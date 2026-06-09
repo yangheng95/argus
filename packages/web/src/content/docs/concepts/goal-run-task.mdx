@@ -25,15 +25,15 @@ EngineTask (kind: "workflow" | "build")
 
 `EngineTaskTable` stores the user request and task-level metadata:
 
-| Field | Meaning |
-|---|---|
-| `kind` | `"workflow"` uses the pipeline workflow; `"build"` uses direct build |
-| `executor` | `opencorvus`, `codex`, or `claude-code` |
-| `request` / `title` | User-facing task contract |
-| `attachments` | User-contract attachments |
-| `system_artifacts` | System-generated material such as screenshots and rendered evidence |
-| `criteria_results` | Rollup used by the overlay quality panel |
-| `time_started` / `time_completed` / `error` | Source fields for derived task status |
+| Field                                       | Meaning                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------- |
+| `kind`                                      | `"workflow"` uses the pipeline workflow; `"build"` uses direct build |
+| `executor`                                  | `opencorvus`, `codex`, or `claude-code`                              |
+| `request` / `title`                         | User-facing task contract                                            |
+| `attachments`                               | User-contract attachments                                            |
+| `system_artifacts`                          | System-generated material such as screenshots and rendered evidence  |
+| `criteria_results`                          | Rollup used by the overlay quality panel                             |
+| `time_started` / `time_completed` / `error` | Source fields for derived task status                                |
 
 `deriveTaskStatus` projects task status from task timestamps, errors, cancellation metadata, and run state.
 
@@ -45,11 +45,11 @@ EngineTask (kind: "workflow" | "build")
 
 The Architect agent writes:
 
-| Entity | Meaning |
-|---|---|
-| `EnginePlanVersionTable` | Active or superseded plan version |
-| `EngineGoalTable` | Goal contract fields: objective, acceptance specs, dependencies, ownership, priority, kind |
-| `EnginePlanNodeTable` | Plan graph rows that connect goals to the active plan |
+| Entity                   | Meaning                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------ |
+| `EnginePlanVersionTable` | Active or superseded plan version                                                          |
+| `EngineGoalTable`        | Goal contract fields: objective, acceptance specs, dependencies, ownership, priority, kind |
+| `EnginePlanNodeTable`    | Plan graph rows that connect goals to the active plan                                      |
 
 UI and prompt status for a goal are derived from the goal-run attempt chain.
 
@@ -67,14 +67,14 @@ Workflow progress is rendered from artifacts and workflow tool side effects.
 
 `GoalRunRow` is reconstructed from `engine_artifact` rows with `kind="goal_run_attempt"`.
 
-| Field | Meaning |
-|---|---|
-| `goal_id` | Goal being implemented |
-| `status` | `queued / accepted / planning / running / evaluating / blocked / completed / failed / aborted` |
-| `workspace_dir` / `workspace_branch` | Isolated goal workspace |
-| `workspace_base_ref` / `merge_ref` | Snapshot/git references for replay and merge |
-| `supersede_of` | Links retry/rework attempts while preserving previous evidence |
-| `owner` | Process owner used to detect orphaned live attempts after restart |
+| Field                                | Meaning                                                                                        |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `goal_id`                            | Goal being implemented                                                                         |
+| `status`                             | `queued / accepted / planning / running / evaluating / blocked / completed / failed / aborted` |
+| `workspace_dir` / `workspace_branch` | Isolated goal workspace                                                                        |
+| `workspace_base_ref` / `merge_ref`   | Snapshot/git references for replay and merge                                                   |
+| `supersede_of`                       | Links retry/rework attempts while preserving previous evidence                                 |
+| `owner`                              | Process owner used to detect orphaned live attempts after restart                              |
 
 The latest non-superseded attempt is the authoritative source for goal progress.
 
@@ -84,11 +84,11 @@ The latest non-superseded attempt is the authoritative source for goal progress.
 
 `EvaluationRow` is reconstructed from `engine_artifact.kind="verification-evidence"` and records task-level or goal-run evidence:
 
-| Field | Meaning |
-|---|---|
-| `scope` | `goal_run` or `acceptance` |
-| `status` | `pending / passed / failed / inconclusive` |
-| `verdict` | `accepted / rejected / inconclusive` |
+| Field      | Meaning                                                 |
+| ---------- | ------------------------------------------------------- |
+| `scope`    | `goal_run` or `acceptance`                              |
+| `status`   | `pending / passed / failed / inconclusive`              |
+| `verdict`  | `accepted / rejected / inconclusive`                    |
 | `checks[]` | Check summaries, evidence pointers, and scorer metadata |
 
 ## Durable State

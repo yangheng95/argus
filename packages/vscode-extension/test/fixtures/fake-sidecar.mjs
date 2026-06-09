@@ -24,7 +24,9 @@ if (failMode === "missing-token") {
   }
 }
 if (failMode === "existing-instance") {
-  console.error("existing managed sidecar detected (PID=4242, port=9999). Stop it before opening this workspace in VS Code.")
+  console.error(
+    "existing managed sidecar detected (PID=4242, port=9999). Stop it before opening this workspace in VS Code.",
+  )
   process.exit(3)
 }
 
@@ -79,9 +81,7 @@ const server = createServer((req, res) => {
     return
   }
   if (url === "/executor" && req.method === "GET") {
-    sendJson(req, res, 200, [
-      { id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true },
-    ])
+    sendJson(req, res, 200, [{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     return
   }
   if (url === "/skill/installed" && req.method === "GET") {

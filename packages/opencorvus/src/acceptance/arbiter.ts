@@ -1,5 +1,9 @@
 import type { VisualMetricResult } from "./visual-metric"
-import type { AcceptanceEvidenceManifest, AcceptanceGateVerdict, AcceptanceManifestFunctionalAssessment } from "./manifest"
+import type {
+  AcceptanceEvidenceManifest,
+  AcceptanceGateVerdict,
+  AcceptanceManifestFunctionalAssessment,
+} from "./manifest"
 import type { AcceptanceVerdictType, RejectedVerdictType, DeferredCheckType, ToolCallEvidenceType } from "./verdict"
 
 /**
@@ -124,9 +128,7 @@ export function composeAcceptanceDecision(input: {
     }
   }
   if (!input.agentVerdict) {
-    throw new Error(
-      "composeAcceptanceDecision: legacy evidence passed but no verdict was supplied.",
-    )
+    throw new Error("composeAcceptanceDecision: legacy evidence passed but no verdict was supplied.")
   }
   return {
     final: input.agentVerdict,
@@ -147,16 +149,17 @@ export function composeAcceptanceDecision(input: {
  */
 function synthesizeHostGateRejected(hostGate: HostGateResult): RejectedVerdictType {
   const summary = `Acceptance rejected by required evidence: ${hostGate.manifest.finalGate.summary}`
-  const groups = hostGate.failures.length > 0
-    ? hostGate.failures
-    : [
-        {
-          kind: "manifest" as const,
-          id: hostGate.manifest.id,
-          summary: hostGate.manifest.finalGate.summary,
-          evidence: [],
-        },
-      ]
+  const groups =
+    hostGate.failures.length > 0
+      ? hostGate.failures
+      : [
+          {
+            kind: "manifest" as const,
+            id: hostGate.manifest.id,
+            summary: hostGate.manifest.finalGate.summary,
+            evidence: [],
+          },
+        ]
   const rejection_details = groups.map((group) => {
     const detail = [group.summary, ...group.evidence].filter((s) => s.trim().length > 0).join("\n")
     return {
@@ -189,8 +192,7 @@ function buildHostDeferredChecks(hostGate: HostGateResult): DeferredCheckType[] 
   const auxiliary = new Set(manifest.functionalAssessment?.auxiliaryFailureIds ?? [])
   const checks: DeferredCheckType[] = manifest.checkResults.map((item) => ({
     name: item.id,
-    result:
-      item.status === "failed" && auxiliary.has(item.id) ? ("advisory_failed" as const) : item.status,
+    result: item.status === "failed" && auxiliary.has(item.id) ? ("advisory_failed" as const) : item.status,
     evidence:
       [
         item.command,
@@ -204,8 +206,7 @@ function buildHostDeferredChecks(hostGate: HostGateResult): DeferredCheckType[] 
   for (const review of manifest.reviewEvidence) {
     checks.push({
       name: review.id,
-      result:
-        review.status === "failed" && auxiliary.has(review.id) ? ("advisory_failed" as const) : review.status,
+      result: review.status === "failed" && auxiliary.has(review.id) ? ("advisory_failed" as const) : review.status,
       evidence: review.evidence.join("\n") || `${review.id} ${review.status}`,
     })
   }
@@ -214,15 +215,14 @@ function buildHostDeferredChecks(hostGate: HostGateResult): DeferredCheckType[] 
     checks.push({
       name: "visual_metric",
       result: m.passed ? "passed" : "failed",
-      evidence:
-        [
-          `score=${m.score.toFixed(3)}`,
-          `rendered=${m.renderedPath}`,
-          `reference=${m.referencePath}`,
-          ...m.gates.map(
-            (g) => `${g.name}: ${g.passed ? "passed" : "failed"} value=${g.value} threshold=${g.threshold} ${g.note}`,
-          ),
-        ].join("\n"),
+      evidence: [
+        `score=${m.score.toFixed(3)}`,
+        `rendered=${m.renderedPath}`,
+        `reference=${m.referencePath}`,
+        ...m.gates.map(
+          (g) => `${g.name}: ${g.passed ? "passed" : "failed"} value=${g.value} threshold=${g.threshold} ${g.note}`,
+        ),
+      ].join("\n"),
     })
   }
   return checks
@@ -234,9 +234,7 @@ function buildHostToolCallEvidence(hostGate: HostGateResult): ToolCallEvidenceTy
     {
       tool: "AcceptanceEvidenceManifest",
       passed: manifest.finalGate.status === "passed",
-      detail: padEvidence(
-        `finalGate.status=${manifest.finalGate.status} ${manifest.finalGate.summary}`,
-      ),
+      detail: padEvidence(`finalGate.status=${manifest.finalGate.status} ${manifest.finalGate.summary}`),
     },
   ]
   if (hostGate.visualMetric) {
@@ -244,9 +242,7 @@ function buildHostToolCallEvidence(hostGate: HostGateResult): ToolCallEvidenceTy
     evidence.push({
       tool: "visual_metric",
       passed: m.passed,
-      detail: padEvidence(
-        `score=${m.score.toFixed(3)} failed_gates=${m.gates.filter((g) => !g.passed).length}`,
-      ),
+      detail: padEvidence(`score=${m.score.toFixed(3)} failed_gates=${m.gates.filter((g) => !g.passed).length}`),
     })
   }
   return evidence

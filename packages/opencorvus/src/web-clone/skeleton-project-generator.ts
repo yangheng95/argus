@@ -88,11 +88,18 @@ export async function generateWebCloneSkeletonProject(
     ["src/slots.json", JSON.stringify({ version: 1, purpose: "web-clone-skeleton-slots", slots }, null, 2) + "\n"],
     ["src/generated/singlefile-head-styles.html", sourceDocument.headStylesHtml],
     ["src/generated/singlefile-body.html", sourceDocument.bodyHtml],
-    ["src/generated/singlefile-document.json", JSON.stringify({
-      title: sourceDocument.title,
-      htmlAttributes: sourceDocument.htmlAttributes,
-      bodyAttributes: sourceDocument.bodyAttributes,
-    }, null, 2) + "\n"],
+    [
+      "src/generated/singlefile-document.json",
+      JSON.stringify(
+        {
+          title: sourceDocument.title,
+          htmlAttributes: sourceDocument.htmlAttributes,
+          bodyAttributes: sourceDocument.bodyAttributes,
+        },
+        null,
+        2,
+      ) + "\n",
+    ],
     ["README.md", readme],
   ])
 
@@ -169,8 +176,12 @@ async function hydrateHtmlAssets(input: {
   })
   const hydratedSvgPaths = (html.match(/data-skeleton-asset="true"/g) ?? []).length
 
-  html = await replaceAssetAttribute(html, "data-asset-src", "src", input, () => { copiedAssets += 1 })
-  html = await replaceAssetAttribute(html, "data-asset-href", "href", input, () => { copiedAssets += 1 })
+  html = await replaceAssetAttribute(html, "data-asset-src", "src", input, () => {
+    copiedAssets += 1
+  })
+  html = await replaceAssetAttribute(html, "data-asset-href", "href", input, () => {
+    copiedAssets += 1
+  })
   return { html, hydratedSvgPaths, copiedAssets }
 }
 
@@ -282,7 +293,9 @@ function parseAttributes(attributeSource: string): Record<string, string> {
 
 function extractStyleAndStylesheetTags(headHtml: string): string {
   const styles = headHtml.match(/<style\b[\s\S]*?<\/style>/gi) ?? []
-  const links = (headHtml.match(/<link\b[^>]*>/gi) ?? []).filter((tag) => /\brel=(?:"stylesheet"|'stylesheet'|stylesheet)\b/i.test(tag))
+  const links = (headHtml.match(/<link\b[^>]*>/gi) ?? []).filter((tag) =>
+    /\brel=(?:"stylesheet"|'stylesheet'|stylesheet)\b/i.test(tag),
+  )
   return [...links, ...styles].join("\n")
 }
 
@@ -498,24 +511,28 @@ async function copyReferenceImage(sourcePackageDir: string, outputDir: string): 
 }
 
 function renderPackageJson(packageName: string): string {
-  return `${JSON.stringify({
-    name: normalizePackageName(packageName),
-    private: true,
-    version: "0.0.0",
-    type: "module",
-    scripts: {
-      dev: `node scripts/extract-source-html.mjs && ${GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteDev}`,
-      build: `node scripts/extract-source-html.mjs && ${GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteBuild}`,
-      preview: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.vitePreview,
+  return `${JSON.stringify(
+    {
+      name: normalizePackageName(packageName),
+      private: true,
+      version: "0.0.0",
+      type: "module",
+      scripts: {
+        dev: `node scripts/extract-source-html.mjs && ${GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteDev}`,
+        build: `node scripts/extract-source-html.mjs && ${GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteBuild}`,
+        preview: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.vitePreview,
+      },
+      packageManager: GENERATED_FRONTEND_PACKAGE_PROFILE.packageManager,
+      dependencies: {
+        "@vitejs/plugin-react": "^4.3.4",
+        react: "^18.3.1",
+        "react-dom": "^18.3.1",
+        vite: "^5.4.19",
+      },
     },
-    packageManager: GENERATED_FRONTEND_PACKAGE_PROFILE.packageManager,
-    dependencies: {
-      "@vitejs/plugin-react": "^4.3.4",
-      react: "^18.3.1",
-      "react-dom": "^18.3.1",
-      vite: "^5.4.19",
-    },
-  }, null, 2)}\n`
+    null,
+    2,
+  )}\n`
 }
 
 function renderReadme(input: {
@@ -557,10 +574,16 @@ function renderReadme(input: {
   ].join("\n")
 }
 
-function buildWarnings(sourceHtmlKind: "singlefile" | "source-skeleton", criticalCss: string, fullSourceCss: string): string[] {
+function buildWarnings(
+  sourceHtmlKind: "singlefile" | "source-skeleton",
+  criticalCss: string,
+  fullSourceCss: string,
+): string[] {
   const warnings: string[] = []
   if (sourceHtmlKind !== "singlefile") {
-    warnings.push("No SingleFile HTML was available; the baseline uses source-skeleton HTML and may be less visually complete.")
+    warnings.push(
+      "No SingleFile HTML was available; the baseline uses source-skeleton HTML and may be less visually complete.",
+    )
   }
   const reachableRuleCount = (criticalCss.match(/\/\* Reachable original CSS rules\. \*\//g) ?? []).length
   if (sourceHtmlKind !== "singlefile" && reachableRuleCount === 0 && fullSourceCss.length < 20000) {
@@ -591,24 +614,19 @@ async function writeText(filePath: string, content: string): Promise<void> {
 }
 
 function normalizePackageName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 214) || "web-clone-skeleton"
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 214) || "web-clone-skeleton"
+  )
 }
 
 function escapeHtmlAttribute(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("\"", "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
+  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
 }
 
 function escapeHtmlText(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
 }

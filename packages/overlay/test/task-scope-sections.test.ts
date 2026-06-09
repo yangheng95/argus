@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
-import { taskScopeSectionVisibility, taskScopeWorkflowSectionID } from "../src/utils/task-scope-sections";
+import { expect, test } from "bun:test"
+import { taskScopeSectionVisibility, taskScopeWorkflowSectionID } from "../src/utils/task-scope-sections"
 
 test("task-scope workflow sections are visible while their steps are active", () => {
   const visibility = taskScopeSectionVisibility({
@@ -12,12 +12,12 @@ test("task-scope workflow sections are visible while their steps are active", ()
     },
     requirements: [],
     architect: null,
-  });
+  })
 
-  expect(visibility.frontendResearch).toBe(false);
-  expect(visibility.requirements).toBe(true);
-  expect(visibility.architect).toBe(false);
-});
+  expect(visibility.frontendResearch).toBe(false)
+  expect(visibility.requirements).toBe(true)
+  expect(visibility.architect).toBe(false)
+})
 
 test("task-scope workflow sections remain visible once data exists", () => {
   const visibility = taskScopeSectionVisibility({
@@ -30,12 +30,12 @@ test("task-scope workflow sections remain visible once data exists", () => {
     },
     requirements: [{ id: "req_1" }],
     architect: { contractCount: 3 },
-  });
+  })
 
-  expect(visibility.frontendResearch).toBe(true);
-  expect(visibility.requirements).toBe(true);
-  expect(visibility.architect).toBe(true);
-});
+  expect(visibility.frontendResearch).toBe(true)
+  expect(visibility.requirements).toBe(true)
+  expect(visibility.architect).toBe(true)
+})
 
 test("task-scope workflow sections stay hidden before backend progress exists", () => {
   const visibility = taskScopeSectionVisibility({
@@ -48,10 +48,10 @@ test("task-scope workflow sections stay hidden before backend progress exists", 
     },
     requirements: [],
     architect: null,
-  });
+  })
 
-  expect(visibility).toEqual({ frontendResearch: false, requirements: false, architect: false });
-});
+  expect(visibility).toEqual({ frontendResearch: false, requirements: false, architect: false })
+})
 
 test("frontend research section is visible when the workflow step fails before an agent card exists", () => {
   const visibility = taskScopeSectionVisibility({
@@ -64,9 +64,9 @@ test("frontend research section is visible when the workflow step fails before a
     },
     requirements: [],
     architect: null,
-  });
+  })
 
-  expect(visibility.frontendResearch).toBe(true);
-  expect(taskScopeWorkflowSectionID("frontend_research")).toBe("frontendResearch");
-  expect(taskScopeWorkflowSectionID("frontend_design")).toBe("frontendResearch");
-});
+  expect(visibility.frontendResearch).toBe(true)
+  expect(taskScopeWorkflowSectionID("frontend_research")).toBe("frontendResearch")
+  expect(taskScopeWorkflowSectionID("frontend_design")).toBe("frontendResearch")
+})

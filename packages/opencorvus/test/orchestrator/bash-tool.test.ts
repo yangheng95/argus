@@ -21,9 +21,9 @@ describe("validateOrchestratorBashCommand — single git invocation only", () =>
   })
 
   test("accepts a multi-arg git invocation", () => {
-    expect(
-      validateOrchestratorBashCommand("git checkout --ours -- packages/opencorvus/src/foo.ts"),
-    ).toEqual({ ok: true })
+    expect(validateOrchestratorBashCommand("git checkout --ours -- packages/opencorvus/src/foo.ts")).toEqual({
+      ok: true,
+    })
   })
 
   test("accepts the bare `git` (e.g. `git --help`) form", () => {
@@ -112,7 +112,8 @@ describe("validateOrchestratorBashCommand — single git invocation only", () =>
     const result = validateOrchestratorBashCommand("git diff -- taskkill /IM bun.exe")
     // host-killing pattern is a regex, fires on the substring.
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.reason).toMatch(/host-process-killing|substitution|separator|pipeline|chain|redirection/)
+    if (!result.ok)
+      expect(result.reason).toMatch(/host-process-killing|substitution|separator|pipeline|chain|redirection/)
   })
 })
 

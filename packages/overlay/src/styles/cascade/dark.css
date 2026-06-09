@@ -61,8 +61,12 @@ body[data-theme="dark"] {
   --accent-ring: rgba(91, 141, 239, 0.24);
   --accent-glow: rgba(91, 141, 239, 0.28);
   --hover-accent-border: rgba(91, 141, 239, 0.24);
-  --hover-accent-wash:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.14), rgba(91, 141, 239, 0.05) 58%, rgba(255, 255, 255, 0.02));
+  --hover-accent-wash: linear-gradient(
+    180deg,
+    rgba(91, 141, 239, 0.14),
+    rgba(91, 141, 239, 0.05) 58%,
+    rgba(255, 255, 255, 0.02)
+  );
   --info: #5b8def;
   --info-dim: rgba(91, 141, 239, 0.12);
   --good: #34d399;
@@ -100,10 +104,8 @@ body[data-theme="dark"] {
   --divider-soft: rgba(255, 255, 255, 0.06);
   --panel-fill: var(--surface);
   --panel-fill-hover:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent),
-    var(--surface);
+    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent), var(--surface);
   --card-fill: var(--subtle-1);
   --card-fill-hover:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.06), rgba(91, 141, 239, 0.02) 68%, transparent),
-    var(--surface-inset);
+    linear-gradient(180deg, rgba(91, 141, 239, 0.06), rgba(91, 141, 239, 0.02) 68%, transparent), var(--surface-inset);
 }

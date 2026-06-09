@@ -56,7 +56,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function countSoloTopLevelRules(selector: string): number {

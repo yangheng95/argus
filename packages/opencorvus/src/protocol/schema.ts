@@ -45,4 +45,3 @@ export const ProtocolInboxMessage = z.object({
   visible_at: z.number().int().positive(),
   last_error: z.string().min(1).optional(),
 })
-

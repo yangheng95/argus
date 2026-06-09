@@ -29,6 +29,7 @@ import {
   TaskConversationHydration,
   TaskMessageInput,
   TaskMessageResult,
+  TaskOperatorModelContext,
   TaskAccepted,
   TaskEvent,
   Task,
@@ -49,7 +50,14 @@ import { buildTaskProjectArchive, TaskProjectArchiveUnsupportedProjectError } fr
 import { errors, replyRouteErrors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
-import { sessionGoalID, sessionParentID, sessionRole, taskIDForSession, taskMessageWatermark, taskSession } from "@/orchestrator/task-event"
+import {
+  sessionGoalID,
+  sessionParentID,
+  sessionRole,
+  taskIDForSession,
+  taskMessageWatermark,
+  taskSession,
+} from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { DIRECT_AGENT_SESSION_CONTROL_KINDS } from "@/orchestrator/direct-reply"
 import { BusEvent } from "@/bus/bus-event"
@@ -84,8 +92,10 @@ const TASK_LIST_PROJECTION_EVENT_PREFIXES = [
 
 function isTaskListProjectionEventType(type: string) {
   const normalized = type.replace(/^engine\./, "")
-  return TASK_LIST_PROJECTION_EVENT_TYPES.has(normalized) ||
+  return (
+    TASK_LIST_PROJECTION_EVENT_TYPES.has(normalized) ||
     TASK_LIST_PROJECTION_EVENT_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+  )
 }
 
 export const TaskListEvent = z.object({
@@ -257,13 +267,15 @@ export const EngineRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
-        return c.json(await EngineService.getGlobalTaskBoard({
-          directory: query.directory,
-          query: query.q,
-          status: query.status,
-          limit: query.limit,
-          cursor: query.cursor,
-        }))
+        return c.json(
+          await EngineService.getGlobalTaskBoard({
+            directory: query.directory,
+            query: query.q,
+            status: query.status,
+            limit: query.limit,
+            cursor: query.cursor,
+          }),
+        )
       },
     )
     .patch(
@@ -367,13 +379,9 @@ export const EngineRoutes = lazy(() =>
             },
             { aggregate: "task" },
           )
-          await writeData(
-            JSON.stringify({ type: "task-list.connected", taskID: null, sequence: 0 }),
-          )
+          await writeData(JSON.stringify({ type: "task-list.connected", taskID: null, sequence: 0 }))
           const heartbeat = setInterval(() => {
-            void writeData(
-              JSON.stringify({ type: "task-list.heartbeat", taskID: null, sequence: 0 }),
-            )
+            void writeData(JSON.stringify({ type: "task-list.heartbeat", taskID: null, sequence: 0 }))
           }, 10_000)
           await new Promise<void>((resolve) => {
             stream.onAbort(() => {
@@ -541,13 +549,10 @@ export const EngineRoutes = lazy(() =>
         const after = Math.max(0, parseInt(c.req.query("after") ?? "0", 10) || 0)
         const afterLiveRaw = c.req.query("after_live")
         const shouldReplayLive = afterLiveRaw !== undefined
-        const afterLive = shouldReplayLive
-          ? Math.max(0, parseInt(afterLiveRaw ?? "0", 10) || 0)
-          : 0
+        const afterLive = shouldReplayLive ? Math.max(0, parseInt(afterLiveRaw ?? "0", 10) || 0) : 0
         const afterLiveEpochRaw = c.req.query("after_live_epoch")
-        const afterLiveEpoch = afterLiveEpochRaw === undefined
-          ? undefined
-          : Math.max(0, parseInt(afterLiveEpochRaw, 10) || 0)
+        const afterLiveEpoch =
+          afterLiveEpochRaw === undefined ? undefined : Math.max(0, parseInt(afterLiveEpochRaw, 10) || 0)
         const afterMessageWatermark = Math.max(0, parseInt(c.req.query("after_message_watermark") ?? "0", 10) || 0)
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
@@ -569,14 +574,16 @@ export const EngineRoutes = lazy(() =>
           }
           const emitMessageChange = async (watermark: number) => {
             messageWatermark = watermark
-            const data = JSON.stringify(taskEvent(taskID, {
-              type: "task.messages.changed",
-              properties: {
-                taskID,
-                watermark,
-                summary: "Task message append/update tables changed",
-              },
-            }))
+            const data = JSON.stringify(
+              taskEvent(taskID, {
+                type: "task.messages.changed",
+                properties: {
+                  taskID,
+                  watermark,
+                  summary: "Task message append/update tables changed",
+                },
+              }),
+            )
             await writeData(data)
           }
           const markLiveMessageSeen = (event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) => {
@@ -637,26 +644,30 @@ export const EngineRoutes = lazy(() =>
             void writeData(item.data)
           })
 
-          const connData = JSON.stringify(taskEvent(taskID, {
-            type: "task.connected",
-            properties: {
-              taskID,
-              summary: "Task event stream connected",
-            },
-          }))
+          const connData = JSON.stringify(
+            taskEvent(taskID, {
+              type: "task.connected",
+              properties: {
+                taskID,
+                summary: "Task event stream connected",
+              },
+            }),
+          )
           await writeData(connData)
           const initialMessageWatermark = taskMessageWatermark(taskID)
           if (initialMessageWatermark > messageWatermark) {
             await emitMessageChange(initialMessageWatermark)
           }
           const heartbeat = setInterval(() => {
-            const data = JSON.stringify(taskEvent(taskID, {
-              type: "task.heartbeat",
-              properties: {
-                taskID,
-                summary: "Task event stream heartbeat",
-              },
-            }))
+            const data = JSON.stringify(
+              taskEvent(taskID, {
+                type: "task.heartbeat",
+                properties: {
+                  taskID,
+                  summary: "Task event stream heartbeat",
+                },
+              }),
+            )
             void writeData(data)
           }, 10_000)
           const messageChangePoll = setInterval(() => {
@@ -710,7 +721,9 @@ export const EngineRoutes = lazy(() =>
           Promise.resolve(ControlTimeline.list({ taskID })),
         ])
         const transcript = transcriptResult.transcript
-        const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(items: T[]) => {
+        const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(
+          items: T[],
+        ) => {
           if (rewindCursor == null) return items
           return items.filter((item) => {
             const created =
@@ -730,7 +743,8 @@ export const EngineRoutes = lazy(() =>
         })
         const history = {
           ...historyWindow.history,
-          hasMore: historyWindow.history.hasMore ||
+          hasMore:
+            historyWindow.history.hasMore ||
             (transcriptResult.truncated && historyWindow.history.oldestTimestamp != null),
         }
         const latestSequence = Number(board.lastSequence)
@@ -742,14 +756,10 @@ export const EngineRoutes = lazy(() =>
           until: latestSequence,
           limit: CONVERSATION_EVENT_PAGE_LIMIT,
           rewindCursor,
-          sinceTimestamp: history.hasMore
-            ? history.oldestTimestamp
-            : null,
+          sinceTimestamp: history.hasMore ? history.oldestTimestamp : null,
         })
         const view = projectConversationView(board, historyWindow.transcript, eventPage.events)
-        const agentView = history.hasMore
-          ? projectConversationView(board, filteredTranscript, eventPage.events)
-          : view
+        const agentView = history.hasMore ? projectConversationView(board, filteredTranscript, eventPage.events) : view
         return c.json({
           lastSequence: latestSequence,
           messageWatermark,
@@ -798,18 +808,18 @@ export const EngineRoutes = lazy(() =>
           const created = typeof item?.info?.time?.created === "number" ? item.info.time.created : undefined
           return created == null || created <= rewindCursor
         })
-        const oldestTimestamp = sessionTranscript.length > 0
-          ? conversationItemTimestamp(sessionTranscript[0])
-          : null
-        const newestTimestamp = sessionTranscript.length > 0
-          ? conversationItemTimestamp(sessionTranscript[sessionTranscript.length - 1])
-          : null
-        const sessionTimeline = oldestTimestamp == null || newestTimestamp == null
-          ? []
-          : timeline.filter((item) => {
-              const created = conversationItemTimestamp(item)
-              return created >= oldestTimestamp && created <= newestTimestamp
-            })
+        const oldestTimestamp = sessionTranscript.length > 0 ? conversationItemTimestamp(sessionTranscript[0]) : null
+        const newestTimestamp =
+          sessionTranscript.length > 0
+            ? conversationItemTimestamp(sessionTranscript[sessionTranscript.length - 1])
+            : null
+        const sessionTimeline =
+          oldestTimestamp == null || newestTimestamp == null
+            ? []
+            : timeline.filter((item) => {
+                const created = conversationItemTimestamp(item)
+                return created >= oldestTimestamp && created <= newestTimestamp
+              })
         const sessionEvents = conversationSessionEvents(taskID, sessionID, { rewindCursor })
         return c.json({
           transcript: sessionTranscript,
@@ -855,7 +865,9 @@ export const EngineRoutes = lazy(() =>
           loadFullTaskTranscript(taskID),
           Promise.resolve(ControlTimeline.list({ taskID })),
         ])
-        const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(items: T[]) => {
+        const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(
+          items: T[],
+        ) => {
           if (rewindCursor == null) return items
           return items.filter((item) => {
             const created =
@@ -867,11 +879,11 @@ export const EngineRoutes = lazy(() =>
             return created == null || created <= rewindCursor
           })
         }
-        const page = __conversationHistoryBeforeForTest(
-          filterByCursor(transcript),
-          filterByCursor(timeline),
-          { before: query.before, beforeID: query.before_id, limit: query.limit },
-        )
+        const page = __conversationHistoryBeforeForTest(filterByCursor(transcript), filterByCursor(timeline), {
+          before: query.before,
+          beforeID: query.before_id,
+          limit: query.limit,
+        })
         const pageEvents = conversationHistoryEvents(taskID, {
           before: query.before,
           oldestTimestamp: page.history.oldestTimestamp,
@@ -911,13 +923,15 @@ export const EngineRoutes = lazy(() =>
         const taskID = c.req.valid("param").taskID
         const query = c.req.valid("query")
         await EngineService.getTask(taskID)
-        return c.json(conversationEventPage(taskID, {
-          after: query.after,
-          until: query.until,
-          limit: query.limit,
-          rewindCursor: taskRewindCursor(taskID),
-          sinceTimestamp: query.since ?? null,
-        }))
+        return c.json(
+          conversationEventPage(taskID, {
+            after: query.after,
+            until: query.until,
+            limit: query.limit,
+            rewindCursor: taskRewindCursor(taskID),
+            sinceTimestamp: query.since ?? null,
+          }),
+        )
       },
     )
     .get(
@@ -996,6 +1010,31 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         return c.json(await loadFullTaskTranscript(c.req.valid("param").taskID))
+      },
+    )
+    .get(
+      "/task/:taskID/operator-model-context",
+      describeRoute({
+        summary: "Get task operator model context",
+        description:
+          "Return the agent and effective model that a task-level operator message will use. " +
+          "This mirrors the task message append path so overlay model controls do not guess from raw config.",
+        operationId: "task.operatorModelContext",
+        responses: {
+          200: {
+            description: "Task operator model context",
+            content: {
+              "application/json": {
+                schema: resolver(TaskOperatorModelContext),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        return c.json(await EngineService.getTaskOperatorModelContext(c.req.valid("param").taskID))
       },
     )
     .get(
@@ -1197,13 +1236,15 @@ export const EngineRoutes = lazy(() =>
             description: "Rewind applied",
             content: {
               "application/json": {
-                schema: resolver(z.object({
-                  taskID: z.string(),
-                  cursorTime: z.number(),
-                  rewindCount: z.number(),
-                  resetWorktree: z.boolean(),
-                  anchorKind: z.enum(["cursorTime", "message"]),
-                })),
+                schema: resolver(
+                  z.object({
+                    taskID: z.string(),
+                    cursorTime: z.number(),
+                    rewindCount: z.number(),
+                    resetWorktree: z.boolean(),
+                    anchorKind: z.enum(["cursorTime", "message"]),
+                  }),
+                ),
               },
             },
           },
@@ -1288,14 +1329,16 @@ export const EngineRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await EngineService.retryTask(c.req.valid("param").taskID).catch((error) => {
-          if (error instanceof PlannerFailureError) {
-            throw new HTTPException(503, {
-              message: error.message,
-            })
-          }
-          throw error
-        }))
+        return c.json(
+          await EngineService.retryTask(c.req.valid("param").taskID).catch((error) => {
+            if (error instanceof PlannerFailureError) {
+              throw new HTTPException(503, {
+                message: error.message,
+              })
+            }
+            throw error
+          }),
+        )
       },
     )
     .post(
@@ -1417,7 +1460,8 @@ export const EngineRoutes = lazy(() =>
         operationId: "goalRun.acceptance",
         responses: {
           200: {
-            description: "Goal-run acceptance, or null when the goal_run exists but has not produced a acceptance yet (in-flight build).",
+            description:
+              "Goal-run acceptance, or null when the goal_run exists but has not produced a acceptance yet (in-flight build).",
             content: {
               "application/json": {
                 schema: resolver(Acceptance.nullable()),
@@ -1539,9 +1583,7 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ interactionID: Interaction.shape.id })),
       validator("json", ReplyInteractionInput),
       async (c) => {
-        return c.json(
-          await EngineService.replyInteraction(c.req.valid("param").interactionID, c.req.valid("json")),
-        )
+        return c.json(await EngineService.replyInteraction(c.req.valid("param").interactionID, c.req.valid("json")))
       },
     )
     .post(
@@ -1564,9 +1606,7 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ interactionID: Interaction.shape.id })),
       validator("json", RejectInteractionInput),
       async (c) => {
-        return c.json(
-          await EngineService.rejectInteraction(c.req.valid("param").interactionID, c.req.valid("json")),
-        )
+        return c.json(await EngineService.rejectInteraction(c.req.valid("param").interactionID, c.req.valid("json")))
       },
     )
     .patch(
@@ -1662,7 +1702,7 @@ export const EngineRoutes = lazy(() =>
         const { title } = c.req.valid("json")
         return c.json(await EngineService.updateTaskTitle(c.req.valid("param").taskID, title))
       },
-    )
+    ),
 )
 
 async function assertDirectAgentSession(taskID: string, sessionID: string) {
@@ -1755,43 +1795,30 @@ function expandWindowStartToSessionBoundary(items: any[], start: number): number
   return Math.max(0, Math.min(start, items.length))
 }
 
-function conversationHistoryState(
-  allTranscript: any[],
-  visibleTranscript: any[],
-  limit: number,
-) {
+function conversationHistoryState(allTranscript: any[], visibleTranscript: any[], limit: number) {
   const oldestItem = visibleTranscript[0] ?? null
   const oldest = oldestItem ? conversationItemTimestamp(oldestItem) : null
   const oldestMessageID = oldestItem ? conversationItemID(oldestItem) || null : null
   return {
     oldestTimestamp: oldest,
     oldestMessageID,
-    hasMore: oldestItem != null && allTranscript.some((item) =>
-      compareConversationItems(item, oldestItem) < 0
-    ),
+    hasMore: oldestItem != null && allTranscript.some((item) => compareConversationItems(item, oldestItem) < 0),
     limit,
   }
 }
 
-export function __conversationHistoryWindowForTest(
-  transcript: any[],
-  timeline: any[],
-  input: { tailLimit: number },
-) {
-  const orderedTranscript = [...transcript].sort(
-    compareConversationItems,
-  )
+export function __conversationHistoryWindowForTest(transcript: any[], timeline: any[], input: { tailLimit: number }) {
+  const orderedTranscript = [...transcript].sort(compareConversationItems)
   const start = expandWindowStartToSessionBoundary(
     orderedTranscript,
     Math.max(0, orderedTranscript.length - input.tailLimit),
   )
   const visibleTranscript = orderedTranscript.slice(start)
-  const oldestTimestamp = visibleTranscript.length > 0
-    ? conversationItemTimestamp(visibleTranscript[0])
-    : null
-  const visibleTimeline = oldestTimestamp == null
-    ? [...timeline]
-    : timeline.filter((item) => conversationItemTimestamp(item) >= oldestTimestamp)
+  const oldestTimestamp = visibleTranscript.length > 0 ? conversationItemTimestamp(visibleTranscript[0]) : null
+  const visibleTimeline =
+    oldestTimestamp == null
+      ? [...timeline]
+      : timeline.filter((item) => conversationItemTimestamp(item) >= oldestTimestamp)
   return {
     transcript: visibleTranscript,
     timeline: visibleTimeline,
@@ -1807,20 +1834,16 @@ export function __conversationHistoryBeforeForTest(
   const olderTranscript = [...transcript]
     .filter((item) => isBeforeConversationCursor(item, { before: input.before, beforeID: input.beforeID }))
     .sort(compareConversationItems)
-  const start = expandWindowStartToSessionBoundary(
-    olderTranscript,
-    Math.max(0, olderTranscript.length - input.limit),
-  )
+  const start = expandWindowStartToSessionBoundary(olderTranscript, Math.max(0, olderTranscript.length - input.limit))
   const visibleTranscript = olderTranscript.slice(start)
-  const oldestTimestamp = visibleTranscript.length > 0
-    ? conversationItemTimestamp(visibleTranscript[0])
-    : null
-  const visibleTimeline = oldestTimestamp == null
-    ? []
-    : timeline.filter((item) => {
-        const created = conversationItemTimestamp(item)
-        return created >= oldestTimestamp && created < input.before
-      })
+  const oldestTimestamp = visibleTranscript.length > 0 ? conversationItemTimestamp(visibleTranscript[0]) : null
+  const visibleTimeline =
+    oldestTimestamp == null
+      ? []
+      : timeline.filter((item) => {
+          const created = conversationItemTimestamp(item)
+          return created >= oldestTimestamp && created < input.before
+        })
   return {
     transcript: visibleTranscript,
     timeline: visibleTimeline,
@@ -1859,29 +1882,30 @@ async function taskSessionIDs(taskID: string) {
   return { task, rootSessionID, sessionIDs }
 }
 
-async function loadTaskTranscript(
-  taskID: string,
-  input: { perSessionLimit?: number } = {},
-) {
+async function loadTaskTranscript(taskID: string, input: { perSessionLimit?: number } = {}) {
   const { rootSessionID, sessionIDs } = await taskSessionIDs(taskID)
   if (!rootSessionID) return { transcript: [], truncated: false }
-  const perSessionLimit = typeof input.perSessionLimit === "number"
-    ? Math.max(1, Math.floor(input.perSessionLimit))
-    : undefined
+  const perSessionLimit =
+    typeof input.perSessionLimit === "number" ? Math.max(1, Math.floor(input.perSessionLimit)) : undefined
   let truncated = false
-  const all = await Promise.all(sessionIDs.map(async (id) => {
-    if (!perSessionLimit) return Session.messages({ sessionID: id })
-    const messages = await Session.messages({ sessionID: id, limit: perSessionLimit + 1 })
-    if (messages.length > perSessionLimit) {
-      truncated = true
-      return messages.slice(messages.length - perSessionLimit)
-    }
-    return messages
-  }))
+  const all = await Promise.all(
+    sessionIDs.map(async (id) => {
+      if (!perSessionLimit) return Session.messages({ sessionID: id })
+      const messages = await Session.messages({ sessionID: id, limit: perSessionLimit + 1 })
+      if (messages.length > perSessionLimit) {
+        truncated = true
+        return messages.slice(messages.length - perSessionLimit)
+      }
+      return messages
+    }),
+  )
   const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
   for (const msg of messages) {
     const sid = msg.info.sessionID || ""
-    const meta = overlayMeta(sid, rootSessionID, { role: msg.info.role })
+    const meta = overlayMeta(sid, rootSessionID, {
+      role: msg.info.role,
+      extra: "extra" in msg.info ? msg.info.extra : undefined,
+    })
     ;(msg.info as any).resolvedRole = meta.resolvedRole
     ;(msg.info as any).channel = meta.channel
     const goalID = sessionGoalID(sid)
@@ -1902,16 +1926,14 @@ async function loadFullTaskTranscript(taskID: string) {
 function conversationEventPage(
   taskID: string,
   input: {
-    after: number;
-    until?: number;
-    limit: number;
-    rewindCursor: number | null;
-    sinceTimestamp?: number | null;
+    after: number
+    until?: number
+    limit: number
+    rewindCursor: number | null
+    sinceTimestamp?: number | null
   },
 ) {
-  const latestSequence = typeof input.until === "number"
-    ? input.until
-    : ProtocolStore.latestTaskSequence(taskID)
+  const latestSequence = typeof input.until === "number" ? input.until : ProtocolStore.latestTaskSequence(taskID)
   const rows = ProtocolStore.listTaskEventsAfter(taskID, input.after, {
     until: latestSequence,
     limit: input.limit,
@@ -1919,9 +1941,10 @@ function conversationEventPage(
   const cursor = rows.reduce((max, event) => Math.max(max, event.sequence), input.after)
   const events = rows
     .map(protocolTaskEvent)
-    .filter((event) =>
-      (input.rewindCursor == null || event.timestamp <= input.rewindCursor)
-      && (input.sinceTimestamp == null || event.timestamp >= input.sinceTimestamp)
+    .filter(
+      (event) =>
+        (input.rewindCursor == null || event.timestamp <= input.rewindCursor) &&
+        (input.sinceTimestamp == null || event.timestamp >= input.sinceTimestamp),
     )
   return {
     events,
@@ -1939,14 +1962,15 @@ function conversationSessionEvents(
   taskID: string,
   sessionID: string,
   input: {
-    rewindCursor: number | null;
+    rewindCursor: number | null
   },
 ) {
   return ProtocolStore.listTaskEvents(taskID)
-    .filter((event) =>
-      event.sessionID === sessionID &&
-      (event.type === "session.status" || event.type === "session.error") &&
-      (input.rewindCursor == null || event.time.emitted <= input.rewindCursor)
+    .filter(
+      (event) =>
+        event.sessionID === sessionID &&
+        (event.type === "session.status" || event.type === "session.error") &&
+        (input.rewindCursor == null || event.time.emitted <= input.rewindCursor),
     )
     .map(protocolTaskEvent)
 }
@@ -1954,19 +1978,20 @@ function conversationSessionEvents(
 function conversationHistoryEvents(
   taskID: string,
   input: {
-    before: number;
-    oldestTimestamp: number | null;
-    rewindCursor: number | null;
+    before: number
+    oldestTimestamp: number | null
+    rewindCursor: number | null
   },
 ) {
   if (input.oldestTimestamp == null) return []
   const oldestTimestamp = input.oldestTimestamp
   return ProtocolStore.listTaskEvents(taskID)
-    .filter((event) =>
-      (event.type === "session.status" || event.type === "session.error") &&
-      event.time.emitted >= oldestTimestamp &&
-      event.time.emitted < input.before &&
-      (input.rewindCursor == null || event.time.emitted <= input.rewindCursor)
+    .filter(
+      (event) =>
+        (event.type === "session.status" || event.type === "session.error") &&
+        event.time.emitted >= oldestTimestamp &&
+        event.time.emitted < input.before &&
+        (input.rewindCursor == null || event.time.emitted <= input.rewindCursor),
     )
     .map(protocolTaskEvent)
 }
@@ -1983,13 +2008,17 @@ export function taskListProtocolEvent(event: ReturnType<typeof ProtocolStore.lis
 }
 
 function taskListNotificationDetails(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]): string {
-  return JSON.stringify({
-    type: event.type.replace("engine.", ""),
-    taskID: event.taskID ?? null,
-    sequence: event.sequence,
-    summary: event.summary ?? (event.payload as Record<string, unknown> | undefined)?.summary ?? "",
-    payload: event.payload ?? {},
-  }, null, 2)
+  return JSON.stringify(
+    {
+      type: event.type.replace("engine.", ""),
+      taskID: event.taskID ?? null,
+      sequence: event.sequence,
+      summary: event.summary ?? (event.payload as Record<string, unknown> | undefined)?.summary ?? "",
+      payload: event.payload ?? {},
+    },
+    null,
+    2,
+  )
 }
 
 export function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
@@ -2000,9 +2029,7 @@ export function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTas
   // is to crash loudly, not to stamp envelopes with a client-local clock.
   const timestamp = event.time.emitted
   if (!(typeof timestamp === "number" && timestamp > 0)) {
-    throw new Error(
-      `protocolTaskEvent: event ${event.id} missing time.emitted (schema-invariant violated)`,
-    )
+    throw new Error(`protocolTaskEvent: event ${event.id} missing time.emitted (schema-invariant violated)`)
   }
   const notify = BusEvent.resolveNotify(event.type, event.payload ?? {})
   return {

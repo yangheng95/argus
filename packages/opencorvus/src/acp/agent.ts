@@ -1526,9 +1526,7 @@ export namespace ACP {
     // `z.unknown()` — narrow to an object surface before keyed access; treat
     // any non-string field as absent.
     const input: Record<string, unknown> =
-      rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
-        ? (rawInput as Record<string, unknown>)
-        : {}
+      rawInput && typeof rawInput === "object" && !Array.isArray(rawInput) ? (rawInput as Record<string, unknown>) : {}
     const tool = toolName.toLocaleLowerCase()
     const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
     const dirPath = typeof input["path"] === "string" ? input["path"] : ""

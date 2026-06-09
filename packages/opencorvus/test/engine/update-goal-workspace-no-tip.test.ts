@@ -33,44 +33,50 @@ describe("updateGoalWorkspace — no-tip path", () => {
     goalID = `goal_ugw_${stamp}`
     const now = Date.now()
     Database.transaction((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "updateGoalWorkspace test",
-        sandboxes: [],
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "t",
-        request: "t",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
-      db.insert(EngineGoalTable).values({
-        id: goalID,
-        task_id: taskID,
-        title: "g",
-        slug: "g",
-        objective: "obj",
-        acceptance_specs: [],
-        owned_paths: [],
-        depends_on: [],
-        exports: [],
-        imports: [],
-        kind: "feature",
-        requirement_ids: [],
-        priority: "blocking",
-        source: "test",
-        order_index: 0,
-        time_created: now,
-        time_updated: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "updateGoalWorkspace test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "t",
+          request: "t",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineGoalTable)
+        .values({
+          id: goalID,
+          task_id: taskID,
+          title: "g",
+          slug: "g",
+          objective: "obj",
+          acceptance_specs: [],
+          owned_paths: [],
+          depends_on: [],
+          exports: [],
+          imports: [],
+          kind: "feature",
+          requirement_ids: [],
+          priority: "blocking",
+          source: "test",
+          order_index: 0,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
     })
   })
 

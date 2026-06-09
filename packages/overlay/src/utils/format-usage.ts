@@ -14,59 +14,59 @@
 /** Compact token count — "8.4k" rather than "8432", so low-contrast hint
  *  chrome reads at a glance without dominating the row. */
 export function formatTokenCount(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "—";
-  if (n < 1000) return String(n);
+  if (!Number.isFinite(n) || n < 0) return "—"
+  if (n < 1000) return String(n)
   const units = [
     { value: 1_000, suffix: "k" },
     { value: 1_000_000, suffix: "m" },
     { value: 1_000_000_000, suffix: "b" },
     { value: 1_000_000_000_000, suffix: "t" },
-  ];
-  let unitIndex = 0;
-  while (unitIndex < units.length - 1 && n >= units[unitIndex + 1].value) unitIndex++;
+  ]
+  let unitIndex = 0
+  while (unitIndex < units.length - 1 && n >= units[unitIndex + 1].value) unitIndex++
 
   const render = (index: number): string => {
-    const scaled = n / units[index].value;
+    const scaled = n / units[index].value
     if (scaled < 10) {
-      const rounded = Number(scaled.toFixed(1));
+      const rounded = Number(scaled.toFixed(1))
       return rounded >= 10
         ? `${Math.round(scaled)}${units[index].suffix}`
-        : `${scaled.toFixed(1)}${units[index].suffix}`;
+        : `${scaled.toFixed(1)}${units[index].suffix}`
     }
-    return `${Math.round(scaled)}${units[index].suffix}`;
-  };
-
-  let label = render(unitIndex);
-  if (/^1000[.0]*[kmb]$/.test(label) && unitIndex < units.length - 1) {
-    unitIndex++;
-    label = render(unitIndex);
+    return `${Math.round(scaled)}${units[index].suffix}`
   }
-  return label;
+
+  let label = render(unitIndex)
+  if (/^1000[.0]*[kmb]$/.test(label) && unitIndex < units.length - 1) {
+    unitIndex++
+    label = render(unitIndex)
+  }
+  return label
 }
 
 /** Format a cost in USD as a tight badge value: under $0.01 → "<$0.01",
  *  under $1 → 3-decimal cents-wise, otherwise 2 decimals. Hundreds of
  *  these scan past the operator so we stay under 7 chars. */
 export function formatCostUSD(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "";
-  if (n === 0) return "$0";
-  if (n < 0.01) return "<$0.01";
-  if (n < 1) return "$" + n.toFixed(3);
-  return "$" + n.toFixed(2);
+  if (!Number.isFinite(n) || n < 0) return ""
+  if (n === 0) return "$0"
+  if (n < 0.01) return "<$0.01"
+  if (n < 1) return "$" + n.toFixed(3)
+  return "$" + n.toFixed(2)
 }
 
 /** Minimal card shape consumed by the usage aggregator. Kept
  *  independent of the full `CardNode` interface so tests can build
  *  fixtures without importing the store. */
 export interface UsageCardLike {
-  contextTokens?: number;
-  contextTokensEstimated?: boolean;
+  contextTokens?: number
+  contextTokensEstimated?: boolean
   usage?: {
-    inputTokens?: number;
-    outputTokens?: number;
-    totalTokens?: number;
-    costUSD?: number;
-  };
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+    costUSD?: number
+  }
 }
 
 /** Aggregate whole-conversation usage by summing each card's own
@@ -76,31 +76,31 @@ export interface UsageCardLike {
  *  sum-across-cards gives the conversation total. Cards without a `usage`
  *  field (user messages, phase boundaries, tool-result chrome) contribute
  *  nothing. */
-export function aggregateUsageAcrossSessions(
-  cards: Iterable<UsageCardLike | undefined | null>,
-): { tokens: number; costUSD: number; estimated: boolean } {
-  let tokens = 0;
-  let costUSD = 0;
-  let estimated = false;
+export function aggregateUsageAcrossSessions(cards: Iterable<UsageCardLike | undefined | null>): {
+  tokens: number
+  costUSD: number
+  estimated: boolean
+} {
+  let tokens = 0
+  let costUSD = 0
+  let estimated = false
   for (const card of cards) {
-    const usage = card?.usage;
+    const usage = card?.usage
     if (usage) {
-      const total =
-        (usage.totalTokens ?? 0) ||
-        ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0));
+      const total = (usage.totalTokens ?? 0) || (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
       if (total > 0 || (usage.costUSD ?? 0) > 0) {
-        tokens += total;
-        costUSD += usage.costUSD ?? 0;
-        continue;
+        tokens += total
+        costUSD += usage.costUSD ?? 0
+        continue
       }
     }
-    const contextTokens = card?.contextTokens ?? 0;
+    const contextTokens = card?.contextTokens ?? 0
     if (contextTokens > 0) {
-      tokens += contextTokens;
-      estimated = estimated || !!card?.contextTokensEstimated;
+      tokens += contextTokens
+      estimated = estimated || !!card?.contextTokensEstimated
     }
   }
-  return { tokens, costUSD, estimated };
+  return { tokens, costUSD, estimated }
 }
 
 /** Format a `{tokens, costUSD}` aggregate as the strip text. Empty
@@ -109,11 +109,11 @@ export function aggregateUsageAcrossSessions(
  *  reports tokens but no cost should not show a stray "· $0", and
  *  vice-versa. */
 export function formatUsageStrip(input: { tokens: number; costUSD: number; estimated?: boolean }): string {
-  const parts: string[] = [];
-  if (input.tokens > 0) parts.push(`${input.estimated ? "~" : ""}${formatTokenCount(input.tokens)} tok`);
+  const parts: string[] = []
+  if (input.tokens > 0) parts.push(`${input.estimated ? "~" : ""}${formatTokenCount(input.tokens)} tok`)
   if (input.costUSD > 0) {
-    const costLabel = formatCostUSD(input.costUSD);
-    if (costLabel) parts.push(costLabel);
+    const costLabel = formatCostUSD(input.costUSD)
+    if (costLabel) parts.push(costLabel)
   }
-  return parts.join(" · ");
+  return parts.join(" · ")
 }

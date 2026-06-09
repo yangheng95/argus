@@ -84,7 +84,7 @@ export namespace Filesystem {
   }
 
   export async function write(p: string, content: string | Buffer | Uint8Array, mode?: number): Promise<void> {
-    const doWrite = () => mode ? writeFile(p, content, { mode }) : writeFile(p, content)
+    const doWrite = () => (mode ? writeFile(p, content, { mode }) : writeFile(p, content))
     try {
       await doWrite()
     } catch (e) {

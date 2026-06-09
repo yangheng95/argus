@@ -8,6 +8,7 @@ import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { ACTIVE_GOAL_RUN_STATUSES } from "./catalog"
+import { InternalGitCommitSubject } from "./internal-git-commit-subject"
 import { listGoalRunsForTask, requireTask, type AcceptanceRow, type PlanRow, type TaskRow } from "./store"
 import fs from "node:fs/promises"
 import path from "node:path"
@@ -20,9 +21,7 @@ const AUTHOR = {
 }
 
 function dict(input: unknown) {
-  return input && typeof input === "object" && !Array.isArray(input)
-    ? input as Record<string, unknown>
-    : {}
+  return input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {}
 }
 
 function clean(input: string) {
@@ -101,7 +100,13 @@ async function state() {
   }
 }
 
-function note(taskID: string, status: "created" | "completed" | "failed", summary: string, payload: Record<string, unknown>, time = Date.now()) {
+function note(
+  taskID: string,
+  status: "created" | "completed" | "failed",
+  summary: string,
+  payload: Record<string, unknown>,
+  time = Date.now(),
+) {
   Database.use((db) =>
     db
       .insert(EngineProgressSnapshotTable)
@@ -137,7 +142,13 @@ function save(task: TaskRow, patch: Record<string, unknown>, time = Date.now()) 
   return requireTask(task.id)
 }
 
-async function commit(input: { task: TaskRow; plan?: PlanRow; acceptance?: AcceptanceRow; mode: "baseline" | "result"; allowEmpty: boolean }) {
+async function commit(input: {
+  task: TaskRow
+  plan?: PlanRow
+  acceptance?: AcceptanceRow
+  mode: "baseline" | "result"
+  allowEmpty: boolean
+}) {
   const added = await git(evidenceExcludedAddAllArgs(), { cwd: Instance.directory })
   if (added.exitCode !== 0) {
     return {
@@ -145,7 +156,15 @@ async function commit(input: { task: TaskRow; plan?: PlanRow; acceptance?: Accep
     }
   }
   const msg = message(input.task, input.mode, input.plan, input.acceptance)
-  const args = ["commit", "--no-gpg-sign", ...(input.allowEmpty ? ["--allow-empty"] : []), "-m", msg.subject, "-m", msg.body]
+  const args = [
+    "commit",
+    "--no-gpg-sign",
+    ...(input.allowEmpty ? ["--allow-empty"] : []),
+    "-m",
+    msg.subject,
+    "-m",
+    msg.body,
+  ]
   const result = await git(args, {
     cwd: Instance.directory,
     env: env(),
@@ -275,10 +294,15 @@ export async function ensureGitignore() {
   if (await file.exists()) {
     // Append missing essentials without overwriting user content
     const existing = await file.text()
-    const lines = new Set(existing.split(/\r?\n/).map(l => l.trim()))
-    const missing = GITIGNORE_ESSENTIALS.split("\n").filter(l => l.trim() && !l.startsWith("!") && !lines.has(l.trim()))
+    const lines = new Set(existing.split(/\r?\n/).map((l) => l.trim()))
+    const missing = GITIGNORE_ESSENTIALS.split("\n").filter(
+      (l) => l.trim() && !l.startsWith("!") && !lines.has(l.trim()),
+    )
     if (missing.length > 0) {
-      await Bun.write(`${dir}/.gitignore`, existing.trimEnd() + "\n\n# Auto-added by OpenCorvus\n" + missing.join("\n") + "\n")
+      await Bun.write(
+        `${dir}/.gitignore`,
+        existing.trimEnd() + "\n\n# Auto-added by OpenCorvus\n" + missing.join("\n") + "\n",
+      )
     }
   } else {
     await Bun.write(`${dir}/.gitignore`, GITIGNORE_ESSENTIALS)
@@ -326,14 +350,20 @@ export async function ensureGitignore() {
   // as filenames and the seed commit silently failed on every fresh repo.
   // That left HEAD absent, and `Worktree.create` then died with the opaque
   // `WorktreeCreateFailedError` on every greenfield project.
-  const committed = await git([
-    "-c", "user.email=opencorvus@local",
-    "-c", "user.name=OpenCorvus",
-    "commit",
-    ...(hasHead ? ["--only"] : []),
-    "-m", "chore(opencorvus): seed baseline .gitignore",
-    ...(hasHead ? ["--", ".gitignore"] : []),
-  ], { cwd: dir })
+  const committed = await git(
+    [
+      "-c",
+      "user.email=opencorvus@local",
+      "-c",
+      "user.name=OpenCorvus",
+      "commit",
+      ...(hasHead ? ["--only"] : []),
+      "-m",
+      InternalGitCommitSubject.seedGitignore,
+      ...(hasHead ? ["--", ".gitignore"] : []),
+    ],
+    { cwd: dir },
+  )
   if (committed.exitCode !== 0) {
     const detail = committed.stderr.toString().trim() || committed.stdout.toString().trim() || "git commit failed"
     throw new Error(`ensureGitignore: seed commit failed: ${detail}`)
@@ -376,10 +406,14 @@ async function untrackOpencorvusGitExcludedPaths(dir: string) {
   if (!anyStaged) return
   await git(
     [
-      "-c", "user.name=opencorvus",
-      "-c", "user.email=noreply@opencorvus.ai",
-      "commit", "--no-gpg-sign", "--no-verify",
-      "-m", "chore: untrack opencorvus ignored paths",
+      "-c",
+      "user.name=opencorvus",
+      "-c",
+      "user.email=noreply@opencorvus.ai",
+      "commit",
+      "--no-gpg-sign",
+      "-m",
+      InternalGitCommitSubject.untrackIgnoredPaths,
     ],
     { cwd: dir },
   )
@@ -387,16 +421,12 @@ async function untrackOpencorvusGitExcludedPaths(dir: string) {
 
 function baseline(task: TaskRow) {
   const value = dict(dict(task.metadata).git).baseline
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
 }
 
 function result(task: TaskRow) {
   const value = dict(dict(task.metadata).git).result
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
 }
 
 /**
@@ -524,7 +554,8 @@ function readAcceptanceLKG(task: TaskRow): AcceptanceLKG | undefined {
     typeof v.best_commit_sha !== "string" ||
     typeof v.best_round !== "number" ||
     typeof v.recorded_at !== "number"
-  ) return
+  )
+    return
   return {
     best_score: v.best_score,
     best_commit_sha: v.best_commit_sha,
@@ -593,7 +624,12 @@ async function evaluateAndApplyLKG(input: {
         outcome: {
           kind: "held",
           score: input.score,
-          previous: { best_score: input.score, best_commit_sha: "", best_round: input.iteration, recorded_at: Date.now() },
+          previous: {
+            best_score: input.score,
+            best_commit_sha: "",
+            best_round: input.iteration,
+            recorded_at: Date.now(),
+          },
         },
       }
     }
@@ -603,7 +639,10 @@ async function evaluateAndApplyLKG(input: {
       best_round: input.iteration,
       recorded_at: Date.now(),
     }
-    return { task: writeAcceptanceLKG(input.task, updated), outcome: { kind: "first_round", score: input.score, updated } }
+    return {
+      task: writeAcceptanceLKG(input.task, updated),
+      outcome: { kind: "first_round", score: input.score, updated },
+    }
   }
 
   const delta = input.score - previous.best_score
@@ -619,7 +658,10 @@ async function evaluateAndApplyLKG(input: {
       best_round: input.iteration,
       recorded_at: Date.now(),
     }
-    return { task: writeAcceptanceLKG(input.task, updated), outcome: { kind: "improved", score: input.score, previous, updated } }
+    return {
+      task: writeAcceptanceLKG(input.task, updated),
+      outcome: { kind: "improved", score: input.score, previous, updated },
+    }
   }
   if (delta >= -epsilon) {
     return { task: input.task, outcome: { kind: "held", score: input.score, previous } }
@@ -631,18 +673,23 @@ async function evaluateAndApplyLKG(input: {
   // loudly instead of silently passing.
   if (!previous.best_commit_sha) {
     log.warn("evaluateAndApplyLKG: regression detected but LKG has no commit sha — cannot roll back", {
-      taskID: input.task.id, iteration: input.iteration, delta,
+      taskID: input.task.id,
+      iteration: input.iteration,
+      delta,
     })
     return { task: input.task, outcome: { kind: "held", score: input.score, previous } }
   }
   const activeSiblings = await detectActiveSiblingGoals(input.task.id)
   if (activeSiblings.length > 0) {
-    log.warn("evaluateAndApplyLKG: regression detected but active sibling goals exist — skipping reset to avoid wiping concurrent progress", {
-      taskID: input.task.id,
-      iteration: input.iteration,
-      delta,
-      activeSiblings,
-    })
+    log.warn(
+      "evaluateAndApplyLKG: regression detected but active sibling goals exist — skipping reset to avoid wiping concurrent progress",
+      {
+        taskID: input.task.id,
+        iteration: input.iteration,
+        delta,
+        activeSiblings,
+      },
+    )
     return {
       task: input.task,
       outcome: {
@@ -660,8 +707,11 @@ async function evaluateAndApplyLKG(input: {
     throw new Error(`evaluateAndApplyLKG: git reset --hard ${previous.best_commit_sha} failed: ${err}`)
   }
   log.info("evaluateAndApplyLKG: rolled back to LKG", {
-    taskID: input.task.id, iteration: input.iteration,
-    score: input.score, best_score: previous.best_score, sha: previous.best_commit_sha,
+    taskID: input.task.id,
+    iteration: input.iteration,
+    score: input.score,
+    best_score: previous.best_score,
+    sha: previous.best_commit_sha,
   })
   return {
     task: input.task,
@@ -683,8 +733,7 @@ const _evaluateAndApplyLKG = evaluateAndApplyLKG
 export namespace EngineGit {
   export const commitAcceptanceRound = (input: Parameters<typeof _commitAcceptanceRound>[0]) =>
     _commitAcceptanceRound(input)
-  export const evaluateAndApplyLKG = (input: Parameters<typeof _evaluateAndApplyLKG>[0]) =>
-    _evaluateAndApplyLKG(input)
+  export const evaluateAndApplyLKG = (input: Parameters<typeof _evaluateAndApplyLKG>[0]) => _evaluateAndApplyLKG(input)
   export const readLKG = (task: TaskRow) => readAcceptanceLKG(task)
 
   export async function prepare(task: TaskRow, plan?: PlanRow) {
@@ -733,34 +782,46 @@ export namespace EngineGit {
     const after = await branch()
     const snapshot = await Snapshot.track()
     const time = Date.now()
-    const row = save(task, {
-      branch: after ?? info.branch,
-      baseline: {
+    const row = save(
+      task,
+      {
+        branch: after ?? info.branch,
+        baseline: {
+          mode: next.mode,
+          branch: after ?? info.branch,
+          commit: next.commit,
+          message: next.message,
+          head_before: before,
+          snapshot,
+          dirty: info.dirty,
+          staged: info.staged,
+          modified: info.modified,
+          untracked: info.untracked,
+          conflicts: info.conflicts,
+          ahead: info.ahead,
+          behind: info.behind,
+          time,
+        },
+      },
+      time,
+    )
+    note(
+      task.id,
+      "created",
+      next.mode === "created_commit"
+        ? "Created a startup git checkpoint."
+        : "Recorded the current HEAD as the startup checkpoint.",
+      {
+        kind: "git",
+        stage: "baseline",
         mode: next.mode,
         branch: after ?? info.branch,
         commit: next.commit,
         message: next.message,
-        head_before: before,
         snapshot,
-        dirty: info.dirty,
-        staged: info.staged,
-        modified: info.modified,
-        untracked: info.untracked,
-        conflicts: info.conflicts,
-        ahead: info.ahead,
-        behind: info.behind,
-        time,
       },
-    }, time)
-    note(task.id, "created", next.mode === "created_commit" ? "Created a startup git checkpoint." : "Recorded the current HEAD as the startup checkpoint.", {
-      kind: "git",
-      stage: "baseline",
-      mode: next.mode,
-      branch: after ?? info.branch,
-      commit: next.commit,
-      message: next.message,
-      snapshot,
-    }, time)
+      time,
+    )
     return { task: row }
   }
 
@@ -811,35 +872,47 @@ export namespace EngineGit {
 
     const after = await branch()
     const time = Date.now()
-    const row = save(task, {
-      branch: after ?? info.branch,
-      result: {
+    const row = save(
+      task,
+      {
+        branch: after ?? info.branch,
+        result: {
+          mode: next.mode,
+          branch: after ?? info.branch,
+          commit: next.commit,
+          message: next.message,
+          head_before: before,
+          acceptance_id: acceptance.id,
+          acceptance_summary: acceptance.summary,
+          dirty: info.dirty,
+          staged: info.staged,
+          modified: info.modified,
+          untracked: info.untracked,
+          conflicts: info.conflicts,
+          ahead: info.ahead,
+          behind: info.behind,
+          time,
+        },
+      },
+      time,
+    )
+    note(
+      task.id,
+      "completed",
+      next.mode === "created_commit"
+        ? "Committed the accepted workspace state."
+        : "Recorded the current HEAD as the accepted workspace state.",
+      {
+        kind: "git",
+        stage: "result",
         mode: next.mode,
         branch: after ?? info.branch,
         commit: next.commit,
         message: next.message,
-        head_before: before,
-        acceptance_id: acceptance.id,
-        acceptance_summary: acceptance.summary,
-        dirty: info.dirty,
-        staged: info.staged,
-        modified: info.modified,
-        untracked: info.untracked,
-        conflicts: info.conflicts,
-        ahead: info.ahead,
-        behind: info.behind,
-        time,
+        acceptanceID: acceptance.id,
       },
-    }, time)
-    note(task.id, "completed", next.mode === "created_commit" ? "Committed the accepted workspace state." : "Recorded the current HEAD as the accepted workspace state.", {
-      kind: "git",
-      stage: "result",
-      mode: next.mode,
-      branch: after ?? info.branch,
-      commit: next.commit,
-      message: next.message,
-      acceptanceID: acceptance.id,
-    }, time)
+      time,
+    )
     return { task: row }
   }
 }

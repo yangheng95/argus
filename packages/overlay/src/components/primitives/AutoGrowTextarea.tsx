@@ -34,8 +34,7 @@ export function autoGrowHeight(opts: {
   return Math.min(opts.scrollHeight, maxHeight)
 }
 
-export interface AutoGrowTextareaProps
-  extends Omit<JSX.TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "ref"> {
+export interface AutoGrowTextareaProps extends Omit<JSX.TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "ref"> {
   /** Controlled value. Must be reactive for auto-grow to follow edits. */
   value: string
   /** Visible-line ceiling before the textarea starts scrolling. */

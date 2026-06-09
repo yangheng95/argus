@@ -28,6 +28,7 @@ type DiffItem = {
 type DiffStat = {
   readonly additions: number
   readonly deletions: number
+  readonly binary: boolean
 }
 
 const emptyPatch = (file: string) => formatPatch(structuredPatch(file, file, "", "", "", "", { context: 0 }))
@@ -62,13 +63,16 @@ function parseNumstat(text: string) {
   const stats = new Map<string, DiffStat>()
   for (const line of text.trim().split(/\r?\n/)) {
     if (!line) continue
-    const [rawAdditions, rawDeletions, file] = line.split("\t")
+    const [rawAdditions, rawDeletions, rawFile] = line.split("\t")
+    const file = rawFile?.includes(" => ") ? rawFile.split(" => ").at(-1) : rawFile
     if (!rawAdditions || !rawDeletions || !file) continue
+    const binary = rawAdditions === "-" && rawDeletions === "-"
     const additions = Number.parseInt(rawAdditions, 10)
     const deletions = Number.parseInt(rawDeletions, 10)
     stats.set(normalizeGitPath(file), {
       additions: Number.isFinite(additions) ? additions : 0,
       deletions: Number.isFinite(deletions) ? deletions : 0,
+      binary,
     })
   }
   return stats
@@ -167,6 +171,13 @@ async function gitText(command: Promise<GitResult>, label: string) {
   throw new Error(`${label} failed${stderr ? `: ${stderr}` : ""}`)
 }
 
+async function gitDiffText(command: Promise<GitResult>, label: string) {
+  const result = await command
+  if (result.exitCode === 0 || result.exitCode === 1) return result.text()
+  const stderr = result.stderr.toString().trim()
+  throw new Error(`${label} failed${stderr ? `: ${stderr}` : ""}`)
+}
+
 async function optionalGitText(command: Promise<GitResult>) {
   const result = await command
   if (result.exitCode !== 0) return undefined
@@ -192,19 +203,37 @@ async function untrackedFiles(cwd: string) {
 }
 
 async function statUntracked(cwd: string, file: string): Promise<DiffStat> {
-  const text = await Bun.file(path.join(cwd, file))
-    .text()
-    .catch(() => "")
-  if (!text) return { additions: 0, deletions: 0 }
-  return { additions: text.split(/\r?\n/).filter(Boolean).length, deletions: 0 }
+  const stats = parseNumstat(
+    await gitDiffText(
+      git(["diff", "--no-ext-diff", "--no-renames", "--numstat", "--no-index", "--", "/dev/null", file], {
+        cwd,
+        timeoutProfile: "default",
+      }),
+      "vcs diff untracked numstat",
+    ),
+  )
+  return stats.get(file) ?? { additions: 0, deletions: 0, binary: true }
 }
 
 async function patchUntracked(cwd: string, file: string, options?: DiffOptions) {
-  const text = await Bun.file(path.join(cwd, file))
-    .text()
-    .catch(() => "")
-  const patch = formatPatch(
-    structuredPatch(file, file, "", text, "", "", { context: options?.context ?? PATCH_CONTEXT_LINES }),
+  const patch = await gitDiffText(
+    git(
+      [
+        "diff",
+        "--no-ext-diff",
+        "--no-renames",
+        `--unified=${patchContext(options)}`,
+        "--no-index",
+        "--",
+        "/dev/null",
+        file,
+      ],
+      {
+        cwd,
+        timeoutProfile: "default",
+      },
+    ),
+    "vcs diff untracked patch",
   )
   return Buffer.byteLength(patch) > MAX_PATCH_BYTES ? emptyPatch(file) : patch
 }
@@ -294,14 +323,18 @@ async function diffFiles(
 
   for (const item of items) {
     const stat = stats.get(item.file) ?? (item.code === "??" ? await statUntracked(cwd, item.file) : undefined)
-    const rawPatch = item.code === "??" ? await patchUntracked(cwd, item.file, options) : patches.get(item.file)
-    const patch = capped ? emptyPatch(item.file) : (rawPatch ?? emptyPatch(item.file))
-    const nextTotal = total + Buffer.byteLength(patch)
+    const rawPatch = stat?.binary
+      ? undefined
+      : item.code === "??"
+        ? await patchUntracked(cwd, item.file, options)
+        : patches.get(item.file)
+    const patch = stat?.binary ? undefined : capped ? emptyPatch(item.file) : (rawPatch ?? emptyPatch(item.file))
+    const nextTotal = total + Buffer.byteLength(patch ?? "")
     capped = capped || nextTotal > MAX_TOTAL_PATCH_BYTES
     if (!capped) total = nextTotal
     result.push({
       file: item.file,
-      patch: capped ? emptyPatch(item.file) : patch,
+      ...(patch !== undefined ? { patch: capped ? emptyPatch(item.file) : patch } : {}),
       additions: stat?.additions ?? 0,
       deletions: stat?.deletions ?? 0,
       status: item.status,

@@ -355,16 +355,6 @@ fn overlay_open_project_editor(editor: ProjectEditor, path: String) -> Result<bo
 }
 
 #[tauri::command]
-fn overlay_create_dir(path: String) -> Result<bool, String> {
-    let path = path.trim();
-    if path.is_empty() {
-        return Ok(false);
-    }
-    fs::create_dir_all(path).map_err(|err| err.to_string())?;
-    Ok(true)
-}
-
-#[tauri::command]
 fn overlay_write_file(path: String, content: String) -> Result<bool, String> {
     let path = path.trim();
     if path.is_empty() {
@@ -1369,7 +1359,6 @@ fn main() {
         overlay_open_path,
         overlay_open_url,
         overlay_open_project_editor,
-        overlay_create_dir,
         overlay_write_file,
         overlay_pick_dir,
         overlay_pick_files,
@@ -1388,7 +1377,6 @@ fn main() {
         overlay_open_path,
         overlay_open_url,
         overlay_open_project_editor,
-        overlay_create_dir,
         overlay_write_file,
         overlay_pick_dir,
         overlay_pick_files,

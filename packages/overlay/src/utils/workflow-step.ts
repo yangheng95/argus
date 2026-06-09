@@ -18,18 +18,20 @@
  *  adversarial review happens inside the (task-scope) acceptance session,
  *  not inside a goal-scope phase card. */
 export interface GoalPhaseLocation {
-  stepID: string;
-  phaseID: string;
+  stepID: string
+  phaseID: string
 }
 
 export function goalStagePhaseID(stage: string): GoalPhaseLocation | null {
-  const normalized = String(stage || "").trim().toLowerCase();
+  const normalized = String(stage || "")
+    .trim()
+    .toLowerCase()
   switch (normalized) {
     case "planner":
-      return { stepID: "build", phaseID: "plan" };
+      return { stepID: "build", phaseID: "plan" }
     case "build":
-      return { stepID: "build", phaseID: "build" };
+      return { stepID: "build", phaseID: "build" }
     default:
-      return null;
+      return null
   }
 }

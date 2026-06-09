@@ -11,7 +11,10 @@ import { createGitLab, VERSION as GITLAB_PROVIDER_VERSION } from "@gitlab/gitlab
 import type { Provider } from "./provider"
 
 export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
-export type CustomLoader = (provider: Provider.Info, context?: { config: Config.Info }) => Promise<{
+export type CustomLoader = (
+  provider: Provider.Info,
+  context?: { config: Config.Info },
+) => Promise<{
   autoload: boolean
   getModel?: CustomModelLoader
   options?: Record<string, any>
@@ -34,7 +37,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       const env = Env.all()
       if (input.env.some((item) => env[item])) return true
       if (await Auth.get(input.id)) return true
-      const config = context?.config ?? await Config.get()
+      const config = context?.config ?? (await Config.get())
       if (config.provider?.["opencorvus"]?.options?.apiKey) return true
       return false
     })()
@@ -90,7 +93,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     }
   },
   "amazon-bedrock": async (_input, context) => {
-    const config = context?.config ?? await Config.get()
+    const config = context?.config ?? (await Config.get())
     const providerConfig = config.provider?.["amazon-bedrock"]
 
     const auth = await Auth.get("amazon-bedrock")
@@ -333,7 +336,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       return Env.get("GITLAB_TOKEN")
     })()
 
-    const config = context?.config ?? await Config.get()
+    const config = context?.config ?? (await Config.get())
     const providerConfig = config.provider?.["gitlab"]
 
     const aiGatewayHeaders = {

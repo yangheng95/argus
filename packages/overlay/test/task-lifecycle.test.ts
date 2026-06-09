@@ -13,8 +13,15 @@ import { createStore } from "solid-js/store"
 // the full overlay module graph (which depends on DOM, Tauri, etc.).
 
 const INTERRUPTABLE_STATUSES = new Set([
-  "queued", "spec_generating", "goal_decomposing", "planning",
-  "planned", "running", "blocked", "evaluating", "delivering",
+  "queued",
+  "spec_generating",
+  "goal_decomposing",
+  "planning",
+  "planned",
+  "running",
+  "blocked",
+  "evaluating",
+  "delivering",
 ])
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"])
@@ -125,8 +132,8 @@ describe("busy signal (chatRequest || isTaskInterruptable)", () => {
     // 2. Direct API creates task → chatRequest cleared
     // 3. Task status = "queued" → isTaskInterruptable = true → busy=true
     // No gap! The stop button remains visible.
-    const chatRequest = null  // cleared after create
-    const taskStatus = "queued"  // task just created
+    const chatRequest = null // cleared after create
+    const taskStatus = "queued" // task just created
     const busy = !!chatRequest || isTaskInterruptable(taskStatus)
     expect(busy).toBe(true)
   })
@@ -308,6 +315,6 @@ describe("pipeline abort registry contract", () => {
     taskAborts.get("task-1")?.abort("first")
     taskAborts.get("task-1")?.abort("second")
     expect(ctrl.signal.aborted).toBe(true)
-    expect(ctrl.signal.reason).toBe("first")  // first reason wins
+    expect(ctrl.signal.reason).toBe("first") // first reason wins
   })
 })

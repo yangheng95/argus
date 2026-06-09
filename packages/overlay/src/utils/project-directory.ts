@@ -13,10 +13,6 @@ export function projectDirectoryLabel(directory: string, unknownName: string): P
   const parts = normalized.split("/").filter(Boolean)
   const name = parts[parts.length - 1] || normalized
   const parent =
-    parts.length > 1
-      ? parts.length > 3
-        ? ".../" + parts.slice(-3, -1).join("/")
-        : parts.slice(0, -1).join("/")
-      : ""
+    parts.length > 1 ? (parts.length > 3 ? ".../" + parts.slice(-3, -1).join("/") : parts.slice(0, -1).join("/")) : ""
   return { name, parent }
 }

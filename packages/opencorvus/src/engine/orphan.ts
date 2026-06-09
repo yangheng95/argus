@@ -7,12 +7,7 @@
  * executor context on a process restart; no code gates on the result.
  */
 
-import {
-  listLiveGoalRunsForProject,
-  listLiveRunsForProject,
-  type GoalRunRow,
-  type RunRow,
-} from "./store"
+import { listLiveGoalRunsForProject, listLiveRunsForProject, type GoalRunRow, type RunRow } from "./store"
 import { isLiveGoalRunStatus } from "./catalog"
 import { processOwner } from "./lease"
 import { Ownership } from "./ownership"

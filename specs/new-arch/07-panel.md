@@ -61,31 +61,36 @@ Agent Cards（chat 左侧） — 各 agent 实时消息流
 ```
 
 **规则**：
+
 - 每个区域可折叠；只有**活跃/失败**的区域默认展开
 - Goal 顺序按 dependency layer 排列：Layer 0 在上，Layer 1 在下
 
 ## 当前 → 重设计 对照
 
 ### 删除的面板区域
-| 删除项 | 替代 |
-|---|---|
-| `SpecPanel` | 合并入 **需求分析区**（spec → requirements） |
-| `PlanPanel`（扁平全局） | 拆分到 **GoalWorkflowGroup.plan** 步骤 |
-| `GoalsPanel`（扁平列表） | **GoalWorkflowGroup** header 替代 |
-| `CriteriaPanel`（全局 checks） | per-goal eval 内嵌（check family 保留在 eval 区） |
-| `TaskBoardLane` 泳道 | goals 直接从 `goalWorkflows` 获取，不走 `lane.cards` |
+
+| 删除项                         | 替代                                                 |
+| ------------------------------ | ---------------------------------------------------- |
+| `SpecPanel`                    | 合并入 **需求分析区**（spec → requirements）         |
+| `PlanPanel`（扁平全局）        | 拆分到 **GoalWorkflowGroup.plan** 步骤               |
+| `GoalsPanel`（扁平列表）       | **GoalWorkflowGroup** header 替代                    |
+| `CriteriaPanel`（全局 checks） | per-goal eval 内嵌（check family 保留在 eval 区）    |
+| `TaskBoardLane` 泳道           | goals 直接从 `goalWorkflows` 获取，不走 `lane.cards` |
 
 ### 新增的面板区域
+
 - **需求分析区** — 需求列表 + 目标数 + 追溯矩阵 + fidelity score
 - **Architect 区** — 接口契约 + 目录蓝图 + 导出清单 + 命名规范
 - **GoalWorkflowGroup** — per-goal [plan · execute · eval] 可折叠组
 
 ### 保留不变
+
 - Overview · Acceptance · Interactions · Agent Cards
 
 ## TaskBoard 模型变更
 
 ### 新增字段
+
 ```ts
 workflow: { id, name, currentStep? }      // 当前使用的 workflow
 
@@ -104,14 +109,16 @@ goalWorkflows: Array<GoalWorkflowGroup>    // per-goal 工作流状态
 ```
 
 ### 废弃字段
-| 字段 | 替代 |
-|---|---|
-| `spec: SpecSnapshot` | `requirements` |
+
+| 字段                             | 替代                        |
+| -------------------------------- | --------------------------- |
+| `spec: SpecSnapshot`             | `requirements`              |
 | `planNodes: TaskBoardPlanNode[]` | `goalWorkflows[].planSteps` |
-| `lanes: TaskBoardLane[]` | 不再需要 |
-| `snapshots: ProgressSnapshot[]` | 未使用 |
+| `lanes: TaskBoardLane[]`         | 不再需要                    |
+| `snapshots: ProgressSnapshot[]`  | 未使用                      |
 
 ### 保留字段
+
 `task` · `run` · `goalRuns` · `acceptance` · `evaluation` · `interactions` · `overview` · `brief` · `artifacts`
 
 ## 配置面板重设计
@@ -166,6 +173,7 @@ goalWorkflows: Array<GoalWorkflowGroup>    // per-goal 工作流状态
 ```
 
 **配置变更路径**：
+
 ```
 Panel → PATCH /config {partial} → mergeDeep → 写文件
      → Bus "config.changed" → SSE → 所有 Overlay 自动刷新
@@ -175,11 +183,11 @@ Panel → PATCH /config {partial} → mergeDeep → 写文件
 
 实际注册的事件（见 `engine/model.ts:1067-1069`）：
 
-| 事件 | 触发 |
-|---|---|
-| `workflow.selected` | 更新 workflow 标识 |
-| `workflow.step.updated` | 刷新 stage（requirements / architect / build / acceptance 等步骤进度） |
-| `goal.workflow.progress` | per-goal workflow 进度 |
+| 事件                     | 触发                                                                   |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `workflow.selected`      | 更新 workflow 标识                                                     |
+| `workflow.step.updated`  | 刷新 stage（requirements / architect / build / acceptance 等步骤进度） |
+| `goal.workflow.progress` | per-goal workflow 进度                                                 |
 
 > 历史版本规划过 `requirements.completed` / `architect.completed` / `goal.workflow.updated` 等
 > 独立事件，当前**均未注册**——stage 进度统一通过 `workflow.step.updated` + `goal.workflow.progress`

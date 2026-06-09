@@ -426,14 +426,23 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
               setStore("provider_default", reconcile(providers.data!.default))
             }),
             providerListPromise.then((providers) => setStore("provider_next", reconcile(providers.data!))),
-            ...(args.continue ? [] : [sessionListPromise.then((sessions) => setStore("session", reconcile(sessions as unknown as Session[])))]),
+            ...(args.continue
+              ? []
+              : [
+                  sessionListPromise.then((sessions) =>
+                    setStore("session", reconcile(sessions as unknown as Session[])),
+                  ),
+                ]),
             sdk.client.command.list().then((x) => setStore("command", reconcile(x.data ?? []))),
             sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data!))),
             sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!))),
             sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
             sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data!))),
             sdk.client.session.status().then((x) => {
-              setStore("session_status", reconcile(x.data! as unknown as { [sessionID: string]: import("@opencorvus-ai/sdk").SessionStatus }))
+              setStore(
+                "session_status",
+                reconcile(x.data! as unknown as { [sessionID: string]: import("@opencorvus-ai/sdk").SessionStatus }),
+              )
             }),
             sdk.client.provider.auth().then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
             refreshProjectBoard(),

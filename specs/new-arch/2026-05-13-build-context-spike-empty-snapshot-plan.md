@@ -10,12 +10,12 @@ This plan is scoped to root-cause investigation and implementation strategy. It 
 
 Read-only SQLite queries against `C:\Users\chuan\AppData\Local\opencorvus\.opencorvus\opencorvus.db` show:
 
-| Session | Event | Evidence |
-|---|---|---|
+| Session                          | Event                | Evidence                                                                                                                    |
+| -------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `ses_1e041b267ffdFO3yajAEhfZENy` | Oversized patch part | `prt_e1fc7e100001ddAXma6acsS1Ns`, `hash=4b825dc642cb6eb9a060e54bf8d69288fbee4904`, `file_count=4478`, `length(data)=676984` |
-| `ses_1e041b267ffdFO3yajAEhfZENy` | Compaction overflow | `msg_e1fc7e18a001epmqd9WtZBMNTc`, provider error: `Max Input Tokens=262144, Got=481283` |
+| `ses_1e041b267ffdFO3yajAEhfZENy` | Compaction overflow  | `msg_e1fc7e18a001epmqd9WtZBMNTc`, provider error: `Max Input Tokens=262144, Got=481283`                                     |
 | `ses_1e037b17affdw30mS4CpMi7PGv` | Oversized patch part | `prt_e1fcd34fd001vEoaV8VpjgWka3`, `hash=4b825dc642cb6eb9a060e54bf8d69288fbee4904`, `file_count=4479`, `length(data)=677156` |
-| `ses_1e037b17affdw30mS4CpMi7PGv` | Compaction overflow | `msg_e1fcd358f001Ker0MisK2FZjUe`, provider error: `Max Input Tokens=262144, Got=465713` |
+| `ses_1e037b17affdw30mS4CpMi7PGv` | Compaction overflow  | `msg_e1fcd358f001Ker0MisK2FZjUe`, provider error: `Max Input Tokens=262144, Got=465713`                                     |
 
 The hash `4b825dc642cb6eb9a060e54bf8d69288fbee4904` is Git's empty tree. In both failing build sessions, a `step-start` snapshot used that empty tree, then the subsequent `step-finish` snapshot was non-empty. `Snapshot.patch(emptyTree)` correctly reported every indexed file as changed, and the session persisted that list as a patch part.
 
@@ -23,17 +23,17 @@ Other recent patch parts in the same DB are small: the next largest rows are onl
 
 ## Current Implementation Map
 
-| Area | File | Current behavior | Impact |
-|---|---|---|---|
-| Snapshot capture | `packages/opencorvus/src/snapshot/index.ts` | `track()` calls `add()` then `write-tree`. `add()` does not inspect `git add` exit status. | If `git add` fails or captures an empty temporary index, `write-tree` can return the empty tree and the caller treats it as a valid snapshot. |
-| Snapshot diff | `packages/opencorvus/src/snapshot/index.ts` | `patch(hash)` diffs `hash` against current worktree and returns all changed file paths. | Correctly turns an empty-tree baseline into a whole-worktree file list. |
-| Session patch emission | `packages/opencorvus/src/session/processor.ts` | On `finish-step` and in the catch/final path, emits a patch part whenever `Snapshot.patch(snapshot).files.length > 0`. | No guard rejects pathological patch evidence before it enters durable session history. |
-| Normal provider replay | `packages/opencorvus/src/session/message.ts` | Patch parts become text: `[Patch evidence: hash: ${files.join(", ")}]`. | A single oversized patch part can be replayed into later model calls. |
-| Compaction projection | `packages/opencorvus/src/session/compaction.ts` | `patchEvidence()` also expands every patch part with `files.join(", ")`; `runtimeContext()` appends this outside normal tool-output truncation. | Compaction can duplicate the same giant file list in selected history and runtime prompt. |
-| Compaction budget | `packages/opencorvus/src/session/compaction.ts` | `selectCompactionInput()` estimates selected history but does not validate the final prompt including runtime context before calling the provider. | Compaction can be invoked with a request larger than the compaction model's input limit. |
-| Session summary diff | `packages/opencorvus/src/session/summary.ts` | `computeDiff()` uses earliest `step-start` and latest `step-finish` snapshots for session diff. | An empty earliest snapshot can make overlay summary/diff report the whole worktree as changed. |
-| Managed executor acceptance diff | `packages/opencorvus/src/executor/managed.ts` | Uses `Snapshot.track()` for `startHash` and acceptance `currentHash`, but catches failures and continues with missing or empty diff data. | Snapshot integrity failures can be hidden from executor and acceptance state. |
-| Git checkpoint snapshot | `packages/opencorvus/src/engine/git.ts` | Stores `Snapshot.track()` result as baseline snapshot. | Bad snapshot hashes can enter task checkpoint metadata. |
+| Area                             | File                                            | Current behavior                                                                                                                                   | Impact                                                                                                                                        |
+| -------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Snapshot capture                 | `packages/opencorvus/src/snapshot/index.ts`     | `track()` calls `add()` then `write-tree`. `add()` does not inspect `git add` exit status.                                                         | If `git add` fails or captures an empty temporary index, `write-tree` can return the empty tree and the caller treats it as a valid snapshot. |
+| Snapshot diff                    | `packages/opencorvus/src/snapshot/index.ts`     | `patch(hash)` diffs `hash` against current worktree and returns all changed file paths.                                                            | Correctly turns an empty-tree baseline into a whole-worktree file list.                                                                       |
+| Session patch emission           | `packages/opencorvus/src/session/processor.ts`  | On `finish-step` and in the catch/final path, emits a patch part whenever `Snapshot.patch(snapshot).files.length > 0`.                             | No guard rejects pathological patch evidence before it enters durable session history.                                                        |
+| Normal provider replay           | `packages/opencorvus/src/session/message.ts`    | Patch parts become text: `[Patch evidence: hash: ${files.join(", ")}]`.                                                                            | A single oversized patch part can be replayed into later model calls.                                                                         |
+| Compaction projection            | `packages/opencorvus/src/session/compaction.ts` | `patchEvidence()` also expands every patch part with `files.join(", ")`; `runtimeContext()` appends this outside normal tool-output truncation.    | Compaction can duplicate the same giant file list in selected history and runtime prompt.                                                     |
+| Compaction budget                | `packages/opencorvus/src/session/compaction.ts` | `selectCompactionInput()` estimates selected history but does not validate the final prompt including runtime context before calling the provider. | Compaction can be invoked with a request larger than the compaction model's input limit.                                                      |
+| Session summary diff             | `packages/opencorvus/src/session/summary.ts`    | `computeDiff()` uses earliest `step-start` and latest `step-finish` snapshots for session diff.                                                    | An empty earliest snapshot can make overlay summary/diff report the whole worktree as changed.                                                |
+| Managed executor acceptance diff | `packages/opencorvus/src/executor/managed.ts`   | Uses `Snapshot.track()` for `startHash` and acceptance `currentHash`, but catches failures and continues with missing or empty diff data.          | Snapshot integrity failures can be hidden from executor and acceptance state.                                                                 |
+| Git checkpoint snapshot          | `packages/opencorvus/src/engine/git.ts`         | Stores `Snapshot.track()` result as baseline snapshot.                                                                                             | Bad snapshot hashes can enter task checkpoint metadata.                                                                                       |
 
 ## Root Cause
 
@@ -71,12 +71,14 @@ The corrected contract is:
 ### Phase 1: Make Snapshot Capture Fail Loudly
 
 Files:
+
 - `packages/opencorvus/src/snapshot/index.ts`
 - `packages/opencorvus/src/executor/managed.ts`
 - `packages/opencorvus/src/session/message.ts`
 - `packages/opencorvus/test/snapshot/snapshot.test.ts`
 
 Change:
+
 - Introduce a small internal helper for git commands inside `Snapshot`, e.g. `snapshotGitText()`, that throws on non-zero exit with stderr.
 - Use it in `add()`, `track()`, `patch()`, `diff()`, and `diffFull()` where failure means the snapshot result is invalid.
 - `track()` must not return `4b825dc642cb6eb9a060e54bf8d69288fbee4904` for a non-empty worktree. If the temporary index writes the empty tree while the worktree has any non-ignored files, throw `SnapshotEmptyTreeError`.
@@ -85,6 +87,7 @@ Change:
 - Remove `.catch(() => undefined)` and `.catch(() => [])` around `Snapshot.track()` / `Snapshot.diffFull()` in `executor/managed.ts`. Snapshot errors must make executor submit/acceptance fail visibly.
 
 Acceptance:
+
 - Test `git add` failure is not ignored and `track()` rejects instead of returning empty tree.
 - Test a real empty git repository can still produce empty tree only when no trackable files exist.
 - Test a non-empty linked worktree never returns empty tree.
@@ -94,11 +97,13 @@ Acceptance:
 ### Phase 2: Reject Pathological Patch Parts Before Persistence
 
 Files:
+
 - `packages/opencorvus/src/session/processor.ts`
 - `packages/opencorvus/src/snapshot/types.ts`
 - `packages/opencorvus/test/session/processor-*.test.ts` or a focused new processor test
 
 Change:
+
 - Add a single patch-evidence projection function, e.g. `Snapshot.patchEvidenceSummary(patch)`, that returns a bounded provider-facing object:
   - `hash`
   - `fileCount`
@@ -110,6 +115,7 @@ Change:
 - If the patch hash is the empty tree and the file list is clearly a whole-worktree capture rather than a legitimate greenfield patch, do not persist it as ordinary evidence. Mark the assistant message with a snapshot integrity error so the run fails visibly.
 
 Acceptance:
+
 - Test a valid patch with thousands of files remains complete in the persisted patch part.
 - Test an empty-tree whole-worktree patch becomes a visible session error, not a 677k patch part.
 - Test ordinary one-file patch parts still render and replay exactly enough evidence for the model.
@@ -117,12 +123,14 @@ Acceptance:
 ### Phase 3: Single Bounded Patch Projection For Model Replay And Compaction
 
 Files:
+
 - `packages/opencorvus/src/session/message.ts`
 - `packages/opencorvus/src/session/compaction.ts`
 - `packages/opencorvus/test/session/message.test.ts`
 - `packages/opencorvus/test/session/compaction.test.ts`
 
 Change:
+
 - Remove direct `part.files.join(", ")` from both `Message.toModelMessages()` and `SessionCompaction.patchEvidence()`.
 - Route both through the same bounded renderer.
 - The renderer must include file count and representative paths, not a raw all-paths dump.
@@ -131,6 +139,7 @@ Change:
 - Do not change the rewind-facing `PatchPart` schema in this phase.
 
 Acceptance:
+
 - Test `Message.toModelMessages()` projects a 4,000-file patch under the cap and includes file count/omitted count.
 - Test `SessionCompaction.runtimeContext()` uses the same projection and does not duplicate raw file lists.
 - Test `Token.estimate(JSON.stringify(await Message.toModelMessages(...)))` stays below a configured budget for the synthetic 4,000-file case.
@@ -138,11 +147,13 @@ Acceptance:
 ### Phase 4: Add Compaction Request Preflight
 
 Files:
+
 - `packages/opencorvus/src/session/compaction.ts`
 - `packages/opencorvus/src/session/summary.ts`
 - `packages/opencorvus/test/session/compaction.test.ts`
 
 Change:
+
 - After building the final compaction `messages` array, estimate tokens for the exact provider-bound payload.
 - If it exceeds `ContextBudget.usable({ config, model })`, fail the compaction with a `ContextOverflowError` before provider call.
 - The failure must be explicit and terminal for that compaction attempt. Do not retry with hidden truncation or a different model.
@@ -150,6 +161,7 @@ Change:
 - `SessionSummary.summarize()` must not write `session_diff` or summary counts from invalid snapshot diffs. `Snapshot.diffFull()` failures should propagate to a visible summary failure path instead of creating polluted summary artifacts.
 
 Acceptance:
+
 - Test final compaction preflight catches oversize runtime context before invoking `processor.process()`.
 - Test a normal bounded patch-evidence compaction proceeds.
 - Test the stored assistant compaction message reports `ContextOverflowError` clearly and is not accepted as a valid summary boundary.
@@ -158,10 +170,12 @@ Acceptance:
 ### Phase 5: Repair Existing Polluted Local Rows
 
 Files:
+
 - Prefer a one-off debug script under `packages/opencorvus/script/` only if this needs to be repeatable.
 - Otherwise perform a targeted SQL repair manually with a dry-run query first.
 
 Change:
+
 - Identify patch parts where `hash=4b825dc642cb6eb9a060e54bf8d69288fbee4904` and `json_array_length(files) > threshold`.
 - Remove only those invalid patch parts or replace the affected assistant messages with explicit snapshot integrity errors. Do not truncate them into "valid" patch evidence because that would preserve a false baseline.
 - Repair related polluted artifacts for the same sessions: `step-start.snapshot=4b825dc642cb6eb9a060e54bf8d69288fbee4904`, `session_diff`, and summary counts derived from the invalid empty baseline.
@@ -169,6 +183,7 @@ Change:
 - Do not touch source worktree files or unrelated messages.
 
 Acceptance:
+
 - Dry-run lists exactly the two polluted parts for task `tsk_e1f9c2cd4001z5TZEezacMOY84`.
 - After repair, `Message.toModelMessages()` and compaction selection for both build sessions no longer exceed model budget.
 - Overlay no longer shows whole-worktree patch evidence for those two turns.
@@ -177,18 +192,21 @@ Acceptance:
 ### Phase 6: End-To-End Regression
 
 Files:
+
 - `packages/opencorvus/test/snapshot/snapshot.test.ts`
 - `packages/opencorvus/test/session/message.test.ts`
 - `packages/opencorvus/test/session/compaction.test.ts`
 - Optional focused integration test around `SessionProcessor` patch emission
 
 Commands:
+
 - `bun test packages/opencorvus/test/snapshot/snapshot.test.ts`
 - `bun test packages/opencorvus/test/session/message.test.ts`
 - `bun test packages/opencorvus/test/session/compaction.test.ts`
 - `bun run typecheck`
 
 Additional DB validation:
+
 - Query latest patch parts ordered by `length(data)`; no new patch part should exceed the bounded cap.
 - Query compaction errors containing `ContextWindowExceeded`; no new compaction request should reach provider with a predictable oversize payload.
 

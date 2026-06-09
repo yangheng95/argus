@@ -29,16 +29,16 @@ See [CLI](/docs/cli/) for all flags. Set `OPENCORVUS_SERVER_PASSWORD` when bindi
 
 Routes are split into focused modules under `packages/opencorvus/src/server/routes/`:
 
-| Module | Module | Module |
-|---|---|---|
-| `app.ts` | `attachment.ts` | `auth.ts` |
-| `channel.ts` | `coding.ts` | `config.ts` |
-| `control.ts` | `executor.ts` | `experimental.ts` |
-| `export.ts` | `file.ts` | `gateway.ts` |
-| `global.ts` | `mcp.ts` | `orchestrator.ts` |
-| `panel.ts` | `permission.ts` | `project.ts` |
-| `provider.ts` | `pty.ts` | `question.ts` |
-| `session.ts` | `skill.ts` | `tui.ts` |
+| Module        | Module          | Module            |
+| ------------- | --------------- | ----------------- |
+| `app.ts`      | `attachment.ts` | `auth.ts`         |
+| `channel.ts`  | `coding.ts`     | `config.ts`       |
+| `control.ts`  | `executor.ts`   | `experimental.ts` |
+| `export.ts`   | `file.ts`       | `gateway.ts`      |
+| `global.ts`   | `mcp.ts`        | `orchestrator.ts` |
+| `panel.ts`    | `permission.ts` | `project.ts`      |
+| `provider.ts` | `pty.ts`        | `question.ts`     |
+| `session.ts`  | `skill.ts`      | `tui.ts`          |
 
 Each module owns a related slice of the API (e.g. `permission.ts` exposes `/permission/*`, `mcp.ts` exposes `/mcp/*`).
 

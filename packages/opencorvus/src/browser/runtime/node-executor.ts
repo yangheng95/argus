@@ -1,9 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process"
 
-import {
-  type BrowserNodeSidecarRuntime,
-  resolveBrowserNodeSidecarRuntime,
-} from "./node-sidecar"
+import { type BrowserNodeSidecarRuntime, resolveBrowserNodeSidecarRuntime } from "./node-sidecar"
 
 export interface BrowserNodeSidecarRunResult<TResult> {
   result: TResult
@@ -70,9 +67,12 @@ export async function runBrowserNodeSidecar<TResult>(input: {
   label: string
 }): Promise<BrowserNodeSidecarRunResult<TResult>> {
   if (input.signal?.aborted) {
-    throw new BrowserNodeSidecarError("aborted", input.signal.reason instanceof Error ? input.signal.reason.message : `${input.label} aborted`)
+    throw new BrowserNodeSidecarError(
+      "aborted",
+      input.signal.reason instanceof Error ? input.signal.reason.message : `${input.label} aborted`,
+    )
   }
-  const runtime = input.runtime ?? await resolveBrowserNodeSidecarRuntime()
+  const runtime = input.runtime ?? (await resolveBrowserNodeSidecarRuntime())
   const payload = Buffer.from(JSON.stringify(input.payload), "utf8").toString("base64")
   const child = spawn(runtime.nodeExecutable, ["-"], {
     cwd: process.cwd(),
@@ -122,18 +122,25 @@ export async function runBrowserNodeSidecar<TResult>(input: {
       clearTimeout(timer)
       resolve({ code, signal })
     })
-  }).catch((error) => ({
-    code: 1,
-    signal: null,
-    error,
-  })).finally(() => {
-    input.signal?.removeEventListener("abort", abortHandler)
   })
+    .catch((error) => ({
+      code: 1,
+      signal: null,
+      error,
+    }))
+    .finally(() => {
+      input.signal?.removeEventListener("abort", abortHandler)
+    })
 
   if ("error" in exit) {
     const error = exit.error
     if (error instanceof BrowserNodeSidecarError) throw error
-    throw new BrowserNodeSidecarError("spawn", error instanceof Error ? error.message : String(error), { stderr }, { cause: error })
+    throw new BrowserNodeSidecarError(
+      "spawn",
+      error instanceof Error ? error.message : String(error),
+      { stderr },
+      { cause: error },
+    )
   }
   if (aborted) {
     throw new BrowserNodeSidecarError(

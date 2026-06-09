@@ -14,15 +14,15 @@ scenario-specific instruction bypasses it.
 
 ## Evidence
 
-| Surface | Finding |
-| --- | --- |
-| `src/prompt/core/build-core.txt` | 195 total lines; fixed core contains frontend-design, web-clone, mirror, skeleton, source audit, integrity rework, browser project package rules. |
-| `src/prompt/core/build-core.txt` reference-fidelity section | `web-clone-source` appears 33 times, `mirror` 10 times, `skeleton` 13 times. A single line contains a full webpage-clone execution manual. |
-| `src/build/agent.ts::externalBuildSystemContract` | External Codex/Claude build executors receive hard-coded webpage clone rules even when the task is report/PRD/debug/test work. |
-| `test/agent/core-prompt-hygiene.test.ts` | Tests currently lock webpage-clone behavior into build-core, so prompt bloat is protected as expected behavior. |
-| `test/build-agent/external-system.test.ts` | Current worktree already expects new `source_baseline_input` wording, while `src/build/agent.ts` still has older visual-baseline wording. This proves prompt migration is partially applied and inconsistent. |
-| `src/build/agent.ts::buildUserPrompt` | Context-specific sections exist (`frontendDesign`, `integrityFeedback`, `retryGuidance`, `acceptanceFeedback`, design specs, contract graph), but scenario policy is not isolated behind them. |
-| `src/decision-log/bundle.ts` | A full decision-log projection exists specifically so downstream agents can read task-specific context instead of requiring every policy in the core prompt. |
+| Surface                                                     | Finding                                                                                                                                                                                                       |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/prompt/core/build-core.txt`                            | 195 total lines; fixed core contains frontend-design, web-clone, mirror, skeleton, source audit, integrity rework, browser project package rules.                                                             |
+| `src/prompt/core/build-core.txt` reference-fidelity section | `web-clone-source` appears 33 times, `mirror` 10 times, `skeleton` 13 times. A single line contains a full webpage-clone execution manual.                                                                    |
+| `src/build/agent.ts::externalBuildSystemContract`           | External Codex/Claude build executors receive hard-coded webpage clone rules even when the task is report/PRD/debug/test work.                                                                                |
+| `test/agent/core-prompt-hygiene.test.ts`                    | Tests currently lock webpage-clone behavior into build-core, so prompt bloat is protected as expected behavior.                                                                                               |
+| `test/build-agent/external-system.test.ts`                  | Current worktree already expects new `source_baseline_input` wording, while `src/build/agent.ts` still has older visual-baseline wording. This proves prompt migration is partially applied and inconsistent. |
+| `src/build/agent.ts::buildUserPrompt`                       | Context-specific sections exist (`frontendDesign`, `integrityFeedback`, `retryGuidance`, `acceptanceFeedback`, design specs, contract graph), but scenario policy is not isolated behind them.                |
+| `src/decision-log/bundle.ts`                                | A full decision-log projection exists specifically so downstream agents can read task-specific context instead of requiring every policy in the core prompt.                                                  |
 
 ## Root Cause
 
@@ -127,17 +127,17 @@ Build prompt composition must have three explicit layers:
 
 ## Call-Site Inventory
 
-| Call site | Required action |
-| --- | --- |
-| `src/build/agent.ts::composeBuildCore` | Keep role kernel + engineering craft + auto-iteration only. Do not include scenario overlays in system core. |
-| `src/build/agent.ts::buildUserPrompt` | Replace inline scenario sections with compiler-rendered overlays. |
-| `src/build/agent.ts::buildRetryFeedbackPrompt` | Reuse the same overlay selection for retry context; avoid losing the original scenario packet. |
-| `src/build/agent.ts::externalBuildSystemContract` | Remove webpage-clone rules; keep external-executor mechanics only. |
+| Call site                                          | Required action                                                                                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/build/agent.ts::composeBuildCore`             | Keep role kernel + engineering craft + auto-iteration only. Do not include scenario overlays in system core.                                      |
+| `src/build/agent.ts::buildUserPrompt`              | Replace inline scenario sections with compiler-rendered overlays.                                                                                 |
+| `src/build/agent.ts::buildRetryFeedbackPrompt`     | Reuse the same overlay selection for retry context; avoid losing the original scenario packet.                                                    |
+| `src/build/agent.ts::externalBuildSystemContract`  | Remove webpage-clone rules; keep external-executor mechanics only.                                                                                |
 | `src/orchestrator/tools.ts` build context assembly | Continue passing `frontendDesign`, feedback, requirements, graph, and design specs; ensure the full decision-log reference is included for build. |
-| `src/agent/role-contract.ts` | Update `build` description to general executor semantics. |
-| `test/agent/core-prompt-hygiene.test.ts` | Invert contaminated assertions: core prompt must not contain scenario policy. |
-| `test/build-agent/prompt-context.test.ts` | Move scenario assertions to overlay-specific tests. |
-| `test/build-agent/external-system.test.ts` | Assert external mechanics and overlay parity, not duplicated web-clone text. |
+| `src/agent/role-contract.ts`                       | Update `build` description to general executor semantics.                                                                                         |
+| `test/agent/core-prompt-hygiene.test.ts`           | Invert contaminated assertions: core prompt must not contain scenario policy.                                                                     |
+| `test/build-agent/prompt-context.test.ts`          | Move scenario assertions to overlay-specific tests.                                                                                               |
+| `test/build-agent/external-system.test.ts`         | Assert external mechanics and overlay parity, not duplicated web-clone text.                                                                      |
 
 ## Non-Fixes
 

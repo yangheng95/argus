@@ -123,7 +123,10 @@ async function removeEvalWorktree(primaryDir: string, evalDir: string): Promise<
 }
 
 function safePathPart(value: string): string {
-  const slug = value.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "")
+  const slug = value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
   if (!slug) throw new Error("evaluateLKGInIsolatedWorktree: empty path component")
   return slug
 }

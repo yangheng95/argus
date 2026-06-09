@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "node:path"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
-const promptPath = path.join(
-  repoRoot,
-  "packages/opencorvus/src/prompt/core/orchestrator-core.txt",
-)
+const promptPath = path.join(repoRoot, "packages/opencorvus/src/prompt/core/orchestrator-core.txt")
 
 /**
  * Spec orchestrator-grain-discipline-2026-05-07.md §5.
@@ -48,9 +45,7 @@ describe("orchestrator-core grain ladder hardening", () => {
 
   test("rung 3 names architect re-entry as the per-graph escalation", async () => {
     const text = await Bun.file(promptPath).text()
-    expect(text).toMatch(
-      /rung 3 \(per-graph\):\s*re-enter\s+`architect`\s+with\s+the\s+rejection\s+feedback/,
-    )
+    expect(text).toMatch(/rung 3 \(per-graph\):\s*re-enter\s+`architect`\s+with\s+the\s+rejection\s+feedback/)
   })
 
   test("rung 4 calls out collateral damage of restart_from_stage", async () => {
@@ -72,9 +67,7 @@ describe("orchestrator-core grain ladder hardening", () => {
    */
   test("rung 4 collateral explicitly includes ALREADY-completed siblings", async () => {
     const text = await Bun.file(promptPath).text()
-    expect(text).toMatch(
-      /INCLUDING ALREADY-completed sibling goals in the same task/,
-    )
+    expect(text).toMatch(/INCLUDING ALREADY-completed sibling goals in the same task/)
   })
 
   test("goal-level failure is pinned to rung 1-3, never rung 4", async () => {
@@ -83,12 +76,8 @@ describe("orchestrator-core grain ladder hardening", () => {
     // Pin the load-bearing distinction between goal-level and stage-level
     // failure so an editor cannot soften it into "prefer fine-grained tools".
     expect(text).toMatch(/goal-level\*\*\s+failure, not a stage-level failure/)
-    expect(text).toMatch(
-      /executor stage spans every goal in the\s+task/,
-    )
-    expect(text).toMatch(
-      /collateral wipes ALREADY-completed siblings/,
-    )
+    expect(text).toMatch(/executor stage spans every goal in the\s+task/)
+    expect(text).toMatch(/collateral wipes ALREADY-completed siblings/)
     // The legal-moves enumeration must name the rung 1-3 tools by their
     // prompt-canonical spellings so the LLM sees concrete alternatives.
     expect(text).toMatch(/build\(\{ goalID: N, request:/)
@@ -99,21 +88,15 @@ describe("orchestrator-core grain ladder hardening", () => {
 
   test("restart_from_stage is reserved for task-wide failure modes", async () => {
     const text = await Bun.file(promptPath).text()
-    expect(text).toMatch(
-      /`restart_from_stage` is reserved for \*\*task-wide\*\* failure modes/,
-    )
+    expect(text).toMatch(/`restart_from_stage` is reserved for \*\*task-wide\*\* failure modes/)
     // "Goal #N exhausted its retries" must be named as NOT one of those,
     // because that is the exact misuse the live task hit.
-    expect(text).toMatch(
-      /"Goal #N\s+exhausted its retries" is not one of those/,
-    )
+    expect(text).toMatch(/"Goal #N\s+exhausted its retries" is not one of those/)
   })
 
   test("rung 8 prefers architect re-entry over restart_from_stage", async () => {
     const text = await Bun.file(promptPath).text()
-    expect(text).toMatch(
-      /re-enter\s+`architect`\s+with\s+the\s+rejection\s+feedback\s+as\s+evidence\s+first/,
-    )
+    expect(text).toMatch(/re-enter\s+`architect`\s+with\s+the\s+rejection\s+feedback\s+as\s+evidence\s+first/)
     expect(text).toMatch(/only after architect\s+re-entry produced no convergence/)
   })
 
@@ -128,9 +111,7 @@ describe("orchestrator-core grain ladder hardening", () => {
     // The prior reflexive pattern was rung 8: "Hallucination at the
     // upstream stage ... → **restart_from_stage(...)**". Pin its
     // absence so future edits don't quietly restore it.
-    expect(text).not.toMatch(
-      /Hallucination at the upstream stage[^.]*→\s*\*\*restart_from_stage/,
-    )
+    expect(text).not.toMatch(/Hallucination at the upstream stage[^.]*→\s*\*\*restart_from_stage/)
   })
 
   test("does NOT advertise the prior single-line ladder", async () => {
@@ -138,9 +119,7 @@ describe("orchestrator-core grain ladder hardening", () => {
     // Pre-fix: the entire ladder fit on two lines as a > > > > chain.
     // The new ladder is multi-rung; pin the prior phrasing's absence so
     // an editor restoring the soft single-line form is caught.
-    expect(text).not.toContain(
-      "Cheaper repairs first: `modify_goal` (contract patch) > `build({ goalID })`",
-    )
+    expect(text).not.toContain("Cheaper repairs first: `modify_goal` (contract patch) > `build({ goalID })`")
   })
 })
 

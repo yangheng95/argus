@@ -8,14 +8,14 @@ The Files panel can show a changed file row with additions/deletions while the D
 
 `rg resolveDiff/currentChangeGroups/changedFileDiffs/DiffTarget` found these relevant call sites:
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
-| `packages/overlay/src/components/ChangesPanel.tsx` | Click creates `DiffTarget`, eagerly calls `resolveDiff()`, then opens the workspace diff. | Keep. |
-| `packages/overlay/src/components/DiffPreviewPanel.tsx` | Resource calls `resolveDiff(target)` and renders `DiffView` only when a `FileChange` is returned. | Keep. |
-| `packages/overlay/src/services/diff.ts` | Builds board groups, fetches acceptance diffs, and resolves one file by exact path. | Add VCS diff backfill after acceptance lookup misses full body. |
-| `packages/overlay/src/services/meta.ts` | `normalizeDiffs()` normalizes acceptance diff rows. | Reuse through `normalizeAcceptanceDiffs`; no parallel status normalization. |
-| `packages/opencorvus/src/server/routes/app.ts` | Existing `GET /vcs/diff` route returns `Vcs.FileDiff[]`. | Use this mature source; do not implement filesystem diffing in overlay. |
-| `packages/opencorvus/src/project/vcs.ts` | Existing VCS diff implementation returns `file`, `before`, `after`, stats, and status. | No change. |
+| Surface                                                | Current behavior                                                                                  | Change                                                                      |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `packages/overlay/src/components/ChangesPanel.tsx`     | Click creates `DiffTarget`, eagerly calls `resolveDiff()`, then opens the workspace diff.         | Keep.                                                                       |
+| `packages/overlay/src/components/DiffPreviewPanel.tsx` | Resource calls `resolveDiff(target)` and renders `DiffView` only when a `FileChange` is returned. | Keep.                                                                       |
+| `packages/overlay/src/services/diff.ts`                | Builds board groups, fetches acceptance diffs, and resolves one file by exact path.               | Add VCS diff backfill after acceptance lookup misses full body.             |
+| `packages/overlay/src/services/meta.ts`                | `normalizeDiffs()` normalizes acceptance diff rows.                                               | Reuse through `normalizeAcceptanceDiffs`; no parallel status normalization. |
+| `packages/opencorvus/src/server/routes/app.ts`         | Existing `GET /vcs/diff` route returns `Vcs.FileDiff[]`.                                          | Use this mature source; do not implement filesystem diffing in overlay.     |
+| `packages/opencorvus/src/project/vcs.ts`               | Existing VCS diff implementation returns `file`, `before`, `after`, stats, and status.            | No change.                                                                  |
 
 ## Implementation
 

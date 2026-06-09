@@ -72,7 +72,11 @@ export async function captureSingleFileHtml(input: CaptureSingleFileInput): Prom
   if (!stat.isFile() || stat.size === 0) {
     throw new Error(await renderSingleFileOutputFailure(input.outputPath, diagnostics))
   }
-  return { outputPath: input.outputPath, bytes: stat.size, command: ["single-file-cli/api", input.url, input.outputPath] }
+  return {
+    outputPath: input.outputPath,
+    bytes: stat.size,
+    command: ["single-file-cli/api", input.url, input.outputPath],
+  }
 }
 
 function throwIfAborted(signal?: AbortSignal) {
@@ -95,10 +99,9 @@ async function renderSingleFileOutputFailure(
 ): Promise<string> {
   const details = await readSingleFileDiagnostics(diagnostics)
   const causeMessage = cause instanceof Error && cause.message ? ` Cause: ${cause.message}` : ""
-  return [
-    `single-file capture did not write a non-empty HTML file at ${outputPath}.${causeMessage}`,
-    details,
-  ].filter(Boolean).join("\n\n")
+  return [`single-file capture did not write a non-empty HTML file at ${outputPath}.${causeMessage}`, details]
+    .filter(Boolean)
+    .join("\n\n")
 }
 
 async function readSingleFileDiagnostics(diagnostics: ReturnType<typeof singleFileDiagnosticPaths>): Promise<string> {
@@ -115,9 +118,10 @@ async function readDiagnosticSection(label: string, file: string): Promise<strin
   const trimmed = text.trim()
   if (!trimmed) return ""
   const maxChars = 4_000
-  const clipped = trimmed.length > maxChars
-    ? `${trimmed.slice(0, maxChars).trimEnd()}\n[clipped ${trimmed.length - maxChars} chars from ${file}]`
-    : trimmed
+  const clipped =
+    trimmed.length > maxChars
+      ? `${trimmed.slice(0, maxChars).trimEnd()}\n[clipped ${trimmed.length - maxChars} chars from ${file}]`
+      : trimmed
   return `## ${label}: ${file}\n${clipped}`
 }
 

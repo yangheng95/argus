@@ -43,15 +43,11 @@ describe("validatePath", () => {
 
 describe("buildUrl", () => {
   test("joins base and path correctly", () => {
-    expect(buildUrl("http://127.0.0.1:8080", "global/health", {})).toBe(
-      "http://127.0.0.1:8080/global/health",
-    )
+    expect(buildUrl("http://127.0.0.1:8080", "global/health", {})).toBe("http://127.0.0.1:8080/global/health")
   })
 
   test("strips trailing slash from base", () => {
-    expect(buildUrl("http://127.0.0.1:8080/", "global/health", {})).toBe(
-      "http://127.0.0.1:8080/global/health",
-    )
+    expect(buildUrl("http://127.0.0.1:8080/", "global/health", {})).toBe("http://127.0.0.1:8080/global/health")
   })
 
   test("encodes query parameters", () => {

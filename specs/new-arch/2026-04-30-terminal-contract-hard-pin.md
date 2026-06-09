@@ -19,21 +19,21 @@ Commands run before design:
 - `rg -n "submit_requirements|submit_architect|submit_integrity_review|register_requirement|register_goal|submit_.*_verdict" packages/opencorvus/src/requirements packages/opencorvus/src/architect packages/opencorvus/src/integrity -g "*.ts"`
 - `rg -n "report_build_passed|report_build_failed|report_build_result|terminalTool\\?|toolNames\\?|allowHardPin|forceTerminalTool|forceStructuredOutput|structuredOutputToolChoice\\(|terminalToolChoice\\(" packages/opencorvus/src packages/opencorvus/test specs -g "*.ts" -g "*.md" -g "*.txt"`
 
-| Call point | Current role | Decision |
-| --- | --- | --- |
-| `session/loop.ts::TerminalToolContract.toolNames` | lets build describe two terminal tools | delete; terminal contract has one named terminal tool |
-| `session/loop.ts::TerminalToolContract.allowHardPin` | disables named pin for build | delete; readiness decides whether named pin is valid |
-| `session/loop.ts::terminalToolChoice` | returns `"required"` unless unused force flag is true | replace with readiness-based choice |
-| `session/loop.ts::structuredOutputToolChoice` | has unused `forceStructuredOutput` option | delete option; structured output still uses `"required"` because work tools can precede final schema output |
-| `agent/runner.ts::terminalTool.toolNames` | passes multi-name terminal contract | delete |
-| `agent/runner.ts::terminalTool.allowHardPin` | passes dead hard-pin veto | delete |
-| `requirements/agent.ts` | terminal tool after requirement collection | keep `submit_requirements`; add readiness from collector facts |
-| `architect/agent.ts` | terminal tool after goal graph collection | keep `submit_architect`; add readiness from collector facts |
-| `integrity/agent.ts` | terminal tool after all dimension verdicts | keep `submit_integrity_review`; add readiness from collector facts |
-| `build/agent.ts` | two terminal tools discriminate passed/failed | replace with one `report_build_result` tool whose payload has `status` |
-| `prompt/core/build-core.txt` | instructs two build terminal tools | update to single terminal tool |
-| `test/session/terminal-tool-recovery.test.ts` | locks old force and two-tool behavior | update to readiness hard-pin behavior |
-| `test/agent/visible-brief-hygiene.test.ts` | forbids old visible protocol string | update forbidden snippet |
+| Call point                                           | Current role                                          | Decision                                                                                                    |
+| ---------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `session/loop.ts::TerminalToolContract.toolNames`    | lets build describe two terminal tools                | delete; terminal contract has one named terminal tool                                                       |
+| `session/loop.ts::TerminalToolContract.allowHardPin` | disables named pin for build                          | delete; readiness decides whether named pin is valid                                                        |
+| `session/loop.ts::terminalToolChoice`                | returns `"required"` unless unused force flag is true | replace with readiness-based choice                                                                         |
+| `session/loop.ts::structuredOutputToolChoice`        | has unused `forceStructuredOutput` option             | delete option; structured output still uses `"required"` because work tools can precede final schema output |
+| `agent/runner.ts::terminalTool.toolNames`            | passes multi-name terminal contract                   | delete                                                                                                      |
+| `agent/runner.ts::terminalTool.allowHardPin`         | passes dead hard-pin veto                             | delete                                                                                                      |
+| `requirements/agent.ts`                              | terminal tool after requirement collection            | keep `submit_requirements`; add readiness from collector facts                                              |
+| `architect/agent.ts`                                 | terminal tool after goal graph collection             | keep `submit_architect`; add readiness from collector facts                                                 |
+| `integrity/agent.ts`                                 | terminal tool after all dimension verdicts            | keep `submit_integrity_review`; add readiness from collector facts                                          |
+| `build/agent.ts`                                     | two terminal tools discriminate passed/failed         | replace with one `report_build_result` tool whose payload has `status`                                      |
+| `prompt/core/build-core.txt`                         | instructs two build terminal tools                    | update to single terminal tool                                                                              |
+| `test/session/terminal-tool-recovery.test.ts`        | locks old force and two-tool behavior                 | update to readiness hard-pin behavior                                                                       |
+| `test/agent/visible-brief-hygiene.test.ts`           | forbids old visible protocol string                   | update forbidden snippet                                                                                    |
 
 ## Design
 

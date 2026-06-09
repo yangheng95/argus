@@ -34,13 +34,15 @@ test("materializes VisualEvidenceBundle from rendered, eval, and vision artifact
     referencePath,
     renderedPath,
     accepted: false,
-    differences: [{
-      severity: "critical",
-      region: "top navigation",
-      observed: "Header is stacked and oversized.",
-      expected: "Header matches the dense reference navigation.",
-      fix_hint: "Restore the original navigation layout.",
-    }],
+    differences: [
+      {
+        severity: "critical",
+        region: "top navigation",
+        observed: "Header is stacked and oversized.",
+        expected: "Header matches the dense reference navigation.",
+        fix_hint: "Restore the original navigation layout.",
+      },
+    ],
   })
 
   const bundle = await tryMaterializeVisualEvidenceBundle({

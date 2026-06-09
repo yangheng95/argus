@@ -1,4 +1,4 @@
-import { For, createEffect, createMemo, createSignal } from "solid-js";
+import { For, createEffect, createMemo, createSignal } from "solid-js"
 import {
   clearTerminalProfileSelection,
   defaultTerminalProfileID,
@@ -6,92 +6,87 @@ import {
   selectTerminalProfileID,
   selectedTerminalProfileID,
   terminalProfiles,
-} from "../services/terminal-selection";
-import {
-  openSystemTerminal,
-  type TerminalProfileIcon,
-} from "../services/terminal";
-import { activeDirectory } from "../services/workspace";
-import { t } from "../utils/i18n";
-import { Icon, type IconName } from "./Icon";
-import {
-  WorkspaceSplitLauncher,
-  WorkspaceSplitLauncherItem,
-} from "./WorkspaceSplitLauncher";
+} from "../services/terminal-selection"
+import { openSystemTerminal, type TerminalProfileIcon } from "../services/terminal"
+import { activeDirectory } from "../services/workspace"
+import { t } from "../utils/i18n"
+import { Icon, type IconName } from "./Icon"
+import { WorkspaceSplitLauncher, WorkspaceSplitLauncherItem } from "./WorkspaceSplitLauncher"
 
 const TERMINAL_ICONS: Record<TerminalProfileIcon, IconName> = {
   terminal: "terminal",
   powershell: "terminal-powershell",
   "command-prompt": "terminal-command-prompt",
   bash: "terminal-bash",
-};
+}
 
 export function WorkspaceLayoutControls() {
-  const [open, setOpen] = createSignal(false);
-  const [loading, setLoading] = createSignal(false);
-  const [error, setError] = createSignal("");
+  const [open, setOpen] = createSignal(false)
+  const [loading, setLoading] = createSignal(false)
+  const [error, setError] = createSignal("")
 
-  const disabled = () => !activeDirectory() || loading() || terminalProfiles().length === 0;
-  const selectedProfile = createMemo(() =>
-    terminalProfiles().find((profile) => profile.id === selectedTerminalProfileID()) ??
-    terminalProfiles().find((profile) => profile.id === defaultTerminalProfileID()) ??
-    null,
-  );
+  const disabled = () => !activeDirectory() || loading() || terminalProfiles().length === 0
+  const selectedProfile = createMemo(
+    () =>
+      terminalProfiles().find((profile) => profile.id === selectedTerminalProfileID()) ??
+      terminalProfiles().find((profile) => profile.id === defaultTerminalProfileID()) ??
+      null,
+  )
   const triggerIcon = createMemo(() => {
-    const profile = selectedProfile();
-    if (!profile) return "terminal" as IconName;
-    return terminalIconName(profile.icon);
-  });
-  const title = () => error() || t("terminal.open");
+    const profile = selectedProfile()
+    if (!profile) return "terminal" as IconName
+    return terminalIconName(profile.icon)
+  })
+  const title = () => error() || t("terminal.open")
 
   function terminalIconName(icon: TerminalProfileIcon): IconName {
-    const value = TERMINAL_ICONS[icon];
-    if (!value) throw new Error(`Unknown terminal profile icon: ${icon}`);
-    return value;
+    const value = TERMINAL_ICONS[icon]
+    if (!value) throw new Error(`Unknown terminal profile icon: ${icon}`)
+    return value
   }
 
   async function reloadProfiles() {
-    const directory = activeDirectory();
+    const directory = activeDirectory()
     if (!directory) {
-      clearTerminalProfileSelection();
-      return;
+      clearTerminalProfileSelection()
+      return
     }
-    setLoading(true);
-    setError("");
+    setLoading(true)
+    setError("")
     try {
       await reloadTerminalProfileSelection({
         directory,
         defaultProfileMissingMessage: t("terminal.default_profile_missing"),
-      });
+      })
     } catch (reason) {
-      clearTerminalProfileSelection();
-      setError(reason instanceof Error ? reason.message : String(reason));
+      clearTerminalProfileSelection()
+      setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
   function close() {
-    setOpen(false);
+    setOpen(false)
   }
 
   async function openProfile(profileID: string) {
-    const cwd = activeDirectory();
-    if (!cwd) throw new Error("Workspace directory is required");
-    selectTerminalProfileID(profileID);
-    close();
-    setError("");
+    const cwd = activeDirectory()
+    if (!cwd) throw new Error("Workspace directory is required")
+    selectTerminalProfileID(profileID)
+    close()
+    setError("")
     try {
-      await openSystemTerminal({ cwd, profileID });
+      await openSystemTerminal({ cwd, profileID })
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(reason instanceof Error ? reason.message : String(reason))
     }
   }
 
   createEffect(() => {
-    activeDirectory();
-    void reloadProfiles();
-  });
+    activeDirectory()
+    void reloadProfiles()
+  })
 
   return (
     <WorkspaceSplitLauncher
@@ -110,16 +105,20 @@ export function WorkspaceLayoutControls() {
       menuDataUI="workspace-terminal-menu"
       onPrimaryClick={() => openProfile(selectedProfile()?.id ?? "")}
       onOpenChange={setOpen}
-      primaryChildren={(
-        <span class="workspace-terminal-select-icon" data-terminal-icon={selectedProfile()?.icon ?? "terminal"} aria-hidden="true">
+      primaryChildren={
+        <span
+          class="workspace-terminal-select-icon"
+          data-terminal-icon={selectedProfile()?.icon ?? "terminal"}
+          aria-hidden="true"
+        >
           <Icon name={triggerIcon()} size={18} />
         </span>
-      )}
-      menuButtonChildren={(
+      }
+      menuButtonChildren={
         <span class="workspace-terminal-select-caret" aria-hidden="true">
           <Icon name="caret-down" size={12} />
         </span>
-      )}
+      }
     >
       <For each={terminalProfiles()}>
         {(profile) => (
@@ -128,19 +127,16 @@ export function WorkspaceLayoutControls() {
             dataAttributes={{ "data-terminal-profile": profile.id }}
             onSelect={() => openProfile(profile.id)}
           >
-            <span
-              class="workspace-terminal-option-icon"
-              data-terminal-icon={profile.icon}
-              aria-hidden="true"
-            >
+            <span class="workspace-terminal-option-icon" data-terminal-icon={profile.icon} aria-hidden="true">
               <Icon name={terminalIconName(profile.icon)} size={18} />
             </span>
             <span class="workspace-terminal-option-label">
-              {profile.label}{profile.id === defaultTerminalProfileID() ? ` ${t("terminal.default_profile_suffix")}` : ""}
+              {profile.label}
+              {profile.id === defaultTerminalProfileID() ? ` ${t("terminal.default_profile_suffix")}` : ""}
             </span>
           </WorkspaceSplitLauncherItem>
         )}
       </For>
     </WorkspaceSplitLauncher>
-  );
+  )
 }

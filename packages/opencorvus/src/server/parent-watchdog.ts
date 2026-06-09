@@ -15,11 +15,9 @@ export namespace ParentWatchdog {
    * Returns a stop() handle for graceful teardown when the sidecar is
    * shutting down for legitimate reasons.
    */
-  export function start(opts: {
-    parentPid: number
-    intervalMs?: number
-    onOrphan: (reason: string) => void
-  }): { stop: () => void } {
+  export function start(opts: { parentPid: number; intervalMs?: number; onOrphan: (reason: string) => void }): {
+    stop: () => void
+  } {
     const intervalMs = opts.intervalMs ?? 5000
     let stopped = false
     let fired = false

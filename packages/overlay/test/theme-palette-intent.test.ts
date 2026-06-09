@@ -5,10 +5,7 @@ import { join } from "node:path"
 const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles", "cascade")
 
 function readTheme(name: string): string {
-  return readFileSync(join(STYLES_ROOT, name), "utf8").replace(
-    /\/\*[\s\S]*?\*\//g,
-    "",
-  )
+  return readFileSync(join(STYLES_ROOT, name), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
 function themeToken(css: string, token: string): string {
@@ -98,11 +95,7 @@ describe("overlay theme palette intent", () => {
       ["light", light],
       ["vscode-dark", vscodeDark],
     ] as const
-    const popupTokens = [
-      "--dialog-bg",
-      "--menu-panel-bg",
-      "--executor-menu-bg",
-    ]
+    const popupTokens = ["--dialog-bg", "--menu-panel-bg", "--executor-menu-bg"]
     const violations: string[] = []
 
     for (const [themeName, css] of themes) {

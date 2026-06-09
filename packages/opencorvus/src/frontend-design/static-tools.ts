@@ -84,5 +84,5 @@ export const FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS = [
 
 export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = ["skill"] as const
 
-export type FrontendDesignStaticToolID = typeof FRONTEND_DESIGN_STATIC_TOOL_IDS[number]
-export type FrontendDesignSessionToolID = typeof FRONTEND_DESIGN_SESSION_TOOL_IDS[number]
+export type FrontendDesignStaticToolID = (typeof FRONTEND_DESIGN_STATIC_TOOL_IDS)[number]
+export type FrontendDesignSessionToolID = (typeof FRONTEND_DESIGN_SESSION_TOOL_IDS)[number]

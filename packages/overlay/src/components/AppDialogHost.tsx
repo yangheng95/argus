@@ -1,63 +1,63 @@
-import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
-import { dialogStore, setDialogStore } from "../store/dialog";
-import { dismissAppDialog, settleAppDialog } from "../services/app-dialog";
-import { t } from "../utils/i18n";
-import { Dialog } from "./primitives/Dialog";
-import { Button } from "./ui/Button";
+import { createEffect, createSignal, For, onCleanup, Show } from "solid-js"
+import { dialogStore, setDialogStore } from "../store/dialog"
+import { dismissAppDialog, settleAppDialog } from "../services/app-dialog"
+import { t } from "../utils/i18n"
+import { Dialog } from "./primitives/Dialog"
+import { Button } from "./ui/Button"
 
-const TASK_DECISION_COUNTDOWN_TICK_MS = 250;
+const TASK_DECISION_COUNTDOWN_TICK_MS = 250
 
 export function AppDialogHost() {
-  let okButtonRef: HTMLButtonElement | undefined;
-  let inputRef: HTMLInputElement | undefined;
-  let selectRef: HTMLSelectElement | undefined;
-  const [remainingSeconds, setRemainingSeconds] = createSignal(0);
+  let okButtonRef: HTMLButtonElement | undefined
+  let inputRef: HTMLInputElement | undefined
+  let selectRef: HTMLSelectElement | undefined
+  const [remainingSeconds, setRemainingSeconds] = createSignal(0)
 
-  const isTaskQueueDecision = () => dialogStore.app.kind === "task-queue-decision";
-  const isTaskCardDecision = () => isTaskQueueDecision();
+  const isTaskQueueDecision = () => dialogStore.app.kind === "task-queue-decision"
+  const isTaskCardDecision = () => isTaskQueueDecision()
   const hasTaskDecisionCountdown = () =>
     isTaskCardDecision() &&
     Number(dialogStore.app.countdownSeconds || 0) > 0 &&
-    Number(dialogStore.app.countdownDeadlineMs || 0) > 0;
-  const decisionEyebrow = () => t("task.queue_decision.eyebrow");
-  const decisionCountdownText = () => t("task.queue_decision.countdown", { seconds: remainingSeconds() });
+    Number(dialogStore.app.countdownDeadlineMs || 0) > 0
+  const decisionEyebrow = () => t("task.queue_decision.eyebrow")
+  const decisionCountdownText = () => t("task.queue_decision.countdown", { seconds: remainingSeconds() })
   const decisionDescription = (value: string) => {
-    return value === "start" ? t("task.queue_decision.start_desc") : t("task.queue_decision.queue_desc");
-  };
+    return value === "start" ? t("task.queue_decision.start_desc") : t("task.queue_decision.queue_desc")
+  }
   const chooseTaskDecision = (value: string) => {
-    settleAppDialog(true, dialogStore.app.epoch, value);
-  };
+    settleAppDialog(true, dialogStore.app.epoch, value)
+  }
 
   createEffect(() => {
-    if (!dialogStore.app.open || !hasTaskDecisionCountdown()) return;
-    const deadlineMs = Number(dialogStore.app.countdownDeadlineMs || 0);
-    const updateRemaining = () => setRemainingSeconds(Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000)));
-    updateRemaining();
+    if (!dialogStore.app.open || !hasTaskDecisionCountdown()) return
+    const deadlineMs = Number(dialogStore.app.countdownDeadlineMs || 0)
+    const updateRemaining = () => setRemainingSeconds(Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000)))
+    updateRemaining()
     const timer = window.setInterval(() => {
-      updateRemaining();
-    }, TASK_DECISION_COUNTDOWN_TICK_MS);
-    onCleanup(() => window.clearInterval(timer));
-  });
+      updateRemaining()
+    }, TASK_DECISION_COUNTDOWN_TICK_MS)
+    onCleanup(() => window.clearInterval(timer))
+  })
 
   createEffect(() => {
-    if (!dialogStore.app.open) return;
+    if (!dialogStore.app.open) return
     queueMicrotask(() => {
       if (dialogStore.app.input && inputRef) {
-        inputRef.focus();
-        inputRef.select();
-        return;
+        inputRef.focus()
+        inputRef.select()
+        return
       }
       if (dialogStore.app.select && !isTaskCardDecision() && selectRef) {
-        selectRef.focus();
-        return;
+        selectRef.focus()
+        return
       }
       if (isTaskCardDecision()) {
-        document.querySelector<HTMLButtonElement>("#appDialogBody .app-dialog-decision__choice")?.focus();
-        return;
+        document.querySelector<HTMLButtonElement>("#appDialogBody .app-dialog-decision__choice")?.focus()
+        return
       }
-      okButtonRef?.focus();
-    });
-  });
+      okButtonRef?.focus()
+    })
+  })
 
   return (
     <Dialog
@@ -89,7 +89,7 @@ export function AppDialogHost() {
               size="md"
               tone="accent"
               ref={(el) => {
-                okButtonRef = el;
+                okButtonRef = el
               }}
               onClick={() => settleAppDialog(true, dialogStore.app.epoch)}
             >
@@ -113,8 +113,8 @@ export function AppDialogHost() {
           <div class="app-dialog-decision__choices" role="group" aria-label={dialogStore.app.selectLabel || ""}>
             <For each={dialogStore.app.selectOptions || []}>
               {(option) => {
-                const selected = () => dialogStore.app.selectValue === option.value;
-                const recommended = () => dialogStore.app.recommendedValue === option.value;
+                const selected = () => dialogStore.app.selectValue === option.value
+                const recommended = () => dialogStore.app.recommendedValue === option.value
                 return (
                   <button
                     type="button"
@@ -131,7 +131,7 @@ export function AppDialogHost() {
                     </span>
                     <span class="app-dialog-decision__choice-body">{decisionDescription(option.value)}</span>
                   </button>
-                );
+                )
               }}
             </For>
           </div>
@@ -161,15 +161,15 @@ export function AppDialogHost() {
           placeholder={dialogStore.app.inputPlaceholder || ""}
           value={dialogStore.app.inputValue || ""}
           ref={(el) => {
-            inputRef = el;
+            inputRef = el
           }}
           onInput={(event) => {
-            setDialogStore("app", "inputValue", event.currentTarget.value);
+            setDialogStore("app", "inputValue", event.currentTarget.value)
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
-              event.preventDefault();
-              settleAppDialog(true, dialogStore.app.epoch);
+              event.preventDefault()
+              settleAppDialog(true, dialogStore.app.epoch)
             }
           }}
         />
@@ -185,11 +185,11 @@ export function AppDialogHost() {
           class="field-input app-dialog-input custom-select"
           id="appDialogSelect"
           ref={(el) => {
-            selectRef = el;
+            selectRef = el
           }}
           value={dialogStore.app.selectValue || ""}
           onChange={(event) => {
-            setDialogStore("app", "selectValue", event.currentTarget.value);
+            setDialogStore("app", "selectValue", event.currentTarget.value)
           }}
         >
           {(dialogStore.app.selectOptions || []).map((item) => (
@@ -198,5 +198,5 @@ export function AppDialogHost() {
         </select>
       </label>
     </Dialog>
-  );
+  )
 }

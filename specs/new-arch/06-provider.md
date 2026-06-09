@@ -15,20 +15,20 @@
 
 不同 LLM 提供商在 4 个维度上各不相同：
 
-| 维度 | 差异 |
-|---|---|
-| **API 协议** | OpenAI Chat/Responses · Anthropic Messages · Google GenerateContent · Bedrock InvokeModel |
-| **认证方式** | API Key (env) · OAuth · AWS IAM Role · GCP Service Account · 嵌入式密钥 |
+| 维度         | 差异                                                                                          |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| **API 协议** | OpenAI Chat/Responses · Anthropic Messages · Google GenerateContent · Bedrock InvokeModel     |
+| **认证方式** | API Key (env) · OAuth · AWS IAM Role · GCP Service Account · 嵌入式密钥                       |
 | **参数格式** | reasoning → `thinking` / `reasoningEffort` / `thinkingConfig` / `reasoningConfig`（四种写法） |
-| **模型能力** | tool_call · vision · audio · reasoning · streaming · caching — 每个模型组合不同 |
+| **模型能力** | tool_call · vision · audio · reasoning · streaming · caching — 每个模型组合不同               |
 
 ## 主流方案对比
 
-| 方案 | 示例 | 优缺点 |
-|---|---|---|
-| **A. 统一 SDK 适配**（本项目） | Vercel AI SDK | ✓ 类型安全 · 灵活 · 官方维护 · 可定制 · ✗ provider-specific 逻辑分散 |
-| **B. 代理网关** | LiteLLM / OpenRouter | ✓ 零代码 · 100+ provider · ✗ 额外跳转 · 参数丢失 · 第三方依赖 |
-| **C. 抽象基类** | LangChain / LlamaIndex | ✓ 清晰分层 · OOP · ✗ 抽象泄漏 · TypeScript 生态弱 |
+| 方案                           | 示例                   | 优缺点                                                               |
+| ------------------------------ | ---------------------- | -------------------------------------------------------------------- |
+| **A. 统一 SDK 适配**（本项目） | Vercel AI SDK          | ✓ 类型安全 · 灵活 · 官方维护 · 可定制 · ✗ provider-specific 逻辑分散 |
+| **B. 代理网关**                | LiteLLM / OpenRouter   | ✓ 零代码 · 100+ provider · ✗ 额外跳转 · 参数丢失 · 第三方依赖        |
+| **C. 抽象基类**                | LangChain / LlamaIndex | ✓ 清晰分层 · OOP · ✗ 抽象泄漏 · TypeScript 生态弱                    |
 
 **本项目采用方案 A 深度定制**，与 opencode 同源，已支持 20 个 bundled provider（见 `provider/bundled.ts:27-48`），六层适配。
 
@@ -123,13 +123,13 @@ Agent.run()                                     agent 发起 LLM 调用
   "agent": {
     "orchestrator": { "model": "anthropic/claude-sonnet-4-..." }, // 协调者，最强
     "requirements": { "model": "anthropic/claude-sonnet-4-..." }, // 需求分析
-    "architect":    { "model": "openai/gpt-5" },                  // 跨目标契约
-    "build":        { "model": "anthropic/claude-sonnet-4-..." }, // 实际写代码
-    "acceptance":     { "model": "openai/gpt-4o-mini" }             // 低成本验收
+    "architect": { "model": "openai/gpt-5" }, // 跨目标契约
+    "build": { "model": "anthropic/claude-sonnet-4-..." }, // 实际写代码
+    "acceptance": { "model": "openai/gpt-4o-mini" }, // 低成本验收
   },
   // 注：planner / acceptance review 已下线（见 [01-agents.md](01-agents.md)），不要再配。
-  "model": "anthropic/claude-sonnet-4-...",   // 全局默认
-  "small_model": "openai/gpt-4o-mini"         // 小任务快速
+  "model": "anthropic/claude-sonnet-4-...", // 全局默认
+  "small_model": "openai/gpt-4o-mini", // 小任务快速
 }
 ```
 
@@ -140,45 +140,52 @@ Agent.run()                                     agent 发起 LLM 调用
 
 ## 核心文件
 
-| 文件 | 职责 |
-|---|---|
-| `provider/llm.ts` | `ProviderLLM.stream()` — agent 唯一 LLM 入口 + `wrapModel` / `baseHeaders` helpers |
-| `provider/provider.ts` | Model Registry + SDK Router + 状态管理 |
-| `provider/transform.ts` | Parameter Transform + Message 标准化 |
-| `provider/vendor.ts` | Custom Loaders — per-provider 特殊逻辑 |
-| `provider/vendor-headers.ts` | per-provider HTTP header 注入（拆自 vendor.ts） |
-| `provider/vendor-messages.ts` | per-provider 消息修复（拆自 vendor.ts） |
-| `provider/policy.ts` | 模型策略 / 输入限制校验 |
-| `provider/hexin-discovery.ts` · `hexin-profiles.ts` | 内部供应商发现 / profile 管理（项目特化） |
-| `provider/auth.ts` | Auth 管理 — API Key / OAuth / IAM |
-| `provider/error.ts` | Error Normalization + Overflow 检测 |
-| `provider/bundled.ts` | 20 个打包 SDK 映射（`bundled.ts:27-48`） |
-| `provider/base-url.ts` | 自定义 base URL 解析 |
-| `provider/models.ts` · `models-snapshot.ts` | 模型元数据 + 本地快照 |
-| `provider/dashscope.ts` | 特殊 provider 实现（动态密钥） |
-| `session/llm.ts` | Session LLM — 复用 ProviderLLM helpers + plugin/trace/permission |
-| `config/config.ts` | Agent model 配置 + Provider 配置 |
+| 文件                                                | 职责                                                                               |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `provider/llm.ts`                                   | `ProviderLLM.stream()` — agent 唯一 LLM 入口 + `wrapModel` / `baseHeaders` helpers |
+| `provider/provider.ts`                              | Model Registry + SDK Router + 状态管理                                             |
+| `provider/transform.ts`                             | Parameter Transform + Message 标准化                                               |
+| `provider/vendor.ts`                                | Custom Loaders — per-provider 特殊逻辑                                             |
+| `provider/vendor-headers.ts`                        | per-provider HTTP header 注入（拆自 vendor.ts）                                    |
+| `provider/vendor-messages.ts`                       | per-provider 消息修复（拆自 vendor.ts）                                            |
+| `provider/policy.ts`                                | 模型策略 / 输入限制校验                                                            |
+| `provider/hexin-discovery.ts` · `hexin-profiles.ts` | 内部供应商发现 / profile 管理（项目特化）                                          |
+| `provider/auth.ts`                                  | Auth 管理 — API Key / OAuth / IAM                                                  |
+| `provider/error.ts`                                 | Error Normalization + Overflow 检测                                                |
+| `provider/bundled.ts`                               | 20 个打包 SDK 映射（`bundled.ts:27-48`）                                           |
+| `provider/base-url.ts`                              | 自定义 base URL 解析                                                               |
+| `provider/models.ts` · `models-snapshot.ts`         | 模型元数据 + 本地快照                                                              |
+| `provider/dashscope.ts`                             | 特殊 provider 实现（动态密钥）                                                     |
+| `session/llm.ts`                                    | Session LLM — 复用 ProviderLLM helpers + plugin/trace/permission                   |
+| `config/config.ts`                                  | Agent model 配置 + Provider 配置                                                   |
 
 ## 新增 Provider 三条路径
 
 ### Path 1 — OpenAI 兼容（零代码）
+
 ```jsonc
 // config.provider 配置 api URL + env API Key
 { "provider": { "my-oai-compat": { "api": "https://...", "env": ["MY_KEY"] } } }
 ```
+
 自动使用 `@ai-sdk/openai-compatible`。
 
 ### Path 2 — 有 Vercel AI SDK 包（一行代码）
+
 在 `bundled.ts` 加映射：
+
 ```ts
 "@ai-sdk/new-provider": createNewProvider
 ```
+
 自动参数适配。
 
 ### Path 3 — 特殊行为（vendor.ts）
+
 ```ts
 CUSTOM_LOADERS["new-provider"] = {
-  getModel, options   // 区域路由 / 认证流 / API 切换
+  getModel,
+  options, // 区域路由 / 认证流 / API 切换
 }
 ```
 

@@ -5,30 +5,19 @@
 // supporting helpers (parseServerLogLine, stringifyLogValue, etc., lines
 // 10795–10926).
 
-import {
-  createEffect,
-  createSignal,
-  createMemo,
-  For,
-  Show,
-} from "solid-js";
-import { VList, type VListHandle } from "virtua/solid";
-import { appStore, setAppStore, filteredLogEntries } from "../store/app";
-import type { LogEntry, LogLevel, LogSource } from "../store/app";
-import { t } from "../utils/i18n";
-import { apiJson } from "../services/api";
-import { useAsyncAction } from "../solid/async-action";
-import { Dialog } from "./primitives/Dialog";
-import { Button } from "./ui/Button";
-import {
-  fmtElapsed,
-  logDetailFields,
-  parseServerLogLine,
-  stringifyLogValue,
-} from "../utils/log";
+import { createEffect, createSignal, createMemo, For, Show } from "solid-js"
+import { VList, type VListHandle } from "virtua/solid"
+import { appStore, setAppStore, filteredLogEntries } from "../store/app"
+import type { LogEntry, LogLevel, LogSource } from "../store/app"
+import { t } from "../utils/i18n"
+import { apiJson } from "../services/api"
+import { useAsyncAction } from "../solid/async-action"
+import { Dialog } from "./primitives/Dialog"
+import { Button } from "./ui/Button"
+import { fmtElapsed, logDetailFields, parseServerLogLine, stringifyLogValue } from "../utils/log"
 
 // ── Re-export types so callers can use them without importing store/app ──
-export type { LogEntry, LogLevel, LogSource };
+export type { LogEntry, LogLevel, LogSource }
 
 // ── Constants ──
 
@@ -38,7 +27,7 @@ const NDJSON_STAGE_COLORS: Record<string, string> = {
   goal: "#2ECC71",
   judge: "#F39C12",
   acceptance: "#28B4A0",
-};
+}
 
 const NDJSON_TOOL_COLORS: Record<string, string> = {
   read_file: "#3498DB",
@@ -51,10 +40,10 @@ const NDJSON_TOOL_COLORS: Record<string, string> = {
   edit_file: "#2ECC71",
   run_command: "#E8644A",
   bash: "#E74C3C",
-};
+}
 
 function ndjsonToolColor(name: string): string {
-  return NDJSON_TOOL_COLORS[name] ?? "#95A5A6";
+  return NDJSON_TOOL_COLORS[name] ?? "#95A5A6"
 }
 
 // ── Internal server-log state ──
@@ -62,81 +51,78 @@ function ndjsonToolColor(name: string): string {
 // across component remounts but are not reactive (refresh is triggered
 // explicitly by the user or on open).
 
-let _serverLogLines: string[] = [];
+let _serverLogLines: string[] = []
 
 async function loadServerLogs(): Promise<void> {
   try {
-    const data = await apiJson("log/tail?n=500");
-    _serverLogLines = Array.isArray(data?.lines) ? data.lines : [];
+    const data = await apiJson("log/tail?n=500")
+    _serverLogLines = Array.isArray(data?.lines) ? data.lines : []
   } catch {
-    _serverLogLines = [];
+    _serverLogLines = []
   }
 }
 
 function clipText(value: string, limit = 80): string {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  if (text.length <= limit) return text;
-  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
+  const text = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!text) return ""
+  if (text.length <= limit) return text
+  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`
 }
 
 function logPreviewValue(value: unknown): string {
-  return clipText(stringifyLogValue(value), 80);
+  return clipText(stringifyLogValue(value), 80)
 }
 
 function logSourceLabel(source: LogSource): string {
-  if (source === "server") return "Server";
-  if (source === "pipeline") return "Pipeline";
-  return "Overlay";
+  if (source === "server") return "Server"
+  if (source === "pipeline") return "Pipeline"
+  return "Overlay"
 }
 
 // ── Merge all log sources (
 
-function buildLogEntries(
-  overlayEntries: LogEntry[],
-  ndjsonEvents: any[],
-  filterLevel: LogLevel,
-): LogEntry[] {
+function buildLogEntries(overlayEntries: LogEntry[], ndjsonEvents: any[], filterLevel: LogLevel): LogEntry[] {
   const levelOrder: Record<string, number> = {
     debug: 0,
     info: 1,
     warn: 2,
     error: 3,
-  };
-  const threshold = levelOrder[filterLevel] ?? 0;
+  }
+  const threshold = levelOrder[filterLevel] ?? 0
 
- // Server log lines (parsed from raw strings)
+  // Server log lines (parsed from raw strings)
   const serverLines: LogEntry[] = _serverLogLines
     .map((line): LogEntry => {
-      const entry = parseServerLogLine(line);
+      const entry = parseServerLogLine(line)
       return {
         ...entry,
         level: entry.level as LogLevel,
         source: "server",
-      };
+      }
     })
-    .filter((e) => (levelOrder[e.level] ?? 0) >= threshold);
+    .filter((e) => (levelOrder[e.level] ?? 0) >= threshold)
 
- // Pipeline NDJSON events
+  // Pipeline NDJSON events
   const pipelineLines: LogEntry[] = (Array.isArray(ndjsonEvents) ? ndjsonEvents : [])
     .filter((ev) => ev.kind !== "tool_delta")
     .flatMap((ev) => {
-      const level: LogLevel = ev.kind === "error" ? "error" : "info";
-      if ((levelOrder[level] ?? 0) < threshold) return [];
-      const stage = ev.stage || "";
-      const kind = ev.kind || "";
-      const toolName = ev.toolName || "";
-      const summary = ev.summary || ev.text || "";
-      const parts: string[] = [];
-      if (kind === "tool_call" && toolName) parts.push(`→ ${toolName}`);
-      else if (kind === "tool_result" && toolName) parts.push(`← ${toolName}`);
-      else if (kind === "status") parts.push(summary);
-      else if (kind === "message_delta") parts.push("[text delta]");
+      const level: LogLevel = ev.kind === "error" ? "error" : "info"
+      if ((levelOrder[level] ?? 0) < threshold) return []
+      const stage = ev.stage || ""
+      const kind = ev.kind || ""
+      const toolName = ev.toolName || ""
+      const summary = ev.summary || ev.text || ""
+      const parts: string[] = []
+      if (kind === "tool_call" && toolName) parts.push(`→ ${toolName}`)
+      else if (kind === "tool_result" && toolName) parts.push(`← ${toolName}`)
+      else if (kind === "status") parts.push(summary)
+      else if (kind === "message_delta") parts.push("[text delta]")
       if (kind !== "status" && summary) {
-        parts.push(summary.length > 150 ? summary.slice(0, 150) + "…" : summary);
+        parts.push(summary.length > 150 ? summary.slice(0, 150) + "…" : summary)
       }
-      const elapsed =
-        typeof ev.elapsed_ms === "number" ? fmtElapsed(ev.elapsed_ms) : "";
+      const elapsed = typeof ev.elapsed_ms === "number" ? fmtElapsed(ev.elapsed_ms) : ""
       return [
         {
           level,
@@ -152,37 +138,32 @@ function buildLogEntries(
           raw: "",
           source: "pipeline" as LogSource,
         },
-      ];
-    });
+      ]
+    })
 
-  return [...serverLines, ...pipelineLines, ...overlayEntries].sort(
-    (a, b) => (a.ts || "").localeCompare(b.ts || ""),
-  );
+  return [...serverLines, ...pipelineLines, ...overlayEntries].sort((a, b) => (a.ts || "").localeCompare(b.ts || ""))
 }
 
 function formatLogText(entries: LogEntry[]): string {
   return entries
     .map((e) => {
-      const parts = [
-        `[${String(e.source || "client").toUpperCase()}]`,
-        `[${String(e.level || "info").toUpperCase()}]`,
-      ];
-      if (e.ts) parts.push(e.ts);
-      if (e.service) parts.push(e.service);
-      parts.push(e.message || "");
-      const fields = logDetailFields(e.fields);
-      if (Object.keys(fields).length) parts.push(stringifyLogValue(fields));
-      return parts.join(" ");
+      const parts = [`[${String(e.source || "client").toUpperCase()}]`, `[${String(e.level || "info").toUpperCase()}]`]
+      if (e.ts) parts.push(e.ts)
+      if (e.service) parts.push(e.service)
+      parts.push(e.message || "")
+      const fields = logDetailFields(e.fields)
+      if (Object.keys(fields).length) parts.push(stringifyLogValue(fields))
+      return parts.join(" ")
     })
-    .join("\n");
+    .join("\n")
 }
 
 async function copyText(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
+    await navigator.clipboard.writeText(text)
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -190,8 +171,8 @@ async function copyText(text: string): Promise<boolean> {
 // Ports renderLogEntryDetail ( 10928–10944)
 
 function LogEntryDetail(props: { entry: LogEntry }) {
-  const fields = createMemo(() => logDetailFields(props.entry.fields));
-  const items = createMemo(() => Object.entries(fields()));
+  const fields = createMemo(() => logDetailFields(props.entry.fields))
+  const items = createMemo(() => Object.entries(fields()))
 
   return (
     <>
@@ -229,7 +210,7 @@ function LogEntryDetail(props: { entry: LogEntry }) {
         </details>
       </Show>
     </>
-  );
+  )
 }
 
 // ── LogLine subcomponent ──
@@ -241,9 +222,7 @@ function LogLine(props: { entry: LogEntry }) {
         <span class="log-source" data-source={props.entry.source}>
           {logSourceLabel(props.entry.source)}
         </span>
-        <span class={`log-level log-level-${props.entry.level}`}>
-          [{props.entry.level.toUpperCase()}]
-        </span>
+        <span class={`log-level log-level-${props.entry.level}`}>[{props.entry.level.toUpperCase()}]</span>
         <Show when={!!props.entry.delta}>
           <span class="log-delta">{props.entry.delta}</span>
         </Show>
@@ -255,74 +234,70 @@ function LogLine(props: { entry: LogEntry }) {
       <div class="log-msg">{props.entry.message || props.entry.raw || ""}</div>
       <LogEntryDetail entry={props.entry} />
     </div>
-  );
+  )
 }
 
 // ── LogViewer component props ──
 
 export interface LogViewerProps {
   /**
- * NDJSON pipeline events array. Pass the live ndjsonEvents array from the
- * or an empty array.
- */
-  ndjsonEvents?: any[];
+   * NDJSON pipeline events array. Pass the live ndjsonEvents array from the
+   * or an empty array.
+   */
+  ndjsonEvents?: any[]
   /** Whether the dialog is open. */
-  open?: boolean;
-  onClose?: () => void;
+  open?: boolean
+  onClose?: () => void
 }
 
 // ── LogViewer ──
 
 export function LogViewer(props: LogViewerProps) {
-  const [serverLogsSeq, setServerLogsSeq] = createSignal(0);
-  let logList: VListHandle | undefined;
+  const [serverLogsSeq, setServerLogsSeq] = createSignal(0)
+  let logList: VListHandle | undefined
 
- // Merged & filtered log entries
+  // Merged & filtered log entries
   const entries = createMemo(() => {
-    serverLogsSeq();
-    return buildLogEntries(
-      filteredLogEntries(),
-      props.ndjsonEvents ?? [],
-      appStore.logFilterLevel,
-    );
-  });
+    serverLogsSeq()
+    return buildLogEntries(filteredLogEntries(), props.ndjsonEvents ?? [], appStore.logFilterLevel)
+  })
 
   const refreshAction = useAsyncAction(async () => {
-    await loadServerLogs();
-    setServerLogsSeq((value) => value + 1);
-  });
+    await loadServerLogs()
+    setServerLogsSeq((value) => value + 1)
+  })
 
   const handleCopy = async () => {
-    const text = formatLogText(entries());
-    if (!text) return;
-    await copyText(text);
-  };
+    const text = formatLogText(entries())
+    if (!text) return
+    await copyText(text)
+  }
 
   const handleClear = () => {
- // Clear overlay client log entries via the store
-    setAppStore("logEntries", []);
-    _serverLogLines = [];
-    setServerLogsSeq((value) => value + 1);
-  };
+    // Clear overlay client log entries via the store
+    setAppStore("logEntries", [])
+    _serverLogLines = []
+    setServerLogsSeq((value) => value + 1)
+  }
 
   const handleLevelChange = (e: Event) => {
-    const select = e.target as HTMLSelectElement;
-    setAppStore("logFilterLevel", select.value as LogLevel);
-  };
+    const select = e.target as HTMLSelectElement
+    setAppStore("logFilterLevel", select.value as LogLevel)
+  }
 
   createEffect(() => {
     if (props.open) {
-      void refreshAction.run();
+      void refreshAction.run()
     }
-  });
+  })
 
   createEffect(() => {
-    if (!props.open) return;
-    const count = entries().length;
+    if (!props.open) return
+    const count = entries().length
     if (count > 0) {
-      queueMicrotask(() => logList?.scrollToIndex(count - 1, { align: "end" }));
+      queueMicrotask(() => logList?.scrollToIndex(count - 1, { align: "end" }))
     }
-  });
+  })
 
   return (
     <Dialog
@@ -378,14 +353,7 @@ export function LogViewer(props: LogViewerProps) {
           >
             {t("common.copy")}
           </Button>
-          <Button
-            type="button"
-            id="btnLogClear"
-            variant="ghost"
-            size="sm"
-            tone="danger"
-            onClick={handleClear}
-          >
+          <Button type="button" id="btnLogClear" variant="ghost" size="sm" tone="danger" onClick={handleClear}>
             {t("common.clear")}
           </Button>
           <Button
@@ -416,12 +384,12 @@ export function LogViewer(props: LogViewerProps) {
           itemSize={88}
           overscan={8}
           ref={(handle) => {
-            logList = handle;
+            logList = handle
           }}
         >
           {(entry) => <LogLine entry={entry} />}
         </VList>
       </Show>
     </Dialog>
-  );
+  )
 }

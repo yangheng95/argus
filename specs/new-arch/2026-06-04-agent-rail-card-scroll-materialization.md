@@ -18,13 +18,13 @@ false negative.
 
 ## Callsite Audit
 
-| Callsite | Role | Disposition |
-| --- | --- | --- |
-| `ConversationAgentRail.tsx::locateRecord` | Loads session/history, expands parent cards, and dispatches `requestConversationCardScroll`. | Keep this as the rail owner; do not invent a second scrolling path. |
-| `Conversation.tsx::scrollCardIntoView` | Single listener that turns card-scroll requests into virtualizer scroll + DOM focus/highlight. | Fix here so every card-scroll caller gets render-aware behavior. |
-| `conversation-scroll.ts` | Event contract for card-scroll requests. | Keep unchanged; the contract is already correct. |
-| `TaskProgressBar.tsx` | Another caller of `requestConversationCardScroll`. | Beneficiary of the same fix; no callsite-specific workaround. |
-| `conversation-agent-rail.test.ts` | Source-contract tests for rail behavior. | Add coverage that the scroll handler waits for target materialization rather than a fixed two-frame lookup. |
+| Callsite                                  | Role                                                                                           | Disposition                                                                                                 |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `ConversationAgentRail.tsx::locateRecord` | Loads session/history, expands parent cards, and dispatches `requestConversationCardScroll`.   | Keep this as the rail owner; do not invent a second scrolling path.                                         |
+| `Conversation.tsx::scrollCardIntoView`    | Single listener that turns card-scroll requests into virtualizer scroll + DOM focus/highlight. | Fix here so every card-scroll caller gets render-aware behavior.                                            |
+| `conversation-scroll.ts`                  | Event contract for card-scroll requests.                                                       | Keep unchanged; the contract is already correct.                                                            |
+| `TaskProgressBar.tsx`                     | Another caller of `requestConversationCardScroll`.                                             | Beneficiary of the same fix; no callsite-specific workaround.                                               |
+| `conversation-agent-rail.test.ts`         | Source-contract tests for rail behavior.                                                       | Add coverage that the scroll handler waits for target materialization rather than a fixed two-frame lookup. |
 
 ## Acceptance
 

@@ -26,12 +26,14 @@ try {
   await setup.flush()
   const spans = setup.captureSpans()
   const frame = setup.captureCharFrame()
-  console.log(JSON.stringify({
-    title: spans.lines[0]?.spans[0]?.text ?? "",
-    titleFg: spans.lines[0]?.spans[0]?.fg.toString() ?? "",
-    titleBg: spans.lines[0]?.spans[0]?.bg.toString() ?? "",
-    frame,
-  }))
+  console.log(
+    JSON.stringify({
+      title: spans.lines[0]?.spans[0]?.text ?? "",
+      titleFg: spans.lines[0]?.spans[0]?.fg.toString() ?? "",
+      titleBg: spans.lines[0]?.spans[0]?.bg.toString() ?? "",
+      frame,
+    }),
+  )
 } finally {
   setup.renderer.destroy()
 }

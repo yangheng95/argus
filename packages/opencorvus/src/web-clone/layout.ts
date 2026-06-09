@@ -88,7 +88,10 @@ function scoreMatch(extracted: ExtractedLayoutCandidate, candidate: CloneElement
   const extractedId = extracted.element.attrs?.id ?? selectorId(extracted.element.selector)
   if (extractedId && candidate.attrs.get("id") === extractedId) score += 8
 
-  const classOverlap = overlap(candidate.classTokens, new Set(extracted.element.classes ?? selectorClasses(extracted.element.selector)))
+  const classOverlap = overlap(
+    candidate.classTokens,
+    new Set(extracted.element.classes ?? selectorClasses(extracted.element.selector)),
+  )
   score += classOverlap * 3
 
   const href = candidate.attrs.get("href")
@@ -125,7 +128,15 @@ function flattenCloneElements(root: WebCloneNode): CloneElementCandidate[] {
   walk(root, (node) => {
     if (node.type !== "element") return
     const tag = (node.tag ?? "").toLowerCase()
-    if (tag === "html" || tag === "head" || tag === "script" || tag === "style" || tag === "meta" || tag === "link" || tag === "title") {
+    if (
+      tag === "html" ||
+      tag === "head" ||
+      tag === "script" ||
+      tag === "style" ||
+      tag === "meta" ||
+      tag === "link" ||
+      tag === "title"
+    ) {
       return
     }
     const attrs = new Map<string, string>()
@@ -177,7 +188,9 @@ function selectorId(selector: string | undefined): string | undefined {
 }
 
 function selectorClasses(selector: string | undefined): string[] {
-  return Array.from(selector?.matchAll(/\.([A-Za-z0-9_-]+)/g) ?? []).map((match) => match[1]).filter(Boolean)
+  return Array.from(selector?.matchAll(/\.([A-Za-z0-9_-]+)/g) ?? [])
+    .map((match) => match[1])
+    .filter(Boolean)
 }
 
 function overlap(left: Set<string>, right: Set<string>): number {

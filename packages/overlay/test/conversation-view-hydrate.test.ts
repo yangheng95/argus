@@ -1,11 +1,11 @@
-import { expect, test } from "bun:test";
-import { setBoardStore } from "../src/store/board";
-import { cardTreeStore } from "../src/store/card-tree";
-import { hydrateConversationView, resetWriter } from "../src/services/tree-writer";
+import { expect, test } from "bun:test"
+import { setBoardStore } from "../src/store/board"
+import { cardTreeStore } from "../src/store/card-tree"
+import { hydrateConversationView, resetWriter } from "../src/services/tree-writer"
 
 test("hydrateConversationView routes goal-phase transcript messages into the phase card", () => {
-  resetWriter();
-  setBoardStore("selectedTaskID", "tsk_hydrate_view");
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_hydrate_view")
   setBoardStore("board", {
     task: {
       id: "tsk_hydrate_view",
@@ -48,7 +48,7 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
       },
     ],
     interactions: [],
-  });
+  })
 
   const transcript = [
     {
@@ -72,7 +72,7 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
         },
       ],
     },
-  ];
+  ]
 
   hydrateConversationView(
     {
@@ -88,21 +88,21 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
       ],
     },
     transcript,
-  );
+  )
 
-  const phaseCardID = "step:goal_1:build:phase:build";
-  expect(cardTreeStore.cards["build:session:ses_build"]).toBeUndefined();
-  expect(cardTreeStore.cards[phaseCardID]).toBeDefined();
+  const phaseCardID = "step:goal_1:build:phase:build"
+  expect(cardTreeStore.cards["build:session:ses_build"]).toBeUndefined()
+  expect(cardTreeStore.cards[phaseCardID]).toBeDefined()
   expect(
     cardTreeStore.cards[phaseCardID]?.parts.some(
       (part) => part.type === "text" && String(part.text || "").includes("Recovered build output."),
     ),
-  ).toBe(true);
-});
+  ).toBe(true)
+})
 
 test("hydrateConversationView uses transcript message identity for persisted goal-phase parts", () => {
-  resetWriter();
-  setBoardStore("selectedTaskID", "tsk_hydrate_persisted_parts");
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_hydrate_persisted_parts")
   setBoardStore("board", {
     task: {
       id: "tsk_hydrate_persisted_parts",
@@ -116,9 +116,7 @@ test("hydrateConversationView uses transcript message identity for persisted goa
       steps: [
         {
           id: "build",
-          phases: [
-            { id: "build", label: "Build", sessionKind: "build" },
-          ],
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
         },
       ],
     },
@@ -143,7 +141,7 @@ test("hydrateConversationView uses transcript message identity for persisted goa
       },
     ],
     interactions: [],
-  });
+  })
 
   hydrateConversationView(
     {
@@ -200,12 +198,12 @@ test("hydrateConversationView uses transcript message identity for persisted goa
         ],
       },
     ],
-  );
+  )
 
-  const phaseCardID = "step:goal_persisted_parts:build:phase:build";
-  const phaseParts = cardTreeStore.cards[phaseCardID]?.parts ?? [];
-  expect(cardTreeStore.cards["build:session:ses_build_persisted"]).toBeUndefined();
-  expect(cardTreeStore.cards["filtered:session:ses_stale_part_session:message:msg_stale_part_message"]).toBeUndefined();
+  const phaseCardID = "step:goal_persisted_parts:build:phase:build"
+  const phaseParts = cardTreeStore.cards[phaseCardID]?.parts ?? []
+  expect(cardTreeStore.cards["build:session:ses_build_persisted"]).toBeUndefined()
+  expect(cardTreeStore.cards["filtered:session:ses_stale_part_session:message:msg_stale_part_message"]).toBeUndefined()
   expect(
     phaseParts.some(
       (part) =>
@@ -214,7 +212,7 @@ test("hydrateConversationView uses transcript message identity for persisted goa
         part.sessionID === "ses_build_persisted" &&
         String(part.text || "").includes("First persisted build body."),
     ),
-  ).toBe(true);
+  ).toBe(true)
   expect(
     phaseParts.some(
       (part) =>
@@ -223,12 +221,12 @@ test("hydrateConversationView uses transcript message identity for persisted goa
         part.sessionID === "ses_build_persisted" &&
         String(part.text || "").includes("Second persisted build body."),
     ),
-  ).toBe(true);
-});
+  ).toBe(true)
+})
 
 test("hydrateConversationView restores task-scope agent cards with reasoning parts", () => {
-  resetWriter();
-  setBoardStore("selectedTaskID", "tsk_task_scope_hydrate");
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_task_scope_hydrate")
   setBoardStore("board", {
     task: {
       id: "tsk_task_scope_hydrate",
@@ -254,7 +252,7 @@ test("hydrateConversationView restores task-scope agent cards with reasoning par
     },
     goalWorkflows: [],
     interactions: [],
-  });
+  })
 
   const transcript = [
     {
@@ -309,7 +307,7 @@ test("hydrateConversationView restores task-scope agent cards with reasoning par
         },
       ],
     },
-  ];
+  ]
 
   hydrateConversationView(
     {
@@ -331,20 +329,20 @@ test("hydrateConversationView restores task-scope agent cards with reasoning par
       ],
     },
     transcript,
-  );
+  )
 
-  const requirementsCardID = "requirements:session:ses_requirements:message:msg_requirements";
-  const architectCardID = "architect:session:ses_architect:message:msg_architect";
-  expect(cardTreeStore.order).toContain(requirementsCardID);
-  expect(cardTreeStore.order).toContain(architectCardID);
+  const requirementsCardID = "requirements:session:ses_requirements:message:msg_requirements"
+  const architectCardID = "architect:session:ses_architect:message:msg_architect"
+  expect(cardTreeStore.order).toContain(requirementsCardID)
+  expect(cardTreeStore.order).toContain(architectCardID)
   expect(
     cardTreeStore.cards[requirementsCardID]?.parts.some(
       (part) => part.type === "reasoning" && String(part.text || "").includes("extracting requirements"),
     ),
-  ).toBe(true);
+  ).toBe(true)
   expect(
     cardTreeStore.cards[architectCardID]?.parts.some(
       (part) => part.type === "reasoning" && String(part.text || "").includes("Designing goals"),
     ),
-  ).toBe(true);
-});
+  ).toBe(true)
+})

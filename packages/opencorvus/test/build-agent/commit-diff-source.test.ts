@@ -15,10 +15,10 @@ describe("build agent commit diff source", () => {
     const relativeRuntimeFile = path.relative(tmp.path, runtimeFile).replaceAll("\\", "/")
 
     await fs.mkdir(worktreeDir, { recursive: true })
-    await fs.writeFile(runtimeFile, "{\"version\":\"1.0.0\"}\n")
+    await fs.writeFile(runtimeFile, '{"version":"1.0.0"}\n')
     await $`git add -f ${relativeRuntimeFile}`.cwd(tmp.path).quiet()
     await $`git commit -m "force-track runtime worktree file"`.cwd(tmp.path).quiet()
-    await fs.writeFile(runtimeFile, "{\"version\":\"1.0.1\"}\n")
+    await fs.writeFile(runtimeFile, '{"version":"1.0.1"}\n')
     await $`git add -f ${relativeRuntimeFile}`.cwd(tmp.path).quiet()
     await $`git commit -m "modify runtime worktree file"`.cwd(tmp.path).quiet()
 

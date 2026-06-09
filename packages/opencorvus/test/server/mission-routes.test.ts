@@ -36,7 +36,7 @@ describe("mission routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { missionID: string; sessionID: string; title: string }
+        const body = (await response.json()) as { missionID: string; sessionID: string; title: string }
         expect(body).toMatchObject({
           missionID: "m-rename",
           sessionID: session.id,
@@ -68,7 +68,8 @@ describe("mission routes", () => {
         }) {
           const id = Identifier.ascending("task")
           Database.use((db) =>
-            db.insert(EngineTaskTable)
+            db
+              .insert(EngineTaskTable)
               .values({
                 id,
                 project_id: Instance.project.id,
@@ -120,7 +121,7 @@ describe("mission routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as Array<{
+        const body = (await response.json()) as Array<{
           missionID: string
           tasks: Array<{ id: string; title: string; status: string }>
           taskStats: Record<string, number>
@@ -128,7 +129,10 @@ describe("mission routes", () => {
         const record = body.find((item) => item.missionID === session.missionID)
         expect(record).toBeDefined()
         expect(record!.tasks.map((task) => task.id).sort()).toEqual([activeTaskID, completedTaskID].sort())
-        expect(record!.tasks.map((task) => task.title).sort()).toEqual(["Mission active task", "Mission completed task"])
+        expect(record!.tasks.map((task) => task.title).sort()).toEqual([
+          "Mission active task",
+          "Mission completed task",
+        ])
         expect(record!.taskStats).toMatchObject({
           total: 2,
           queued: 0,
@@ -184,11 +188,39 @@ describe("mission routes", () => {
 
         expect(response.status).toBe(200)
         expect(await response.json()).toBe(true)
-        expect(Database.use((db) =>
-          db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get(),
-        )).toBeUndefined()
+        expect(
+          Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get()),
+        ).toBeUndefined()
       },
     })
+  })
+
+  test("DELETE /mission/:missionID uses the explicit row directory to disambiguate global ledger rows", async () => {
+    await using alpha = await tmpdir({ git: true })
+    await using beta = await tmpdir({ git: true })
+
+    const alphaSession = await Instance.provide({
+      directory: alpha.path,
+      fn: () => ensureMissionSession({ missionID: "m-shared", defaultCwd: alpha.path }),
+    })
+    const betaSession = await Instance.provide({
+      directory: beta.path,
+      fn: () => ensureMissionSession({ missionID: "m-shared", defaultCwd: beta.path }),
+    })
+
+    const app = Server.App()
+    const response = await app.request(`/mission/m-shared?directory=${encodeURIComponent(alpha.path)}`, {
+      method: "DELETE",
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toBe(true)
+    expect(
+      Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, alphaSession.id)).get()),
+    ).toBeUndefined()
+    expect(
+      Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, betaSession.id)).get()),
+    ).toBeDefined()
   })
 
   test("Mission actions do not target non-Mission sessions", async () => {

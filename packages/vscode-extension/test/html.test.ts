@@ -75,7 +75,9 @@ describe("renderOverlayHtml", () => {
   })
 
   afterEach(() => {
-    try { fs.rmSync(extensionRoot, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(extensionRoot, { recursive: true, force: true })
+    } catch {}
   })
 
   function render(hostLocale: string) {

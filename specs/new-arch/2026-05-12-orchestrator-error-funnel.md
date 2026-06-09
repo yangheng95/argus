@@ -60,19 +60,19 @@ instead of grepping flat strings.
 
 ### 2.3 Pattern C — strict propagation, no swallow (**conformant by omission**)
 
-| Site                                           | Effect                                                                                                   |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| retired acceptance review provider setup          | bubbled raw `Provider.getModel` failure to orchestrator acceptance flow                                    |
-| `orchestrator/tools.ts:4791` (`refine`)        | bubbles raw `resolveAgentModel` failure to the tool caller                                               |
-| `control/message.ts:224-230`                   | `Provider.defaultModel()` is intentionally uncaught; missing config stays operator-visible               |
-| `session/wake.ts:101-103`                      | wake loop `resolveModel()` returns `Provider.defaultModel()` raw; no local swallow                       |
-| `session/shell-exec.ts:52-55`                  | shell resume path resolves `Provider.defaultModel()` raw when `input.model` and `agent.model` are absent |
-| `agent/agent.ts:510-511`                       | `generate()` resolves `Provider.defaultModel()` then `Provider.getModel()` raw                           |
-| `cli/cmd/debug/agent.ts:73-74`                 | debug tool listing uses `Provider.defaultModel()` raw                                                    |
-| `cli/cmd/debug/agent.ts:117-118`               | debug tool execution context uses `Provider.defaultModel()` raw                                          |
-| `frontend-design/tools/webpage-vision-judge.ts` | frontend-design vision judge resolves configured/default model raw                                                |
-| `session/prompt/title.ts:35`                   | title generation resolves model raw                                                                      |
-| `task-api/index.ts:1596`                       | follow-up summary model resolves raw                                                                     |
+| Site                                            | Effect                                                                                                   |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| retired acceptance review provider setup        | bubbled raw `Provider.getModel` failure to orchestrator acceptance flow                                  |
+| `orchestrator/tools.ts:4791` (`refine`)         | bubbles raw `resolveAgentModel` failure to the tool caller                                               |
+| `control/message.ts:224-230`                    | `Provider.defaultModel()` is intentionally uncaught; missing config stays operator-visible               |
+| `session/wake.ts:101-103`                       | wake loop `resolveModel()` returns `Provider.defaultModel()` raw; no local swallow                       |
+| `session/shell-exec.ts:52-55`                   | shell resume path resolves `Provider.defaultModel()` raw when `input.model` and `agent.model` are absent |
+| `agent/agent.ts:510-511`                        | `generate()` resolves `Provider.defaultModel()` then `Provider.getModel()` raw                           |
+| `cli/cmd/debug/agent.ts:73-74`                  | debug tool listing uses `Provider.defaultModel()` raw                                                    |
+| `cli/cmd/debug/agent.ts:117-118`                | debug tool execution context uses `Provider.defaultModel()` raw                                          |
+| `frontend-design/tools/webpage-vision-judge.ts` | frontend-design vision judge resolves configured/default model raw                                       |
+| `session/prompt/title.ts:35`                    | title generation resolves model raw                                                                      |
+| `task-api/index.ts:1596`                        | follow-up summary model resolves raw                                                                     |
 
 These are fine: they either intentionally surface the error to their caller or
 defer policy to a higher boundary.

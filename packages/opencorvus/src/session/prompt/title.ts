@@ -8,10 +8,7 @@ import { EffectiveConfig } from "@/config/effective"
 
 const log = Log.create({ service: "session.prompt" })
 
-export async function ensureTitle(input: {
-  session: Session.Info
-  history: Message.WithParts[]
-}) {
+export async function ensureTitle(input: { session: Session.Info; history: Message.WithParts[] }) {
   if (input.session.parentID) return
   if (!Session.isDefaultTitle(input.session.title)) return
 

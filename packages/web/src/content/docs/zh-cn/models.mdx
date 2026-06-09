@@ -7,11 +7,11 @@ OpenCorvus 在三种场景选模型，三者可独立配置。底层 provider �
 
 ## 三个旋钮
 
-| 场景 | 配置位置 |
-|---|---|
-| 默认执行模型 | [config](/docs/zh-cn/config/) 的 `model` 字段 |
-| 按 agent 模型 | `agent.<name>.model`（见 `packages/opencorvus/src/config/config.ts:1053-1067`、`1191`、`1232`、`1239`、`1246`） |
-| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL` 环境变量 |
+| 场景              | 配置位置                                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- |
+| 默认执行模型      | [config](/docs/zh-cn/config/) 的 `model` 字段                                                                   |
+| 按 agent 模型     | `agent.<name>.model`（见 `packages/opencorvus/src/config/config.ts:1053-1067`、`1191`、`1232`、`1239`、`1246`） |
+| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL` 环境变量                                                                              |
 
 规划/执行分模型示例：
 
@@ -19,10 +19,10 @@ OpenCorvus 在三种场景选模型，三者可独立配置。底层 provider �
 {
   "model": "alibaba-cn/qwen3.5-plus",
   "agent": {
-    "requirements":   { "model": "anthropic/claude-sonnet-4-6" },
-    "planner":        { "model": "anthropic/claude-sonnet-4-6" },
-    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" }
-  }
+    "requirements": { "model": "anthropic/claude-sonnet-4-6" },
+    "planner": { "model": "anthropic/claude-sonnet-4-6" },
+    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" },
+  },
 }
 ```
 

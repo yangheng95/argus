@@ -7,23 +7,23 @@
 // settingsStore.directory. Cwd switching is delegated to applyDirectory(),
 // the same function the existing Settings → General panel uses.
 
-import { Show } from "solid-js";
-import { settingsStore } from "../store/settings";
-import { applyDirectory, pickDirectory } from "../services/workspace";
-import { Icon } from "./Icon";
+import { Show } from "solid-js"
+import { settingsStore } from "../store/settings"
+import { applyDirectory, pickDirectory } from "../services/workspace"
+import { Icon } from "./Icon"
 
 export interface TopBarProps {
   /** Slot for the right-side controls (connection badge, window controls). */
-  rightSlot?: () => any;
+  rightSlot?: () => any
 }
 
 function shortenPath(p: string, max = 64): string {
-  if (!p) return "";
-  if (p.length <= max) return p;
+  if (!p) return ""
+  if (p.length <= max) return p
   // Drop middle, keep root + tail.
-  const head = p.slice(0, Math.max(8, Math.floor(max / 3)));
-  const tail = p.slice(-(max - head.length - 1));
-  return `${head}…${tail}`;
+  const head = p.slice(0, Math.max(8, Math.floor(max / 3)))
+  const tail = p.slice(-(max - head.length - 1))
+  return `${head}…${tail}`
 }
 
 async function switchCwd(): Promise<void> {
@@ -32,9 +32,9 @@ async function switchCwd(): Promise<void> {
   // throws UnsupportedNativeCommandError everywhere else (CLAUDE.md
   // §一-7: no silent prompt fallback — vite-preview users can supply
   // a directory via settings instead).
-  const next = await pickDirectory(settingsStore.directory ?? undefined);
-  if (!next) return;
-  await applyDirectory(next, {});
+  const next = await pickDirectory(settingsStore.directory ?? undefined)
+  if (!next) return
+  await applyDirectory(next, {})
 }
 
 export function TopBar(props: TopBarProps) {
@@ -49,9 +49,7 @@ export function TopBar(props: TopBarProps) {
         <span class="top-bar-cwd-icon" aria-hidden="true">
           <Icon name="folder" />
         </span>
-        <span class="top-bar-cwd-path">
-          {shortenPath(settingsStore.directory ?? "", 56) || "Choose project…"}
-        </span>
+        <span class="top-bar-cwd-path">{shortenPath(settingsStore.directory ?? "", 56) || "Choose project…"}</span>
         <span class="top-bar-cwd-caret" aria-hidden="true">
           <Icon name="caret-down" />
         </span>
@@ -61,5 +59,5 @@ export function TopBar(props: TopBarProps) {
         <div class="top-bar-right">{props.rightSlot!()}</div>
       </Show>
     </div>
-  );
+  )
 }

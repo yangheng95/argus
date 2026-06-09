@@ -47,15 +47,15 @@ function baseGoalRun(overrides: Partial<GoalRunRow>): GoalRunRow {
 
 describe("isGoalRunOrphaned — owner-stamp orphan predicate", () => {
   test("live status + foreign owner with dead PID ⇒ orphaned", () => {
-    expect(isGoalRunOrphaned(baseGoalRun({ status: "running", owner: FOREIGN_OWNER }), processOwner(), () => false)).toBe(
-      true,
-    )
-    expect(isGoalRunOrphaned(baseGoalRun({ status: "planning", owner: FOREIGN_OWNER }), processOwner(), () => false)).toBe(
-      true,
-    )
-    expect(isGoalRunOrphaned(baseGoalRun({ status: "blocked", owner: FOREIGN_OWNER }), processOwner(), () => false)).toBe(
-      true,
-    )
+    expect(
+      isGoalRunOrphaned(baseGoalRun({ status: "running", owner: FOREIGN_OWNER }), processOwner(), () => false),
+    ).toBe(true)
+    expect(
+      isGoalRunOrphaned(baseGoalRun({ status: "planning", owner: FOREIGN_OWNER }), processOwner(), () => false),
+    ).toBe(true)
+    expect(
+      isGoalRunOrphaned(baseGoalRun({ status: "blocked", owner: FOREIGN_OWNER }), processOwner(), () => false),
+    ).toBe(true)
   })
 
   test("live status + foreign owner with live PID ⇒ NOT orphaned", () => {
@@ -133,7 +133,8 @@ function seedGoalRun(
   now: number,
 ) {
   Database.use((db) =>
-    db.insert(EngineArtifactTable)
+    db
+      .insert(EngineArtifactTable)
       .values({
         id: `${goalRunID}_${now}`,
         task_id: taskID,

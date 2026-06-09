@@ -18,9 +18,7 @@ describe("deriveUrlSignals", () => {
   })
 
   test("text containing both a figma URL and another URL splits cleanly", () => {
-    const out = deriveUrlSignals(
-      "Mockup at https://www.figma.com/file/xyz, also see https://example.com/spec",
-    )
+    const out = deriveUrlSignals("Mockup at https://www.figma.com/file/xyz, also see https://example.com/spec")
     expect(out.request_contains_figma_url).toBe(true)
     expect(out.request_contains_url).toBe(true)
   })
@@ -40,9 +38,7 @@ describe("deriveUrlSignals", () => {
 
   test("recognises figma proto / board / design / file paths", () => {
     for (const path of ["file", "design", "proto", "board"]) {
-      expect(
-        deriveUrlSignals(`https://figma.com/${path}/abc/x`).request_contains_figma_url,
-      ).toBe(true)
+      expect(deriveUrlSignals(`https://figma.com/${path}/abc/x`).request_contains_figma_url).toBe(true)
     }
   })
 

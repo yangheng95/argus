@@ -39,7 +39,9 @@ function walkCss(dir: string): string[] {
 // styles.css decomposed architecture. Selectors that used to live in the
 // monolith now live across these files; searching the combined text
 // preserves the same semantics as the old readFileSync("styles.css").
-const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
+const STYLES = walkCss(STYLES_ROOT)
+  .map((f) => readFileSync(f, "utf8"))
+  .join("\n")
 
 function ruleBody(selector: string): string {
   // Match a CSS rule that STARTS with the given selector (so a

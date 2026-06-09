@@ -7,12 +7,12 @@ as `TerminalToolMissingError` because `report_build_result` was never reached.
 
 Observed call sites:
 
-| Surface | Decision |
-| --- | --- |
-| `packages/opencorvus/src/prompt/core/build-core.txt` | Add Build-agent execution guidance: long deliverables must be written in section-sized tool calls. |
-| `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts` | Add prompt hygiene regression test for the chunked-write guidance. |
-| `packages/opencorvus/src/build/agent.ts` | No runtime change; it already composes `build-core.txt` as the single Build prompt core. |
-| `packages/opencorvus/src/session/loop.ts` | No runtime change; terminal tool detection remains the correct contract failure surface. |
+| Surface                                                      | Decision                                                                                           |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/prompt/core/build-core.txt`         | Add Build-agent execution guidance: long deliverables must be written in section-sized tool calls. |
+| `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts` | Add prompt hygiene regression test for the chunked-write guidance.                                 |
+| `packages/opencorvus/src/build/agent.ts`                     | No runtime change; it already composes `build-core.txt` as the single Build prompt core.           |
+| `packages/opencorvus/src/session/loop.ts`                    | No runtime change; terminal tool detection remains the correct contract failure surface.           |
 
 ## Implementation
 

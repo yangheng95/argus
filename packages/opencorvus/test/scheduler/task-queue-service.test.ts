@@ -128,9 +128,11 @@ describe("scheduler.task-queue-service", () => {
       },
     })
 
-    expect(prompt).toHaveBeenCalledWith(expect.objectContaining({
-      agent: "explore",
-    }))
+    expect(prompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: "explore",
+      }),
+    )
   })
 
   test("retries on failure and marks failed after max retries", async () => {

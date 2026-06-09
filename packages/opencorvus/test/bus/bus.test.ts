@@ -13,15 +13,14 @@ import { tmpdir } from "../fixture/fixture"
 const TestEvent = BusEvent.define("test.event", z.object({ value: z.string() }))
 
 const CounterEvent = BusEvent.define("test.counter", z.object({ count: z.number() }))
-const NotifyDescriptorEvent = BusEvent.define(
-  "test.notify.descriptor",
-  z.object({ value: z.string() }),
-  { tier: 1, badge: true },
-)
+const NotifyDescriptorEvent = BusEvent.define("test.notify.descriptor", z.object({ value: z.string() }), {
+  tier: 1,
+  badge: true,
+})
 const NotifyResolverEvent = BusEvent.define(
   "test.notify.resolver",
   z.object({ verdict: z.enum(["accepted", "rejected"]) }),
-  (payload) => payload.verdict === "rejected" ? { tier: 1, badge: true } : { tier: 2 },
+  (payload) => (payload.verdict === "rejected" ? { tier: 1, badge: true } : { tier: 2 }),
 )
 const NotifyOmittedEvent = BusEvent.define("test.notify.omitted", z.object({ value: z.string() }))
 
@@ -120,19 +119,23 @@ describe("BusEvent notification registry", () => {
   })
 
   test("actual event annotations keep bridged tiers and global NOOPs explicit", () => {
-    expect(BusEvent.resolveNotify(Event.InteractionResolved.type, {
-      taskID: "tsk_notify_actual",
-      interactionID: "int_notify_actual",
-      status: "answered",
-      summary: "answered",
-    })).toBeUndefined()
-    expect(BusEvent.resolveNotify(Message.Event.PartDelta.type, {
-      sessionID: "ses_notify_actual",
-      messageID: "msg_notify_actual",
-      partID: "prt_notify_actual",
-      field: "text",
-      delta: "hello",
-    })).toEqual({ tier: 3 })
+    expect(
+      BusEvent.resolveNotify(Event.InteractionResolved.type, {
+        taskID: "tsk_notify_actual",
+        interactionID: "int_notify_actual",
+        status: "answered",
+        summary: "answered",
+      }),
+    ).toBeUndefined()
+    expect(
+      BusEvent.resolveNotify(Message.Event.PartDelta.type, {
+        sessionID: "ses_notify_actual",
+        messageID: "msg_notify_actual",
+        partID: "prt_notify_actual",
+        field: "text",
+        delta: "hello",
+      }),
+    ).toEqual({ tier: 3 })
     expect(BusEvent.resolveNotify(SessionEvents.Error.type, {})).toEqual({ tier: 1 })
     expect(BusEvent.resolveNotify(Workspace.Event.Failed.type, { message: "workspace failed" })).toBeUndefined()
   })

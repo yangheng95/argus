@@ -15,7 +15,9 @@ describe("web-clone source skeleton consumption audit", () => {
     await using tmp = await tmpdir()
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
-    await Bun.write(path.join(projectDir, "src", "App.tsx"), `
+    await Bun.write(
+      path.join(projectDir, "src", "App.tsx"),
+      `
       import reactLogo from './assets/react.svg'
       import viteLogo from '/vite.svg'
       import './App.css'
@@ -33,7 +35,8 @@ describe("web-clone source skeleton consumption audit", () => {
           </>
         )
       }
-    `)
+    `,
+    )
     await Bun.write(path.join(projectDir, "src", "App.css"), ".logo { height: 6em; }")
 
     const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
@@ -48,12 +51,24 @@ describe("web-clone source skeleton consumption audit", () => {
     await using tmp = await tmpdir()
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
-    await Bun.write(path.join(projectDir, "web-clone-source", "source-skeleton", "index.html"), `
+    await Bun.write(
+      path.join(projectDir, "web-clone-source", "source-skeleton", "index.html"),
+      `
       <main><h1>Economic calendar</h1><p>GDP Growth Rate</p></main>
-    `)
-    await Bun.write(path.join(projectDir, "web-clone-source", "source-ir", "content-model.json"), JSON.stringify({
-      tables: [{ headers: ["Time", "Country", "Event", "Actual"], rows: [["08:30", "US", "GDP Growth Rate", "2.1%"]] }],
-    }, null, 2))
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "web-clone-source", "source-ir", "content-model.json"),
+      JSON.stringify(
+        {
+          tables: [
+            { headers: ["Time", "Country", "Event", "Actual"], rows: [["08:30", "US", "GDP Growth Rate", "2.1%"]] },
+          ],
+        },
+        null,
+        2,
+      ),
+    )
 
     const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
 
@@ -88,11 +103,20 @@ describe("web-clone source skeleton consumption audit", () => {
     await using tmp = await tmpdir()
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
-    await Bun.write(path.join(projectDir, "src", "data", "calendar.json"), JSON.stringify([
-      { time: "08:30", country: "US", event: "GDP Growth Rate", actual: "2.1%" },
-      { time: "09:45", country: "US", event: "Manufacturing PMI", actual: "51.3" },
-    ], null, 2))
-    await Bun.write(path.join(projectDir, "src", "components", "CalendarTable.tsx"), `
+    await Bun.write(
+      path.join(projectDir, "src", "data", "calendar.json"),
+      JSON.stringify(
+        [
+          { time: "08:30", country: "US", event: "GDP Growth Rate", actual: "2.1%" },
+          { time: "09:45", country: "US", event: "Manufacturing PMI", actual: "51.3" },
+        ],
+        null,
+        2,
+      ),
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "components", "CalendarTable.tsx"),
+      `
       import calendarEvents from "../data/calendar.json"
 
       export function CalendarTable() {
@@ -102,13 +126,17 @@ describe("web-clone source skeleton consumption audit", () => {
           </table>
         )
       }
-    `)
-    await Bun.write(path.join(projectDir, "src", "App.tsx"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "App.tsx"),
+      `
       import { CalendarTable } from "./components/CalendarTable"
       export default function App() {
         return <main><nav>Markets</nav><h1>Economic calendar</h1><CalendarTable /></main>
       }
-    `)
+    `,
+    )
 
     const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
 
@@ -122,13 +150,18 @@ describe("web-clone source skeleton consumption audit", () => {
     await using tmp = await tmpdir()
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
-    await Bun.write(path.join(projectDir, "src", "data", "calendar.ts"), `
+    await Bun.write(
+      path.join(projectDir, "src", "data", "calendar.ts"),
+      `
       export const calendarEvents = [
         { time: "08:30", country: "US", event: "GDP Growth Rate", actual: "2.1%" },
         { time: "09:45", country: "US", event: "Manufacturing PMI", actual: "51.3" },
       ]
-    `)
-    await Bun.write(path.join(projectDir, "src", "components", "CalendarTable.tsx"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "components", "CalendarTable.tsx"),
+      `
       import { calendarEvents } from "../data/calendar"
 
       export function CalendarTable() {
@@ -148,8 +181,11 @@ describe("web-clone source skeleton consumption audit", () => {
           </table>
         )
       }
-    `)
-    await Bun.write(path.join(projectDir, "src", "App.tsx"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "App.tsx"),
+      `
       import { CalendarTable } from "./components/CalendarTable"
       import "./styles.css"
 
@@ -164,13 +200,20 @@ describe("web-clone source skeleton consumption audit", () => {
           </main>
         )
       }
-    `)
-    await Bun.write(path.join(projectDir, "src", "styles.css"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "styles.css"),
+      `
       .economic-calendar { display: grid; grid-template-columns: 180px 1fr; gap: 16px; color: #111827; }
       .economic-calendar__table { width: 100%; border-collapse: collapse; }
-    `)
+    `,
+    )
 
-    const { audit, auditPath } = await writeWebCloneSourceSkeletonConsumptionAudit({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const { audit, auditPath } = await writeWebCloneSourceSkeletonConsumptionAudit({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+    })
 
     expect(auditPath).toEndWith("web-clone-source-skeleton-consumption-audit.json")
     expect(audit.passed).toBe(true)
@@ -193,7 +236,8 @@ describe("web-clone source skeleton consumption audit", () => {
       path.join(projectDir, "src", "styles", "source-critical.css"),
       Array.from(
         { length: 2600 },
-        (_, index) => `.source-node-${index} { content: "data-source-node-id=node_${index}"; padding: ${index % 8}px; }`,
+        (_, index) =>
+          `.source-node-${index} { content: "data-source-node-id=node_${index}"; padding: ${index % 8}px; }`,
       ).join("\n"),
     )
 
@@ -215,12 +259,15 @@ describe("web-clone source skeleton consumption audit", () => {
       sourcePackageDir,
       outputDir: projectDir,
     })
-    await Bun.write(path.join(projectDir, "src", "components", "source-dom", "TinyDebtRegion.tsx"), `
+    await Bun.write(
+      path.join(projectDir, "src", "components", "source-dom", "TinyDebtRegion.tsx"),
+      `
       // @ts-nocheck
       export function TinyDebtRegion() {
         return <section>GDP Growth Rate</section>
       }
-    `)
+    `,
+    )
 
     const audit = await auditWebCloneSourceSkeletonConsumption({
       projectDir,
@@ -242,11 +289,14 @@ describe("web-clone source skeleton consumption audit", () => {
     const sourcePackageDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
-    await Bun.write(path.join(projectDir, "src", "data", "sourceDomReplacementPlan.ts"), `
+    await Bun.write(
+      path.join(projectDir, "src", "data", "sourceDomReplacementPlan.ts"),
+      `
       export const sourceDomReplacementPlan = [
         { regionComponentName: "CalendarRegion", regionFilePath: "src/components/source-dom/CalendarRegion.tsx" },
       ] as const
-    `)
+    `,
+    )
 
     const audit = await auditWebCloneSourceSkeletonConsumption({
       projectDir,
@@ -281,13 +331,18 @@ describe("web-clone source skeleton consumption audit", () => {
     await using tmp = await tmpdir()
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
-    await Bun.write(path.join(projectDir, "src", "data", "calendar.ts"), `
+    await Bun.write(
+      path.join(projectDir, "src", "data", "calendar.ts"),
+      `
       export const calendarEvents = [
         { time: "08:30", country: "US", event: "GDP Growth Rate", actual: "2.1%" },
         { time: "09:45", country: "US", event: "Manufacturing PMI", actual: "51.3" },
       ]
-    `)
-    await Bun.write(path.join(projectDir, "src", "components", "ReferenceCanvas.tsx"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "components", "ReferenceCanvas.tsx"),
+      `
       import { calendarEvents } from "../data/calendar"
 
       export function ReferenceCanvas() {
@@ -299,13 +354,17 @@ describe("web-clone source skeleton consumption audit", () => {
           </main>
         )
       }
-    `)
-    await Bun.write(path.join(projectDir, "src", "App.tsx"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "App.tsx"),
+      `
       import { ReferenceCanvas } from "./components/ReferenceCanvas"
       export default function App() {
         return <ReferenceCanvas />
       }
-    `)
+    `,
+    )
 
     const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
 
@@ -319,7 +378,9 @@ describe("web-clone source skeleton consumption audit", () => {
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
-    await Bun.write(path.join(projectDir, "src", "components", "HiddenSourceCoverage.tsx"), `
+    await Bun.write(
+      path.join(projectDir, "src", "components", "HiddenSourceCoverage.tsx"),
+      `
       import { calendarEvents } from "../data/calendar"
 
       export function HiddenSourceCoverage() {
@@ -329,23 +390,30 @@ describe("web-clone source skeleton consumption audit", () => {
           </section>
         )
       }
-    `)
-    await Bun.write(path.join(projectDir, "src", "App.tsx"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "App.tsx"),
+      `
       import { CalendarTable } from "./components/CalendarTable"
       import { HiddenSourceCoverage } from "./components/HiddenSourceCoverage"
       import "./styles.css"
       export default function App() {
         return <main><nav>Markets</nav><h1>Economic calendar</h1><CalendarTable /><HiddenSourceCoverage /></main>
       }
-    `)
-    await Bun.write(path.join(projectDir, "src", "styles.css"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "styles.css"),
+      `
       .semantic-source-layer {
         width: 1px;
         height: 1px;
         overflow: hidden;
         opacity: 0;
       }
-    `)
+    `,
+    )
 
     const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
 
@@ -360,7 +428,9 @@ describe("web-clone source skeleton consumption audit", () => {
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
     const longPath = "M0 0 " + Array.from({ length: 700 }, (_, index) => `L${index} ${index % 37}`).join(" ")
-    await Bun.write(path.join(projectDir, "src", "components", "InlineMap.tsx"), `
+    await Bun.write(
+      path.join(projectDir, "src", "components", "InlineMap.tsx"),
+      `
       export function InlineMap() {
         return (
           <svg viewBox="0 0 1000 500">
@@ -368,14 +438,18 @@ describe("web-clone source skeleton consumption audit", () => {
           </svg>
         )
       }
-    `)
-    await Bun.write(path.join(projectDir, "src", "App.tsx"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "App.tsx"),
+      `
       import { CalendarTable } from "./components/CalendarTable"
       import { InlineMap } from "./components/InlineMap"
       export default function App() {
         return <main><nav>Markets</nav><h1>Economic calendar</h1><CalendarTable /><InlineMap /></main>
       }
-    `)
+    `,
+    )
 
     const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
 
@@ -389,15 +463,22 @@ describe("web-clone source skeleton consumption audit", () => {
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
-    const assetPaths = Array.from({ length: 220 }, (_, index) =>
-      `<AssetPath assetPath={"../assets/svg/asset_${String(index).padStart(6, "0")}.path.txt"} id={"land-${index}"} className={"neutral"} />`,
+    const assetPaths = Array.from(
+      { length: 220 },
+      (_, index) =>
+        `<AssetPath assetPath={"../assets/svg/asset_${String(index).padStart(6, "0")}.path.txt"} id={"land-${index}"} className={"neutral"} />`,
     ).join("\n")
-    await Bun.write(path.join(projectDir, "src", "components", "AssetPath.tsx"), `
+    await Bun.write(
+      path.join(projectDir, "src", "components", "AssetPath.tsx"),
+      `
       export function AssetPath(props: { assetPath: string; id?: string; className?: string }) {
         return <path data-asset-path={props.assetPath} id={props.id} className={props.className} />
       }
-    `)
-    await Bun.write(path.join(projectDir, "src", "components", "SidecarMap.tsx"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "components", "SidecarMap.tsx"),
+      `
       import { AssetPath } from "./AssetPath"
       export function SidecarMap() {
         return (
@@ -406,14 +487,18 @@ describe("web-clone source skeleton consumption audit", () => {
           </svg>
         )
       }
-    `)
-    await Bun.write(path.join(projectDir, "src", "App.tsx"), `
+    `,
+    )
+    await Bun.write(
+      path.join(projectDir, "src", "App.tsx"),
+      `
       import { CalendarTable } from "./components/CalendarTable"
       import { SidecarMap } from "./components/SidecarMap"
       export default function App() {
         return <main><nav>Markets</nav><h1>Economic calendar</h1><CalendarTable /><SidecarMap /></main>
       }
-    `)
+    `,
+    )
 
     const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
 
@@ -436,7 +521,9 @@ describe("web-clone source skeleton consumption audit", () => {
   })
 
   test("infers maintainable replacement mode from Chinese maintainability requests", () => {
-    expect(inferWebCloneFinalAcceptanceMode("需要一个可维护的真实实现，尽量复用现有组件或者成熟组件")).toBe("maintainable_replacement_required")
+    expect(inferWebCloneFinalAcceptanceMode("需要一个可维护的真实实现，尽量复用现有组件或者成熟组件")).toBe(
+      "maintainable_replacement_required",
+    )
   })
 
   test("consumption evidence reports a missing or stale audit when source-skeleton is cited", async () => {
@@ -451,7 +538,10 @@ describe("web-clone source skeleton consumption audit", () => {
     expect(missing.ok).toBe(false)
     expect(missing.findings.join("\n")).toContain("missing web-clone-source-skeleton-consumption-audit.json")
 
-    const { auditPath } = await writeWebCloneSourceSkeletonConsumptionAudit({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const { auditPath } = await writeWebCloneSourceSkeletonConsumptionAudit({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+    })
     const passing = await inspectWebCloneSourceSkeletonConsumptionEvidence({ projectDir: tmp.path, citedText })
     expect(passing.ok).toBe(true)
     expect(passing.auditPath).toBe(auditPath)
@@ -533,13 +623,18 @@ describe("web-clone source skeleton consumption audit", () => {
 })
 
 async function writePassingProject(projectDir: string): Promise<void> {
-  await Bun.write(path.join(projectDir, "src", "data", "calendar.ts"), `
+  await Bun.write(
+    path.join(projectDir, "src", "data", "calendar.ts"),
+    `
     export const calendarEvents = [
       { time: "08:30", country: "US", event: "GDP Growth Rate", actual: "2.1%" },
       { time: "09:45", country: "US", event: "Manufacturing PMI", actual: "51.3" },
     ]
-  `)
-  await Bun.write(path.join(projectDir, "src", "components", "CalendarTable.tsx"), `
+  `,
+  )
+  await Bun.write(
+    path.join(projectDir, "src", "components", "CalendarTable.tsx"),
+    `
     import { calendarEvents } from "../data/calendar"
 
     export function CalendarTable() {
@@ -558,19 +653,25 @@ async function writePassingProject(projectDir: string): Promise<void> {
         </table>
       )
     }
-  `)
-  await Bun.write(path.join(projectDir, "src", "App.tsx"), `
+  `,
+  )
+  await Bun.write(
+    path.join(projectDir, "src", "App.tsx"),
+    `
     import { CalendarTable } from "./components/CalendarTable"
     export default function App() {
       return <main><nav>Markets</nav><h1>Economic calendar</h1><CalendarTable /></main>
     }
-  `)
+  `,
+  )
 }
 
 async function writeFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "web-clone-source")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <!doctype html>
     <html>
       <body data-reference-image="../reference.png">
@@ -589,100 +690,162 @@ async function writeFixtureEvidence(root: string): Promise<string> {
         </main>
       </body>
     </html>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    `
     .economic-calendar { display: grid; grid-template-columns: 180px 1fr; gap: 16px; color: #111827; }
     table { border-collapse: collapse; width: 100%; }
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-component-tree",
-    components: [
-      { id: "segment-nav", name: "NavigationRegion", textPreview: ["Markets"] },
-      { id: "segment-main", name: "EconomicCalendarSection", textPreview: ["Economic calendar", "08:30", "GDP Growth Rate"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-content-model",
-    tables: [{
-      nodeId: "table-1",
-      headers: ["Time", "Country", "Event", "Actual"],
-      rows: [
-        ["08:30", "US", "GDP Growth Rate", "2.1%"],
-        ["09:45", "US", "Manufacturing PMI", "51.3"],
-      ],
-    }],
-    lists: [],
-    cards: [],
-    controls: [],
-    links: [{ nodeId: "link-1", text: "Markets", href: "/markets" }],
-    media: [],
-    repeatedGroups: [{
-      parentNodeId: "tbody-1",
-      count: 2,
-      sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"],
-    }],
-    stats: {
-      totalTables: 1,
-      totalLists: 0,
-      totalCards: 0,
-      totalRepeatedGroups: 1,
-    },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        purpose: "web-clone-component-tree",
+        components: [
+          { id: "segment-nav", name: "NavigationRegion", textPreview: ["Markets"] },
+          {
+            id: "segment-main",
+            name: "EconomicCalendarSection",
+            textPreview: ["Economic calendar", "08:30", "GDP Growth Rate"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        purpose: "web-clone-content-model",
+        tables: [
+          {
+            nodeId: "table-1",
+            headers: ["Time", "Country", "Event", "Actual"],
+            rows: [
+              ["08:30", "US", "GDP Growth Rate", "2.1%"],
+              ["09:45", "US", "Manufacturing PMI", "51.3"],
+            ],
+          },
+        ],
+        lists: [],
+        cards: [],
+        controls: [],
+        links: [{ nodeId: "link-1", text: "Markets", href: "/markets" }],
+        media: [],
+        repeatedGroups: [
+          {
+            parentNodeId: "tbody-1",
+            count: 2,
+            sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"],
+          },
+        ],
+        stats: {
+          totalTables: 1,
+          totalLists: 0,
+          totalCards: 0,
+          totalRepeatedGroups: 1,
+        },
+      },
+      null,
+      2,
+    ),
+  )
   await writeMinimalSourceManifest(webpageEvidenceDir)
   return webpageEvidenceDir
 }
 
 async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<void> {
   const referenceSha256 = createHash("sha256").update(Buffer.from(minimalPngBytes())).digest("hex")
-  await Bun.write(path.join(sourcePackageDir, "web-clone-source-manifest.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-visible-source-package",
-    provenance: {
-      source: "webpage-evidence",
-      webpageEvidenceDir: sourcePackageDir,
-      reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: minimalPngBytes().length },
-    },
-    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "webpage-evidence/reference.png" }],
-  }, null, 2))
+  await Bun.write(
+    path.join(sourcePackageDir, "web-clone-source-manifest.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        purpose: "web-clone-visible-source-package",
+        provenance: {
+          source: "webpage-evidence",
+          webpageEvidenceDir: sourcePackageDir,
+          reference: {
+            path: "reference.png",
+            sha256: referenceSha256,
+            width: 1,
+            height: 1,
+            bytes: minimalPngBytes().length,
+          },
+        },
+        files: [
+          {
+            path: "reference.png",
+            sha256: referenceSha256,
+            bytes: minimalPngBytes().length,
+            source: "webpage-evidence/reference.png",
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
 }
 
-async function writeSelfContainedManifestWithStaleEvidence(sourcePackageDir: string, staleWebpageEvidenceDir: string): Promise<void> {
+async function writeSelfContainedManifestWithStaleEvidence(
+  sourcePackageDir: string,
+  staleWebpageEvidenceDir: string,
+): Promise<void> {
   const referenceBytes = await Bun.file(path.join(sourcePackageDir, "reference.png")).arrayBuffer()
   const skeletonBytes = await Bun.file(path.join(sourcePackageDir, "source-skeleton", "index.html")).arrayBuffer()
   const referenceSha256 = createHash("sha256").update(Buffer.from(referenceBytes)).digest("hex")
   const skeletonSha256 = createHash("sha256").update(Buffer.from(skeletonBytes)).digest("hex")
-  await Bun.write(path.join(sourcePackageDir, "web-clone-source-manifest.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-visible-source-package",
-    provenance: {
-      source: "webpage-evidence",
-      webpageEvidenceDir: staleWebpageEvidenceDir,
-      reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: referenceBytes.byteLength },
-    },
-    files: [
-      { path: "reference.png", sha256: referenceSha256, bytes: referenceBytes.byteLength, source: "webpage-evidence/reference.png" },
+  await Bun.write(
+    path.join(sourcePackageDir, "web-clone-source-manifest.json"),
+    JSON.stringify(
       {
-        path: "source-skeleton/index.html",
-        sha256: skeletonSha256,
-        bytes: skeletonBytes.byteLength,
-        source: "webpage-evidence/source-skeleton/index.html",
+        version: 1,
+        purpose: "web-clone-visible-source-package",
+        provenance: {
+          source: "webpage-evidence",
+          webpageEvidenceDir: staleWebpageEvidenceDir,
+          reference: {
+            path: "reference.png",
+            sha256: referenceSha256,
+            width: 1,
+            height: 1,
+            bytes: referenceBytes.byteLength,
+          },
+        },
+        files: [
+          {
+            path: "reference.png",
+            sha256: referenceSha256,
+            bytes: referenceBytes.byteLength,
+            source: "webpage-evidence/reference.png",
+          },
+          {
+            path: "source-skeleton/index.html",
+            sha256: skeletonSha256,
+            bytes: skeletonBytes.byteLength,
+            source: "webpage-evidence/source-skeleton/index.html",
+          },
+        ],
       },
-    ],
-  }, null, 2))
+      null,
+      2,
+    ),
+  )
 }
 
 function minimalPngBytes(): Uint8Array {
   return Uint8Array.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-    0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49,
+    0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00,
+    0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
   ])
 }

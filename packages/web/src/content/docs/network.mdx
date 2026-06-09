@@ -7,18 +7,17 @@ OpenCorvus reads standard proxy environment variables; there is no separate prox
 
 ## Supported variables
 
-| Variable | Purpose |
-|---|---|
-| `HTTP_PROXY` / `http_proxy` | Proxy for HTTP traffic |
-| `HTTPS_PROXY` / `https_proxy` | Proxy for HTTPS traffic |
-| `NO_PROXY` / `no_proxy` | Comma-separated host patterns to bypass |
+| Variable                      | Purpose                                 |
+| ----------------------------- | --------------------------------------- |
+| `HTTP_PROXY` / `http_proxy`   | Proxy for HTTP traffic                  |
+| `HTTPS_PROXY` / `https_proxy` | Proxy for HTTPS traffic                 |
+| `NO_PROXY` / `no_proxy`       | Comma-separated host patterns to bypass |
 
 The detection helper lives in `packages/opencorvus/src/util/proxied.ts`:
 
 ```ts
 export function proxied() {
-  return !!(process.env.HTTP_PROXY || process.env.HTTPS_PROXY ||
-            process.env.http_proxy || process.env.https_proxy)
+  return !!(process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy)
 }
 ```
 

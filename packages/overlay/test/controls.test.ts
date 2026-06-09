@@ -2,9 +2,7 @@ import { expect, test } from "bun:test"
 import { launchBrowser } from "./launch"
 import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
-
 await ensureOverlayDist()
-
 
 test(
   "overlay controls trigger without runtime failures",
@@ -895,7 +893,6 @@ test(
         minimize: 0,
         open: [] as string[],
         copy: [] as string[],
-        created: [] as string[],
         picked: ["D:/overlay/picked", "D:/overlay/picked", "D:/overlay/workspace/app"] as string[],
         settings: {
           directory: "D:/overlay/workspace/app",
@@ -930,10 +927,6 @@ test(
             }
             if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
             if (command === "overlay_pick_dir") return state.picked.shift() || "D:/overlay/picked"
-            if (command === "overlay_create_dir") {
-              if (args.path) state.created.push(String(args.path))
-              return true
-            }
             if (command === "overlay_open_path") {
               if (args.path) state.open.push(String(args.path))
               return true
@@ -1064,7 +1057,10 @@ test(
       await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
       await page.waitForSelector(".task-row-main[data-task-id='task-1']")
       await page.click(".task-row-main[data-task-id='task-1']")
-      await page.waitForSelector('[data-task-action="retry"]')
+      await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      await page.waitForFunction(
+        () => document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active === "true",
+      )
       await page.waitForSelector(".req-item")
       const workflowPanels = await page.evaluate(() => {
         const req = document.querySelector<HTMLElement>(".req-item")
@@ -1109,10 +1105,10 @@ test(
       await page.click('[data-menu-trigger="help"]')
       await page.waitForFunction(() => !document.querySelector('[data-testid="titlebar-menu-help"]'))
 
-      await ensureMenuOpen("skill")
-      await page.waitForSelector('[data-testid="titlebar-open-skills"]')
-      seen.push('[data-testid="titlebar-open-skills"]')
-      await tap('[data-testid="titlebar-open-skills"]')
+      await ensureMenuOpen("settings")
+      await page.waitForSelector('[data-testid="titlebar-settings-skill"]')
+      seen.push('[data-testid="titlebar-settings-skill"]')
+      await tap('[data-testid="titlebar-settings-skill"]')
       await page.waitForFunction(
         () =>
           (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
@@ -1125,10 +1121,10 @@ test(
         () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true,
       )
 
-      await ensureMenuOpen("mcp")
-      await page.waitForSelector('[data-testid="titlebar-open-mcp"]')
-      seen.push('[data-testid="titlebar-open-mcp"]')
-      await tap('[data-testid="titlebar-open-mcp"]')
+      await ensureMenuOpen("settings")
+      await page.waitForSelector('[data-testid="titlebar-settings-mcp"]')
+      seen.push('[data-testid="titlebar-settings-mcp"]')
+      await tap('[data-testid="titlebar-settings-mcp"]')
       await page.waitForFunction(
         () =>
           (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
@@ -1141,10 +1137,10 @@ test(
         () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true,
       )
 
-      await ensureMenuOpen("skill")
-      await page.waitForSelector('[data-testid="titlebar-open-skill-market"]')
-      seen.push('[data-testid="titlebar-open-skill-market"]')
-      await tap('[data-testid="titlebar-open-skill-market"]')
+      await ensureMenuOpen("settings")
+      await page.waitForSelector('[data-testid="titlebar-settings-skill-market"]')
+      seen.push('[data-testid="titlebar-settings-skill-market"]')
+      await tap('[data-testid="titlebar-settings-skill-market"]')
       await page.waitForFunction(
         () =>
           (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
@@ -1160,9 +1156,9 @@ test(
       const stub = await page.evaluate(
         () => (window as typeof window & { __overlayTest: Record<string, unknown> }).__overlayTest,
       )
-      expect(seen).toContain('[data-testid="titlebar-open-skills"]')
-      expect(seen).toContain('[data-testid="titlebar-open-mcp"]')
-      expect(seen).toContain('[data-testid="titlebar-open-skill-market"]')
+      expect(seen).toContain('[data-testid="titlebar-settings-skill"]')
+      expect(seen).toContain('[data-testid="titlebar-settings-mcp"]')
+      expect(seen).toContain('[data-testid="titlebar-settings-skill-market"]')
       expect(stub.open).toBeDefined()
       expect(stub.close).toBe(0)
       expect(errors).toEqual([])

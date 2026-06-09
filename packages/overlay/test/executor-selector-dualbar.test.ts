@@ -16,18 +16,12 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
-const SRC = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "components", "ExecutorSelector.tsx"),
-  "utf8",
-)
+const SRC = readFileSync(path.resolve(import.meta.dir, "..", "src", "components", "ExecutorSelector.tsx"), "utf8")
 const TITLEBAR_SRC = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "components", "titlebar", "TitlebarMenubar.tsx"),
   "utf8",
 )
-const CSS = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "composer.css"),
-  "utf8",
-)
+const CSS = readFileSync(path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "composer.css"), "utf8")
 
 describe("ExecutorSelector dual chip bar", () => {
   test("renders two distinct chip buttons rather than a single chip", () => {
@@ -55,15 +49,13 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toContain("<Popover.Root")
     expect(SRC).toContain("<Popover.Trigger")
     expect(SRC).toContain("<Popover.Content")
-    expect(SRC).not.toContain("document.addEventListener(\"pointerdown\"")
+    expect(SRC).not.toContain('document.addEventListener("pointerdown"')
     expect(SRC).not.toContain("useHotkey({")
   })
 
   test("mirror picker only surfaces models from connected providers", () => {
     expect(SRC).toMatch(/connectedProviderIDs/)
-    expect(SRC).toMatch(
-      /function mirrorProviderGroups\(\)[\s\S]*?filter\(\(group\) => group\.available\)/,
-    )
+    expect(SRC).toMatch(/function mirrorProviderGroups\(\)[\s\S]*?filter\(\(group\) => group\.available\)/)
   })
 
   test("external picker lists all configured providers for the executor without provider-auth status badges", () => {
@@ -75,25 +67,34 @@ describe("ExecutorSelector dual chip bar", () => {
 
   test("external picker writes native executor model IDs, not provider/model refs", () => {
     expect(SRC).toMatch(/modelIDFormat: "qualified" \| "native" = "qualified"/)
-    expect(SRC).toMatch(/modelIDFormat === "qualified" \? modelIDs\.map\(\(modelID\) => `\$\{id\}\/\$\{modelID\}`\) : modelIDs/)
+    expect(SRC).toMatch(
+      /modelIDFormat === "qualified" \? modelIDs\.map\(\(modelID\) => `\$\{id\}\/\$\{modelID\}`\) : modelIDs/,
+    )
     expect(SRC).toMatch(/await setExecutorModel\(executorID, model\)/)
   })
 
   test("mirror selection writes task root session config before project config", () => {
-    expect(SRC).toMatch(/import \{ rootTaskSessionID, hasSelectedTask \} from "\.\.\/store\/board"/)
-    expect(SRC).toMatch(/import \{[\s\S]*?getSessionConfig,[\s\S]*?patchConfig,[\s\S]*?patchSessionConfig/)
-    expect(SRC).toMatch(/const taskRootSessionID = createMemo\(\(\) => rootTaskSessionID\(\)\.trim\(\)\)/)
-    expect(SRC).toMatch(/const saved = await patchSessionConfig\(sessionID, \{ model: value \? value : null \}\)/)
-    expect(SRC).toMatch(/mutateSessionConfig\(saved\)/)
+    expect(SRC).toMatch(/import \{ activeTaskID, hasSelectedTask \} from "\.\.\/store\/board"/)
+    expect(SRC).toMatch(/import \{[\s\S]*?getTaskOperatorModelContext,[\s\S]*?patchConfig,[\s\S]*?patchSessionConfig/)
+    expect(SRC).toMatch(/const \[taskOperatorContext/)
+    expect(SRC).toMatch(
+      /const taskOperatorContextKey = createMemo\([\s\S]*?if \(!appStore\.connected\) return null[\s\S]*?return \{ taskID: id, refresh: sessionConfigRefreshToken\(\) \}/,
+    )
+    expect(SRC).toMatch(/return await getTaskOperatorModelContext\(key\.taskID\)/)
+    expect(SRC).toMatch(
+      /await patchSessionConfig\(ctx\.sessionID, \{[\s\S]*?agent: \{[\s\S]*?\[ctx\.agent\]: \{[\s\S]*?model: value \? value : null/,
+    )
+    expect(SRC).toMatch(/mutateTaskOperatorContext\(/)
     expect(SRC).toMatch(/await patchConfig\(\{ model: value \? value : null \}\)/)
-    expect(SRC.indexOf("patchSessionConfig(sessionID")).toBeLessThan(SRC.indexOf("patchConfig({ model"))
+    expect(SRC.indexOf("patchSessionConfig(ctx.sessionID")).toBeLessThan(SRC.indexOf("patchConfig({ model"))
   })
 
   test("selected task without resolved root session disables mirror writes instead of falling back to project config", () => {
-    expect(SRC).toMatch(/const mirrorWriteDisabled = createMemo\(\(\) => hasSelectedTask\(\) && !taskRootSessionID\(\)\)/)
-    expect(SRC).toMatch(/if \(hasSelectedTask\(\) && !taskRootSessionID\(\)\) return ""/)
+    expect(SRC).toMatch(
+      /const mirrorWriteDisabled = createMemo\(\(\) => hasSelectedTask\(\) && !currentTaskOperatorContext\(\)\?\.sessionID\)/,
+    )
     expect(SRC).toMatch(/function openMirror\(\)[\s\S]*?if \(mirrorWriteDisabled\(\)\) return/)
-    expect(SRC).toMatch(/if \(hasSelectedTask\(\)\)[\s\S]*?if \(!sessionID\)[\s\S]*?return/)
+    expect(SRC).toMatch(/if \(hasSelectedTask\(\)\)[\s\S]*?if \(!ctx\?\.agent \|\| !ctx\.sessionID\)[\s\S]*?return/)
     expect(SRC).toMatch(/disabled=\{mirrorWriteDisabled\(\)\}/)
     expect(SRC).toMatch(/disabled=\{props\.disabled\}/)
   })
@@ -125,12 +126,8 @@ describe("ExecutorSelector dual chip bar", () => {
 })
 
 describe("i18n keys for the dual bar exist in both locales", () => {
-  const EN = JSON.parse(
-    readFileSync(path.resolve(import.meta.dir, "..", "src", "i18n", "en-US.json"), "utf8"),
-  )
-  const ZH = JSON.parse(
-    readFileSync(path.resolve(import.meta.dir, "..", "src", "i18n", "zh-CN.json"), "utf8"),
-  )
+  const EN = JSON.parse(readFileSync(path.resolve(import.meta.dir, "..", "src", "i18n", "en-US.json"), "utf8"))
+  const ZH = JSON.parse(readFileSync(path.resolve(import.meta.dir, "..", "src", "i18n", "zh-CN.json"), "utf8"))
   for (const key of [
     "executor.mirror_chip_title",
     "executor.mirror_chip_aria",

@@ -479,11 +479,12 @@ export namespace File {
       }
     }
 
-    const untrackedOutput = await $`git -c core.fsmonitor=false -c core.quotepath=false ls-files --others --exclude-standard`
-      .cwd(Instance.directory)
-      .quiet()
-      .nothrow()
-      .text()
+    const untrackedOutput =
+      await $`git -c core.fsmonitor=false -c core.quotepath=false ls-files --others --exclude-standard`
+        .cwd(Instance.directory)
+        .quiet()
+        .nothrow()
+        .text()
 
     if (untrackedOutput.trim()) {
       const untrackedFiles = untrackedOutput.trim().split("\n")
@@ -504,11 +505,12 @@ export namespace File {
     }
 
     // Get deleted files
-    const deletedOutput = await $`git -c core.fsmonitor=false -c core.quotepath=false diff --name-only --diff-filter=D HEAD`
-      .cwd(Instance.directory)
-      .quiet()
-      .nothrow()
-      .text()
+    const deletedOutput =
+      await $`git -c core.fsmonitor=false -c core.quotepath=false diff --name-only --diff-filter=D HEAD`
+        .cwd(Instance.directory)
+        .quiet()
+        .nothrow()
+        .text()
 
     if (deletedOutput.trim()) {
       const deletedFiles = deletedOutput.trim().split("\n")
@@ -578,7 +580,11 @@ export namespace File {
     if (Project.isGitRepo(Instance.directory)) {
       let diff = await $`git -c core.fsmonitor=false diff ${file}`.cwd(Instance.directory).quiet().nothrow().text()
       if (!diff.trim())
-        diff = await $`git -c core.fsmonitor=false diff --staged ${file}`.cwd(Instance.directory).quiet().nothrow().text()
+        diff = await $`git -c core.fsmonitor=false diff --staged ${file}`
+          .cwd(Instance.directory)
+          .quiet()
+          .nothrow()
+          .text()
       if (diff.trim()) {
         const original = await $`git show HEAD:${file}`.cwd(Instance.directory).quiet().nothrow().text()
         const patch = structuredPatch(file, file, original, content, "old", "new", {

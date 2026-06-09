@@ -5,12 +5,7 @@ import { pathToFileURL } from "node:url"
 export namespace BrowserRuntime {
   type PlaywrightModule = {
     chromium: {
-      launch(input: {
-        executablePath: string
-        headless: boolean
-        args: string[]
-        timeout: number
-      }): Promise<any>
+      launch(input: { executablePath: string; headless: boolean; args: string[]; timeout: number }): Promise<any>
     }
   }
 
@@ -163,7 +158,10 @@ export namespace BrowserRuntime {
 
   function isPackagedRuntime() {
     if (process.env.OPENCORVUS_BROWSER_MCP_PACKAGED === "1") return true
-    const executable = path.basename(process.execPath).toLowerCase().replace(/\.exe$/, "")
+    const executable = path
+      .basename(process.execPath)
+      .toLowerCase()
+      .replace(/\.exe$/, "")
     return executable !== "bun" && executable !== "node"
   }
 

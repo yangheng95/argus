@@ -31,68 +31,68 @@
 
 ### 1.1 后端 / wire 契约
 
-| 文件 | 改动 |
-|------|------|
-| `packages/opencorvus/src/engine/model.ts:711` | `TaskBoardGoalStepPayload.workspaceDir` 字段删除 |
+| 文件                                                                        | 改动                                                                                                                                           |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/engine/model.ts:711`                               | `TaskBoardGoalStepPayload.workspaceDir` 字段删除                                                                                               |
 | `packages/opencorvus/src/workbench/board.ts:1199-1272` (`buildStepPayload`) | 删除局部变量 `workspaceDir`、`goalRun.workspace_dir` 读取行、返回对象里的 `workspaceDir` 字段 + 早退条件中的 `workspaceDir === undefined` 判定 |
-| `packages/sdk/openapi.json` | 由 `bun run docs:api` 重生（移除 step payload 中 workspaceDir） |
-| `packages/sdk/js/src/gen/types.gen.ts` | 由 codegen 重生 |
+| `packages/sdk/openapi.json`                                                 | 由 `bun run docs:api` 重生（移除 step payload 中 workspaceDir）                                                                                |
+| `packages/sdk/js/src/gen/types.gen.ts`                                      | 由 codegen 重生                                                                                                                                |
 
 `TaskBoardGoalWorkflow.workspaceDir/workspaceBranch`（`model.ts:790-792`）**保留**，是新方案的数据源。
 
 ### 1.2 overlay 前端 — 新增（goal 卡片渲染）
 
-| 文件 | 改动 |
-|------|------|
-| `packages/overlay/src/components/GoalWorkflowGroup.tsx:50-64` | `GoalWorkflow` 接口增加 `workspaceDir?: string; workspaceBranch?: string;` |
-| 同上 `:154-175` (`gwg-header-meta`) | 折叠态在 revision/advisory 徽章后追加 `<Show when={workspaceBranch}><span class="gwg-branch-pill">⎇ {workspaceBranch}</span></Show>` |
-| 同上 `:176-196` (`gwg-body`) | 在 acceptance 行之后新增 worktree 按钮（path + branch，点击 `openDirectory`） |
-| `packages/overlay/src/utils/path.ts` *(新建)* | 抽出 `relativePathFrom` + `shortPath`（原 `TaskDirBar.tsx:26-38`，rule 9 公共化），新行复用 |
-| `packages/overlay/src/styles/surfaces/inspector.css` 或对应 GWG 样式表 | 新增 `.gwg-worktree`（button，复用 `.gwg-objective` padding/border 模式）+ `.gwg-branch-pill`（折叠态徽章） |
-| `packages/overlay/src/i18n/zh-CN.json` + `en-US.json` | 新增 `goal.field.worktree` = "工作区" / "Worktree" |
+| 文件                                                                   | 改动                                                                                                                                 |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/overlay/src/components/GoalWorkflowGroup.tsx:50-64`          | `GoalWorkflow` 接口增加 `workspaceDir?: string; workspaceBranch?: string;`                                                           |
+| 同上 `:154-175` (`gwg-header-meta`)                                    | 折叠态在 revision/advisory 徽章后追加 `<Show when={workspaceBranch}><span class="gwg-branch-pill">⎇ {workspaceBranch}</span></Show>` |
+| 同上 `:176-196` (`gwg-body`)                                           | 在 acceptance 行之后新增 worktree 按钮（path + branch，点击 `openDirectory`）                                                        |
+| `packages/overlay/src/utils/path.ts` _(新建)_                          | 抽出 `relativePathFrom` + `shortPath`（原 `TaskDirBar.tsx:26-38`，rule 9 公共化），新行复用                                          |
+| `packages/overlay/src/styles/surfaces/inspector.css` 或对应 GWG 样式表 | 新增 `.gwg-worktree`（button，复用 `.gwg-objective` padding/border 模式）+ `.gwg-branch-pill`（折叠态徽章）                          |
+| `packages/overlay/src/i18n/zh-CN.json` + `en-US.json`                  | 新增 `goal.field.worktree` = "工作区" / "Worktree"                                                                                   |
 
 ### 1.3 overlay 前端 — 删除（全局聚合位，rule 8）
 
-| 文件 | 删除 |
-|------|------|
-| `packages/overlay/src/components/TaskDirBar.tsx:138-168` | `TaskWorkspaceLine` 整个组件 |
-| 同上 `:26-38` | `relativePathFrom` + `shortPath`（已抽到 `utils/path.ts`，rule 9） |
-| 同上 `:23` | 从 import 去掉 `currentExecutionDirectory`、`openDirectory`（VcsBadge 不需要）|
-| `packages/overlay/src/services/workspace.ts:697-738` | `currentExecutionDirectory()` + `goalStepPriority()` 整段 |
-| `packages/overlay/src/main.tsx:12,769,777-779` | `TaskWorkspaceLine` import 与 mount 三处 |
-| `packages/overlay/src/index.html:119` | `<span id="solidTaskWorkspaceLineMount">` |
-| `packages/overlay/src/dom.ts:35,184` | `taskWorkspaceDir` 条目 |
-| `packages/overlay/src/i18n/zh-CN.json:324` + `en-US.json:324` | `cwd.execution_workspace` key |
-| `packages/overlay/src/styles/surfaces/conversation.css:486` | `.task-workspace-row` 规则 |
-| `packages/overlay/src/services/meta.ts:30` | 注释中 `TaskWorkspaceLine` 提及 |
+| 文件                                                          | 删除                                                                           |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `packages/overlay/src/components/TaskDirBar.tsx:138-168`      | `TaskWorkspaceLine` 整个组件                                                   |
+| 同上 `:26-38`                                                 | `relativePathFrom` + `shortPath`（已抽到 `utils/path.ts`，rule 9）             |
+| 同上 `:23`                                                    | 从 import 去掉 `currentExecutionDirectory`、`openDirectory`（VcsBadge 不需要） |
+| `packages/overlay/src/services/workspace.ts:697-738`          | `currentExecutionDirectory()` + `goalStepPriority()` 整段                      |
+| `packages/overlay/src/main.tsx:12,769,777-779`                | `TaskWorkspaceLine` import 与 mount 三处                                       |
+| `packages/overlay/src/index.html:119`                         | `<span id="solidTaskWorkspaceLineMount">`                                      |
+| `packages/overlay/src/dom.ts:35,184`                          | `taskWorkspaceDir` 条目                                                        |
+| `packages/overlay/src/i18n/zh-CN.json:324` + `en-US.json:324` | `cwd.execution_workspace` key                                                  |
+| `packages/overlay/src/styles/surfaces/conversation.css:486`   | `.task-workspace-row` 规则                                                     |
+| `packages/overlay/src/services/meta.ts:30`                    | 注释中 `TaskWorkspaceLine` 提及                                                |
 
 ### 1.4 overlay 前端 — 调整（VcsBadge 重定位）
 
-| 文件 | 改动 |
-|------|------|
+| 文件                                             | 改动                                                                                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | `packages/overlay/src/components/TaskDirBar.tsx` | `VcsBadge` 从 `TaskWorkspaceLine` 内移出，新增独立 mount 或合并进 `TaskDirContent` 末尾；导出方式相应调整 |
-| `packages/overlay/src/index.html` | 如新增独立 mount，加 `<span id="solidVcsBadgeMount">`；如合并到 TaskDirContent，无 DOM 变动 |
-| `packages/overlay/src/main.tsx` | mount 点同步调整 |
+| `packages/overlay/src/index.html`                | 如新增独立 mount，加 `<span id="solidVcsBadgeMount">`；如合并到 TaskDirContent，无 DOM 变动               |
+| `packages/overlay/src/main.tsx`                  | mount 点同步调整                                                                                          |
 
 ### 1.5 测试 — 删除/修改
 
-| 文件 | 改动 |
-|------|------|
-| `packages/overlay/test/board-workflow-schema.test.ts:3,40-70` | 删除 `currentExecutionDirectory reads only canonical goal step payloads` 测试（被测函数已删） |
-| `packages/overlay/test/task-cwd-row-layout.test.ts:78-79,92-105` | 删除 `.task-workspace-row` 锚定测试 + `execution workspace path control` describe 块 |
-| `packages/overlay/test/overlay-architecture-guards.test.ts:718` | 守护类列表移除 `"task-workspace-row"` |
+| 文件                                                             | 改动                                                                                          |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `packages/overlay/test/board-workflow-schema.test.ts:3,40-70`    | 删除 `currentExecutionDirectory reads only canonical goal step payloads` 测试（被测函数已删） |
+| `packages/overlay/test/task-cwd-row-layout.test.ts:78-79,92-105` | 删除 `.task-workspace-row` 锚定测试 + `execution workspace path control` describe 块          |
+| `packages/overlay/test/overlay-architecture-guards.test.ts:718`  | 守护类列表移除 `"task-workspace-row"`                                                         |
 
 ### 1.6 测试 — 新增（rule 36）
 
-| 用例 | 文件 | 断言 |
-|------|------|------|
-| GoalWorkflowGroup 渲染 worktree 行 | `packages/overlay/test/goal-workflow-group.test.ts` *(新建或复用)* | fixture goal 带 `workspaceDir = ".opencorvus/worktrees/goal-x"`，展开后 DOM 含 `.gwg-worktree`，文本含相对路径，`title` 是绝对路径 |
-| 折叠态显示 branch 徽章 | 同上 | fixture goal 带 `workspaceBranch`，未展开时 DOM 含 `.gwg-branch-pill` 文本 `⎇ <branch>` |
-| 点击打开目录 | 同上 | mock `openDirectory`；点击 `.gwg-worktree` 触发 `openDirectory(workspaceDir)` 一次 |
-| **并行 goal 各自展示** | 同上 | fixture 两个 running goal、不同 `workspaceDir/Branch`；断言 DOM 中出现两条独立 worktree path + 两个 branch 徽章；断言两者文本互不重复 |
-| 无 worktree 时不渲染 | 同上 | `workspaceDir = undefined`：worktree 行 + branch 徽章均不出现 |
-| 自动行为消失 | `packages/overlay/test/overlay-architecture-guards.test.ts` 或 `task-cwd-row-layout.test.ts` 重命名后 | 断言：源码搜不到 `TaskWorkspaceLine` 标识符；`workspace.ts` 不再 export `currentExecutionDirectory`；i18n 不再含 `cwd.execution_workspace` 键 |
-| step payload 无 workspaceDir | `packages/opencorvus/test/workbench/board-step-payload.test.ts` *(新建或复用)* | 构造 task fixture，断言 `goalWorkflows[].steps[].payload` 不含 `workspaceDir` 键 |
+| 用例                               | 文件                                                                                                  | 断言                                                                                                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| GoalWorkflowGroup 渲染 worktree 行 | `packages/overlay/test/goal-workflow-group.test.ts` _(新建或复用)_                                    | fixture goal 带 `workspaceDir = ".opencorvus/worktrees/goal-x"`，展开后 DOM 含 `.gwg-worktree`，文本含相对路径，`title` 是绝对路径            |
+| 折叠态显示 branch 徽章             | 同上                                                                                                  | fixture goal 带 `workspaceBranch`，未展开时 DOM 含 `.gwg-branch-pill` 文本 `⎇ <branch>`                                                       |
+| 点击打开目录                       | 同上                                                                                                  | mock `openDirectory`；点击 `.gwg-worktree` 触发 `openDirectory(workspaceDir)` 一次                                                            |
+| **并行 goal 各自展示**             | 同上                                                                                                  | fixture 两个 running goal、不同 `workspaceDir/Branch`；断言 DOM 中出现两条独立 worktree path + 两个 branch 徽章；断言两者文本互不重复         |
+| 无 worktree 时不渲染               | 同上                                                                                                  | `workspaceDir = undefined`：worktree 行 + branch 徽章均不出现                                                                                 |
+| 自动行为消失                       | `packages/overlay/test/overlay-architecture-guards.test.ts` 或 `task-cwd-row-layout.test.ts` 重命名后 | 断言：源码搜不到 `TaskWorkspaceLine` 标识符；`workspace.ts` 不再 export `currentExecutionDirectory`；i18n 不再含 `cwd.execution_workspace` 键 |
+| step payload 无 workspaceDir       | `packages/opencorvus/test/workbench/board-step-payload.test.ts` _(新建或复用)_                        | 构造 task fixture，断言 `goalWorkflows[].steps[].payload` 不含 `workspaceDir` 键                                                              |
 
 ### 1.7 文档（无需改）
 
@@ -135,8 +135,7 @@
   >
     <span class="gwg-worktree-label">{t("goal.field.worktree")}</span>
     <span class="gwg-worktree-path">
-      {relativePathFrom(activeDirectory(), props.goal.workspaceDir!)
-        || shortPath(props.goal.workspaceDir!)}
+      {relativePathFrom(activeDirectory(), props.goal.workspaceDir!) || shortPath(props.goal.workspaceDir!)}
     </span>
     <Show when={props.goal.workspaceBranch}>
       <span class="gwg-worktree-branch">⎇ {props.goal.workspaceBranch}</span>
@@ -149,11 +148,7 @@
 
 ```tsx
 <Show when={props.goal.workspaceBranch}>
-  <span
-    class="gwg-branch-pill"
-    title={props.goal.workspaceDir}
-    aria-label={`worktree: ${props.goal.workspaceDir}`}
-  >
+  <span class="gwg-branch-pill" title={props.goal.workspaceDir} aria-label={`worktree: ${props.goal.workspaceDir}`}>
     ⎇ {props.goal.workspaceBranch}
   </span>
 </Show>
@@ -179,14 +174,14 @@
 
 ## §3 风险与缓解
 
-| 风险 | 缓解 |
-|------|------|
-| 删除 `currentExecutionDirectory` 是 export 变更，外部包导入会爆 | grep 已确认仅 `board-workflow-schema.test.ts:3` 引用，删除测试即可。无 SDK / 跨包消费者。 |
-| `task-workspace-row` 是 `overlay-architecture-guards.test.ts` 守护列表成员，遗漏会导致守护测试通过但实际类已废 | §1.5 显式列出该测试为修改项。 |
-| 删除 `step.payload.workspaceDir` 是 wire schema 收窄，旧 overlay 版本（如果 release ）连新后端会丢失字段 | 项目未发布（CLAUDE.md rule 16），无兼容包袱，直接删。 |
-| 折叠态 branch 徽章占用 `gwg-header-meta` 宽度，长 branch 名（如 `goal-qc8zgjhy` 12 字符）+ revision + advisory 可能拥挤 | branch 徽章使用 `text-overflow: ellipsis` + `max-width`；hover 看 title 完整路径。 |
-| `relativePathFrom(activeDirectory(), workspaceDir)` 在 task 根目录尚未 hydrated 时会返回空串，落回 `shortPath` | 行为正常，shortPath 给 `…/{last2}` 仍可读；与原 `TaskWorkspaceLine` 同样的回退逻辑。 |
-| 抽出 `utils/path.ts` 后若其他文件已有同名 helper，会双源 | grep 已确认 `relativePathFrom` / `shortPath` 仅在 `TaskDirBar.tsx` 出现，新建文件无冲突。 |
+| 风险                                                                                                                    | 缓解                                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 删除 `currentExecutionDirectory` 是 export 变更，外部包导入会爆                                                         | grep 已确认仅 `board-workflow-schema.test.ts:3` 引用，删除测试即可。无 SDK / 跨包消费者。 |
+| `task-workspace-row` 是 `overlay-architecture-guards.test.ts` 守护列表成员，遗漏会导致守护测试通过但实际类已废          | §1.5 显式列出该测试为修改项。                                                             |
+| 删除 `step.payload.workspaceDir` 是 wire schema 收窄，旧 overlay 版本（如果 release ）连新后端会丢失字段                | 项目未发布（CLAUDE.md rule 16），无兼容包袱，直接删。                                     |
+| 折叠态 branch 徽章占用 `gwg-header-meta` 宽度，长 branch 名（如 `goal-qc8zgjhy` 12 字符）+ revision + advisory 可能拥挤 | branch 徽章使用 `text-overflow: ellipsis` + `max-width`；hover 看 title 完整路径。        |
+| `relativePathFrom(activeDirectory(), workspaceDir)` 在 task 根目录尚未 hydrated 时会返回空串，落回 `shortPath`          | 行为正常，shortPath 给 `…/{last2}` 仍可读；与原 `TaskWorkspaceLine` 同样的回退逻辑。      |
+| 抽出 `utils/path.ts` 后若其他文件已有同名 helper，会双源                                                                | grep 已确认 `relativePathFrom` / `shortPath` 仅在 `TaskDirBar.tsx` 出现，新建文件无冲突。 |
 
 ---
 
@@ -223,13 +218,13 @@ codex 结论是方向认同（B 方案 + 删除全局聚合 + 删除 `step.paylo
 
 codex 指出 §1 漏了 overlay-side 的 type/projection 镜像链。**新增**到 §1：
 
-| 章节 | 原状 | 修订追加 |
-|------|------|----------|
-| §1.2（新增）/§1.3（删除）—— 待重分类 | 未覆盖 | 删除 `packages/overlay/src/store/card-tree.ts:82` 的 `StepPayload.workspaceDir` 字段。这是 wire schema `TaskBoardGoalStepPayload.workspaceDir`（`model.ts:711`）的 client-side 镜像（其文件头注释行 70-71 自承"mirrors workbench/board.ts GoalStepPayload"），后端 wire 收窄后镜像必须同步收窄，否则类型层留双源（rule 8）。 |
-| §1.2 | 未覆盖 | `packages/overlay/src/services/tree-writer.ts:1660` 的 `stepPayload: step.payload` 是整对象盲拷贝，自身**不需要改代码**（payload 上没有 `workspaceDir` 后这里自然不会拷贝它）；但**需要增加测试**，见 §6.4。 |
-| §1.4（SDK 区分） | 仅笼统说"重生" | 明确：openapi.json + types.gen.ts **只删 step-level** (`paths.*.goalWorkflows[].steps[].payload.workspaceDir`)，**保留 goal-level** (`paths.*.goalWorkflows[].workspaceDir/Branch`)。重生后人工 diff 确认这两条命中差异，不能笼统说"移除 workspaceDir"。 |
-| §1.5 | 仅删除 | `packages/overlay/test/board-workflow-schema.test.ts` 删除 `currentExecutionDirectory` 测试后，文件若只剩无关测试可保留；若空则整文件删除。 |
-| §1.3 / §1.4（VcsBadge） | 提及"新增独立 mount 或合并" | **codex 反对新增 mount，确定合并方案**：`VcsBadge` 合并进 `TaskDirContent`（与 task-dir breadcrumb 同 owner surface），不新增 `#solidVcsBadgeMount`。`TaskDirContent` 返回 `<span class="task-dir">…</span>` 旁追加 `<VcsBadge />`，或将 `VcsBadge` 内联到该 span 末尾。`index.html` 不新增 mount 节点。 |
+| 章节                                 | 原状                        | 修订追加                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------ | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §1.2（新增）/§1.3（删除）—— 待重分类 | 未覆盖                      | 删除 `packages/overlay/src/store/card-tree.ts:82` 的 `StepPayload.workspaceDir` 字段。这是 wire schema `TaskBoardGoalStepPayload.workspaceDir`（`model.ts:711`）的 client-side 镜像（其文件头注释行 70-71 自承"mirrors workbench/board.ts GoalStepPayload"），后端 wire 收窄后镜像必须同步收窄，否则类型层留双源（rule 8）。 |
+| §1.2                                 | 未覆盖                      | `packages/overlay/src/services/tree-writer.ts:1660` 的 `stepPayload: step.payload` 是整对象盲拷贝，自身**不需要改代码**（payload 上没有 `workspaceDir` 后这里自然不会拷贝它）；但**需要增加测试**，见 §6.4。                                                                                                                 |
+| §1.4（SDK 区分）                     | 仅笼统说"重生"              | 明确：openapi.json + types.gen.ts **只删 step-level** (`paths.*.goalWorkflows[].steps[].payload.workspaceDir`)，**保留 goal-level** (`paths.*.goalWorkflows[].workspaceDir/Branch`)。重生后人工 diff 确认这两条命中差异，不能笼统说"移除 workspaceDir"。                                                                     |
+| §1.5                                 | 仅删除                      | `packages/overlay/test/board-workflow-schema.test.ts` 删除 `currentExecutionDirectory` 测试后，文件若只剩无关测试可保留；若空则整文件删除。                                                                                                                                                                                  |
+| §1.3 / §1.4（VcsBadge）              | 提及"新增独立 mount 或合并" | **codex 反对新增 mount，确定合并方案**：`VcsBadge` 合并进 `TaskDirContent`（与 task-dir breadcrumb 同 owner surface），不新增 `#solidVcsBadgeMount`。`TaskDirContent` 返回 `<span class="task-dir">…</span>` 旁追加 `<VcsBadge />`，或将 `VcsBadge` 内联到该 span 末尾。`index.html` 不新增 mount 节点。                     |
 
 ### 6.2 rule 13（无状态机）审计补强
 
@@ -256,22 +251,22 @@ codex 指出"自动行为消失"测试不能只删旧测试，要写**源码 neg
 
 **修订** §1.6 测试清单新增独立用例（文件：`packages/overlay/test/worktree-display-source-guards.test.ts`，新建）：
 
-| 守护断言 | 目的 |
-|----------|------|
-| overlay/src 全树搜不到 `TaskWorkspaceLine` 标识符 | 阻止组件回归 |
-| `workspace.ts` 不再 export `currentExecutionDirectory` 或 `goalStepPriority` | 阻止聚合函数复活 |
-| i18n 文件不再含 `cwd.execution_workspace` 键 | 阻止旧文案残留 |
-| `index.html` 不再含 `solidTaskWorkspaceLineMount` | 阻止挂载点回潜 |
-| `dom.ts` 不再含 `taskWorkspaceDir` 字段 | 阻止 DOM 注册回归 |
-| css `.task-workspace-row` 选择器不存在 | 阻止 CSS 类残留 |
-| `card-tree.ts` 的 `StepPayload` interface 字段集合不含 `workspaceDir` | 阻止 client 镜像回归 |
+| 守护断言                                                                     | 目的                 |
+| ---------------------------------------------------------------------------- | -------------------- |
+| overlay/src 全树搜不到 `TaskWorkspaceLine` 标识符                            | 阻止组件回归         |
+| `workspace.ts` 不再 export `currentExecutionDirectory` 或 `goalStepPriority` | 阻止聚合函数复活     |
+| i18n 文件不再含 `cwd.execution_workspace` 键                                 | 阻止旧文案残留       |
+| `index.html` 不再含 `solidTaskWorkspaceLineMount`                            | 阻止挂载点回潜       |
+| `dom.ts` 不再含 `taskWorkspaceDir` 字段                                      | 阻止 DOM 注册回归    |
+| css `.task-workspace-row` 选择器不存在                                       | 阻止 CSS 类残留      |
+| `card-tree.ts` 的 `StepPayload` interface 字段集合不含 `workspaceDir`        | 阻止 client 镜像回归 |
 
 新增 backend 测试（文件：`packages/opencorvus/test/workbench/board-step-payload.test.ts`，新建或合并到现有 board 测试）：
 
-| 用例 | 断言 |
-|------|------|
-| step payload 投影不含 workspaceDir | 构造 goal_run with `workspace_dir = "D:/x"`，运行 `buildBoard`，断言 `board.goalWorkflows[0].steps[*].payload` 全部 step 都没有 `workspaceDir` 键（`expect(Object.keys(payload)).not.toContain("workspaceDir")`） |
-| openapi.json step payload schema 不含 workspaceDir | 读取 `packages/sdk/openapi.json`，在 step payload schema 上断言 `properties.workspaceDir` 不存在 |
+| 用例                                               | 断言                                                                                                                                                                                                              |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| step payload 投影不含 workspaceDir                 | 构造 goal_run with `workspace_dir = "D:/x"`，运行 `buildBoard`，断言 `board.goalWorkflows[0].steps[*].payload` 全部 step 都没有 `workspaceDir` 键（`expect(Object.keys(payload)).not.toContain("workspaceDir")`） |
+| openapi.json step payload schema 不含 workspaceDir | 读取 `packages/sdk/openapi.json`，在 step payload schema 上断言 `properties.workspaceDir` 不存在                                                                                                                  |
 
 修改既有测试（§1.5 追加项）：
 

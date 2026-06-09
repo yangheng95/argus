@@ -699,9 +699,10 @@ export namespace Message {
     //
     // Returns undefined when the URL is neither â€” the caller skips that
     // attachment rather than crashing the tool result.
-    const attachmentToBase64 = async (
-      attachment: { mime: string; url: string },
-    ): Promise<{ mime: string; data: string } | undefined> => {
+    const attachmentToBase64 = async (attachment: {
+      mime: string
+      url: string
+    }): Promise<{ mime: string; data: string } | undefined> => {
       if (attachment.url.startsWith("data:") && attachment.url.includes(",")) {
         const commaIndex = attachment.url.indexOf(",")
         return { mime: attachment.mime, data: attachment.url.slice(commaIndex + 1) }
@@ -813,7 +814,11 @@ export namespace Message {
           // Binary file parts are only forwarded when the target model declares
           // the capability to handle them â€” otherwise the AI SDK / provider
           // conversion layer throws UnsupportedFunctionalityError at runtime.
-          if (part.type === "file" && !isDecodableText(part.mime, part.filename) && part.mime !== "application/x-directory") {
+          if (
+            part.type === "file" &&
+            !isDecodableText(part.mime, part.filename) &&
+            part.mime !== "application/x-directory"
+          ) {
             if (options.stripMedia) {
               userMessage.parts.push({
                 type: "text",
@@ -823,9 +828,7 @@ export namespace Message {
             }
             const isImage = part.mime.startsWith("image/")
             const isPdf = part.mime === "application/pdf"
-            const capable =
-              (isImage && model.capabilities.input.image) ||
-              (isPdf && model.capabilities.input.pdf)
+            const capable = (isImage && model.capabilities.input.image) || (isPdf && model.capabilities.input.pdf)
             if (capable) {
               userMessage.parts.push({
                 type: "file",

@@ -7,9 +7,7 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
       steps: [
         {
           id: "build",
-          phases: [
-            { id: "build", sessionKind: "build" },
-          ],
+          phases: [{ id: "build", sessionKind: "build" }],
         },
       ],
     },
@@ -113,22 +111,26 @@ test("projectConversationView tracks the last message with displayable content",
 })
 
 test("projectConversationView includes lifecycle-only frontend agent sessions", () => {
-  const view = projectConversationView({}, [], [
-    {
-      type: "session.status",
-      emittedAt: 1_776_000_010_000,
-      payload: {
-        sessionID: "ses_frontend_research_failed",
-        channel: "frontend-research",
-        parentSessionID: "ses_orchestrator",
-        status: {
-          type: "terminal",
-          reason: "error",
-          error: "page evidence preparation failed",
+  const view = projectConversationView(
+    {},
+    [],
+    [
+      {
+        type: "session.status",
+        emittedAt: 1_776_000_010_000,
+        payload: {
+          sessionID: "ses_frontend_research_failed",
+          channel: "frontend-research",
+          parentSessionID: "ses_orchestrator",
+          status: {
+            type: "terminal",
+            reason: "error",
+            error: "page evidence preparation failed",
+          },
         },
       },
-    },
-  ])
+    ],
+  )
 
   expect(view.topLevelSessionIDs).toEqual(["ses_frontend_research_failed"])
   expect(view.sessions[0]).toEqual(

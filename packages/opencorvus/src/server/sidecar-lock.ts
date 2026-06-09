@@ -30,12 +30,19 @@ export namespace SidecarLock {
     if (!x || typeof x !== "object") return false
     const o = x as Record<string, unknown>
     return (
-      typeof o.pid === "number" && Number.isInteger(o.pid) && o.pid > 0 &&
-      typeof o.port === "number" && Number.isInteger(o.port) && o.port > 0 &&
+      typeof o.pid === "number" &&
+      Number.isInteger(o.pid) &&
+      o.pid > 0 &&
+      typeof o.port === "number" &&
+      Number.isInteger(o.port) &&
+      o.port > 0 &&
       typeof o.hostname === "string" &&
-      typeof o.parentPid === "number" && Number.isInteger(o.parentPid) && o.parentPid > 0 &&
+      typeof o.parentPid === "number" &&
+      Number.isInteger(o.parentPid) &&
+      o.parentPid > 0 &&
       typeof o.workspace === "string" &&
-      typeof o.startedAt === "number" && Number.isFinite(o.startedAt)
+      typeof o.startedAt === "number" &&
+      Number.isFinite(o.startedAt)
     )
   }
 
@@ -59,9 +66,7 @@ export namespace SidecarLock {
    */
   function lockFilePath(workspace: string): string {
     const resolved = path.resolve(workspace)
-    const normalized = (process.platform === "win32" || process.platform === "darwin")
-      ? resolved.toLowerCase()
-      : resolved
+    const normalized = process.platform === "win32" || process.platform === "darwin" ? resolved.toLowerCase() : resolved
     const hash = crypto.createHash("sha256").update(normalized).digest("hex").slice(0, 16)
     const safe = resolved.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40)
     return path.join(Global.Path.state, `sidecar.${safe}.${hash}.lock`)
@@ -100,18 +105,24 @@ export namespace SidecarLock {
       parsed = JSON.parse(raw)
     } catch {
       log.warn("malformed lock file, treating as stale", { file })
-      try { fs.unlinkSync(file) } catch {}
+      try {
+        fs.unlinkSync(file)
+      } catch {}
       return null
     }
     if (!isLockInfo(parsed)) {
       log.warn("lock file shape invalid, treating as stale", { file })
-      try { fs.unlinkSync(file) } catch {}
+      try {
+        fs.unlinkSync(file)
+      } catch {}
       return null
     }
     const info = parsed
     if (!isProcessAlive(info.pid)) {
       log.info("stale lock from dead pid, removing", { file, pid: info.pid })
-      try { fs.unlinkSync(file) } catch {}
+      try {
+        fs.unlinkSync(file)
+      } catch {}
       return null
     }
     return info
@@ -135,7 +146,10 @@ export namespace SidecarLock {
    */
   export class SidecarLockContendedError extends Error {
     override readonly name = "SidecarLockContendedError"
-    constructor(public readonly file: string, public readonly existing: LockInfo | null) {
+    constructor(
+      public readonly file: string,
+      public readonly existing: LockInfo | null,
+    ) {
       super(
         existing
           ? `existing managed sidecar holds the workspace lock (PID=${existing.pid}, port=${existing.port})`
@@ -207,7 +221,9 @@ export namespace SidecarLock {
               // Synchronous tiny back-off; the sidecar is in
               // shutdown so we want to finish quickly.
               const until = Date.now() + 50
-              while (Date.now() < until) { /* spin */ }
+              while (Date.now() < until) {
+                /* spin */
+              }
             }
           }
         }

@@ -52,12 +52,8 @@ test("reasoning model + json_schema → auto (avoids deepseek-reasoner 400)", ()
 
 test("text format → undefined regardless of reasoning capability", () => {
   const text = { type: "text" as const }
-  expect(
-    SessionLoop.structuredOutputToolChoice(text, { capabilities: { reasoning: true } }),
-  ).toBeUndefined()
-  expect(
-    SessionLoop.structuredOutputToolChoice(text, { capabilities: { reasoning: false } }),
-  ).toBeUndefined()
+  expect(SessionLoop.structuredOutputToolChoice(text, { capabilities: { reasoning: true } })).toBeUndefined()
+  expect(SessionLoop.structuredOutputToolChoice(text, { capabilities: { reasoning: false } })).toBeUndefined()
 })
 
 test("model param omitted → behaves like non-reasoning (required)", () => {

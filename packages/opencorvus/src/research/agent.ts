@@ -28,7 +28,12 @@ import {
   renderWebpagePrdEvidencePromptSection,
   type WebpagePrdEvidence,
 } from "./webpage-prd-evidence"
-import { RESEARCH_VOLATILE_STALE_AFTER_MS, researchRequestHash, type ResearchBrief, type ResearchBundle } from "./schema"
+import {
+  RESEARCH_VOLATILE_STALE_AFTER_MS,
+  researchRequestHash,
+  type ResearchBrief,
+  type ResearchBundle,
+} from "./schema"
 import { researchRequestHashInput } from "./staleness"
 
 import DEEP_RESEARCH_CORE from "@/prompt/core/deep-research-core.txt"
@@ -224,8 +229,13 @@ async function createResearchTool(
     description: initialized.description,
     inputSchema: initialized.parameters,
     execute: async (args, options) => {
-      const meta = (options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined)?.opencorvus
-      const abort = (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ?? input.signal ?? new AbortController().signal
+      const meta = (
+        options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined
+      )?.opencorvus
+      const abort =
+        (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ??
+        input.signal ??
+        new AbortController().signal
       return initialized.execute(args as never, {
         sessionID: meta?.sessionID ?? "",
         messageID: meta?.messageID ?? "",
@@ -284,12 +294,14 @@ function buildUserPrompt(
 ): string {
   const sections: string[] = []
   sections.push(`# Delegation\n\n${config.delegation}`)
-  sections.push(renderUserRequestSection({
-    heading: "# Task",
-    title: input.title,
-    request: input.request,
-    taskID: input.taskID,
-  }))
+  sections.push(
+    renderUserRequestSection({
+      heading: "# Task",
+      title: input.title,
+      request: input.request,
+      taskID: input.taskID,
+    }),
+  )
   if (input.reason?.trim()) sections.push(`# Why Research Was Requested\n\n${input.reason.trim()}`)
   if (input.targetDeliverable) sections.push(`# Target Deliverable\n\n${input.targetDeliverable}`)
   if (input.sourceUrls && input.sourceUrls.length > 0) {
@@ -315,9 +327,10 @@ async function writeResearchBundle(input: {
   if (!input.taskID) {
     throw new Error("research bundle persistence requires taskID")
   }
-  const paths = input.kind === "frontend-research"
-    ? ProjectRuntimePaths.frontendResearchPaths(Instance.directory, input.taskID, input.sessionID)
-    : ProjectRuntimePaths.deepResearchPaths(Instance.directory, input.taskID, input.sessionID)
+  const paths =
+    input.kind === "frontend-research"
+      ? ProjectRuntimePaths.frontendResearchPaths(Instance.directory, input.taskID, input.sessionID)
+      : ProjectRuntimePaths.deepResearchPaths(Instance.directory, input.taskID, input.sessionID)
   await fs.mkdir(paths.absoluteDir, { recursive: true })
   await Promise.all([
     fs.writeFile(paths.fullMarkdownAbsolute, input.bundle.full_markdown, "utf8"),

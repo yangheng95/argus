@@ -56,47 +56,50 @@ test("submit_frontend_template tolerates missing review fields from provider too
   const kit = createFrontendTemplateOutputTools({ autoIteration: true })
   const submit = kit.tools.submit_frontend_template as any
 
-  const out = await submit.execute({
-    design_system: "custom financial page",
-    tech_stack: ["React", "Vite"],
-    final_acceptance_mode: "maintainable_replacement_required",
-    frontend_template: "frontend template",
-    fillable_modules: "fillable modules",
-    component_inventory: "component inventory",
-    component_reuse_plan: [
-      {
-        family_id: "comp-table",
-        name: "Market table",
-        observed_surface: "Country metrics table",
-        source_refs: [],
-        implementation_strategy: "mature_library",
-        reuse_source: "@tanstack/react-table",
-        mature_library_candidates: ["@tanstack/react-table"],
-        props_states: "rows and columns",
-        replacement_boundary: "table skeleton slot",
-        parity_guard: "visual diff",
-        custom_fallback_reason: "not applicable",
-      },
-    ],
-    baseline_replacement_plan: [
-      {
-        boundary_id: "replace-market-table",
-        source_region: "table skeleton slot",
-        action: "replace_generated_baseline",
-        component_family_id: "comp-table",
-        replacement_strategy: "mature_library",
-        reuse_source: "@tanstack/react-table",
-        mature_library_candidates: ["@tanstack/react-table"],
-        deletion_rule: "Remove generated table DOM after parity passes.",
-        source_refs: [],
-        parity_guard: "visual diff and source audit",
-        custom_fallback_reason: "not applicable",
-      },
-    ],
-    material_inventory: "materials",
-    visual_consistency_contract: "visual contract",
-    ui_data_contract: "data contract",
-  }, {})
+  const out = await submit.execute(
+    {
+      design_system: "custom financial page",
+      tech_stack: ["React", "Vite"],
+      final_acceptance_mode: "maintainable_replacement_required",
+      frontend_template: "frontend template",
+      fillable_modules: "fillable modules",
+      component_inventory: "component inventory",
+      component_reuse_plan: [
+        {
+          family_id: "comp-table",
+          name: "Market table",
+          observed_surface: "Country metrics table",
+          source_refs: [],
+          implementation_strategy: "mature_library",
+          reuse_source: "@tanstack/react-table",
+          mature_library_candidates: ["@tanstack/react-table"],
+          props_states: "rows and columns",
+          replacement_boundary: "table skeleton slot",
+          parity_guard: "visual diff",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+      baseline_replacement_plan: [
+        {
+          boundary_id: "replace-market-table",
+          source_region: "table skeleton slot",
+          action: "replace_generated_baseline",
+          component_family_id: "comp-table",
+          replacement_strategy: "mature_library",
+          reuse_source: "@tanstack/react-table",
+          mature_library_candidates: ["@tanstack/react-table"],
+          deletion_rule: "Remove generated table DOM after parity passes.",
+          source_refs: [],
+          parity_guard: "visual diff and source audit",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+      material_inventory: "materials",
+      visual_consistency_contract: "visual contract",
+      ui_data_contract: "data contract",
+    },
+    {},
+  )
 
   expect(out).toContain("OK")
   expect(kit.getCollector().final?.template_iteration_notes).toHaveLength(2)
@@ -107,44 +110,47 @@ test("submit_frontend_template normalizes markdown open questions", async () => 
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
 
-  await submit.execute({
-    design_system: "custom financial page",
-    tech_stack: ["React", "Vite"],
-    final_acceptance_mode: "maintainable_replacement_required",
-    frontend_template: "frontend template",
-    fillable_modules: "fillable modules",
-    component_inventory: "component inventory",
-    component_reuse_plan: [
-      {
-        family_id: "comp-table",
-        name: "Market table",
-        observed_surface: "Country metrics table",
-        source_refs: [],
-        implementation_strategy: "mature_library",
-        reuse_source: "@tanstack/react-table",
-        mature_library_candidates: ["@tanstack/react-table"],
-        props_states: "rows and columns",
-        replacement_boundary: "table skeleton slot",
-        parity_guard: "visual diff",
-        custom_fallback_reason: "not applicable",
+  await submit.execute(
+    {
+      design_system: "custom financial page",
+      tech_stack: ["React", "Vite"],
+      final_acceptance_mode: "maintainable_replacement_required",
+      frontend_template: "frontend template",
+      fillable_modules: "fillable modules",
+      component_inventory: "component inventory",
+      component_reuse_plan: [
+        {
+          family_id: "comp-table",
+          name: "Market table",
+          observed_surface: "Country metrics table",
+          source_refs: [],
+          implementation_strategy: "mature_library",
+          reuse_source: "@tanstack/react-table",
+          mature_library_candidates: ["@tanstack/react-table"],
+          props_states: "rows and columns",
+          replacement_boundary: "table skeleton slot",
+          parity_guard: "visual diff",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+      material_inventory: "materials",
+      visual_consistency_contract: "visual contract",
+      ui_data_contract: "data contract",
+      frontend_project: {
+        status: "created",
+        role: "source_baseline_input",
+        project_root: "frontend-design-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+        generation_tool: "host-prepared:create_frontend_skeleton_project",
+        notes: ["source baseline ready"],
       },
-    ],
-    material_inventory: "materials",
-    visual_consistency_contract: "visual contract",
-    ui_data_contract: "data contract",
-    frontend_project: {
-      status: "created",
-      role: "source_baseline_input",
-      project_root: "frontend-design-skeleton",
-      source_package: "web-clone-source",
-      entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
-      generation_tool: "host-prepared:create_frontend_skeleton_project",
-      notes: ["source baseline ready"],
+      template_iteration_notes: ["checked inventory"],
+      completeness_review: "complete enough",
+      open_questions: "- right toolbar capture ambiguity\n- exact 1600px max width",
     },
-    template_iteration_notes: ["checked inventory"],
-    completeness_review: "complete enough",
-    open_questions: "- right toolbar capture ambiguity\n- exact 1600px max width",
-  }, {})
+    {},
+  )
 
   expect(kit.getCollector().final?.open_questions).toEqual([
     "right toolbar capture ambiguity",
@@ -156,42 +162,45 @@ test("submit_frontend_template rebuilds flattened frontend_project provider args
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
 
-  await submit.execute({
-    design_system: "custom financial page",
-    tech_stack: ["React", "Vite"],
-    final_acceptance_mode: "visual_baseline_allowed",
-    frontend_template: "frontend template",
-    fillable_modules: "fillable modules",
-    component_inventory: "component inventory",
-    component_reuse_plan: [
-      {
-        family_id: "comp-table",
-        name: "Market table",
-        observed_surface: "Country metrics table",
-        source_refs: [],
-        implementation_strategy: "mature_library",
-        reuse_source: "@tanstack/react-table",
-        mature_library_candidates: ["@tanstack/react-table"],
-        props_states: "rows and columns",
-        replacement_boundary: "table skeleton slot",
-        parity_guard: "visual diff",
-        custom_fallback_reason: "not applicable",
-      },
-    ],
-    baseline_replacement_plan: [],
-    material_inventory: "materials",
-    visual_consistency_contract: "visual contract",
-    ui_data_contract: "data contract",
-    template_iteration_notes: ["checked inventory"],
-    completeness_review: "complete enough",
-    "frontend_project<arg_key>status": "created",
-    "frontend_project<arg_key>role": "source_baseline_input",
-    "frontend_project<arg_key>project_root": "frontend-design-skeleton",
-    "frontend_project<arg_key>source_package": "web-clone-source",
-    "frontend_project<arg_key>entrypoints": "[\"README.md\",\"src/App.tsx\"]",
-    "frontend_project<arg_key>generation_tool": "host-prepared:create_frontend_skeleton_project",
-    "frontend_project<arg_key>notes": "[\"source skeleton ready\"]",
-  }, {})
+  await submit.execute(
+    {
+      design_system: "custom financial page",
+      tech_stack: ["React", "Vite"],
+      final_acceptance_mode: "visual_baseline_allowed",
+      frontend_template: "frontend template",
+      fillable_modules: "fillable modules",
+      component_inventory: "component inventory",
+      component_reuse_plan: [
+        {
+          family_id: "comp-table",
+          name: "Market table",
+          observed_surface: "Country metrics table",
+          source_refs: [],
+          implementation_strategy: "mature_library",
+          reuse_source: "@tanstack/react-table",
+          mature_library_candidates: ["@tanstack/react-table"],
+          props_states: "rows and columns",
+          replacement_boundary: "table skeleton slot",
+          parity_guard: "visual diff",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+      baseline_replacement_plan: [],
+      material_inventory: "materials",
+      visual_consistency_contract: "visual contract",
+      ui_data_contract: "data contract",
+      template_iteration_notes: ["checked inventory"],
+      completeness_review: "complete enough",
+      "frontend_project<arg_key>status": "created",
+      "frontend_project<arg_key>role": "source_baseline_input",
+      "frontend_project<arg_key>project_root": "frontend-design-skeleton",
+      "frontend_project<arg_key>source_package": "web-clone-source",
+      "frontend_project<arg_key>entrypoints": '["README.md","src/App.tsx"]',
+      "frontend_project<arg_key>generation_tool": "host-prepared:create_frontend_skeleton_project",
+      "frontend_project<arg_key>notes": '["source skeleton ready"]',
+    },
+    {},
+  )
 
   const project = kit.getCollector().final?.frontend_project
   expect(project?.status).toBe("created")
@@ -215,79 +224,103 @@ test("submit_frontend_template renders compact structured fields into markdown h
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
 
-  await submit.execute({
-    design_system: "custom financial page",
-    tech_stack: ["React", "Vite"],
-    final_acceptance_mode: "maintainable_replacement_required",
-    frontend_template_sections: [
-      {
-        title: "Route",
-        detail: "Render /markets from frontend-design-skeleton plus semantic replacement slots.",
-        source_refs: ["web-clone-source/implementation-blueprint.md"],
+  await submit.execute(
+    {
+      design_system: "custom financial page",
+      tech_stack: ["React", "Vite"],
+      final_acceptance_mode: "maintainable_replacement_required",
+      frontend_template_sections: [
+        {
+          title: "Route",
+          detail: "Render /markets from frontend-design-skeleton plus semantic replacement slots.",
+          source_refs: ["web-clone-source/implementation-blueprint.md"],
+        },
+      ],
+      fillable_module_items: [
+        {
+          title: "Markets table",
+          detail: "Render table rows from data arrays and preserve sticky first column.",
+          source_refs: ["web-clone-source/source-ir/content-model.json"],
+        },
+      ],
+      component_reuse_plan: [
+        {
+          family_id: "comp-table",
+          name: "Market table",
+          observed_surface: "Country metrics table",
+          source_refs: ["web-clone-source/source-ir/content-model.json"],
+          implementation_strategy: "mature_library",
+          reuse_source: "@tanstack/react-table",
+          mature_library_candidates: ["@tanstack/react-table"],
+          props_states: "rows, columns, scroll state",
+          replacement_boundary: "table skeleton slot",
+          parity_guard: "visual diff against reference.png",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+      baseline_replacement_plan: [
+        {
+          boundary_id: "replace-market-table",
+          source_region: "table skeleton slot",
+          action: "replace_generated_baseline",
+          component_family_id: "comp-table",
+          replacement_strategy: "mature_library",
+          reuse_source: "@tanstack/react-table",
+          mature_library_candidates: ["@tanstack/react-table"],
+          deletion_rule: "Remove generated table DOM after parity passes.",
+          source_refs: ["web-clone-source/source-ir/content-model.json"],
+          parity_guard: "visual diff and source audit",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+      material_inventory_items: [
+        {
+          title: "Reference",
+          detail: "Use reference.png as pixel truth.",
+          source_refs: ["web-clone-source/reference.png"],
+        },
+      ],
+      quality_project_items: [
+        {
+          title: "Source layout",
+          detail:
+            "Build src/pages/MarketsPage.tsx from the source skeleton, semantic components, and preserved CSS sidecars.",
+          source_refs: ["frontend-design-skeleton/src/App.tsx"],
+        },
+        {
+          title: "Verification",
+          detail: "Run visual diff against reference.png and source audit before reporting pass.",
+          source_refs: ["web-clone-source/reference.png"],
+        },
+      ],
+      frontend_project: {
+        status: "created",
+        role: "source_baseline_input",
+        project_root: "C:\\tmp\\frontend-design-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+        generation_tool: "source-skeleton-react",
+        notes: ["editable source skeleton"],
       },
-    ],
-    fillable_module_items: [
-      {
-        title: "Markets table",
-        detail: "Render table rows from data arrays and preserve sticky first column.",
-        source_refs: ["web-clone-source/source-ir/content-model.json"],
-      },
-    ],
-    component_reuse_plan: [
-      {
-        family_id: "comp-table",
-        name: "Market table",
-        observed_surface: "Country metrics table",
-        source_refs: ["web-clone-source/source-ir/content-model.json"],
-        implementation_strategy: "mature_library",
-        reuse_source: "@tanstack/react-table",
-        mature_library_candidates: ["@tanstack/react-table"],
-        props_states: "rows, columns, scroll state",
-        replacement_boundary: "table skeleton slot",
-        parity_guard: "visual diff against reference.png",
-        custom_fallback_reason: "not applicable",
-      },
-    ],
-    baseline_replacement_plan: [
-      {
-        boundary_id: "replace-market-table",
-        source_region: "table skeleton slot",
-        action: "replace_generated_baseline",
-        component_family_id: "comp-table",
-        replacement_strategy: "mature_library",
-        reuse_source: "@tanstack/react-table",
-        mature_library_candidates: ["@tanstack/react-table"],
-        deletion_rule: "Remove generated table DOM after parity passes.",
-        source_refs: ["web-clone-source/source-ir/content-model.json"],
-        parity_guard: "visual diff and source audit",
-        custom_fallback_reason: "not applicable",
-      },
-    ],
-    material_inventory_items: [
-      { title: "Reference", detail: "Use reference.png as pixel truth.", source_refs: ["web-clone-source/reference.png"] },
-    ],
-    quality_project_items: [
-      { title: "Source layout", detail: "Build src/pages/MarketsPage.tsx from the source skeleton, semantic components, and preserved CSS sidecars.", source_refs: ["frontend-design-skeleton/src/App.tsx"] },
-      { title: "Verification", detail: "Run visual diff against reference.png and source audit before reporting pass.", source_refs: ["web-clone-source/reference.png"] },
-    ],
-    frontend_project: {
-      status: "created",
-      role: "source_baseline_input",
-      project_root: "C:\\tmp\\frontend-design-skeleton",
-      source_package: "web-clone-source",
-      entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
-      generation_tool: "source-skeleton-react",
-      notes: ["editable source skeleton"],
+      visual_consistency_items: [
+        {
+          title: "Desktop",
+          detail: "Desktop viewport must match reference.png at the configured threshold.",
+          source_refs: ["web-clone-source/reference.png"],
+        },
+      ],
+      ui_data_contract_items: [
+        {
+          title: "Rows",
+          detail: "Country rows are local mock records, not duplicated JSX.",
+          source_refs: ["web-clone-source/source-ir/content-model.json"],
+        },
+      ],
+      template_iteration_notes: ["checked compact handoff"],
+      completeness_review: "complete enough",
     },
-    visual_consistency_items: [
-      { title: "Desktop", detail: "Desktop viewport must match reference.png at the configured threshold.", source_refs: ["web-clone-source/reference.png"] },
-    ],
-    ui_data_contract_items: [
-      { title: "Rows", detail: "Country rows are local mock records, not duplicated JSX.", source_refs: ["web-clone-source/source-ir/content-model.json"] },
-    ],
-    template_iteration_notes: ["checked compact handoff"],
-    completeness_review: "complete enough",
-  }, {})
+    {},
+  )
 
   const final = kit.getCollector().final
   expect(final?.frontend_template).toContain("Route")
@@ -316,82 +349,89 @@ test("submit_frontend_template renders visual HTML skeleton as non-implementatio
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
 
-  await submit.execute({
-    design_system: "source-derived static visual baseline",
-    tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
-    final_acceptance_mode: "visual_baseline_allowed",
-    frontend_template_sections: [
-      {
-        title: "Visual skeleton route",
-        detail: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
-        source_refs: ["web-clone-source/source-skeleton/index.html"],
-      },
-    ],
-    fillable_module_items: [
-      {
-        title: "Skeleton assets",
-        detail: "Use source-owned CSS and assets copied from the task-runtime source package.",
-        source_refs: ["web-clone-source/assets", "web-clone-source/source-skeleton/critical.css"],
-      },
-    ],
-    component_reuse_plan: [
-      {
-        family_id: "comp-static-skeleton",
-        name: "Static visual skeleton",
-        observed_surface: "Full captured page first viewport",
-        source_refs: ["web-clone-source/reference.png", "web-clone-source/source-ir/style-profile.json"],
-        implementation_strategy: "extracted_baseline_defer",
-        reuse_source: "visual-html-skeleton/index.html",
-        mature_library_candidates: [],
-        props_states: "static representative visual states only",
-        replacement_boundary: "visual skeleton root",
-        parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
-        custom_fallback_reason: "not applicable",
-      },
-    ],
-    material_inventory_items: [
-      {
-        title: "Source authority",
-        detail: "The skeleton is derived from source IR, source skeleton CSS, assets, and the reference screenshot.",
-        source_refs: ["web-clone-source/source-ir/style-profile.json", "web-clone-source/source-skeleton/critical.css"],
-      },
-    ],
-    frontend_project: {
-      status: "created",
-      role: "visual_baseline_input",
-      project_root: "visual-html-skeleton",
-      source_package: "web-clone-source",
-      entrypoints: [
-        "visual-html-skeleton/index.html",
-        "visual-html-skeleton/styles.css",
-        "visual-html-skeleton/screenshots/desktop.png",
-        "visual-html-skeleton/visual-diff.json",
+  await submit.execute(
+    {
+      design_system: "source-derived static visual baseline",
+      tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+      final_acceptance_mode: "visual_baseline_allowed",
+      frontend_template_sections: [
+        {
+          title: "Visual skeleton route",
+          detail: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+          source_refs: ["web-clone-source/source-skeleton/index.html"],
+        },
       ],
-      generation_tool: "source-ir-static-html-skeleton",
-      notes: [
-        "Derived from source IR and source skeleton; not a final app.",
-        "Future project work transcribes this visual skeleton into semantic source.",
+      fillable_module_items: [
+        {
+          title: "Skeleton assets",
+          detail: "Use source-owned CSS and assets copied from the task-runtime source package.",
+          source_refs: ["web-clone-source/assets", "web-clone-source/source-skeleton/critical.css"],
+        },
       ],
+      component_reuse_plan: [
+        {
+          family_id: "comp-static-skeleton",
+          name: "Static visual skeleton",
+          observed_surface: "Full captured page first viewport",
+          source_refs: ["web-clone-source/reference.png", "web-clone-source/source-ir/style-profile.json"],
+          implementation_strategy: "extracted_baseline_defer",
+          reuse_source: "visual-html-skeleton/index.html",
+          mature_library_candidates: [],
+          props_states: "static representative visual states only",
+          replacement_boundary: "visual skeleton root",
+          parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+      material_inventory_items: [
+        {
+          title: "Source authority",
+          detail: "The skeleton is derived from source IR, source skeleton CSS, assets, and the reference screenshot.",
+          source_refs: [
+            "web-clone-source/source-ir/style-profile.json",
+            "web-clone-source/source-skeleton/critical.css",
+          ],
+        },
+      ],
+      frontend_project: {
+        status: "created",
+        role: "visual_baseline_input",
+        project_root: "visual-html-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: [
+          "visual-html-skeleton/index.html",
+          "visual-html-skeleton/styles.css",
+          "visual-html-skeleton/screenshots/desktop.png",
+          "visual-html-skeleton/visual-diff.json",
+        ],
+        generation_tool: "source-ir-static-html-skeleton",
+        notes: [
+          "Derived from source IR and source skeleton; not a final app.",
+          "Future project work transcribes this visual skeleton into semantic source.",
+        ],
+      },
+      visual_consistency_items: [
+        {
+          title: "Reference parity",
+          detail: "Skeleton screenshots must be compared against source reference.png.",
+          source_refs: ["web-clone-source/reference.png"],
+        },
+      ],
+      ui_data_contract_items: [
+        {
+          title: "Static content",
+          detail: "Use visible content from source-ir/content-model.json; no runtime API required for the skeleton.",
+          source_refs: ["web-clone-source/source-ir/content-model.json"],
+        },
+      ],
+      template_iteration_notes: ["checked visual skeleton source authority and transcription boundary"],
+      completeness_review:
+        "Visual HTML skeleton is complete enough as a source-derived baseline, not as maintainable completion.",
+      reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+      open_questions: [],
     },
-    visual_consistency_items: [
-      {
-        title: "Reference parity",
-        detail: "Skeleton screenshots must be compared against source reference.png.",
-        source_refs: ["web-clone-source/reference.png"],
-      },
-    ],
-    ui_data_contract_items: [
-      {
-        title: "Static content",
-        detail: "Use visible content from source-ir/content-model.json; no runtime API required for the skeleton.",
-        source_refs: ["web-clone-source/source-ir/content-model.json"],
-      },
-    ],
-    template_iteration_notes: ["checked visual skeleton source authority and transcription boundary"],
-    completeness_review: "Visual HTML skeleton is complete enough as a source-derived baseline, not as maintainable completion.",
-    reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
-    open_questions: [],
-  }, {})
+    {},
+  )
 
   const report = buildFrontendTemplateReport(kit.getCollector()).detail
   expect(report).toContain("- role: visual_baseline_input")
@@ -411,50 +451,53 @@ test("visual baseline report marks below-threshold measured skeleton as incomple
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
 
-  await submit.execute({
-    design_system: "TradingView source-derived visual baseline",
-    tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
-    final_acceptance_mode: "visual_baseline_allowed",
-    frontend_template: "Restore the source-derived page into visual-html-skeleton/index.html.",
-    fillable_modules: "All visible regions are represented, but map and icon fidelity still need repair.",
-    component_inventory: "Static visual skeleton regions.",
-    component_reuse_plan: [
-      {
-        family_id: "comp-static-skeleton",
-        name: "Static visual skeleton",
-        observed_surface: "Full captured page first viewport",
-        source_refs: ["web-clone-source/reference.png"],
-        implementation_strategy: "extracted_baseline_defer",
-        reuse_source: "visual-html-skeleton/index.html",
-        mature_library_candidates: [],
-        props_states: "static representative visual states only",
-        replacement_boundary: "visual skeleton root",
-        parity_guard: "webpage_evaluate against reference.png",
-        custom_fallback_reason: "not applicable",
-      },
-    ],
-    baseline_replacement_plan: [],
-    material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
-    visual_consistency_contract: "Current score: 81/100 (SSIM 0.8263, pixel diff 10.69%) against reference.png.",
-    ui_data_contract: "Static visible source content only.",
-    frontend_project: {
-      status: "created",
-      role: "visual_baseline_input",
-      project_root: "visual-html-skeleton",
-      source_package: "web-clone-source",
-      entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/styles/tokens.css"],
-      generation_tool: "source-ir-static-html-skeleton",
-      notes: [
-        "Visual score below 95% target (81 vs 95 required).",
-        "Remaining visual debt: canvas map, table heat colors, simplified legend SVG, logo path, and social icons.",
-        "The skeleton is a usable visual baseline for downstream transcription work.",
+  await submit.execute(
+    {
+      design_system: "TradingView source-derived visual baseline",
+      tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+      final_acceptance_mode: "visual_baseline_allowed",
+      frontend_template: "Restore the source-derived page into visual-html-skeleton/index.html.",
+      fillable_modules: "All visible regions are represented, but map and icon fidelity still need repair.",
+      component_inventory: "Static visual skeleton regions.",
+      component_reuse_plan: [
+        {
+          family_id: "comp-static-skeleton",
+          name: "Static visual skeleton",
+          observed_surface: "Full captured page first viewport",
+          source_refs: ["web-clone-source/reference.png"],
+          implementation_strategy: "extracted_baseline_defer",
+          reuse_source: "visual-html-skeleton/index.html",
+          mature_library_candidates: [],
+          props_states: "static representative visual states only",
+          replacement_boundary: "visual skeleton root",
+          parity_guard: "webpage_evaluate against reference.png",
+          custom_fallback_reason: "not applicable",
+        },
       ],
+      baseline_replacement_plan: [],
+      material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
+      visual_consistency_contract: "Current score: 81/100 (SSIM 0.8263, pixel diff 10.69%) against reference.png.",
+      ui_data_contract: "Static visible source content only.",
+      frontend_project: {
+        status: "created",
+        role: "visual_baseline_input",
+        project_root: "visual-html-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/styles/tokens.css"],
+        generation_tool: "source-ir-static-html-skeleton",
+        notes: [
+          "Visual score below 95% target (81 vs 95 required).",
+          "Remaining visual debt: canvas map, table heat colors, simplified legend SVG, logo path, and social icons.",
+          "The skeleton is a usable visual baseline for downstream transcription work.",
+        ],
+      },
+      template_iteration_notes: ["checked visual score and remaining debt"],
+      completeness_review: "Visual evidence is below the requested threshold.",
+      reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+      open_questions: [],
     },
-    template_iteration_notes: ["checked visual score and remaining debt"],
-    completeness_review: "Visual evidence is below the requested threshold.",
-    reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
-    open_questions: [],
-  }, {})
+    {},
+  )
 
   const report = buildFrontendTemplateReport(kit.getCollector()).detail
   expect(report).toContain("visual_quality_status: incomplete_visual_fidelity")
@@ -467,46 +510,50 @@ test("visual baseline workflow reports source baseline submissions as incomplete
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
 
-  await submit.execute({
-    design_system: "source-derived static visual baseline",
-    tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
-    final_acceptance_mode: "visual_baseline_allowed",
-    frontend_template: "Restore the captured page into a source-editable static HTML/CSS visual skeleton.",
-    fillable_modules: "Create visual-html-skeleton/index.html, tokens.css, regional CSS, assets, screenshots, and visual diff evidence.",
-    component_inventory: "Static visual skeleton regions.",
-    component_reuse_plan: [
-      {
-        family_id: "comp-static-skeleton",
-        name: "Static visual skeleton",
-        observed_surface: "Full captured page",
-        source_refs: ["web-clone-source/reference.png"],
-        implementation_strategy: "extracted_baseline_defer",
-        reuse_source: "frontend-design-skeleton",
-        mature_library_candidates: [],
-        props_states: "static representative visual states",
-        replacement_boundary: "visual skeleton root",
-        parity_guard: "Compare the restored static skeleton against reference.png.",
-        custom_fallback_reason: "not applicable",
+  await submit.execute(
+    {
+      design_system: "source-derived static visual baseline",
+      tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+      final_acceptance_mode: "visual_baseline_allowed",
+      frontend_template: "Restore the captured page into a source-editable static HTML/CSS visual skeleton.",
+      fillable_modules:
+        "Create visual-html-skeleton/index.html, tokens.css, regional CSS, assets, screenshots, and visual diff evidence.",
+      component_inventory: "Static visual skeleton regions.",
+      component_reuse_plan: [
+        {
+          family_id: "comp-static-skeleton",
+          name: "Static visual skeleton",
+          observed_surface: "Full captured page",
+          source_refs: ["web-clone-source/reference.png"],
+          implementation_strategy: "extracted_baseline_defer",
+          reuse_source: "frontend-design-skeleton",
+          mature_library_candidates: [],
+          props_states: "static representative visual states",
+          replacement_boundary: "visual skeleton root",
+          parity_guard: "Compare the restored static skeleton against reference.png.",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+      baseline_replacement_plan: [],
+      material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
+      visual_consistency_contract: "95% visual similarity against web-clone-source/reference.png.",
+      ui_data_contract: "Static visible source content only.",
+      frontend_project: {
+        status: "created",
+        role: "source_baseline_input",
+        project_root: "frontend-design-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: ["README.md", "src/App.tsx", "src/components/SourceDomPage.tsx"],
+        generation_tool: "host-prepared:create_frontend_skeleton_project",
+        notes: ["Captured source evidence exists, but the visual HTML skeleton was not restored."],
       },
-    ],
-    baseline_replacement_plan: [],
-    material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
-    visual_consistency_contract: "95% visual similarity against web-clone-source/reference.png.",
-    ui_data_contract: "Static visible source content only.",
-    frontend_project: {
-      status: "created",
-      role: "source_baseline_input",
-      project_root: "frontend-design-skeleton",
-      source_package: "web-clone-source",
-      entrypoints: ["README.md", "src/App.tsx", "src/components/SourceDomPage.tsx"],
-      generation_tool: "host-prepared:create_frontend_skeleton_project",
-      notes: ["Captured source evidence exists, but the visual HTML skeleton was not restored."],
+      template_iteration_notes: ["checked visual-only output contract"],
+      completeness_review: "Not complete: this is still the captured source evidence baseline.",
+      reference_artifacts: ["web-clone-source/reference.png"],
+      open_questions: [],
     },
-    template_iteration_notes: ["checked visual-only output contract"],
-    completeness_review: "Not complete: this is still the captured source evidence baseline.",
-    reference_artifacts: ["web-clone-source/reference.png"],
-    open_questions: [],
-  }, {})
+    {},
+  )
 
   const report = buildFrontendTemplateReport(kit.getCollector()).detail
   expect(report).toContain("- role: source_baseline_input")
@@ -545,78 +592,87 @@ test("component reuse plan accepts provider naming and incomplete library hints 
     open_questions: [],
   }
 
-  const okWithProviderIds = await submit.execute({
-    ...base,
-    component_reuse_plan: [
-      {
-        family_id: "MarketTable",
-        name: "Table",
-        observed_surface: "Data table",
-        source_refs: [],
-        implementation_strategy: "mature_library",
-        reuse_source: "not specified",
-        mature_library_candidates: [],
-        props_states: "rows and sort state",
-        replacement_boundary: "table region",
-        replacement_guard: "visual diff",
-        custom_fallback_reason: "not applicable",
-      },
-    ],
-    baseline_replacement_plan: [
-      {
-        boundary_id: "market-table-boundary",
-        source_region: "table region",
-        action: "defer_baseline_until_parity",
-        component_family_id: "MarketTable",
-        replacement_strategy: "mature_library",
-        reuse_source: "not specified",
-        mature_library_candidates: [],
-        deletion_rule: "Keep baseline until visual parity is proven.",
-        source_refs: [],
-        replacement_guard: "visual diff",
-      },
-    ],
-  }, {})
+  const okWithProviderIds = await submit.execute(
+    {
+      ...base,
+      component_reuse_plan: [
+        {
+          family_id: "MarketTable",
+          name: "Table",
+          observed_surface: "Data table",
+          source_refs: [],
+          implementation_strategy: "mature_library",
+          reuse_source: "not specified",
+          mature_library_candidates: [],
+          props_states: "rows and sort state",
+          replacement_boundary: "table region",
+          replacement_guard: "visual diff",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+      baseline_replacement_plan: [
+        {
+          boundary_id: "market-table-boundary",
+          source_region: "table region",
+          action: "defer_baseline_until_parity",
+          component_family_id: "MarketTable",
+          replacement_strategy: "mature_library",
+          reuse_source: "not specified",
+          mature_library_candidates: [],
+          deletion_rule: "Keep baseline until visual parity is proven.",
+          source_refs: [],
+          replacement_guard: "visual diff",
+        },
+      ],
+    },
+    {},
+  )
 
   expect(okWithProviderIds).toContain("OK")
 
   const secondSubmit = createFrontendTemplateOutputTools().tools.submit_frontend_template as any
-  const ok = await submit.execute({
-    ...base,
-    component_reuse_plan: [
-      {
-        family_id: "comp-table",
-        name: "Table",
-        observed_surface: "Data table",
-        source_refs: [],
-        implementation_strategy: "custom_fallback",
-        reuse_source: "not found after inspecting src/components",
-        mature_library_candidates: [],
-        props_states: "rows and sort state",
-        replacement_boundary: "table region",
-        parity_guard: "visual diff",
-      },
-    ],
-  }, {})
+  const ok = await submit.execute(
+    {
+      ...base,
+      component_reuse_plan: [
+        {
+          family_id: "comp-table",
+          name: "Table",
+          observed_surface: "Data table",
+          source_refs: [],
+          implementation_strategy: "custom_fallback",
+          reuse_source: "not found after inspecting src/components",
+          mature_library_candidates: [],
+          props_states: "rows and sort state",
+          replacement_boundary: "table region",
+          parity_guard: "visual diff",
+        },
+      ],
+    },
+    {},
+  )
 
   expect(ok).toContain("already submitted")
-  const secondOk = await secondSubmit.execute({
-    ...base,
-    component_reuse_plan: [
-      {
-        family_id: "Table",
-        name: "Table",
-        observed_surface: "Data table",
-        source_refs: [],
-        implementation_strategy: "custom_fallback",
-        reuse_source: "not found after inspecting src/components",
-        mature_library_candidates: [],
-        props_states: "rows and sort state",
-        replacement_boundary: "table region",
-        parity_guard: "visual diff",
-      },
-    ],
-  }, {})
+  const secondOk = await secondSubmit.execute(
+    {
+      ...base,
+      component_reuse_plan: [
+        {
+          family_id: "Table",
+          name: "Table",
+          observed_surface: "Data table",
+          source_refs: [],
+          implementation_strategy: "custom_fallback",
+          reuse_source: "not found after inspecting src/components",
+          mature_library_candidates: [],
+          props_states: "rows and sort state",
+          replacement_boundary: "table region",
+          parity_guard: "visual diff",
+        },
+      ],
+    },
+    {},
+  )
   expect(secondOk).toContain("OK")
 })
 
@@ -663,34 +719,42 @@ test("maintainable acceptance does not synthesize a whole-page source baseline r
     open_questions: [],
   }
 
-  const okWithoutPlan = await submit.execute({
-    ...base,
-    baseline_replacement_plan: [],
-  }, {})
+  const okWithoutPlan = await submit.execute(
+    {
+      ...base,
+      baseline_replacement_plan: [],
+    },
+    {},
+  )
 
   expect(okWithoutPlan).toContain("OK")
-  expect(kit.getCollector().final?.component_reuse_plan.map((item) => item.family_id)).not.toContain("comp-source-page-baseline")
+  expect(kit.getCollector().final?.component_reuse_plan.map((item) => item.family_id)).not.toContain(
+    "comp-source-page-baseline",
+  )
   expect(kit.getCollector().final?.baseline_replacement_plan).toHaveLength(0)
   expect(kit.getCollector().final?.quality_project_contract).not.toContain("source-page-baseline")
 
-  const secondSubmit = await submit.execute({
-    ...base,
-    baseline_replacement_plan: [
-      {
-        boundary_id: "replace-market-table",
-        source_region: "frontend-design-skeleton table DOM region",
-        action: "replace_generated_baseline",
-        component_family_id: "comp-table",
-        replacement_strategy: "mature_library",
-        reuse_source: "@tanstack/react-table",
-        mature_library_candidates: ["@tanstack/react-table"],
-        deletion_rule: "Remove the generated table HTML after the component passes visual diff.",
-        source_refs: ["web-clone-source/source-ir/content-model.json"],
-        parity_guard: "Run visual diff and source audit.",
-        custom_fallback_reason: "not applicable",
-      },
-    ],
-  }, {})
+  const secondSubmit = await submit.execute(
+    {
+      ...base,
+      baseline_replacement_plan: [
+        {
+          boundary_id: "replace-market-table",
+          source_region: "frontend-design-skeleton table DOM region",
+          action: "replace_generated_baseline",
+          component_family_id: "comp-table",
+          replacement_strategy: "mature_library",
+          reuse_source: "@tanstack/react-table",
+          mature_library_candidates: ["@tanstack/react-table"],
+          deletion_rule: "Remove the generated table HTML after the component passes visual diff.",
+          source_refs: ["web-clone-source/source-ir/content-model.json"],
+          parity_guard: "Run visual diff and source audit.",
+          custom_fallback_reason: "not applicable",
+        },
+      ],
+    },
+    {},
+  )
 
   expect(secondSubmit).toContain("already submitted")
 })
@@ -698,49 +762,52 @@ test("maintainable acceptance does not synthesize a whole-page source baseline r
 test("baseline replacement custom fallback reason is optional provider detail", async () => {
   const submit = createFrontendTemplateOutputTools().tools.submit_frontend_template as any
 
-  const ok = await submit.execute({
-    design_system: "custom dashboard",
-    tech_stack: ["React"],
-    final_acceptance_mode: "maintainable_replacement_required",
-    frontend_template: "frontend template",
-    fillable_modules: "fillable modules",
-    component_inventory: "component inventory",
-    component_reuse_plan: [
-      {
-        family_id: "comp-table",
-        name: "Table",
-        observed_surface: "Data table",
-        source_refs: [],
-        implementation_strategy: "custom_fallback",
-        reuse_source: "not found after inspecting src/components",
-        mature_library_candidates: [],
-        props_states: "rows and sort state",
-        replacement_boundary: "table region",
-        parity_guard: "visual diff",
-      },
-    ],
-    baseline_replacement_plan: [
-      {
-        boundary_id: "replace-market-table",
-        source_region: "frontend-design-skeleton table DOM region",
-        action: "replace_generated_baseline",
-        component_family_id: "comp-table",
-        replacement_strategy: "custom_fallback",
-        reuse_source: "not found after inspecting src/components",
-        mature_library_candidates: [],
-        deletion_rule: "Remove generated table HTML after the replacement is visually equivalent.",
-        source_refs: ["web-clone-source/source-ir/content-model.json"],
-        parity_guard: "Run visual diff and source audit.",
-      },
-    ],
-    material_inventory: "materials",
-    visual_consistency_contract: "visual contract",
-    ui_data_contract: "data contract",
-    template_iteration_notes: ["checked inventory"],
-    completeness_review: "complete enough",
-    reference_artifacts: [],
-    open_questions: [],
-  }, {})
+  const ok = await submit.execute(
+    {
+      design_system: "custom dashboard",
+      tech_stack: ["React"],
+      final_acceptance_mode: "maintainable_replacement_required",
+      frontend_template: "frontend template",
+      fillable_modules: "fillable modules",
+      component_inventory: "component inventory",
+      component_reuse_plan: [
+        {
+          family_id: "comp-table",
+          name: "Table",
+          observed_surface: "Data table",
+          source_refs: [],
+          implementation_strategy: "custom_fallback",
+          reuse_source: "not found after inspecting src/components",
+          mature_library_candidates: [],
+          props_states: "rows and sort state",
+          replacement_boundary: "table region",
+          parity_guard: "visual diff",
+        },
+      ],
+      baseline_replacement_plan: [
+        {
+          boundary_id: "replace-market-table",
+          source_region: "frontend-design-skeleton table DOM region",
+          action: "replace_generated_baseline",
+          component_family_id: "comp-table",
+          replacement_strategy: "custom_fallback",
+          reuse_source: "not found after inspecting src/components",
+          mature_library_candidates: [],
+          deletion_rule: "Remove generated table HTML after the replacement is visually equivalent.",
+          source_refs: ["web-clone-source/source-ir/content-model.json"],
+          parity_guard: "Run visual diff and source audit.",
+        },
+      ],
+      material_inventory: "materials",
+      visual_consistency_contract: "visual contract",
+      ui_data_contract: "data contract",
+      template_iteration_notes: ["checked inventory"],
+      completeness_review: "complete enough",
+      reference_artifacts: [],
+      open_questions: [],
+    },
+    {},
+  )
 
   expect(ok).toContain("OK")
 })
@@ -787,14 +854,17 @@ test("submit_frontend_template closes collector against duplicate submit and lat
   const duplicate = await submit.execute(payload, {})
   expect(duplicate).toContain("already submitted")
 
-  const late = await kit.tools.register_color_spec.execute({
-    id: "vis-color-late",
-    title: "Late color",
-    hex: "#ffffff",
-    role: "background",
-    applies_to: "body",
-    severity: "must",
-  }, {} as any)
+  const late = await kit.tools.register_color_spec.execute(
+    {
+      id: "vis-color-late",
+      title: "Late color",
+      hex: "#ffffff",
+      role: "background",
+      applies_to: "body",
+      severity: "must",
+    },
+    {} as any,
+  )
   expect(late).toContain("already submitted")
   expect(kit.getCollector().specs).toHaveLength(0)
 })

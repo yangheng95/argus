@@ -34,7 +34,9 @@ export function closeFileEditor(): void {
 }
 
 export function shortWorkbenchPath(path: string): string {
-  const parts = String(path || "").split(/[\\/]/).filter(Boolean)
+  const parts = String(path || "")
+    .split(/[\\/]/)
+    .filter(Boolean)
   if (parts.length <= 2) return path
   return parts.slice(-2).join("/")
 }

@@ -96,10 +96,7 @@ test("multiple message-turn cards for one session merge into a single workflow r
   }
   const projection = buildAgentWorkflow({
     traceEvents: [],
-    order: [
-      "assistant:session:ses_orch:message:msg_1",
-      "assistant:session:ses_orch:message:msg_2",
-    ],
+    order: ["assistant:session:ses_orch:message:msg_1", "assistant:session:ses_orch:message:msg_2"],
     cards: cards as any,
   })
 

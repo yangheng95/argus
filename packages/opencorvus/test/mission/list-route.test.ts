@@ -121,9 +121,9 @@ describe("GET /mission", () => {
       directory: tmpB.path,
     })
 
-    const filtered = (await (
-      await getMissionList(`?directory=${encodeURIComponent(tmpA.path)}`)
-    ).json()) as Array<{ missionID: string }>
+    const filtered = (await (await getMissionList(`?directory=${encodeURIComponent(tmpA.path)}`)).json()) as Array<{
+      missionID: string
+    }>
     expect(filtered.map((row) => row.missionID)).toEqual(["project-a"])
   })
 
@@ -138,9 +138,9 @@ describe("GET /mission", () => {
         const visible = (await (await getMissionList(directoryQuery(tmp.path))).json()) as Array<{ missionID: string }>
         expect(visible.map((row) => row.missionID)).toEqual(["live"])
 
-        const withArchived = (await (
-          await getMissionList(directoryQuery(tmp.path, "archived=true"))
-        ).json()) as Array<{ missionID: string }>
+        const withArchived = (await (await getMissionList(directoryQuery(tmp.path, "archived=true"))).json()) as Array<{
+          missionID: string
+        }>
         expect(withArchived.map((row) => row.missionID)).toEqual(["live", "old"])
       },
     })
@@ -160,9 +160,9 @@ describe("GET /mission", () => {
         const byID = (await (await getMissionList("?search=beta-id")).json()) as Array<{ missionID: string }>
         expect(byID.map((row) => row.missionID)).toEqual(["beta-id"])
 
-        const byDirectory = (await (
-          await getMissionList(`?search=${encodeURIComponent(tmp.path)}`)
-        ).json()) as Array<{ missionID: string }>
+        const byDirectory = (await (await getMissionList(`?search=${encodeURIComponent(tmp.path)}`)).json()) as Array<{
+          missionID: string
+        }>
         expect(byDirectory.map((row) => row.missionID)).toEqual(["alpha-id", "beta-id"])
       },
     })
@@ -184,10 +184,9 @@ describe("GET /mission", () => {
         expect(first.map((row) => row.sessionID)).toEqual(["ses_z"])
 
         const next = (await (
-          await getMissionList(directoryQuery(
-            tmp.path,
-            `cursorUpdated=${first[0].updated}&cursorSessionID=${first[0].sessionID}`,
-          ))
+          await getMissionList(
+            directoryQuery(tmp.path, `cursorUpdated=${first[0].updated}&cursorSessionID=${first[0].sessionID}`),
+          )
         ).json()) as Array<{ sessionID: string }>
         expect(next.map((row) => row.sessionID)).toEqual(["ses_a"])
       },

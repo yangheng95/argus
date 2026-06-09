@@ -1,17 +1,19 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "bun:test"
 
-(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 if (typeof globalThis.requestAnimationFrame === "undefined") {
-  (globalThis as any).requestAnimationFrame = (() => 1) as any;
-  (globalThis as any).cancelAnimationFrame = (() => {}) as any;
+  ;(globalThis as any).requestAnimationFrame = (() => 1) as any
+  ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
 }
 
-const { setBoardStore } = await import("../src/store/board");
-const { applyEvent, flushBufferedPartDeltas, resetWriter, hydrateConversationView } = await import("../src/services/tree-writer");
-const { cardTreeStore } = await import("../src/store/card-tree");
-const { statusBadge } = await import("../src/utils/status-badge");
-const { replay } = await import("./fixtures/replay");
+const { setBoardStore } = await import("../src/store/board")
+const { applyEvent, flushBufferedPartDeltas, resetWriter, hydrateConversationView } = await import(
+  "../src/services/tree-writer"
+)
+const { cardTreeStore } = await import("../src/store/card-tree")
+const { statusBadge } = await import("../src/utils/status-badge")
+const { replay } = await import("./fixtures/replay")
 const {
   EVENTS,
   INITIAL_BOARD,
@@ -25,9 +27,9 @@ const {
   DESIGN_SID,
   ARCHITECT_SID,
   TASK_ID,
-} = await import("./fixtures/goal-phase-events");
+} = await import("./fixtures/goal-phase-events")
 
-const INTEGRITY_SID = "ses_integrity";
+const INTEGRITY_SID = "ses_integrity"
 
 function stampedInfo(channel: string, info: Record<string, any>) {
   return {
@@ -35,7 +37,7 @@ function stampedInfo(channel: string, info: Record<string, any>) {
     resolvedRole: info.resolvedRole ?? channel,
     agent: info.agent ?? channel,
     channel,
-  };
+  }
 }
 
 function stampedPart(channel: string, part: Record<string, any>) {
@@ -43,7 +45,7 @@ function stampedPart(channel: string, part: Record<string, any>) {
     ...part,
     resolvedRole: part.resolvedRole ?? channel,
     channel,
-  };
+  }
 }
 
 test("phase cards absorb goal-scoped session parts — no nested session cards", async () => {
@@ -57,82 +59,81 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   //     children.
   //   - Non-goal sub-agents (requirements / frontend-design / architect)
   //     surface as top-level siblings of the root assistant card.
-  const snapshot = await replay(EVENTS, INITIAL_BOARD);
+  const snapshot = await replay(EVENTS, INITIAL_BOARD)
 
   // 2026-04-19 flatten: the goal-group wrapper card is gone. Each goal's
   // single goal-scope executor step is now a top-level card with goal
   // title / round / description / contracts stamped on it.
   // 2026-04-20: per-goal evaluator removed; build step has plan + build
   // phases only (`evaluate` phase dropped with the deterministic runner).
-  const stepCardID = `step:${GOAL_ID}:build`; // W2-V26: format reverted 2026-04-26 to attempt-invariant (drop :goalRunID:)
-  const planPhaseID = `${stepCardID}:phase:plan`;
-  const buildPhaseID = `${stepCardID}:phase:build`;
+  const stepCardID = `step:${GOAL_ID}:build` // W2-V26: format reverted 2026-04-26 to attempt-invariant (drop :goalRunID:)
+  const planPhaseID = `${stepCardID}:phase:plan`
+  const buildPhaseID = `${stepCardID}:phase:build`
 
   // One real message turn = one card: `<stage>:session:<sid>:message:<mid>`.
-  const executorCardID = `executor:session:${EXECUTOR_SID}:message:msg_exec_1`;
-  const buildWorkerCardID = `build:session:${BUILD_SID}:message:msg_build_1`;
-  const plannerCardID = `planner:session:${PLANNER_SID}:message:msg_planner_1`;
-  const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}:message:msg_requirements_1`;
-  const designCardID = `frontend-design:session:${DESIGN_SID}:message:msg_design_1`;
-  const architectCardID = `architect:session:${ARCHITECT_SID}:message:msg_architect_1`;
-  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_orch_1`;
+  const executorCardID = `executor:session:${EXECUTOR_SID}:message:msg_exec_1`
+  const buildWorkerCardID = `build:session:${BUILD_SID}:message:msg_build_1`
+  const plannerCardID = `planner:session:${PLANNER_SID}:message:msg_planner_1`
+  const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}:message:msg_requirements_1`
+  const designCardID = `frontend-design:session:${DESIGN_SID}:message:msg_design_1`
+  const architectCardID = `architect:session:${ARCHITECT_SID}:message:msg_architect_1`
+  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_orch_1`
 
   // Step card exists and has the two phase cards in order — no session
   // cards between step and phase.
-  expect(snapshot.nodes[stepCardID]).toBeDefined();
-  expect(snapshot.nodes[stepCardID]!.childIDs).toEqual([planPhaseID, buildPhaseID]);
+  expect(snapshot.nodes[stepCardID]).toBeDefined()
+  expect(snapshot.nodes[stepCardID]!.childIDs).toEqual([planPhaseID, buildPhaseID])
 
   // Each phase card exists with the declared kind + phase metadata.
   for (const [id, phaseID] of [
     [planPhaseID, "plan"],
     [buildPhaseID, "build"],
   ] as const) {
-    const node = snapshot.nodes[id];
-    expect(node).toBeDefined();
-    expect(node!.kind).toBe("phase");
-    expect(node!.phaseID).toBe(phaseID);
+    const node = snapshot.nodes[id]
+    expect(node).toBeDefined()
+    expect(node!.kind).toBe("phase")
+    expect(node!.phaseID).toBe(phaseID)
     // Phase cards never nest session cards as children (the session's
     // parts live directly on the phase card). Interaction cards are a
     // separate concern — they can appear as phase children when their
     // sessionID resolves to a phase-absorbed session.
     for (const childID of node!.childIDs || []) {
-      expect(childID).not.toMatch(/:session:/);
+      expect(childID).not.toMatch(/:session:/)
     }
   }
 
   // The phase-absorbed session cards DO NOT exist as independent cards.
   // Their parts live on the phase card they were routed to.
-  expect(snapshot.nodes[buildWorkerCardID]).toBeUndefined();
-  expect(snapshot.nodes[plannerCardID]).toBeUndefined();
+  expect(snapshot.nodes[buildWorkerCardID]).toBeUndefined()
+  expect(snapshot.nodes[plannerCardID]).toBeUndefined()
 
   // Phase cards must surface the absorbed sessionID via `phaseSessionID` so
   // the inline AgentSessionReplyBox in Card.tsx can target the running
-  // sub-agent session. Without this, build / planner have no side-channel
-  // for user → sub-agent reply during execution — the route accepts it
-  // (DIRECT_REPLY_AGENT_KINDS includes "build"), but the UI has no input.
-  expect(snapshot.nodes[buildPhaseID]!.phaseSessionID).toBe(BUILD_SID);
-  expect(snapshot.nodes[planPhaseID]!.phaseSessionID).toBe(PLANNER_SID);
+  // sub-agent session. Without this, absorbed build / planner sessions
+  // would have no visible operator input on the phase card.
+  expect(snapshot.nodes[buildPhaseID]!.phaseSessionID).toBe(BUILD_SID)
+  expect(snapshot.nodes[planPhaseID]!.phaseSessionID).toBe(PLANNER_SID)
 
   // Build phase's parts include the tool call + text from the build worker
   // session (msg_build_1). Planner phase's parts include the planner's text.
-  const buildParts = snapshot.nodes[buildPhaseID]!.parts;
-  expect(buildParts.some((p) => p.type === "tool" && p.tool === "bash")).toBe(true);
-  expect(buildParts.some((p) => p.type === "text" && p.text === "Build passed.")).toBe(true);
+  const buildParts = snapshot.nodes[buildPhaseID]!.parts
+  expect(buildParts.some((p) => p.type === "tool" && p.tool === "bash")).toBe(true)
+  expect(buildParts.some((p) => p.type === "text" && p.text === "Build passed.")).toBe(true)
 
-  const planParts = snapshot.nodes[planPhaseID]!.parts;
-  expect(planParts.some((p) => p.type === "text" && p.text === "Planned the build sequence.")).toBe(true);
+  const planParts = snapshot.nodes[planPhaseID]!.parts
+  expect(planParts.some((p) => p.type === "text" && p.text === "Planned the build sequence.")).toBe(true)
 
   // Executor container is NOT rendered as its own card and NOT in top-level.
-  expect(snapshot.order).not.toContain(executorCardID);
+  expect(snapshot.order).not.toContain(executorCardID)
 
   // Non-goal sub-agents surface at top level, not nested under root.
-  const rootChildren = snapshot.nodes[rootCardID]!.childIDs || [];
+  const rootChildren = snapshot.nodes[rootCardID]!.childIDs || []
   for (const cardID of [requirementsCardID, designCardID, architectCardID]) {
-    expect(rootChildren).not.toContain(cardID);
-    expect(snapshot.order).toContain(cardID);
+    expect(rootChildren).not.toContain(cardID)
+    expect(snapshot.order).toContain(cardID)
   }
-  expect(snapshot.order).toContain(rootCardID);
-});
+  expect(snapshot.order).toContain(rootCardID)
+})
 
 test("executor sessions surface when they contain visible reasoning", () => {
   setBoardStore("board", {
@@ -146,12 +147,12 @@ test("executor sessions surface when they contain visible reasoning", () => {
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
-  resetWriter();
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
+  resetWriter()
 
-  const executorCardID = `executor:session:${EXECUTOR_SID}:message:msg_executor_reasoning`;
-  const reasoningPartID = "part_executor_reasoning";
+  const executorCardID = `executor:session:${EXECUTOR_SID}:message:msg_executor_reasoning`
+  const reasoningPartID = "part_executor_reasoning"
   applyEvent({
     type: "message.updated",
     properties: {
@@ -165,9 +166,9 @@ test("executor sessions surface when they contain visible reasoning", () => {
         time: { created: 1_776_000_001_000 },
       }),
     },
-  });
+  })
 
-  expect(cardTreeStore.order).not.toContain(executorCardID);
+  expect(cardTreeStore.order).not.toContain(executorCardID)
 
   applyEvent({
     type: "message.part.updated",
@@ -181,8 +182,8 @@ test("executor sessions surface when they contain visible reasoning", () => {
         text: "",
       }),
     },
-  });
-  expect(cardTreeStore.order).not.toContain(executorCardID);
+  })
+  expect(cardTreeStore.order).not.toContain(executorCardID)
 
   applyEvent({
     type: "message.part.delta",
@@ -194,16 +195,16 @@ test("executor sessions surface when they contain visible reasoning", () => {
       field: "text",
       delta: "thinking through the executor path",
     },
-  });
-  flushBufferedPartDeltas();
+  })
+  flushBufferedPartDeltas()
 
-  expect(cardTreeStore.order).toContain(executorCardID);
+  expect(cardTreeStore.order).toContain(executorCardID)
   expect(
     cardTreeStore.cards[executorCardID]?.parts.some(
       (part: any) => part.type === "reasoning" && part.text.includes("executor path"),
     ),
-  ).toBe(true);
-});
+  ).toBe(true)
+})
 
 test("non-goal sub-agent sessions surface at top level, not under their parent session", () => {
   setBoardStore("board", {
@@ -217,9 +218,9 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
-  resetWriter();
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
+  resetWriter()
 
   applyEvent({
     type: "message.updated",
@@ -234,7 +235,7 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
         time: { created: 1_776_000_000_000 },
       }),
     },
-  });
+  })
   applyEvent({
     type: "message.updated",
     properties: {
@@ -249,18 +250,18 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
         time: { created: 1_776_000_001_000 },
       }),
     },
-  });
+  })
 
-  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root`;
-  const architectCardID = "architect:session:ses_architect:message:msg_architect";
+  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root`
+  const architectCardID = "architect:session:ses_architect:message:msg_architect"
 
-  expect(cardTreeStore.order).toContain(rootCardID);
-  expect(cardTreeStore.order).toContain(architectCardID);
-  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(architectCardID);
-});
+  expect(cardTreeStore.order).toContain(rootCardID)
+  expect(cardTreeStore.order).toContain(architectCardID)
+  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(architectCardID)
+})
 
 test("follow-up user sessions render as plain user bubbles without boundary chrome", () => {
-  const USER_SID = "ses_user_followup";
+  const USER_SID = "ses_user_followup"
 
   setBoardStore("board", {
     task: {
@@ -273,9 +274,9 @@ test("follow-up user sessions render as plain user bubbles without boundary chro
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
-  resetWriter();
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
+  resetWriter()
 
   applyEvent({
     type: "message.updated",
@@ -290,7 +291,7 @@ test("follow-up user sessions render as plain user bubbles without boundary chro
         time: { created: 1_776_000_001_000 },
       }),
     },
-  });
+  })
   applyEvent({
     type: "message.part.updated",
     properties: {
@@ -303,20 +304,20 @@ test("follow-up user sessions render as plain user bubbles without boundary chro
         text: "继续",
       }),
     },
-  });
+  })
 
-  const userCardID = `user:session:${USER_SID}:message:msg_user_followup`;
-  const userCard = cardTreeStore.cards[userCardID];
+  const userCardID = `user:session:${USER_SID}:message:msg_user_followup`
+  const userCard = cardTreeStore.cards[userCardID]
 
-  expect(userCard).toBeDefined();
-  expect(userCard?.kind).toBe("message");
-  expect(userCard?.role).toBe("user");
-  expect((userCard?.parts || []).map((part) => part.type)).toEqual(["text"]);
-  expect(cardTreeStore.order).toContain(userCardID);
-});
+  expect(userCard).toBeDefined()
+  expect(userCard?.kind).toBe("message")
+  expect(userCard?.role).toBe("user")
+  expect((userCard?.parts || []).map((part) => part.type)).toEqual(["text"])
+  expect(cardTreeStore.order).toContain(userCardID)
+})
 
 test("tree-writer preserves step summaries and payloads from board.goalWorkflows", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -346,8 +347,8 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
               buildSessionID: BUILD_SID,
             },
             phases: {
-              plan:     { status: "completed", startedAt: 1_776_000_001_000, completedAt: 1_776_000_001_500 },
-              build:    { status: "running",   startedAt: 1_776_000_001_500 },
+              plan: { status: "completed", startedAt: 1_776_000_001_000, completedAt: 1_776_000_001_500 },
+              build: { status: "running", startedAt: 1_776_000_001_500 },
               evaluate: { status: "pending" },
             },
           },
@@ -355,32 +356,32 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
       },
     ],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
   applyEvent({
     type: "task.updated",
     properties: {
       taskID: TASK_ID,
       task: { id: TASK_ID, goalWorkflows: [] },
     },
-  });
+  })
 
-  const stepCardID = `step:${GOAL_ID}:build`; // W2-V26: format reverted 2026-04-26 to attempt-invariant (drop :goalRunID:)
+  const stepCardID = `step:${GOAL_ID}:build` // W2-V26: format reverted 2026-04-26 to attempt-invariant (drop :goalRunID:)
   // Step headers no longer duplicate the summary into `subtitle`; the
   // summary lives in the structured step payload instead.
-  expect(cardTreeStore.cards[stepCardID]?.subtitle).toBeUndefined();
-  expect(cardTreeStore.cards[stepCardID]?.title).toBe("Scaffold project");
-  expect(cardTreeStore.cards[stepCardID]?.round).toBe(1);
-  expect(cardTreeStore.cards[stepCardID]?.stepID).toBe("build");
-  expect(cardTreeStore.cards[stepCardID]?.goalID).toBe(GOAL_ID);
-  expect(cardTreeStore.cards[stepCardID]?.stepPayload?.buildSessionID).toBe(BUILD_SID);
-  expect(cardTreeStore.cards[stepCardID]?.stepPayload?.planNodes?.[0]?.title).toBe("Create shell");
+  expect(cardTreeStore.cards[stepCardID]?.subtitle).toBeUndefined()
+  expect(cardTreeStore.cards[stepCardID]?.title).toBe("Scaffold project")
+  expect(cardTreeStore.cards[stepCardID]?.round).toBe(1)
+  expect(cardTreeStore.cards[stepCardID]?.stepID).toBe("build")
+  expect(cardTreeStore.cards[stepCardID]?.goalID).toBe(GOAL_ID)
+  expect(cardTreeStore.cards[stepCardID]?.stepPayload?.buildSessionID).toBe(BUILD_SID)
+  expect(cardTreeStore.cards[stepCardID]?.stepPayload?.planNodes?.[0]?.title).toBe("Create shell")
   // §6.4 negative guard — worktree was demoted from step payload to the
   // goal-level workspaceDir/workspaceBranch (board.ts projection). The
   // copied step payload must not regrow it; otherwise the wire-collapse
   // gets silently undone (rule 8 — single source).
-  expect(Object.keys(cardTreeStore.cards[stepCardID]?.stepPayload ?? {})).not.toContain("workspaceDir");
-});
+  expect(Object.keys(cardTreeStore.cards[stepCardID]?.stepPayload ?? {})).not.toContain("workspaceDir")
+})
 
 test("tree-writer projects interactions into session children and top-level cards", () => {
   setBoardStore("board", {
@@ -412,9 +413,9 @@ test("tree-writer projects interactions into session children and top-level card
         time: { created: 1_776_000_002_000 },
       },
     ],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
-  resetWriter();
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
+  resetWriter()
 
   applyEvent({
     type: "message.updated",
@@ -429,31 +430,31 @@ test("tree-writer projects interactions into session children and top-level card
         time: { created: 1_776_000_000_500 },
       }),
     },
-  });
+  })
 
-  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root_interaction`;
-  const claimedCardID = "interaction-card:ctx:interaction:int_claimed";
-  const orphanCardID = "interaction-card:ctx:interaction:int_orphan";
+  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root_interaction`
+  const claimedCardID = "interaction-card:ctx:interaction:int_claimed"
+  const orphanCardID = "interaction-card:ctx:interaction:int_orphan"
 
-  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).toContain(claimedCardID);
-  expect(cardTreeStore.order).toContain(orphanCardID);
-  expect(cardTreeStore.cards[claimedCardID]?.parts?.[0]?.type).toBe("interaction-permission");
-  expect(cardTreeStore.cards[orphanCardID]?.parts?.[0]?.type).toBe("interaction-question");
-});
+  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).toContain(claimedCardID)
+  expect(cardTreeStore.order).toContain(orphanCardID)
+  expect(cardTreeStore.cards[claimedCardID]?.parts?.[0]?.type).toBe("interaction-permission")
+  expect(cardTreeStore.cards[orphanCardID]?.parts?.[0]?.type).toBe("interaction-question")
+})
 
 test("tree-writer projects raw Mission question events into the session card", () => {
-  const MISSION_SID = "ses_mission_question";
-  const QUESTION_ID = "que_mission_stack";
+  const MISSION_SID = "ses_mission_question"
+  const QUESTION_ID = "que_mission_stack"
   setBoardStore("board", {
     kind: "session",
     sessionID: MISSION_SID,
     status: "active",
     title: "Mission Control",
     directory: "D:/repo",
-  });
-  setBoardStore("selectedSource", { kind: "session", id: MISSION_SID });
-  setBoardStore("selectedTaskID", "");
-  resetWriter();
+  })
+  setBoardStore("selectedSource", { kind: "session", id: MISSION_SID })
+  setBoardStore("selectedTaskID", "")
+  resetWriter()
 
   applyEvent({
     type: "message.updated",
@@ -468,7 +469,7 @@ test("tree-writer projects raw Mission question events into the session card", (
         time: { created: 1_780_500_000_000 },
       }),
     },
-  });
+  })
 
   applyEvent({
     type: "question.asked",
@@ -485,17 +486,17 @@ test("tree-writer projects raw Mission question events into the session card", (
       ],
       tool: { messageID: "msg_mission_question", callID: "call_question" },
     },
-  });
+  })
 
-  const missionCardID = `mission:session:${MISSION_SID}:message:msg_mission_question`;
-  const questionCardID = `interaction-card:ctx:interaction:${QUESTION_ID}`;
-  const questionPart = cardTreeStore.cards[questionCardID]?.parts?.[0] as any;
+  const missionCardID = `mission:session:${MISSION_SID}:message:msg_mission_question`
+  const questionCardID = `interaction-card:ctx:interaction:${QUESTION_ID}`
+  const questionPart = cardTreeStore.cards[questionCardID]?.parts?.[0] as any
 
-  expect(cardTreeStore.cards[missionCardID]?.childIDs || []).toContain(questionCardID);
-  expect(questionPart?.type).toBe("interaction-question");
-  expect(questionPart?.interaction?.replyEndpoint).toBe("question");
-  expect(questionPart?.interaction?.payload?.questions?.[0]?.header).toBe("Tech Stack");
-});
+  expect(cardTreeStore.cards[missionCardID]?.childIDs || []).toContain(questionCardID)
+  expect(questionPart?.type).toBe("interaction-question")
+  expect(questionPart?.interaction?.replyEndpoint).toBe("question")
+  expect(questionPart?.interaction?.payload?.questions?.[0]?.header).toBe("Tech Stack")
+})
 
 test("tree-writer does not duplicate task questions from raw question events", () => {
   setBoardStore("board", {
@@ -509,10 +510,10 @@ test("tree-writer does not duplicate task questions from raw question events", (
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedSource", { kind: "task", id: TASK_ID });
-  setBoardStore("selectedTaskID", TASK_ID);
-  resetWriter();
+  })
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
+  setBoardStore("selectedTaskID", TASK_ID)
+  resetWriter()
 
   applyEvent({
     type: "question.asked",
@@ -522,10 +523,10 @@ test("tree-writer does not duplicate task questions from raw question events", (
       sessionID: ROOT_SID,
       questions: [{ header: "Task", question: "Should not render raw?" }],
     },
-  });
+  })
 
-  expect(cardTreeStore.cards["interaction-card:ctx:interaction:que_task_normalized_elsewhere"]).toBeUndefined();
-});
+  expect(cardTreeStore.cards["interaction-card:ctx:interaction:que_task_normalized_elsewhere"]).toBeUndefined()
+})
 
 test("root assistant session with parentSessionID pointing to task-virtual root surfaces at top level", () => {
   // Mirrors real backend shape (task-message-protocol-bridge.ts stamps
@@ -534,10 +535,10 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
   // emits any message.updated). Regression guard for the Step 2 rewrite
   // that initially hid the root assistant behind a pending-parent check
   // and left the overlay completely blank.
-  const TASK_VIRTUAL_SID = "ses_task_virtual_root";
-  const ROOT_ASSISTANT_SID = "ses_real_assistant";
+  const TASK_VIRTUAL_SID = "ses_task_virtual_root"
+  const ROOT_ASSISTANT_SID = "ses_real_assistant"
 
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -549,8 +550,8 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
   applyEvent({
     type: "message.updated",
@@ -566,15 +567,15 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
         time: { created: 1_776_000_000_500 },
       }),
     },
-  });
+  })
 
-  const rootCardID = `assistant:session:${ROOT_ASSISTANT_SID}:message:msg_root`;
-  expect(cardTreeStore.cards[rootCardID]).toBeDefined();
-  expect(cardTreeStore.order).toContain(rootCardID);
-});
+  const rootCardID = `assistant:session:${ROOT_ASSISTANT_SID}:message:msg_root`
+  expect(cardTreeStore.cards[rootCardID]).toBeDefined()
+  expect(cardTreeStore.order).toContain(rootCardID)
+})
 
 test("channel-stamped part.updated materializes the correct session card immediately", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -586,8 +587,8 @@ test("channel-stamped part.updated materializes the correct session card immedia
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
   // A message.part.updated arrives before any message.updated for this
   // session (high-cadence streaming race). Because the fixture now carries
@@ -606,12 +607,12 @@ test("channel-stamped part.updated materializes the correct session card immedia
         parentSessionID: ROOT_SID,
       }),
     },
-  });
+  })
 
-  const plannerRaceCardID = "planner:session:ses_race:message:msg_race";
-  expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined();
-  expect(cardTreeStore.cards[plannerRaceCardID]).toBeDefined();
-  expect(cardTreeStore.order).toContain(plannerRaceCardID);
+  const plannerRaceCardID = "planner:session:ses_race:message:msg_race"
+  expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined()
+  expect(cardTreeStore.cards[plannerRaceCardID]).toBeDefined()
+  expect(cardTreeStore.order).toContain(plannerRaceCardID)
 
   // Once message.updated arrives, the same planner turn card stays put.
   applyEvent({
@@ -628,7 +629,7 @@ test("channel-stamped part.updated materializes the correct session card immedia
         time: { created: 1_776_000_001_000 },
       }),
     },
-  });
+  })
   applyEvent({
     type: "message.updated",
     properties: {
@@ -642,18 +643,16 @@ test("channel-stamped part.updated materializes the correct session card immedia
         time: { created: 1_776_000_000_500 },
       }),
     },
-  });
+  })
 
-  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root`;
-  expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined();
-  expect(cardTreeStore.cards[plannerRaceCardID]).toBeDefined();
-  expect(cardTreeStore.order).toContain(rootCardID);
+  const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root`
+  expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined()
+  expect(cardTreeStore.cards[plannerRaceCardID]).toBeDefined()
+  expect(cardTreeStore.order).toContain(rootCardID)
   // Planner is now a top-level sibling of the root assistant, not a child.
-  expect(cardTreeStore.order).toContain(plannerRaceCardID);
-  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(
-    plannerRaceCardID,
-  );
-});
+  expect(cardTreeStore.order).toContain(plannerRaceCardID)
+  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(plannerRaceCardID)
+})
 
 // ── Integrity review (renamed from "fidelity" 2026-04+) ──
 //
@@ -666,7 +665,7 @@ test("channel-stamped part.updated materializes the correct session card immedia
 // lifecycle; completed integrity verdicts remain phase-specific.
 
 test("integrity completed event materializes an integrity session card with structured verdict", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -678,8 +677,8 @@ test("integrity completed event materializes an integrity session card with stru
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
   applyEvent({
     type: "integrity.review.completed",
@@ -691,29 +690,63 @@ test("integrity completed event materializes an integrity session card with stru
       summary: "team found a blocking gap",
       teamReportMarkdown: "Blocking: missing goal X",
       reviewers: [
-        { reviewerID: "completion", scope: "completion", verdict: "needs_correction", summary: "missing goal X", evidence: ["request asks X"], findings: [], openQuestions: [] },
-        { reviewerID: "runtime", scope: "runtime", verdict: "pass", summary: "no runtime issue", evidence: [], findings: [], openQuestions: [] },
+        {
+          reviewerID: "completion",
+          scope: "completion",
+          verdict: "needs_correction",
+          summary: "missing goal X",
+          evidence: ["request asks X"],
+          findings: [],
+          openQuestions: [],
+        },
+        {
+          reviewerID: "runtime",
+          scope: "runtime",
+          verdict: "pass",
+          summary: "no runtime issue",
+          evidence: [],
+          findings: [],
+          openQuestions: [],
+        },
       ],
-      findings: [{ id: "missing-x", severity: "blocking", verdictImpact: "needs_correction", title: "Missing X", description: "missing goal X", evidence: ["request asks X"], targetIDs: [], requirementIDs: [], specIDs: [], filePaths: [], repair: "Add X", reviewers: ["completion"], consensus: "agreed" }],
+      findings: [
+        {
+          id: "missing-x",
+          severity: "blocking",
+          verdictImpact: "needs_correction",
+          title: "Missing X",
+          description: "missing goal X",
+          evidence: ["request asks X"],
+          targetIDs: [],
+          requirementIDs: [],
+          specIDs: [],
+          filePaths: [],
+          repair: "Add X",
+          reviewers: ["completion"],
+          consensus: "agreed",
+        },
+      ],
       rounds: [],
-      requiredRepairs: [{ id: "repair-x", description: "Add X", evidence: ["request asks X"], targetIDs: [], filePaths: [] }],
+      requiredRepairs: [
+        { id: "repair-x", description: "Add X", evidence: ["request asks X"], targetIDs: [], filePaths: [] },
+      ],
       unresolvedDisagreements: [],
       attempts: 1,
     },
-  });
+  })
 
-  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
-  expect(cardTreeStore.cards[integrityCardID]).toBeDefined();
-  expect(cardTreeStore.cards[integrityCardID]?.kind).toBe("agent");
-  expect(cardTreeStore.cards[integrityCardID]?.stage).toBe("integrity");
-  expect(cardTreeStore.cards[integrityCardID]?.integrity?.verdict).toBe("needs_correction");
-  expect(cardTreeStore.cards[integrityCardID]?.integrity?.findings?.[0]?.id).toBe("missing-x");
-  expect(cardTreeStore.cards[integrityCardID]?.integrity?.requiredRepairs?.[0]?.id).toBe("repair-x");
-  expect(cardTreeStore.order).toContain(integrityCardID);
-});
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`
+  expect(cardTreeStore.cards[integrityCardID]).toBeDefined()
+  expect(cardTreeStore.cards[integrityCardID]?.kind).toBe("agent")
+  expect(cardTreeStore.cards[integrityCardID]?.stage).toBe("integrity")
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.verdict).toBe("needs_correction")
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.findings?.[0]?.id).toBe("missing-x")
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.requiredRepairs?.[0]?.id).toBe("repair-x")
+  expect(cardTreeStore.order).toContain(integrityCardID)
+})
 
 test("integrity completed event can materialize before any message stream arrives", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -725,8 +758,8 @@ test("integrity completed event can materialize before any message stream arrive
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
   // The protocol event itself carries enough identity to create the
   // integrity session card even before any message/part stream arrives.
@@ -740,8 +773,24 @@ test("integrity completed event can materialize before any message stream arrive
       summary: "all clean",
       teamReportMarkdown: "No findings.",
       reviewers: [
-        { reviewerID: "completion", scope: "completion", verdict: "pass", summary: "complete", evidence: [], findings: [], openQuestions: [] },
-        { reviewerID: "runtime", scope: "runtime", verdict: "pass", summary: "runtime ok", evidence: [], findings: [], openQuestions: [] },
+        {
+          reviewerID: "completion",
+          scope: "completion",
+          verdict: "pass",
+          summary: "complete",
+          evidence: [],
+          findings: [],
+          openQuestions: [],
+        },
+        {
+          reviewerID: "runtime",
+          scope: "runtime",
+          verdict: "pass",
+          summary: "runtime ok",
+          evidence: [],
+          findings: [],
+          openQuestions: [],
+        },
       ],
       findings: [],
       rounds: [],
@@ -749,17 +798,17 @@ test("integrity completed event can materialize before any message stream arrive
       unresolvedDisagreements: [],
       attempts: 1,
     },
-  });
+  })
 
-  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
-  expect(cardTreeStore.cards[integrityCardID]).toBeDefined();
-  expect(cardTreeStore.cards[integrityCardID]?.status).toBe("completed");
-  expect(cardTreeStore.cards[integrityCardID]?.integrity?.verdict).toBe("pass");
-  expect(cardTreeStore.order).toContain(integrityCardID);
-});
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`
+  expect(cardTreeStore.cards[integrityCardID]).toBeDefined()
+  expect(cardTreeStore.cards[integrityCardID]?.status).toBe("completed")
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.verdict).toBe("pass")
+  expect(cardTreeStore.order).toContain(integrityCardID)
+})
 
 test("integrity event missing sessionID throws (schema became required)", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -771,8 +820,8 @@ test("integrity event missing sessionID throws (schema became required)", () => 
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
   expect(() =>
     applyEvent({
@@ -791,8 +840,8 @@ test("integrity event missing sessionID throws (schema became required)", () => 
         attempts: 0,
       },
     }),
-  ).toThrow(/missing sessionID/);
-});
+  ).toThrow(/missing sessionID/)
+})
 
 test("integrity progress no longer writes elapsed string into subtitle", () => {
   // 2026-05-11: previously tree-writer composed `"Xm Ys elapsed"` (and
@@ -800,7 +849,7 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
   // subtitle every 20s. That double-sourced the elapsed UX against
   // CardHeader's `.card__duration` chip. Subtitle now carries only the
   // attempt label; CardHeader owns the live elapsed string.
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -812,8 +861,8 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
   applyEvent({
     type: "review.stream.started",
@@ -824,7 +873,7 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
       phase: "integrity",
       sessionID: INTEGRITY_SID,
     },
-  });
+  })
   applyEvent({
     type: "review.stream.progress",
     emittedAt: 1_776_000_021_000,
@@ -836,14 +885,14 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
       attempt: 0,
       elapsedMs: 20_000,
     },
-  });
+  })
 
-  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
-  const beforeRetry = cardTreeStore.cards[integrityCardID];
-  expect(beforeRetry).toBeDefined();
-  expect(beforeRetry!.status).toBe("running");
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`
+  const beforeRetry = cardTreeStore.cards[integrityCardID]
+  expect(beforeRetry).toBeDefined()
+  expect(beforeRetry!.status).toBe("running")
   // attempt 0 → no subtitle at all.
-  expect(beforeRetry!.subtitle).toBeUndefined();
+  expect(beforeRetry!.subtitle).toBeUndefined()
 
   applyEvent({
     type: "review.stream.progress",
@@ -856,23 +905,23 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
       attempt: 2,
       elapsedMs: 100_000,
     },
-  });
+  })
 
-  const afterRetry = cardTreeStore.cards[integrityCardID]!;
+  const afterRetry = cardTreeStore.cards[integrityCardID]!
   // Subtitle reflects the retry attempt; nothing about elapsed time.
   // In the test harness `t()` returns the key verbatim because no
   // locale bundle is loaded — that's still adequate to prove the
   // tree-writer no longer composes an elapsed string.
-  expect(afterRetry.subtitle).toBeDefined();
-  expect(afterRetry.subtitle).not.toContain("elapsed");
-  expect(afterRetry.subtitle).toContain("integrity.attempt_label");
+  expect(afterRetry.subtitle).toBeDefined()
+  expect(afterRetry.subtitle).not.toContain("elapsed")
+  expect(afterRetry.subtitle).toContain("integrity.attempt_label")
   // `time` is set from the started event so CardHeader can subtract from
   // the shared 1Hz tick to display the running duration.
-  expect(afterRetry.time).toBe(1_776_000_001_000);
-});
+  expect(afterRetry.time).toBe(1_776_000_001_000)
+})
 
 test("integrity reasoning chunks append byte-identical text without changing the rendered part shape", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -884,8 +933,8 @@ test("integrity reasoning chunks append byte-identical text without changing the
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
   applyEvent({
     type: "review.stream.started",
@@ -896,7 +945,7 @@ test("integrity reasoning chunks append byte-identical text without changing the
       phase: "integrity",
       sessionID: INTEGRITY_SID,
     },
-  });
+  })
 
   for (const delta of ["plan ", "then ", "verify"]) {
     applyEvent({
@@ -910,23 +959,23 @@ test("integrity reasoning chunks append byte-identical text without changing the
         attempt: 1,
         delta,
       },
-    });
+    })
   }
 
-  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
-  const part = cardTreeStore.cards[integrityCardID]?.parts.find((entry: any) =>
-    entry?.partID === `review:integrity:${INTEGRITY_SID}:reasoning:1`
-  );
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`
+  const part = cardTreeStore.cards[integrityCardID]?.parts.find(
+    (entry: any) => entry?.partID === `review:integrity:${INTEGRITY_SID}:reasoning:1`,
+  )
   expect(part).toEqual({
     type: "reasoning",
     partID: `review:integrity:${INTEGRITY_SID}:reasoning:1`,
     text: "plan then verify",
-  });
-  expect(String(part?.text || "")).toBe("plan then verify");
-});
+  })
+  expect(String(part?.text || "")).toBe("plan then verify")
+})
 
 test("resetWriter clears integrity session cards materialized from protocol events", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -938,8 +987,8 @@ test("resetWriter clears integrity session cards materialized from protocol even
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
   applyEvent({
     type: "integrity.review.completed",
@@ -951,8 +1000,24 @@ test("resetWriter clears integrity session cards materialized from protocol even
       summary: "",
       teamReportMarkdown: "No findings.",
       reviewers: [
-        { reviewerID: "completion", scope: "completion", verdict: "pass", summary: "complete", evidence: [], findings: [], openQuestions: [] },
-        { reviewerID: "runtime", scope: "runtime", verdict: "pass", summary: "runtime ok", evidence: [], findings: [], openQuestions: [] },
+        {
+          reviewerID: "completion",
+          scope: "completion",
+          verdict: "pass",
+          summary: "complete",
+          evidence: [],
+          findings: [],
+          openQuestions: [],
+        },
+        {
+          reviewerID: "runtime",
+          scope: "runtime",
+          verdict: "pass",
+          summary: "runtime ok",
+          evidence: [],
+          findings: [],
+          openQuestions: [],
+        },
       ],
       findings: [],
       rounds: [],
@@ -960,16 +1025,16 @@ test("resetWriter clears integrity session cards materialized from protocol even
       unresolvedDisagreements: [],
       attempts: 1,
     },
-  });
+  })
 
-  resetWriter();
+  resetWriter()
 
-  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
-  expect(cardTreeStore.cards[integrityCardID]).toBeUndefined();
-});
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`
+  expect(cardTreeStore.cards[integrityCardID]).toBeUndefined()
+})
 
 test("tree-writer explicitly accepts non-projected protocol events", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -981,11 +1046,11 @@ test("tree-writer explicitly accepts non-projected protocol events", () => {
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
-  const beforeOrder = [...cardTreeStore.order];
-  const beforeCards = Object.keys(cardTreeStore.cards);
+  const beforeOrder = [...cardTreeStore.order]
+  const beforeCards = Object.keys(cardTreeStore.cards)
   const events = [
     { type: "spec.created", properties: { taskID: TASK_ID, specID: "spec_1", summary: "drafted" } },
     { type: "spec.updated", properties: { taskID: TASK_ID, specID: "spec_1", status: "active", summary: "updated" } },
@@ -993,22 +1058,25 @@ test("tree-writer explicitly accepts non-projected protocol events", () => {
     { type: "milestone.activated", properties: { taskID: TASK_ID, milestoneID: "ms_1", summary: "active" } },
     { type: "milestone.passed", properties: { taskID: TASK_ID, milestoneID: "ms_1", summary: "passed" } },
     { type: "milestone.failed", properties: { taskID: TASK_ID, milestoneID: "ms_2", summary: "failed" } },
-    { type: "message.injected", properties: { taskID: TASK_ID, runID: "run_1", text: "continue", summary: "injected" } },
+    {
+      type: "message.injected",
+      properties: { taskID: TASK_ID, runID: "run_1", text: "continue", summary: "injected" },
+    },
     { type: "agent.updated", properties: { taskID: TASK_ID, stage: "executor", summary: "heartbeat" } },
     { type: "session.created", properties: { info: { id: "ses_created" } } },
     { type: "session.updated", properties: { info: { id: "ses_updated" } } },
     { type: "session.deleted", properties: { info: { id: "ses_deleted" } } },
     { type: "session.diff", properties: { sessionID: "ses_diff", diff: [] } },
-  ];
+  ]
 
-  for (const event of events) applyEvent(event);
+  for (const event of events) applyEvent(event)
 
-  expect(cardTreeStore.order).toEqual(beforeOrder);
-  expect(Object.keys(cardTreeStore.cards)).toEqual(beforeCards);
-});
+  expect(cardTreeStore.order).toEqual(beforeOrder)
+  expect(Object.keys(cardTreeStore.cards)).toEqual(beforeCards)
+})
 
 test("session.status preserves terminal reason when status arrives before the card", () => {
-  resetWriter();
+  resetWriter()
 
   applyEvent({
     type: "session.status",
@@ -1017,7 +1085,7 @@ test("session.status preserves terminal reason when status arrives before the ca
       sessionID: "ses_pending_terminal",
       status: { type: "terminal", reason: "aborted" },
     },
-  });
+  })
 
   applyEvent({
     type: "message.updated",
@@ -1029,17 +1097,17 @@ test("session.status preserves terminal reason when status arrives before the ca
         time: { created: 1_776_000_009_000 },
       }),
     },
-  });
+  })
 
-  const card = cardTreeStore.cards["requirements:session:ses_pending_terminal:message:msg_pending_terminal"]!;
-  expect(card.status).toBe("error");
-  expect(card.terminalReason).toBe("aborted");
-  expect(card.timeCompleted).toBe(1_776_000_010_000);
-  expect(statusBadge(card)).toEqual({ tone: "cancelled", glyph: "⊘" });
-});
+  const card = cardTreeStore.cards["requirements:session:ses_pending_terminal:message:msg_pending_terminal"]!
+  expect(card.status).toBe("error")
+  expect(card.terminalReason).toBe("aborted")
+  expect(card.timeCompleted).toBe(1_776_000_010_000)
+  expect(statusBadge(card)).toEqual({ tone: "cancelled", glyph: "⊘" })
+})
 
 test("session.status materializes frontend research card when preparation fails before any message", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -1051,11 +1119,11 @@ test("session.status materializes frontend research card when preparation fails 
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
-  const sessionID = "ses_frontend_research_prepare_failed";
-  const cardID = `frontend-research:session:${sessionID}`;
+  const sessionID = "ses_frontend_research_prepare_failed"
+  const cardID = `frontend-research:session:${sessionID}`
   applyEvent({
     type: "session.status",
     emittedAt: 1_776_000_010_000,
@@ -1070,22 +1138,22 @@ test("session.status materializes frontend research card when preparation fails 
         error: "Node runtime state capture failed during navigate: page.goto timeout",
       },
     },
-  });
+  })
 
-  const card = cardTreeStore.cards[cardID]!;
-  expect(card).toBeDefined();
-  expect(card.kind).toBe("agent");
-  expect(card.sessionID).toBe(sessionID);
-  expect(card.messageID).toBeUndefined();
-  expect(card.stage).toBe("frontend-research");
-  expect(card.status).toBe("error");
-  expect(card.terminalReason).toBe("error");
-  expect(card.errorReason).toContain("page.goto timeout");
-  expect(cardTreeStore.order).toContain(cardID);
-});
+  const card = cardTreeStore.cards[cardID]!
+  expect(card).toBeDefined()
+  expect(card.kind).toBe("agent")
+  expect(card.sessionID).toBe(sessionID)
+  expect(card.messageID).toBeUndefined()
+  expect(card.stage).toBe("frontend-research")
+  expect(card.status).toBe("error")
+  expect(card.terminalReason).toBe("error")
+  expect(card.errorReason).toContain("page.goto timeout")
+  expect(cardTreeStore.order).toContain(cardID)
+})
 
 test("message arrival migrates lifecycle-only frontend card without leaving a duplicate", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -1097,12 +1165,12 @@ test("message arrival migrates lifecycle-only frontend card without leaving a du
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
-  const sessionID = "ses_frontend_design_lifecycle";
-  const lifecycleCardID = `frontend-design:session:${sessionID}`;
-  const messageCardID = `frontend-design:session:${sessionID}:message:msg_frontend_design_lifecycle`;
+  const sessionID = "ses_frontend_design_lifecycle"
+  const lifecycleCardID = `frontend-design:session:${sessionID}`
+  const messageCardID = `frontend-design:session:${sessionID}:message:msg_frontend_design_lifecycle`
 
   applyEvent({
     type: "session.status",
@@ -1114,10 +1182,10 @@ test("message arrival migrates lifecycle-only frontend card without leaving a du
       parentSessionID: ROOT_SID,
       status: { type: "streaming" },
     },
-  });
+  })
 
-  expect(cardTreeStore.cards[lifecycleCardID]).toBeDefined();
-  expect(cardTreeStore.order).toContain(lifecycleCardID);
+  expect(cardTreeStore.cards[lifecycleCardID]).toBeDefined()
+  expect(cardTreeStore.order).toContain(lifecycleCardID)
 
   applyEvent({
     type: "message.updated",
@@ -1131,18 +1199,18 @@ test("message arrival migrates lifecycle-only frontend card without leaving a du
         time: { created: 1_776_000_002_000 },
       }),
     },
-  });
+  })
 
-  expect(cardTreeStore.cards[lifecycleCardID]).toBeUndefined();
-  expect(cardTreeStore.cards[messageCardID]).toBeDefined();
-  expect(cardTreeStore.cards[messageCardID]?.sessionID).toBe(sessionID);
-  expect(cardTreeStore.cards[messageCardID]?.messageID).toBe("msg_frontend_design_lifecycle");
-  expect(cardTreeStore.order).not.toContain(lifecycleCardID);
-  expect(cardTreeStore.order).toContain(messageCardID);
-});
+  expect(cardTreeStore.cards[lifecycleCardID]).toBeUndefined()
+  expect(cardTreeStore.cards[messageCardID]).toBeDefined()
+  expect(cardTreeStore.cards[messageCardID]?.sessionID).toBe(sessionID)
+  expect(cardTreeStore.cards[messageCardID]?.messageID).toBe("msg_frontend_design_lifecycle")
+  expect(cardTreeStore.order).not.toContain(lifecycleCardID)
+  expect(cardTreeStore.order).toContain(messageCardID)
+})
 
 test("session.error marks the session card with the original stream error", () => {
-  resetWriter();
+  resetWriter()
 
   applyEvent({
     type: "message.updated",
@@ -1154,7 +1222,7 @@ test("session.error marks the session card with the original stream error", () =
         time: { created: 1_776_000_009_000 },
       }),
     },
-  });
+  })
 
   applyEvent({
     type: "session.error",
@@ -1166,7 +1234,7 @@ test("session.error marks the session card with the original stream error", () =
         data: { message: "upstream closed while starting tool call" },
       },
     },
-  });
+  })
 
   applyEvent({
     type: "session.status",
@@ -1175,14 +1243,14 @@ test("session.error marks the session card with the original stream error", () =
       sessionID: "ses_stream_error",
       status: { type: "idle" },
     },
-  });
+  })
 
-  const card = cardTreeStore.cards["frontend-design:session:ses_stream_error:message:msg_stream_error"]!;
-  expect(card.status).toBe("error");
-  expect(card.terminalReason).toBe("error");
-  expect(card.errorReason).toBe("upstream closed while starting tool call");
-  expect(card.timeCompleted).toBe(1_776_000_010_000);
-});
+  const card = cardTreeStore.cards["frontend-design:session:ses_stream_error:message:msg_stream_error"]!
+  expect(card.status).toBe("error")
+  expect(card.terminalReason).toBe("error")
+  expect(card.errorReason).toBe("upstream closed while starting tool call")
+  expect(card.timeCompleted).toBe(1_776_000_010_000)
+})
 
 // ── Message-turn cards (2026-05-16) ──
 //
@@ -1203,184 +1271,402 @@ function seedTurnBoard(request: string): void {
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
-  resetWriter();
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
+  resetWriter()
 }
 
 test("orchestrator turns stay in one complete session card around child agents", () => {
-  seedTurnBoard("interleave turns");
+  seedTurnBoard("interleave turns")
 
-  const o1 = `assistant:session:${ROOT_SID}:message:msg_o1`;
-  const childCard = "architect:session:ses_child:message:msg_child";
-  const o2 = `assistant:session:${ROOT_SID}:message:msg_o2`;
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_o1`
+  const childCard = "architect:session:ses_child:message:msg_child"
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_o2`
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_o1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_100 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
-    id: "prt_o1", messageID: "msg_o1", sessionID: ROOT_SID, type: "text", text: "turn one" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_o1",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_o1",
+        messageID: "msg_o1",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "turn one",
+      }),
+    },
+  })
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("architect", {
-    id: "msg_child", sessionID: "ses_child", role: "assistant", resolvedRole: "architect", agent: "architect",
-    parentSessionID: ROOT_SID, time: { created: 1_776_000_000_200 } }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("architect", {
+        id: "msg_child",
+        sessionID: "ses_child",
+        role: "assistant",
+        resolvedRole: "architect",
+        agent: "architect",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_o2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_300 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
-    id: "prt_o2", messageID: "msg_o2", sessionID: ROOT_SID, type: "text", text: "turn two" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_o2",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_300 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_o2",
+        messageID: "msg_o2",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "turn two",
+      }),
+    },
+  })
 
-  const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2);
-  expect(ordered).toEqual([o1, childCard]);
+  const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2)
+  expect(ordered).toEqual([o1, childCard])
 
-  const o1Texts = (cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text);
-  expect(o1Texts).toContain("turn one");
-  expect(o1Texts).toContain("turn two");
-  expect(cardTreeStore.cards[o2]).toBeUndefined();
+  const o1Texts = (cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)
+  expect(o1Texts).toContain("turn one")
+  expect(o1Texts).toContain("turn two")
+  expect(cardTreeStore.cards[o2]).toBeUndefined()
 
-  expect(cardTreeStore.cards[o1]?.status).toBe("running");
-  expect(cardTreeStore.cards[o1]?.sessionID).toBe(ROOT_SID);
-  expect(cardTreeStore.cards[o1]?.messageID).toBe("msg_o1");
-});
+  expect(cardTreeStore.cards[o1]?.status).toBe("running")
+  expect(cardTreeStore.cards[o1]?.sessionID).toBe(ROOT_SID)
+  expect(cardTreeStore.cards[o1]?.messageID).toBe("msg_o1")
+})
 
 test("late child agent event does not split an already-arrived orchestrator session card", () => {
-  seedTurnBoard("out-of-order interleave turns");
+  seedTurnBoard("out-of-order interleave turns")
 
-  const o1 = `assistant:session:${ROOT_SID}:message:msg_late_o1`;
-  const childCard = "architect:session:ses_late_child:message:msg_late_child";
-  const o2 = `assistant:session:${ROOT_SID}:message:msg_late_o2`;
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_late_o1`
+  const childCard = "architect:session:ses_late_child:message:msg_late_child"
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_late_o2`
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_late_o1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_100 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
-    id: "prt_late_o1", messageID: "msg_late_o1", sessionID: ROOT_SID, type: "text", text: "turn one before late child" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_late_o1",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_late_o1",
+        messageID: "msg_late_o1",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "turn one before late child",
+      }),
+    },
+  })
 
   // The orchestrator resume event can reach the overlay before the child
   // agent's ephemeral message event even though the child belongs between
   // O1/O2 in the persisted message timeline.
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_late_o2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_300 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
-    id: "prt_late_o2", messageID: "msg_late_o2", sessionID: ROOT_SID, type: "text", text: "turn two after late child" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_late_o2",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_300 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_late_o2",
+        messageID: "msg_late_o2",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "turn two after late child",
+      }),
+    },
+  })
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("architect", {
-    id: "msg_late_child", sessionID: "ses_late_child", role: "assistant", resolvedRole: "architect", agent: "architect",
-    parentSessionID: ROOT_SID, time: { created: 1_776_000_000_200 } }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("architect", {
+        id: "msg_late_child",
+        sessionID: "ses_late_child",
+        role: "assistant",
+        resolvedRole: "architect",
+        agent: "architect",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
 
-  const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2);
-  expect(ordered).toEqual([o1, childCard]);
-  expect(cardTreeStore.cards[o2]).toBeUndefined();
-  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).toContain("turn two after late child");
-});
+  const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2)
+  expect(ordered).toEqual([o1, childCard])
+  expect(cardTreeStore.cards[o2]).toBeUndefined()
+  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).toContain("turn two after late child")
+})
 
 test("consecutive messages from the same agent stay in one card", () => {
-  seedTurnBoard("consecutive turns");
+  seedTurnBoard("consecutive turns")
 
-  const cardID = `assistant:session:${ROOT_SID}:message:msg_c1`;
-  const secondCardID = `assistant:session:${ROOT_SID}:message:msg_c2`;
+  const cardID = `assistant:session:${ROOT_SID}:message:msg_c1`
+  const secondCardID = `assistant:session:${ROOT_SID}:message:msg_c2`
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_c1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_100 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
-    id: "prt_c1", messageID: "msg_c1", sessionID: ROOT_SID, type: "text", text: "first consecutive turn" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_c1",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_c1",
+        messageID: "msg_c1",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "first consecutive turn",
+      }),
+    },
+  })
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_c2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_200 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
-    id: "prt_c2", messageID: "msg_c2", sessionID: ROOT_SID, type: "text", text: "second consecutive turn" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_c2",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_c2",
+        messageID: "msg_c2",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "second consecutive turn",
+      }),
+    },
+  })
 
-  expect(cardTreeStore.cards[cardID]).toBeDefined();
-  expect(cardTreeStore.cards[secondCardID]).toBeUndefined();
-  expect(cardTreeStore.order.filter((id) => id === cardID || id === secondCardID)).toEqual([cardID]);
+  expect(cardTreeStore.cards[cardID]).toBeDefined()
+  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
+  expect(cardTreeStore.order.filter((id) => id === cardID || id === secondCardID)).toEqual([cardID])
   expect((cardTreeStore.cards[cardID]?.parts || []).map((p: any) => p.text)).toEqual([
     "first consecutive turn",
     undefined,
     "second consecutive turn",
-  ]);
-  expect(cardTreeStore.cards[cardID]?.parts.some((p: any) => p.type === "boundary" && p.role === "assistant")).toBe(true);
-});
+  ])
+  expect(cardTreeStore.cards[cardID]?.parts.some((p: any) => p.type === "boundary" && p.role === "assistant")).toBe(
+    true,
+  )
+})
 
 test("repeated message.updated for the same agent message does not reset card start time", () => {
-  seedTurnBoard("stable message timer");
+  seedTurnBoard("stable message timer")
 
-  const cardID = "frontend-research:session:ses_timer_stable:message:msg_timer_stable";
+  const cardID = "frontend-research:session:ses_timer_stable:message:msg_timer_stable"
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("frontend-research", {
-    id: "msg_timer_stable",
-    sessionID: "ses_timer_stable",
-    role: "assistant",
-    resolvedRole: "frontend-research",
-    agent: "frontend-research",
-    parentSessionID: ROOT_SID,
-    time: { created: 1_776_000_000_100 },
-  }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("frontend-research", {
-    id: "prt_timer_stable",
-    messageID: "msg_timer_stable",
-    sessionID: "ses_timer_stable",
-    type: "text",
-    text: "initial research",
-  }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("frontend-research", {
+        id: "msg_timer_stable",
+        sessionID: "ses_timer_stable",
+        role: "assistant",
+        resolvedRole: "frontend-research",
+        agent: "frontend-research",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("frontend-research", {
+        id: "prt_timer_stable",
+        messageID: "msg_timer_stable",
+        sessionID: "ses_timer_stable",
+        type: "text",
+        text: "initial research",
+      }),
+    },
+  })
 
-  expect(cardTreeStore.cards[cardID]?.time).toBe(1_776_000_000_100);
+  expect(cardTreeStore.cards[cardID]?.time).toBe(1_776_000_000_100)
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("frontend-research", {
-    id: "msg_timer_stable",
-    sessionID: "ses_timer_stable",
-    role: "assistant",
-    resolvedRole: "frontend-research",
-    agent: "frontend-research",
-    parentSessionID: ROOT_SID,
-    time: { created: 1_776_000_012_000 },
-  }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("frontend-research", {
+        id: "msg_timer_stable",
+        sessionID: "ses_timer_stable",
+        role: "assistant",
+        resolvedRole: "frontend-research",
+        agent: "frontend-research",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_012_000 },
+      }),
+    },
+  })
 
-  expect(cardTreeStore.cards[cardID]?.time).toBe(1_776_000_000_100);
-  expect((cardTreeStore.cards[cardID]?.parts || []).map((part: any) => part.text)).toContain("initial research");
-});
+  expect(cardTreeStore.cards[cardID]?.time).toBe(1_776_000_000_100)
+  expect((cardTreeStore.cards[cardID]?.parts || []).map((part: any) => part.text)).toContain("initial research")
+})
 
-test("explore channel owns the card and in-card boundaries even when resolvedRole is stale", () => {
-  seedTurnBoard("explore card ownership");
+test("explore channel owns the card while resolvedRole owns in-card authorship", () => {
+  seedTurnBoard("explore card ownership")
 
-  const cardID = "explore:session:ses_explore_mixed:message:msg_explore_1";
-  const secondCardID = "explore:session:ses_explore_mixed:message:msg_explore_2";
+  const cardID = "explore:session:ses_explore_mixed:message:msg_explore_1"
+  const secondCardID = "explore:session:ses_explore_mixed:message:msg_explore_2"
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("explore", {
-    id: "msg_explore_1", sessionID: "ses_explore_mixed", role: "user", resolvedRole: "orchestrator", agent: "build",
-    parentSessionID: ROOT_SID, time: { created: 1_776_000_000_100 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("explore", {
-    id: "prt_explore_1", messageID: "msg_explore_1", sessionID: "ses_explore_mixed", type: "text", text: "inspect repo" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("explore", {
+        id: "msg_explore_1",
+        sessionID: "ses_explore_mixed",
+        role: "user",
+        resolvedRole: "orchestrator",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("explore", {
+        id: "prt_explore_1",
+        messageID: "msg_explore_1",
+        sessionID: "ses_explore_mixed",
+        type: "text",
+        text: "inspect repo",
+      }),
+    },
+  })
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("explore", {
-    id: "msg_explore_2", sessionID: "ses_explore_mixed", role: "assistant", resolvedRole: "orchestrator", agent: "build",
-    parentSessionID: ROOT_SID, time: { created: 1_776_000_000_200 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("explore", {
-    id: "prt_explore_2", messageID: "msg_explore_2", sessionID: "ses_explore_mixed", type: "text", text: "repo inspected" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("explore", {
+        id: "msg_explore_2",
+        sessionID: "ses_explore_mixed",
+        role: "assistant",
+        resolvedRole: "orchestrator",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("explore", {
+        id: "prt_explore_2",
+        messageID: "msg_explore_2",
+        sessionID: "ses_explore_mixed",
+        type: "text",
+        text: "repo inspected",
+      }),
+    },
+  })
 
-  const card = cardTreeStore.cards[cardID];
-  expect(card).toBeDefined();
-  expect(cardTreeStore.cards[secondCardID]).toBeUndefined();
-  expect(card?.stage).toBe("explore");
-  expect(card?.title).toBe("chat.role.explore");
-  expect(card?.parts.map((part: any) => part.text)).toEqual([
-    "inspect repo",
-    undefined,
-    "repo inspected",
-  ]);
-  expect(card?.parts.some((part: any) => part.type === "boundary" && part.role === "explore")).toBe(true);
-});
+  const card = cardTreeStore.cards[cardID]
+  expect(card).toBeDefined()
+  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
+  expect(card?.stage).toBe("explore")
+  expect(card?.title).toBe("chat.role.explore")
+  expect(card?.parts.map((part: any) => part.text)).toEqual(["inspect repo", undefined, "repo inspected"])
+  expect(card?.parts.some((part: any) => part.type === "boundary" && part.role === "orchestrator")).toBe(true)
+})
 
 test("mission session splits user turns from mission agent turns", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     kind: "session",
     sessionID: "ses_mission_split",
     title: "Mission Control",
-  } as any);
+  } as any)
 
   hydrateConversationView(
     {
@@ -1438,93 +1724,165 @@ test("mission session splits user turns from mission agent turns", () => {
         ],
       },
     ],
-  );
+  )
 
-  const userCard = cardTreeStore.cards["user:session:ses_mission_split:message:msg_mission_user"];
-  const missionCard = cardTreeStore.cards["mission:session:ses_mission_split:message:msg_mission_agent"];
+  const userCard = cardTreeStore.cards["user:session:ses_mission_split:message:msg_mission_user"]
+  const missionCard = cardTreeStore.cards["mission:session:ses_mission_split:message:msg_mission_agent"]
 
-  expect(userCard?.kind).toBe("message");
-  expect(userCard?.stage).toBe("user");
-  expect(userCard?.parts.map((part: any) => part.text)).toEqual(["start mission"]);
-  expect(missionCard?.kind).toBe("agent");
-  expect(missionCard?.stage).toBe("mission");
-  expect(missionCard?.title).toBe("chat.role.mission");
-  expect(missionCard?.parts.map((part: any) => part.text)).toEqual(["mission accepted"]);
-  expect(cardTreeStore.order).toContain(userCard!.id);
-  expect(cardTreeStore.order).toContain(missionCard!.id);
-});
+  expect(userCard?.kind).toBe("message")
+  expect(userCard?.stage).toBe("user")
+  expect(userCard?.parts.map((part: any) => part.text)).toEqual(["start mission"])
+  expect(missionCard?.kind).toBe("agent")
+  expect(missionCard?.stage).toBe("mission")
+  expect(missionCard?.title).toBe("chat.role.mission")
+  expect(missionCard?.parts.map((part: any) => part.text)).toEqual(["mission accepted"])
+  expect(cardTreeStore.order).toContain(userCard!.id)
+  expect(cardTreeStore.order).toContain(missionCard!.id)
+})
 
 test("phase-absorbed agent does not split a later orchestrator turn", () => {
-  seedTurnBoard("phase interruption");
+  seedTurnBoard("phase interruption")
 
-  const o1 = `assistant:session:${ROOT_SID}:message:msg_phase_i1`;
-  const o2 = `assistant:session:${ROOT_SID}:message:msg_phase_i2`;
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_phase_i1`
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_phase_i2`
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_phase_i1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_100 } }) } });
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("build", {
-    id: "msg_phase_build", sessionID: "ses_phase_build_interrupt", role: "assistant", resolvedRole: "build", agent: "build",
-    parentSessionID: ROOT_SID, goalID: "goal_phase_interrupt", time: { created: 1_776_000_000_150 } }) } });
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_phase_i2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_200 } }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_phase_i1",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: "msg_phase_build",
+        sessionID: "ses_phase_build_interrupt",
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        goalID: "goal_phase_interrupt",
+        time: { created: 1_776_000_000_150 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_phase_i2",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
 
-  expect(cardTreeStore.cards[o1]).toBeDefined();
-  expect(cardTreeStore.cards[o2]).toBeUndefined();
-  expect(cardTreeStore.order.filter((id) => id === o1 || id === o2)).toEqual([o1]);
-});
+  expect(cardTreeStore.cards[o1]).toBeDefined()
+  expect(cardTreeStore.cards[o2]).toBeUndefined()
+  expect(cardTreeStore.order.filter((id) => id === o1 || id === o2)).toEqual([o1])
+})
 
 test("phase-absorbed empty build messages do not create timestamp-only boundaries", () => {
-  seedTurnBoard("empty build envelope");
+  seedTurnBoard("empty build envelope")
 
-  const goalID = "goal_empty_build";
-  const sessionID = "ses_empty_build";
-  const messageID = "msg_empty_build";
+  const goalID = "goal_empty_build"
+  const sessionID = "ses_empty_build"
+  const messageID = "msg_empty_build"
   const hasEmptyBoundary = () =>
     Object.values(cardTreeStore.cards).some((card: any) =>
       (card?.parts || []).some((part: any) => part.type === "boundary" && part.messageID === messageID),
-    );
+    )
   const hasVisibleMessagePart = () =>
     Object.values(cardTreeStore.cards).some((card: any) =>
-      (card?.parts || []).some((part: any) =>
-        part.messageID === messageID &&
-        part.type !== "step-start" &&
-        part.type !== "step-finish" &&
-        part.type !== "boundary",
+      (card?.parts || []).some(
+        (part: any) =>
+          part.messageID === messageID &&
+          part.type !== "step-start" &&
+          part.type !== "step-finish" &&
+          part.type !== "boundary",
       ),
-    );
+    )
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("build", {
-    id: messageID, sessionID, role: "assistant", resolvedRole: "build", agent: "build",
-    parentSessionID: ROOT_SID, goalID, time: { created: 1_776_000_000_150 } }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: messageID,
+        sessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        goalID,
+        time: { created: 1_776_000_000_150 },
+      }),
+    },
+  })
 
-  expect(hasEmptyBoundary()).toBe(false);
-  expect(hasVisibleMessagePart()).toBe(false);
+  expect(hasEmptyBoundary()).toBe(false)
+  expect(hasVisibleMessagePart()).toBe(false)
 
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("build", {
-    id: "prt_empty_step", messageID, sessionID, type: "step-start",
-    parentSessionID: ROOT_SID, goalID }) } });
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("build", {
+        id: "prt_empty_step",
+        messageID,
+        sessionID,
+        type: "step-start",
+        parentSessionID: ROOT_SID,
+        goalID,
+      }),
+    },
+  })
 
-  expect(hasEmptyBoundary()).toBe(false);
-  expect(hasVisibleMessagePart()).toBe(false);
+  expect(hasEmptyBoundary()).toBe(false)
+  expect(hasVisibleMessagePart()).toBe(false)
 
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("build", {
-    id: "prt_visible_text", messageID, sessionID, type: "text", text: "visible build output",
-    parentSessionID: ROOT_SID, goalID }) } });
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("build", {
+        id: "prt_visible_text",
+        messageID,
+        sessionID,
+        type: "text",
+        text: "visible build output",
+        parentSessionID: ROOT_SID,
+        goalID,
+      }),
+    },
+  })
 
-  const phaseCard = Object.values(cardTreeStore.cards).find((card: any) => card?.phaseSessionID === sessionID) as any;
-  expect(phaseCard).toBeDefined();
-  expect(phaseCard.parts.some((part: any) => part.type === "boundary" && part.messageID === messageID)).toBe(true);
-  expect(phaseCard.parts.some((part: any) => part.type === "text" && part.text === "visible build output")).toBe(true);
-});
+  const phaseCard = Object.values(cardTreeStore.cards).find((card: any) => card?.phaseSessionID === sessionID) as any
+  expect(phaseCard).toBeDefined()
+  expect(phaseCard.parts.some((part: any) => part.type === "boundary" && part.messageID === messageID)).toBe(true)
+  expect(phaseCard.parts.some((part: any) => part.type === "text" && part.text === "visible build output")).toBe(true)
+})
 
 test("hydrate skips empty build transcript messages before boundary projection", () => {
-  seedTurnBoard("hydrate empty build envelope");
+  seedTurnBoard("hydrate empty build envelope")
 
-  const goalID = "goal_hydrate_empty";
-  const emptySessionID = "ses_hydrate_empty";
-  const visibleSessionID = "ses_hydrate_visible";
+  const goalID = "goal_hydrate_empty"
+  const emptySessionID = "ses_hydrate_empty"
+  const visibleSessionID = "ses_hydrate_visible"
   hydrateConversationView(
     {
       sessions: [
@@ -1578,13 +1936,15 @@ test("hydrate skips empty build transcript messages before boundary projection",
         parts: [{ id: "prt_hydrate_visible", type: "text", text: "hydrated build output" }],
       },
     ],
-  );
+  )
 
-  expect(Object.values(cardTreeStore.cards).some((card: any) => card?.phaseSessionID === emptySessionID)).toBe(false);
-  const phaseCard = Object.values(cardTreeStore.cards).find((card: any) => card?.phaseSessionID === visibleSessionID) as any;
-  expect(phaseCard).toBeDefined();
-  expect(phaseCard.parts.some((part: any) => part.type === "text" && part.text === "hydrated build output")).toBe(true);
-});
+  expect(Object.values(cardTreeStore.cards).some((card: any) => card?.phaseSessionID === emptySessionID)).toBe(false)
+  const phaseCard = Object.values(cardTreeStore.cards).find(
+    (card: any) => card?.phaseSessionID === visibleSessionID,
+  ) as any
+  expect(phaseCard).toBeDefined()
+  expect(phaseCard.parts.some((part: any) => part.type === "text" && part.text === "hydrated build output")).toBe(true)
+})
 
 test("interaction remains attached to the turn active at interaction time", () => {
   setBoardStore("board", {
@@ -1608,77 +1968,192 @@ test("interaction remains attached to the turn active at interaction time", () =
         time: { created: 1_776_000_000_150 },
       },
     ],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
-  resetWriter();
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
+  resetWriter()
 
-  const o1 = `assistant:session:${ROOT_SID}:message:msg_i1`;
-  const o2 = `assistant:session:${ROOT_SID}:message:msg_i2`;
-  const interactionCardID = "interaction-card:ctx:interaction:int_turn_owner";
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_i1`
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_i2`
+  const interactionCardID = "interaction-card:ctx:interaction:int_turn_owner"
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_i1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_100 } }) } });
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_i2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_300 } }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_i1",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_i2",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_300 },
+      }),
+    },
+  })
 
-  expect(cardTreeStore.cards[o1]?.childIDs || []).toContain(interactionCardID);
-  expect(cardTreeStore.cards[o2]?.childIDs || []).not.toContain(interactionCardID);
-});
+  expect(cardTreeStore.cards[o1]?.childIDs || []).toContain(interactionCardID)
+  expect(cardTreeStore.cards[o2]?.childIDs || []).not.toContain(interactionCardID)
+})
 
 test("late part.delta lands on the original turn card after a newer message starts", () => {
-  seedTurnBoard("late delta");
+  seedTurnBoard("late delta")
 
-  const o1 = `assistant:session:${ROOT_SID}:message:msg_d1`;
-  const o2 = `assistant:session:${ROOT_SID}:message:msg_d2`;
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_d1`
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_d2`
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_d1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_100 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
-    id: "prt_d1", messageID: "msg_d1", sessionID: ROOT_SID, type: "text", text: "" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_d1",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_d1",
+        messageID: "msg_d1",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "",
+      }),
+    },
+  })
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_d2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_200 } }) } });
-  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("assistant", {
-    id: "prt_d2", messageID: "msg_d2", sessionID: ROOT_SID, type: "text", text: "" }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_d2",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_d2",
+        messageID: "msg_d2",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "",
+      }),
+    },
+  })
 
-  applyEvent({ type: "message.part.delta", properties: { taskID: TASK_ID,
-    partID: "prt_d1", messageID: "msg_d1", sessionID: ROOT_SID, field: "text", delta: "late tail" } });
-  flushBufferedPartDeltas();
+  applyEvent({
+    type: "message.part.delta",
+    properties: {
+      taskID: TASK_ID,
+      partID: "prt_d1",
+      messageID: "msg_d1",
+      sessionID: ROOT_SID,
+      field: "text",
+      delta: "late tail",
+    },
+  })
+  flushBufferedPartDeltas()
 
-  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).toContain("late tail");
-  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).not.toContain("late tail");
-});
+  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).toContain("late tail")
+  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).not.toContain("late tail")
+})
 
 test("session.status terminal updates the complete session card", () => {
-  seedTurnBoard("status active only");
+  seedTurnBoard("status active only")
 
-  const o1 = `assistant:session:${ROOT_SID}:message:msg_s1`;
-  const o2 = `assistant:session:${ROOT_SID}:message:msg_s2`;
+  const o1 = `assistant:session:${ROOT_SID}:message:msg_s1`
+  const o2 = `assistant:session:${ROOT_SID}:message:msg_s2`
 
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_s1", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_100 } }) } });
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("architect", {
-    id: "msg_s_child", sessionID: "ses_status_child", role: "assistant", resolvedRole: "architect", agent: "architect",
-    parentSessionID: ROOT_SID, time: { created: 1_776_000_000_150 } }) } });
-  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("assistant", {
-    id: "msg_s2", sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant", agent: "assistant",
-    time: { created: 1_776_000_000_200 } }) } });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_s1",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("architect", {
+        id: "msg_s_child",
+        sessionID: "ses_status_child",
+        role: "assistant",
+        resolvedRole: "architect",
+        agent: "architect",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_150 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_s2",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
 
-  applyEvent({ type: "session.status", emittedAt: 1_776_000_000_300, properties: {
-    sessionID: ROOT_SID, status: { type: "terminal", reason: "completed" } } });
+  applyEvent({
+    type: "session.status",
+    emittedAt: 1_776_000_000_300,
+    properties: {
+      sessionID: ROOT_SID,
+      status: { type: "terminal", reason: "completed" },
+    },
+  })
 
-  expect(cardTreeStore.cards[o1]?.status).toBe("completed");
-  expect(cardTreeStore.cards[o1]?.terminalReason).toBe("completed");
-  expect(cardTreeStore.cards[o2]).toBeUndefined();
-});
+  expect(cardTreeStore.cards[o1]?.status).toBe("completed")
+  expect(cardTreeStore.cards[o1]?.terminalReason).toBe("completed")
+  expect(cardTreeStore.cards[o2]).toBeUndefined()
+})
 
 test("hydrate keeps consecutive same-agent messages in one card", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -1690,30 +2165,32 @@ test("hydrate keeps consecutive same-agent messages in one card", () => {
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
 
   const mk = (id: string, created: number, text: string) => ({
     info: {
-      id, sessionID: ROOT_SID, role: "assistant", resolvedRole: "assistant",
-      agent: "assistant", channel: "assistant", time: { created },
+      id,
+      sessionID: ROOT_SID,
+      role: "assistant",
+      resolvedRole: "assistant",
+      agent: "assistant",
+      channel: "assistant",
+      time: { created },
     },
     parts: [{ id: `prt_${id}`, messageID: id, sessionID: ROOT_SID, type: "text", text }],
-  });
-  const transcript = [
-    mk("msg_h1", 1_776_000_000_100, "first turn"),
-    mk("msg_h2", 1_776_000_000_200, "second turn"),
-  ];
+  })
+  const transcript = [mk("msg_h1", 1_776_000_000_100, "first turn"), mk("msg_h2", 1_776_000_000_200, "second turn")]
 
-  hydrateConversationView({ sessions: [{ sessionID: ROOT_SID, stage: "assistant" }] }, transcript);
+  hydrateConversationView({ sessions: [{ sessionID: ROOT_SID, stage: "assistant" }] }, transcript)
 
-  const h1 = `assistant:session:${ROOT_SID}:message:msg_h1`;
-  const h2 = `assistant:session:${ROOT_SID}:message:msg_h2`;
-  expect(cardTreeStore.order).toContain(h1);
-  expect(cardTreeStore.order).not.toContain(h2);
-  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "first turn")).toBe(true);
-  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "second turn")).toBe(true);
-  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.type === "boundary" && p.role === "assistant")).toBe(true);
-  expect(cardTreeStore.cards[h2]).toBeUndefined();
-  expect(cardTreeStore.cards[`assistant:session:${ROOT_SID}`]).toBeUndefined();
-});
+  const h1 = `assistant:session:${ROOT_SID}:message:msg_h1`
+  const h2 = `assistant:session:${ROOT_SID}:message:msg_h2`
+  expect(cardTreeStore.order).toContain(h1)
+  expect(cardTreeStore.order).not.toContain(h2)
+  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "first turn")).toBe(true)
+  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "second turn")).toBe(true)
+  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.type === "boundary" && p.role === "assistant")).toBe(true)
+  expect(cardTreeStore.cards[h2]).toBeUndefined()
+  expect(cardTreeStore.cards[`assistant:session:${ROOT_SID}`]).toBeUndefined()
+})

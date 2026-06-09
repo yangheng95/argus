@@ -6,10 +6,7 @@ import { Session } from "@/session"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema, derivePanelActor, panelCapabilityActionSet } from "@/panel/capability"
-import {
-  RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE,
-  isRightSidebarCodingAssistantSession,
-} from "@/coding-assistant/session"
+import { RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE, isRightSidebarCodingAssistantSession } from "@/coding-assistant/session"
 
 // Action whitelist by actor. `mission` is a coordinator that drives
 // squad/team work through a bounded set of panel actions; `explore` is a
@@ -33,12 +30,7 @@ const MISSION_ALLOWED_ACTIONS = new Set([
   "reply_interaction",
   "reject_interaction",
 ])
-const EXPLORE_ALLOWED_ACTIONS = new Set([
-  "query_task",
-  "view_board",
-  "view_plan",
-  "view_tasks",
-])
+const EXPLORE_ALLOWED_ACTIONS = new Set(["query_task", "view_board", "view_plan", "view_tasks"])
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel" || ctx.extra?.surface === "right-sidebar"
@@ -126,9 +118,10 @@ function panelTaskAcceptance(board: PanelTaskBoard): z.infer<typeof PanelTaskAcc
         const kind = nonEmptyString(raw.kind)
         const label = nonEmptyString(raw.label)
         if (!kind || !label) return []
-        const payload = raw.payload && typeof raw.payload === "object" && !Array.isArray(raw.payload)
-          ? raw.payload as Record<string, unknown>
-          : undefined
+        const payload =
+          raw.payload && typeof raw.payload === "object" && !Array.isArray(raw.payload)
+            ? (raw.payload as Record<string, unknown>)
+            : undefined
         return [{ kind, label, ...(payload ? { payload } : {}) }]
       })
     : undefined
@@ -221,9 +214,7 @@ async function panelQueryTaskRow(
       ...panelTaskSummaryRow(board),
       ...(input.includeInteractions
         ? {
-            pendingInteractions: (board.interactions ?? []).filter(
-              (req) => req.status === "pending",
-            ).length,
+            pendingInteractions: (board.interactions ?? []).filter((req) => req.status === "pending").length,
           }
         : {}),
     }
@@ -250,10 +241,7 @@ async function resolvePanelActor(ctx: Tool.Context) {
   return derivePanelActor(ctx.agent)
 }
 
-async function resolveCreateTaskQueueDecision(input: {
-  queue?: boolean
-  ctx: Tool.Context
-}) {
+async function resolveCreateTaskQueueDecision(input: { queue?: boolean; ctx: Tool.Context }) {
   if (typeof input.queue === "boolean") return input.queue
   if (input.ctx.extra?.surface !== "panel") {
     return false
@@ -287,7 +275,8 @@ async function resolveCreateTaskQueueDecision(input: {
 }
 
 export const PanelTool = Tool.define("panel", {
-  description: "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
+  description:
+    "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
   parameters: PanelActionSchema,
   async execute(params, ctx) {
     // Actor-based action filter. Mission is a coordinator, not an executor —
@@ -309,7 +298,8 @@ export const PanelTool = Tool.define("panel", {
           `Explore may call: ${[...EXPLORE_ALLOWED_ACTIONS].join(", ")}.`,
       )
     }
-    const rightSidebarActions = actor === "right_sidebar_assistant" ? panelCapabilityActionSet("right-sidebar") : undefined
+    const rightSidebarActions =
+      actor === "right_sidebar_assistant" ? panelCapabilityActionSet("right-sidebar") : undefined
     if (rightSidebarActions && !rightSidebarActions.has(params.action)) {
       throw new Error(
         `panel action "${params.action}" is not permitted for the right sidebar assistant. ` +
@@ -327,7 +317,9 @@ export const PanelTool = Tool.define("panel", {
             board.plan ? `Plan: ${board.plan.summary}` : "Plan unavailable",
             goals.length > 0 ? "Goals:" : undefined,
             ...goals.map((goal, index) => `${index + 1}. ${goal.goalTitle} [${goal.goalStatus || "pending"}]`),
-          ].filter(Boolean).join("\n"),
+          ]
+            .filter(Boolean)
+            .join("\n"),
           metadata: {},
         }
       }
@@ -336,9 +328,12 @@ export const PanelTool = Tool.define("panel", {
           const project = await EngineService.getProjectBoard({ limit: 8 })
           return {
             title: "Tasks",
-            output: project.tasks.length === 0
-              ? "No tasks found."
-              : project.tasks.map((item, index) => `${index + 1}. ${item.task.title} [${item.task.status}] (${item.task.id})`).join("\n"),
+            output:
+              project.tasks.length === 0
+                ? "No tasks found."
+                : project.tasks
+                    .map((item, index) => `${index + 1}. ${item.task.title} [${item.task.status}] (${item.task.id})`)
+                    .join("\n"),
             metadata: {},
           }
         }
@@ -352,7 +347,9 @@ export const PanelTool = Tool.define("panel", {
             board.overview?.summary,
             board.acceptance ? `Acceptance: ${board.acceptance.summary}` : undefined,
             board.evaluation ? `Evaluation: ${board.evaluation.verdict} — ${board.evaluation.summary}` : undefined,
-          ].filter(Boolean).join("\n"),
+          ]
+            .filter(Boolean)
+            .join("\n"),
           metadata: {},
         }
       }
@@ -360,9 +357,12 @@ export const PanelTool = Tool.define("panel", {
         const board = await EngineService.getProjectBoard({ limit: 8 })
         return {
           title: "Tasks",
-          output: board.tasks.length === 0
-            ? "No tasks found."
-            : board.tasks.map((item, index) => `${index + 1}. ${item.task.title} [${item.task.status}] (${item.task.id})`).join("\n"),
+          output:
+            board.tasks.length === 0
+              ? "No tasks found."
+              : board.tasks
+                  .map((item, index) => `${index + 1}. ${item.task.title} [${item.task.status}] (${item.task.id})`)
+                  .join("\n"),
           metadata: {},
         }
       }
@@ -431,10 +431,7 @@ export const PanelTool = Tool.define("panel", {
             // throws — silently treating an HTTP path as base64 would persist
             // garbage bytes as "the user's reference image" and trigger the
             // exact fidelity-0 surface this fix is closing. Rule 7.
-            data: decodeDataUrlBase64(
-              a.url,
-              `panel.create_task attachment "${a.filename ?? a.mime}"`,
-            ),
+            data: decodeDataUrlBase64(a.url, `panel.create_task attachment "${a.filename ?? a.mime}"`),
             ...(a.filename ? { filename: a.filename } : {}),
           }))
         const baseRequest = originalText || params.request
@@ -471,11 +468,12 @@ export const PanelTool = Tool.define("panel", {
           actor,
           ...(missionProvenance ? { mission: missionProvenance } : {}),
         }
-        const source = actor === "mission"
-          ? "mission"
-          : actor === "right_sidebar_assistant"
-            ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
-            : params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel")
+        const source =
+          actor === "mission"
+            ? "mission"
+            : actor === "right_sidebar_assistant"
+              ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
+              : (params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"))
         const taskID = await EngineService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
           request,
@@ -530,17 +528,15 @@ export const PanelTool = Tool.define("panel", {
           .filter((a) => !isDecodableText(a.mime, a.filename))
           .map((a) => ({
             mime: a.mime,
-            data: decodeDataUrlBase64(
-              a.url,
-              `panel.send_task_message attachment "${a.filename ?? a.mime}"`,
-            ),
+            data: decodeDataUrlBase64(a.url, `panel.send_task_message attachment "${a.filename ?? a.mime}"`),
             ...(a.filename ? { filename: a.filename } : {}),
           }))
         const result = await EngineService.handleTaskMessage(params.taskID, {
           text: followText ? params.text + followText : params.text,
-          source: actor === "right_sidebar_assistant"
-            ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
-            : params.source ?? ctx.extra?.source ?? "panel",
+          source:
+            actor === "right_sidebar_assistant"
+              ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
+              : (params.source ?? ctx.extra?.source ?? "panel"),
           user_id: params.user_id,
           ...(followBinaries.length > 0 ? { attachments: followBinaries } : {}),
         })
@@ -562,41 +558,73 @@ export const PanelTool = Tool.define("panel", {
           )
           return {
             title: "Interaction replied",
-            output: JSON.stringify({ kind: "interaction", task_id: result.taskID, interaction_id: result.id, message: "Interaction answered." }),
+            output: JSON.stringify({
+              kind: "interaction",
+              task_id: result.taskID,
+              interaction_id: result.id,
+              message: "Interaction answered.",
+            }),
             metadata: {},
           }
         } catch (error) {
           return {
             title: "Reply failed",
-            output: JSON.stringify({ kind: "panel_response", message: `Failed to reply: ${error instanceof Error ? error.message : String(error)}` }),
+            output: JSON.stringify({
+              kind: "panel_response",
+              message: `Failed to reply: ${error instanceof Error ? error.message : String(error)}`,
+            }),
             metadata: {},
           }
         }
       }
       case "reject_interaction": {
-        const result = await EngineService.rejectInteraction(params.interactionID, { message: params.message, autoReply: false })
+        const result = await EngineService.rejectInteraction(params.interactionID, {
+          message: params.message,
+          autoReply: false,
+        })
         return {
           title: "Interaction rejected",
-          output: JSON.stringify({ kind: "interaction", task_id: result.taskID, interaction_id: result.id, message: "Interaction rejected." }),
+          output: JSON.stringify({
+            kind: "interaction",
+            task_id: result.taskID,
+            interaction_id: result.id,
+            message: "Interaction rejected.",
+          }),
           metadata: {},
         }
       }
       case "retry_task":
         await EngineService.retryTask(params.taskID)
-        return { title: "Retry queued", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Retry queued." }), metadata: {} }
+        return {
+          title: "Retry queued",
+          output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Retry queued." }),
+          metadata: {},
+        }
       case "replan_task":
         await EngineService.retryTask(params.taskID)
-        return { title: "Replan queued", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Replan queued." }), metadata: {} }
+        return {
+          title: "Replan queued",
+          output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Replan queued." }),
+          metadata: {},
+        }
       case "cancel_task":
         await EngineService.cancelTask(params.taskID)
-        return { title: "Task cancelled", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task cancelled." }), metadata: {} }
+        return {
+          title: "Task cancelled",
+          output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task cancelled." }),
+          metadata: {},
+        }
       case "update_checks":
         if (params.checks) {
           await EngineService.updateTaskChecks(params.taskID, { checks: params.checks })
         } else {
           await EngineService.selectTaskChecks(params.taskID, params.selection ?? {})
         }
-        return { title: "Checks updated", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task checks updated." }), metadata: {} }
+        return {
+          title: "Checks updated",
+          output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task checks updated." }),
+          metadata: {},
+        }
       case "capture_overlay_screenshot":
         try {
           const shot = await captureWindowScreenshot(params.match)
@@ -605,11 +633,13 @@ export const PanelTool = Tool.define("panel", {
             output: JSON.stringify({
               kind: "panel_response",
               message: `Captured OpenCorvus GUI: ${shot.title} (${shot.width}x${shot.height}).`,
-              attachments: [{
-                mime: shot.mime,
-                url: shot.url,
-                filename: shot.filename,
-              }],
+              attachments: [
+                {
+                  mime: shot.mime,
+                  url: shot.url,
+                  filename: shot.filename,
+                },
+              ],
             }),
             metadata: {},
           }
@@ -723,10 +753,18 @@ export const PanelTool = Tool.define("panel", {
           description: params.description,
           acceptance_specs: params.acceptance_specs as import("@/acceptance/types").AcceptanceSpec[],
         })
-        return { title: "Goal updated", output: JSON.stringify({ kind: "panel_response", message: "Goal updated." }), metadata: {} }
+        return {
+          title: "Goal updated",
+          output: JSON.stringify({ kind: "panel_response", message: "Goal updated." }),
+          metadata: {},
+        }
       case "delete_goal":
         await EngineService.deleteGoal(params.goalID)
-        return { title: "Goal deleted", output: JSON.stringify({ kind: "panel_response", message: "Goal deleted." }), metadata: {} }
+        return {
+          title: "Goal deleted",
+          output: JSON.stringify({ kind: "panel_response", message: "Goal deleted." }),
+          metadata: {},
+        }
     }
   },
 })

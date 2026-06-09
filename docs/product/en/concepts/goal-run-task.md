@@ -85,16 +85,16 @@ orchestrator-stream-error
 
 **Common `kind` meanings**:
 
-| kind                                                                    | Meaning                                                                                                |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `run`                                                                   | Root node for one task execution attempt (replaces the old `engine_run` table)                         |
-| `goal_run_attempt`                                                      | One worktree attempt for a single goal; `payload.workspace_*` is the single source for worktree info   |
-| `acceptance`                                                              | One acceptance candidate (replaces the old `engine_acceptance` table)                                      |
-| `evaluation` / `verdict`                                                | Evaluation decision (`accepted / rejected / inconclusive`; replaces the old `engine_evaluation` table) |
-| `verification-evidence`                                                 | Acceptance check evidence (with `scope = goal_run` / `acceptance`)                                         |
-| `patch` / `changed_file` / `diff`                                       | Code change artifacts                                                                                  |
-| `acceptance_evidence_manifest` / `surface_manifest` / `specialist_review` | Acceptance-phase artifacts                                                                               |
-| `integrity_attempt` / `prosecutor_attempt`                              | Integrity / prosecutor agent output                                                                    |
+| kind                                                                      | Meaning                                                                                                |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `run`                                                                     | Root node for one task execution attempt (replaces the old `engine_run` table)                         |
+| `goal_run_attempt`                                                        | One worktree attempt for a single goal; `payload.workspace_*` is the single source for worktree info   |
+| `acceptance`                                                              | One acceptance candidate (replaces the old `engine_acceptance` table)                                  |
+| `evaluation` / `verdict`                                                  | Evaluation decision (`accepted / rejected / inconclusive`; replaces the old `engine_evaluation` table) |
+| `verification-evidence`                                                   | Acceptance check evidence (with `scope = goal_run` / `acceptance`)                                     |
+| `patch` / `changed_file` / `diff`                                         | Code change artifacts                                                                                  |
+| `acceptance_evidence_manifest` / `surface_manifest` / `specialist_review` | Acceptance-phase artifacts                                                                             |
+| `integrity_attempt` / `prosecutor_attempt`                                | Integrity / prosecutor agent output                                                                    |
 
 `inconclusive` verdict means "unable to decide" — not a pass and not a failure; it triggers replan rather than retry.
 

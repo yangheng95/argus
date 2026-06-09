@@ -85,10 +85,7 @@ export namespace Ownership {
   export interface OrphanEntry {
     marker: Marker
     markerPath: string
-    reason:
-      | "owner-process-dead"
-      | "target-missing"
-      | "marker-unparseable"
+    reason: "owner-process-dead" | "target-missing" | "marker-unparseable"
     /** Set when `kind === "worktree"` and the directory is still on disk
      *  (missing marker was the sole orphan reason). */
     worktreeDir?: string
@@ -98,16 +95,24 @@ export namespace Ownership {
     return ProjectRuntimePaths.ownershipRoot(primaryWorktreeDir)
   }
 
-  function worktreeMarkerDir(primaryWorktreeDir: string, marker?: Pick<Marker, "taskID" | "sessionID" | "runID">): string {
+  function worktreeMarkerDir(
+    primaryWorktreeDir: string,
+    marker?: Pick<Marker, "taskID" | "sessionID" | "runID">,
+  ): string {
     if (marker?.taskID && marker.sessionID) {
-      return ProjectRuntimePaths.ownershipPaths(primaryWorktreeDir, marker.taskID, marker.sessionID, marker.runID).worktreeMarkerDir
+      return ProjectRuntimePaths.ownershipPaths(primaryWorktreeDir, marker.taskID, marker.sessionID, marker.runID)
+        .worktreeMarkerDir
     }
     return path.join(ownershipRoot(primaryWorktreeDir), WORKTREE_DIR)
   }
 
-  function processMarkerDir(primaryWorktreeDir: string, marker?: Pick<Marker, "taskID" | "sessionID" | "runID">): string {
+  function processMarkerDir(
+    primaryWorktreeDir: string,
+    marker?: Pick<Marker, "taskID" | "sessionID" | "runID">,
+  ): string {
     if (marker?.taskID && marker.sessionID) {
-      return ProjectRuntimePaths.ownershipPaths(primaryWorktreeDir, marker.taskID, marker.sessionID, marker.runID).processMarkerDir
+      return ProjectRuntimePaths.ownershipPaths(primaryWorktreeDir, marker.taskID, marker.sessionID, marker.runID)
+        .processMarkerDir
     }
     return path.join(ownershipRoot(primaryWorktreeDir), PROCESS_DIR)
   }
@@ -119,7 +124,10 @@ export namespace Ownership {
    * someone else's marker, which is strictly worse than a longer filename.
    */
   function sanitizeFilename(input: string): string {
-    return input.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120)
+    return input
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120)
   }
 
   function workerMarkerFilename(worktreeDir: string): string {
@@ -198,7 +206,7 @@ export namespace Ownership {
     for (const entry of entries) {
       const markerPath = path.join(dir, entry.name)
       if (entry.isDirectory()) {
-        out.push(...await listMarkers(markerPath))
+        out.push(...(await listMarkers(markerPath)))
         continue
       }
       if (!entry.name.endsWith(MARKER_SUFFIX)) continue
@@ -267,10 +275,7 @@ export namespace Ownership {
       return filePath
     }
 
-    export async function clear(input: {
-      primaryWorktreeDir: string
-      worktreeDir: string
-    }): Promise<void> {
+    export async function clear(input: { primaryWorktreeDir: string; worktreeDir: string }): Promise<void> {
       const filename = workerMarkerFilename(input.worktreeDir)
       const markerPaths = (await listMarkers(worktreeMarkerDir(input.primaryWorktreeDir)))
         .map((entry) => entry.markerPath)
@@ -284,8 +289,7 @@ export namespace Ownership {
 
     export async function list(primaryWorktreeDir: string): Promise<Array<{ markerPath: string; marker: Marker }>> {
       const raw = await listMarkers(worktreeMarkerDir(primaryWorktreeDir))
-      return raw
-        .filter((r): r is { markerPath: string; marker: Marker } => !!r.marker && r.marker.kind === "worktree")
+      return raw.filter((r): r is { markerPath: string; marker: Marker } => !!r.marker && r.marker.kind === "worktree")
     }
 
     /**
@@ -363,18 +367,12 @@ export namespace Ownership {
         createdAt: input.now ?? Date.now(),
         kind: "process",
       }
-      const filePath = path.join(
-        processMarkerDir(input.primaryWorktreeDir, marker),
-        processMarkerFilename(input.pid),
-      )
+      const filePath = path.join(processMarkerDir(input.primaryWorktreeDir, marker), processMarkerFilename(input.pid))
       await writeMarker(filePath, marker)
       return filePath
     }
 
-    export async function clear(input: {
-      primaryWorktreeDir: string
-      pid: number
-    }): Promise<void> {
+    export async function clear(input: { primaryWorktreeDir: string; pid: number }): Promise<void> {
       const filename = processMarkerFilename(input.pid)
       const markerPaths = (await listMarkers(processMarkerDir(input.primaryWorktreeDir)))
         .map((entry) => entry.markerPath)
@@ -388,8 +386,7 @@ export namespace Ownership {
 
     export async function list(primaryWorktreeDir: string): Promise<Array<{ markerPath: string; marker: Marker }>> {
       const raw = await listMarkers(processMarkerDir(primaryWorktreeDir))
-      return raw
-        .filter((r): r is { markerPath: string; marker: Marker } => !!r.marker && r.marker.kind === "process")
+      return raw.filter((r): r is { markerPath: string; marker: Marker } => !!r.marker && r.marker.kind === "process")
     }
 
     /**

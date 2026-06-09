@@ -1,9 +1,11 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "bun:test"
 
-(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
-const { applyEvent, flushBufferedPartDeltas, resetWriter, hasProjectedPart } = await import("../src/services/tree-writer");
-const { cardTreeStore } = await import("../src/store/card-tree");
+const { applyEvent, flushBufferedPartDeltas, resetWriter, hasProjectedPart } = await import(
+  "../src/services/tree-writer"
+)
+const { cardTreeStore } = await import("../src/store/card-tree")
 
 function stampedInfo(channel: string, info: Record<string, any>) {
   return {
@@ -11,7 +13,7 @@ function stampedInfo(channel: string, info: Record<string, any>) {
     resolvedRole: info.resolvedRole ?? channel,
     agent: info.agent ?? channel,
     channel,
-  };
+  }
 }
 
 function stampedPart(channel: string, part: Record<string, any>) {
@@ -19,11 +21,11 @@ function stampedPart(channel: string, part: Record<string, any>) {
     ...part,
     resolvedRole: part.resolvedRole ?? channel,
     channel,
-  };
+  }
 }
 
 test("part projection materializes the deterministic turn when the part arrives before message metadata", () => {
-  resetWriter();
+  resetWriter()
 
   applyEvent({
     type: "message.part.updated",
@@ -38,10 +40,10 @@ test("part projection materializes the deterministic turn when the part arrives 
         text: "part first",
       }),
     },
-  });
+  })
 
-  const cardID = "build:session:ses_before_message:message:msg_before_message";
-  expect(cardTreeStore.cards[cardID]).toBeDefined();
+  const cardID = "build:session:ses_before_message:message:msg_before_message"
+  expect(cardTreeStore.cards[cardID]).toBeDefined()
   expect(cardTreeStore.cards[cardID]?.parts).toEqual([
     expect.objectContaining({
       id: "prt_before_message",
@@ -49,8 +51,8 @@ test("part projection materializes the deterministic turn when the part arrives 
       sessionID: "ses_before_message",
       text: "part first",
     }),
-  ]);
-  expect(hasProjectedPart("ses_before_message", "prt_before_message")).toBe(true);
+  ])
+  expect(hasProjectedPart("ses_before_message", "prt_before_message")).toBe(true)
 
   applyEvent({
     type: "message.updated",
@@ -64,15 +66,15 @@ test("part projection materializes the deterministic turn when the part arrives 
         time: { created: 1_780_000_000_000 },
       }),
     },
-  });
+  })
 
-  expect(cardTreeStore.cards[cardID]).toBeDefined();
-  expect(Object.keys(cardTreeStore.cards).filter((id) => id.includes("ses_before_message"))).toEqual([cardID]);
-  expect(cardTreeStore.cards[cardID]?.time).toBe(1_780_000_000_000);
-});
+  expect(cardTreeStore.cards[cardID]).toBeDefined()
+  expect(Object.keys(cardTreeStore.cards).filter((id) => id.includes("ses_before_message"))).toEqual([cardID])
+  expect(cardTreeStore.cards[cardID]?.time).toBe(1_780_000_000_000)
+})
 
 test("non-reconstructable message stream events stay loud for selected-task recovery", () => {
-  resetWriter();
+  resetWriter()
 
   expect(() =>
     applyEvent({
@@ -85,7 +87,7 @@ test("non-reconstructable message stream events stay loud for selected-task reco
         delta: "x",
       },
     }),
-  ).toThrow(/message\.part\.delta: unknown session ses_missing/);
+  ).toThrow(/message\.part\.delta: unknown session ses_missing/)
 
   applyEvent({
     type: "message.updated",
@@ -98,7 +100,7 @@ test("non-reconstructable message stream events stay loud for selected-task reco
         time: { created: 1_780_000_000_100 },
       }),
     },
-  });
+  })
 
   expect(() =>
     applyEvent({
@@ -109,7 +111,7 @@ test("non-reconstructable message stream events stay loud for selected-task reco
         partID: "prt_missing",
       },
     }),
-  ).toThrow(/message\.part\.removed: unknown part prt_missing in session ses_known/);
+  ).toThrow(/message\.part\.removed: unknown part prt_missing in session ses_known/)
 
   expect(() =>
     applyEvent({
@@ -120,11 +122,11 @@ test("non-reconstructable message stream events stay loud for selected-task reco
         messageID: "msg_missing",
       },
     }),
-  ).toThrow(/message\.removed: unknown message msg_missing in session ses_known/);
-});
+  ).toThrow(/message\.removed: unknown message msg_missing in session ses_known/)
+})
 
 test("completed integrity verdict is not downgraded by late running review events", () => {
-  resetWriter();
+  resetWriter()
 
   applyEvent({
     type: "integrity.review.completed",
@@ -145,11 +147,11 @@ test("completed integrity verdict is not downgraded by late running review event
         summary: "accepted",
       },
     },
-  });
+  })
 
-  const cardID = "integrity:session:ses_integrity_done";
-  expect(cardTreeStore.cards[cardID]?.status).toBe("completed");
-  expect(cardTreeStore.cards[cardID]?.integrity?.verdict).toBe("pass");
+  const cardID = "integrity:session:ses_integrity_done"
+  expect(cardTreeStore.cards[cardID]?.status).toBe("completed")
+  expect(cardTreeStore.cards[cardID]?.integrity?.verdict).toBe("pass")
 
   applyEvent({
     type: "review.stream.progress",
@@ -163,7 +165,7 @@ test("completed integrity verdict is not downgraded by late running review event
       elapsedMs: 500,
       summary: "late progress",
     },
-  });
+  })
   applyEvent({
     type: "review.stream.chunk",
     emittedAt: 1_780_000_000_600,
@@ -175,10 +177,12 @@ test("completed integrity verdict is not downgraded by late running review event
       attempt: 2,
       delta: "late chunk",
     },
-  });
-  flushBufferedPartDeltas();
+  })
+  flushBufferedPartDeltas()
 
-  expect(cardTreeStore.cards[cardID]?.status).toBe("completed");
-  expect(cardTreeStore.cards[cardID]?.integrity?.verdict).toBe("pass");
-  expect(cardTreeStore.cards[cardID]?.parts.some((part: any) => String(part?.text || "").includes("late chunk"))).toBe(false);
-});
+  expect(cardTreeStore.cards[cardID]?.status).toBe("completed")
+  expect(cardTreeStore.cards[cardID]?.integrity?.verdict).toBe("pass")
+  expect(cardTreeStore.cards[cardID]?.parts.some((part: any) => String(part?.text || "").includes("late chunk"))).toBe(
+    false,
+  )
+})

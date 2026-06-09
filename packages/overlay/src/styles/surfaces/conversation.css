@@ -932,6 +932,227 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Project worktree dropdown: compact row sibling of cwd + VCS. */
+.project-worktree-dropdown {
+  appearance: none;
+  min-width: 0;
+  height: calc(24px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(3px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--oc-control-border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--oc-control-bg);
+  box-shadow: var(--oc-control-shadow);
+  color: var(--text-soft);
+  font-family: var(--font);
+  font-size: var(--ui-font-meta);
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--ui-duration-fast),
+    border-color var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+
+.project-worktree-dropdown:hover,
+.project-worktree-dropdown:focus-visible,
+.project-worktree-dropdown[data-open="true"] {
+  background: var(--oc-control-bg-hover);
+  border-color: var(--oc-control-border-hover);
+  color: var(--text-strong);
+  outline: none;
+}
+
+.project-worktree-count {
+  min-width: calc(12px * var(--ui-scale));
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.project-worktree-caret {
+  color: var(--text-muted);
+  transition:
+    transform var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-fast);
+}
+
+.project-worktree-dropdown[data-open="true"] .project-worktree-caret {
+  transform: rotate(180deg);
+  color: var(--text-strong);
+}
+
+.project-worktree-panel {
+  position: fixed;
+  z-index: var(--ui-z-titlebar);
+  max-width: min(calc(520px * var(--ui-scale)), calc(100vw - 16px));
+}
+
+.project-worktree-panel-shell {
+  display: grid;
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--menu-panel-bg);
+  box-shadow: var(--shadow-lg);
+}
+
+.project-worktree-panel-head {
+  display: grid;
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
+}
+
+.project-worktree-panel-title {
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.project-worktree-panel-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+}
+
+.project-worktree-list {
+  display: grid;
+  gap: calc(3px * var(--ui-scale));
+  max-height: min(calc(320px * var(--ui-scale)), calc(100vh - 120px));
+  overflow: auto;
+}
+
+.project-worktree-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(26px * var(--ui-scale));
+  align-items: center;
+  gap: calc(3px * var(--ui-scale));
+}
+
+.project-worktree-item {
+  appearance: none;
+  min-width: 0;
+  min-height: calc(34px * var(--ui-scale));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-worktree-item:hover,
+.project-worktree-item:focus-visible {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+  outline: none;
+}
+
+.project-worktree-main {
+  min-width: 0;
+  display: grid;
+  gap: calc(1px * var(--ui-scale));
+}
+
+.project-worktree-name,
+.project-worktree-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-worktree-name {
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-medium);
+}
+
+.project-worktree-path {
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+}
+
+.project-worktree-state,
+.project-worktree-branch {
+  min-width: 0;
+  max-width: calc(150px * var(--ui-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: calc(2px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--subtle-1);
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+}
+
+.project-worktree-row[data-status="active"] .project-worktree-state {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: var(--accent-dim);
+}
+
+.project-worktree-row[data-status="expired"] .project-worktree-state {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 34%, var(--border));
+  background: var(--warn-dim);
+}
+
+.project-worktree-row[data-status="primary"] .project-worktree-state {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 34%, var(--border));
+  background: var(--good-dim);
+}
+
+.project-worktree-remove {
+  appearance: none;
+  width: calc(26px * var(--ui-scale));
+  height: calc(26px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.project-worktree-remove:hover,
+.project-worktree-remove:focus-visible {
+  background: var(--bad-dim);
+  color: var(--bad);
+  outline: none;
+}
+
+.project-worktree-remove:disabled {
+  cursor: default;
+  opacity: var(--ui-opacity-disabled);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.project-worktree-empty {
+  padding: calc(10px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+}
+
 /* Cwd dropdown: control-vocab chip carrying the breadcrumb path
    and a caret. The shell already routes through `--oc-control-*`
    tokens — just relocating. */

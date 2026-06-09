@@ -31,7 +31,10 @@ test("every role contract id has a matching registered agent (no silent missing 
       const byID = new Map(agents.map((a) => [a.name, a]))
       for (const [id, contract] of Object.entries(AgentRoleContract.all)) {
         const agent = byID.get(id)
-        expect(agent, `AgentRoleContract.all["${id}"] has no matching Agent.list() entry — likely missing from agent.ts state() / NATIVE_DEFAULTS`).toBeDefined()
+        expect(
+          agent,
+          `AgentRoleContract.all["${id}"] has no matching Agent.list() entry — likely missing from agent.ts state() / NATIVE_DEFAULTS`,
+        ).toBeDefined()
         expect(agent!.description).toBe(contract.description)
       }
     },
@@ -222,24 +225,40 @@ test("integrity prompt is host-owned so catalog cannot diverge from team runtime
 
 test("deep-research and frontend-design role descriptions keep document research distinct from UI replication", () => {
   expect(AgentRoleContract.description("frontend-design")).toContain("frontend implementation template")
-  expect(AgentRoleContract.description("frontend-design")).toContain("generated code and PRD/SPEC/report material are reference inputs only")
-  expect(AgentRoleContract.description("frontend-design")).toContain("rewritten webpage must be based on ainvest-frontend-design")
-  expect(AgentRoleContract.description("frontend-design")).toContain("not the owner for PRD/SPEC/report webpage research")
+  expect(AgentRoleContract.description("frontend-design")).toContain(
+    "generated code and PRD/SPEC/report material are reference inputs only",
+  )
+  expect(AgentRoleContract.description("frontend-design")).toContain(
+    "rewritten webpage must be based on ainvest-frontend-design",
+  )
+  expect(AgentRoleContract.description("frontend-design")).toContain(
+    "not the owner for PRD/SPEC/report webpage research",
+  )
   expect(AgentRoleContract.description("frontend-design")).toContain("UI implementation or replication")
 
   expect(AgentRoleContract.description("deep-research")).toContain("PRD/SPEC/report source material")
-  expect(AgentRoleContract.description("deep-research")).toContain("Dedicated webpage functional/visual investigation division belongs to frontend-research")
+  expect(AgentRoleContract.description("deep-research")).toContain(
+    "Dedicated webpage functional/visual investigation division belongs to frontend-research",
+  )
 
   expect(AgentRoleContract.description("frontend-research")).toContain("Frontend research agent")
   expect(AgentRoleContract.description("frontend-research")).toContain("host-prepared rendered webpage evidence")
-  expect(AgentRoleContract.description("frontend-research")).toContain("source-backed webpage investigation work packets")
+  expect(AgentRoleContract.description("frontend-research")).toContain(
+    "source-backed webpage investigation work packets",
+  )
   expect(AgentRoleContract.description("frontend-research")).toContain("frontend_research_brief")
   expect(AgentRoleContract.description("frontend-research")).toContain("page interface verification")
   expect(AgentRoleContract.description("frontend-research")).toContain("API adaptation documentation handoff cues")
-  expect(AgentRoleContract.description("frontend-research")).toContain("PRD outline, or document material are reference inputs only")
-  expect(AgentRoleContract.description("frontend-research")).toContain("downstream webpage rewriting must be based on ainvest-frontend-design")
+  expect(AgentRoleContract.description("frontend-research")).toContain(
+    "PRD outline, or document material are reference inputs only",
+  )
+  expect(AgentRoleContract.description("frontend-research")).toContain(
+    "downstream webpage rewriting must be based on ainvest-frontend-design",
+  )
   expect(AgentRoleContract.description("frontend-research")).toContain("does not call build")
-  expect(AgentRoleContract.description("frontend-research")).toContain("does not create the frontend implementation template")
+  expect(AgentRoleContract.description("frontend-research")).toContain(
+    "does not create the frontend implementation template",
+  )
 })
 
 test("public workflow docs and live prompt describe the current model only", async () => {
@@ -331,7 +350,10 @@ test("public workflow docs and live prompt describe the current model only", asy
       expect(text, `${file} must not contain deleted public workflow term ${pattern}`).not.toMatch(pattern)
     }
     for (const pattern of staleExplanationPatterns) {
-      expect(text, `${file} must describe the current workflow directly instead of explaining stale terms ${pattern}`).not.toMatch(pattern)
+      expect(
+        text,
+        `${file} must describe the current workflow directly instead of explaining stale terms ${pattern}`,
+      ).not.toMatch(pattern)
     }
   }
 

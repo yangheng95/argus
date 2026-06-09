@@ -1,9 +1,6 @@
 import type { IntegrityResult } from "./team-agent"
 
-export function renderIntegrityMarkdown(input: {
-  verdict: IntegrityResult
-  sessionID: string
-}): string {
+export function renderIntegrityMarkdown(input: { verdict: IntegrityResult; sessionID: string }): string {
   const { verdict, sessionID } = input
   const lines: string[] = []
   lines.push(`### Integrity team review (verdict=${verdict.verdict}; session ${sessionID})`)
@@ -24,7 +21,9 @@ export function renderIntegrityMarkdown(input: {
         finding.userRequestQuotes && finding.userRequestQuotes.length > 0
           ? ` quotes=[${finding.userRequestQuotes.join(" | ")}]`
           : ""
-      lines.push(`- [${finding.severity}/${finding.consensus}] ${finding.id}: ${finding.title}${targets}${files}${quotes}`)
+      lines.push(
+        `- [${finding.severity}/${finding.consensus}] ${finding.id}: ${finding.title}${targets}${files}${quotes}`,
+      )
       if (finding.fingerprint) lines.push(`  fingerprint: ${finding.fingerprint}`)
       if (finding.canonicalSymptom) lines.push(`  canonical symptom: ${finding.canonicalSymptom}`)
       lines.push(`  ${finding.description}`)

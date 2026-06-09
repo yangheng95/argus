@@ -37,19 +37,21 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
       .describe(
         "Path to the reference PNG (e.g. reference.png from webpage_extract). Can be an absolute path or relative to the worktree.",
       ),
-    rendered: z
-      .string()
-      .describe("Path to the rendered PNG (e.g. rendered.png from webpage_render)."),
+    rendered: z.string().describe("Path to the rendered PNG (e.g. rendered.png from webpage_render)."),
     outputDir: z
       .string()
-      .describe(`Directory used to resolve relative paths and to write \`eval-result.json\`. Defaults to task-scoped \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`.`)
+      .describe(
+        `Directory used to resolve relative paths and to write \`eval-result.json\`. Defaults to task-scoped \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`.`,
+      )
       .optional(),
     passThreshold: z
       .number()
       .int()
       .min(0)
       .max(100)
-      .describe(`Numeric pass threshold. Default ${WEBPAGE_EVALUATE_PASS_SCORE}; use ${WEBPAGE_HIGH_FIDELITY_PASS_SCORE} for similarity >95% acceptance.`)
+      .describe(
+        `Numeric pass threshold. Default ${WEBPAGE_EVALUATE_PASS_SCORE}; use ${WEBPAGE_HIGH_FIDELITY_PASS_SCORE} for similarity >95% acceptance.`,
+      )
       .optional(),
   }),
   async execute(params, ctx) {
@@ -97,7 +99,9 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
         `- Reference: \`${referencePath}\``,
         `- Rendered:  \`${renderedPath}\``,
         `- Result:    \`${evalResultPath}\``,
-        visualEvidenceBundle ? `- Visual evidence bundle: \`${path.join(outputDir, "visual-evidence-bundle.json")}\`` : "",
+        visualEvidenceBundle
+          ? `- Visual evidence bundle: \`${path.join(outputDir, "visual-evidence-bundle.json")}\``
+          : "",
         "",
         `## Score: **${report.overallScore}/100**`,
         `- Numeric threshold: ${passThreshold}/100`,
@@ -118,7 +122,9 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
         mismatchedPixels: report.mismatchedPixels,
         totalPixels: report.totalPixels,
         evalResultPath,
-        visualEvidenceBundlePath: visualEvidenceBundle ? path.join(outputDir, "visual-evidence-bundle.json") : undefined,
+        visualEvidenceBundlePath: visualEvidenceBundle
+          ? path.join(outputDir, "visual-evidence-bundle.json")
+          : undefined,
       },
     }
   },

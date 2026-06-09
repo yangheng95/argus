@@ -629,13 +629,13 @@ export const GithubRunCommand = cmd({
               `${response}\n\nCloses #${issueId}${footer()}`,
             )
             if (pr) {
-          await createComment(`Created PR #${pr}${footer()}`)
+              await createComment(`Created PR #${pr}${footer()}`)
             } else {
-          await createComment(`${response}${footer()}`)
+              await createComment(`${response}${footer()}`)
             }
             await removeReaction(commentType)
           } else {
-        await createComment(`${response}${footer()}`)
+            await createComment(`${response}${footer()}`)
             await removeReaction(commentType)
           }
         }
@@ -864,10 +864,7 @@ export const GithubRunCommand = cmd({
               part.state.input && typeof part.state.input === "object" && !Array.isArray(part.state.input)
                 ? part.state.input
                 : {}
-            const title =
-              part.state.title || Object.keys(input).length > 0
-                ? JSON.stringify(input)
-                : "Unknown"
+            const title = part.state.title || Object.keys(input).length > 0 ? JSON.stringify(input) : "Unknown"
             console.log()
             printEvent(color, tool, title)
           }

@@ -9,14 +9,14 @@ OpenCorvus 的编排围绕 **agent** 构建。代理注册表（名称、模式�
 
 当前注册表内置以下代理。`mode` 表示调用方式：`primary` 作为会话顶层 agent 运行；`subagent` 由其他 agent 通过 `task` 工具派发。`hidden` 表示路由槽——不会出现在选择器里，但模型 / prompt 仍可在 config 中覆盖。
 
-| Agent | 模式 | 角色 |
-|---|---|---|
-| `build` | primary（hidden） | 实现 agent。由 orchestrator 或 direct workflow 派发后执行 read / edit / bash 类实现工具。 |
-| `general` | subagent | 通用多步研究 / 并行工作 agent，由 `task` 工具派发。 |
-| `explore` | subagent | 代码库探索——快速文件 / 代码搜索，默认只读。 |
-| `acceptance` | primary（hidden） | Acceptance review 槽位，用于 review stream 与 arbitration 路径。 |
+| Agent          | 模式              | 角色                                                                                                                                                                                                               |
+| -------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `build`        | primary（hidden） | 实现 agent。由 orchestrator 或 direct workflow 派发后执行 read / edit / bash 类实现工具。                                                                                                                          |
+| `general`      | subagent          | 通用多步研究 / 并行工作 agent，由 `task` 工具派发。                                                                                                                                                                |
+| `explore`      | subagent          | 代码库探索——快速文件 / 代码搜索，默认只读。                                                                                                                                                                        |
+| `acceptance`   | primary（hidden） | Acceptance review 槽位，用于 review stream 与 arbitration 路径。                                                                                                                                                   |
 | `orchestrator` | primary（hidden） | 编排 agent。拥有任务生命周期决策权，并调用 `frontend_design`、`frontend_research`、`analyze_intent`、`requirements`、`architect`、`build`、`integrity`、`modify_goal`、`restart_from_stage` 等显式 workflow 工具。 |
-| `requirements` | primary（hidden） | 需求阶段。抽取用户需求和基础技术决策。 |
+| `requirements` | primary（hidden） | 需求阶段。抽取用户需求和基础技术决策。                                                                                                                                                                             |
 
 其他注册的代理（`architect`、`frontend-design`、`frontend-research`、`intent-analysis`、`integrity`、`visual-qa`、`prosecutor`、`summary`、`title`、`compaction`、`mission`、`control`）是由 orchestrator、mission runtime 或 session loop 内部调用的 stage / 工具槽。它们在 config 中可见（可覆盖 model、prompt），但除非有专门 runtime 暴露，否则不可用户选择。
 
@@ -35,9 +35,9 @@ orchestrator 跑 `pipeline` 工作流时，Architect 创建 goals，每个 block
 ```jsonc
 {
   "agent": {
-    "build":          { "model": "anthropic/claude-sonnet-4-6" },
-    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" }
-  }
+    "build": { "model": "anthropic/claude-sonnet-4-6" },
+    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" },
+  },
 }
 ```
 
@@ -54,9 +54,9 @@ orchestrator 跑 `pipeline` 工作流时，Architect 创建 goals，每个 block
       "description": "审查代码最佳实践与潜在问题",
       "model": "anthropic/claude-sonnet-4-6",
       "prompt": "你是代码评审者。关注安全、性能、可维护性。",
-      "tools": { "write": false, "edit": false }
-    }
-  }
+      "tools": { "write": false, "edit": false },
+    },
+  },
 }
 ```
 
@@ -73,13 +73,13 @@ orchestrator 跑 `pipeline` 工作流时，Architect 创建 goals，每个 block
 ```jsonc
 {
   "assistant": {
-    "requirements":    { "max_steps": 20 },
-    "architect":       { "max_steps": 40 },
-    "acceptance":        { "max_steps": 160, "max_retries": 3 },
-    "frontend_design":  { "max_steps": 30 },
+    "requirements": { "max_steps": 20 },
+    "architect": { "max_steps": 40 },
+    "acceptance": { "max_steps": 160, "max_retries": 3 },
+    "frontend_design": { "max_steps": 30 },
     "intent_analysis": { "max_steps": 10 },
-    "build":           { "max_steps": 80 }
-  }
+    "build": { "max_steps": 80 },
+  },
 }
 ```
 

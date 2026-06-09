@@ -5,7 +5,7 @@
 // nativeSelect — show a select-option dialog
 // nativeOpen — open a URL or filesystem path via the Tauri plugin
 
-import { showAppDialog } from "../services/app-dialog";
+import { showAppDialog } from "../services/app-dialog"
 
 // ── nativeConfirm ──
 // Shows a confirm dialog and returns true when the user clicked OK.
@@ -13,10 +13,10 @@ import { showAppDialog } from "../services/app-dialog";
 export async function nativeConfirm(
   message: string,
   options?: {
-    title?: string;
-    kind?: string;
-    okLabel?: string;
-    cancelLabel?: string;
+    title?: string
+    kind?: string
+    okLabel?: string
+    cancelLabel?: string
   },
 ): Promise<boolean> {
   const result = await showAppDialog({
@@ -26,8 +26,8 @@ export async function nativeConfirm(
     okLabel: options?.okLabel,
     cancelLabel: options?.cancelLabel,
     cancel: true,
-  });
-  return !!result?.confirmed;
+  })
+  return !!result?.confirmed
 }
 
 // ── nativePrompt ──
@@ -36,13 +36,13 @@ export async function nativeConfirm(
 export async function nativePrompt(
   message: string,
   options?: {
-    title?: string;
-    kind?: string;
-    okLabel?: string;
-    cancelLabel?: string;
-    inputLabel?: string;
-    inputPlaceholder?: string;
-    inputValue?: string;
+    title?: string
+    kind?: string
+    okLabel?: string
+    cancelLabel?: string
+    inputLabel?: string
+    inputPlaceholder?: string
+    inputValue?: string
   },
 ): Promise<string | null> {
   const result = await showAppDialog({
@@ -56,32 +56,32 @@ export async function nativePrompt(
     inputLabel: options?.inputLabel,
     inputPlaceholder: options?.inputPlaceholder || "",
     inputValue: options?.inputValue || "",
-  });
-  return result?.confirmed ? (result.value ?? null) : null;
+  })
+  return result?.confirmed ? (result.value ?? null) : null
 }
 
 // ── nativeSelect ──
 // Shows a select-option dialog and returns the chosen value, or null if cancelled.
 
 export interface SelectOption {
-  value: string;
-  label?: string;
+  value: string
+  label?: string
 }
 
 export async function nativeSelect(
   message: string,
   options?: {
-    title?: string;
-    kind?: string;
-    okLabel?: string;
-    cancelLabel?: string;
-    selectLabel?: string;
-    selectValue?: string;
-    options?: SelectOption[];
+    title?: string
+    kind?: string
+    okLabel?: string
+    cancelLabel?: string
+    selectLabel?: string
+    selectValue?: string
+    options?: SelectOption[]
   },
 ): Promise<string | null> {
-  const list = Array.isArray(options?.options) ? options!.options : [];
-  if (!list.length) return null;
+  const list = Array.isArray(options?.options) ? options!.options : []
+  if (!list.length) return null
   const result = await showAppDialog({
     title: options?.title,
     message,
@@ -93,8 +93,8 @@ export async function nativeSelect(
     selectLabel: options?.selectLabel,
     selectOptions: list,
     selectValue: options?.selectValue || list[0]?.value || "",
-  });
-  return result?.confirmed ? (result.value ?? null) : null;
+  })
+  return result?.confirmed ? (result.value ?? null) : null
 }
 
 // ── nativeOpen ──
@@ -105,13 +105,13 @@ export async function nativeSelect(
 // in hosts that don't implement the command — no silent fallback to
 // `window.open` (CLAUDE.md §一-7 / plan §5.4).
 
-import { getHostTransport } from "../services/host-transport";
+import { getHostTransport } from "../services/host-transport"
 
 export async function nativeOpen(target: string): Promise<boolean> {
-  if (!target) return false;
-  const isUrl = /^https?:\/\//i.test(target);
+  if (!target) return false
+  const isUrl = /^https?:\/\//i.test(target)
   const opened = await getHostTransport().native(
     isUrl ? { kind: "open-url", url: target } : { kind: "open-path", path: target },
-  );
-  return opened === true;
+  )
+  return opened === true
 }

@@ -73,36 +73,45 @@ const args = parseArgs()
 const db = args.apply ? new Database(args.db) : new Database(args.db, { readonly: true })
 
 const sessions = db
-  .query<{ id: string }, [string]>(`
+  .query<{ id: string }, [string]>(
+    `
     WITH RECURSIVE session_tree(id) AS (
       SELECT session_id FROM engine_task WHERE id = ?
       UNION ALL
       SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
     )
     SELECT id FROM session_tree
-  `)
+  `,
+  )
   .all(args.taskID)
   .map((row) => row.id)
 
 if (sessions.length === 0) {
-  console.log(JSON.stringify({
-    mode: args.apply ? "apply" : "dry-run",
-    db: args.db,
-    taskID: args.taskID,
-    sessions: 0,
-    emptyAssistantsAdjacentToCompaction: [],
-    failedCompactionAssistants: [],
-    legacyProseSummaries: [],
-    oversizedPatchParts: [],
-    repairableMessageIDs: [],
-  }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        mode: args.apply ? "apply" : "dry-run",
+        db: args.db,
+        taskID: args.taskID,
+        sessions: 0,
+        emptyAssistantsAdjacentToCompaction: [],
+        failedCompactionAssistants: [],
+        legacyProseSummaries: [],
+        oversizedPatchParts: [],
+        repairableMessageIDs: [],
+      },
+      null,
+      2,
+    ),
+  )
   db.close()
   process.exit(0)
 }
 
 const sessionSql = placeholders(sessions)
 const messages = db
-  .query<MessageRow, string[]>(`
+  .query<MessageRow, string[]>(
+    `
     SELECT m.id,
            m.session_id,
            json_extract(m.data, '$.role') AS role,
@@ -117,17 +126,20 @@ const messages = db
     WHERE m.session_id IN (${sessionSql})
     GROUP BY m.id
     ORDER BY m.session_id, m.id
-  `)
+  `,
+  )
   .all(...sessions)
 
 const compactionUsers = new Set(
   db
-    .query<{ message_id: string }, string[]>(`
+    .query<{ message_id: string }, string[]>(
+      `
       SELECT DISTINCT message_id
       FROM part
       WHERE session_id IN (${sessionSql})
         AND json_extract(data, '$.type') = 'compaction'
-    `)
+    `,
+    )
     .all(...sessions)
     .map((row) => row.message_id),
 )
@@ -164,9 +176,17 @@ const legacyProseSummaries = messages.filter(
 
 const oversizedPatchParts = db
   .query<
-    { id: string; message_id: string; session_id: string; hash: string | null; file_count: number | null; data_length: number },
+    {
+      id: string
+      message_id: string
+      session_id: string
+      hash: string | null
+      file_count: number | null
+      data_length: number
+    },
     [...string[], number, string]
-  >(`
+  >(
+    `
     SELECT id,
            message_id,
            session_id,
@@ -178,7 +198,8 @@ const oversizedPatchParts = db
       AND json_extract(data, '$.type') = 'patch'
       AND (length(data) >= ? OR json_extract(data, '$.hash') = ?)
     ORDER BY data_length DESC
-  `)
+  `,
+  )
   .all(...sessions, args.oversizedPatchChars, EMPTY_TREE_HASH)
 
 const repairableMessageIDs = [
@@ -188,17 +209,23 @@ const repairableMessageIDs = [
   ]),
 ]
 
-console.log(JSON.stringify({
-  mode: args.apply ? "apply" : "dry-run",
-  db: args.db,
-  taskID: args.taskID,
-  sessions: sessions.length,
-  emptyAssistantsAdjacentToCompaction,
-  failedCompactionAssistants,
-  legacyProseSummaries,
-  oversizedPatchParts,
-  repairableMessageIDs,
-}, null, 2))
+console.log(
+  JSON.stringify(
+    {
+      mode: args.apply ? "apply" : "dry-run",
+      db: args.db,
+      taskID: args.taskID,
+      sessions: sessions.length,
+      emptyAssistantsAdjacentToCompaction,
+      failedCompactionAssistants,
+      legacyProseSummaries,
+      oversizedPatchParts,
+      repairableMessageIDs,
+    },
+    null,
+    2,
+  ),
+)
 
 if (!args.apply || repairableMessageIDs.length === 0) {
   db.close()
@@ -210,10 +237,16 @@ db.transaction(() => {
   db.query(`DELETE FROM message WHERE id IN (${placeholders(repairableMessageIDs)})`).run(...repairableMessageIDs)
 })()
 
-console.log(JSON.stringify({
-  repaired: true,
-  backup,
-  deletedMessages: repairableMessageIDs,
-}, null, 2))
+console.log(
+  JSON.stringify(
+    {
+      repaired: true,
+      backup,
+      deletedMessages: repairableMessageIDs,
+    },
+    null,
+    2,
+  ),
+)
 
 db.close()

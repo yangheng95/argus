@@ -50,7 +50,7 @@ If the brief is research-shaped (the activation signals above) and you call `ext
    - **关键洞察 / Key Insights** — bulleted observations that emerge from the matrix, each insight backed by one or more matrix cells.
    - **建议 / Recommendations** — actionable, prioritised, scoped to the audience the brief named (product team, engineering, leadership, …).
    - **参考 / References** — the canonical URL list, deduplicated.
-   Adapt the section names + ordering to the brief's language. If the brief explicitly enumerates sections, follow that enumeration verbatim.
+     Adapt the section names + ordering to the brief's language. If the brief explicitly enumerates sections, follow that enumeration verbatim.
 
 6. **Self-check before reporting done.** Re-read the report yourself. Every non-obvious claim should have a citation; every section the brief asked for should exist; the recommendations should be concrete enough to act on. Do not pad with filler if a section has nothing real to say — say so explicitly and move on.
 

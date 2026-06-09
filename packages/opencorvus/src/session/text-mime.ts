@@ -13,13 +13,40 @@ const TEXT_APP_MIMES = new Set([
 ])
 
 const TEXT_EXTS = new Set([
-  "ts", "tsx", "js", "jsx", "mjs", "cjs",
-  "py", "go", "rs", "c", "cpp", "h", "hpp",
-  "java", "rb", "sh", "bat", "ps1",
-  "html", "css", "scss", "less",
-  "sql", "toml", "yaml", "yml",
-  "json", "xml", "csv", "log",
-  "md", "markdown", "txt", "rst",
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "py",
+  "go",
+  "rs",
+  "c",
+  "cpp",
+  "h",
+  "hpp",
+  "java",
+  "rb",
+  "sh",
+  "bat",
+  "ps1",
+  "html",
+  "css",
+  "scss",
+  "less",
+  "sql",
+  "toml",
+  "yaml",
+  "yml",
+  "json",
+  "xml",
+  "csv",
+  "log",
+  "md",
+  "markdown",
+  "txt",
+  "rst",
 ])
 
 /**
@@ -79,9 +106,7 @@ const DATA_URL_BASE64_PATTERN = /^data:[^;,]+(?:;[^;,]+)*;base64,/i
 
 export function decodeDataUrlBase64(dataUrl: string, context: string): string {
   if (typeof dataUrl !== "string" || !DATA_URL_BASE64_PATTERN.test(dataUrl)) {
-    const preview = typeof dataUrl === "string" && dataUrl.length > 60
-      ? `${dataUrl.slice(0, 60)}…`
-      : String(dataUrl)
+    const preview = typeof dataUrl === "string" && dataUrl.length > 60 ? `${dataUrl.slice(0, 60)}…` : String(dataUrl)
     throw new Error(
       `${context}: expected data URL of form "data:<mime>;base64,<bytes>", got ${JSON.stringify(preview)}`,
     )

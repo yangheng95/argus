@@ -196,8 +196,8 @@ test(
       await page.select('[data-testid="agent-model-select-integrity"]', "openai/gpt-4.1")
       await page.waitForFunction(
         () =>
-          (document.querySelector('[data-testid="agent-model-select-integrity"]') as HTMLSelectElement | null)?.value ===
-          "openai/gpt-4.1",
+          (document.querySelector('[data-testid="agent-model-select-integrity"]') as HTMLSelectElement | null)
+            ?.value === "openai/gpt-4.1",
       )
 
       const modelPatches = patches.filter((patch) => "agent" in patch)

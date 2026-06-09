@@ -12,16 +12,16 @@ owns webpage functional/visual investigation.
 
 Full-repo grep covered these surfaces before editing:
 
-| Surface | Action |
-| --- | --- |
-| Agent role registry | Replace the live generic agent identity `research` with `deep-research`. |
-| Orchestrator tools | Replace tool id `research` with `deep_research`; keep `frontend_research` separate. |
-| Session kinds and runtime contracts | Replace workflow/session kind `research` with `deep-research`. |
-| Prompt catalog/core prompt | Rename the generic prompt to deep research and redefine its boundary as multi-source deep evidence gathering. |
-| Runtime runner | Rename `ResearchAgent` to `DeepResearchAgent`; keep shared `ResearchBrief` schema because both deep research and frontend research persist research evidence briefs. |
-| Runtime task bundle paths | Store deep research bundles under `deep-research/<session>/...` instead of `research/<session>/...`. |
-| Tests | Update role, orchestrator description, session, prompt, and persistence tests to assert the new identity and the absence of the old tool. |
-| Docs/specs | Update active specs and prompt references where they describe the live generic agent identity. |
+| Surface                             | Action                                                                                                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent role registry                 | Replace the live generic agent identity `research` with `deep-research`.                                                                                             |
+| Orchestrator tools                  | Replace tool id `research` with `deep_research`; keep `frontend_research` separate.                                                                                  |
+| Session kinds and runtime contracts | Replace workflow/session kind `research` with `deep-research`.                                                                                                       |
+| Prompt catalog/core prompt          | Rename the generic prompt to deep research and redefine its boundary as multi-source deep evidence gathering.                                                        |
+| Runtime runner                      | Rename `ResearchAgent` to `DeepResearchAgent`; keep shared `ResearchBrief` schema because both deep research and frontend research persist research evidence briefs. |
+| Runtime task bundle paths           | Store deep research bundles under `deep-research/<session>/...` instead of `research/<session>/...`.                                                                 |
+| Tests                               | Update role, orchestrator description, session, prompt, and persistence tests to assert the new identity and the absence of the old tool.                            |
+| Docs/specs                          | Update active specs and prompt references where they describe the live generic agent identity.                                                                       |
 
 ## Design
 

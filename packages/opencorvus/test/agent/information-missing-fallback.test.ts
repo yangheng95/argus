@@ -92,7 +92,9 @@ describe("INFORMATION_MISSING_FALLBACK_TEXT constant — single source for the r
   })
 
   test("declares the host's process-exit contract with concrete exit code", () => {
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/host detects[\s\S]*<INFORMATION MISSING>[\s\S]*process\.exits[\s\S]*code 99/)
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(
+      /host detects[\s\S]*<INFORMATION MISSING>[\s\S]*process\.exits[\s\S]*code 99/,
+    )
     expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("ONE emit")
     expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/desired outcome/)
   })

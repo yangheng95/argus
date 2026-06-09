@@ -77,9 +77,7 @@ function part(messageID: string, id: string) {
 
 const userTurn: Message.WithParts = {
   info: userInfo("m-user"),
-  parts: [
-    { ...part("m-user", "u1"), type: "text", text: "hello" },
-  ] as Message.Part[],
+  parts: [{ ...part("m-user", "u1"), type: "text", text: "hello" }] as Message.Part[],
 }
 
 describe("toModelMessages — stream early-death structural gate", () => {

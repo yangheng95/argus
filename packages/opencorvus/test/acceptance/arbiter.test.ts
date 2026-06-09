@@ -27,31 +27,37 @@ describe("legacy acceptance evidence arbiter", () => {
   })
 
   test("review stream event schemas accept only the integrity live-card contract", () => {
-    expect(EngineEvent.ReviewStreamStarted.properties.parse({
-      taskID: "tsk_review",
-      reviewID: "integrity:ses_review",
-      phase: "integrity",
-      sessionID: "ses_review",
-    }).reviewID).toBe("integrity:ses_review")
+    expect(
+      EngineEvent.ReviewStreamStarted.properties.parse({
+        taskID: "tsk_review",
+        reviewID: "integrity:ses_review",
+        phase: "integrity",
+        sessionID: "ses_review",
+      }).reviewID,
+    ).toBe("integrity:ses_review")
 
-    expect(EngineEvent.ReviewStreamProgress.properties.parse({
-      taskID: "tsk_review",
-      reviewID: "integrity:ses_review",
-      phase: "integrity",
-      currentStep: "runtime",
-      attempt: 1,
-      elapsedMs: 123,
-      summary: "Runtime evidence",
-    }).currentStep).toBe("runtime")
+    expect(
+      EngineEvent.ReviewStreamProgress.properties.parse({
+        taskID: "tsk_review",
+        reviewID: "integrity:ses_review",
+        phase: "integrity",
+        currentStep: "runtime",
+        attempt: 1,
+        elapsedMs: 123,
+        summary: "Runtime evidence",
+      }).currentStep,
+    ).toBe("runtime")
 
-    expect(EngineEvent.ReviewStreamChunk.properties.parse({
-      taskID: "tsk_review",
-      reviewID: "integrity:ses_review",
-      phase: "integrity",
-      kind: "reasoning",
-      delta: "thinking",
-      attempt: 1,
-    }).phase).toBe("integrity")
+    expect(
+      EngineEvent.ReviewStreamChunk.properties.parse({
+        taskID: "tsk_review",
+        reviewID: "integrity:ses_review",
+        phase: "integrity",
+        kind: "reasoning",
+        delta: "thinking",
+        attempt: 1,
+      }).phase,
+    ).toBe("integrity")
 
     expect("IntegrityReviewStarted" in EngineEvent).toBe(false)
     expect("IntegrityReviewProgress" in EngineEvent).toBe(false)

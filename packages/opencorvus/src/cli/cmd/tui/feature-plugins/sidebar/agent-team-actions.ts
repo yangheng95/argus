@@ -53,7 +53,12 @@ async function runTaskMutation(api: TuiPluginApi, title: string, task: TaskItem,
   }
 }
 
-async function runInteractionMutation(api: TuiPluginApi, title: string, interaction: PendingInteraction, run: () => Promise<unknown>) {
+async function runInteractionMutation(
+  api: TuiPluginApi,
+  title: string,
+  interaction: PendingInteraction,
+  run: () => Promise<unknown>,
+) {
   try {
     await run()
     api.ui.toast({
@@ -251,7 +256,8 @@ export function showTask(api: TuiPluginApi, item: TaskItem) {
     title: action.title,
     value: `${action.action}:${index}`,
     description: action.description,
-    category: action.action === "reply_interaction" || action.action === "reject_interaction" ? "Interaction" : "Task Action",
+    category:
+      action.action === "reply_interaction" || action.action === "reject_interaction" ? "Interaction" : "Task Action",
   }))
   api.ui.dialog.replace(() =>
     api.ui.DialogSelect({

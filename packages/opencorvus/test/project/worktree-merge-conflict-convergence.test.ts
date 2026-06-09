@@ -52,8 +52,7 @@ describe("Worktree.mergeWithMerge convergence", () => {
     }
     expect(Worktree.MergeConflictError.isInstance(firstErr)).toBe(true)
 
-    const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`
-      .quiet().nothrow().cwd(info.directory)
+    const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`.quiet().nothrow().cwd(info.directory)
     expect(mergeHead.exitCode).toBe(0)
 
     const conflictFile = path.join(info.directory, "lock.json")

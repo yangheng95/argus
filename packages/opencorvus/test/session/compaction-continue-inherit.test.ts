@@ -20,10 +20,7 @@ describe("SessionCompaction continuation", () => {
       },
     })
 
-  function installRuntimeContinuation(input: {
-    sessionID: string
-    kind: "build" | "frontend-design" | "integrity"
-  }) {
+  function installRuntimeContinuation(input: { sessionID: string; kind: "build" | "frontend-design" | "integrity" }) {
     const descriptor = WorkerTurnDescriptor.create({
       sessionID: input.sessionID,
       payload: {

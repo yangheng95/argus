@@ -22,7 +22,7 @@ test("tool input capture recovers structured args from streamed tool-input delta
     chunk: {
       type: "tool-input-delta",
       id: "call_1",
-      delta: "{\"summary\":\"Spec\",\"items\":[\"a\",\"b\"]}",
+      delta: '{"summary":"Spec","items":["a","b"]}',
     },
   } as never)
 
@@ -79,7 +79,7 @@ test("tracked tool capture reports usage and notifies once on the first valid pa
     chunk: {
       type: "tool-input-delta",
       id: "call_3",
-      delta: "{\"summary\":\"Spec\",\"items\":[\"a\"]}",
+      delta: '{"summary":"Spec","items":["a"]}',
     },
   } as never)
   await hooks.onChunk?.({

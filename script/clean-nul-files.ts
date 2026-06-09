@@ -22,18 +22,15 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 const RESERVED = new Set<string>([
-  "nul", "con", "prn", "aux",
+  "nul",
+  "con",
+  "prn",
+  "aux",
   ...Array.from({ length: 9 }, (_, i) => `com${i + 1}`),
   ...Array.from({ length: 9 }, (_, i) => `lpt${i + 1}`),
 ])
 
-const SKIP_DIRS = new Set<string>([
-  "node_modules",
-  ".git",
-  "$Recycle.Bin",
-  "System Volume Information",
-  "Windows.old",
-])
+const SKIP_DIRS = new Set<string>(["node_modules", ".git", "$Recycle.Bin", "System Volume Information", "Windows.old"])
 
 function toWin32LongPath(p: string): string {
   if (process.platform !== "win32") return p

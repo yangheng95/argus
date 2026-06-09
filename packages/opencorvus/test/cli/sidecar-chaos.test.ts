@@ -80,9 +80,11 @@ async function spawnSidecar(opts: {
         if (done) break
         stderrTail = (stderrTail + decoder.decode(value)).slice(-8192)
       }
-    } catch {}
-    finally {
-      try { reader.releaseLock() } catch {}
+    } catch {
+    } finally {
+      try {
+        reader.releaseLock()
+      } catch {}
     }
   })()
   // Hold a reference so the drain never GC'd; we await it indirectly
@@ -104,7 +106,9 @@ async function spawnSidecar(opts: {
         break
       }
     }
-    try { reader.releaseLock() } catch {}
+    try {
+      reader.releaseLock()
+    } catch {}
   }
 
   return {
@@ -119,110 +123,113 @@ describe("opencorvus sidecar (chaos)", () => {
 
   afterEach(async () => {
     while (cleanups.length) {
-      try { cleanups.pop()!() } catch {}
+      try {
+        cleanups.pop()!()
+      } catch {}
     }
   })
 
-  test(
-    "second managed sidecar on the same workspace exits 3 (existing-instance lock §19.1.1)",
-    async () => {
-      const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-chaos-"))
-      const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-chaos-ws-"))
-      cleanups.push(() => {
-        try { fs.rmSync(tempHome, { recursive: true, force: true }) } catch {}
-        try { fs.rmSync(workspace, { recursive: true, force: true }) } catch {}
-      })
-
-      // First sidecar — should reach handshake and own the lock.
-      const TOKEN = `chaos-token-${Math.random().toString(36).slice(2)}`
-      const first = await spawnSidecar({
-        tempHome,
-        workspace,
-        parentPid: process.pid,
-        token: TOKEN,
-        awaitHandshake: true,
-        handshakeTimeoutMs: 30_000,
-      })
-      cleanups.push(() => {
-        try { first.proc.kill() } catch {}
-      })
-      expect(first.port).toBeDefined()
-      expect(first.port).toBeGreaterThan(0)
-
-      // Second sidecar — same workspace, different token. The lock
-      // file written by `first` should make detectExisting() fail
-      // and the sidecar must exit with code 3.
-      const second = await spawnSidecar({
-        tempHome,
-        workspace,
-        parentPid: process.pid,
-        // No awaitHandshake — second never reaches handshake.
-      })
-      const exitCode = await Promise.race([
-        second.proc.exited,
-        new Promise<number>((r) => setTimeout(() => r(-1), 10_000)),
-      ])
-      // Allow the stderr drain to flush after exit before reading.
-      await new Promise((r) => setTimeout(r, 50))
-      const stderr = second.getStderr()
-      expect(exitCode).toBe(3)
-      expect(stderr).toContain("existing managed sidecar")
-
-      // Graceful shutdown of the first via HTTP /shutdown.
+  test("second managed sidecar on the same workspace exits 3 (existing-instance lock §19.1.1)", async () => {
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-chaos-"))
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-chaos-ws-"))
+    cleanups.push(() => {
       try {
-        const auth = Buffer.from(`opencorvus:${TOKEN}`).toString("base64")
-        await fetch(`http://127.0.0.1:${first.port}/shutdown`, {
-          method: "POST",
-          headers: { Authorization: `Basic ${auth}` },
-        }).catch(() => undefined)
+        fs.rmSync(tempHome, { recursive: true, force: true })
       } catch {}
-      await Promise.race([
-        first.proc.exited,
-        new Promise<number>((r) => setTimeout(() => r(-1), 10_000)),
-      ])
-    },
-    90_000,
-  )
+      try {
+        fs.rmSync(workspace, { recursive: true, force: true })
+      } catch {}
+    })
 
-  test(
-    "parent watchdog self-shuts when parent PID is already dead at spawn time (§19.1.2)",
-    async () => {
-      const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-chaos-"))
-      const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-chaos-ws-"))
-      cleanups.push(() => {
-        try { fs.rmSync(tempHome, { recursive: true, force: true }) } catch {}
-        try { fs.rmSync(workspace, { recursive: true, force: true }) } catch {}
-      })
+    // First sidecar — should reach handshake and own the lock.
+    const TOKEN = `chaos-token-${Math.random().toString(36).slice(2)}`
+    const first = await spawnSidecar({
+      tempHome,
+      workspace,
+      parentPid: process.pid,
+      token: TOKEN,
+      awaitHandshake: true,
+      handshakeTimeoutMs: 30_000,
+    })
+    cleanups.push(() => {
+      try {
+        first.proc.kill()
+      } catch {}
+    })
+    expect(first.port).toBeDefined()
+    expect(first.port).toBeGreaterThan(0)
 
-      // Spawn a short-lived dummy bun that we kill BEFORE the sidecar
-      // starts; its PID will already be free by the time the
-      // watchdog's first poll runs. We still pass a real-looking PID
-      // value rather than a literally-impossible one so the resolver
-      // sees the same shape as a real workflow.
-      const dummy = Bun.spawn(["bun", "-e", "process.exit(0)"], { stdout: "ignore", stderr: "ignore" })
-      const deadPid = dummy.pid!
-      await dummy.exited
+    // Second sidecar — same workspace, different token. The lock
+    // file written by `first` should make detectExisting() fail
+    // and the sidecar must exit with code 3.
+    const second = await spawnSidecar({
+      tempHome,
+      workspace,
+      parentPid: process.pid,
+      // No awaitHandshake — second never reaches handshake.
+    })
+    const exitCode = await Promise.race([
+      second.proc.exited,
+      new Promise<number>((r) => setTimeout(() => r(-1), 10_000)),
+    ])
+    // Allow the stderr drain to flush after exit before reading.
+    await new Promise((r) => setTimeout(r, 50))
+    const stderr = second.getStderr()
+    expect(exitCode).toBe(3)
+    expect(stderr).toContain("existing managed sidecar")
 
-      const sidecar = await spawnSidecar({
-        tempHome,
-        workspace,
-        parentPid: deadPid,
-        watchdogIntervalMs: 200,
-        awaitHandshake: true,
-        handshakeTimeoutMs: 30_000,
-      })
-      cleanups.push(() => {
-        try { sidecar.proc.kill() } catch {}
-      })
-      // Even if the handshake landed, the watchdog should fire
-      // within the next polling interval and the sidecar must exit
-      // on its own. Allow generous slack for slow CI runners.
-      const exitCode = await Promise.race([
-        sidecar.proc.exited,
-        new Promise<number>((r) => setTimeout(() => r(-1), 15_000)),
-      ])
-      expect(exitCode).not.toBe(-1)
-    },
-    60_000,
-  )
+    // Graceful shutdown of the first via HTTP /shutdown.
+    try {
+      const auth = Buffer.from(`opencorvus:${TOKEN}`).toString("base64")
+      await fetch(`http://127.0.0.1:${first.port}/shutdown`, {
+        method: "POST",
+        headers: { Authorization: `Basic ${auth}` },
+      }).catch(() => undefined)
+    } catch {}
+    await Promise.race([first.proc.exited, new Promise<number>((r) => setTimeout(() => r(-1), 10_000))])
+  }, 90_000)
+
+  test("parent watchdog self-shuts when parent PID is already dead at spawn time (§19.1.2)", async () => {
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-chaos-"))
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-chaos-ws-"))
+    cleanups.push(() => {
+      try {
+        fs.rmSync(tempHome, { recursive: true, force: true })
+      } catch {}
+      try {
+        fs.rmSync(workspace, { recursive: true, force: true })
+      } catch {}
+    })
+
+    // Spawn a short-lived dummy bun that we kill BEFORE the sidecar
+    // starts; its PID will already be free by the time the
+    // watchdog's first poll runs. We still pass a real-looking PID
+    // value rather than a literally-impossible one so the resolver
+    // sees the same shape as a real workflow.
+    const dummy = Bun.spawn(["bun", "-e", "process.exit(0)"], { stdout: "ignore", stderr: "ignore" })
+    const deadPid = dummy.pid!
+    await dummy.exited
+
+    const sidecar = await spawnSidecar({
+      tempHome,
+      workspace,
+      parentPid: deadPid,
+      watchdogIntervalMs: 200,
+      awaitHandshake: true,
+      handshakeTimeoutMs: 30_000,
+    })
+    cleanups.push(() => {
+      try {
+        sidecar.proc.kill()
+      } catch {}
+    })
+    // Even if the handshake landed, the watchdog should fire
+    // within the next polling interval and the sidecar must exit
+    // on its own. Allow generous slack for slow CI runners.
+    const exitCode = await Promise.race([
+      sidecar.proc.exited,
+      new Promise<number>((r) => setTimeout(() => r(-1), 15_000)),
+    ])
+    expect(exitCode).not.toBe(-1)
+  }, 60_000)
 })

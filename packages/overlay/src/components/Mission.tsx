@@ -22,16 +22,7 @@
 // degraded state. Each error block names the operation and the server
 // message and offers a retry where retrying is meaningful.
 
-import {
-  For,
-  Show,
-  createEffect,
-  createMemo,
-  createResource,
-  createSignal,
-  onCleanup,
-  onMount,
-} from "solid-js"
+import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js"
 import { boardStore, setBoardStore } from "../store/board"
 import { clearMessages, setChatAttachments } from "../store/messages"
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
@@ -58,10 +49,7 @@ import type { DiffTarget } from "../services/diff"
 import { startSSE, stopSSE } from "../services/sse"
 import { resetWriter } from "../services/tree-writer"
 import { t } from "../utils/i18n"
-import {
-  humanizeApiError,
-  runtimeLabel,
-} from "../utils/mission-helpers"
+import { humanizeApiError, runtimeLabel } from "../utils/mission-helpers"
 import { detailStamp, stamp } from "../utils/time"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -221,16 +209,13 @@ export function Mission(props: {
     { initialValue: [] },
   )
 
-  const [runtime, runtimeCtl] = createResource(
-    missionDirectory,
-    async () => {
-      try {
-        return await loadChannelRuntime()
-      } catch (err) {
-        throw new Error(errorMessage(err))
-      }
-    },
-  )
+  const [runtime, runtimeCtl] = createResource(missionDirectory, async () => {
+    try {
+      return await loadChannelRuntime()
+    } catch (err) {
+      throw new Error(errorMessage(err))
+    }
+  })
 
   // ── Resizable three columns ────────────────────────────────────────
   //
@@ -300,7 +285,9 @@ export function Mission(props: {
     if (!selected) return undefined
     return (missionRecords() ?? []).find((mission) => mission.sessionID === selected)
   })
-  const missionChannelTaskStats = createMemo(() => selectedMissionRecord()?.taskStats ?? aggregateMissionTaskStats(missionRecords() ?? []))
+  const missionChannelTaskStats = createMemo(
+    () => selectedMissionRecord()?.taskStats ?? aggregateMissionTaskStats(missionRecords() ?? []),
+  )
 
   // ── Refresh / actions ──────────────────────────────────────────────
 
@@ -353,7 +340,7 @@ export function Mission(props: {
 
   async function handleMissionAbort(mission: MissionRecord): Promise<void> {
     await withBusy(`abort:${mission.missionID}`, async () => {
-      await abortMission(mission.missionID)
+      await abortMission(mission)
       setMissionRefreshToken((value) => value + 1)
     })
   }
@@ -361,14 +348,14 @@ export function Mission(props: {
   async function handleMissionDelete(mission: MissionRecord): Promise<void> {
     await withBusy(`delete:${mission.missionID}`, async () => {
       if (selectedMissionSessionID() === mission.sessionID) handleCloseMission()
-      await deleteMission(mission.missionID)
+      await deleteMission(mission)
       await missionRecordsCtl.refetch()
     })
   }
 
   async function handleMissionRename(mission: MissionRecord, title: string): Promise<void> {
     await withBusy(`rename:${mission.missionID}`, async () => {
-      await renameMission(mission.missionID, title)
+      await renameMission(mission, title)
       await missionRecordsCtl.refetch()
     })
   }
@@ -467,19 +454,19 @@ export function Mission(props: {
           aria-label={t("mission.ledger.title")}
         />
 
-          <MissionWorkbench
-            active={isMissionPage()}
-            composerOpen={composerOpen()}
-            onCloseComposer={() => setComposerOpen(false)}
-            selectedSource={boardStore.selectedSource}
-            workspaceTarget={props.workspaceTarget}
-            workspaceOpen={props.workspaceOpen}
-            closeWorkspace={props.closeWorkspace}
-            selectedMission={selectedMissionRecord()}
-            missionLauncherDraftKey={missionLauncherDraftKey()}
-            onMissionAwake={(result) => void handleMissionAwake(result)}
-            onMissionMessageSubmitted={handleMissionMessageSubmitted}
-          />
+        <MissionWorkbench
+          active={isMissionPage()}
+          composerOpen={composerOpen()}
+          onCloseComposer={() => setComposerOpen(false)}
+          selectedSource={boardStore.selectedSource}
+          workspaceTarget={props.workspaceTarget}
+          workspaceOpen={props.workspaceOpen}
+          closeWorkspace={props.closeWorkspace}
+          selectedMission={selectedMissionRecord()}
+          missionLauncherDraftKey={missionLauncherDraftKey()}
+          onMissionAwake={(result) => void handleMissionAwake(result)}
+          onMissionMessageSubmitted={handleMissionMessageSubmitted}
+        />
 
         <div
           class="pane-resizer pane-resizer-right"
@@ -549,7 +536,13 @@ function MissionWorkbench(props: {
           <Show when={props.active}>
             <Show
               when={props.selectedSource?.kind === "session"}
-              fallback={<MissionComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} draftKey={props.missionLauncherDraftKey} />}
+              fallback={
+                <MissionComposer
+                  onClose={props.onCloseComposer}
+                  onAwake={props.onMissionAwake}
+                  draftKey={props.missionLauncherDraftKey}
+                />
+              }
             >
               <MissionConversation
                 workspaceTarget={props.workspaceTarget}
@@ -563,7 +556,12 @@ function MissionWorkbench(props: {
           </Show>
         }
       >
-        <MissionComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} dismissible={true} draftKey={props.missionLauncherDraftKey} />
+        <MissionComposer
+          onClose={props.onCloseComposer}
+          onAwake={props.onMissionAwake}
+          dismissible={true}
+          draftKey={props.missionLauncherDraftKey}
+        />
       </Show>
     </section>
   )
@@ -587,7 +585,9 @@ function MissionConversation(props: {
     <div class="mission-conversation" data-kind="mission" data-ui="mission-conversation">
       <header class="mission-conversation-header chat-header oc-surface-header">
         <div class="chat-header-main oc-surface-header__main">
-          <h2 class="mission-conversation-title chat-title oc-surface-header__title">{t("mission.launcher.conversation_title")}</h2>
+          <h2 class="mission-conversation-title chat-title oc-surface-header__title">
+            {t("mission.launcher.conversation_title")}
+          </h2>
         </div>
         <div class="oc-surface-header__actions mission-conversation-header-actions">
           <span
@@ -649,7 +649,9 @@ function MissionComposer(props: {
 }) {
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal("")
-  const [lastResult, setLastResult] = createSignal<{ missionID: string; sessionID: string; created: boolean } | null>(null)
+  const [lastResult, setLastResult] = createSignal<{ missionID: string; sessionID: string; created: boolean } | null>(
+    null,
+  )
 
   let activeController: AbortController | null = null
   const cancelActive = (reason?: unknown): void => {
@@ -883,7 +885,12 @@ function MissionChannelPanel(props: {
           <ul class="mission-channels-rows">
             <For each={props.channels}>
               {(c) => (
-                <li class="mission-channel-row" data-channel-id={c.id} data-status={c.status} data-runtime={c.runtime_status ?? "disabled"}>
+                <li
+                  class="mission-channel-row"
+                  data-channel-id={c.id}
+                  data-status={c.status}
+                  data-runtime={c.runtime_status ?? "disabled"}
+                >
                   <div class="mission-channel-row-head">
                     <span class="mission-channel-row-name">{c.name}</span>
                     <span class="mission-channel-row-status" data-status={c.status}>

@@ -76,8 +76,8 @@ export function overlayMeta(
   if (typeof info.role !== "string" || info.role.length === 0) {
     throw new Error(
       `overlayMeta: message on session ${sessionID} has no info.role. ` +
-      `Every message emitter must set role explicitly (user / assistant). ` +
-      `Find the upstream caller that constructed this message and add the role.`,
+        `Every message emitter must set role explicitly (user / assistant). ` +
+        `Find the upstream caller that constructed this message and add the role.`,
     )
   }
   const role = info.role
@@ -87,8 +87,8 @@ export function overlayMeta(
     if (role !== "user") {
       throw new Error(
         `overlayMeta: ${role} message on root session ${sessionID}. Root ` +
-        `sessions only hold user-authored content; assistant output must be ` +
-        `written to a child session with a non-root kind.`,
+          `sessions only hold user-authored content; assistant output must be ` +
+          `written to a child session with a non-root kind.`,
       )
     }
     return { resolvedRole: "user", channel: "main" }
@@ -98,15 +98,15 @@ export function overlayMeta(
   if (!kind) {
     throw new Error(
       `overlayMeta: session ${sessionID} has no kind in the DB. Every session ` +
-      `must be created via Session.createNext({kind: ...}); a row missing kind ` +
-      `means a code path bypassed createNext or the row was inserted directly.`,
+        `must be created via Session.createNext({kind: ...}); a row missing kind ` +
+        `means a code path bypassed createNext or the row was inserted directly.`,
     )
   }
   if (kind === "root") {
     throw new Error(
       `overlayMeta: child session ${sessionID} has kind="root" (only the ` +
-      `task's session_id should be a root). Probably a Session.createNext ` +
-      `call passed kind="root" with a parentID.`,
+        `task's session_id should be a root). Probably a Session.createNext ` +
+        `call passed kind="root" with a parentID.`,
     )
   }
   if (role === "user") {
@@ -145,7 +145,7 @@ function cacheMessageInfo(properties: Record<string, unknown>) {
   if (typeof info.role !== "string" || info.role.length === 0) {
     throw new Error(
       `cacheMessageInfo: message ${info.id} missing info.role — every emitter ` +
-      `must set role explicitly; no "assistant" fallback (一个萝卜一个坑).`,
+        `must set role explicitly; no "assistant" fallback (一个萝卜一个坑).`,
     )
   }
   rememberMessageInfo(info.id, {
@@ -156,19 +156,17 @@ function cacheMessageInfo(properties: Record<string, unknown>) {
 
 function readPersistedMessageInfo(messageID: string): { role: string; extra?: Record<string, unknown> } | undefined {
   const row = Database.use((db) =>
-    db
-      .select({ data: MessageTable.data })
-      .from(MessageTable)
-      .where(eq(MessageTable.id, messageID))
-      .get(),
+    db.select({ data: MessageTable.data }).from(MessageTable).where(eq(MessageTable.id, messageID)).get(),
   )
-  const role = row?.data && typeof row.data === "object" && "role" in row.data
-    ? (row.data as Record<string, unknown>).role
-    : undefined
+  const role =
+    row?.data && typeof row.data === "object" && "role" in row.data
+      ? (row.data as Record<string, unknown>).role
+      : undefined
   if (typeof role !== "string" || !role) return undefined
-  const extra = row?.data && typeof row.data === "object" && "extra" in row.data
-    ? (row.data as Record<string, unknown>).extra
-    : undefined
+  const extra =
+    row?.data && typeof row.data === "object" && "extra" in row.data
+      ? (row.data as Record<string, unknown>).extra
+      : undefined
   const info = {
     role,
     ...(extra && typeof extra === "object" ? { extra: extra as Record<string, unknown> } : {}),
@@ -189,19 +187,14 @@ function infoForEvent(properties: Record<string, unknown>): { role: string; extr
   if (part?.metadata?.overlay_direct_reply === true) {
     return { role: "user", extra: { overlay_direct_reply: true } }
   }
-  const messageID =
-    part?.messageID ||
-    (properties as any).messageID ||
-    ""
+  const messageID = part?.messageID || (properties as any).messageID || ""
   if (messageID && messageInfoCache.has(messageID)) {
     return messageInfoCache.get(messageID)!
   }
   if (messageID) {
     const persisted = readPersistedMessageInfo(messageID)
     if (persisted) return persisted
-    throw new Error(
-      `bridge: message ${messageID} missing role in cache and DB while enriching event`,
-    )
+    throw new Error(`bridge: message ${messageID} missing role in cache and DB while enriching event`)
   }
   throw new Error("bridge: event missing both info.role and messageID")
 }
@@ -210,7 +203,11 @@ function infoForEvent(properties: Record<string, unknown>): { role: string; extr
  * Stamp resolvedRole / channel / goalID / parentSessionID onto every event.
  * Source of truth: session.kind, session.goal_id, session.parent_id.
  */
-function enrichProperties(properties: Record<string, unknown>, sessionID: string, taskID: string): Record<string, unknown> {
+function enrichProperties(
+  properties: Record<string, unknown>,
+  sessionID: string,
+  taskID: string,
+): Record<string, unknown> {
   const info = infoForEvent(properties)
   const rootSessionID = taskSession(taskID) || ""
   const meta = overlayMeta(sessionID, rootSessionID, info)
@@ -249,15 +246,12 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
  * they do not have an authoring message and therefore must not enter
  * `infoForEvent()`.
  */
-function enrichLifecycleProperties(
-  properties: Record<string, unknown>,
-  sessionID: string,
-): Record<string, unknown> {
+function enrichLifecycleProperties(properties: Record<string, unknown>, sessionID: string): Record<string, unknown> {
   const kind = sessionRole(sessionID)
   if (!kind) {
     throw new Error(
       `bridge: lifecycle event for session ${sessionID} has no kind in the database. ` +
-      `Every lifecycle event must target a persisted Session row.`,
+        `Every lifecycle event must target a persisted Session row.`,
     )
   }
   const goalID = sessionGoalID(sessionID)

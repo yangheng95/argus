@@ -12,13 +12,13 @@ That contradicts the frontend-design prompt: the prompt asks the agent to review
 
 Repository grep covered all call points before the change:
 
-| Surface | Current behavior | Required change |
-| --- | --- | --- |
-| `packages/opencorvus/src/frontend-design/agent.ts` | `shouldScopeFrontendTemplateSubmitTool({ hostPrepared: true })` returns true and removes read/search tools. | Host-prepared webpage turns must keep read/search/list/memory tools, while still avoiding redundant acquisition tools. |
-| `packages/opencorvus/src/frontend-design/host-prepared-source-project.ts` | Host-prepared submit schema is a lightweight wrapper that fills a prebuilt report. | Host-prepared turns should use the normal full `submit_frontend_template` schema so the agent owns the maintainable contract. |
-| `packages/opencorvus/src/prompt/core/frontend-design-core.txt` | Mentions terminal-only host-prepared turns and unavailable discovery tools. | Prompt must align with runtime: host-prepared turns should read bounded evidence and target project files before finalizing. |
-| `packages/opencorvus/test/frontend-design/prompt.test.ts` | Tests assert terminal-only host-prepared behavior. | Tests must assert host-prepared turns are not scoped to terminal-only and prompt no longer forbids discovery tools. |
-| `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts` | Hygiene test pins terminal-only prompt text. | Update expectations to the new exploration contract. |
+| Surface                                                                   | Current behavior                                                                                            | Required change                                                                                                               |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/frontend-design/agent.ts`                        | `shouldScopeFrontendTemplateSubmitTool({ hostPrepared: true })` returns true and removes read/search tools. | Host-prepared webpage turns must keep read/search/list/memory tools, while still avoiding redundant acquisition tools.        |
+| `packages/opencorvus/src/frontend-design/host-prepared-source-project.ts` | Host-prepared submit schema is a lightweight wrapper that fills a prebuilt report.                          | Host-prepared turns should use the normal full `submit_frontend_template` schema so the agent owns the maintainable contract. |
+| `packages/opencorvus/src/prompt/core/frontend-design-core.txt`            | Mentions terminal-only host-prepared turns and unavailable discovery tools.                                 | Prompt must align with runtime: host-prepared turns should read bounded evidence and target project files before finalizing.  |
+| `packages/opencorvus/test/frontend-design/prompt.test.ts`                 | Tests assert terminal-only host-prepared behavior.                                                          | Tests must assert host-prepared turns are not scoped to terminal-only and prompt no longer forbids discovery tools.           |
+| `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts`              | Hygiene test pins terminal-only prompt text.                                                                | Update expectations to the new exploration contract.                                                                          |
 
 ## Design
 

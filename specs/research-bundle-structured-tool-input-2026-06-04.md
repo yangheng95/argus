@@ -10,13 +10,13 @@ Root cause: the terminal tool schema makes the model manually escape a long mark
 
 ## Grep Evidence
 
-| Symbol or text | Call points | Decision |
-| --- | --- | --- |
-| `ResearchSubmitSchema` | `packages/opencorvus/src/research/output-tools.ts` and `packages/opencorvus/test/research/output-tools.test.ts` | Replace `bundle` input shape. |
-| `ResearchBundleSchema` / `ResearchBundle` | `schema.ts`, `output-tools.ts`, `agent.ts`, `index.ts`, `types.ts` | Keep materialized persisted bundle type as strings for files; add a separate structured tool-input schema. |
-| `researchBundleFromDraft` | `output-tools.ts`, `agent.ts` | Convert structured bundle input to materialized markdown/JSON strings before persistence. |
-| `full_markdown` prompt text | `research-core.txt`, `frontend-research-core.txt`, `webpage-prd-evidence.ts`, prompt tests | Replace with structured sections instructions. |
-| `full_markdown_path` / `evidence_json_path` / `citation_map_path` | `engine/describe.ts`, `orchestrator/tools.ts`, persist tests, schema integrity checks | Keep unchanged; downstream consumes paths, not raw bundle content. |
+| Symbol or text                                                    | Call points                                                                                                     | Decision                                                                                                   |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `ResearchSubmitSchema`                                            | `packages/opencorvus/src/research/output-tools.ts` and `packages/opencorvus/test/research/output-tools.test.ts` | Replace `bundle` input shape.                                                                              |
+| `ResearchBundleSchema` / `ResearchBundle`                         | `schema.ts`, `output-tools.ts`, `agent.ts`, `index.ts`, `types.ts`                                              | Keep materialized persisted bundle type as strings for files; add a separate structured tool-input schema. |
+| `researchBundleFromDraft`                                         | `output-tools.ts`, `agent.ts`                                                                                   | Convert structured bundle input to materialized markdown/JSON strings before persistence.                  |
+| `full_markdown` prompt text                                       | `research-core.txt`, `frontend-research-core.txt`, `webpage-prd-evidence.ts`, prompt tests                      | Replace with structured sections instructions.                                                             |
+| `full_markdown_path` / `evidence_json_path` / `citation_map_path` | `engine/describe.ts`, `orchestrator/tools.ts`, persist tests, schema integrity checks                           | Keep unchanged; downstream consumes paths, not raw bundle content.                                         |
 
 ## Design
 

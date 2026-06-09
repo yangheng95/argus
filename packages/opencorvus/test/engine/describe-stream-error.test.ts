@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import {
-  EngineArtifactTable,
-  EngineTaskTable,
-} from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { describeTask, renderTaskDescription } from "../../src/engine/describe"
 import { recordToolExecuteError } from "../../src/engine/persist"
 import { createDecisionLog } from "../../src/decision-log"
@@ -32,26 +29,30 @@ let stamp = ""
 
 function seedTask(taskStartedMs: number) {
   Database.transaction((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: process.cwd(),
-      name: "stream-error describe test",
-      sandboxes: [],
-      time_created: taskStartedMs,
-      time_updated: taskStartedMs,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "stream-error describe",
-      request: "test",
-      kind: "workflow",
-      priority: "normal",
-      time_created: taskStartedMs,
-      time_updated: taskStartedMs,
-      time_started: taskStartedMs,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "stream-error describe test",
+        sandboxes: [],
+        time_created: taskStartedMs,
+        time_updated: taskStartedMs,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "stream-error describe",
+        request: "test",
+        kind: "workflow",
+        priority: "normal",
+        time_created: taskStartedMs,
+        time_updated: taskStartedMs,
+        time_started: taskStartedMs,
+      })
+      .run()
   })
 }
 
@@ -63,21 +64,23 @@ function seedStreamError(input: {
   sessionID?: string
 }) {
   Database.transaction((db) => {
-    db.insert(EngineArtifactTable).values({
-      id: input.artifactID,
-      task_id: taskID,
-      run_id: null,
-      kind: "orchestrator-stream-error",
-      label: "orchestrator-stream-error",
-      payload: {
-        reason: input.reason,
-        errorName: input.errorName ?? null,
-        sessionID: input.sessionID ?? null,
-        now: input.timeCreated,
-      },
-      time_created: input.timeCreated,
-      time_updated: input.timeCreated,
-    }).run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: input.artifactID,
+        task_id: taskID,
+        run_id: null,
+        kind: "orchestrator-stream-error",
+        label: "orchestrator-stream-error",
+        payload: {
+          reason: input.reason,
+          errorName: input.errorName ?? null,
+          sessionID: input.sessionID ?? null,
+          now: input.timeCreated,
+        },
+        time_created: input.timeCreated,
+        time_updated: input.timeCreated,
+      })
+      .run()
   })
 }
 
@@ -267,7 +270,8 @@ describe("describeTask.recent_agent_failures", () => {
         createDecisionLog(taskID).append({
           phase: "agent_error",
           key: "build_session_error",
-          value: "Agent session failed before producing a successful result.\nerror=AgentRunError: [build] APIError: Provider returned HTTP 429",
+          value:
+            "Agent session failed before producing a successful result.\nerror=AgentRunError: [build] APIError: Provider returned HTTP 429",
           reason: "model-visible agent failure; session=ses_build; kind=build",
         })
 

@@ -18,25 +18,25 @@ my-skill/
 
 Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `name` | string（必需） | 全局唯一 ID，被 permission 引用 |
-| `description` | string（必需） | 一句话描述，告诉 agent 何时激活 |
-| `platforms` | `("win32"\|"darwin"\|"linux")[]` | 平台过滤，空数组 = 全平台 |
-| `auto_detect.files` | string[] | 项目中存在这些文件时作为发现提示 |
-| `auto_detect.deps` | string[] | `package.json` 中存在这些依赖时作为发现提示 |
-| `auto_detect.task_signals` | object | 任务级信号：图片附件、非 Figma URL、Figma URL、package scripts、请求文本 |
-| `priority` | number | 多 skill 命中时的排序（大在前，默认 0） |
-| `required_tools` | string[] | skill 预期可能需要的工具提示 |
+| 字段                       | 类型                             | 说明                                                                     |
+| -------------------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `name`                     | string（必需）                   | 全局唯一 ID，被 permission 引用                                          |
+| `description`              | string（必需）                   | 一句话描述，告诉 agent 何时激活                                          |
+| `platforms`                | `("win32"\|"darwin"\|"linux")[]` | 平台过滤，空数组 = 全平台                                                |
+| `auto_detect.files`        | string[]                         | 项目中存在这些文件时作为发现提示                                         |
+| `auto_detect.deps`         | string[]                         | `package.json` 中存在这些依赖时作为发现提示                              |
+| `auto_detect.task_signals` | object                           | 任务级信号：图片附件、非 Figma URL、Figma URL、package scripts、请求文本 |
+| `priority`                 | number                           | 多 skill 命中时的排序（大在前，默认 0）                                  |
+| `required_tools`           | string[]                         | skill 预期可能需要的工具提示                                             |
 
 ## 2. 内置 Skills
 
 随二进制打包（`src/skill/skill.ts` 的 `builtins` 数组），**只有两个**：
 
-| Skill | 用途 |
-|---|---|
+| Skill                   | 用途                                                                |
+| ----------------------- | ------------------------------------------------------------------- |
 | `ainvest-design-system` | 提供内置 Ainvest UI tokens、组件、规则和资产，用于 Ainvest 前端工作 |
-| `research-report` | 用 `websearch` 和按需 `webfetch` 产出带来源的 Markdown 调研报告 |
+| `research-report`       | 用 `websearch` 和按需 `webfetch` 产出带来源的 Markdown 调研报告     |
 
 其他 skill 需要通过 `skills.paths` / `skills.urls` 显式加载。
 
@@ -53,12 +53,8 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 ```jsonc
 {
   "skills": {
-    "paths": [
-      "./my-skills",
-      "~/shared/skills",
-      "/absolute/path/skills"
-    ]
-  }
+    "paths": ["./my-skills", "~/shared/skills", "/absolute/path/skills"],
+  },
 }
 ```
 
@@ -69,8 +65,8 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 ```jsonc
 {
   "skills": {
-    "urls": ["https://skills.example.com/my-pack/"]
-  }
+    "urls": ["https://skills.example.com/my-pack/"],
+  },
 }
 ```
 
@@ -86,13 +82,13 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 
 内置 Skill Market 条目（`src/skill/manager.ts:107-165`）：
 
-| ID | 来源 | 信任等级 |
-|---|---|---|
-| `openai-skills` | github.com/openai/skills | official |
-| `anthropic-skills` | github.com/anthropics/skills | official |
-| `skills-sh` | skills.sh | curated |
-| `skillstore` | skillstore.io | curated |
-| `skills-pub` | skills.pub | community |
+| ID                 | 来源                         | 信任等级  |
+| ------------------ | ---------------------------- | --------- |
+| `openai-skills`    | github.com/openai/skills     | official  |
+| `anthropic-skills` | github.com/anthropics/skills | official  |
+| `skills-sh`        | skills.sh                    | curated   |
+| `skillstore`       | skillstore.io                | curated   |
+| `skills-pub`       | skills.pub                   | community |
 
 ## 5. 通过 Git 安装
 
@@ -117,9 +113,9 @@ Session 初始化时会提供 Skill Policy 与可用 skill 摘要。Agent 需要
     "skill": {
       "*": "ask",
       "research-report": "allow",
-      "local-note": "deny"
-    }
-  }
+      "local-note": "deny",
+    },
+  },
 }
 ```
 
@@ -127,14 +123,14 @@ Session 初始化时会提供 Skill Policy 与可用 skill 摘要。Agent 需要
 
 ## 8. 信任等级与风险
 
-| 等级 | 来源 |
-|---|---|
-| `builtin` | 随二进制打包 |
-| `official` | openai/skills 或 anthropics/skills |
-| `curated` | skills.sh / skillstore.io |
-| `community` | skills.pub |
-| `local` | 本地路径 |
-| `external` | `.claude/` 或 `.agents/` 目录发现 |
+| 等级        | 来源                               |
+| ----------- | ---------------------------------- |
+| `builtin`   | 随二进制打包                       |
+| `official`  | openai/skills 或 anthropics/skills |
+| `curated`   | skills.sh / skillstore.io          |
+| `community` | skills.pub                         |
+| `local`     | 本地路径                           |
+| `external`  | `.claude/` 或 `.agents/` 目录发现  |
 
 风险评估：目录含 `scripts/` → 高风险；含 `agents/` 或 `references/` → 中等（`src/skill/manager.ts:465-491`）。
 

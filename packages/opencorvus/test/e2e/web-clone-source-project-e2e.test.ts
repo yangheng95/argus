@@ -19,16 +19,29 @@ import { taskIDForSession } from "../../src/orchestrator/task-event"
 await loadBenchmarkEnv(import.meta.dir)
 
 const runE2E = process.env.OPENCORVUS_RUN_WEB_CLONE_E2E === "1" || process.env.OPENCORVUS_RUN_WEB_CLONE_E2E === "true"
-const runFrontendDesignAgentE2E = process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "1" || process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "true"
+const runFrontendDesignAgentE2E =
+  process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "1" ||
+  process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "true"
 const e2eTest = runE2E ? test : test.skip
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const defaultWebpageEvidenceDir = path.join(repoRoot, ".tmp", "source-skeleton-tradingview-v2h", "webpage-evidence")
-const webpageEvidenceDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_WEBPAGE_EVIDENCE ?? defaultWebpageEvidenceDir)
-const outputDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_OUTPUT ?? path.join(repoRoot, ".tmp", "opencorvus-web-clone-e2e-output"))
-const frontendDesignBenchmarkTaskID = process.env.OPENCORVUS_FRONTEND_DESIGN_TASK_ID ?? `tsk_web_clone_frontend_design_e2e_${Date.now().toString(16)}`
-const frontendDesignProjectDir = process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR) : undefined
-const frontendDesignProcessTracePath = process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE) : undefined
-const frontendDesignIterationStatePath = process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE) : undefined
+const webpageEvidenceDir = path.resolve(
+  process.env.OPENCORVUS_WEB_CLONE_E2E_WEBPAGE_EVIDENCE ?? defaultWebpageEvidenceDir,
+)
+const outputDir = path.resolve(
+  process.env.OPENCORVUS_WEB_CLONE_E2E_OUTPUT ?? path.join(repoRoot, ".tmp", "opencorvus-web-clone-e2e-output"),
+)
+const frontendDesignBenchmarkTaskID =
+  process.env.OPENCORVUS_FRONTEND_DESIGN_TASK_ID ?? `tsk_web_clone_frontend_design_e2e_${Date.now().toString(16)}`
+const frontendDesignProjectDir = process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR
+  ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR)
+  : undefined
+const frontendDesignProcessTracePath = process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE
+  ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROCESS_TRACE)
+  : undefined
+const frontendDesignIterationStatePath = process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE
+  ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE)
+  : undefined
 const threshold = normalizeVisualThreshold(Number(process.env.OPENCORVUS_WEB_CLONE_E2E_THRESHOLD ?? 96))
 const worstThreshold = normalizeVisualThreshold(Number(process.env.OPENCORVUS_WEB_CLONE_E2E_WORST_THRESHOLD ?? 75))
 
@@ -152,7 +165,13 @@ describe("web clone source project E2E", () => {
     ] as const) {
       recordTraceEvent(trace, {
         step: name,
-        kind: name === "source-project-sidecars" || name === "visual-skeleton-artifacts" || name === "frontend_design_static_tool_surface" || name === "frontend_design_region_selection" ? "inspection" : "tool",
+        kind:
+          name === "source-project-sidecars" ||
+          name === "visual-skeleton-artifacts" ||
+          name === "frontend_design_static_tool_surface" ||
+          name === "frontend_design_region_selection"
+            ? "inspection"
+            : "tool",
         name,
         status: "passed",
       })
@@ -184,11 +203,22 @@ describe("web clone source project E2E", () => {
       rawSourceDomDumpPresent: false,
       referenceImageExists: true,
     }
-    for (const name of ["web_clone_prepare_context", "create_frontend_skeleton_project", "source-project-sidecars", "visual-skeleton-artifacts", "html-skeleton-workflow-check"] as const) {
+    for (const name of [
+      "web_clone_prepare_context",
+      "create_frontend_skeleton_project",
+      "source-project-sidecars",
+      "visual-skeleton-artifacts",
+      "html-skeleton-workflow-check",
+    ] as const) {
       const details = name === "html-skeleton-workflow-check" ? { passed: true, mssim: 0.96 } : undefined
       recordTraceEvent(trace, {
         step: name,
-        kind: name === "source-project-sidecars" || name === "visual-skeleton-artifacts" ? "inspection" : name === "html-skeleton-workflow-check" ? "command" : "tool",
+        kind:
+          name === "source-project-sidecars" || name === "visual-skeleton-artifacts"
+            ? "inspection"
+            : name === "html-skeleton-workflow-check"
+              ? "command"
+              : "tool",
         name,
         status: "passed",
         ...(details ? { details } : {}),
@@ -225,9 +255,19 @@ describe("web clone source project E2E", () => {
         { name: "source-project-sidecars", status: "passed", timestamp: new Date().toISOString() },
         { name: "frontend_design_region_selection", status: "passed", timestamp: new Date().toISOString() },
         { name: "frontend_design_source_edit", status: "passed", timestamp: new Date().toISOString() },
-        { name: "frontend_design_replacement_result", status: "passed", timestamp: new Date().toISOString(), details: { replacementStatus: "completed", regionComponentName: "HeroRegion" } },
+        {
+          name: "frontend_design_replacement_result",
+          status: "passed",
+          timestamp: new Date().toISOString(),
+          details: { replacementStatus: "completed", regionComponentName: "HeroRegion" },
+        },
         { name: "visual-skeleton-artifacts", status: "passed", timestamp: new Date().toISOString() },
-        { name: "html-skeleton-workflow-check", status: "passed", timestamp: new Date().toISOString(), details: { passed: true, mssim: 0.96 } },
+        {
+          name: "html-skeleton-workflow-check",
+          status: "passed",
+          timestamp: new Date().toISOString(),
+          details: { passed: true, mssim: 0.96 },
+        },
       ],
     })
     recordTraceEvent(trace, {
@@ -283,7 +323,9 @@ describe("web clone source project E2E", () => {
     const audit = evaluateBenchmarkProcessTrace(trace)
 
     expect(audit.passed).toBe(false)
-    expect(audit.findings.join("\n")).toContain("Frontend-design iteration state still has remaining source debt: FaqRegion.")
+    expect(audit.findings.join("\n")).toContain(
+      "Frontend-design iteration state still has remaining source debt: FaqRegion.",
+    )
   })
 
   test("frontend_design agent benchmark request points at visual HTML skeleton boundaries", () => {
@@ -303,7 +345,9 @@ describe("web clone source project E2E", () => {
     expect(request).toContain("visual-html-skeleton/index.html")
     expect(request).toContain("visual-html-skeleton/styles/tokens.css")
     expect(request).toContain("editing only the visual HTML skeleton, not frontend-design-skeleton")
-    expect(request).toContain("Do not run install/build/dev-server commands inside the skeleton evidence project or the visual HTML skeleton")
+    expect(request).toContain(
+      "Do not run install/build/dev-server commands inside the skeleton evidence project or the visual HTML skeleton",
+    )
     expect(request).toContain("Create or populate the visual HTML skeleton before any visual comparison")
     expect(request).toContain("final_acceptance_mode=visual_baseline_allowed")
     expect(request).toContain("frontend_project.role=visual_baseline_input")
@@ -336,168 +380,191 @@ describe("web clone source project E2E", () => {
     })
   })
 
-  e2eTest("runs the OpenCorvus tool chain and enforces the visual threshold", async () => {
-    await assertDirectory(webpageEvidenceDir)
-    if (frontendDesignProjectDir) await assertDirectory(frontendDesignProjectDir)
-    if (frontendDesignProcessTracePath) await assertFile(frontendDesignProcessTracePath)
-    if (frontendDesignIterationStatePath) await assertFile(frontendDesignIterationStatePath)
-    await Instance.provide({
-      directory: repoRoot,
-      fn: async () => {
-        const frontendDesignModel = runFrontendDesignAgentE2E
-          ? await resolveFrontendDesignBenchmarkModel()
-          : undefined
-        const frontendDesignPaths = ProjectRuntimePaths.frontendDesignPaths(repoRoot, frontendDesignBenchmarkTaskID)
-        const skeletonProjectDir = runFrontendDesignAgentE2E
-          ? frontendDesignPaths.skeletonProjectAbsolute
-          : frontendDesignProjectDir ?? outputDir
-        const targetProjectDir = runFrontendDesignAgentE2E
-          ? path.join(path.dirname(frontendDesignPaths.skeletonProjectAbsolute), "visual-html-skeleton")
-          : frontendDesignProjectDir ?? outputDir
-        const trace = createBenchmarkProcessTrace({ sourcePackageDir: webpageEvidenceDir, outputDir: targetProjectDir })
-        const toolIds = await ToolRegistry.ids()
-        expect(toolIds).toContain("web_clone_prepare_context")
-        const frontendDesign = await Agent.get("frontend-design")
-        const frontendDesignToolIds = new Set(frontendDesign?.tools?.include ?? [])
-        expect(frontendDesignToolIds.has("create_frontend_skeleton_project")).toBe(true)
-        expect(frontendDesignToolIds.has("record_frontend_region_selection")).toBe(true)
-        recordTraceEvent(trace, {
-          step: "registry-tool-surface",
-          kind: "inspection",
-          name: "frontend_design_static_tool_surface",
-          status: "passed",
-          details: {
-            requiredTools: ["create_frontend_skeleton_project", "record_frontend_region_selection"],
-          },
-        })
+  e2eTest(
+    "runs the OpenCorvus tool chain and enforces the visual threshold",
+    async () => {
+      await assertDirectory(webpageEvidenceDir)
+      if (frontendDesignProjectDir) await assertDirectory(frontendDesignProjectDir)
+      if (frontendDesignProcessTracePath) await assertFile(frontendDesignProcessTracePath)
+      if (frontendDesignIterationStatePath) await assertFile(frontendDesignIterationStatePath)
+      await Instance.provide({
+        directory: repoRoot,
+        fn: async () => {
+          const frontendDesignModel = runFrontendDesignAgentE2E
+            ? await resolveFrontendDesignBenchmarkModel()
+            : undefined
+          const frontendDesignPaths = ProjectRuntimePaths.frontendDesignPaths(repoRoot, frontendDesignBenchmarkTaskID)
+          const skeletonProjectDir = runFrontendDesignAgentE2E
+            ? frontendDesignPaths.skeletonProjectAbsolute
+            : (frontendDesignProjectDir ?? outputDir)
+          const targetProjectDir = runFrontendDesignAgentE2E
+            ? path.join(path.dirname(frontendDesignPaths.skeletonProjectAbsolute), "visual-html-skeleton")
+            : (frontendDesignProjectDir ?? outputDir)
+          const trace = createBenchmarkProcessTrace({
+            sourcePackageDir: webpageEvidenceDir,
+            outputDir: targetProjectDir,
+          })
+          const toolIds = await ToolRegistry.ids()
+          expect(toolIds).toContain("web_clone_prepare_context")
+          const frontendDesign = await Agent.get("frontend-design")
+          const frontendDesignToolIds = new Set(frontendDesign?.tools?.include ?? [])
+          expect(frontendDesignToolIds.has("create_frontend_skeleton_project")).toBe(true)
+          expect(frontendDesignToolIds.has("record_frontend_region_selection")).toBe(true)
+          recordTraceEvent(trace, {
+            step: "registry-tool-surface",
+            kind: "inspection",
+            name: "frontend_design_static_tool_surface",
+            status: "passed",
+            details: {
+              requiredTools: ["create_frontend_skeleton_project", "record_frontend_region_selection"],
+            },
+          })
 
-        const prepareTool = await WebClonePrepareContextTool.init()
-        const context = await prepareTool.execute({
-          webpageEvidenceDir,
-          outputDir: runFrontendDesignAgentE2E ? frontendDesignPaths.sourcePackageAbsolute : undefined,
-        }, ctx)
-        expect(context.title).toBe("Web clone context prepared")
-        recordTraceEvent(trace, {
-          step: "prepare-source-context",
-          kind: "tool",
-          name: "web_clone_prepare_context",
-          status: "passed",
-          details: { webpageEvidenceDir, title: context.title },
-        })
-
-        if (runFrontendDesignAgentE2E) {
-          await resetFrontendDesignBenchmarkSkeletonDir(frontendDesignPaths.skeletonProjectAbsolute)
-          await resetFrontendDesignBenchmarkTargetDir(targetProjectDir)
-          const frontendDesignParentSessionID = await ensureFrontendDesignBenchmarkTask(frontendDesignBenchmarkTaskID)
-          const parsedModel = Provider.parseModel(frontendDesignModel!)
-          const analysis = await FrontendDesignAgent.analyze({
-            title: "Web clone rawproject refinement benchmark",
-            request: buildFrontendDesignAgentBenchmarkRequest({
-              sourcePackageDir: context.metadata.sourcePackageDir,
-              skeletonProjectDir,
-              targetProjectDir,
+          const prepareTool = await WebClonePrepareContextTool.init()
+          const context = await prepareTool.execute(
+            {
               webpageEvidenceDir,
-            }),
-            taskID: frontendDesignBenchmarkTaskID,
-            parentSessionID: frontendDesignParentSessionID,
-            model: { providerID: parsedModel.providerID, modelID: parsedModel.modelID },
+              outputDir: runFrontendDesignAgentE2E ? frontendDesignPaths.sourcePackageAbsolute : undefined,
+            },
+            ctx,
+          )
+          expect(context.title).toBe("Web clone context prepared")
+          recordTraceEvent(trace, {
+            step: "prepare-source-context",
+            kind: "tool",
+            name: "web_clone_prepare_context",
+            status: "passed",
+            details: { webpageEvidenceDir, title: context.title },
           })
-          expect(analysis.processTraceArtifact).toBeTruthy()
-          expect(analysis.iterationStateArtifact).toBeTruthy()
-          mergeFrontendDesignProcessTrace(trace, await readFrontendDesignProcessTrace(analysis.processTraceArtifact!))
-          trace.frontendDesignIterationState = await readFrontendDesignIterationState(analysis.iterationStateArtifact!)
-        }
-        if (frontendDesignProcessTracePath) {
-          mergeFrontendDesignProcessTrace(trace, await readFrontendDesignProcessTrace(frontendDesignProcessTracePath))
-        }
-        if (frontendDesignIterationStatePath) {
-          trace.frontendDesignIterationState = await readFrontendDesignIterationState(frontendDesignIterationStatePath)
-        }
-        if (!frontendDesignProjectDir && !runFrontendDesignAgentE2E) {
-          const skeletonTrace = createFrontendSkeletonProjectTool({
-            onToolEvent: (event) => recordTraceEvent(trace, {
-              step: event.name,
-              kind: "tool",
-              name: event.name,
-              status: event.status,
-              details: event.details,
-            }),
-          })
-          const created = await (skeletonTrace.create_frontend_skeleton_project as any).execute({
-            sourcePackageDir: context.metadata.sourcePackageDir,
-            outputDir: skeletonProjectDir,
-            overwrite: true,
-          })
-          expect(created.title).toBe("Frontend source skeleton project created")
-        }
-        recordTraceEvent(trace, {
-          step: "inspect-source-project-sidecars",
-          kind: "inspection",
-          name: "source-project-sidecars",
-          status: "passed",
-          details: { skeletonProjectDir },
-        })
-        trace.visualSkeletonEvidence = await inspectVisualSkeletonEvidence(targetProjectDir, context.metadata.sourcePackageDir)
-        recordTraceEvent(trace, {
-          step: "inspect-visual-skeleton-artifacts",
-          kind: "inspection",
-          name: "visual-skeleton-artifacts",
-          status: "passed",
-          details: trace.visualSkeletonEvidence,
-        })
 
-        const acceptanceDir = path.join(path.dirname(targetProjectDir), "acceptance")
-        await fs.mkdir(acceptanceDir, { recursive: true })
-        const htmlSkeletonWorkflow = await runHtmlSkeletonWorkflowCheck({
-          frontendDesignDir: path.dirname(skeletonProjectDir),
-          visualRoot: targetProjectDir,
-          sourcePackageDir: context.metadata.sourcePackageDir,
-          reference: path.join(context.metadata.sourcePackageDir, "reference.png"),
-          outDir: path.join(acceptanceDir, "html-skeleton-workflow"),
-          threshold,
-          worstThreshold,
-          headless: true,
-        })
-        trace.audits.htmlSkeletonWorkflow = htmlSkeletonWorkflow
-        recordTraceEvent(trace, {
-          step: "html-skeleton-workflow-check",
-          kind: "command",
-          name: "html-skeleton-workflow-check",
-          status: htmlSkeletonWorkflow.passed ? "passed" : "failed",
-          details: {
-            passed: htmlSkeletonWorkflow.passed,
-            mssim: htmlSkeletonWorkflow.visualDiff?.mssim,
+          if (runFrontendDesignAgentE2E) {
+            await resetFrontendDesignBenchmarkSkeletonDir(frontendDesignPaths.skeletonProjectAbsolute)
+            await resetFrontendDesignBenchmarkTargetDir(targetProjectDir)
+            const frontendDesignParentSessionID = await ensureFrontendDesignBenchmarkTask(frontendDesignBenchmarkTaskID)
+            const parsedModel = Provider.parseModel(frontendDesignModel!)
+            const analysis = await FrontendDesignAgent.analyze({
+              title: "Web clone rawproject refinement benchmark",
+              request: buildFrontendDesignAgentBenchmarkRequest({
+                sourcePackageDir: context.metadata.sourcePackageDir,
+                skeletonProjectDir,
+                targetProjectDir,
+                webpageEvidenceDir,
+              }),
+              taskID: frontendDesignBenchmarkTaskID,
+              parentSessionID: frontendDesignParentSessionID,
+              model: { providerID: parsedModel.providerID, modelID: parsedModel.modelID },
+            })
+            expect(analysis.processTraceArtifact).toBeTruthy()
+            expect(analysis.iterationStateArtifact).toBeTruthy()
+            mergeFrontendDesignProcessTrace(trace, await readFrontendDesignProcessTrace(analysis.processTraceArtifact!))
+            trace.frontendDesignIterationState = await readFrontendDesignIterationState(
+              analysis.iterationStateArtifact!,
+            )
+          }
+          if (frontendDesignProcessTracePath) {
+            mergeFrontendDesignProcessTrace(trace, await readFrontendDesignProcessTrace(frontendDesignProcessTracePath))
+          }
+          if (frontendDesignIterationStatePath) {
+            trace.frontendDesignIterationState = await readFrontendDesignIterationState(
+              frontendDesignIterationStatePath,
+            )
+          }
+          if (!frontendDesignProjectDir && !runFrontendDesignAgentE2E) {
+            const skeletonTrace = createFrontendSkeletonProjectTool({
+              onToolEvent: (event) =>
+                recordTraceEvent(trace, {
+                  step: event.name,
+                  kind: "tool",
+                  name: event.name,
+                  status: event.status,
+                  details: event.details,
+                }),
+            })
+            const created = await (skeletonTrace.create_frontend_skeleton_project as any).execute({
+              sourcePackageDir: context.metadata.sourcePackageDir,
+              outputDir: skeletonProjectDir,
+              overwrite: true,
+            })
+            expect(created.title).toBe("Frontend source skeleton project created")
+          }
+          recordTraceEvent(trace, {
+            step: "inspect-source-project-sidecars",
+            kind: "inspection",
+            name: "source-project-sidecars",
+            status: "passed",
+            details: { skeletonProjectDir },
+          })
+          trace.visualSkeletonEvidence = await inspectVisualSkeletonEvidence(
+            targetProjectDir,
+            context.metadata.sourcePackageDir,
+          )
+          recordTraceEvent(trace, {
+            step: "inspect-visual-skeleton-artifacts",
+            kind: "inspection",
+            name: "visual-skeleton-artifacts",
+            status: "passed",
+            details: trace.visualSkeletonEvidence,
+          })
+
+          const acceptanceDir = path.join(path.dirname(targetProjectDir), "acceptance")
+          await fs.mkdir(acceptanceDir, { recursive: true })
+          const htmlSkeletonWorkflow = await runHtmlSkeletonWorkflowCheck({
+            frontendDesignDir: path.dirname(skeletonProjectDir),
+            visualRoot: targetProjectDir,
+            sourcePackageDir: context.metadata.sourcePackageDir,
+            reference: path.join(context.metadata.sourcePackageDir, "reference.png"),
+            outDir: path.join(acceptanceDir, "html-skeleton-workflow"),
             threshold,
             worstThreshold,
-            report: path.join(htmlSkeletonWorkflow.outDir, "html-skeleton-workflow-report.json"),
-          },
-        })
-        trace.processAudit = evaluateBenchmarkProcessTrace(trace)
-        await fs.writeFile(path.join(acceptanceDir, "web-clone-benchmark-process-trace.json"), JSON.stringify(trace, null, 2), "utf8")
-        const report = {
-          version: 1,
-          purpose: "web-clone-opencorvus-e2e",
-          passed: htmlSkeletonWorkflow.passed === true && trace.processAudit.passed === true,
-          threshold,
-          worstThreshold,
-          webpageEvidenceDir,
-          outputDir: targetProjectDir,
-          skeletonProjectDir,
-          processTrace: path.join(acceptanceDir, "web-clone-benchmark-process-trace.json"),
-          processAudit: trace.processAudit,
-          htmlSkeletonWorkflow,
-        }
-        await fs.writeFile(path.join(acceptanceDir, "opencorvus-web-clone-e2e.json"), JSON.stringify(report, null, 2), "utf8")
-        expect(report.passed, JSON.stringify(report, null, 2)).toBe(true)
-      },
-    })
-  }, 600_000)
+            headless: true,
+          })
+          trace.audits.htmlSkeletonWorkflow = htmlSkeletonWorkflow
+          recordTraceEvent(trace, {
+            step: "html-skeleton-workflow-check",
+            kind: "command",
+            name: "html-skeleton-workflow-check",
+            status: htmlSkeletonWorkflow.passed ? "passed" : "failed",
+            details: {
+              passed: htmlSkeletonWorkflow.passed,
+              mssim: htmlSkeletonWorkflow.visualDiff?.mssim,
+              threshold,
+              worstThreshold,
+              report: path.join(htmlSkeletonWorkflow.outDir, "html-skeleton-workflow-report.json"),
+            },
+          })
+          trace.processAudit = evaluateBenchmarkProcessTrace(trace)
+          await fs.writeFile(
+            path.join(acceptanceDir, "web-clone-benchmark-process-trace.json"),
+            JSON.stringify(trace, null, 2),
+            "utf8",
+          )
+          const report = {
+            version: 1,
+            purpose: "web-clone-opencorvus-e2e",
+            passed: htmlSkeletonWorkflow.passed === true && trace.processAudit.passed === true,
+            threshold,
+            worstThreshold,
+            webpageEvidenceDir,
+            outputDir: targetProjectDir,
+            skeletonProjectDir,
+            processTrace: path.join(acceptanceDir, "web-clone-benchmark-process-trace.json"),
+            processAudit: trace.processAudit,
+            htmlSkeletonWorkflow,
+          }
+          await fs.writeFile(
+            path.join(acceptanceDir, "opencorvus-web-clone-e2e.json"),
+            JSON.stringify(report, null, 2),
+            "utf8",
+          )
+          expect(report.passed, JSON.stringify(report, null, 2)).toBe(true)
+        },
+      })
+    },
+    600_000,
+  )
 })
 
-function createBenchmarkProcessTrace(input: {
-  sourcePackageDir: string
-  outputDir: string
-}): BenchmarkProcessTrace {
+function createBenchmarkProcessTrace(input: { sourcePackageDir: string; outputDir: string }): BenchmarkProcessTrace {
   return {
     version: 1,
     purpose: "web-clone-benchmark-process-trace",
@@ -572,25 +639,32 @@ async function ensureFrontendDesignBenchmarkTask(taskID: string): Promise<string
   const rootSession = await Session.create({ kind: "root", title: "frontend-design benchmark root" })
   const now = Date.now()
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: Instance.project.id,
-      session_id: rootSession.id,
-      source: "test",
-      title: "frontend-design visual HTML skeleton benchmark",
-      request: "Restore the prepared web-clone-source package into a source-editable visual HTML skeleton.",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: Instance.project.id,
+        session_id: rootSession.id,
+        source: "test",
+        title: "frontend-design visual HTML skeleton benchmark",
+        request: "Restore the prepared web-clone-source package into a source-editable visual HTML skeleton.",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run(),
   )
   return rootSession.id
 }
 
 async function resolveFrontendDesignBenchmarkModel(): Promise<string> {
   const providers = await Provider.list()
-  const explicit = firstEnv("OPENCORVUS_FRONTEND_DESIGN_E2E_MODEL", "OPENCORVUS_DESIGN_TEST_MODEL", "OPENCORVUS_E2E_MODEL")
+  const explicit = firstEnv(
+    "OPENCORVUS_FRONTEND_DESIGN_E2E_MODEL",
+    "OPENCORVUS_DESIGN_TEST_MODEL",
+    "OPENCORVUS_E2E_MODEL",
+  )
   const model = explicit
     ? resolveModelRefFromProviders(providers, explicit)
     : resolvePreferredFrontendDesignModel(providers)
@@ -608,10 +682,7 @@ function firstEnv(...keys: string[]): string | undefined {
   return undefined
 }
 
-function resolveModelRefFromProviders(
-  providers: Awaited<ReturnType<typeof Provider.list>>,
-  input: string,
-): string {
+function resolveModelRefFromProviders(providers: Awaited<ReturnType<typeof Provider.list>>, input: string): string {
   if (input.includes("/")) {
     return input
   }
@@ -668,8 +739,18 @@ function createCompletedFrontendDesignProcessTrace(): FrontendDesignProcessTrace
       { name: "visual-skeleton-artifacts", status: "passed", timestamp: new Date().toISOString() },
       { name: "frontend_design_region_selection", status: "passed", timestamp: new Date().toISOString() },
       { name: "frontend_design_source_edit", status: "passed", timestamp: new Date().toISOString() },
-      { name: "frontend_design_replacement_result", status: "passed", timestamp: new Date().toISOString(), details: { replacementStatus: "completed", regionComponentName: "HeroRegion" } },
-      { name: "html-skeleton-workflow-check", status: "passed", timestamp: new Date().toISOString(), details: { passed: true, mssim: 0.96 } },
+      {
+        name: "frontend_design_replacement_result",
+        status: "passed",
+        timestamp: new Date().toISOString(),
+        details: { replacementStatus: "completed", regionComponentName: "HeroRegion" },
+      },
+      {
+        name: "html-skeleton-workflow-check",
+        status: "passed",
+        timestamp: new Date().toISOString(),
+        details: { passed: true, mssim: 0.96 },
+      },
     ],
   }
 }
@@ -705,7 +786,10 @@ async function readFrontendDesignIterationState(file: string): Promise<FrontendD
   return parsed as FrontendDesignIterationState
 }
 
-function mergeFrontendDesignProcessTrace(trace: BenchmarkProcessTrace, frontendTrace: FrontendDesignProcessTrace): void {
+function mergeFrontendDesignProcessTrace(
+  trace: BenchmarkProcessTrace,
+  frontendTrace: FrontendDesignProcessTrace,
+): void {
   for (const event of frontendTrace.events) {
     recordTraceEvent(trace, {
       step: event.name,
@@ -730,18 +814,24 @@ function frontendDesignEventKind(name: string): BenchmarkProcessEvent["kind"] {
   return "tool"
 }
 
-async function inspectVisualSkeletonEvidence(projectDir: string, sourcePackageDir: string): Promise<VisualSkeletonEvidence> {
+async function inspectVisualSkeletonEvidence(
+  projectDir: string,
+  sourcePackageDir: string,
+): Promise<VisualSkeletonEvidence> {
   const indexPath = path.join(projectDir, "index.html")
   const indexHtml = await fs.readFile(indexPath, "utf8").catch(() => "")
   return {
     indexHtmlExists: await fileExists(indexPath),
     tokenCssExists: await fileExists(path.join(projectDir, "styles", "tokens.css")),
     externalCssLinked: /<link\b[^>]*\brel=(?:"stylesheet"|'stylesheet'|stylesheet\b)/i.test(indexHtml),
-    frameworkEntryPresent: /(?:\/assets\/index-[^"']+\.js|\/src\/main\.(?:tsx|ts|jsx|js)|react-refresh|vite\/client)/i.test(indexHtml),
-    buildOutputPresent: await fileExists(path.join(projectDir, "dist", "index.html")) ||
-      await fileExists(path.join(projectDir, "build", "index.html")) ||
-      await fileExists(path.join(projectDir, "out", "index.html")),
-    rawSourceDomDumpPresent: /\bsource-dom-page\b/i.test(indexHtml) ||
+    frameworkEntryPresent:
+      /(?:\/assets\/index-[^"']+\.js|\/src\/main\.(?:tsx|ts|jsx|js)|react-refresh|vite\/client)/i.test(indexHtml),
+    buildOutputPresent:
+      (await fileExists(path.join(projectDir, "dist", "index.html"))) ||
+      (await fileExists(path.join(projectDir, "build", "index.html"))) ||
+      (await fileExists(path.join(projectDir, "out", "index.html"))),
+    rawSourceDomDumpPresent:
+      /\bsource-dom-page\b/i.test(indexHtml) ||
       /\bsinglefile-body\.html\b/i.test(indexHtml) ||
       /\bsource-skeleton\b/i.test(indexHtml) ||
       (indexHtml.match(/\bdata-source-node-id=/gi) ?? []).length > 500,
@@ -771,12 +861,12 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
     if (!eventNames.includes(name)) findings.push(`Missing process event: ${name}.`)
   }
 
-  const htmlSkeletonCheck = trace.events.find((event) =>
-    event.name === "html-skeleton-workflow-check" &&
-    event.status === "passed" &&
-    event.details?.passed === true
+  const htmlSkeletonCheck = trace.events.find(
+    (event) =>
+      event.name === "html-skeleton-workflow-check" && event.status === "passed" && event.details?.passed === true,
   )
-  if (!htmlSkeletonCheck) findings.push("Missing passing html-skeleton-workflow-check event for the visual HTML skeleton.")
+  if (!htmlSkeletonCheck)
+    findings.push("Missing passing html-skeleton-workflow-check event for the visual HTML skeleton.")
 
   const evidence = trace.visualSkeletonEvidence
   if (!evidence?.referenceImageExists) findings.push("Source package is missing reference.png.")
@@ -787,10 +877,14 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
     findings.push("Visual HTML skeleton still uses a framework compiled/dev entry instead of static HTML/CSS.")
   }
   if (evidence?.buildOutputPresent) {
-    findings.push("Visual HTML skeleton root contains dist/build/out output; the design artifact must stay source-editable.")
+    findings.push(
+      "Visual HTML skeleton root contains dist/build/out output; the design artifact must stay source-editable.",
+    )
   }
   if (evidence?.rawSourceDomDumpPresent) {
-    findings.push("Visual HTML skeleton appears to be a raw source DOM dump instead of restored semantic HTML sections.")
+    findings.push(
+      "Visual HTML skeleton appears to be a raw source DOM dump instead of restored semantic HTML sections.",
+    )
   }
 
   const iterationState = trace.frontendDesignIterationState
@@ -801,20 +895,28 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
       findings.push("Frontend-design iteration state has no completed replacements.")
     }
     if (iterationState.remainingSourceDebt.length > 0) {
-      findings.push(`Frontend-design iteration state still has remaining source debt: ${iterationState.remainingSourceDebt.join(", ")}.`)
+      findings.push(
+        `Frontend-design iteration state still has remaining source debt: ${iterationState.remainingSourceDebt.join(", ")}.`,
+      )
     }
     if (iterationState.blockedReplacements.length > 0) {
-      findings.push(`Frontend-design iteration state still has blocked replacements: ${iterationState.blockedReplacements.length}.`)
+      findings.push(
+        `Frontend-design iteration state still has blocked replacements: ${iterationState.blockedReplacements.length}.`,
+      )
     }
     if (iterationState.deferredReplacements.length > 0) {
-      findings.push(`Frontend-design iteration state still has deferred replacements: ${iterationState.deferredReplacements.length}.`)
+      findings.push(
+        `Frontend-design iteration state still has deferred replacements: ${iterationState.deferredReplacements.length}.`,
+      )
     }
   }
 
   const generateIndex = eventNames.indexOf("create_frontend_skeleton_project")
   const sourceEditIndex = eventNames.indexOf("frontend_design_source_edit")
   if (generateIndex >= 0 && sourceEditIndex >= 0 && sourceEditIndex < generateIndex) {
-    findings.push("Frontend-design HTML skeleton edit ran before create_frontend_skeleton_project materialized the source evidence baseline.")
+    findings.push(
+      "Frontend-design HTML skeleton edit ran before create_frontend_skeleton_project materialized the source evidence baseline.",
+    )
   }
 
   return {

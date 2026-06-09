@@ -20,80 +20,75 @@
  * Diff is the audit; commit the diff with the script.
  */
 
-import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { readdir, readFile, writeFile } from "node:fs/promises"
+import { join, relative } from "node:path"
 
-const STYLES_ROOT = "packages/overlay/src/styles";
-const TOKEN_FILE = "packages/overlay/src/styles/tokens/design-language.css";
+const STYLES_ROOT = "packages/overlay/src/styles"
+const TOKEN_FILE = "packages/overlay/src/styles/tokens/design-language.css"
 
 async function listCss(dir: string): Promise<string[]> {
-  const out: string[] = [];
+  const out: string[] = []
   for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...(await listCss(full)));
-    else if (entry.name.endsWith(".css")) out.push(full);
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...(await listCss(full)))
+    else if (entry.name.endsWith(".css")) out.push(full)
   }
-  return out;
+  return out
 }
 
-const BODY = "var(--ui-font-weight-body)";
-const MEDIUM = "var(--ui-font-weight-medium)";
-const STRONG = "var(--ui-font-weight-strong)";
+const BODY = "var(--ui-font-weight-body)"
+const MEDIUM = "var(--ui-font-weight-medium)"
+const STRONG = "var(--ui-font-weight-strong)"
 
 function mapValue(raw: string): string {
-  const v = raw.trim();
-  if (v === BODY || v === MEDIUM || v === STRONG) return v;
-  if (v === "inherit" || v === "normal") return v;
-  if (v === "bold") return STRONG;
-  const n = Number(v);
-  if (!Number.isFinite(n)) return raw;
-  if (n <= 400) return BODY;
-  if (n <= 500) return MEDIUM;
-  return STRONG;
+  const v = raw.trim()
+  if (v === BODY || v === MEDIUM || v === STRONG) return v
+  if (v === "inherit" || v === "normal") return v
+  if (v === "bold") return STRONG
+  const n = Number(v)
+  if (!Number.isFinite(n)) return raw
+  if (n <= 400) return BODY
+  if (n <= 500) return MEDIUM
+  return STRONG
 }
 
 async function migrate() {
-  const files = await listCss(STYLES_ROOT);
-  let totalChanged = 0;
-  let totalCallsites = 0;
-  const unhandled: string[] = [];
+  const files = await listCss(STYLES_ROOT)
+  let totalChanged = 0
+  let totalCallsites = 0
+  const unhandled: string[] = []
 
   for (const file of files) {
-    const norm = file.split(/[\\/]/).join("/");
-    if (norm.endsWith("tokens/design-language.css")) continue;
-    const original = await readFile(file, "utf8");
-    const changed = original.replace(
-      /font-weight:\s*([^;\n]+);/g,
-      (match, value: string) => {
-        totalCallsites++;
-        const trimmed = value.trim();
-        // Already a token consumer; leave alone.
-        if (trimmed.startsWith("var(--ui-font-weight-")) return match;
-        const mapped = mapValue(trimmed);
-        if (mapped === trimmed) {
-          unhandled.push(`${relative(".", file)}: ${trimmed}`);
-          return match;
-        }
-        return `font-weight: ${mapped};`;
-      },
-    );
+    const norm = file.split(/[\\/]/).join("/")
+    if (norm.endsWith("tokens/design-language.css")) continue
+    const original = await readFile(file, "utf8")
+    const changed = original.replace(/font-weight:\s*([^;\n]+);/g, (match, value: string) => {
+      totalCallsites++
+      const trimmed = value.trim()
+      // Already a token consumer; leave alone.
+      if (trimmed.startsWith("var(--ui-font-weight-")) return match
+      const mapped = mapValue(trimmed)
+      if (mapped === trimmed) {
+        unhandled.push(`${relative(".", file)}: ${trimmed}`)
+        return match
+      }
+      return `font-weight: ${mapped};`
+    })
 
     if (changed !== original) {
-      totalChanged++;
-      await writeFile(file, changed, "utf8");
-      console.log(`  rewrote ${relative(".", file)}`);
+      totalChanged++
+      await writeFile(file, changed, "utf8")
+      console.log(`  rewrote ${relative(".", file)}`)
     }
   }
 
-  console.log(`\nFiles changed: ${totalChanged}`);
-  console.log(`Callsites scanned: ${totalCallsites}`);
+  console.log(`\nFiles changed: ${totalChanged}`)
+  console.log(`Callsites scanned: ${totalCallsites}`)
   if (unhandled.length > 0) {
-    console.error(
-      `\nUnhandled values (manual review required, ${unhandled.length}):`,
-    );
-    for (const u of unhandled) console.error(`  ${u}`);
-    process.exit(1);
+    console.error(`\nUnhandled values (manual review required, ${unhandled.length}):`)
+    for (const u of unhandled) console.error(`  ${u}`)
+    process.exit(1)
   }
 }
 
-await migrate();
+await migrate()

@@ -95,13 +95,18 @@ export function parseHtmlSkeletonWorkflowCheckArgs(): HtmlSkeletonWorkflowCheckI
     outDir: path.resolve(flag("--out") ?? defaultOutDir()),
     threshold: parseNumberFlag("--threshold", 0.95),
     worstThreshold: parseNumberFlag("--worst-threshold", 0.8),
-    browserLaunchTimeoutMs: parseNumberFlag("--browser-launch-timeout-ms", Number(process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000)),
+    browserLaunchTimeoutMs: parseNumberFlag(
+      "--browser-launch-timeout-ms",
+      Number(process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000),
+    ),
     headless: process.argv.includes("--headless") || process.env.OPENCORVUS_VISUAL_DIFF_HEADLESS === "1",
     artifactsOnly: process.argv.includes("--artifacts-only"),
   }
 }
 
-export async function runHtmlSkeletonWorkflowCheck(input: HtmlSkeletonWorkflowCheckInput): Promise<HtmlSkeletonWorkflowCheckReport> {
+export async function runHtmlSkeletonWorkflowCheck(
+  input: HtmlSkeletonWorkflowCheckInput,
+): Promise<HtmlSkeletonWorkflowCheckReport> {
   const resolved = await resolveInputs(input)
   await fs.mkdir(resolved.outDir, { recursive: true })
 
@@ -146,23 +151,28 @@ export async function runHtmlSkeletonWorkflowCheck(input: HtmlSkeletonWorkflowCh
     checks,
     visualDiff,
   }
-  await fs.writeFile(path.join(resolved.outDir, "html-skeleton-workflow-report.json"), JSON.stringify(report, null, 2) + "\n")
+  await fs.writeFile(
+    path.join(resolved.outDir, "html-skeleton-workflow-report.json"),
+    JSON.stringify(report, null, 2) + "\n",
+  )
   return report
 }
 
-async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<Required<Pick<HtmlSkeletonWorkflowCheckInput, "outDir" | "threshold" | "worstThreshold" | "headless">> & {
-  frontendDesignDir?: string
-  frontendResearchDir?: string
-  visualRoot: string
-  sourcePackageDir?: string
-  templatePath?: string
-  evidenceManifestPath?: string
-  processTracePath?: string
-  iterationStatePath?: string
-  logDir?: string
-  reference: string
-  browserLaunchTimeoutMs?: number
-}> {
+async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<
+  Required<Pick<HtmlSkeletonWorkflowCheckInput, "outDir" | "threshold" | "worstThreshold" | "headless">> & {
+    frontendDesignDir?: string
+    frontendResearchDir?: string
+    visualRoot: string
+    sourcePackageDir?: string
+    templatePath?: string
+    evidenceManifestPath?: string
+    processTracePath?: string
+    iterationStatePath?: string
+    logDir?: string
+    reference: string
+    browserLaunchTimeoutMs?: number
+  }
+> {
   const taskDir = input.taskDir
     ? await resolveTaskDir(path.resolve(input.taskDir))
     : input.taskID
@@ -180,7 +190,9 @@ async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<Req
     : taskDir
       ? path.join(taskDir, "frontend-research")
       : undefined
-  const visualRoot = path.resolve(input.visualRoot ?? path.join(frontendDesignDir ?? process.cwd(), "visual-html-skeleton"))
+  const visualRoot = path.resolve(
+    input.visualRoot ?? path.join(frontendDesignDir ?? process.cwd(), "visual-html-skeleton"),
+  )
   const sourcePackageDir = input.sourcePackageDir
     ? path.resolve(input.sourcePackageDir)
     : frontendDesignDir
@@ -228,20 +240,22 @@ async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<Req
 
 async function resolveTaskDir(inputDir: string): Promise<string> {
   const directFrontendDesign = path.join(inputDir, "frontend-design")
-  if (await dirExists(directFrontendDesign) || path.basename(inputDir).toLowerCase() === "frontend-design") {
+  if ((await dirExists(directFrontendDesign)) || path.basename(inputDir).toLowerCase() === "frontend-design") {
     return inputDir
   }
   if (path.basename(inputDir).toLowerCase() !== "tasks") return inputDir
 
   const entries = await fs.readdir(inputDir, { withFileTypes: true }).catch(() => [])
-  const candidates = await Promise.all(entries
-    .filter((entry) => entry.isDirectory())
-    .map(async (entry) => {
-      const taskDir = path.join(inputDir, entry.name)
-      const frontendDesignDir = path.join(taskDir, "frontend-design")
-      const stat = await fs.stat(frontendDesignDir).catch(() => undefined)
-      return stat?.isDirectory() ? { taskDir, mtimeMs: stat.mtimeMs } : undefined
-    }))
+  const candidates = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => {
+        const taskDir = path.join(inputDir, entry.name)
+        const frontendDesignDir = path.join(taskDir, "frontend-design")
+        const stat = await fs.stat(frontendDesignDir).catch(() => undefined)
+        return stat?.isDirectory() ? { taskDir, mtimeMs: stat.mtimeMs } : undefined
+      }),
+  )
   const sorted = candidates
     .filter((item): item is { taskDir: string; mtimeMs: number } => Boolean(item))
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
@@ -263,13 +277,21 @@ async function collectArtifactChecks(
   },
   checks: HtmlSkeletonWorkflowCheckReport["checks"],
 ): Promise<void> {
-  checks.push(await fileCheck("visual-root-index", path.join(input.visualRoot, "index.html"), "visual HTML skeleton has an index.html entrypoint"))
+  checks.push(
+    await fileCheck(
+      "visual-root-index",
+      path.join(input.visualRoot, "index.html"),
+      "visual HTML skeleton has an index.html entrypoint",
+    ),
+  )
   checks.push(await fileCheck("reference-png", input.reference, "visual truth reference.png is available"))
 
   const normalizedVisualRoot = normalizePath(input.visualRoot)
   checks.push({
     id: "visual-root-is-design-output",
-    passed: !normalizedVisualRoot.endsWith("/frontend-design-skeleton") && !normalizedVisualRoot.endsWith("/web-clone-source/source-skeleton"),
+    passed:
+      !normalizedVisualRoot.endsWith("/frontend-design-skeleton") &&
+      !normalizedVisualRoot.endsWith("/web-clone-source/source-skeleton"),
     message: "visualRoot must be the separate frontend-design visual output, not captured source evidence",
     path: input.visualRoot,
   })
@@ -286,7 +308,8 @@ async function collectArtifactChecks(
   checks.push({
     id: "editable-html-size",
     passed: indexBytes > 0 && indexBytes <= 200_000,
-    message: "index.html must stay editable and bounded; split source evidence into semantic sections/CSS/assets instead of a giant DOM dump",
+    message:
+      "index.html must stay editable and bounded; split source evidence into semantic sections/CSS/assets instead of a giant DOM dump",
     path: indexPath,
   })
   checks.push({
@@ -296,7 +319,9 @@ async function collectArtifactChecks(
     path: indexPath,
   })
   const tokenPath = path.join(input.visualRoot, "styles", "tokens.css")
-  checks.push(await fileCheck("visual-token-css", tokenPath, "visual skeleton includes source-backed styles/tokens.css"))
+  checks.push(
+    await fileCheck("visual-token-css", tokenPath, "visual skeleton includes source-backed styles/tokens.css"),
+  )
   if (await fileExists(tokenPath)) {
     const tokenCss = await readOptionalText(tokenPath)
     checks.push({
@@ -314,14 +339,17 @@ async function collectArtifactChecks(
   })
   checks.push({
     id: "not-framework-compiled-entry",
-    passed: !/(?:\/assets\/index-[^"']+\.js|\/src\/main\.(?:tsx|ts|jsx|js)|react-refresh|vite\/client)/i.test(indexHtml),
+    passed: !/(?:\/assets\/index-[^"']+\.js|\/src\/main\.(?:tsx|ts|jsx|js)|react-refresh|vite\/client)/i.test(
+      indexHtml,
+    ),
     message: "visual skeleton must not rely on a framework compiled/dev entry as the visual artifact",
     path: indexPath,
   })
   checks.push({
     id: "not-raw-source-dom-dump",
     passed: !isRawSourceDomDump(indexHtml),
-    message: "visual skeleton must not be a raw captured DOM/source-skeleton dump; restore editable semantic HTML sections instead",
+    message:
+      "visual skeleton must not be a raw captured DOM/source-skeleton dump; restore editable semantic HTML sections instead",
     path: indexPath,
   })
   checks.push({
@@ -359,15 +387,23 @@ async function collectArtifactChecks(
       path.join("source-skeleton", "source-skeleton-audit.json"),
       "reference.png",
     ]) {
-      checks.push(await fileCheck(`source-package-${normalizePath(relative).replace(/[^a-z0-9]+/g, "-")}`, path.join(input.sourcePackageDir, relative), `source package includes ${relative}`))
+      checks.push(
+        await fileCheck(
+          `source-package-${normalizePath(relative).replace(/[^a-z0-9]+/g, "-")}`,
+          path.join(input.sourcePackageDir, relative),
+          `source package includes ${relative}`,
+        ),
+      )
     }
   }
 
-  if (input.templatePath && await fileExists(input.templatePath)) {
+  if (input.templatePath && (await fileExists(input.templatePath))) {
     const template = await readOptionalText(input.templatePath)
     checks.push({
       id: "template-role-visual-baseline",
-      passed: /\brole:\s*visual_baseline_input\b/i.test(template) || /\bfrontend_project\.role=visual_baseline_input\b/i.test(template),
+      passed:
+        /\brole:\s*visual_baseline_input\b/i.test(template) ||
+        /\bfrontend_project\.role=visual_baseline_input\b/i.test(template),
       message: "frontend-template reports frontend_project.role=visual_baseline_input",
       path: input.templatePath,
     })
@@ -379,7 +415,8 @@ async function collectArtifactChecks(
     })
     checks.push({
       id: "template-records-visual-evidence",
-      passed: /\bvisual-diff\b/i.test(template) || /\bwebpage_evaluate\b/i.test(template) || /\bscreenshot\b/i.test(template),
+      passed:
+        /\bvisual-diff\b/i.test(template) || /\bwebpage_evaluate\b/i.test(template) || /\bscreenshot\b/i.test(template),
       message: "frontend-template decision log records rendered visual evidence",
       path: input.templatePath,
     })
@@ -394,7 +431,13 @@ async function collectArtifactChecks(
 
   if (input.frontendDesignDir) {
     if (input.evidenceManifestPath) {
-      checks.push(await fileCheck("evidence-source-manifest", input.evidenceManifestPath, "frontend-design writes evidence-source-manifest.md"))
+      checks.push(
+        await fileCheck(
+          "evidence-source-manifest",
+          input.evidenceManifestPath,
+          "frontend-design writes evidence-source-manifest.md",
+        ),
+      )
     }
     if (input.processTracePath) {
       checks.push(await fileCheck("process-trace", input.processTracePath, "frontend-design process trace exists"))
@@ -421,7 +464,9 @@ async function collectArtifactChecks(
       }
     }
     if (input.iterationStatePath) {
-      checks.push(await fileCheck("iteration-state", input.iterationStatePath, "frontend-design iteration state exists"))
+      checks.push(
+        await fileCheck("iteration-state", input.iterationStatePath, "frontend-design iteration state exists"),
+      )
       if (await fileExists(input.iterationStatePath)) {
         const state = await readOptionalText(input.iterationStatePath)
         checks.push({
@@ -434,11 +479,11 @@ async function collectArtifactChecks(
     }
   }
 
-  if (input.frontendResearchDir && await dirExists(input.frontendResearchDir)) {
+  if (input.frontendResearchDir && (await dirExists(input.frontendResearchDir))) {
     await collectFrontendResearchChecks(input.frontendResearchDir, checks)
   }
 
-  if (input.logDir && await dirExists(input.logDir)) {
+  if (input.logDir && (await dirExists(input.logDir))) {
     const logText = await readSmallLogCorpus(input.logDir)
     checks.push({
       id: "logs-mention-skeleton-tool",
@@ -500,7 +545,11 @@ function repoRoot(): string {
   return path.resolve(import.meta.dir, "../../../..")
 }
 
-async function fileCheck(id: string, filePath: string, message: string): Promise<HtmlSkeletonWorkflowCheckReport["checks"][number]> {
+async function fileCheck(
+  id: string,
+  filePath: string,
+  message: string,
+): Promise<HtmlSkeletonWorkflowCheckReport["checks"][number]> {
   return {
     id,
     passed: await fileExists(filePath),
@@ -541,7 +590,10 @@ async function readOptionalText(filePath: string): Promise<string> {
 
 function isReferenceImageOnly(html: string): boolean {
   const body = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html
-  const bodyWithoutTags = body.replace(/<script\b[\s\S]*?<\/script>/gi, "").replace(/<style\b[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ")
+  const bodyWithoutTags = body
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
   const textLength = bodyWithoutTags.replace(/\s+/g, "").length
   const imageCount = (body.match(/<img\b/gi) ?? []).length
   return /\breference\.png\b/i.test(body) && imageCount <= 2 && textLength < 200
@@ -553,10 +605,12 @@ function inlineStyleBytes(html: string): number {
 
 function isRawSourceDomDump(html: string): boolean {
   const sourceNodeCount = (html.match(/\bdata-source-node-id=/gi) ?? []).length
-  return sourceNodeCount > 500 ||
+  return (
+    sourceNodeCount > 500 ||
     /\bsource-dom-page\b/i.test(html) ||
     /\bsinglefile-body\.html\b/i.test(html) ||
     /\bsource-skeleton\b/i.test(html)
+  )
 }
 
 async function readSmallLogCorpus(root: string): Promise<string> {
@@ -598,13 +652,17 @@ async function main() {
     : process.argv.includes("--artifacts-only")
       ? " artifacts-only"
       : " visual-skipped"
-  console.log(`[html-skeleton-workflow-check] ${report.passed ? "PASS" : "FAIL"}${visual} report=${path.join(report.outDir, "html-skeleton-workflow-report.json")}`)
+  console.log(
+    `[html-skeleton-workflow-check] ${report.passed ? "PASS" : "FAIL"}${visual} report=${path.join(report.outDir, "html-skeleton-workflow-report.json")}`,
+  )
   process.exit(report.passed ? 0 : 1)
 }
 
 if (import.meta.main) {
   main().catch((err) => {
-    console.error(`[html-skeleton-workflow-check] error: ${err instanceof Error ? err.stack || err.message : String(err)}`)
+    console.error(
+      `[html-skeleton-workflow-check] error: ${err instanceof Error ? err.stack || err.message : String(err)}`,
+    )
     process.exit(2)
   })
 }

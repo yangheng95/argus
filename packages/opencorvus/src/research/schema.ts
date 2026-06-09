@@ -21,22 +21,25 @@ export const RESEARCH_BUNDLE_LIMITS = {
   citationMapJsonChars: 100_000,
 } as const
 
-const PROJECT_RELATIVE_RUNTIME_RESEARCH_PATH = /^\.opencorvus\/runtime\/tasks\/[^/]+\/(?:deep-research|frontend-research)\/[^/]+\/[^/]+$/
+const PROJECT_RELATIVE_RUNTIME_RESEARCH_PATH =
+  /^\.opencorvus\/runtime\/tasks\/[^/]+\/(?:deep-research|frontend-research)\/[^/]+\/[^/]+$/
 
-export const ResearchEvidenceRefSchema = z.object({
-  id: z.string().min(1),
-  kind: z.enum(["web", "code", "memory", "user"]),
-  pointer: z.string().min(1),
-  title: z.string().min(1),
-  retrieved_at: z.string().min(1),
-  reliability: z.enum(["primary", "secondary", "community", "unknown"]),
-  excerpt: z.string().min(1).max(800),
-  bundle_ref: z.string().min(1).optional(),
-  volatile: z.boolean().default(false),
-}).transform((item) => ({
-  ...item,
-  bundle_ref: item.bundle_ref ?? `research-bundle.md#${item.id}`,
-}))
+export const ResearchEvidenceRefSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.enum(["web", "code", "memory", "user"]),
+    pointer: z.string().min(1),
+    title: z.string().min(1),
+    retrieved_at: z.string().min(1),
+    reliability: z.enum(["primary", "secondary", "community", "unknown"]),
+    excerpt: z.string().min(1).max(800),
+    bundle_ref: z.string().min(1).optional(),
+    volatile: z.boolean().default(false),
+  })
+  .transform((item) => ({
+    ...item,
+    bundle_ref: item.bundle_ref ?? `research-bundle.md#${item.id}`,
+  }))
 export type ResearchEvidenceRef = z.infer<typeof ResearchEvidenceRefSchema>
 
 export const ResearchFactSchema = z.object({
@@ -213,7 +216,8 @@ export const ResearchBundleSchema = z.object({
 export type ResearchBundle = z.infer<typeof ResearchBundleSchema>
 
 const ResearchBundleLine = (max: number) =>
-  z.string()
+  z
+    .string()
     .min(1)
     .max(max)
     .regex(/^[^\r\n]+$/, "must be single-line text; split multiline notes into multiple array items")
@@ -272,16 +276,43 @@ export function validateResearchBriefSemantics(brief: ResearchBrief): string | u
   const factIDs = new Set(brief.facts.map((item) => item.id))
 
   const uniqueError =
-    ensureUnique(brief.evidence_index.map((item) => item.id), "evidence") ??
-    ensureUnique(brief.facts.map((item) => item.id), "fact") ??
-    ensureUnique(brief.inferences.map((item) => item.id), "inference") ??
-    ensureUnique(brief.problem_statements.map((item) => item.id), "problem_statement") ??
-    ensureUnique(brief.user_needs.map((item) => item.id), "user_need") ??
-    ensureUnique(brief.constraints.map((item) => item.id), "constraint") ??
-    ensureUnique(brief.document_outline.map((item) => item.id), "document_outline") ??
+    ensureUnique(
+      brief.evidence_index.map((item) => item.id),
+      "evidence",
+    ) ??
+    ensureUnique(
+      brief.facts.map((item) => item.id),
+      "fact",
+    ) ??
+    ensureUnique(
+      brief.inferences.map((item) => item.id),
+      "inference",
+    ) ??
+    ensureUnique(
+      brief.problem_statements.map((item) => item.id),
+      "problem_statement",
+    ) ??
+    ensureUnique(
+      brief.user_needs.map((item) => item.id),
+      "user_need",
+    ) ??
+    ensureUnique(
+      brief.constraints.map((item) => item.id),
+      "constraint",
+    ) ??
+    ensureUnique(
+      brief.document_outline.map((item) => item.id),
+      "document_outline",
+    ) ??
     ensureWebpageContractUniqueIDs(brief.webpage_contract) ??
-    ensureUnique(brief.subpage_research_tasks.map((item) => item.id), "subpage_research_task") ??
-    ensureUnique(brief.open_questions.map((item) => item.id), "open_question")
+    ensureUnique(
+      brief.subpage_research_tasks.map((item) => item.id),
+      "subpage_research_task",
+    ) ??
+    ensureUnique(
+      brief.open_questions.map((item) => item.id),
+      "open_question",
+    )
   if (uniqueError) return uniqueError
 
   for (const fact of brief.facts) {
@@ -324,22 +355,54 @@ export function validateResearchBriefSemantics(brief: ResearchBrief): string | u
 function ensureWebpageContractUniqueIDs(contract: ResearchWebpageContract | undefined): string | undefined {
   if (!contract) return undefined
   return (
-    ensureUnique(contract.functional_surfaces.map((item) => item.id), "webpage_contract.functional_surface") ??
-    ensureUnique(contract.visual_layout.map((item) => item.id), "webpage_contract.visual_layout") ??
-    ensureUnique(contract.style_requirements.map((item) => item.id), "webpage_contract.style_requirement") ??
-    ensureUnique(contract.interaction_states.map((item) => item.id), "webpage_contract.interaction_state") ??
-    ensureUnique(contract.data_content_inventory.map((item) => item.id), "webpage_contract.data_content_inventory") ??
-    ensureUnique(contract.fidelity_acceptance.map((item) => item.id), "webpage_contract.fidelity_acceptance") ??
-    ensureUnique(contract.fidelity_risks.map((item) => item.id), "webpage_contract.fidelity_risk")
+    ensureUnique(
+      contract.functional_surfaces.map((item) => item.id),
+      "webpage_contract.functional_surface",
+    ) ??
+    ensureUnique(
+      contract.visual_layout.map((item) => item.id),
+      "webpage_contract.visual_layout",
+    ) ??
+    ensureUnique(
+      contract.style_requirements.map((item) => item.id),
+      "webpage_contract.style_requirement",
+    ) ??
+    ensureUnique(
+      contract.interaction_states.map((item) => item.id),
+      "webpage_contract.interaction_state",
+    ) ??
+    ensureUnique(
+      contract.data_content_inventory.map((item) => item.id),
+      "webpage_contract.data_content_inventory",
+    ) ??
+    ensureUnique(
+      contract.fidelity_acceptance.map((item) => item.id),
+      "webpage_contract.fidelity_acceptance",
+    ) ??
+    ensureUnique(
+      contract.fidelity_risks.map((item) => item.id),
+      "webpage_contract.fidelity_risk",
+    )
   )
 }
 
-function ensureWebpageContractRefs(contract: ResearchWebpageContract | undefined, evidenceIDs: Set<string>): string | undefined {
+function ensureWebpageContractRefs(
+  contract: ResearchWebpageContract | undefined,
+  evidenceIDs: Set<string>,
+): string | undefined {
   if (!contract) return undefined
-  const referenceErr = ensureRefs(contract.reference_image_evidence_ids, evidenceIDs, "webpage_contract.reference_image_evidence_ids")
+  const referenceErr = ensureRefs(
+    contract.reference_image_evidence_ids,
+    evidenceIDs,
+    "webpage_contract.reference_image_evidence_ids",
+  )
   if (referenceErr) return referenceErr
   for (const item of contract.functional_surfaces) {
-    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.functional_surface ${item.id}.evidence_ids`)
+    const err = ensureRefs(
+      item.evidence_ids,
+      evidenceIDs,
+      `webpage_contract.functional_surface ${item.id}.evidence_ids`,
+    )
     if (err) return err
   }
   for (const item of contract.visual_layout) {
@@ -355,11 +418,19 @@ function ensureWebpageContractRefs(contract: ResearchWebpageContract | undefined
     if (err) return err
   }
   for (const item of contract.data_content_inventory) {
-    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.data_content_inventory ${item.id}.evidence_ids`)
+    const err = ensureRefs(
+      item.evidence_ids,
+      evidenceIDs,
+      `webpage_contract.data_content_inventory ${item.id}.evidence_ids`,
+    )
     if (err) return err
   }
   for (const item of contract.fidelity_acceptance) {
-    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.fidelity_acceptance ${item.id}.evidence_ids`)
+    const err = ensureRefs(
+      item.evidence_ids,
+      evidenceIDs,
+      `webpage_contract.fidelity_acceptance ${item.id}.evidence_ids`,
+    )
     if (err) return err
   }
   for (const item of contract.fidelity_risks) {
@@ -378,11 +449,7 @@ export function validateResearchBriefIntegrity(brief: ResearchBrief): string | u
     return `source_digest mismatch: expected ${expectedDigest}.`
   }
 
-  const bundlePaths = [
-    brief.bundle.full_markdown_path,
-    brief.bundle.evidence_json_path,
-    brief.bundle.citation_map_path,
-  ]
+  const bundlePaths = [brief.bundle.full_markdown_path, brief.bundle.evidence_json_path, brief.bundle.citation_map_path]
   for (const bundlePath of bundlePaths) {
     const normalized = bundlePath.replaceAll("\\", "/")
     if (
@@ -401,11 +468,7 @@ export function validateResearchBriefTaskBoundary(brief: ResearchBrief, taskID: 
     `.opencorvus/runtime/tasks/${Identifier.shortPath(taskID)}/deep-research/`,
     `.opencorvus/runtime/tasks/${Identifier.shortPath(taskID)}/frontend-research/`,
   ]
-  const bundlePaths = [
-    brief.bundle.full_markdown_path,
-    brief.bundle.evidence_json_path,
-    brief.bundle.citation_map_path,
-  ]
+  const bundlePaths = [brief.bundle.full_markdown_path, brief.bundle.evidence_json_path, brief.bundle.citation_map_path]
   for (const bundlePath of bundlePaths) {
     const normalized = bundlePath.replaceAll("\\", "/")
     if (!expectedPrefixes.some((prefix) => normalized.startsWith(prefix))) {

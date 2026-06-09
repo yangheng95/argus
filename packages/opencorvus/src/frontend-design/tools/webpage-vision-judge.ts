@@ -84,62 +84,64 @@ function normalizeVerdictShape(value: unknown): unknown {
   }
   if (typeof record.overall_impression !== "string" || !record.overall_impression.trim()) {
     const differences = Array.isArray(record.differences) ? record.differences : []
-    record.overall_impression = record.accepted === true && differences.length === 0
-      ? "Rendered screenshot appears visually faithful to the reference."
-      : `Rendered screenshot has ${differences.length} visible difference(s) that require review.`
+    record.overall_impression =
+      record.accepted === true && differences.length === 0
+        ? "Rendered screenshot appears visually faithful to the reference."
+        : `Rendered screenshot has ${differences.length} visible difference(s) that require review.`
   }
   return record
 }
 
-const VerdictSchema = z.preprocess(normalizeVerdictShape, z.object({
-  accepted: z
-    .boolean()
-    .describe(
-      "true ONLY when the rendered screenshot is visually faithful to the reference: " +
-        "all top-level sections present, palette matches, key UI elements (logos, " +
-        "buttons, search boxes, icons) are visually correct. Set false if ANY " +
-        "high-impact element is missing, distorted, or in the wrong colour.",
-    ),
-  overall_impression: z
-    .string()
-    .describe("One-sentence summary of how the rendered output compares to the reference."),
-  differences: z
-    .array(
-      z.preprocess(normalizeDifferenceShape, z.object({
-        severity: z
-          .enum(["critical", "major", "minor"])
-          .describe(
-            "critical = section/structure missing or broken. major = wrong colours, " +
-              "wrong icon shape, wrong text, mis-positioned hero element. minor = " +
-              "small spacing / font-weight / shade variations.",
-          ),
-        region: z
-          .string()
-          .describe(
-            "Where in the page the difference is (e.g. 'top nav', 'logo', 'search box', " +
-              "'hot-search list row 1', 'footer right corner').",
-          ),
-        observed: z
-          .string()
-          .describe("What you ACTUALLY see in the rendered screenshot at that region."),
-        expected: z
-          .string()
-          .describe("What you SHOULD see based on the reference screenshot."),
-        fix_hint: z
-          .string()
-          .describe(
-            "One concrete edit suggestion the developer should make next " +
-              "(e.g. 'replace shape-blob div with inline SVG paw-print path', " +
-              "'change second mic icon to paperclip', 'shrink hot-search row " +
-              "vertical padding to match reference').",
-          ),
-      })),
-    )
-    .describe(
-      "Ranked list of visual differences, most severe first. " +
-        "Empty array allowed only when accepted=true.",
-    ),
-}))
+const VerdictSchema = z.preprocess(
+  normalizeVerdictShape,
+  z.object({
+    accepted: z
+      .boolean()
+      .describe(
+        "true ONLY when the rendered screenshot is visually faithful to the reference: " +
+          "all top-level sections present, palette matches, key UI elements (logos, " +
+          "buttons, search boxes, icons) are visually correct. Set false if ANY " +
+          "high-impact element is missing, distorted, or in the wrong colour.",
+      ),
+    overall_impression: z
+      .string()
+      .describe("One-sentence summary of how the rendered output compares to the reference."),
+    differences: z
+      .array(
+        z.preprocess(
+          normalizeDifferenceShape,
+          z.object({
+            severity: z
+              .enum(["critical", "major", "minor"])
+              .describe(
+                "critical = section/structure missing or broken. major = wrong colours, " +
+                  "wrong icon shape, wrong text, mis-positioned hero element. minor = " +
+                  "small spacing / font-weight / shade variations.",
+              ),
+            region: z
+              .string()
+              .describe(
+                "Where in the page the difference is (e.g. 'top nav', 'logo', 'search box', " +
+                  "'hot-search list row 1', 'footer right corner').",
+              ),
+            observed: z.string().describe("What you ACTUALLY see in the rendered screenshot at that region."),
+            expected: z.string().describe("What you SHOULD see based on the reference screenshot."),
+            fix_hint: z
+              .string()
+              .describe(
+                "One concrete edit suggestion the developer should make next " +
+                  "(e.g. 'replace shape-blob div with inline SVG paw-print path', " +
+                  "'change second mic icon to paperclip', 'shrink hot-search row " +
+                  "vertical padding to match reference').",
+              ),
+          }),
+        ),
+      )
+      .describe(
+        "Ranked list of visual differences, most severe first. " + "Empty array allowed only when accepted=true.",
+      ),
+  }),
+)
 
 export function normalizeVisionJudgeVerdictForTest(value: unknown): z.infer<typeof VerdictSchema> {
   return VerdictSchema.parse(value)
@@ -156,9 +158,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
   parameters: z.object({
     reference: z
       .string()
-      .describe(
-        "Path to the reference PNG (defaults to `reference.png` inside the webpage evidence dir).",
-      )
+      .describe("Path to the reference PNG (defaults to `reference.png` inside the webpage evidence dir).")
       .optional(),
     rendered: z
       .string()
@@ -178,20 +178,13 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
     const referencePath = resolve(params.reference ?? "reference.png")
     const renderedPath = resolve(params.rendered ?? "rendered.png")
 
-    const [referenceBytes, renderedBytes] = await Promise.all([
-      fs.readFile(referencePath),
-      fs.readFile(renderedPath),
-    ])
+    const [referenceBytes, renderedBytes] = await Promise.all([fs.readFile(referencePath), fs.readFile(renderedPath)])
 
     // Single configured-model resolver (spec §13.2): session overlay > base.
     const config = await EffectiveConfig.effective({ sessionID: ctx.sessionID })
     const parsed = await resolveConfiguredModelRef({ sessionID: ctx.sessionID })
     const model = await Provider.getModel(parsed.providerID, parsed.modelID, { config })
-    const language = ProviderLLM.wrapModel(
-      await Provider.getLanguage(model, { config }),
-      model,
-      {},
-    )
+    const language = ProviderLLM.wrapModel(await Provider.getLanguage(model, { config }), model, {})
 
     if (!model.capabilities.input.image) {
       throw new Error(
@@ -281,9 +274,9 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       const errMessage = original instanceof Error ? original.message : String(original)
       const errName = original instanceof Error ? original.name : "UnknownError"
       const errStack = original instanceof Error ? original.stack : undefined
-      const cause = original instanceof Error && "cause" in original ? (original as { cause?: unknown }).cause : undefined
-      const causeMessage =
-        cause instanceof Error ? cause.message : cause !== undefined ? String(cause) : undefined
+      const cause =
+        original instanceof Error && "cause" in original ? (original as { cause?: unknown }).cause : undefined
+      const causeMessage = cause instanceof Error ? cause.message : cause !== undefined ? String(cause) : undefined
       log.error("vision judge structured stream failed", {
         providerID: parsed.providerID,
         modelID: parsed.modelID,
@@ -293,15 +286,25 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
         errStack,
       })
       const failurePath = path.join(outputDir, "vision-judge-failure.json")
-      await fs.writeFile(failurePath, JSON.stringify({
-        generatedAt: new Date().toISOString(),
-        model: `${parsed.providerID}/${parsed.modelID}`,
-        referencePath,
-        renderedPath,
-        errName,
-        errMessage,
-        causeMessage,
-      }, null, 2), "utf8").catch(() => undefined)
+      await fs
+        .writeFile(
+          failurePath,
+          JSON.stringify(
+            {
+              generatedAt: new Date().toISOString(),
+              model: `${parsed.providerID}/${parsed.modelID}`,
+              referencePath,
+              renderedPath,
+              errName,
+              errMessage,
+              causeMessage,
+            },
+            null,
+            2,
+          ),
+          "utf8",
+        )
+        .catch(() => undefined)
       throw new Error(
         `webpage_vision_judge: ${errName} — ${errMessage}` +
           (causeMessage ? ` (cause: ${causeMessage})` : "") +
@@ -355,8 +358,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       lines.push("## Differences (severity-ordered)")
       lines.push("")
       const ordered = [...verdict.differences].sort((a, b) => {
-        const rank = (s: string) =>
-          s === "critical" ? 0 : s === "major" ? 1 : 2
+        const rank = (s: string) => (s === "critical" ? 0 : s === "major" ? 1 : 2)
         return rank(a.severity) - rank(b.severity)
       })
       for (const d of ordered) {
@@ -385,7 +387,9 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
         majorCount: verdict.differences.filter((d) => d.severity === "major").length,
         minorCount: verdict.differences.filter((d) => d.severity === "minor").length,
         verdictPath: judgePath,
-        visualEvidenceBundlePath: visualEvidenceBundle ? path.join(outputDir, "visual-evidence-bundle.json") : undefined,
+        visualEvidenceBundlePath: visualEvidenceBundle
+          ? path.join(outputDir, "visual-evidence-bundle.json")
+          : undefined,
       },
     }
   },

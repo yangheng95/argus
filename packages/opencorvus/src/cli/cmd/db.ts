@@ -74,7 +74,8 @@ const PathCommand = cmd({
  */
 const ResetCommand = cmd({
   command: "reset",
-  describe: "atomically wipe the global opencorvus SQLite DB and project scratch (worktrees, ownership markers, snapshots). DESTRUCTIVE — there is no undo.",
+  describe:
+    "atomically wipe the global opencorvus SQLite DB and project scratch (worktrees, ownership markers, snapshots). DESTRUCTIVE — there is no undo.",
   builder: (yargs: Argv) => {
     return yargs.option("force", {
       type: "boolean",

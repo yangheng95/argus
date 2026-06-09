@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { PROTOCOL_VERSION, type ExtensionMessage } from "@opencorvus-ai/transport-protocol"
-import {
-  __resetVsCodeTransportForTest,
-  createVsCodeTransport,
-} from "../src/services/vscode-transport"
+import { __resetVsCodeTransportForTest, createVsCodeTransport } from "../src/services/vscode-transport"
 
 /**
  * audit-2026-04-29 W2-G3. Locks vscode-transport's ui-command
@@ -39,20 +36,32 @@ function installFakeWindow(): {
   const posted: any[] = []
   let listener: ((e: MessageEvent) => void) | undefined
   const fakeWindow: any = {
-    addEventListener(_t: string, fn: (e: MessageEvent) => void) { listener = fn },
+    addEventListener(_t: string, fn: (e: MessageEvent) => void) {
+      listener = fn
+    },
     removeEventListener() {},
     location: { reload() {} },
     sessionStorage: {
       _data: new Map<string, string>(),
-      getItem(k: string) { return this._data.get(k) ?? null },
-      setItem(k: string, v: string) { this._data.set(k, v) },
-      removeItem(k: string) { this._data.delete(k) },
+      getItem(k: string) {
+        return this._data.get(k) ?? null
+      },
+      setItem(k: string, v: string) {
+        this._data.set(k, v)
+      },
+      removeItem(k: string) {
+        this._data.delete(k)
+      },
     },
     acquireVsCodeApi() {
       return {
-        postMessage(m: unknown) { posted.push(m) },
+        postMessage(m: unknown) {
+          posted.push(m)
+        },
         setState() {},
-        getState() { return null },
+        getState() {
+          return null
+        },
       }
     },
   }
@@ -64,19 +73,25 @@ function installFakeWindow(): {
       if (!listener) throw new Error("no listener installed")
       listener({ data: m } as MessageEvent)
     },
-    cleanup: () => { (globalThis as any).window = prev },
+    cleanup: () => {
+      ;(globalThis as any).window = prev
+    },
   }
 }
 
 describe("vscode-transport ui-command dispatch (audit W2-G3)", () => {
   let cleanupFake: (() => void) | undefined
   beforeEach(() => {
-    try { __resetVsCodeTransportForTest() } catch {}
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
   })
   afterEach(() => {
     cleanupFake?.()
     cleanupFake = undefined
-    try { __resetVsCodeTransportForTest() } catch {}
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
   })
 
   test("multi-subscriber dispatch fires every handler in order", () => {
@@ -104,10 +119,14 @@ describe("vscode-transport ui-command dispatch (audit W2-G3)", () => {
     const calls: number[] = []
     const errs: unknown[][] = []
     const origError = console.error
-    console.error = (...args: unknown[]) => { errs.push(args) }
+    console.error = (...args: unknown[]) => {
+      errs.push(args)
+    }
     try {
       t.subscribeUiCommand("composer.attach", () => calls.push(1))
-      t.subscribeUiCommand("composer.attach", () => { throw new Error("boom") })
+      t.subscribeUiCommand("composer.attach", () => {
+        throw new Error("boom")
+      })
       t.subscribeUiCommand("composer.attach", () => calls.push(3))
       fake.trigger({
         protocol: PROTOCOL_VERSION,
@@ -133,7 +152,9 @@ describe("vscode-transport ui-command dispatch (audit W2-G3)", () => {
     sub.unsubscribe()
     const warns: unknown[][] = []
     const origWarn = console.warn
-    console.warn = (...args: unknown[]) => { warns.push(args) }
+    console.warn = (...args: unknown[]) => {
+      warns.push(args)
+    }
     try {
       fake.trigger({
         protocol: PROTOCOL_VERSION,
@@ -158,7 +179,9 @@ describe("vscode-transport ui-command dispatch (audit W2-G3)", () => {
     createVsCodeTransport()
     const warns: unknown[][] = []
     const origWarn = console.warn
-    console.warn = (...args: unknown[]) => { warns.push(args) }
+    console.warn = (...args: unknown[]) => {
+      warns.push(args)
+    }
     try {
       expect(() =>
         fake.trigger({
@@ -197,12 +220,16 @@ describe("vscode-transport ui-command dispatch (audit W2-G3)", () => {
 describe("vscode-transport stream lifecycle envelopes (audit W2-G3)", () => {
   let cleanupFake: (() => void) | undefined
   beforeEach(() => {
-    try { __resetVsCodeTransportForTest() } catch {}
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
   })
   afterEach(() => {
     cleanupFake?.()
     cleanupFake = undefined
-    try { __resetVsCodeTransportForTest() } catch {}
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
   })
 
   test("stream.event delivers each event string to onEvent in order", async () => {
@@ -210,10 +237,7 @@ describe("vscode-transport stream lifecycle envelopes (audit W2-G3)", () => {
     cleanupFake = fake.cleanup
     const t = createVsCodeTransport()
     const events: string[] = []
-    t.openStream(
-      { path: "task/abc/events" },
-      { onEvent: (e) => events.push(e) },
-    )
+    t.openStream({ path: "task/abc/events" }, { onEvent: (e) => events.push(e) })
     await new Promise((r) => setTimeout(r, 0))
     const sid = fake.fake.posted.find((m) => m.type === "stream.open")!.id
     fake.trigger({
@@ -230,10 +254,7 @@ describe("vscode-transport stream lifecycle envelopes (audit W2-G3)", () => {
     cleanupFake = fake.cleanup
     const t = createVsCodeTransport()
     const errs: Error[] = []
-    t.openStream(
-      { path: "task/abc/events" },
-      { onEvent: () => {}, onError: (e) => errs.push(e) },
-    )
+    t.openStream({ path: "task/abc/events" }, { onEvent: () => {}, onError: (e) => errs.push(e) })
     await new Promise((r) => setTimeout(r, 0))
     const sid = fake.fake.posted.find((m) => m.type === "stream.open")!.id
     fake.trigger({
@@ -251,10 +272,7 @@ describe("vscode-transport stream lifecycle envelopes (audit W2-G3)", () => {
     cleanupFake = fake.cleanup
     const t = createVsCodeTransport()
     const closeReasons: string[] = []
-    t.openStream(
-      { path: "task/abc/events" },
-      { onEvent: () => {}, onClose: (r) => closeReasons.push(r ?? "<undef>") },
-    )
+    t.openStream({ path: "task/abc/events" }, { onEvent: () => {}, onClose: (r) => closeReasons.push(r ?? "<undef>") })
     await new Promise((r) => setTimeout(r, 0))
     const sid = fake.fake.posted.find((m) => m.type === "stream.open")!.id
     fake.trigger({
@@ -279,10 +297,7 @@ describe("vscode-transport stream lifecycle envelopes (audit W2-G3)", () => {
     cleanupFake = fake.cleanup
     const t = createVsCodeTransport()
     const events: string[] = []
-    const handle = t.openStream(
-      { path: "task/abc/events" },
-      { onEvent: (e) => events.push(e) },
-    )
+    const handle = t.openStream({ path: "task/abc/events" }, { onEvent: (e) => events.push(e) })
     await new Promise((r) => setTimeout(r, 0))
     handle.close()
     // Pretend the bridge sent a final batch after we already closed

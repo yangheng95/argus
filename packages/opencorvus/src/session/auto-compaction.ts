@@ -34,10 +34,7 @@ export namespace AutomaticCompaction {
     return disabledWorkflowSessionKinds.has(kind as SessionKind)
   }
 
-  export function decision(input: {
-    sessionKind: SessionKind | string
-    runtimeContinuationReady?: boolean
-  }): Decision {
+  export function decision(input: { sessionKind: SessionKind | string; runtimeContinuationReady?: boolean }): Decision {
     if (disabledWorkflowSessionKinds.has(input.sessionKind as SessionKind)) {
       return { enabled: false, reason: "unsupported_workflow_kind" }
     }

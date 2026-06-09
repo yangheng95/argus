@@ -69,18 +69,44 @@ export async function readPngEvidence(file: string): Promise<PngEvidence> {
     return { path: resolved, valid: false, error: `missing PNG file (${errorMessage(error)})` }
   }
   if (buffer.length < 24) {
-    return { path: resolved, valid: false, bytes: buffer.length, sha256: sha256Buffer(buffer), error: "PNG file is too small to contain IHDR metadata" }
+    return {
+      path: resolved,
+      valid: false,
+      bytes: buffer.length,
+      sha256: sha256Buffer(buffer),
+      error: "PNG file is too small to contain IHDR metadata",
+    }
   }
   if (!buffer.subarray(0, 8).equals(PNG_SIGNATURE)) {
-    return { path: resolved, valid: false, bytes: buffer.length, sha256: sha256Buffer(buffer), error: "file does not have a PNG signature" }
+    return {
+      path: resolved,
+      valid: false,
+      bytes: buffer.length,
+      sha256: sha256Buffer(buffer),
+      error: "file does not have a PNG signature",
+    }
   }
   if (buffer.readUInt32BE(8) !== 13 || buffer.subarray(12, 16).toString("ascii") !== "IHDR") {
-    return { path: resolved, valid: false, bytes: buffer.length, sha256: sha256Buffer(buffer), error: "PNG first chunk must be a 13-byte IHDR chunk" }
+    return {
+      path: resolved,
+      valid: false,
+      bytes: buffer.length,
+      sha256: sha256Buffer(buffer),
+      error: "PNG first chunk must be a 13-byte IHDR chunk",
+    }
   }
   const width = buffer.readUInt32BE(16)
   const height = buffer.readUInt32BE(20)
   if (width <= 0 || height <= 0) {
-    return { path: resolved, valid: false, width, height, bytes: buffer.length, sha256: sha256Buffer(buffer), error: "PNG IHDR width/height must be positive" }
+    return {
+      path: resolved,
+      valid: false,
+      width,
+      height,
+      bytes: buffer.length,
+      sha256: sha256Buffer(buffer),
+      error: "PNG IHDR width/height must be positive",
+    }
   }
   return {
     path: resolved,
@@ -92,7 +118,9 @@ export async function readPngEvidence(file: string): Promise<PngEvidence> {
   }
 }
 
-export async function inspectWebCloneSourceManifest(sourcePackageDir: string): Promise<WebCloneSourceManifestIntegrity> {
+export async function inspectWebCloneSourceManifest(
+  sourcePackageDir: string,
+): Promise<WebCloneSourceManifestIntegrity> {
   const manifestPath = path.join(sourcePackageDir, "web-clone-source-manifest.json")
   const findings: string[] = []
   const sourceStat = await fs.lstat(sourcePackageDir).catch(() => undefined)
@@ -115,7 +143,8 @@ export async function inspectWebCloneSourceManifest(sourcePackageDir: string): P
     findings.push("web-clone-source-manifest.json purpose must be web-clone-visible-source-package.")
   }
   const provenance = asRecord(manifest.provenance)
-  if (provenance.source !== "webpage-evidence") findings.push("web-clone-source-manifest.json provenance.source must be webpage-evidence.")
+  if (provenance.source !== "webpage-evidence")
+    findings.push("web-clone-source-manifest.json provenance.source must be webpage-evidence.")
   if (typeof provenance.webpageEvidenceDir !== "string" || provenance.webpageEvidenceDir.length === 0) {
     findings.push("web-clone-source-manifest.json provenance.webpageEvidenceDir is required.")
   }
@@ -183,9 +212,13 @@ export async function listExistingWebCloneSourcePackageContamination(sourcePacka
   }
   for (const file of await listFiles(sourcePackageDir)) {
     const relative = normalizePath(path.relative(sourcePackageDir, file))
-    if (/(^|\/)(actual-app|eval|rendered|screenshots?|vision|verification|coverage|dist|build)(?:[./_-]|$)/i.test(relative) ||
+    if (
+      /(^|\/)(actual-app|eval|rendered|screenshots?|vision|verification|coverage|dist|build)(?:[./_-]|$)/i.test(
+        relative,
+      ) ||
       relative.endsWith("/web-clone-source-skeleton-consumption-audit.json") ||
-      relative === "web-clone-source-skeleton-consumption-audit.json") {
+      relative === "web-clone-source-skeleton-consumption-audit.json"
+    ) {
       findings.push(relative)
     }
   }
@@ -195,7 +228,7 @@ export async function listExistingWebCloneSourcePackageContamination(sourcePacka
 export async function listMissingWebpageEvidenceArtifacts(webpageEvidenceDir: string): Promise<string[]> {
   const missing: string[] = []
   for (const relative of WEB_CLONE_REQUIRED_WEBPAGE_EVIDENCE_ARTIFACTS) {
-    if (!await hasNonEmptyFile(path.join(webpageEvidenceDir, relative))) missing.push(relative)
+    if (!(await hasNonEmptyFile(path.join(webpageEvidenceDir, relative)))) missing.push(relative)
   }
   return missing
 }
@@ -254,7 +287,7 @@ async function listFiles(root: string): Promise<string[]> {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? value as Record<string, unknown> : {}
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {}
 }
 
 function normalizePath(value: string): string {

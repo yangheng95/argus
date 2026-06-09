@@ -148,9 +148,9 @@ export namespace LSP {
       }
 
       log.info("enabled LSP servers", {
-          serverIds: objectValues(servers)
-            .map((server) => server.id)
-            .join(", "),
+        serverIds: objectValues(servers)
+          .map((server) => server.id)
+          .join(", "),
       })
 
       return createState(servers, clients)

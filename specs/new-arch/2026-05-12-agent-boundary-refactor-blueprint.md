@@ -114,17 +114,17 @@ review that found no issue.
 This table documents the target, but the implementation source must be the code
 role contract.
 
-| Role                | Owns                                                                                    | Must not own                                                                    |
-| ------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `orchestrator`      | task wake decisions, stage ordering, retry/fail/restart, task mutation tool use         | requirement extraction, goal graph authoring, subjective final acceptance verdict |
-| `requirements`      | requirement extraction and foundational technical decisions                             | goals, contracts, retry strategy                                                |
-| `architect`         | goal graph, traceability, assembly ownership, cross-goal contracts                      | runtime evidence, acceptance verdict                                              |
-| `integrity`         | requirement/goal integrity review, including post-build requirement-status fidelity     | acceptance runtime verification, acceptance verdict, direct goal mutation           |
-| `build`             | implementation in worktree                                                              | final acceptance                                                                |
-| `acceptance-manifest` | deterministic acceptance evidence assembly and persisted evidence manifest                | subjective verdict authorship                                                   |
-| `acceptance-agent`    | semantic accept/reject judgment over acceptance evidence and on-demand inspection results | manifest assembly, hidden integrity routing                                     |
-| `acceptance-arbiter`  | deterministic finalization of acceptance-stage verdict from agent verdict plus host gates | subjective review, new evidence creation                                        |
-| `prosecutor`        | counterexamples and diagnostic challenge metrics over acceptance evidence                 | accept/reject verdict, acceptance truth mutation                                  |
+| Role                  | Owns                                                                                      | Must not own                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `orchestrator`        | task wake decisions, stage ordering, retry/fail/restart, task mutation tool use           | requirement extraction, goal graph authoring, subjective final acceptance verdict |
+| `requirements`        | requirement extraction and foundational technical decisions                               | goals, contracts, retry strategy                                                  |
+| `architect`           | goal graph, traceability, assembly ownership, cross-goal contracts                        | runtime evidence, acceptance verdict                                              |
+| `integrity`           | requirement/goal integrity review, including post-build requirement-status fidelity       | acceptance runtime verification, acceptance verdict, direct goal mutation         |
+| `build`               | implementation in worktree                                                                | final acceptance                                                                  |
+| `acceptance-manifest` | deterministic acceptance evidence assembly and persisted evidence manifest                | subjective verdict authorship                                                     |
+| `acceptance-agent`    | semantic accept/reject judgment over acceptance evidence and on-demand inspection results | manifest assembly, hidden integrity routing                                       |
+| `acceptance-arbiter`  | deterministic finalization of acceptance-stage verdict from agent verdict plus host gates | subjective review, new evidence creation                                          |
+| `prosecutor`          | counterexamples and diagnostic challenge metrics over acceptance evidence                 | accept/reject verdict, acceptance truth mutation                                  |
 
 ## 3. Current Reality Inventory
 

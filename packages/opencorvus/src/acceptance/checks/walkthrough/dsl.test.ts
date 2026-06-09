@@ -89,24 +89,40 @@ describe("walkthrough DSL", () => {
   })
 })
 
-function fakePage(input?: { selectors?: Set<string>; bodyText?: string; navigationPath?: string }): WalkthroughPage & { events: string[] } {
+function fakePage(input?: {
+  selectors?: Set<string>
+  bodyText?: string
+  navigationPath?: string
+}): WalkthroughPage & { events: string[] } {
   let url = "http://127.0.0.1:3000/"
   const events: string[] = []
   return {
     events,
-    goto: async (nextUrl: string) => { url = nextUrl },
+    goto: async (nextUrl: string) => {
+      url = nextUrl
+    },
     waitForNavigation: async (options?: Record<string, unknown>) => {
       events.push(`waitForNavigation:${String(options?.timeout)}:${String(options?.waitUntil)}`)
       if (input?.navigationPath) url = new URL(input.navigationPath, url).toString()
     },
-    type: async (selector: string, value: string) => { events.push(`type:${selector}:${value}`) },
-    click: async (selector: string) => { events.push(`click:${selector}`) },
-    keyboard: {
-      down: async (key: string) => { events.push(`key:down:${key}`) },
-      up: async (key: string) => { events.push(`key:up:${key}`) },
-      press: async (key: string) => { events.push(`key:press:${key}`) },
+    type: async (selector: string, value: string) => {
+      events.push(`type:${selector}:${value}`)
     },
-    $: async (selector: string) => input?.selectors?.has(selector) ? { selector } : null,
+    click: async (selector: string) => {
+      events.push(`click:${selector}`)
+    },
+    keyboard: {
+      down: async (key: string) => {
+        events.push(`key:down:${key}`)
+      },
+      up: async (key: string) => {
+        events.push(`key:up:${key}`)
+      },
+      press: async (key: string) => {
+        events.push(`key:press:${key}`)
+      },
+    },
+    $: async (selector: string) => (input?.selectors?.has(selector) ? { selector } : null),
     evaluate: async <R, Arg = unknown>(_fn: string | ((arg: Arg) => R), arg?: Arg) =>
       (input?.bodyText ?? "").includes(String(arg ?? "")) as R,
     url: () => url,

@@ -27,7 +27,10 @@ function walkCss(dir: string): string[] {
   return out
 }
 
-const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n").replace(/\/\*[\s\S]*?\*\//g, "")
+const STYLES = walkCss(STYLES_ROOT)
+  .map((f) => readFileSync(f, "utf8"))
+  .join("\n")
+  .replace(/\/\*[\s\S]*?\*\//g, "")
 
 function tokenValues(): Record<string, string> {
   const out: Record<string, string> = {}

@@ -46,18 +46,20 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
       const now = Date.now()
       const rootSession = await Session.create({ kind: "root", title: "Frontend design process root" })
       Database.use((db) => {
-        db.insert(EngineTaskTable).values({
-          id: "tsk_analyze_process",
-          project_id: Instance.project.id,
-          session_id: rootSession.id,
-          source: "test",
-          title: "Analyze process trace",
-          request: "Refine the captured web-clone-source into maintainable source.",
-          priority: "normal",
-          time_created: now,
-          time_updated: now,
-          time_started: now,
-        }).run()
+        db.insert(EngineTaskTable)
+          .values({
+            id: "tsk_analyze_process",
+            project_id: Instance.project.id,
+            session_id: rootSession.id,
+            source: "test",
+            title: "Analyze process trace",
+            request: "Refine the captured web-clone-source into maintainable source.",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          })
+          .run()
       })
 
       const { FrontendDesignAgent } = await import("../../src/frontend-design/agent")
@@ -180,18 +182,20 @@ test("FrontendDesignAgent.analyze persists process artifacts before failed final
       const taskID = "tsk_analyze_process_failure"
       const rootSession = await Session.create({ kind: "root", title: "Frontend design process failure root" })
       Database.use((db) => {
-        db.insert(EngineTaskTable).values({
-          id: taskID,
-          project_id: Instance.project.id,
-          session_id: rootSession.id,
-          source: "test",
-          title: "Analyze process trace failure",
-          request: "Refine the captured web-clone-source into maintainable source.",
-          priority: "normal",
-          time_created: now,
-          time_updated: now,
-          time_started: now,
-        }).run()
+        db.insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: rootSession.id,
+            source: "test",
+            title: "Analyze process trace failure",
+            request: "Refine the captured web-clone-source into maintainable source.",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          })
+          .run()
       })
 
       const { FrontendDesignAgent } = await import("../../src/frontend-design/agent")
@@ -221,11 +225,13 @@ test("FrontendDesignAgent.analyze persists process artifacts before failed final
         throw new Error("simulated frontend-design timeout after tools")
       }
 
-      await expect(FrontendDesignAgent.analyze({
-        title: "Analyze process trace failure",
-        request: "Refine the captured web-clone-source into maintainable source.",
-        taskID,
-      })).rejects.toThrow("simulated frontend-design timeout after tools")
+      await expect(
+        FrontendDesignAgent.analyze({
+          title: "Analyze process trace failure",
+          request: "Refine the captured web-clone-source into maintainable source.",
+          taskID,
+        }),
+      ).rejects.toThrow("simulated frontend-design timeout after tools")
 
       const artifactDir = path.join(tmp.path, ".opencorvus", "runtime", "tasks", taskID, "frontend-design")
       const processTrace = await readJsonEventually(path.join(artifactDir, "frontend-design-process-trace.json"))

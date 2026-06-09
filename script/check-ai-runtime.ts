@@ -29,9 +29,7 @@ const openRouterVersion = opencorvusPackage.dependencies?.["@openrouter/ai-sdk-p
 if (!openRouterVersion) {
   issues.push("packages/opencorvus must declare @openrouter/ai-sdk-provider")
 } else if (major(openRouterVersion) !== 2) {
-  issues.push(
-    `@openrouter/ai-sdk-provider must stay on major 2 while the runtime is ai v6, got ${openRouterVersion}`,
-  )
+  issues.push(`@openrouter/ai-sdk-provider must stay on major 2 while the runtime is ai v6, got ${openRouterVersion}`)
 }
 
 const openRouterPatch = Object.keys(rootPackage.patchedDependencies ?? {}).find((item) =>

@@ -6,35 +6,35 @@ OpenCorvus 的 LLM 抽象构建在 [Vercel AI SDK](https://sdk.vercel.ai/) 之�
 
 权威源：`packages/opencorvus/src/provider/bundled.ts` 的 `BUNDLED_PROVIDERS`。
 
-| Provider | 包 |
-|---|---|
-| Anthropic | `@ai-sdk/anthropic`（搭配 `@anthropic-ai/claude-agent-sdk`） |
-| OpenAI / OpenAI 兼容 | `@ai-sdk/openai` + `@ai-sdk/openai-compatible` |
-| Google Generative AI | `@ai-sdk/google` |
-| Google Vertex / Vertex Anthropic | `@ai-sdk/google-vertex` + `@ai-sdk/google-vertex/anthropic` |
-| Amazon Bedrock | `@ai-sdk/amazon-bedrock` |
-| Azure OpenAI | `@ai-sdk/azure` |
-| xAI | `@ai-sdk/xai` |
-| Mistral | `@ai-sdk/mistral` |
-| Groq | `@ai-sdk/groq` |
-| DeepInfra | `@ai-sdk/deepinfra` |
-| Cerebras | `@ai-sdk/cerebras` |
-| Cohere | `@ai-sdk/cohere` |
-| TogetherAI | `@ai-sdk/togetherai` |
-| Perplexity | `@ai-sdk/perplexity` |
-| Vercel | `@ai-sdk/vercel` |
-| Vercel AI Gateway | `@ai-sdk/gateway` |
-| GitLab AI | `@gitlab/gitlab-ai-provider` |
-| OpenRouter | `@openrouter/ai-sdk-provider` |
+| Provider                         | 包                                                           |
+| -------------------------------- | ------------------------------------------------------------ |
+| Anthropic                        | `@ai-sdk/anthropic`（搭配 `@anthropic-ai/claude-agent-sdk`） |
+| OpenAI / OpenAI 兼容             | `@ai-sdk/openai` + `@ai-sdk/openai-compatible`               |
+| Google Generative AI             | `@ai-sdk/google`                                             |
+| Google Vertex / Vertex Anthropic | `@ai-sdk/google-vertex` + `@ai-sdk/google-vertex/anthropic`  |
+| Amazon Bedrock                   | `@ai-sdk/amazon-bedrock`                                     |
+| Azure OpenAI                     | `@ai-sdk/azure`                                              |
+| xAI                              | `@ai-sdk/xai`                                                |
+| Mistral                          | `@ai-sdk/mistral`                                            |
+| Groq                             | `@ai-sdk/groq`                                               |
+| DeepInfra                        | `@ai-sdk/deepinfra`                                          |
+| Cerebras                         | `@ai-sdk/cerebras`                                           |
+| Cohere                           | `@ai-sdk/cohere`                                             |
+| TogetherAI                       | `@ai-sdk/togetherai`                                         |
+| Perplexity                       | `@ai-sdk/perplexity`                                         |
+| Vercel                           | `@ai-sdk/vercel`                                             |
+| Vercel AI Gateway                | `@ai-sdk/gateway`                                            |
+| GitLab AI                        | `@gitlab/gitlab-ai-provider`                                 |
+| OpenRouter                       | `@openrouter/ai-sdk-provider`                                |
 
 国内常用别名（来自 `channel-runtime/.env.example` 与 `provider/provider.ts`）：
 
-| 别名 | 底层 |
-|---|---|
-| `alibaba-cn` | DashScope（阿里云） |
+| 别名                     | 底层                       |
+| ------------------------ | -------------------------- |
+| `alibaba-cn`             | DashScope（阿里云）        |
 | `alibaba-coding-plan-cn` | DashScope Coding Plan 专线 |
-| `moonshotai-cn` | Moonshot（月之暗面） |
-| `deepseek` | DeepSeek |
+| `moonshotai-cn`          | Moonshot（月之暗面）       |
+| `deepseek`               | DeepSeek                   |
 
 ## 配置方式
 
@@ -65,11 +65,11 @@ export DASHSCOPE_API_KEY=sk-...             # 标准 intl
       "api": "https://your-hexin-gateway/v1",
       "env": ["HEXIN_API_KEY"],
       "models": {
-        "gpt-5.4": { "name": "GPT-5.4", "tool_call": true }
-      }
-    }
+        "gpt-5.4": { "name": "GPT-5.4", "tool_call": true },
+      },
+    },
   },
-  "model": "hexin/gpt-5.4"
+  "model": "hexin/gpt-5.4",
 }
 ```
 
@@ -80,7 +80,7 @@ export DASHSCOPE_API_KEY=sk-...             # 标准 intl
 ```jsonc
 {
   "enabled_providers": ["anthropic", "alibaba-cn"],
-  "disabled_providers": ["deepseek"]
+  "disabled_providers": ["deepseek"],
 }
 ```
 
@@ -90,11 +90,11 @@ export DASHSCOPE_API_KEY=sk-...             # 标准 intl
 
 从 commit `187cec77d` 起，**registry 不再自动后台 refresh**。可触发刷新的入口只有三个：
 
-| 触发方式 | 路径 |
-|---|---|
+| 触发方式   | 路径                            |
+| ---------- | ------------------------------- |
 | Overlay UI | Settings → Providers → 刷新按钮 |
-| CLI | `opencorvus models --refresh` |
-| Route | `POST /provider/refresh` |
+| CLI        | `opencorvus models --refresh`   |
+| Route      | `POST /provider/refresh`        |
 
 启发式（检测 env 缺失就跳过）仍然存在；如需强制启用某个 provider，请在 `enabled_providers` 列出，避免依赖 env 嗅探。
 
@@ -102,12 +102,12 @@ export DASHSCOPE_API_KEY=sk-...             # 标准 intl
 
 OpenCorvus 在三种场景选模型：
 
-| 场景 | 配置位置 |
-|---|---|
-| 默认执行模型 | `model` 字段 / `OPENCORVUS_DEFAULT_MODEL` |
-| 各 agent 子项 | `assistant.<agent>.model`（per-agent 覆盖） |
-| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL` |
-| 轻量任务（title / summary） | `small_model` |
+| 场景                        | 配置位置                                    |
+| --------------------------- | ------------------------------------------- |
+| 默认执行模型                | `model` 字段 / `OPENCORVUS_DEFAULT_MODEL`   |
+| 各 agent 子项               | `assistant.<agent>.model`（per-agent 覆盖） |
+| Vision / 截图理解           | `OPENCORVUS_VISION_MODEL`                   |
+| 轻量任务（title / summary） | `small_model`                               |
 
 per-agent 覆盖与执行模型分离的目的：**用强但慢的模型规划，用快但够用的模型执行**。典型配置：
 
@@ -117,8 +117,8 @@ per-agent 覆盖与执行模型分离的目的：**用强但慢的模型规划�
   "small_model": "alibaba-cn/qwen2.5-7b",
   "assistant": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },
-    "architect":    { "model": "anthropic/claude-sonnet-4-6" }
-  }
+    "architect": { "model": "anthropic/claude-sonnet-4-6" },
+  },
 }
 ```
 

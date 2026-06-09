@@ -5,26 +5,26 @@
 // renderInteractions, statusIcon, statusLabel.
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
-import { createEffect, createMemo, createSignal, For, Show, onMount } from "solid-js";
-import { useDisclosure } from "../solid/disclosure";
-import { boardStore } from "../store/board";
-import { cardTreeStore, type CardNode } from "../store/card-tree";
-import { t, tc } from "../utils/i18n";
-import { renderMarkdown } from "../utils/markdown";
-import { acceptanceGoalProgress } from "../utils/goal-workflow";
-import { orderedReachableCardIDs, cardMessageSegments } from "../utils/card-tree";
-import { statusIconName } from "../utils/status-mapping";
-import { activeTone, verdictTone } from "../utils/verdict-tone";
-import { GoalWorkflowList } from "./GoalWorkflowGroup";
-import { RequirementsPanel } from "./RequirementsPanel";
-import { FrontendResearchPanel } from "./FrontendResearchPanel";
-import { ArchitectPanel } from "./ArchitectPanel";
-import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel";
-import { InteractionCardList, type InteractionData } from "./InteractionCard";
-import { taskScopeSectionVisibility, taskScopeWorkflowSectionID } from "../utils/task-scope-sections";
-import { Button } from "./ui/Button";
-import { Icon, type IconName } from "./Icon";
-import { Section } from "./primitives/Section";
+import { createEffect, createMemo, createSignal, For, Show, onMount } from "solid-js"
+import { useDisclosure } from "../solid/disclosure"
+import { boardStore } from "../store/board"
+import { cardTreeStore, type CardNode } from "../store/card-tree"
+import { t, tc } from "../utils/i18n"
+import { renderMarkdown } from "../utils/markdown"
+import { acceptanceGoalProgress } from "../utils/goal-workflow"
+import { orderedReachableCardIDs, cardMessageSegments } from "../utils/card-tree"
+import { statusIconName } from "../utils/status-mapping"
+import { activeTone, verdictTone } from "../utils/verdict-tone"
+import { GoalWorkflowList } from "./GoalWorkflowGroup"
+import { RequirementsPanel } from "./RequirementsPanel"
+import { FrontendResearchPanel } from "./FrontendResearchPanel"
+import { ArchitectPanel } from "./ArchitectPanel"
+import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel"
+import { InteractionCardList, type InteractionData } from "./InteractionCard"
+import { taskScopeSectionVisibility, taskScopeWorkflowSectionID } from "../utils/task-scope-sections"
+import { Button } from "./ui/Button"
+import { Icon, type IconName } from "./Icon"
+import { Section } from "./primitives/Section"
 
 // ── Status utilities ──
 
@@ -36,16 +36,16 @@ export function statusLabel(status: string): string {
     completed: t("task.status.completed"),
     failed: t("task.status.failed"),
     cancelled: t("task.status.cancelled"),
-  };
-  return map[status] || status;
+  }
+  return map[status] || status
 }
 
 // ── StatusBadge ──
 // General-purpose status badge with an icon + label.
 
 interface StatusBadgeProps {
-  status: string;
-  class?: string;
+  status: string
+  class?: string
 }
 
 export function StatusBadge(props: StatusBadgeProps) {
@@ -56,7 +56,7 @@ export function StatusBadge(props: StatusBadgeProps) {
       </span>
       <span class="status-label">{statusLabel(props.status)}</span>
     </span>
-  );
+  )
 }
 
 // ── AcceptancePanel ──
@@ -72,37 +72,33 @@ export function StatusBadge(props: StatusBadgeProps) {
 //
 // Visual primitive `.verdict-pill` is shared with IntegrityCard.
 
-type AcceptanceEvidenceKind = "check" | "review";
+type AcceptanceEvidenceKind = "check" | "review"
 
 interface AcceptanceEvidenceRow {
-  id: string;
-  label: string;
-  status: string;
-  goalRunID?: string;
+  id: string
+  label: string
+  status: string
+  goalRunID?: string
 }
 
-type VerdictTone = "accepted" | "rejected" | "inflight" | "empty";
+type VerdictTone = "accepted" | "rejected" | "inflight" | "empty"
 
 function deriveVerdictTone(acceptance: any): VerdictTone {
-  if (!acceptance) return "empty";
-  if (acceptance.verdict === "accepted") return "accepted";
-  if (acceptance.verdict === "rejected") return "rejected";
-  return "inflight";
+  if (!acceptance) return "empty"
+  if (acceptance.verdict === "accepted") return "accepted"
+  if (acceptance.verdict === "rejected") return "rejected"
+  return "inflight"
 }
 
 function verdictPillLabel(tone: VerdictTone): string {
-  return t(`acceptance.verdict.${tone}`);
+  return t(`acceptance.verdict.${tone}`)
 }
 
-function acceptanceEvidenceGroup(
-  acceptance: any,
-  kind: AcceptanceEvidenceKind,
-): AcceptanceEvidenceRow[] {
-  const manifest = acceptance?.evidenceManifest;
-  if (!manifest) return [];
-  const source: any[] | undefined =
-    kind === "check" ? manifest.checkResults : manifest.reviewEvidence;
-  if (!Array.isArray(source)) return [];
+function acceptanceEvidenceGroup(acceptance: any, kind: AcceptanceEvidenceKind): AcceptanceEvidenceRow[] {
+  const manifest = acceptance?.evidenceManifest
+  if (!manifest) return []
+  const source: any[] | undefined = kind === "check" ? manifest.checkResults : manifest.reviewEvidence
+  if (!Array.isArray(source)) return []
   // No `.slice(0, N)` cap — the operator must see every failed row, not the
   // first 12. Per-group volume is naturally bounded by the manifest schema
   // (≤ a few dozen each in practice); a runaway list signals a real bug
@@ -117,52 +113,46 @@ function acceptanceEvidenceGroup(
         : typeof item?.goalRunId === "string"
           ? item.goalRunId
           : undefined,
-  }));
+  }))
 }
 
 function groupSummary(rows: AcceptanceEvidenceRow[]): {
-  total: number;
-  failed: number;
-  defaultOpen: boolean;
+  total: number
+  failed: number
+  defaultOpen: boolean
 } {
-  const total = rows.length;
-  const failed = rows.filter((row) =>
-    row.status === "failed" || row.status === "needs_correction" || row.status === "concerns",
-  ).length;
-  return { total, failed, defaultOpen: failed > 0 };
+  const total = rows.length
+  const failed = rows.filter(
+    (row) => row.status === "failed" || row.status === "needs_correction" || row.status === "concerns",
+  ).length
+  return { total, failed, defaultOpen: failed > 0 }
 }
 
 function rowVerdict(status: string): string {
-  if (status === "passed" || status === "pass") return "accepted";
-  if (status === "failed" || status === "needs_correction" || status === "concerns") return "rejected";
-  return "inflight";
+  if (status === "passed" || status === "pass") return "accepted"
+  if (status === "failed" || status === "needs_correction" || status === "concerns") return "rejected"
+  return "inflight"
 }
 
 function focusChangesPanel(goalRunID: string | undefined) {
   // CCE = canonical click-through event; the right-panel Files tab handles focus.
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent("acceptance:focus-changes", { detail: { goalRunID } }),
-  );
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent("acceptance:focus-changes", { detail: { goalRunID } }))
 }
 
 interface AcceptanceEvidenceGroupProps {
-  label: string;
-  kind: AcceptanceEvidenceKind;
-  rows: AcceptanceEvidenceRow[];
+  label: string
+  kind: AcceptanceEvidenceKind
+  rows: AcceptanceEvidenceRow[]
 }
 
 export function AcceptanceEvidenceGroup(props: AcceptanceEvidenceGroupProps) {
   return (
     <Show when={props.rows.length > 0}>
       {(() => {
-        const summary = groupSummary(props.rows);
+        const summary = groupSummary(props.rows)
         return (
-          <details
-            class="acceptance-evidence-group"
-            data-kind={props.kind}
-            open={summary.defaultOpen}
-          >
+          <details class="acceptance-evidence-group" data-kind={props.kind} open={summary.defaultOpen}>
             <summary class="acceptance-evidence-group-head">
               <span class="acceptance-evidence-group-label">{props.label}</span>
               <span class="acceptance-evidence-group-count">
@@ -199,30 +189,29 @@ export function AcceptanceEvidenceGroup(props: AcceptanceEvidenceGroupProps) {
               </For>
             </ul>
           </details>
-        );
+        )
       })()}
     </Show>
-  );
+  )
 }
 
 interface AcceptancePanelProps {
-  acceptance: any;
-  phaseState?: "active" | "";
+  acceptance: any
+  phaseState?: "active" | ""
 }
 
-const LIVE_RUN_STATUSES = new Set(["queued", "accepted", "running", "blocked"]);
-const ACCEPTANCE_PHASES = new Set(["deliver", "refine"]);
+const LIVE_RUN_STATUSES = new Set(["queued", "accepted", "running", "blocked"])
+const ACCEPTANCE_PHASES = new Set(["deliver", "refine"])
 
 export function hasActiveAcceptanceRun(board: any): boolean {
-  const run = board?.run;
-  const workflowSteps = Array.isArray(board?.workflow?.steps) ? board.workflow.steps : [];
-  const workflowAcceptanceRunning = workflowSteps.some((step: any) =>
-    ACCEPTANCE_PHASES.has(String(step?.id || "")) && step?.status === "running",
-  );
+  const run = board?.run
+  const workflowSteps = Array.isArray(board?.workflow?.steps) ? board.workflow.steps : []
+  const workflowAcceptanceRunning = workflowSteps.some(
+    (step: any) => ACCEPTANCE_PHASES.has(String(step?.id || "")) && step?.status === "running",
+  )
   const runAcceptanceActive =
-    ACCEPTANCE_PHASES.has(String(run?.phase || "")) &&
-    LIVE_RUN_STATUSES.has(String(run?.status || ""));
-  return workflowAcceptanceRunning || runAcceptanceActive;
+    ACCEPTANCE_PHASES.has(String(run?.phase || "")) && LIVE_RUN_STATUSES.has(String(run?.status || ""))
+  return workflowAcceptanceRunning || runAcceptanceActive
 }
 
 export function acceptancePanelAcceptance(board: any): any {
@@ -237,37 +226,31 @@ export function acceptancePanelAcceptance(board: any): any {
           verdict: "inconclusive",
         }
       : null)
-  );
+  )
 }
 
-const DEFAULT_SUMMARY_LINES = 10;
+const DEFAULT_SUMMARY_LINES = 10
 
 export function AcceptancePanel(props: AcceptancePanelProps) {
   // Migrated to the shared disclosure primitive (Step 9.H of the
   // flat-redesign rollout). `summary` is the canonical open/close
   // state for the acceptance summary clamp affordance.
-  const summary = useDisclosure(false);
+  const summary = useDisclosure(false)
 
-  const tone = createMemo<VerdictTone>(() => deriveVerdictTone(props.acceptance));
+  const tone = createMemo<VerdictTone>(() => deriveVerdictTone(props.acceptance))
   const summaryText = createMemo(() => {
-    const d = props.acceptance;
-    if (!d) return "";
-    if (d.pending === true) return t("acceptance.inflight.hint");
+    const d = props.acceptance
+    if (!d) return ""
+    if (d.pending === true) return t("acceptance.inflight.hint")
     return d.verdict === "rejected"
       ? d.verdictSummary || d.summary || d.result?.summary || ""
-      : d.summary || d.result?.summary || "";
-  });
-  const summaryNeedsClamp = createMemo(
-    () => summaryText().split("\n").length > DEFAULT_SUMMARY_LINES,
-  );
-  const checks = createMemo(() => acceptanceEvidenceGroup(props.acceptance, "check"));
-  const reviews = createMemo(() => acceptanceEvidenceGroup(props.acceptance, "review"));
-  const filesChanged = createMemo(
-    () => (props.acceptance?.result?.changedFiles?.length as number | undefined) ?? 0,
-  );
-  const iteration = createMemo<number>(
-    () => Number(props.acceptance?.evidenceManifest?.iteration ?? 0),
-  );
+      : d.summary || d.result?.summary || ""
+  })
+  const summaryNeedsClamp = createMemo(() => summaryText().split("\n").length > DEFAULT_SUMMARY_LINES)
+  const checks = createMemo(() => acceptanceEvidenceGroup(props.acceptance, "check"))
+  const reviews = createMemo(() => acceptanceEvidenceGroup(props.acceptance, "review"))
+  const filesChanged = createMemo(() => (props.acceptance?.result?.changedFiles?.length as number | undefined) ?? 0)
+  const iteration = createMemo<number>(() => Number(props.acceptance?.evidenceManifest?.iteration ?? 0))
 
   return (
     <Section
@@ -288,71 +271,53 @@ export function AcceptancePanel(props: AcceptancePanelProps) {
       defaultOpen
       attr:data-phase-state={props.phaseState || undefined}
     >
-    <Show when={props.acceptance}>
-      <section class="acceptance-panel" data-verdict={tone()}>
-        <Show when={iteration() > 0}>
-          <div class="acceptance-panel-meta">
-            <span class="acceptance-iteration">
-              {t("acceptance.iteration", { n: String(iteration()) })}
-            </span>
-          </div>
-        </Show>
+      <Show when={props.acceptance}>
+        <section class="acceptance-panel" data-verdict={tone()}>
+          <Show when={iteration() > 0}>
+            <div class="acceptance-panel-meta">
+              <span class="acceptance-iteration">{t("acceptance.iteration", { n: String(iteration()) })}</span>
+            </div>
+          </Show>
 
-        <Show when={summaryText()}>
-          <div
-            class="acceptance-summary md-content"
-            data-clamped={summaryNeedsClamp() && !summary.open() ? "true" : "false"}
-            innerHTML={renderMarkdown(summaryText())}
-          />
-          <Show when={summaryNeedsClamp()}>
-            <button
-              class="acceptance-summary-toggle"
-              type="button"
-              onClick={summary.toggle}
-            >
-              {summary.open() ? t("acceptance.show_less") : t("acceptance.show_more")}
+          <Show when={summaryText()}>
+            <div
+              class="acceptance-summary md-content"
+              data-clamped={summaryNeedsClamp() && !summary.open() ? "true" : "false"}
+              innerHTML={renderMarkdown(summaryText())}
+            />
+            <Show when={summaryNeedsClamp()}>
+              <button class="acceptance-summary-toggle" type="button" onClick={summary.toggle}>
+                {summary.open() ? t("acceptance.show_less") : t("acceptance.show_more")}
+              </button>
+            </Show>
+          </Show>
+
+          <AcceptanceEvidenceGroup label={t("acceptance.checks")} kind="check" rows={checks()} />
+          <AcceptanceEvidenceGroup label={t("acceptance.reviews")} kind="review" rows={reviews()} />
+
+          <Show when={filesChanged() > 0}>
+            <button class="acceptance-files-link" type="button" onClick={() => focusChangesPanel(undefined)}>
+              {tc("acceptance.files_changed", filesChanged(), { count: filesChanged() })}
             </button>
           </Show>
-        </Show>
-
-        <AcceptanceEvidenceGroup
-          label={t("acceptance.checks")}
-          kind="check"
-          rows={checks()}
-        />
-        <AcceptanceEvidenceGroup
-          label={t("acceptance.reviews")}
-          kind="review"
-          rows={reviews()}
-        />
-
-        <Show when={filesChanged() > 0}>
-          <button
-            class="acceptance-files-link"
-            type="button"
-            onClick={() => focusChangesPanel(undefined)}
-          >
-            {tc("acceptance.files_changed", filesChanged(), { count: filesChanged() })}
-          </button>
-        </Show>
-      </section>
-    </Show>
+        </section>
+      </Show>
     </Section>
-  );
+  )
 }
 
 // ── TaskActionsPanel ──
 
 interface TaskActionsPanelProps {
-  overview: any;
-  onRetry?: () => void;
-  onReplan?: () => void;
-  onCancel?: () => void;
+  overview: any
+  onRetry?: () => void
+  onReplan?: () => void
+  onCancel?: () => void
 }
 
 export function TaskActionsPanel(props: TaskActionsPanelProps) {
-  const controls = createMemo(() => props.overview?.controls || {});
-  const hasButtons = createMemo(() => controls().canRetry || controls().canReplan);
+  const controls = createMemo(() => props.overview?.controls || {})
+  const hasButtons = createMemo(() => controls().canRetry || controls().canReplan)
 
   return (
     <Show when={hasButtons()}>
@@ -387,7 +352,7 @@ export function TaskActionsPanel(props: TaskActionsPanelProps) {
         </Show>
       </div>
     </Show>
-  );
+  )
 }
 
 // Pending-interaction rendering is delegated to the shared <InteractionCard>
@@ -404,54 +369,56 @@ export function TaskActionsPanel(props: TaskActionsPanelProps) {
 // no longer takes parent-supplied callbacks.
 
 interface BoardProps {
-  onRetry?: () => void;
-  onReplan?: () => void;
-  onCancel?: () => void;
-  onEditGoal?: (id: string, title: string, detail: string) => void;
-  onDeleteGoal?: (id: string) => void;
+  onRetry?: () => void
+  onReplan?: () => void
+  onCancel?: () => void
+  onEditGoal?: (id: string, title: string, detail: string) => void
+  onDeleteGoal?: (id: string) => void
 }
 
 interface SectionFrameProps {
-  id: string;
-  title: string;
-  bodyId: string;
+  id: string
+  title: string
+  bodyId: string
   /** Section header icon. Identifier resolves through the Icon
    * primitive registry (components/Icon.tsx); inline innerHTML svg
    * strings were retired 2026-05-04 (flat-redesign Step 3). */
-  icon?: IconName;
-  badgeId?: string;
-  badgeText?: string;
-  badgeTone?: string;
-  badgeVariant?: "status" | "metric";
-  phaseState?: "active" | "related" | "";
+  icon?: IconName
+  badgeId?: string
+  badgeText?: string
+  badgeTone?: string
+  badgeVariant?: "status" | "metric"
+  phaseState?: "active" | "related" | ""
   /** Initial open state at mount only; user toggle is preserved afterwards. */
-  defaultOpen?: boolean;
-  children: any;
+  defaultOpen?: boolean
+  children: any
 }
 
 function SectionFrame(props: SectionFrameProps) {
-  let detailsEl: HTMLDetailsElement | undefined;
+  let detailsEl: HTMLDetailsElement | undefined
   // First mount: open the section so the operator sees the data that just
   // became available (the section only renders when taskScopeSections marks
   // it visible — i.e. it has concrete state or data). Without this, the
   // pre-bug behaviour was "section appears collapsed after the agent already
   // ran" and operators had to click to see what the agent produced.
   onMount(() => {
-    if (!detailsEl) return;
-    if (props.defaultOpen ?? true) detailsEl.open = true;
-  });
+    if (!detailsEl) return
+    if (props.defaultOpen ?? true) detailsEl.open = true
+  })
   // Re-open whenever the section transitions back to "active" (e.g. requirements
   // running again after a rewind, or architect being re-entered). The effect
   // never force-closes — once the user manually collapses, it stays collapsed
   // until phaseState flips away and back, matching the spirit of the original
   // "user toggle is preserved" comment.
   createEffect(() => {
-    if (!detailsEl) return;
-    if (props.phaseState === "active") detailsEl.open = true;
-  });
+    if (!detailsEl) return
+    if (props.phaseState === "active") detailsEl.open = true
+  })
   return (
     <Section
-      ref={(el: HTMLDetailsElement) => { detailsEl = el; }}
+      ref={(el: HTMLDetailsElement) => {
+        detailsEl = el
+      }}
       id={props.id}
       bodyId={props.bodyId}
       title={props.title}
@@ -464,88 +431,92 @@ function SectionFrame(props: SectionFrameProps) {
     >
       {props.children}
     </Section>
-  );
+  )
 }
 
 export function Board(props: BoardProps) {
-  const board = () => boardStore.board;
+  const board = () => boardStore.board
 
-  const spec = () => board()?.spec;
-  const acceptance = () => acceptancePanelAcceptance(board());
-  const interactions = () => board()?.interactions || [];
-  const overview = () => board()?.overview;
+  const spec = () => board()?.spec
+  const acceptance = () => acceptancePanelAcceptance(board())
+  const interactions = () => board()?.interactions || []
+  const overview = () => board()?.overview
   // Task-level criteria rollup. Backend (workbench/board.ts) folds the
   // acceptance-agent verdict (deferred_checks + rejection_details + overall
   // verdict) and the in-process visual-diff gate into one list per task.
   // Hidden entirely for kind=build tasks since build self-verifies and does
   // not produce acceptance-stage criteria.
-  const criteriaResults = () => board()?.criteriaResults as
-    | Array<{ name: string; label?: string; family?: string; status: "passed" | "failed" | "skipped"; evidence?: string }>
-    | undefined;
-  const taskKind = () => (board()?.task as { kind?: string } | undefined)?.kind;
+  const criteriaResults = () =>
+    board()?.criteriaResults as
+      | Array<{
+          name: string
+          label?: string
+          family?: string
+          status: "passed" | "failed" | "skipped"
+          evidence?: string
+        }>
+      | undefined
+  const taskKind = () => (board()?.task as { kind?: string } | undefined)?.kind
 
   // ── Workflow-structured data (new) ──
-  const workflow = () => board()?.workflow;
-  const requirements = () => board()?.requirements;
-  const architect = () => board()?.architect;
-  const goalWorkflows = () => board()?.goalWorkflows || [];
+  const workflow = () => board()?.workflow
+  const requirements = () => board()?.requirements
+  const architect = () => board()?.architect
+  const goalWorkflows = () => board()?.goalWorkflows || []
 
   // Derive streaming state from workflow step statuses
   const isRequirementsGenerating = createMemo(() => {
-    const wf = workflow();
-    if (!wf) return false;
-    const reqStep = wf.steps.find((s: any) => s.id === "requirements");
-    return reqStep?.status === "running";
-  });
+    const wf = workflow()
+    if (!wf) return false
+    const reqStep = wf.steps.find((s: any) => s.id === "requirements")
+    return reqStep?.status === "running"
+  })
   const frontendResearchStatus = createMemo(() => {
-    const wf = workflow();
-    if (!wf) return "";
-    const step = wf.steps.find((s: any) => s.id === "frontend_research");
-    return String(step?.status || "");
-  });
+    const wf = workflow()
+    if (!wf) return ""
+    const step = wf.steps.find((s: any) => s.id === "frontend_research")
+    return String(step?.status || "")
+  })
   const isArchitectGenerating = createMemo(() => {
-    const wf = workflow();
-    if (!wf) return false;
-    const archStep = wf.steps.find((s: any) => s.id === "architect");
-    return archStep?.status === "running";
-  });
+    const wf = workflow()
+    if (!wf) return false
+    const archStep = wf.steps.find((s: any) => s.id === "architect")
+    return archStep?.status === "running"
+  })
   const taskScopeSections = createMemo(() =>
     taskScopeSectionVisibility({
       workflow: workflow(),
       requirements: requirements(),
       architect: architect(),
     }),
-  );
+  )
 
   // ── Active section tracking ──
   // Map the workflow's current (running) step to a right-pane section id so
   // the section gets `data-phase-state="active"` highlighting. Falls back to
   // the most recently completed/failed step when nothing is running.
   const activeSection = createMemo<string>(() => {
-    const interactionsPending = interactions().some(
-      (i: any) => i.status === "pending",
-    );
-    if (interactionsPending) return "interactions";
-    const wf = workflow();
-    if (!wf || !Array.isArray(wf.steps)) return "";
-    const running = wf.steps.find((s: any) => s.status === "running");
-    if (running) return taskScopeWorkflowSectionID(running.id);
-    if (hasActiveAcceptanceRun(board())) return "acceptance";
-    let lastDone: any = null;
+    const interactionsPending = interactions().some((i: any) => i.status === "pending")
+    if (interactionsPending) return "interactions"
+    const wf = workflow()
+    if (!wf || !Array.isArray(wf.steps)) return ""
+    const running = wf.steps.find((s: any) => s.status === "running")
+    if (running) return taskScopeWorkflowSectionID(running.id)
+    if (hasActiveAcceptanceRun(board())) return "acceptance"
+    let lastDone: any = null
     for (const s of wf.steps) {
-      if (s.status === "completed" || s.status === "failed") lastDone = s;
+      if (s.status === "completed" || s.status === "failed") lastDone = s
     }
-    if (lastDone) return taskScopeWorkflowSectionID(lastDone.id);
-    return "";
-  });
-  const phaseFor = (id: string): "active" | "" =>
-    activeSection() === id ? "active" : "";
+    if (lastDone) return taskScopeWorkflowSectionID(lastDone.id)
+    return ""
+  })
+  const phaseFor = (id: string): "active" | "" => (activeSection() === id ? "active" : "")
   const workflowStatusTone = (status: string): "" | "accent" | "good" | "bad" => {
-    if (status === "failed") return "bad";
-    if (status === "completed") return "good";
-    if (status === "running") return "accent";
-    return "";
-  };
+    if (status === "failed") return "bad"
+    if (status === "completed") return "good"
+    if (status === "running") return "accent"
+    return ""
+  }
 
   // Messages feeding the RequirementsPanel / GoalWorkflowList live-stream
   // surfaces. Single source of truth: `cardTreeStore.cards` — the same
@@ -566,7 +537,9 @@ export function Board(props: BoardProps) {
     // missing role means the emitter is wrong — surface it.
     return cardMessageSegments(card).map((segment) => {
       if (segment.role.length === 0) {
-        throw new Error(`Board grouping: card ${card.id} parts have no role boundary; emitter must mark role transitions explicitly`);
+        throw new Error(
+          `Board grouping: card ${card.id} parts have no role boundary; emitter must mark role transitions explicitly`,
+        )
       }
       return {
         info: {
@@ -575,43 +548,43 @@ export function Board(props: BoardProps) {
           time: { created: segment.time },
         },
         parts: segment.parts,
-      };
-    });
+      }
+    })
   }
 
   /** Agent cards for a given stage, in chronological order. */
   function agentCardsForStage(stage: string): CardNode[] {
-    const ids = orderedReachableCardIDs();
-    const matched: CardNode[] = [];
+    const ids = orderedReachableCardIDs()
+    const matched: CardNode[] = []
     for (const id of ids) {
-      const card = cardTreeStore.cards[id];
-      if (!card || card.kind !== "agent") continue;
-      if (card.stage !== stage) continue;
-      matched.push(card);
+      const card = cardTreeStore.cards[id]
+      if (!card || card.kind !== "agent") continue
+      if (card.stage !== stage) continue
+      matched.push(card)
     }
-    return matched.sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+    return matched.sort((a, b) => (a.time ?? 0) - (b.time ?? 0))
   }
 
   // Requirements surface reads the actual requirements stage plus legacy
   // spec/goal cards created by older task snapshots.
   const requirementsMessages = createMemo(() => {
-    const out: any[] = [];
+    const out: any[] = []
     for (const stage of ["requirements", "spec", "goal"]) {
       for (const card of agentCardsForStage(stage)) {
-        out.push(...cardToMessageSegments(card));
+        out.push(...cardToMessageSegments(card))
       }
     }
-    return out;
-  });
+    return out
+  })
   const frontendResearchMessages = createMemo(() => {
-    const out: any[] = [];
+    const out: any[] = []
     for (const stage of ["frontend-research"]) {
       for (const card of agentCardsForStage(stage)) {
-        out.push(...cardToMessageSegments(card));
+        out.push(...cardToMessageSegments(card))
       }
     }
-    return out;
-  });
+    return out
+  })
 
   return (
     <>
@@ -647,10 +620,7 @@ export function Board(props: BoardProps) {
             badgeText={frontendResearchStatus() ? statusLabel(frontendResearchStatus()) : ""}
             badgeTone={workflowStatusTone(frontendResearchStatus())}
           >
-            <FrontendResearchPanel
-              status={frontendResearchStatus()}
-              streamingMessages={frontendResearchMessages()}
-            />
+            <FrontendResearchPanel status={frontendResearchStatus()} streamingMessages={frontendResearchMessages()} />
           </SectionFrame>
         </Show>
 
@@ -663,20 +633,20 @@ export function Board(props: BoardProps) {
             badgeId="requirementsBadge"
             phaseState={phaseFor("requirements")}
             badgeText={(() => {
-              const rs = requirements() ?? [];
+              const rs = requirements() ?? []
               if (rs.length > 0) {
-                const passed = rs.filter((r: any) => r.status === "passed").length;
-                return `${passed}/${rs.length}`;
+                const passed = rs.filter((r: any) => r.status === "passed").length
+                return `${passed}/${rs.length}`
               }
-              if (isRequirementsGenerating()) return t("common.active");
-              return goalWorkflows().length > 0 ? "—" : "";
+              if (isRequirementsGenerating()) return t("common.active")
+              return goalWorkflows().length > 0 ? "—" : ""
             })()}
             badgeTone={(() => {
-              const rs = requirements() ?? [];
-              if (rs.length === 0) return activeTone(isRequirementsGenerating());
-              const passed = rs.filter((r: any) => r.status === "passed").length;
-              const failed = rs.filter((r: any) => r.status === "failed").length;
-              return verdictTone({ passed, failed, total: rs.length });
+              const rs = requirements() ?? []
+              if (rs.length === 0) return activeTone(isRequirementsGenerating())
+              const passed = rs.filter((r: any) => r.status === "passed").length
+              const failed = rs.filter((r: any) => r.status === "failed").length
+              return verdictTone({ passed, failed, total: rs.length })
             })()}
           >
             <RequirementsPanel
@@ -711,24 +681,20 @@ export function Board(props: BoardProps) {
           badgeId="goalWorkflowsBadge"
           phaseState={phaseFor("goalWorkflows")}
           badgeText={(() => {
-            const gw = goalWorkflows();
-            const passed = gw.filter((g) => g.goalStatus === "passed").length;
-            return gw.length > 0 ? `${passed}/${gw.length}` : "";
+            const gw = goalWorkflows()
+            const passed = gw.filter((g) => g.goalStatus === "passed").length
+            return gw.length > 0 ? `${passed}/${gw.length}` : ""
           })()}
           badgeVariant="metric"
           badgeTone={(() => {
-            const gw = goalWorkflows();
-            if (gw.length === 0) return "";
-            const passed = gw.filter((g) => g.goalStatus === "passed").length;
-            const failed = gw.filter((g) => g.goalStatus === "failed").length;
-            return verdictTone({ passed, failed, total: gw.length });
+            const gw = goalWorkflows()
+            if (gw.length === 0) return ""
+            const passed = gw.filter((g) => g.goalStatus === "passed").length
+            const failed = gw.filter((g) => g.goalStatus === "failed").length
+            return verdictTone({ passed, failed, total: gw.length })
           })()}
         >
-          <GoalWorkflowList
-            goals={goalWorkflows()}
-            onEditGoal={props.onEditGoal}
-            onDeleteGoal={props.onDeleteGoal}
-          />
+          <GoalWorkflowList goals={goalWorkflows()} onEditGoal={props.onEditGoal} onDeleteGoal={props.onDeleteGoal} />
         </SectionFrame>
 
         <Show when={acceptance()}>
@@ -740,99 +706,91 @@ export function Board(props: BoardProps) {
           理由同上——避免与 goal 卡片信息重复；重做时评估每块是否该独立 section
           还是内嵌 goal step payload。不要无脑恢复。 */}
       <Show when={false}>
-      <Show when={taskKind() !== "build"}>
+        <Show when={taskKind() !== "build"}>
+          <SectionFrame
+            id="evaluationCriteriaSection"
+            title={t("section.criteria")}
+            icon="criteria"
+            bodyId="evaluationCriteriaBody"
+            badgeId="evaluationCriteriaBadge"
+            badgeText={(() => {
+              // badge MUST read the same source as the body (criteriaResults)
+              // — falling back to goalWorkflows when criteria is empty made
+              // the badge claim "0/1" while the body showed nothing, which
+              // is a pure fallback (CLAUDE.md 1) that lied to operators.
+              const list = criteriaResults() ?? []
+              if (list.length === 0) return ""
+              const failed = list.filter((c) => c.status === "failed").length
+              const passed = list.filter((c) => c.status === "passed").length
+              return failed > 0 ? `${failed} failed` : `${passed}/${list.length}`
+            })()}
+            badgeTone={(() => {
+              const list = criteriaResults() ?? []
+              if (list.length === 0) return ""
+              const failed = list.filter((c) => c.status === "failed").length
+              const passed = list.filter((c) => c.status === "passed").length
+              return verdictTone({ passed, failed, total: list.length })
+            })()}
+          >
+            <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
+          </SectionFrame>
+        </Show>
+
         <SectionFrame
-          id="evaluationCriteriaSection"
-          title={t("section.criteria")}
-          icon="criteria"
-          bodyId="evaluationCriteriaBody"
-          badgeId="evaluationCriteriaBadge"
+          id="acceptanceSection"
+          title={t("section.acceptance")}
+          icon="acceptance"
+          bodyId="acceptanceBody"
+          badgeId="acceptanceBadge"
+          phaseState={phaseFor("acceptance")}
           badgeText={(() => {
-            // badge MUST read the same source as the body (criteriaResults)
-            // — falling back to goalWorkflows when criteria is empty made
-            // the badge claim "0/1" while the body showed nothing, which
-            // is a pure fallback (CLAUDE.md 1) that lied to operators.
-            const list = criteriaResults() ?? [];
-            if (list.length === 0) return "";
-            const failed = list.filter((c) => c.status === "failed").length;
-            const passed = list.filter((c) => c.status === "passed").length;
-            return failed > 0 ? `${failed} failed` : `${passed}/${list.length}`;
+            const gs = goalWorkflows()
+            if (gs.length === 0) {
+              const d = acceptance()
+              return d ? verdictPillLabel(deriveVerdictTone(d)) : ""
+            }
+            const progress = acceptanceGoalProgress(gs)
+            return `${progress.completed}/${progress.total}`
           })()}
+          badgeVariant="metric"
           badgeTone={(() => {
-            const list = criteriaResults() ?? [];
-            if (list.length === 0) return "";
-            const failed = list.filter((c) => c.status === "failed").length;
-            const passed = list.filter((c) => c.status === "passed").length;
-            return verdictTone({ passed, failed, total: list.length });
+            const gs = goalWorkflows()
+            if (gs.length === 0) {
+              // Verdict drives the badge tone — same single source the panel
+              // uses. Lifecycle status (publishing / candidate) deliberately
+              // ignored here so a rejected verdict never paints the section
+              // header green.
+              const tone = deriveVerdictTone(acceptance())
+              return tone === "accepted" ? "good" : tone === "rejected" ? "bad" : tone === "inflight" ? "accent" : ""
+            }
+            const progress = acceptanceGoalProgress(gs)
+            if (progress.total === 0 && progress.completed === 0) return ""
+            return verdictTone({
+              passed: progress.completed,
+              failed: progress.failed,
+              total: progress.total,
+            })
           })()}
         >
-          <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
+          <AcceptancePanel acceptance={acceptance()} />
+        </SectionFrame>
+
+        <SectionFrame
+          id="interactionsSection"
+          title={t("workflow.interactions")}
+          icon="criteria"
+          bodyId="interactionsBody"
+          badgeId="interactionsBadge"
+          phaseState={phaseFor("interactions")}
+          badgeText={(() => {
+            const n = interactions().filter((i: any) => i.status === "pending").length
+            return n > 0 ? String(n) : ""
+          })()}
+          badgeTone="warn"
+        >
+          <InteractionCardList interactions={interactions() as InteractionData[]} />
         </SectionFrame>
       </Show>
-
-      <SectionFrame
-        id="acceptanceSection"
-        title={t("section.acceptance")}
-        icon="acceptance"
-        bodyId="acceptanceBody"
-        badgeId="acceptanceBadge"
-        phaseState={phaseFor("acceptance")}
-        badgeText={(() => {
-          const gs = goalWorkflows();
-          if (gs.length === 0) {
-            const d = acceptance();
-            return d ? verdictPillLabel(deriveVerdictTone(d)) : "";
-          }
-          const progress = acceptanceGoalProgress(gs);
-          return `${progress.completed}/${progress.total}`;
-        })()}
-        badgeVariant="metric"
-        badgeTone={(() => {
-          const gs = goalWorkflows();
-          if (gs.length === 0) {
-            // Verdict drives the badge tone — same single source the panel
-            // uses. Lifecycle status (publishing / candidate) deliberately
-            // ignored here so a rejected verdict never paints the section
-            // header green.
-            const tone = deriveVerdictTone(acceptance());
-            return tone === "accepted"
-              ? "good"
-              : tone === "rejected"
-                ? "bad"
-                : tone === "inflight"
-                  ? "accent"
-                  : "";
-          }
-          const progress = acceptanceGoalProgress(gs);
-          if (progress.total === 0 && progress.completed === 0) return "";
-          return verdictTone({
-            passed: progress.completed,
-            failed: progress.failed,
-            total: progress.total,
-          });
-        })()}
-      >
-        <AcceptancePanel acceptance={acceptance()} />
-      </SectionFrame>
-
-      <SectionFrame
-        id="interactionsSection"
-        title={t("workflow.interactions")}
-        icon="criteria"
-        bodyId="interactionsBody"
-        badgeId="interactionsBadge"
-        phaseState={phaseFor("interactions")}
-        badgeText={(() => {
-          const n = interactions().filter((i: any) => i.status === "pending").length;
-          return n > 0 ? String(n) : "";
-        })()}
-        badgeTone="warn"
-      >
-        <InteractionCardList
-          interactions={interactions() as InteractionData[]}
-        />
-      </SectionFrame>
-      </Show>
     </>
-  );
+  )
 }

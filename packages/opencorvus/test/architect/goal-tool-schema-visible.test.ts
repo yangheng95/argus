@@ -44,9 +44,7 @@ test("goal tool schemas expose acceptance_specs shape to the model", () => {
   const registerGoalJsonSchema = asObject(asSchema(architect.tools.register_goal.inputSchema as never).jsonSchema)
   const modifyGoalJsonSchema = asObject(asSchema(orchestrator.tools.modify_goal.inputSchema as never).jsonSchema)
 
-  assertAcceptanceSpecSchemaVisible(
-    acceptanceSpecsNode(registerGoalJsonSchema, ["properties", "acceptance_specs"]),
-  )
+  assertAcceptanceSpecSchemaVisible(acceptanceSpecsNode(registerGoalJsonSchema, ["properties", "acceptance_specs"]))
   assertAcceptanceSpecSchemaVisible(
     acceptanceSpecsNode(modifyGoalJsonSchema, ["properties", "updates", "properties", "acceptance_specs"]),
   )

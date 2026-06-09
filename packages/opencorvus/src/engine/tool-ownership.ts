@@ -185,11 +185,7 @@ export function findLiveBuildOwnershipByGoalRun(input: {
   )
 }
 
-export function assertNoLiveBuildOwnershipForGoal(input: {
-  taskID: string
-  goalID: string
-  action: string
-}): void {
+export function assertNoLiveBuildOwnershipForGoal(input: { taskID: string; goalID: string; action: string }): void {
   const owner = findLiveBuildOwnershipByGoal(input)
   if (!owner) return
   throw new Error(

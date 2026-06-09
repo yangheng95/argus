@@ -1,10 +1,15 @@
 import path from "path"
+import { $ } from "bun"
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Filesystem } from "../../src/util/filesystem"
 import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { Database } from "../../src/storage/db"
+import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { Instance } from "../../src/project/instance"
+import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 
 Log.init({ print: false })
 
@@ -26,7 +31,7 @@ describe("project routes", () => {
     })
 
     expect(response.status).toBe(200)
-    const body = await response.json() as { created: boolean }
+    const body = (await response.json()) as { created: boolean }
     expect(body.created).toBe(true)
     expect(await Filesystem.exists(path.join(tmp.path, ".git"))).toBe(true)
 
@@ -36,7 +41,7 @@ describe("project routes", () => {
       },
     })
     expect(current.status).toBe(200)
-  })
+  }, 30_000)
 
   test("POST /project/current/init-git is idempotent for git projects", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -50,7 +55,125 @@ describe("project routes", () => {
     })
 
     expect(response.status).toBe(200)
-    const body = await response.json() as { created: boolean }
+    const body = (await response.json()) as { created: boolean }
     expect(body.created).toBe(false)
-  })
+  }, 30_000)
+
+  test("GET /project/current/worktrees marks live goal bindings and expired worktrees", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const now = Date.now()
+    const activeDir = path.join(tmp.path, "..", `project-route-active-${now}`)
+    const expiredDir = path.join(tmp.path, "..", `project-route-expired-${now}`)
+
+    await $`git worktree add --no-checkout -b ${`opencorvus/active-${now}`} ${activeDir}`.cwd(tmp.path).quiet()
+    await $`git reset --hard`.cwd(activeDir).quiet()
+    await $`git worktree add --no-checkout -b ${`opencorvus/expired-${now}`} ${expiredDir}`.cwd(tmp.path).quiet()
+    await $`git reset --hard`.cwd(expiredDir).quiet()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = `task_project_worktrees_${now}`
+        const goalID = `goal_project_worktrees_${now}`
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "worktree route task",
+              request: "verify worktree route",
+              priority: "normal",
+              kind: "workflow",
+              queue_order: 0,
+              system_artifacts: [],
+              design_specs: [],
+              criteria_results: [],
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "live route goal",
+              slug: "live-route-goal",
+              objective: "bind active worktree",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+        seedGoalRunAttemptWithWorkspace({
+          taskID,
+          goalID,
+          workspaceDir: activeDir,
+          workspaceBranch: `opencorvus/active-${now}`,
+          status: "running",
+          now,
+        })
+      },
+    })
+
+    const response = await app.request("/project/current/worktrees", {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as Array<{
+      directory: string
+      goalID?: string
+      status: "primary" | "active" | "expired"
+      removable: boolean
+    }>
+    const active = body.find((item) => path.resolve(item.directory) === path.resolve(activeDir))
+    const expired = body.find((item) => path.resolve(item.directory) === path.resolve(expiredDir))
+    const primary = body.find((item) => path.resolve(item.directory) === path.resolve(tmp.path))
+    expect(primary?.status).toBe("primary")
+    expect(primary?.removable).toBe(false)
+    expect(active?.status).toBe("active")
+    expect(active?.goalID).toBe(`goal_project_worktrees_${now}`)
+    expect(active?.removable).toBe(true)
+    expect(expired?.status).toBe("expired")
+    expect(expired?.goalID).toBeUndefined()
+    expect(expired?.removable).toBe(true)
+  }, 30_000)
+
+  test("DELETE /project/current/worktrees removes a registered worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const now = Date.now()
+    const expiredDir = path.join(tmp.path, "..", `project-route-delete-${now}`)
+
+    await $`git worktree add --no-checkout -b ${`opencorvus/delete-${now}`} ${expiredDir}`.cwd(tmp.path).quiet()
+    await $`git reset --hard`.cwd(expiredDir).quiet()
+
+    const response = await app.request("/project/current/worktrees", {
+      method: "DELETE",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ directory: expiredDir }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true })
+    expect(await Filesystem.exists(expiredDir)).toBe(false)
+    const list = await $`git worktree list --porcelain`.cwd(tmp.path).quiet().text()
+    expect(list).not.toContain(path.resolve(expiredDir))
+  }, 30_000)
 })

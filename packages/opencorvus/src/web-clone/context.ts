@@ -72,7 +72,9 @@ const REQUIRED_SOURCE_HANDOFF_ARTIFACTS = [
   "source-ir/interaction-state-snapshots.json",
 ] as const
 
-export async function prepareWebCloneContext(input: PrepareWebCloneContextInput): Promise<PrepareWebCloneContextOutput> {
+export async function prepareWebCloneContext(
+  input: PrepareWebCloneContextInput,
+): Promise<PrepareWebCloneContextOutput> {
   const webpageEvidenceDir = path.resolve(input.webpageEvidenceDir)
   const outputDir = path.resolve(input.outputDir ?? path.join(path.dirname(webpageEvidenceDir), "web-clone-source"))
   await assertContextInputs(webpageEvidenceDir)
@@ -80,7 +82,17 @@ export async function prepareWebCloneContext(input: PrepareWebCloneContextInput)
     throw new Error(`Web clone context outputDir must not overlap webpageEvidenceDir: ${outputDir}`)
   }
 
-  const [componentTree, contentModel, styleTokens, styleProfile, interactionHints, assetManifest, skeletonAudit, sourceQualityAudit, sourceSkeleton] = await Promise.all([
+  const [
+    componentTree,
+    contentModel,
+    styleTokens,
+    styleProfile,
+    interactionHints,
+    assetManifest,
+    skeletonAudit,
+    sourceQualityAudit,
+    sourceSkeleton,
+  ] = await Promise.all([
     readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "component-tree.json")),
     readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "content-model.json")),
     readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "style-tokens.json")),
@@ -119,7 +131,11 @@ export async function prepareWebCloneContext(input: PrepareWebCloneContextInput)
   await fs.rm(outputDir, { recursive: true, force: true })
   await fs.mkdir(outputDir, { recursive: true })
   await fs.writeFile(contextPath, renderContextMarkdown(webpageEvidenceDir, summary, stats), "utf8")
-  await fs.writeFile(contractPath, `${JSON.stringify(renderContract(webpageEvidenceDir, summary, stats), null, 2)}\n`, "utf8")
+  await fs.writeFile(
+    contractPath,
+    `${JSON.stringify(renderContract(webpageEvidenceDir, summary, stats), null, 2)}\n`,
+    "utf8",
+  )
   const materializedFiles = await materializeVisibleSourcePackage({
     webpageEvidenceDir,
     outputDir,
@@ -130,7 +146,15 @@ export async function prepareWebCloneContext(input: PrepareWebCloneContextInput)
   })
   const sourceReadmePath = path.join(outputDir, "README.md")
 
-  return { webpageEvidenceDir, sourcePackageDir: outputDir, sourceReadmePath, contextPath, contractPath, materializedFiles, stats }
+  return {
+    webpageEvidenceDir,
+    sourcePackageDir: outputDir,
+    sourceReadmePath,
+    contextPath,
+    contractPath,
+    materializedFiles,
+    stats,
+  }
 }
 
 function buildContextSummary(input: {
@@ -150,10 +174,22 @@ function buildContextSummary(input: {
     repeatedGroups: readRepeatedGroups(input.contentModel),
     styleTokens: collectNamedStrings(input.styleTokens, ["name", "token", "property", "value"]).slice(0, 80),
     styleProfiles: readStyleProfiles(input.styleProfile),
-    interactionHints: collectNamedStrings(input.interactionHints, ["type", "role", "label", "text", "href"]).slice(0, 80),
+    interactionHints: collectNamedStrings(input.interactionHints, ["type", "role", "label", "text", "href"]).slice(
+      0,
+      80,
+    ),
     assets: readAssets(input.assetManifest),
     textSignals: rankTextSignals([
-      ...collectNamedStrings(input.contentModel, ["headers", "rows", "items", "sampleTexts", "text", "value", "label", "title"]),
+      ...collectNamedStrings(input.contentModel, [
+        "headers",
+        "rows",
+        "items",
+        "sampleTexts",
+        "text",
+        "value",
+        "label",
+        "title",
+      ]),
       ...collectSkeletonText(input.sourceSkeleton),
     ]).slice(0, 80),
   }
@@ -189,18 +225,23 @@ function renderContextMarkdown(
     "- Use `web_clone_source_audit` and runtime visual evaluation against `reference.png` as evidence; report measured results and concrete findings instead of inventing a score.",
     "",
     "## Components",
-    ...summary.components.slice(0, 24).map((component) =>
-      `- ${component.name}${component.kind ? ` (${component.kind})` : ""}${component.textPreview.length ? `: ${component.textPreview.join(" | ")}` : ""}`
-    ),
+    ...summary.components
+      .slice(0, 24)
+      .map(
+        (component) =>
+          `- ${component.name}${component.kind ? ` (${component.kind})` : ""}${component.textPreview.length ? `: ${component.textPreview.join(" | ")}` : ""}`,
+      ),
     "",
     "## Structured Content",
     `- tables: ${stats.tables}`,
     `- lists: ${stats.lists}`,
     `- cards: ${stats.cards}`,
     `- repeated groups: ${stats.repeatedGroups}`,
-    ...summary.tables.slice(0, 8).map((table) =>
-      `- table ${table.title ?? ""}: ${table.headers.join(" | ")}${table.sampleRows[0] ? ` / sample ${table.sampleRows[0].join(" | ")}` : ""}`.trim()
-    ),
+    ...summary.tables
+      .slice(0, 8)
+      .map((table) =>
+        `- table ${table.title ?? ""}: ${table.headers.join(" | ")}${table.sampleRows[0] ? ` / sample ${table.sampleRows[0].join(" | ")}` : ""}`.trim(),
+      ),
     "",
     "## Text Signals",
     ...summary.textSignals.slice(0, 40).map((text) => `- ${text}`),
@@ -212,7 +253,11 @@ function renderContextMarkdown(
     ...summary.styleProfiles.slice(0, 40).map((profile) => `- ${profile}`),
     "",
     "## Asset References",
-    ...summary.assets.slice(0, 40).map((asset) => `- ${asset.id} ${asset.kind} ${asset.path}${asset.semanticRole ? ` (${asset.semanticRole})` : ""}`),
+    ...summary.assets
+      .slice(0, 40)
+      .map(
+        (asset) => `- ${asset.id} ${asset.kind} ${asset.path}${asset.semanticRole ? ` (${asset.semanticRole})` : ""}`,
+      ),
     "",
   ].join("\n")
 }
@@ -230,7 +275,8 @@ function renderContract(
     rules: {
       visibleSourcePackage: "web-clone-source",
       primaryImplementationInput: "implementation-blueprint.md",
-      rawSkeletonPolicy: "source-skeleton/index.html is raw evidence for DOM order and missing text; it is not an app-source template.",
+      rawSkeletonPolicy:
+        "source-skeleton/index.html is raw evidence for DOM order and missing text; it is not an app-source template.",
       sourceAuditTool: "web_clone_source_audit",
       visualTruth: "web-clone-source/reference.png",
       visualEvaluation: {
@@ -273,10 +319,7 @@ async function materializeVisibleSourcePackage(input: {
   summary: ContextSummary
   stats: PrepareWebCloneContextOutput["stats"]
 }): Promise<string[]> {
-  const written = new Set<string>([
-    input.contextPath,
-    input.contractPath,
-  ])
+  const written = new Set<string>([input.contextPath, input.contractPath])
   await fs.mkdir(input.outputDir, { recursive: true })
   const readmePath = path.join(input.outputDir, "README.md")
   await fs.writeFile(readmePath, renderSourcePackageReadme(input.webpageEvidenceDir, input.stats), "utf8")
@@ -286,75 +329,122 @@ async function materializeVisibleSourcePackage(input: {
   await fs.writeFile(blueprintPath, renderImplementationBlueprint(input.summary, input.stats), "utf8")
   written.add(blueprintPath)
 
-  await copyFileIfExists(path.join(input.webpageEvidenceDir, "reference.png"), path.join(input.outputDir, "reference.png"), written)
-  await copyDirIfExists(path.join(input.webpageEvidenceDir, "source-skeleton"), path.join(input.outputDir, "source-skeleton"), written)
-  await copyDirIfExists(path.join(input.webpageEvidenceDir, "source-ir"), path.join(input.outputDir, "source-ir"), written)
-  await copyDirIfExists(path.join(input.webpageEvidenceDir, "interaction-states"), path.join(input.outputDir, "interaction-states"), written)
-  await copyFileIfExists(path.join(input.webpageEvidenceDir, "assets", "manifest.json"), path.join(input.outputDir, "assets", "manifest.json"), written)
-  await copyDirIfExists(path.join(input.webpageEvidenceDir, "assets", "svg"), path.join(input.outputDir, "assets", "svg"), written)
-  await copyDirIfExists(path.join(input.webpageEvidenceDir, "assets", "images"), path.join(input.outputDir, "assets", "images"), written)
-  for (const diagnostic of ["singlefile.html", "page.ir.json", "segments.json", "codegen-context.json", "prd-evidence-summary.md", "visual-surface-candidates.json"]) {
-    await copyFileIfExists(path.join(input.webpageEvidenceDir, diagnostic), path.join(input.outputDir, diagnostic), written)
+  await copyFileIfExists(
+    path.join(input.webpageEvidenceDir, "reference.png"),
+    path.join(input.outputDir, "reference.png"),
+    written,
+  )
+  await copyDirIfExists(
+    path.join(input.webpageEvidenceDir, "source-skeleton"),
+    path.join(input.outputDir, "source-skeleton"),
+    written,
+  )
+  await copyDirIfExists(
+    path.join(input.webpageEvidenceDir, "source-ir"),
+    path.join(input.outputDir, "source-ir"),
+    written,
+  )
+  await copyDirIfExists(
+    path.join(input.webpageEvidenceDir, "interaction-states"),
+    path.join(input.outputDir, "interaction-states"),
+    written,
+  )
+  await copyFileIfExists(
+    path.join(input.webpageEvidenceDir, "assets", "manifest.json"),
+    path.join(input.outputDir, "assets", "manifest.json"),
+    written,
+  )
+  await copyDirIfExists(
+    path.join(input.webpageEvidenceDir, "assets", "svg"),
+    path.join(input.outputDir, "assets", "svg"),
+    written,
+  )
+  await copyDirIfExists(
+    path.join(input.webpageEvidenceDir, "assets", "images"),
+    path.join(input.outputDir, "assets", "images"),
+    written,
+  )
+  for (const diagnostic of [
+    "singlefile.html",
+    "page.ir.json",
+    "segments.json",
+    "codegen-context.json",
+    "prd-evidence-summary.md",
+    "visual-surface-candidates.json",
+  ]) {
+    await copyFileIfExists(
+      path.join(input.webpageEvidenceDir, diagnostic),
+      path.join(input.outputDir, diagnostic),
+      written,
+    )
   }
 
   const manifestPath = path.join(input.outputDir, "web-clone-source-manifest.json")
   const referenceEvidence = await readPngEvidence(path.join(input.outputDir, "reference.png"))
   const captureViewport = await readCaptureViewport(input.webpageEvidenceDir)
   const manifestEntries = await buildSourceManifestEntries(input.outputDir, input.webpageEvidenceDir, written)
-  await fs.writeFile(manifestPath, `${JSON.stringify({
-    version: 1,
-    purpose: "web-clone-visible-source-package",
-    webpageEvidenceDir: input.webpageEvidenceDir,
-    provenance: {
-      source: "webpage-evidence",
-      webpageEvidenceDir: input.webpageEvidenceDir,
-      requiredWebpageEvidenceArtifacts: WEB_CLONE_REQUIRED_WEBPAGE_EVIDENCE_ARTIFACTS,
-      captureViewport,
-      reference: referenceEvidence.valid
-        ? {
-            path: "reference.png",
-            sha256: referenceEvidence.sha256,
-            width: referenceEvidence.width,
-            height: referenceEvidence.height,
-            bytes: referenceEvidence.bytes,
-          }
-        : undefined,
-    },
-    files: manifestEntries,
-    entrypoints: [
-      "README.md",
-      "implementation-blueprint.md",
-      "web-clone-context.md",
-      "web-clone-implementation-contract.json",
-      "source-ir/component-tree.json",
-      "source-ir/content-model.json",
-      "source-ir/layout-map.json",
-      "source-ir/style-tokens.json",
-      "source-ir/style-profile.json",
-      "source-ir/interaction-hints.json",
-      "source-ir/interaction-state-snapshots.json",
-      "interaction-states/initial.png",
-      "interaction-states/scroll-25.png",
-      "interaction-states/scroll-50.png",
-      "interaction-states/scroll-75.png",
-      "visual-surface-candidates.json",
-      "source-skeleton/critical.css",
-      "source-skeleton/index.html",
-      "assets/manifest.json",
-      "reference.png",
-    ],
-    rules: [
-      "Build agents must read this project-root source package before implementation.",
-      "implementation-blueprint.md and source-ir/* are the primary app-source inputs.",
-      "source-ir/style-profile.json is the region-scoped style source for CSS/layout generation.",
-      "source-skeleton/index.html is raw evidence only; do not mechanically convert it into one giant framework component.",
-      "Implementation code belongs in the target app source tree; this package is the reusable source handoff, not a generated app.",
-      "source-ir/interaction-state-snapshots.json is runtime evidence, not prose requirements or implementation code.",
-      "Use sidecar assets by file reference instead of inlining dense SVG/base64 payloads.",
-      "Do not runtime-load third-party CSS bundles; copy or author project-owned CSS from the extracted critical styles and tokens.",
-      "Runtime acceptance still compares the target app against reference.png.",
-    ],
-  }, null, 2)}\n`, "utf8")
+  await fs.writeFile(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        version: 1,
+        purpose: "web-clone-visible-source-package",
+        webpageEvidenceDir: input.webpageEvidenceDir,
+        provenance: {
+          source: "webpage-evidence",
+          webpageEvidenceDir: input.webpageEvidenceDir,
+          requiredWebpageEvidenceArtifacts: WEB_CLONE_REQUIRED_WEBPAGE_EVIDENCE_ARTIFACTS,
+          captureViewport,
+          reference: referenceEvidence.valid
+            ? {
+                path: "reference.png",
+                sha256: referenceEvidence.sha256,
+                width: referenceEvidence.width,
+                height: referenceEvidence.height,
+                bytes: referenceEvidence.bytes,
+              }
+            : undefined,
+        },
+        files: manifestEntries,
+        entrypoints: [
+          "README.md",
+          "implementation-blueprint.md",
+          "web-clone-context.md",
+          "web-clone-implementation-contract.json",
+          "source-ir/component-tree.json",
+          "source-ir/content-model.json",
+          "source-ir/layout-map.json",
+          "source-ir/style-tokens.json",
+          "source-ir/style-profile.json",
+          "source-ir/interaction-hints.json",
+          "source-ir/interaction-state-snapshots.json",
+          "interaction-states/initial.png",
+          "interaction-states/scroll-25.png",
+          "interaction-states/scroll-50.png",
+          "interaction-states/scroll-75.png",
+          "visual-surface-candidates.json",
+          "source-skeleton/critical.css",
+          "source-skeleton/index.html",
+          "assets/manifest.json",
+          "reference.png",
+        ],
+        rules: [
+          "Build agents must read this project-root source package before implementation.",
+          "implementation-blueprint.md and source-ir/* are the primary app-source inputs.",
+          "source-ir/style-profile.json is the region-scoped style source for CSS/layout generation.",
+          "source-skeleton/index.html is raw evidence only; do not mechanically convert it into one giant framework component.",
+          "Implementation code belongs in the target app source tree; this package is the reusable source handoff, not a generated app.",
+          "source-ir/interaction-state-snapshots.json is runtime evidence, not prose requirements or implementation code.",
+          "Use sidecar assets by file reference instead of inlining dense SVG/base64 payloads.",
+          "Do not runtime-load third-party CSS bundles; copy or author project-owned CSS from the extracted critical styles and tokens.",
+          "Runtime acceptance still compares the target app against reference.png.",
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  )
   written.add(manifestPath)
   return Array.from(written).sort((a, b) => a.localeCompare(b))
 }
@@ -420,21 +510,26 @@ function renderImplementationBlueprint(summary: ContextSummary, stats: PrepareWe
     "- Keep `source-skeleton/index.html` available for audit and DOM-order lookup only.",
     "",
     "## Expected Component Slices",
-    ...summary.components.slice(0, 24).map((component) =>
-      `- ${component.name}${component.kind ? ` (${component.kind})` : ""}${component.textPreview.length ? `: ${component.textPreview.join(" | ")}` : ""}`
-    ),
+    ...summary.components
+      .slice(0, 24)
+      .map(
+        (component) =>
+          `- ${component.name}${component.kind ? ` (${component.kind})` : ""}${component.textPreview.length ? `: ${component.textPreview.join(" | ")}` : ""}`,
+      ),
     "",
     "## Data Models To Create",
     `- Tables: ${stats.tables}`,
     `- Lists: ${stats.lists}`,
     `- Cards: ${stats.cards}`,
     `- Repeated groups: ${stats.repeatedGroups}`,
-    ...summary.tables.slice(0, 8).map((table) =>
-      `- Table ${table.title ?? ""}: headers ${table.headers.join(" | ")}${table.sampleRows[0] ? `; sample ${table.sampleRows[0].join(" | ")}` : ""}`.trim()
-    ),
-    ...summary.lists.slice(0, 12).map((list) =>
-      `- List ${list.title ?? ""}: ${list.items.slice(0, 8).join(" | ")}`.trim()
-    ),
+    ...summary.tables
+      .slice(0, 8)
+      .map((table) =>
+        `- Table ${table.title ?? ""}: headers ${table.headers.join(" | ")}${table.sampleRows[0] ? `; sample ${table.sampleRows[0].join(" | ")}` : ""}`.trim(),
+      ),
+    ...summary.lists
+      .slice(0, 12)
+      .map((list) => `- List ${list.title ?? ""}: ${list.items.slice(0, 8).join(" | ")}`.trim()),
     "",
     "## Required Text Coverage Samples",
     ...summary.textSignals.slice(0, 40).map((text) => `- ${text}`),
@@ -443,7 +538,7 @@ function renderImplementationBlueprint(summary: ContextSummary, stats: PrepareWe
     "- Check `visual-surface-candidates.json` for high-impact visual surfaces and bounds when present.",
     "- Check `source-ir/style-profile.json` for region-level computed typography, spacing, colors, borders, radii, CSS selector refs, and source-node ids before authoring CSS.",
     "- Check `assets/manifest.json`, `assets/svg/`, and `assets/images/` before authoring dense geometry by hand.",
-    "- If the raw skeleton contains `<canvas src=\"images/canvas/...\">`, implement it as an actual visible chart/image component; browsers do not render a `src` attribute on `<canvas>`.",
+    '- If the raw skeleton contains `<canvas src="images/canvas/...">`, implement it as an actual visible chart/image component; browsers do not render a `src` attribute on `<canvas>`.',
     "",
     "## Verification Checks",
     "- Run `web_clone_source_audit` against this source package and use its findings as implementation evidence.",
@@ -453,14 +548,14 @@ function renderImplementationBlueprint(summary: ContextSummary, stats: PrepareWe
 }
 
 async function copyFileIfExists(source: string, target: string, written: Set<string>): Promise<void> {
-  if (!await exists(source)) return
+  if (!(await exists(source))) return
   await fs.mkdir(path.dirname(target), { recursive: true })
   await fs.copyFile(source, target)
   written.add(target)
 }
 
 async function copyDirIfExists(source: string, target: string, written: Set<string>): Promise<void> {
-  if (!await exists(source)) return
+  if (!(await exists(source))) return
   await fs.rm(target, { recursive: true, force: true })
   await fs.cp(source, target, { recursive: true })
   for (const file of await listFiles(target)) written.add(file)
@@ -480,7 +575,9 @@ async function buildSourceManifestEntries(
       path: relative,
       sha256: await sha256File(file),
       bytes: stat?.isFile() ? stat.size : undefined,
-      source: await exists(path.join(webpageEvidenceDir, relative)) ? normalizePath(path.join("webpage-evidence", relative)) : "generated",
+      source: (await exists(path.join(webpageEvidenceDir, relative)))
+        ? normalizePath(path.join("webpage-evidence", relative))
+        : "generated",
     })
   }
   return entries
@@ -593,7 +690,9 @@ function readStyleProfiles(styleProfile: unknown): ContextSummary["styleProfiles
         colors ? `colors ${colors}` : undefined,
         spacing ? `spacing ${spacing}` : undefined,
         preview ? `text ${preview}` : undefined,
-      ].filter(Boolean).join("; ")
+      ]
+        .filter(Boolean)
+        .join("; ")
     })
     .filter(Boolean)
     .slice(0, 80)
@@ -639,7 +738,9 @@ function collectNamedStrings(value: unknown, keys: string[], key = ""): string[]
   if (typeof value === "string") return keys.includes(key) ? [value] : []
   if (Array.isArray(value)) return value.flatMap((item) => collectNamedStrings(item, keys, key))
   if (!value || typeof value !== "object") return []
-  return Object.entries(value as Record<string, unknown>).flatMap(([childKey, child]) => collectNamedStrings(child, keys, childKey))
+  return Object.entries(value as Record<string, unknown>).flatMap(([childKey, child]) =>
+    collectNamedStrings(child, keys, childKey),
+  )
 }
 
 function collectSkeletonText(html: string): string[] {
@@ -688,21 +789,23 @@ function readStringArray(value: unknown): string[] {
 function readTableRows(value: unknown): string[][] {
   if (!Array.isArray(value)) return []
   return value
-    .map((row) => Array.isArray(row) ? row.map((cell) => readString(cell) ?? "") : [])
+    .map((row) => (Array.isArray(row) ? row.map((cell) => readString(cell) ?? "") : []))
     .filter((row) => row.some((cell) => cell.length > 0))
 }
 
 function readArray(value: unknown, key: string): unknown[] {
   const row = asRecord(value)
-  return Array.isArray(row[key]) ? row[key] as unknown[] : []
+  return Array.isArray(row[key]) ? (row[key] as unknown[]) : []
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? value as Record<string, unknown> : {}
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {}
 }
 
 function readString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? decodeEntities(value).replace(/\s+/g, " ").trim() : undefined
+  return typeof value === "string" && value.trim().length > 0
+    ? decodeEntities(value).replace(/\s+/g, " ").trim()
+    : undefined
 }
 
 function readNumber(value: unknown): number | undefined {
@@ -715,7 +818,7 @@ function decodeEntities(value: string): string {
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
+    .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
 }
 
@@ -730,12 +833,16 @@ async function assertContextInputs(webpageEvidenceDir: string): Promise<void> {
   if (!referenceEvidence.valid) missing.push(`${referenceEvidence.path} (${referenceEvidence.error ?? "invalid PNG"})`)
   for (const relative of REQUIRED_SOURCE_HANDOFF_ARTIFACTS) {
     const file = path.join(webpageEvidenceDir, relative)
-    if (!await exists(file)) missing.push(file)
+    if (!(await exists(file))) missing.push(file)
   }
-  if (await readPassedAudit(path.join(webpageEvidenceDir, "source-skeleton", "source-skeleton-audit.json")) !== true) {
-    missing.push(path.join(webpageEvidenceDir, "source-skeleton", "source-skeleton-audit.json") + " (passed=true required)")
+  if (
+    (await readPassedAudit(path.join(webpageEvidenceDir, "source-skeleton", "source-skeleton-audit.json"))) !== true
+  ) {
+    missing.push(
+      path.join(webpageEvidenceDir, "source-skeleton", "source-skeleton-audit.json") + " (passed=true required)",
+    )
   }
-  if (await readPassedAudit(path.join(webpageEvidenceDir, "source-ir", "source-quality-audit.json")) !== true) {
+  if ((await readPassedAudit(path.join(webpageEvidenceDir, "source-ir", "source-quality-audit.json"))) !== true) {
     missing.push(path.join(webpageEvidenceDir, "source-ir", "source-quality-audit.json") + " (passed=true required)")
   }
   if (missing.length > 0) throw new Error(`Web clone context inputs are missing: ${missing.join(", ")}`)

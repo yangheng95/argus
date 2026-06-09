@@ -29,9 +29,8 @@ async function rmWithinPackage(target: string, options: { recursive?: boolean } 
       await fs.rm(resolved, { force: true, recursive: options.recursive ?? false })
       return
     } catch (error) {
-      const code = error && typeof error === "object" && "code" in error
-        ? String((error as NodeJS.ErrnoException).code)
-        : ""
+      const code =
+        error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
       if (!["EBUSY", "ENOTEMPTY", "EPERM"].includes(code) || attempt === 20) throw error
       Bun.gc(true)
       await Bun.sleep(100 * attempt)
@@ -47,9 +46,8 @@ async function writeFileWithRetry(file: string, contents: string) {
       await fs.writeFile(file, contents)
       return
     } catch (error) {
-      const code = error && typeof error === "object" && "code" in error
-        ? String((error as NodeJS.ErrnoException).code)
-        : ""
+      const code =
+        error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
       if (!["EBUSY", "EUNKNOWN", "EPERM"].includes(code) || attempt === 20) throw error
       Bun.gc(true)
       await Bun.sleep(100 * attempt)
@@ -96,9 +94,9 @@ await writeFileWithRetry(
     `export const DEFAULT_SERVER_URL = \`http://\${DEFAULT_SERVER_HOST}:\${DEFAULT_SERVER_PORT}\`\n`,
 )
 
-// Bootstrap: opencorvus's CLI loads commands that import "@opencorvus-ai/sdk",
+// Bootstrap: opencorvus's OpenAPI generator imports "@opencorvus-ai/sdk",
 // which in turn imports ./gen/*. After a clean (e.g. `rm -rf src/gen`) those
-// modules are missing and `bun dev generate` fails to load. Write minimal
+// modules are missing and the generator fails to load. Write minimal
 // stubs so the SDK module graph resolves; the real generation below replaces
 // them. Stubs are not retained — the `rm -rf src/gen` after generate removes
 // the entire dir and createClient writes fresh files.
@@ -107,20 +105,14 @@ await writeFileWithRetry(
   path.join(dir, "src", "gen", "sdk.gen.ts"),
   "export class OpencodeClient { constructor(_?: unknown) {} }\n",
 )
-await writeFileWithRetry(
-  path.join(dir, "src", "gen", "client", "types.gen.ts"),
-  "export interface Config {}\n",
-)
+await writeFileWithRetry(path.join(dir, "src", "gen", "client", "types.gen.ts"), "export interface Config {}\n")
 await writeFileWithRetry(
   path.join(dir, "src", "gen", "client", "client.gen.ts"),
   "export function createClient(_?: unknown): unknown { throw new Error('SDK not yet generated') }\n",
 )
-await writeFileWithRetry(
-  path.join(dir, "src", "gen", "client", "index.ts"),
-  "export {}\n",
-)
+await writeFileWithRetry(path.join(dir, "src", "gen", "client", "index.ts"), "export {}\n")
 
-await $`bun dev generate > ${openapi}`.cwd(path.resolve(dir, "../../opencorvus"))
+await $`bun ./script/generate-openapi.ts > ${openapi}`.cwd(path.resolve(dir, "../../opencorvus"))
 await writeFileWithRetry(rootOpenapi, await Bun.file(openapi).text())
 await rmWithinPackage("src/gen", { recursive: true })
 await rmWithinPackage("dist", { recursive: true })

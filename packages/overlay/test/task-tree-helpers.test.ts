@@ -132,13 +132,7 @@ describe("flattenGroup — depth-first emit + default collapsed (#10, #11)", () 
     const A = item("A")
     const B = item("B", "A")
     const shape = buildTaskTree([A, B])
-    const entries = flattenGroup(
-      shape.topLevelItems,
-      "/repo",
-      shape.childMap,
-      new Set(),
-      projectDirectoryOf,
-    )
+    const entries = flattenGroup(shape.topLevelItems, "/repo", shape.childMap, new Set(), projectDirectoryOf)
     expect(entries).toHaveLength(1)
     expect(entries[0].item.task.id).toBe("A")
     expect(entries[0].depth).toBe(0)
@@ -150,13 +144,7 @@ describe("flattenGroup — depth-first emit + default collapsed (#10, #11)", () 
     const A = item("A")
     const B = item("B", "A")
     const shape = buildTaskTree([A, B])
-    const entries = flattenGroup(
-      shape.topLevelItems,
-      "/repo",
-      shape.childMap,
-      new Set(["A"]),
-      projectDirectoryOf,
-    )
+    const entries = flattenGroup(shape.topLevelItems, "/repo", shape.childMap, new Set(["A"]), projectDirectoryOf)
     expect(entries.map((e) => [e.item.task.id, e.depth])).toEqual([
       ["A", 0],
       ["B", 1],
@@ -185,13 +173,7 @@ describe("flattenGroup — depth-first emit + default collapsed (#10, #11)", () 
     const B = item("B", "A")
     const C = item("C", "B")
     const shape = buildTaskTree([A, B, C])
-    const entries = flattenGroup(
-      shape.topLevelItems,
-      "/repo",
-      shape.childMap,
-      new Set(["A", "B"]),
-      projectDirectoryOf,
-    )
+    const entries = flattenGroup(shape.topLevelItems, "/repo", shape.childMap, new Set(["A", "B"]), projectDirectoryOf)
     expect(entries.map((e) => [e.item.task.id, e.depth])).toEqual([
       ["A", 0],
       ["B", 1],
@@ -203,13 +185,7 @@ describe("flattenGroup — depth-first emit + default collapsed (#10, #11)", () 
     const parent = item("P", null, "/repo-A")
     const child = item("CH", "P", "/repo-B")
     const shape = buildTaskTree([parent, child])
-    const entries = flattenGroup(
-      shape.topLevelItems,
-      "/repo-A",
-      shape.childMap,
-      new Set(["P"]),
-      projectDirectoryOf,
-    )
+    const entries = flattenGroup(shape.topLevelItems, "/repo-A", shape.childMap, new Set(["P"]), projectDirectoryOf)
     const childEntry = entries.find((e) => e.item.task.id === "CH")!
     expect(childEntry.crossDirectory).toBe(true)
     expect(childEntry.depth).toBe(1)
@@ -219,13 +195,7 @@ describe("flattenGroup — depth-first emit + default collapsed (#10, #11)", () 
     const parent = item("P", null, "/repo")
     const child = item("CH", "P", "/repo")
     const shape = buildTaskTree([parent, child])
-    const entries = flattenGroup(
-      shape.topLevelItems,
-      "/repo",
-      shape.childMap,
-      new Set(["P"]),
-      projectDirectoryOf,
-    )
+    const entries = flattenGroup(shape.topLevelItems, "/repo", shape.childMap, new Set(["P"]), projectDirectoryOf)
     const childEntry = entries.find((e) => e.item.task.id === "CH")!
     expect(childEntry.crossDirectory).toBe(false)
   })

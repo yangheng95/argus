@@ -93,7 +93,7 @@ describe("provider request-body contract", () => {
       },
     })
 
-    const messages = await ProviderTransform.message(
+    const messages = (await ProviderTransform.message(
       [
         {
           role: "assistant",
@@ -109,7 +109,7 @@ describe("provider request-body contract", () => {
       ] as any[],
       openrouter,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(messages[0].content[0].providerOptions.openrouter.reasoning_details).toEqual(reasoningDetails)
     expect(messages[0].providerOptions?.openaiCompatible?.reasoning_details).toBeUndefined()
@@ -148,7 +148,11 @@ describe("provider request-body contract", () => {
       },
     })
 
-    const messages = await ProviderTransform.message([{ role: "user", content: "hello" }] as any[], bedrock, {}) as any[]
+    const messages = (await ProviderTransform.message(
+      [{ role: "user", content: "hello" }] as any[],
+      bedrock,
+      {},
+    )) as any[]
 
     expect(messages[0].providerOptions?.bedrock).toEqual({
       cachePoint: { type: "default" },
@@ -166,7 +170,7 @@ describe("provider request-body contract", () => {
       },
     })
 
-    const messages = await ProviderTransform.message(
+    const messages = (await ProviderTransform.message(
       [
         { role: "user", content: "decompose this task" },
         {
@@ -198,7 +202,7 @@ describe("provider request-body contract", () => {
       ] as any[],
       hexinClaude,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "tool"])
     expect(messages[1].content[0].toolCallId).toBe("toolu_bdrk_invalid")
@@ -216,7 +220,7 @@ describe("provider request-body contract", () => {
       },
     })
 
-    const messages = await ProviderTransform.message(
+    const messages = (await ProviderTransform.message(
       [
         { role: "user", content: "first" },
         { role: "assistant", content: [{ type: "text", text: "prior answer" }] },
@@ -224,7 +228,7 @@ describe("provider request-body contract", () => {
       ] as any[],
       claude,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "user"])
     expect(messages[1].content[0].text).toBe("prior answer")
@@ -241,7 +245,7 @@ describe("provider request-body contract", () => {
       },
     })
 
-    const messages = await ProviderTransform.message(
+    const messages = (await ProviderTransform.message(
       [
         { role: "user", content: "decompose this task" },
         {
@@ -273,7 +277,7 @@ describe("provider request-body contract", () => {
       ] as any[],
       glm,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "tool", "assistant"])
   })
@@ -413,7 +417,7 @@ describe("provider request-body contract", () => {
             {
               id: "call_1",
               type: "function",
-              function: { name: "bash", arguments: "{\"command\":\"echo hi\"}" },
+              function: { name: "bash", arguments: '{"command":"echo hi"}' },
             },
           ],
         },
@@ -447,7 +451,7 @@ describe("provider request-body contract", () => {
             {
               id: "call_1",
               type: "function",
-              function: { name: "bash", arguments: "{\"content\":null}" },
+              function: { name: "bash", arguments: '{"content":null}' },
             },
           ],
         },
@@ -455,7 +459,7 @@ describe("provider request-body contract", () => {
     }) as any
 
     expect(body.messages[0].content).toBeNull()
-    expect(body.messages[0].tool_calls[0].function.arguments).toBe("{\"content\":null}")
+    expect(body.messages[0].tool_calls[0].function.arguments).toBe('{"content":null}')
     expect(body.metadata.content).toBeNull()
   })
 
@@ -484,9 +488,7 @@ describe("provider request-body contract", () => {
   test("Hexin request body normalization runs regardless of SDK package", () => {
     expect(ProviderTransform.shouldNormalizeRequestBody("hexin", "@ai-sdk/azure")).toBe(true)
     expect(ProviderTransform.shouldNormalizeRequestBody("hexin", "@ai-sdk/openai-compatible")).toBe(true)
-    expect(ProviderTransform.shouldNormalizeRequestBody("deepseek", "@ai-sdk/openai-compatible")).toBe(
-      true,
-    )
+    expect(ProviderTransform.shouldNormalizeRequestBody("deepseek", "@ai-sdk/openai-compatible")).toBe(true)
     expect(ProviderTransform.shouldNormalizeRequestBody("openai", "@ai-sdk/openai")).toBe(false)
   })
 })

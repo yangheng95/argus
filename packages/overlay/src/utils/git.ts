@@ -2,18 +2,18 @@
 // boardGitCheckpoints .
 // Also includes canInitGit and initGitCurrent (lines 4258–4391).
 
-import { t } from "./i18n";
-import { apiJson } from "../services/api";
-import { appStore } from "../store/app";
-import { boardStore } from "../store/board";
-import { showAppDialog } from "../services/app-dialog";
-import { activeDirectory, clearProjectScopeData } from "../services/workspace";
-import { reloadProjectScope } from "../services/config";
+import { t } from "./i18n"
+import { apiJson } from "../services/api"
+import { appStore } from "../store/app"
+import { boardStore } from "../store/board"
+import { showAppDialog } from "../services/app-dialog"
+import { activeDirectory, clearProjectScopeData } from "../services/workspace"
+import { reloadProjectScope } from "../services/config"
 
 // ── Internal helpers ──
 
 function record(value: any): boolean {
-  return !!value && typeof value === "object" && !Array.isArray(value);
+  return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
 // ── Exported functions ──
@@ -21,13 +21,9 @@ function record(value: any): boolean {
 /** Return the section heading for a git checkpoint card. */
 export function gitCheckpointTitle(stage: string, mode: string): string {
   if (stage === "baseline") {
-    return mode === "created_commit"
-      ? t("chat.git.baseline_created")
-      : t("chat.git.baseline_recorded");
+    return mode === "created_commit" ? t("chat.git.baseline_created") : t("chat.git.baseline_recorded")
   }
-  return mode === "created_commit"
-    ? t("chat.git.result_created")
-    : t("chat.git.result_recorded");
+  return mode === "created_commit" ? t("chat.git.result_created") : t("chat.git.result_recorded")
 }
 
 /**
@@ -35,14 +31,10 @@ export function gitCheckpointTitle(stage: string, mode: string): string {
  * Returns an empty string when `value` is falsy.
  * Pass `{ code: true }` to wrap the value in backticks.
  */
-export function gitCheckpointLine(
-  key: string,
-  value: any,
-  options: { code?: boolean } = {},
-): string {
-  if (!value) return "";
-  const text = options.code ? `\`${value}\`` : String(value);
-  return `- ${t(key)}: ${text}`;
+export function gitCheckpointLine(key: string, value: any, options: { code?: boolean } = {}): string {
+  if (!value) return ""
+  const text = options.code ? `\`${value}\`` : String(value)
+  return `- ${t(key)}: ${text}`
 }
 
 /**
@@ -50,12 +42,12 @@ export function gitCheckpointLine(
  * The item shape mirrors the objects returned by `boardGitCheckpoints`.
  */
 export function gitCheckpointText(item: {
-  stage: string;
-  mode: string;
-  message?: string;
-  branch?: string;
-  commit?: string;
-  snapshot?: string;
+  stage: string
+  mode: string
+  message?: string
+  branch?: string
+  commit?: string
+  snapshot?: string
 }): string {
   return [
     `**${gitCheckpointTitle(item.stage, item.mode)}**`,
@@ -68,18 +60,18 @@ export function gitCheckpointText(item: {
       : "",
   ]
     .filter(Boolean)
-    .join("\n");
+    .join("\n")
 }
 
 /** The shape of a normalised git checkpoint entry. */
 export interface GitCheckpoint {
-  stage: string;
-  mode: string;
-  branch: string;
-  commit: string;
-  message: string;
-  snapshot: string;
-  time: number;
+  stage: string
+  mode: string
+  branch: string
+  commit: string
+  message: string
+  snapshot: string
+  time: number
 }
 
 /**
@@ -88,15 +80,15 @@ export interface GitCheckpoint {
  * Returns checkpoints sorted by creation time (ascending).
  */
 export function boardGitCheckpoints(board: any): GitCheckpoint[] {
-  const out: GitCheckpoint[] = [];
-  const meta = record(board?.task?.metadata) ? board.task.metadata : null;
-  const git = record(meta?.git) ? meta.git : null;
+  const out: GitCheckpoint[] = []
+  const meta = record(board?.task?.metadata) ? board.task.metadata : null
+  const git = record(meta?.git) ? meta.git : null
 
   for (const stage of ["baseline", "result"]) {
-    const item = record(git?.[stage]) ? git[stage] : null;
-    if (!item) continue;
-    const time = Number(item.time);
-    if (!Number.isFinite(time)) continue;
+    const item = record(git?.[stage]) ? git[stage] : null
+    if (!item) continue
+    const time = Number(item.time)
+    if (!Number.isFinite(time)) continue
     out.push({
       stage,
       mode: typeof item.mode === "string" ? item.mode : "recorded_head",
@@ -105,10 +97,10 @@ export function boardGitCheckpoints(board: any): GitCheckpoint[] {
       message: typeof item.message === "string" ? item.message : "",
       snapshot: typeof item.snapshot === "string" ? item.snapshot : "",
       time,
-    });
+    })
   }
 
-  return out.sort((a, b) => a.time - b.time);
+  return out.sort((a, b) => a.time - b.time)
 }
 
 // ── Git Init Utilities ──
@@ -118,7 +110,7 @@ export function boardGitCheckpoints(board: any): GitCheckpoint[] {
  * and the directory has no git VCS branch yet (i.e. git is not initialised).
  */
 export function canInitGit(): boolean {
-  return !!activeDirectory() && appStore.connected && boardStore.vcs !== null && !boardStore.vcs?.initialized;
+  return !!activeDirectory() && appStore.connected && boardStore.vcs !== null && !boardStore.vcs?.initialized
 }
 
 /**
@@ -127,25 +119,23 @@ export function canInitGit(): boolean {
  * shows a native notification. Returns true on success, false on error.
  */
 export async function initGitCurrent(options: { notify?: boolean } = {}): Promise<boolean> {
-  const dir = activeDirectory();
-  if (!dir || !canInitGit()) return false;
+  const dir = activeDirectory()
+  if (!dir || !canInitGit()) return false
   try {
-    const result = await apiJson("project/current/init-git", { method: "POST" });
- // Reload project scope after git init (config, extensions, meta).
-    clearProjectScopeData();
-    await reloadProjectScope({ restoreWorkspace: false });
+    const result = await apiJson("project/current/init-git", { method: "POST" })
+    // Reload project scope after git init (config, extensions, meta).
+    clearProjectScopeData()
+    await reloadProjectScope({ restoreWorkspace: false })
     if (options.notify !== false) {
-      const msg = result?.created
-        ? t("git.init_done", { dir })
-        : t("git.init_exists", { dir });
-      await showAppDialog({ title: t("git.init"), message: msg, kind: "info" });
+      const msg = result?.created ? t("git.init_done", { dir }) : t("git.init_exists", { dir })
+      await showAppDialog({ title: t("git.init"), message: msg, kind: "info" })
     }
-    return true;
+    return true
   } catch (e) {
-    console.error("[git] Failed to initialize Git", e);
+    console.error("[git] Failed to initialize Git", e)
     if (options.notify !== false) {
-      await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" });
+      await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" })
     }
-    return false;
+    return false
   }
 }

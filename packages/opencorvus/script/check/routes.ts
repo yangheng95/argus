@@ -25,14 +25,16 @@ const RULES: Rule[] = [
   },
   {
     name: "no-storage-db-import",
-    description:
-      "routes/ must not import from @/storage/db or ../storage/db except for the NotFoundError type",
+    description: "routes/ must not import from @/storage/db or ../storage/db except for the NotFoundError type",
     match: (line) => {
       if (!/from\s+["'](@\/storage\/db|\.\.\/+storage\/db)["']/.test(line)) return false
       // Allow imports that only pull NotFoundError (a typed error class).
       const importMatch = line.match(/import\s+\{\s*([^}]+)\s*\}\s+from/)
       if (!importMatch) return true
-      const names = importMatch[1].split(",").map((s) => s.trim()).filter(Boolean)
+      const names = importMatch[1]
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
       return names.some((n) => n !== "NotFoundError" && n !== "type NotFoundError")
     },
   },
@@ -43,8 +45,7 @@ const RULES: Rule[] = [
   },
   {
     name: "no-process-env",
-    description:
-      "routes/ must not read or write process.env — use Flag, Env.snapshot(), or a service-layer helper",
+    description: "routes/ must not read or write process.env — use Flag, Env.snapshot(), or a service-layer helper",
     match: (line) => /\bprocess\.env\b/.test(line),
   },
   {
@@ -106,7 +107,7 @@ function normalizeRuntimePath(input: string) {
 }
 
 async function runtimeRoutes() {
-  const app = await Server.routeInventoryApp() as unknown as {
+  const app = (await Server.routeInventoryApp()) as unknown as {
     routes: Array<{ method: string; path: string }>
   }
   const routes = new Set<string>()

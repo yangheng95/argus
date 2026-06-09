@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { ensureGitignore } from "../../src/engine/git"
+import { InternalGitCommitSubject } from "../../src/engine/internal-git-commit-subject"
 import { tmpdir } from "../fixture/fixture"
 
 async function gitTracked(dir: string, target: string) {
@@ -14,6 +15,30 @@ async function gitTracked(dir: string, target: string) {
 async function commit(dir: string, files: string[], message: string) {
   for (const rel of files) await $`git add -- ${rel}`.cwd(dir).quiet()
   await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${message}`.cwd(dir).quiet()
+}
+
+async function installStrictMaintenanceCommitHook(dir: string) {
+  const hookDir = path.join(dir, ".husky")
+  await fs.mkdir(hookDir, { recursive: true })
+  await fs.writeFile(
+    path.join(hookDir, "commit-msg"),
+    [
+      "#!/bin/sh",
+      "subject=$(sed -n '1p' \"$1\")",
+      "root=$(git rev-parse --show-toplevel)",
+      "printf '%s\\n' \"$subject\" >> \"$root/.hook-subjects\"",
+      "case \"$subject\" in",
+      "  'chore seed baseline .gitignore') exit 0 ;;",
+      "  'chore untrack opencorvus ignored paths') exit 0 ;;",
+      "  chore\\(*|chore:*) exit 1 ;;",
+      "  *) exit 0 ;;",
+      "esac",
+      "",
+    ].join("\n"),
+    "utf8",
+  )
+  await fs.chmod(path.join(hookDir, "commit-msg"), 0o755)
+  await $`git config core.hooksPath .husky`.cwd(dir).quiet()
 }
 
 describe("ensureGitignore", () => {
@@ -58,9 +83,13 @@ describe("ensureGitignore", () => {
     // goal with `WorktreeCreateFailedError` (observed on the gemini chat
     // task 2026-04-29). Regression test pins the contract: "ensureGitignore
     // returning on a fresh repo means HEAD has the .gitignore committed".
-    const dirpath = path.join((await import("os")).tmpdir(), "opencorvus-test-fresh-" + Math.random().toString(36).slice(2))
+    const dirpath = path.join(
+      (await import("os")).tmpdir(),
+      "opencorvus-test-fresh-" + Math.random().toString(36).slice(2),
+    )
     await fs.mkdir(dirpath, { recursive: true })
     await $`git init`.cwd(dirpath).quiet()
+    await installStrictMaintenanceCommitHook(dirpath)
     // explicitly NOT creating a root commit — this is the greenfield case
 
     await Instance.provide({
@@ -74,6 +103,10 @@ describe("ensureGitignore", () => {
     expect(head.exitCode).toBe(0)
     const headTree = await $`git ls-tree --name-only HEAD`.cwd(dirpath).quiet()
     expect(headTree.stdout.toString()).toContain(".gitignore")
+    const subject = (await $`git log --format=%s -1 HEAD`.cwd(dirpath).text()).trim()
+    expect(subject).toBe(InternalGitCommitSubject.seedGitignore)
+    const hookSubjects = await fs.readFile(path.join(dirpath, ".hook-subjects"), "utf8")
+    expect(hookSubjects.trim()).toBe(InternalGitCommitSubject.seedGitignore)
   })
 
   test("untracks opencorvus runtime paths and root artifacts committed before the ignore existed", async () => {
@@ -89,6 +122,7 @@ describe("ensureGitignore", () => {
     await Bun.write(path.join(tmp.path, staticConfig), "static config\n")
     await Bun.write(path.join(tmp.path, visualArtifact), "png bytes\n")
     await commit(tmp.path, [".opencorvus-meta.json", runtimeIntent, staticConfig, visualArtifact], "leak scratch")
+    await installStrictMaintenanceCommitHook(tmp.path)
 
     expect(await gitTracked(tmp.path, ".opencorvus-meta.json")).toBe(true)
     expect(await gitTracked(tmp.path, runtimeIntent)).toBe(true)
@@ -117,5 +151,8 @@ describe("ensureGitignore", () => {
     expect(config).toContain("static config")
     const artifact = await fs.readFile(path.join(tmp.path, visualArtifact), "utf8")
     expect(artifact).toContain("png bytes")
+    const subjects = (await fs.readFile(path.join(tmp.path, ".hook-subjects"), "utf8")).trim().split(/\r?\n/)
+    expect(subjects).toContain(InternalGitCommitSubject.untrackIgnoredPaths)
+    expect(subjects).toContain(InternalGitCommitSubject.seedGitignore)
   })
 })

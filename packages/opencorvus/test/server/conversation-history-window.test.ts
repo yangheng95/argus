@@ -19,11 +19,7 @@ function message(id: string, sessionID: string, created: number) {
 }
 
 test("conversation tail window uses a stable message-id cursor for same-timestamp history", () => {
-  const transcript = [
-    message("msg_a", "ses_a", 100),
-    message("msg_b", "ses_b", 100),
-    message("msg_c", "ses_c", 200),
-  ]
+  const transcript = [message("msg_a", "ses_a", 100), message("msg_b", "ses_b", 100), message("msg_c", "ses_c", 200)]
 
   const tail = __conversationHistoryWindowForTest(transcript, [], { tailLimit: 2 })
 
@@ -46,10 +42,7 @@ test("conversation tail window uses a stable message-id cursor for same-timestam
 })
 
 test("conversation history page keeps timeline events throughout the requested timestamp window", () => {
-  const transcript = [
-    message("msg_old", "ses_old", 100),
-    message("msg_boundary", "ses_boundary", 300),
-  ]
+  const transcript = [message("msg_old", "ses_old", 100), message("msg_boundary", "ses_boundary", 300)]
   const timeline = [
     { id: "tl_old", timestamp: 120 },
     { id: "tl_gap", timestamp: 250 },

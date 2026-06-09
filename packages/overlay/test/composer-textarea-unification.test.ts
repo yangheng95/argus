@@ -72,8 +72,6 @@ describe(".composer-textarea re-enables a visible scrollbar (goal-dialog clip fi
     // base.css sets `scrollbar-width: none` + `width: 0` globally; this surface
     // must override both, or long content clips with no gutter (the bug).
     expect(field).toMatch(/\.composer-textarea\s*\{[^}]*scrollbar-width:\s*thin/)
-    expect(field).toMatch(
-      /\.composer-textarea::-webkit-scrollbar\s*\{[^}]*width:\s*var\(--session-scrollbar-size\)/,
-    )
+    expect(field).toMatch(/\.composer-textarea::-webkit-scrollbar\s*\{[^}]*width:\s*var\(--session-scrollbar-size\)/)
   })
 })

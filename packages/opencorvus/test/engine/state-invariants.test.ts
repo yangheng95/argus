@@ -1,15 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import {
-  Database,
-  count,
-  eq,
-  and,
-  inArray,
-  sql,
-} from "../../src/storage/db"
-import {
-  EngineArtifactTable,
-} from "../../src/engine/engine.sql"
+import { Database, count, eq, and, inArray, sql } from "../../src/storage/db"
+import { EngineArtifactTable } from "../../src/engine/engine.sql"
 import { listGoalRunsByGoal, listGoalRunsForTask } from "../../src/engine/store"
 
 /**
@@ -47,10 +38,7 @@ describe("engine state invariants", () => {
           .select({ id: EngineArtifactTable.id })
           .from(EngineArtifactTable)
           .where(
-            and(
-              eq(EngineArtifactTable.acceptance_id, d.id),
-              eq(EngineArtifactTable.kind, "verification-evidence"),
-            ),
+            and(eq(EngineArtifactTable.acceptance_id, d.id), eq(EngineArtifactTable.kind, "verification-evidence")),
           )
           .all(),
       )
@@ -78,9 +66,7 @@ describe("engine state invariants", () => {
     const violations: Array<{ goalID: string; liveTips: string[] }> = []
     for (const goalID of distinctGoalIDs) {
       const goalRuns = listGoalRunsByGoal(goalID)
-      const supersededIDs = new Set(
-        goalRuns.map((r) => r.supersede_of).filter((x): x is string => !!x),
-      )
+      const supersededIDs = new Set(goalRuns.map((r) => r.supersede_of).filter((x): x is string => !!x))
       const tips = goalRuns.filter((r) => !supersededIDs.has(r.id))
       const liveTips = tips.filter((r) => liveStatuses.includes(r.status as (typeof liveStatuses)[number]))
       if (liveTips.length > 1) {
@@ -109,12 +95,7 @@ describe("engine state invariants", () => {
         db
           .select()
           .from(EngineArtifactTable)
-          .where(
-            and(
-              eq(EngineArtifactTable.goal_run_id, id),
-              eq(EngineArtifactTable.kind, "goal_run_attempt"),
-            ),
-          )
+          .where(and(eq(EngineArtifactTable.goal_run_id, id), eq(EngineArtifactTable.kind, "goal_run_attempt")))
           .orderBy(sql`${EngineArtifactTable.time_created} DESC`)
           .get(),
       )
@@ -142,12 +123,7 @@ describe("engine state invariants", () => {
         db
           .select()
           .from(EngineArtifactTable)
-          .where(
-            and(
-              eq(EngineArtifactTable.goal_run_id, id),
-              eq(EngineArtifactTable.kind, "goal_run_attempt"),
-            ),
-          )
+          .where(and(eq(EngineArtifactTable.goal_run_id, id), eq(EngineArtifactTable.kind, "goal_run_attempt")))
           .orderBy(sql`${EngineArtifactTable.time_created} DESC`)
           .get(),
       )

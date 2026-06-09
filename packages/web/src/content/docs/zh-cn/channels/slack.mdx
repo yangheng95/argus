@@ -19,18 +19,18 @@ Slack 是 OpenCorvus 的**首选远程 channel**，也是 channel-runtime 对接
 
 Bot Token Scopes（最小集）：
 
-| Scope | 用途 |
-|---|---|
-| `chat:write` | 回复消息 |
-| `chat:write.public` | 在未加入的频道回复（可选） |
-| `files:write` | 上传截图 / 附件 |
-| `im:history` / `channels:history` | 读取 DM / 频道消息 |
-| `reactions:write` | Ack emoji（可选） |
+| Scope                             | 用途                       |
+| --------------------------------- | -------------------------- |
+| `chat:write`                      | 回复消息                   |
+| `chat:write.public`               | 在未加入的频道回复（可选） |
+| `files:write`                     | 上传截图 / 附件            |
+| `im:history` / `channels:history` | 读取 DM / 频道消息         |
+| `reactions:write`                 | Ack emoji（可选）          |
 
 App-Level Token Scope：
 
-| Scope | 用途 |
-|---|---|
+| Scope               | 用途             |
+| ------------------- | ---------------- |
 | `connections:write` | Socket Mode 连接 |
 
 ### 3. 订阅事件
@@ -77,11 +77,11 @@ bun run dev
 
 三种 token 职责分明：
 
-| Token | 前缀 | 职责 |
-|---|---|---|
-| Bot Token | `xoxb-` | 代表 bot 的身份调 API（发消息、上传文件） |
-| App Token | `xapp-` | 建立 Socket Mode WebSocket |
-| Signing Secret | 无前缀 | 验证 HTTP webhook 签名（Socket Mode 下不用） |
+| Token          | 前缀    | 职责                                         |
+| -------------- | ------- | -------------------------------------------- |
+| Bot Token      | `xoxb-` | 代表 bot 的身份调 API（发消息、上传文件）    |
+| App Token      | `xapp-` | 建立 Socket Mode WebSocket                   |
+| Signing Secret | 无前缀  | 验证 HTTP webhook 签名（Socket Mode 下不用） |
 
 ## 消息流
 

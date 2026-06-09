@@ -12,7 +12,7 @@ describe("build agent prompt context", () => {
         acceptanceFeedback:
           "Acceptance review rejected the integrated deliverable.\n" +
           "Canonical acceptance feedback packet (JSON, copied from persisted artifacts):\n" +
-          "```json\n{\"manifest\":{\"finalGate\":{\"failedReviewIds\":[\"review:contract_audit\"]}}}\n```",
+          '```json\n{"manifest":{"finalGate":{"failedReviewIds":["review:contract_audit"]}}}\n```',
       },
     )
 
@@ -145,9 +145,13 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("active REQ-N rows are the implementation contract")
     expect(prompt).toContain("map each requirement that touches your goal/request")
     expect(prompt).toContain("Do not treat PRD/research/design material as optional background")
-    expect(prompt).toContain("read the PRD/frontend_design material and any frontend_research investigation packets in page chunks")
+    expect(prompt).toContain(
+      "read the PRD/frontend_design material and any frontend_research investigation packets in page chunks",
+    )
     expect(prompt).toContain("identify the component kind for each chunk")
-    expect(prompt).toContain("All visible content must be componentized and fed by props, data modules, fixtures, or API adapters")
+    expect(prompt).toContain(
+      "All visible content must be componentized and fed by props, data modules, fixtures, or API adapters",
+    )
     expect(prompt).toContain("instead of hardcoded directly into page wrappers, generated SVG, or one-off JSX literals")
     expect(prompt).toContain("Charts, maps, heatmaps, geographic visualizations")
     expect(prompt).toContain("Do not replace a chart/map/heatmap with a flat SVG/image/decorative vector")
@@ -230,9 +234,7 @@ describe("build agent prompt context", () => {
 
     expect(prompt).toContain("## Persistent Integrity Findings")
     expect(prompt).toContain("BF-direct")
-    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(
-      prompt.indexOf("## Prior Attempt Failed"),
-    )
+    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(prompt.indexOf("## Prior Attempt Failed"))
     expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(prompt.indexOf("# Request"))
   })
 
@@ -323,13 +325,15 @@ describe("build agent prompt context", () => {
         depends_on: [],
       },
       {
-        designSpecs: [{
-          severity: "high",
-          category: "layout",
-          title: "Hero layout",
-          requirement: "Two-column hero with exact spacing.",
-          applies_to: "hero",
-        }],
+        designSpecs: [
+          {
+            severity: "high",
+            category: "layout",
+            title: "Hero layout",
+            requirement: "Two-column hero with exact spacing.",
+            applies_to: "hero",
+          },
+        ],
       } as any,
     )
 
@@ -351,25 +355,31 @@ describe("build agent prompt context", () => {
       },
       {
         fidelity: {
-          sourceCoverage: [{
-            id: "src-app-shell",
-            paths: ["src/App.tsx"],
-            goal_ids: ["gol_visual"],
-            action: "modify",
-            rationale: "This goal must adapt the existing app shell rather than bypass it.",
-          }],
-          referenceCoverage: [{
-            id: "ref-hero",
-            surface: "hero",
-            goal_ids: ["gol_visual"],
-            visual_spec_ids: ["vis-hero"],
-            expectation: "Restore the hero 1:1 from the reference.",
-          }],
-          assemblyOwners: [{
-            surface: "final-deliverable",
-            goal_id: "gol_visual",
-            rationale: "This goal owns final stitching for the deliverable shell.",
-          }],
+          sourceCoverage: [
+            {
+              id: "src-app-shell",
+              paths: ["src/App.tsx"],
+              goal_ids: ["gol_visual"],
+              action: "modify",
+              rationale: "This goal must adapt the existing app shell rather than bypass it.",
+            },
+          ],
+          referenceCoverage: [
+            {
+              id: "ref-hero",
+              surface: "hero",
+              goal_ids: ["gol_visual"],
+              visual_spec_ids: ["vis-hero"],
+              expectation: "Restore the hero 1:1 from the reference.",
+            },
+          ],
+          assemblyOwners: [
+            {
+              surface: "final-deliverable",
+              goal_id: "gol_visual",
+              rationale: "This goal owns final stitching for the deliverable shell.",
+            },
+          ],
         },
       } as any,
     )
@@ -506,8 +516,7 @@ describe("build agent prompt context", () => {
           "# Frontend Research Brief (webpage investigation division)\n\n" +
           "work_packet: verify whether the floating tab bar appears after scroll and switches economic indicators.",
         frontendDesign:
-          "# Frontend Design Public Report\n\n" +
-          "- key=visual_consistency_contract value=Match the researched page.",
+          "# Frontend Design Public Report\n\n" + "- key=visual_consistency_contract value=Match the researched page.",
       },
     )
 
@@ -518,7 +527,9 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("read the named work packets")
     expect(prompt).toContain("Preserve component-kind hypotheses unless deeper evidence disproves them")
     expect(prompt).toContain("do not flatten it into SVG/image markup")
-    expect(prompt).toContain("Use requirements, architect contracts, and frontend_design as the binding implementation contract")
+    expect(prompt).toContain(
+      "Use requirements, architect contracts, and frontend_design as the binding implementation contract",
+    )
     expect(prompt).toContain("floating tab bar appears after scroll")
     expect(prompt.indexOf("## Frontend Research Investigation Plan")).toBeLessThan(
       prompt.indexOf("## Frontend Design Handoff"),
@@ -581,7 +592,9 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("web-clone-source/source-skeleton/critical.css")
     expect(prompt).toContain("web-clone-source-skeleton-consumption-audit.json passed")
     expect(prompt).toContain("Treat `.opencorvus/runtime/tasks/<taskID>/frontend-design/` as read-only input")
-    expect(prompt).toContain("Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `webpage-evidence/`, `references/`, or top-level `reference.png`")
+    expect(prompt).toContain(
+      "Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `webpage-evidence/`, `references/`, or top-level `reference.png`",
+    )
     expect(prompt).toContain("work from the frontend_design refined source first")
     expect(prompt).toContain("use the mismatch report for source-backed precision repair")
     expect(prompt).toContain("CSS repair must be source-backed")

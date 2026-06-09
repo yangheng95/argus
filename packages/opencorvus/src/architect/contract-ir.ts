@@ -9,7 +9,8 @@ export const ValueDomainSchema = z.discriminatedUnion("kind", [
       .describe(
         "open — value is an unconstrained instance of typeExpr. Requires a concrete reason (TBD/unknown rejected).",
       ),
-    reason: z.string()
+    reason: z
+      .string()
       .refine((value) => value.trim().length > 0, {
         message: "open valueDomain requires a concrete reason",
       })
@@ -32,19 +33,17 @@ export const ValueDomainSchema = z.discriminatedUnion("kind", [
     brand: z.string().min(1),
     examples: z.array(z.string().min(1)).min(1),
   }),
+  z
+    .object({
+      kind: z.literal("numeric_range").describe("numeric_range — a bounded number. Requires min and/or max."),
+      min: z.number().optional(),
+      max: z.number().optional(),
+    })
+    .refine((value) => value.min !== undefined || value.max !== undefined, {
+      message: "numeric_range requires min or max",
+    }),
   z.object({
-    kind: z
-      .literal("numeric_range")
-      .describe("numeric_range — a bounded number. Requires min and/or max."),
-    min: z.number().optional(),
-    max: z.number().optional(),
-  }).refine((value) => value.min !== undefined || value.max !== undefined, {
-    message: "numeric_range requires min or max",
-  }),
-  z.object({
-    kind: z
-      .literal("ref")
-      .describe("ref — value is governed by another contract. Requires contractName."),
+    kind: z.literal("ref").describe("ref — value is governed by another contract. Requires contractName."),
     contractName: z.string().min(1),
   }),
 ])
@@ -90,10 +89,14 @@ export const ContractIRSchema = z.discriminatedUnion("kind", [
         "enum — closed enumeration. Requires name and variants[] (value + meaning). ir.kind must equal the graph contract kind.",
       ),
     name: z.string().min(1),
-    variants: z.array(z.object({
-      value: z.string().min(1),
-      meaning: z.string().min(1),
-    })).min(1),
+    variants: z
+      .array(
+        z.object({
+          value: z.string().min(1),
+          meaning: z.string().min(1),
+        }),
+      )
+      .min(1),
   }),
 ])
 
@@ -139,12 +142,9 @@ export function auditEligibleFieldsForSymbols(input: {
   return fields
 }
 
-export function auditEligibleSymbols(input: {
-  index: Map<string, ContractIR>
-  symbols: readonly string[]
-}): string[] {
-  return input.symbols.filter((symbol) =>
-    auditEligibleFieldsForSymbols({ index: input.index, symbols: [symbol] }).length > 0
+export function auditEligibleSymbols(input: { index: Map<string, ContractIR>; symbols: readonly string[] }): string[] {
+  return input.symbols.filter(
+    (symbol) => auditEligibleFieldsForSymbols({ index: input.index, symbols: [symbol] }).length > 0,
   )
 }
 
@@ -153,8 +153,10 @@ export function closedStringValuesForValueDomain(
   index: Map<string, ContractIR>,
 ): string[] | undefined {
   if (domain.kind === "literal_union") return domain.values
-  if (domain.kind === "ref") return closedStringValuesFromContract(index.get(domain.contractName), index, new Set([domain.contractName]))
-  if (domain.kind === "branded") return closedStringValuesFromContract(index.get(domain.brand), index, new Set([domain.brand]))
+  if (domain.kind === "ref")
+    return closedStringValuesFromContract(index.get(domain.contractName), index, new Set([domain.contractName]))
+  if (domain.kind === "branded")
+    return closedStringValuesFromContract(index.get(domain.brand), index, new Set([domain.brand]))
   return undefined
 }
 
@@ -189,7 +191,9 @@ export function renderContractIR(ir: ContractIR): string {
   if (ir.kind === "type") {
     lines.push(`type ${ir.name}`)
     for (const field of ir.fields) {
-      lines.push(`- ${field.name}: ${field.typeExpr}; domain=${renderValueDomain(field.valueDomain)}${field.semantic ? `; semantic=${field.semantic}` : ""}`)
+      lines.push(
+        `- ${field.name}: ${field.typeExpr}; domain=${renderValueDomain(field.valueDomain)}${field.semantic ? `; semantic=${field.semantic}` : ""}`,
+      )
     }
     return lines.join("\n")
   }
@@ -197,9 +201,13 @@ export function renderContractIR(ir: ContractIR): string {
     lines.push(`function ${ir.name}`)
     lines.push("params:")
     for (const param of ir.params) {
-      lines.push(`- ${param.name}: ${param.typeExpr}; domain=${renderValueDomain(param.valueDomain)}${param.semantic ? `; semantic=${param.semantic}` : ""}`)
+      lines.push(
+        `- ${param.name}: ${param.typeExpr}; domain=${renderValueDomain(param.valueDomain)}${param.semantic ? `; semantic=${param.semantic}` : ""}`,
+      )
     }
-    lines.push(`returns: ${ir.returns.typeExpr}; domain=${renderValueDomain(ir.returns.valueDomain)}${ir.returns.semantic ? `; semantic=${ir.returns.semantic}` : ""}`)
+    lines.push(
+      `returns: ${ir.returns.typeExpr}; domain=${renderValueDomain(ir.returns.valueDomain)}${ir.returns.semantic ? `; semantic=${ir.returns.semantic}` : ""}`,
+    )
     return lines.join("\n")
   }
   lines.push(`enum ${ir.name}`)
@@ -211,8 +219,10 @@ export function renderContractIR(ir: ContractIR): string {
 
 function renderValueDomain(domain: ValueDomain): string {
   if (domain.kind === "open") return `open(reason=${domain.reason})`
-  if (domain.kind === "literal_union") return `literal_union(${domain.values.map((value) => JSON.stringify(value)).join(" | ")})`
-  if (domain.kind === "branded") return `branded(${domain.brand}; examples=${domain.examples.map((value) => JSON.stringify(value)).join(", ")})`
+  if (domain.kind === "literal_union")
+    return `literal_union(${domain.values.map((value) => JSON.stringify(value)).join(" | ")})`
+  if (domain.kind === "branded")
+    return `branded(${domain.brand}; examples=${domain.examples.map((value) => JSON.stringify(value)).join(", ")})`
   if (domain.kind === "numeric_range") return `numeric_range(min=${domain.min ?? "-inf"}, max=${domain.max ?? "+inf"})`
   return `ref(${domain.contractName})`
 }

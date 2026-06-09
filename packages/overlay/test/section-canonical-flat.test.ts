@@ -31,9 +31,7 @@ const CASCADE_FILES = [
   "cascade/light.css",
   "cascade/vscode-dark.css",
 ]
-const RAW = CASCADE_FILES
-  .map((rel) => readFileSync(path.join(STYLES_DIR, rel), "utf8"))
-  .join("\n")
+const RAW = CASCADE_FILES.map((rel) => readFileSync(path.join(STYLES_DIR, rel), "utf8")).join("\n")
 const STYLES = RAW.replace(/\/\*[\s\S]*?\*\//g, "")
 const INSPECTOR_RAW = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "inspector.css"),
@@ -81,14 +79,7 @@ describe(".section legacy chrome was retired in favour of .oc-section", () => {
 
   test(".oc-section primitive carries the section structural contract", () => {
     const primitiveRaw = readFileSync(
-      path.resolve(
-        import.meta.dir,
-        "..",
-        "src",
-        "styles",
-        "primitives",
-        "section.css",
-      ),
+      path.resolve(import.meta.dir, "..", "src", "styles", "primitives", "section.css"),
       "utf8",
     )
     const primitive = primitiveRaw.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -97,14 +88,7 @@ describe(".section legacy chrome was retired in favour of .oc-section", () => {
 
   test(".oc-section primitive intentionally omits surface chrome (background/border/box-shadow)", () => {
     const primitiveRaw = readFileSync(
-      path.resolve(
-        import.meta.dir,
-        "..",
-        "src",
-        "styles",
-        "primitives",
-        "section.css",
-      ),
+      path.resolve(import.meta.dir, "..", "src", "styles", "primitives", "section.css"),
       "utf8",
     )
     const primitive = primitiveRaw.replace(/\/\*[\s\S]*?\*\//g, "")

@@ -1,31 +1,33 @@
-import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { launchBrowser } from "./launch";
+import { expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+import { launchBrowser } from "./launch"
 
 function cssRule(css: string, pattern: RegExp, label: string): string {
-  const match = css.match(pattern)?.[0];
-  if (!match) throw new Error(`missing CSS rule: ${label}`);
-  return match;
+  const match = css.match(pattern)?.[0]
+  if (!match) throw new Error(`missing CSS rule: ${label}`)
+  return match
 }
 
-test("browser keeps a long transcript pinned without dynamic scrollbar resizing", async () => {
-  const conversationCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8");
-  const bubbleCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/chat-bubble.css"), "utf8");
-  const cardCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/card.css"), "utf8");
-  const structuredCardRule = cssRule(
-    conversationCss,
-    /\.conversation-virtual-item > \.card,\s*\.conversation-virtual-item > \.interaction-card\s*\{[^}]*\}/,
-    "virtualized conversation card containment",
-  );
-  const bubbleRowRule = cssRule(bubbleCss, /\.chat-bubble-row\s*\{[^}]*\}/, "chat bubble row containment");
-  const cardRule = cssRule(cardCss, /\.card\s*\{[^}]*\}/, "base card");
+test(
+  "browser keeps a long transcript pinned without dynamic scrollbar resizing",
+  async () => {
+    const conversationCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
+    const bubbleCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/chat-bubble.css"), "utf8")
+    const cardCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/card.css"), "utf8")
+    const structuredCardRule = cssRule(
+      conversationCss,
+      /\.conversation-virtual-item > \.card,\s*\.conversation-virtual-item > \.interaction-card\s*\{[^}]*\}/,
+      "virtualized conversation card containment",
+    )
+    const bubbleRowRule = cssRule(bubbleCss, /\.chat-bubble-row\s*\{[^}]*\}/, "chat bubble row containment")
+    const cardRule = cssRule(cardCss, /\.card\s*\{[^}]*\}/, "base card")
 
-  const browser = await launchBrowser(["--disable-dev-shm-usage"]);
-  try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 900, height: 700 });
-    await page.setContent(`
+    const browser = await launchBrowser(["--disable-dev-shm-usage"])
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 900, height: 700 })
+      await page.setContent(`
       <!doctype html>
       <style>
         :root {
@@ -81,112 +83,116 @@ test("browser keeps a long transcript pinned without dynamic scrollbar resizing"
         }
       </style>
       <main id="scroll" class="chat-scroll" data-follow-lock="true"></main>
-    `);
+    `)
 
-    const metrics = await page.evaluate(async () => {
-      const scroll = document.getElementById("scroll") as HTMLElement;
-      const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      const appendCard = (index: number) => {
-        const item = document.createElement("div");
-        item.className = "conversation-virtual-item";
-        const card = document.createElement("section");
-        card.className = "card";
-        card.textContent = `card ${index} ${"content ".repeat(18)}`;
-        if (index % 9 === 0) {
-          const nested = document.createElement("section");
-          nested.className = "card nested-card";
-          nested.textContent = `nested ${index} ${"detail ".repeat(14)}`;
-          card.appendChild(nested);
+      const metrics = await page.evaluate(async () => {
+        const scroll = document.getElementById("scroll") as HTMLElement
+        const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        const appendCard = (index: number) => {
+          const item = document.createElement("div")
+          item.className = "conversation-virtual-item"
+          const card = document.createElement("section")
+          card.className = "card"
+          card.textContent = `card ${index} ${"content ".repeat(18)}`
+          if (index % 9 === 0) {
+            const nested = document.createElement("section")
+            nested.className = "card nested-card"
+            nested.textContent = `nested ${index} ${"detail ".repeat(14)}`
+            card.appendChild(nested)
+          }
+          item.appendChild(card)
+          scroll.appendChild(item)
         }
-        item.appendChild(card);
-        scroll.appendChild(item);
-      };
-      const appendBubble = (index: number) => {
-        const item = document.createElement("div");
-        item.className = "conversation-virtual-item";
-        const row = document.createElement("div");
-        row.className = "chat-bubble-row";
-        row.dataset.role = index % 2 === 0 ? "assistant" : "user";
-        row.innerHTML = `<div class="chat-bubble">bubble ${index} ${"stream ".repeat(22)}</div>`;
-        item.appendChild(row);
-        scroll.appendChild(item);
-      };
+        const appendBubble = (index: number) => {
+          const item = document.createElement("div")
+          item.className = "conversation-virtual-item"
+          const row = document.createElement("div")
+          row.className = "chat-bubble-row"
+          row.dataset.role = index % 2 === 0 ? "assistant" : "user"
+          row.innerHTML = `<div class="chat-bubble">bubble ${index} ${"stream ".repeat(22)}</div>`
+          item.appendChild(row)
+          scroll.appendChild(item)
+        }
 
-      for (let i = 0; i < 180; i += 1) {
-        if (i % 3 === 0) appendCard(i);
-        else appendBubble(i);
-      }
-      scroll.scrollTop = scroll.scrollHeight;
-      await frame();
-      const initialTop = scroll.scrollTop;
-      let minTop = initialTop;
-      let maxDistance = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop;
+        for (let i = 0; i < 180; i += 1) {
+          if (i % 3 === 0) appendCard(i)
+          else appendBubble(i)
+        }
+        scroll.scrollTop = scroll.scrollHeight
+        await frame()
+        const initialTop = scroll.scrollTop
+        let minTop = initialTop
+        let maxDistance = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop
 
-      for (let i = 180; i < 240; i += 1) {
-        if (i % 3 === 0) appendCard(i);
-        else appendBubble(i);
-        scroll.scrollTop = scroll.scrollHeight;
-        await frame();
-        const distance = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop;
-        minTop = Math.min(minTop, scroll.scrollTop);
-        maxDistance = Math.max(maxDistance, distance);
-      }
+        for (let i = 180; i < 240; i += 1) {
+          if (i % 3 === 0) appendCard(i)
+          else appendBubble(i)
+          scroll.scrollTop = scroll.scrollHeight
+          await frame()
+          const distance = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop
+          minTop = Math.min(minTop, scroll.scrollTop)
+          maxDistance = Math.max(maxDistance, distance)
+        }
 
-      const topCard = scroll.querySelector(".conversation-virtual-item > .card") as HTMLElement;
-      const nestedCard = scroll.querySelector(".nested-card") as HTMLElement;
-      const bubbleRows = Array.from(scroll.querySelectorAll(".chat-bubble-row")) as HTMLElement[];
-      const bubbleRow = bubbleRows[bubbleRows.length - 1]!;
-      const stableScrollHeight = scroll.scrollHeight;
-      const sampledHeights: number[] = [];
-      for (const ratio of [0, 0.2, 0.5, 0.8, 1]) {
-        scroll.scrollTop = (scroll.scrollHeight - scroll.clientHeight) * ratio;
-        await frame();
-        sampledHeights.push(scroll.scrollHeight);
-      }
-      scroll.scrollTop = scroll.scrollHeight;
-      await frame();
+        const topCard = scroll.querySelector(".conversation-virtual-item > .card") as HTMLElement
+        const nestedCard = scroll.querySelector(".nested-card") as HTMLElement
+        const bubbleRows = Array.from(scroll.querySelectorAll(".chat-bubble-row")) as HTMLElement[]
+        const bubbleRow = bubbleRows[bubbleRows.length - 1]!
+        const stableScrollHeight = scroll.scrollHeight
+        const sampledHeights: number[] = []
+        for (const ratio of [0, 0.2, 0.5, 0.8, 1]) {
+          scroll.scrollTop = (scroll.scrollHeight - scroll.clientHeight) * ratio
+          await frame()
+          sampledHeights.push(scroll.scrollHeight)
+        }
+        scroll.scrollTop = scroll.scrollHeight
+        await frame()
 
-      return {
-        finalDistance: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
-        finalTop: scroll.scrollTop,
-        initialTop,
-        minTop,
-        maxDistance,
-        sampledHeights,
-        stableScrollHeight,
-        topCardContentVisibility: getComputedStyle(topCard).contentVisibility,
-        nestedCardContentVisibility: getComputedStyle(nestedCard).contentVisibility,
-        bubbleRowContentVisibility: getComputedStyle(bubbleRow).contentVisibility,
-      };
-    });
+        return {
+          finalDistance: scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop,
+          finalTop: scroll.scrollTop,
+          initialTop,
+          minTop,
+          maxDistance,
+          sampledHeights,
+          stableScrollHeight,
+          topCardContentVisibility: getComputedStyle(topCard).contentVisibility,
+          nestedCardContentVisibility: getComputedStyle(nestedCard).contentVisibility,
+          bubbleRowContentVisibility: getComputedStyle(bubbleRow).contentVisibility,
+        }
+      })
 
-    expect(metrics.topCardContentVisibility).toBe("visible");
-    expect(metrics.bubbleRowContentVisibility).toBe("visible");
-    expect(metrics.nestedCardContentVisibility).toBe("visible");
-    expect(metrics.sampledHeights).toEqual([
-      metrics.stableScrollHeight,
-      metrics.stableScrollHeight,
-      metrics.stableScrollHeight,
-      metrics.stableScrollHeight,
-      metrics.stableScrollHeight,
-    ]);
-    expect(metrics.minTop).toBeGreaterThanOrEqual(metrics.initialTop);
-    expect(metrics.maxDistance).toBeLessThanOrEqual(2);
-    expect(metrics.finalDistance).toBeLessThanOrEqual(2);
-    expect(metrics.finalTop).toBeGreaterThanOrEqual(metrics.initialTop);
+      expect(metrics.topCardContentVisibility).toBe("visible")
+      expect(metrics.bubbleRowContentVisibility).toBe("visible")
+      expect(metrics.nestedCardContentVisibility).toBe("visible")
+      expect(metrics.sampledHeights).toEqual([
+        metrics.stableScrollHeight,
+        metrics.stableScrollHeight,
+        metrics.stableScrollHeight,
+        metrics.stableScrollHeight,
+        metrics.stableScrollHeight,
+      ])
+      expect(metrics.minTop).toBeGreaterThanOrEqual(metrics.initialTop)
+      expect(metrics.maxDistance).toBeLessThanOrEqual(2)
+      expect(metrics.finalDistance).toBeLessThanOrEqual(2)
+      expect(metrics.finalTop).toBeGreaterThanOrEqual(metrics.initialTop)
 
-    await page.close();
-  } finally {
-    await browser.close().catch(() => undefined);
-  }
-}, { timeout: 15_000 });
+      await page.close()
+    } finally {
+      await browser.close().catch(() => undefined)
+    }
+  },
+  { timeout: 15_000 },
+)
 
-test("browser preserves the visible anchor while older history prepends", async () => {
-  const browser = await launchBrowser(["--disable-dev-shm-usage"]);
-  try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 900, height: 700 });
-    await page.setContent(`
+test(
+  "browser preserves the visible anchor while older history prepends",
+  async () => {
+    const browser = await launchBrowser(["--disable-dev-shm-usage"])
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 900, height: 700 })
+      await page.setContent(`
       <!doctype html>
       <style>
         body { margin: 0; background: #f6f8fa; }
@@ -210,79 +216,87 @@ test("browser preserves the visible anchor while older history prepends", async 
         }
       </style>
       <main id="scroll" class="chat-scroll"></main>
-    `);
+    `)
 
-    const metrics = await page.evaluate(async () => {
-      const scroll = document.getElementById("scroll") as HTMLElement;
-      const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      const makeRow = (id: string) => {
-        const row = document.createElement("section");
-        row.className = "row";
-        row.dataset.cardId = id;
-        row.textContent = `${id} ${"content ".repeat(20)}`;
-        return row;
-      };
-      const firstVisibleAnchor = () => {
-        const containerTop = scroll.getBoundingClientRect().top;
-        const nodes = Array.from(scroll.querySelectorAll<HTMLElement>(":scope > [data-card-id]"));
-        for (const node of nodes) {
-          const rect = node.getBoundingClientRect();
-          if (rect.bottom <= containerTop) continue;
-          const id = node.dataset.cardId || "";
-          if (!id) continue;
-          return { id, top: rect.top };
+      const metrics = await page.evaluate(async () => {
+        const scroll = document.getElementById("scroll") as HTMLElement
+        const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        const makeRow = (id: string) => {
+          const row = document.createElement("section")
+          row.className = "row"
+          row.dataset.cardId = id
+          row.textContent = `${id} ${"content ".repeat(20)}`
+          return row
         }
-        return null;
-      };
-      const restoreAnchor = (anchor: { id: string; top: number } | null) => {
-        if (!anchor) return;
-        const node = scroll.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`);
-        if (!node) return;
-        scroll.scrollTop += node.getBoundingClientRect().top - anchor.top;
-      };
+        const firstVisibleAnchor = () => {
+          const containerTop = scroll.getBoundingClientRect().top
+          const nodes = Array.from(scroll.querySelectorAll<HTMLElement>(":scope > [data-card-id]"))
+          for (const node of nodes) {
+            const rect = node.getBoundingClientRect()
+            if (rect.bottom <= containerTop) continue
+            const id = node.dataset.cardId || ""
+            if (!id) continue
+            return { id, top: rect.top }
+          }
+          return null
+        }
+        const restoreAnchor = (anchor: { id: string; top: number } | null) => {
+          if (!anchor) return
+          const node = scroll.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)
+          if (!node) return
+          scroll.scrollTop += node.getBoundingClientRect().top - anchor.top
+        }
 
-      for (let i = 0; i < 80; i += 1) {
-        scroll.appendChild(makeRow(`msg-${i}`));
-      }
-      const target = scroll.querySelector<HTMLElement>('[data-card-id="msg-30"]')!;
-      scroll.scrollTop = target.offsetTop - scroll.offsetTop - 16;
-      await frame();
+        for (let i = 0; i < 80; i += 1) {
+          scroll.appendChild(makeRow(`msg-${i}`))
+        }
+        const target = scroll.querySelector<HTMLElement>('[data-card-id="msg-30"]')!
+        scroll.scrollTop = target.offsetTop - scroll.offsetTop - 16
+        await frame()
 
-      const anchor = firstVisibleAnchor();
-      const beforeTop = anchor
-        ? scroll.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)!.getBoundingClientRect().top
-        : 0;
+        const anchor = firstVisibleAnchor()
+        const beforeTop = anchor
+          ? scroll
+              .querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)!
+              .getBoundingClientRect().top
+          : 0
 
-      for (let i = 12; i >= 0; i -= 1) {
-        scroll.insertBefore(makeRow(`older-${i}`), scroll.firstChild);
-      }
-      scroll.appendChild(makeRow("live-new"));
-      await frame();
+        for (let i = 12; i >= 0; i -= 1) {
+          scroll.insertBefore(makeRow(`older-${i}`), scroll.firstChild)
+        }
+        scroll.appendChild(makeRow("live-new"))
+        await frame()
 
-      const shiftedTop = anchor
-        ? scroll.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)!.getBoundingClientRect().top
-        : 0;
-      restoreAnchor(anchor);
-      await frame();
+        const shiftedTop = anchor
+          ? scroll
+              .querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)!
+              .getBoundingClientRect().top
+          : 0
+        restoreAnchor(anchor)
+        await frame()
 
-      const afterTop = anchor
-        ? scroll.querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)!.getBoundingClientRect().top
-        : 0;
+        const afterTop = anchor
+          ? scroll
+              .querySelector<HTMLElement>(`:scope > [data-card-id="${CSS.escape(anchor.id)}"]`)!
+              .getBoundingClientRect().top
+          : 0
 
-      return {
-        anchorID: anchor?.id || "",
-        beforeTop,
-        shiftedTop,
-        afterTop,
-      };
-    });
+        return {
+          anchorID: anchor?.id || "",
+          beforeTop,
+          shiftedTop,
+          afterTop,
+        }
+      })
 
-    expect(metrics.anchorID).toMatch(/^msg-\d+$/);
-    expect(metrics.shiftedTop).toBeGreaterThan(metrics.beforeTop + 100);
-    expect(Math.abs(metrics.afterTop - metrics.beforeTop)).toBeLessThanOrEqual(1);
+      expect(metrics.anchorID).toMatch(/^msg-\d+$/)
+      expect(metrics.shiftedTop).toBeGreaterThan(metrics.beforeTop + 100)
+      expect(Math.abs(metrics.afterTop - metrics.beforeTop)).toBeLessThanOrEqual(1)
 
-    await page.close();
-  } finally {
-    await browser.close().catch(() => undefined);
-  }
-}, { timeout: 15_000 });
+      await page.close()
+    } finally {
+      await browser.close().catch(() => undefined)
+    }
+  },
+  { timeout: 15_000 },
+)

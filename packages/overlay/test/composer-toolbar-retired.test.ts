@@ -19,7 +19,9 @@ function walkCss(dir: string): string[] {
   return out
 }
 
-const STYLES = walkCss(STYLES_ROOT).map((file) => readFileSync(file, "utf8")).join("\n")
+const STYLES = walkCss(STYLES_ROOT)
+  .map((file) => readFileSync(file, "utf8"))
+  .join("\n")
 
 describe("composer toolbar is retired", () => {
   test("ChatComposer no longer renders attach, web-search, or expand toolbar buttons", () => {

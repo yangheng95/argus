@@ -28,9 +28,7 @@ describe("BuildResultSchema", () => {
         },
       ],
       commit_ref: "abc1234",
-      tests: [
-        { name: "bun test src/note-store.test.ts", passed: true, detail: "5 pass" },
-      ],
+      tests: [{ name: "bun test src/note-store.test.ts", passed: true, detail: "5 pass" }],
       contract_restatement:
         "Handled the NoteStore goal: create, list, toggle, and remove notes per the acceptance specs; no UI changes were in scope.",
       followup_workload_guidance:
@@ -57,9 +55,7 @@ describe("BuildResultSchema", () => {
         },
       ],
       error: "toggle returned old done value for first call; root cause not identified",
-      tests: [
-        { name: "bun test src/note-store.test.ts", passed: false, detail: "1 fail, 4 pass" },
-      ],
+      tests: [{ name: "bun test src/note-store.test.ts", passed: false, detail: "1 fail, 4 pass" }],
       ...FCI,
     }
     const parsed = BuildResultSchema.safeParse(payload)
@@ -124,7 +120,9 @@ describe("BuildResultSchema", () => {
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
       summary: "functional tests passed but visual score is below threshold",
-      files_changed: [{ path: "webpage-evidence/eval-result.json", summary: "Recorded visual score", reason: "Visual evidence" }],
+      files_changed: [
+        { path: "webpage-evidence/eval-result.json", summary: "Recorded visual score", reason: "Visual evidence" },
+      ],
       error: "Visual score 84/100 is below the 85 threshold",
     })
     expect(parsed.success).toBe(false)
@@ -192,9 +190,7 @@ describe("BuildResultSchema", () => {
             finding_id: "F-settings",
             fingerprint: "if_1234567890abcdef",
             changed_files: ["src/settings.ts"],
-            verification_commands: [
-              { command: "bun test src/settings.test.ts", passed: true, detail: "3 pass" },
-            ],
+            verification_commands: [{ command: "bun test src/settings.test.ts", passed: true, detail: "3 pass" }],
           },
         ],
         unrepaired_findings: [
@@ -245,9 +241,7 @@ describe("BuildResultSchema", () => {
     const failedVerification = BuildResultSchema.safeParse({
       status: "passed",
       summary: "claimed repair",
-      files_changed: [
-        { path: "src/settings.ts", summary: "Changed settings", reason: "Repair F-settings" },
-      ],
+      files_changed: [{ path: "src/settings.ts", summary: "Changed settings", reason: "Repair F-settings" }],
       repair_report: {
         repaired_findings: [
           {
@@ -289,9 +283,7 @@ describe("BuildResultSchema", () => {
     const passed = BuildResultSchema.parse({
       status: "passed",
       summary: "fixed",
-      files_changed: [
-        { path: "src/settings.ts", summary: "Changed settings", reason: "Repair F-settings" },
-      ],
+      files_changed: [{ path: "src/settings.ts", summary: "Changed settings", reason: "Repair F-settings" }],
       repair_report: {
         repaired_findings: [
           {

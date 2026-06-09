@@ -74,8 +74,12 @@ describe("explore subagent — response channel contract", () => {
     const n = norm(source)
 
     expect(n).toContain("Return concrete findings as plain text in your final assistant turn")
-    expect(n).toContain("Tool calls (memory.save and any other tool) are a side channel the orchestrator does NOT read back")
+    expect(n).toContain(
+      "Tool calls (memory.save and any other tool) are a side channel the orchestrator does NOT read back",
+    )
     expect(n).toContain("only your last assistant turn's text is delivered")
-    expect(n).toContain("continuing tool-result echoes are the same task continuing — not new user requests, not system pings")
+    expect(n).toContain(
+      "continuing tool-result echoes are the same task continuing — not new user requests, not system pings",
+    )
   })
 })

@@ -27,11 +27,7 @@ type JsonRpcInbound =
 export type JsonRpcTransport = ReturnType<typeof JsonRpcLineTransport.create>
 
 export const JsonRpcLineTransport = {
-  create(input: {
-    command: string[]
-    cwd?: string
-    env?: NodeJS.ProcessEnv
-  }) {
+  create(input: { command: string[]; cwd?: string; env?: NodeJS.ProcessEnv }) {
     const command = spawnCommand(input.command)
     const proc = Process.spawn(command, {
       cwd: input.cwd,
@@ -44,10 +40,13 @@ export const JsonRpcLineTransport = {
       throw new Error(`JSON-RPC transport unavailable: ${command.join(" ")}`)
     }
 
-    const pending = new Map<RequestID, {
-      resolve(value: unknown): void
-      reject(reason?: unknown): void
-    }>()
+    const pending = new Map<
+      RequestID,
+      {
+        resolve(value: unknown): void
+        reject(reason?: unknown): void
+      }
+    >()
     const queue: JsonRpcInbound[] = []
     let wake: (() => void) | undefined
     let nextID = 0
@@ -115,7 +114,6 @@ export const JsonRpcLineTransport = {
         wake?.()
       }
     })()
-
     ;(async () => {
       const code = await proc.exited.catch(() => 1)
       if (closed) return

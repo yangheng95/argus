@@ -35,7 +35,8 @@ export const ChannelRoutes = lazy(() =>
       "/attachment",
       describeRoute({
         summary: "Create a temporary channel attachment URL",
-        description: "Store a temporary attachment and return a signed public URL for channels that require remote image URLs.",
+        description:
+          "Store a temporary attachment and return a signed public URL for channels that require remote image URLs.",
         operationId: "channel.attachment.create",
         responses: {
           200: {
@@ -126,13 +127,15 @@ export const ChannelRoutes = lazy(() =>
             content: {
               "application/json": {
                 schema: resolver(
-                  ChannelRegistry.Info.pick({ id: true }).omit({ id: true }).extend({
-                    status: ChannelRegistry.Info.shape.runtime_status,
-                    detail: ChannelRegistry.Info.shape.runtime_detail,
-                    channels: ChannelRegistry.Info.shape.id.array(),
-                    logs: ChannelRegistry.Info.shape.runtime_detail.array(),
-                    running: ChannelRegistry.Info.shape.runtime_status.transform((item) => item === "running"),
-                  }),
+                  ChannelRegistry.Info.pick({ id: true })
+                    .omit({ id: true })
+                    .extend({
+                      status: ChannelRegistry.Info.shape.runtime_status,
+                      detail: ChannelRegistry.Info.shape.runtime_detail,
+                      channels: ChannelRegistry.Info.shape.id.array(),
+                      logs: ChannelRegistry.Info.shape.runtime_detail.array(),
+                      running: ChannelRegistry.Info.shape.runtime_status.transform((item) => item === "running"),
+                    }),
                 ),
               },
             },
@@ -156,13 +159,15 @@ export const ChannelRoutes = lazy(() =>
             content: {
               "application/json": {
                 schema: resolver(
-                  ChannelRegistry.Info.pick({ id: true }).omit({ id: true }).extend({
-                    status: ChannelRegistry.Info.shape.runtime_status,
-                    detail: ChannelRegistry.Info.shape.runtime_detail,
-                    channels: ChannelRegistry.Info.shape.id.array(),
-                    logs: ChannelRegistry.Info.shape.runtime_detail.array(),
-                    running: ChannelRegistry.Info.shape.runtime_status.transform((item) => item === "running"),
-                  }),
+                  ChannelRegistry.Info.pick({ id: true })
+                    .omit({ id: true })
+                    .extend({
+                      status: ChannelRegistry.Info.shape.runtime_status,
+                      detail: ChannelRegistry.Info.shape.runtime_detail,
+                      channels: ChannelRegistry.Info.shape.id.array(),
+                      logs: ChannelRegistry.Info.shape.runtime_detail.array(),
+                      running: ChannelRegistry.Info.shape.runtime_status.transform((item) => item === "running"),
+                    }),
                 ),
               },
             },

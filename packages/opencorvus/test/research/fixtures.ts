@@ -1,6 +1,9 @@
 import { researchRequestHash, researchSourceDigest, type ResearchBrief } from "../../src/research/schema"
 
-export function validResearchBrief(request = "research request", overrides: Partial<ResearchBrief> = {}): ResearchBrief {
+export function validResearchBrief(
+  request = "research request",
+  overrides: Partial<ResearchBrief> = {},
+): ResearchBrief {
   const evidence = [
     {
       id: "ev_1",

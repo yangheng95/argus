@@ -48,7 +48,7 @@ export function createReadAttachmentTool(defaultProjectID: string) {
           .string()
           .describe(
             "Either the full `/attachment/<projectID>/<sha>.<ext>` URL from the manifest " +
-            "or the bare `<sha>.<ext>` name.",
+              "or the bare `<sha>.<ext>` name.",
           ),
         projectID: z
           .string()
@@ -96,9 +96,7 @@ export function createReadAttachmentTool(defaultProjectID: string) {
         const decoded = new TextDecoder("utf-8", { fatal: false }).decode(
           truncated ? bytes.subarray(0, MAX_DECODE_BYTES) : bytes,
         )
-        const suffix = truncated
-          ? `\n\n[truncated: ${bytes.length - MAX_DECODE_BYTES} more bytes not shown]`
-          : ""
+        const suffix = truncated ? `\n\n[truncated: ${bytes.length - MAX_DECODE_BYTES} more bytes not shown]` : ""
         return decoded + suffix
       },
     }),

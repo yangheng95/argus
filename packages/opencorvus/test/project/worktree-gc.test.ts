@@ -65,10 +65,7 @@ describe("WorktreeGC orphan sweep", () => {
         const result = await WorktreeGC.apply(plan)
         expect(result.removed).toBeGreaterThanOrEqual(1)
         expect(await Filesystem.exists(wt.directory)).toBe(false)
-        const ref = await $`git show-ref --verify --quiet refs/heads/${wt.branch}`
-          .cwd(tmp.path)
-          .quiet()
-          .nothrow()
+        const ref = await $`git show-ref --verify --quiet refs/heads/${wt.branch}`.cwd(tmp.path).quiet().nothrow()
         expect(ref.exitCode).not.toBe(0)
       },
     })
@@ -114,9 +111,7 @@ describe("WorktreeGC orphan sweep", () => {
         const wt = await Worktree.create({ name: "gc-in-transit-commit" })
         await Bun.write(path.join(wt.directory, "feature.txt"), "acceptance")
         await $`git add -A`.cwd(wt.directory).quiet()
-        await $`git -c user.name=t -c user.email=t@t commit -m "in-transit attempt"`
-          .cwd(wt.directory)
-          .quiet()
+        await $`git -c user.name=t -c user.email=t@t commit -m "in-transit attempt"`.cwd(wt.directory).quiet()
         await makeOld(wt.directory, now)
 
         const plan = await WorktreeGC.inspect({ now })

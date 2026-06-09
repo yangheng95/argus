@@ -366,8 +366,8 @@ export function panelCapabilityActionSet(surface: Surface) {
 }
 
 export function panelCapabilityPrompt(surface: Surface) {
-  return panelCapabilities(surface).actions
-    .map((item) => {
+  return panelCapabilities(surface)
+    .actions.map((item) => {
       const local = item.local_only ? " Desktop panel only." : ""
       const action = item.local_action_types?.length
         ? ` Emits local actions: ${item.local_action_types.join(", ")} on ${item.local_action_surfaces?.join(", ")}.`

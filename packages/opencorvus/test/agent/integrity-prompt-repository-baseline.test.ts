@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "node:path"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
-const integrityPromptPath = path.join(
-  repoRoot,
-  "packages/opencorvus/src/prompt/core/integrity-team-core.txt",
-)
+const integrityPromptPath = path.join(repoRoot, "packages/opencorvus/src/prompt/core/integrity-team-core.txt")
 const orchestratorToolsPath = path.join(repoRoot, "packages/opencorvus/src/orchestrator/tools.ts")
 
 describe("integrity review scope boundaries", () => {

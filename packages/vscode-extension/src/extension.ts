@@ -1,11 +1,7 @@
 import * as vscode from "vscode"
 import { resolveBundledBinary } from "./sidecar/binary-resolver"
 import { startSidecar, type SidecarHandle } from "./sidecar/manager"
-import {
-  SidecarStartupError,
-  SidecarExistingInstanceError,
-  UnsupportedPlatformError,
-} from "./sidecar/errors"
+import { SidecarStartupError, SidecarExistingInstanceError, UnsupportedPlatformError } from "./sidecar/errors"
 import { OpencorvusPanel } from "./webview/panel"
 import { runAttachFileCommand } from "./commands/attach-file"
 
@@ -19,9 +15,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(outputChannel)
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("opencorvus.open", () =>
-      withErrorReporting(() => openCommand(context)),
-    ),
+    vscode.commands.registerCommand("opencorvus.open", () => withErrorReporting(() => openCommand(context))),
     vscode.commands.registerCommand("opencorvus.attachFile", () =>
       withErrorReporting(() =>
         runAttachFileCommand({
@@ -117,9 +111,7 @@ function reportError(err: unknown): void {
   const e = err instanceof Error ? err : new Error(String(err))
   log(`error: ${e.name}: ${e.message}`)
   if (e instanceof SidecarExistingInstanceError) {
-    vscode.window.showErrorMessage(
-      `OpenCorvus: ${e.message}. Stop the other instance, then try again.`,
-    )
+    vscode.window.showErrorMessage(`OpenCorvus: ${e.message}. Stop the other instance, then try again.`)
     return
   }
   if (e instanceof UnsupportedPlatformError) {

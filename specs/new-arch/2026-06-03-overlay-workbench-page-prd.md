@@ -9,6 +9,7 @@ Primary implementation evidence: packages/overlay/src/index.html and packages/ov
 Line-count requirement: this file intentionally exceeds 1000 lines.
 
 ## 0. 缩写与术语定义
+
 - GLOSSARY-001 PRD: Product Requirements Document，产品需求文档，用于定义目标、范围、用户体验、接口、验收和发布要求。
 - GLOSSARY-002 UI: User Interface，用户界面，指用户可见的布局、控件、文案和视觉反馈。
 - GLOSSARY-003 UX: User Experience，用户体验，指用户完成任务的路径、效率、可理解性和错误恢复体验。
@@ -40,6 +41,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - GLOSSARY-029 Fallback: 备用兼容路径，本 PRD 禁止将 fallback 作为产品方案，错误必须显式暴露并修根因。
 
 ## 1. 文档目标
+
 - DOC-GOAL-001 定义 Overlay 主工作台页面的完整产品边界，覆盖默认 Panel mode 和 Mission mode。
 - DOC-GOAL-002 把页面现有实现中的隐性行为转换为可验证的产品需求。
 - DOC-GOAL-003 为后续 UI、接口、错误可见性、性能、测试和发布提供单一需求来源。
@@ -52,6 +54,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - DOC-GOAL-010 给设计提供足够细的信息架构，避免装饰性重做。
 
 ## 2. 页面范围
+
 - SCOPE-001 页面包含 titlebar、workspace command dock、left task ledger、central conversation、composer、workspace diff、file editor、right panel、dialogs、notifications、logs 和 Mission mount。
 - SCOPE-002 页面不包含外部文档站、CLI TUI、server-only API 文档页、GitHub action 页面和纯 benchmark 页面。
 - SCOPE-003 默认 mode 是 Panel，body[data-page-mode='panel'] 下显示工作台三栏。
@@ -69,6 +72,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - SCOPE-015 Brand guide 是短 hover/focus 帮助，不得替代实际工作台功能。
 
 ## 3. 实现证据与单一来源
+
 - EVIDENCE-001 packages/overlay/src/index.html: 定义静态页面 shell、CSS 引入顺序、mount point、三栏布局、Mission mount、log viewer mount。
 - EVIDENCE-002 packages/overlay/src/main.tsx: 定义 Solid mount order、runtime error capture、global bridges、task actions、page mode、debug blob、pane behavior。
 - EVIDENCE-003 packages/overlay/src/components/TaskList.tsx: 定义 left ledger 的 task grouping、queue reorder、rename、delete、cancel、start now。
@@ -91,6 +95,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - EVIDENCE-020 specs/new-arch/2026-06-03-observability-diagnostic-envelope.md: 定义诊断 envelope、API error、startup diagnostics 和 overlay 可见性。
 
 ## 4. 用户画像
+
 - PERSONA-001 Operator: 日常使用 OpenCorvus 完成开发任务的人，需要快速创建任务、监控进度、审查结果并继续追问。
 - PERSONA-002 Maintainer: 维护 OpenCorvus 自身的人，需要查看 debug blob、logs、runtime diagnostics 和 route/source 证据。
 - PERSONA-003 Reviewer: 对交付物做质量审查的人，需要看到需求、计划、目标、文件变化、diff、证据和失败原因。
@@ -101,6 +106,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - PERSONA-008 Support Engineer: 排查用户环境问题的人，需要复制 task debug info、logs、health 和 project-scoped probes。
 
 ## 5. 用户核心目标
+
 - USER-GOAL-001 选择当前 workspace directory，并确认项目上下文正确。
 - USER-GOAL-002 创建新 chat/task，并把自然语言需求、附件和 web search 参数发送给系统。
 - USER-GOAL-003 在任务执行时看到实时对话、tool call、agent card、progress、goals 和状态。
@@ -113,6 +119,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - USER-GOAL-010 在桌面 overlay 中完成窗口控制、编辑器启动、terminal 启动和 coding CLI 启动。
 
 ## 6. 非目标
+
 - NON-GOAL-001 不把 Overlay 变成营销 landing page。
 - NON-GOAL-002 不把 Mission ledger 重新复用 TaskList。
 - NON-GOAL-003 不在前端合成 task、Mission、acceptance 或 conversation 的影子数据。
@@ -127,6 +134,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - NON-GOAL-012 不通过兼容旧 schema、旧 route、旧 UI tab 的方式保留双源。
 
 ## 7. 信息架构总览
+
 - IA-001 页面顶层由 Titlebar、Task selector bar、Panel body、Mission mount、Log viewer、Notification center 组成。
 - IA-002 Titlebar 左侧承载 brand guide 和 top-level menubar。
 - IA-003 Titlebar 右侧承载 connection badge 和 window controls。
@@ -141,6 +149,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - IA-012 Notification center 作为全局 overlay 挂载，必须可接收启动错误。
 
 ## 8. 全局产品原则
+
 - PRINCIPLE-001 用户输入必须进入真实会话或真实 task route，不走隐藏分叉。
 - PRINCIPLE-002 页面展示的任务状态必须来自 server 或 store single source。
 - PRINCIPLE-003 错误必须显式呈现，不用空状态替代错误。
@@ -158,6 +167,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - PRINCIPLE-015 每个用户可见状态都必须能映射到一个 testable source。
 
 ## 9. 页面模式需求
+
 - PAGE-MODE-001 Panel mode 是默认模式，显示 Recent Chats、Conversation、Right Panel。
 - PAGE-MODE-002 Mission mode 通过 sidebar Mission button 或 pageMode store 切换。
 - PAGE-MODE-003 切换到 Mission mode 时，Panel DOM 保留但视觉隐藏。
@@ -170,6 +180,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - PAGE-MODE-010 Page mode 切换不应引入 history fallback 或 URL hash 兼容路径。
 
 ## 10. 启动与初始化需求
+
 - STARTUP-001 NotificationCenter 必须在 initApp 异步工作之前 mount。
 - STARTUP-002 Runtime error handler 必须监听 window.error。
 - STARTUP-003 Runtime error handler 必须监听 window.unhandledrejection。
@@ -187,6 +198,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - STARTUP-015 Startup 必须启动必要 sync timers，并在 teardown 时停止。
 
 ## 11. Surface requirements
+
 - SURFACE-001 Titlebar must remain draggable while data-no-drag controls stay interactive.
 - SURFACE-002 Brand guide must be focusable and short enough to avoid replacing the workbench.
 - SURFACE-003 Connection badge must represent server connection and expose restart diagnostics.
@@ -239,6 +251,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - SURFACE-050 Right-panel collapse must not clear active tab state.
 
 ## 12. API contract requirements
+
 - API-001 GET /global/health is control-plane health and not task DB proof.
 - API-002 GET /global/tasks is the task ledger source.
 - API-003 POST /global/db/reset requires explicit confirmation.
@@ -272,6 +285,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - API-031 GET /log/tail returns log viewer tail content.
 
 ## 13. State ownership requirements
+
 - STATE-001 pageMode store is the single source for Panel/Mission visibility.
 - STATE-002 boardStore is the source for active task, task list, and board snapshot.
 - STATE-003 cardTreeStore is the source for conversation cards.
@@ -285,6 +299,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - STATE-011 Mission local resource is the current Mission list owner; do not add a second global store in the same implementation.
 
 ## 14. Error, empty, and loading requirements
+
 - STATE-VISIBILITY-001 No directory selected must show workspace onboarding or explicit directory required.
 - STATE-VISIBILITY-002 No tasks must show empty recent chats.
 - STATE-VISIBILITY-003 No active task must show start/select prompt.
@@ -307,6 +322,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - STATE-VISIBILITY-020 Error recovery must be a real retry/reload/settings/open action, never fallback.
 
 ## 15. Accessibility, responsive, performance, security, and i18n
+
 - QUALITY-001 Every icon-only button must have aria-label.
 - QUALITY-002 Tabs must expose tablist/tab semantics.
 - QUALITY-003 Resizers must expose role separator and orientation.
@@ -329,6 +345,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - QUALITY-020 Missing i18n keys must fail checks before release.
 
 ## 16. User journeys
+
 - JOURNEY-001 Create task: user chooses workspace, clicks New Chat, enters request, sends, sees ledger row, watches conversation stream, checks Inspector, reviews Files diff, and follows up.
 - JOURNEY-002 Diagnose stuck task: user checks pending interactions, last unfinished card, goal workflow, Files acceptance, LogViewer, task debug blob, project-scoped probes, SQL templates, and then retries, replans, cancels, or reports the exact bug.
 - JOURNEY-003 Browse and edit file: user opens Explorer, expands directory, searches file, opens text file, edits in CodeMirror, saves through PATCH /file/content, sees dirty clear or explicit error.
@@ -341,6 +358,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - JOURNEY-010 Use desktop launchers: user opens editor, terminal, or coding CLI from command dock, route uses selected directory, and unsupported profile errors are visible.
 
 ## 17. Component acceptance matrix
+
 - COMPONENT-001 TitlebarMenubar must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
 - COMPONENT-002 ConnectionBadge must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
 - COMPONENT-003 WindowControls must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
@@ -378,6 +396,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - COMPONENT-035 WorkspaceOnboardingDialog must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
 
 ## 18. Route acceptance matrix
+
 - ROUTE-001 /global/health must be consistent across overlay caller, server route, directory scope, error handling, and tests.
 - ROUTE-002 /global/tasks must be consistent across overlay caller, server route, directory scope, error handling, and tests.
 - ROUTE-003 /global/db/reset must be consistent across overlay caller, server route, directory scope, error handling, and tests.
@@ -411,6 +430,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - ROUTE-031 /log/tail must be consistent across overlay caller, server route, directory scope, error handling, and tests.
 
 ## 19. Detailed shell and chrome requirements
+
 - REQ-SHELL-001 titlebar stability: the page must keep this behavior deterministic, source-backed, keyboard reachable, and regression-tested.
 - REQ-SHELL-002 workspace context: the page must keep this behavior deterministic, source-backed, keyboard reachable, and regression-tested.
 - REQ-SHELL-003 connection visibility: the page must keep this behavior deterministic, source-backed, keyboard reachable, and regression-tested.
@@ -503,6 +523,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-SHELL-090 teardown cleanup: the page must keep this behavior deterministic, source-backed, keyboard reachable, and regression-tested.
 
 ## 20. Detailed task ledger and queue requirements
+
 - REQ-TASK-001 task grouping: the ledger must use boardStore/loadTasks, expose explicit user action, and reject synthetic rows.
 - REQ-TASK-002 task selection: the ledger must use boardStore/loadTasks, expose explicit user action, and reject synthetic rows.
 - REQ-TASK-003 queue position: the ledger must use boardStore/loadTasks, expose explicit user action, and reject synthetic rows.
@@ -595,6 +616,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-TASK-090 load error: the ledger must use boardStore/loadTasks, expose explicit user action, and reject synthetic rows.
 
 ## 21. Detailed conversation and message tree requirements
+
 - REQ-CONV-001 virtual card: the UI must render from cardTreeStore, preserve user reading position, and surface errors instead of manufacturing missing content.
 - REQ-CONV-002 scroll anchor: the UI must render from cardTreeStore, preserve user reading position, and surface errors instead of manufacturing missing content.
 - REQ-CONV-003 history paging: the UI must render from cardTreeStore, preserve user reading position, and surface errors instead of manufacturing missing content.
@@ -697,6 +719,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-CONV-100 stream status: the UI must render from cardTreeStore, preserve user reading position, and surface errors instead of manufacturing missing content.
 
 ## 22. Detailed composer and task action requirements
+
 - REQ-COMPOSER-001 submit: user intent must enter the real panelMessage/task route path with no hidden control-plane reroute.
 - REQ-COMPOSER-002 attachments: user intent must enter the real panelMessage/task route path with no hidden control-plane reroute.
 - REQ-COMPOSER-003 web search: user intent must enter the real panelMessage/task route path with no hidden control-plane reroute.
@@ -779,6 +802,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-COMPOSER-080 task control separation: user intent must enter the real panelMessage/task route path with no hidden control-plane reroute.
 
 ## 23. Detailed right panel requirements
+
 - REQ-RIGHT-001 right tabs: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-002 Explorer lazy load: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 - REQ-RIGHT-003 Explorer search: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
@@ -901,6 +925,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-RIGHT-120 tab i18n: the surface must keep Explorer, Files, and Inspector as separate top-level tabs with one authoritative source per tab.
 
 ## 24. Detailed file editor and workspace diff requirements
+
 - REQ-FILE-001 selected path: all reads and writes must go through project-scoped APIs, and the UI must expose the exact operation state.
 - REQ-FILE-002 content read: all reads and writes must go through project-scoped APIs, and the UI must expose the exact operation state.
 - REQ-FILE-003 CodeMirror edit: all reads and writes must go through project-scoped APIs, and the UI must expose the exact operation state.
@@ -993,6 +1018,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-FILE-090 layout sidecar: all reads and writes must go through project-scoped APIs, and the UI must expose the exact operation state.
 
 ## 25. Detailed Mission requirements
+
 - REQ-MISSION-001 Mission list: Mission must be session-backed, project-aware, and separate from task ledger semantics.
 - REQ-MISSION-002 Mission search: Mission must be session-backed, project-aware, and separate from task ledger semantics.
 - REQ-MISSION-003 Mission select: Mission must be session-backed, project-aware, and separate from task ledger semantics.
@@ -1085,6 +1111,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-MISSION-090 Panel preservation: Mission must be session-backed, project-aware, and separate from task ledger semantics.
 
 ## 26. Detailed diagnostics and error requirements
+
 - REQ-DIAG-001 ApiError: every failure must name the failing operation, expose source evidence, and avoid silent compatibility paths.
 - REQ-DIAG-002 runtime error: every failure must name the failing operation, expose source evidence, and avoid silent compatibility paths.
 - REQ-DIAG-003 startup failure: every failure must name the failing operation, expose source evidence, and avoid silent compatibility paths.
@@ -1187,6 +1214,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-DIAG-100 no fallback: every failure must name the failing operation, expose source evidence, and avoid silent compatibility paths.
 
 ## 27. Detailed quality requirements
+
 - REQ-QUALITY-001 keyboard: the page must remain usable across desktop/narrow viewports and long-running sessions without layout collapse.
 - REQ-QUALITY-002 aria label: the page must remain usable across desktop/narrow viewports and long-running sessions without layout collapse.
 - REQ-QUALITY-003 focus: the page must remain usable across desktop/narrow viewports and long-running sessions without layout collapse.
@@ -1289,6 +1317,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - REQ-QUALITY-100 stable dimensions: the page must remain usable across desktop/narrow viewports and long-running sessions without layout collapse.
 
 ## 28. Detailed testing requirements
+
 - TEST-DETAIL-001 unit behavior: the test must prove the user-visible behavior and reject the previous incorrect or double-source implementation.
 - TEST-DETAIL-002 source guard: the test must prove the user-visible behavior and reject the previous incorrect or double-source implementation.
 - TEST-DETAIL-003 route contract: the test must prove the user-visible behavior and reject the previous incorrect or double-source implementation.
@@ -1411,6 +1440,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - TEST-DETAIL-120 regression guard: the test must prove the user-visible behavior and reject the previous incorrect or double-source implementation.
 
 ## 29. Release requirements
+
 - RELEASE-001 Each implementation slice must grep callsites before changing code.
 - RELEASE-002 Each implementation slice must write or update a disk plan before code edits.
 - RELEASE-003 Each implementation slice must include behavior tests.
@@ -1428,6 +1458,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - RELEASE-015 Open questions must be resolved or explicitly deferred before implementation closure.
 
 ## 30. Open questions
+
 - OPEN-QUESTION-001 Should file editor unsaved close immediately require confirm dialog, or be a follow-up slice?
 - OPEN-QUESTION-002 Should Mission mode narrow layout use tabs or command-palette quick switch?
 - OPEN-QUESTION-003 Should Files tab group by goal and attempt simultaneously?
@@ -1442,6 +1473,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - OPEN-QUESTION-012 Should Brand guide copy be shortened further to comply with minimal in-app instructional text?
 
 ## 31. Acceptance definition
+
 - ACCEPTANCE-001 PRD itself has more than 1000 lines.
 - ACCEPTANCE-002 PRD maps every major page region to source evidence.
 - ACCEPTANCE-003 PRD defines user personas and journeys.
@@ -1464,6 +1496,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - ACCEPTANCE-020 PRD stays aligned with current overlay implementation evidence.
 
 ## 32. Evidence grep summary
+
 - GREP-SUMMARY-001 main.tsx mounts Mission, Conversation, ConversationAgentRail, FileEditorPane, RightFilesPanel, WorkspacePanel, FileExplorerPanel, TaskList, ChatComposer, WindowControls, TitlebarMenubar, RightPanelTabs, TaskStatusHeader, Board, LogViewer.
 - GREP-SUMMARY-002 index.html defines solidMissionMount, taskListPanel, chatScroll, solidConversationAgentRailMount, solidWorkspaceMount, solidChatComposer, solidFileEditorMount, solidRightPanelTabs, solidFileExplorerMount, solidRightFilesMount, solidBoardMount, solidLogViewer.
 - GREP-SUMMARY-003 FileExplorerPanel uses apiJson for file and find/file routes and virtua/solid for large lists.

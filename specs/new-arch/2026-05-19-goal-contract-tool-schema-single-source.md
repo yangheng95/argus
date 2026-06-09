@@ -41,29 +41,29 @@ SDK 发 tool-error part，模型读后重试。可见的 discriminated union 本
 
 待删除符号（全部仅 `architect/output-tools.ts` 内部，无外部消费者）：
 
-| 符号 | 处置 |
-|---|---|
-| `ArchitectGoalRegistrationInputSchema` (100) | 删除；`register_goal.inputSchema` 改用 `GoalContractFieldsSchema` |
-| `ArchitectGoalModificationInputSchema` (122) | 删除；architect `modify_goal.inputSchema` 改用 `z.object({ id, updates: GoalContractUpdateSchema })` |
-| `parseRegisteredGoalForTool` (129, 587, 642) | 删除；execute 直接收已校验入参 |
-| `parseGoalUpdatesForTool` (142, 639) | 删除 |
-| `formatGoalContractError` (138/155/170) | 删除 |
-| `acceptanceScorerHints` (171/184) | 删除 |
-| `acceptanceScorerGuidance` (92/109/125/180) | 删除 |
-| `withGoalContractDefaults` (132/159) | 删除（canonical schema 的 `.default()` 已覆盖默认值）|
-| `ACCEPTANCE_SCORER_TYPES` (89/197/206) | 删除 |
-| `normalizeGoalContractFields` (82, toRegisteredGoal) | **保留**——seeding existingGoals 的 DB→RegisteredGoal 路径仍需要 |
+| 符号                                                 | 处置                                                                                                 |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `ArchitectGoalRegistrationInputSchema` (100)         | 删除；`register_goal.inputSchema` 改用 `GoalContractFieldsSchema`                                    |
+| `ArchitectGoalModificationInputSchema` (122)         | 删除；architect `modify_goal.inputSchema` 改用 `z.object({ id, updates: GoalContractUpdateSchema })` |
+| `parseRegisteredGoalForTool` (129, 587, 642)         | 删除；execute 直接收已校验入参                                                                       |
+| `parseGoalUpdatesForTool` (142, 639)                 | 删除                                                                                                 |
+| `formatGoalContractError` (138/155/170)              | 删除                                                                                                 |
+| `acceptanceScorerHints` (171/184)                    | 删除                                                                                                 |
+| `acceptanceScorerGuidance` (92/109/125/180)          | 删除                                                                                                 |
+| `withGoalContractDefaults` (132/159)                 | 删除（canonical schema 的 `.default()` 已覆盖默认值）                                                |
+| `ACCEPTANCE_SCORER_TYPES` (89/197/206)               | 删除                                                                                                 |
+| `normalizeGoalContractFields` (82, toRegisteredGoal) | **保留**——seeding existingGoals 的 DB→RegisteredGoal 路径仍需要                                      |
 
 orchestrator 侧（`orchestrator/tools.ts`，rule 9 重复实现，一并清理）：
 
-| 符号 | 处置 |
-|---|---|
-| `ModifyGoalInputSchema` (477) | `updates` 改 `GoalContractUpdateSchema`，`goalID`/`reason` 改 `z.string().min(1)` |
-| `parseModifyGoalUpdates` (487, **exported**, 用于 3406 + test) | 删除；execute 直接用已校验 `input.updates`。**修改 test** |
-| `modifyGoalAcceptanceHints` (507) | 删除 |
-| `goalUpdateAcceptanceGuidance` (471) | 删除 |
-| `GOAL_UPDATE_SCORER_TYPES` (469) | 删除 |
-| `computeContractFieldChanges` / `goalUpdateNoOpFields` (617) | 保留——no-op 过滤仍需要，输入现为已校验 partial |
+| 符号                                                           | 处置                                                                              |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `ModifyGoalInputSchema` (477)                                  | `updates` 改 `GoalContractUpdateSchema`，`goalID`/`reason` 改 `z.string().min(1)` |
+| `parseModifyGoalUpdates` (487, **exported**, 用于 3406 + test) | 删除；execute 直接用已校验 `input.updates`。**修改 test**                         |
+| `modifyGoalAcceptanceHints` (507)                              | 删除                                                                              |
+| `goalUpdateAcceptanceGuidance` (471)                           | 删除                                                                              |
+| `GOAL_UPDATE_SCORER_TYPES` (469)                               | 删除                                                                              |
+| `computeContractFieldChanges` / `goalUpdateNoOpFields` (617)   | 保留——no-op 过滤仍需要，输入现为已校验 partial                                    |
 
 canonical schema（保持不变，单一来源）：
 `GoalContractFieldsSchema` / `GoalContractUpdateSchema` @ `pipeline/goal-contract.schema.ts`。
@@ -74,13 +74,13 @@ canonical schema（保持不变，单一来源）：
 
 - `test/architect/output-tools.test.ts:346` "returns actionable guidance for
   malformed scorer type" + `:381` `expect(out).toContain('"shell" is not a
-  scorer type')`：curated 路径已删 → 改为**断言 schema 层面拒绝**
+scorer type')`：curated 路径已删 → 改为**断言 schema 层面拒绝**
   （`ArchitectGoalRegistrationInputSchema`→`GoalContractFieldsSchema` 的
   `.safeParse` 对 `type:"shell"` 报 discriminated-union 错），不再断言 execute 文案。
 - `test/orchestrator/modify-goal-noop.test.ts:147` `describe("parseModifyGoalUpdates")`
-  + `:171` `'"shell" is not a scorer type'`：`parseModifyGoalUpdates` 删除 →
-  改为对 `ModifyGoalInputSchema.safeParse` / `GoalContractUpdateSchema.safeParse`
-  断言；保留 `computeContractFieldChanges` 用例。
+  - `:171` `'"shell" is not a scorer type'`：`parseModifyGoalUpdates` 删除 →
+    改为对 `ModifyGoalInputSchema.safeParse` / `GoalContractUpdateSchema.safeParse`
+    断言；保留 `computeContractFieldChanges` 用例。
 - 新增回归测试（rule 28）：断言 `register_goal` / 两个 `modify_goal` 的
   inputSchema 经 `asSchema(...).jsonSchema` 转换后，`acceptance_specs` 节点
   **不是** `{}`/any，而是含 `AcceptanceSpec` 必填字段与 scorers oneOf 的对象

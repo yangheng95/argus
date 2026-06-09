@@ -6,12 +6,12 @@
 
 ### `opencorvus serve` 起不来
 
-| 检查 | 说明 |
-|---|---|
-| `opencorvus doctor` | 先跑一次全面诊断 |
-| 端口占用 | 默认 7878，`netstat -ano \| findstr 7878` |
+| 检查                         | 说明                                                                |
+| ---------------------------- | ------------------------------------------------------------------- |
+| `opencorvus doctor`          | 先跑一次全面诊断                                                    |
+| 端口占用                     | 默认 7878，`netstat -ano \| findstr 7878`                           |
 | `OPENCORVUS_SERVER_PASSWORD` | 若对外监听，必须设；否则启动报 `refuses to expose without password` |
-| 权限：`ENOSPC` | `~/.opencorvus` 磁盘满 |
+| 权限：`ENOSPC`               | `~/.opencorvus` 磁盘满                                              |
 
 ### Overlay 启动后连不上后端
 
@@ -49,11 +49,11 @@ Overlay 用系统终端打开 worktree 的能力（替代旧嵌入 PTY，commit 
 
 ### 任务卡在 requirements / architect / build 阶段
 
-| 症状 | 检查 |
-|---|---|
-| 没有任何事件 | LLM provider 连通性；`opencorvus doctor` |
-| 有 reasoning tokens 但无 tool-call | 检查 `toolChoice`，reasoning 模型必须 `"auto"` |
-| Agent 长时间无动静 | 当前由 engine 内部 stream-activity 看门狗（180s idle abort）管理；benchmark 已不再接受 `--stall-timeout-ms` / `--planning-stall-timeout-ms` flag |
+| 症状                               | 检查                                                                                                                                             |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 没有任何事件                       | LLM provider 连通性；`opencorvus doctor`                                                                                                         |
+| 有 reasoning tokens 但无 tool-call | 检查 `toolChoice`，reasoning 模型必须 `"auto"`                                                                                                   |
+| Agent 长时间无动静                 | 当前由 engine 内部 stream-activity 看门狗（180s idle abort）管理；benchmark 已不再接受 `--stall-timeout-ms` / `--planning-stall-timeout-ms` flag |
 
 ### 任务一直 replan / retry 不停
 
@@ -66,10 +66,10 @@ Overlay 用系统终端打开 worktree 的能力（替代旧嵌入 PTY，commit 
 
 ### 权限审批无限等待
 
-| 检查 | 说明 |
-|---|---|
-| config 是否显式写了 `ask` | 内置 agent 权限默认 `allow`；只有显式 `ask` 规则会等待操作员回复。 |
-| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | 未回复 ask 的拒绝超时，默认 `300000` ms；最小值 `1000` ms |
+| 检查                               | 说明                                                               |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| config 是否显式写了 `ask`          | 内置 agent 权限默认 `allow`；只有显式 `ask` 规则会等待操作员回复。 |
+| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | 未回复 ask 的拒绝超时，默认 `300000` ms；最小值 `1000` ms          |
 
 ## 评估类
 
@@ -85,7 +85,6 @@ Overlay 用系统终端打开 worktree 的能力（替代旧嵌入 PTY，commit 
 ### TypeScript 编译错误未被检测
 
 确保 spec 的 `check_selectors` 包含 `lint` 或显式声明 `typecheck` family。check selector 必须来自 spec / architect 的结构化输出，**不从关键字推断**（`check/policy.ts::inferSelectors` 返回空数组）。
-
 
 ## Channel 类
 

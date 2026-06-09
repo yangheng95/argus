@@ -21,13 +21,13 @@ The previous spec only addressed the LLMActivityPolicy invariant misorder and th
 
 ## Grep Coverage
 
-| Target | Existing call sites / siblings | Change |
-| --- | --- | --- |
-| `toModelMessages` (assistant branch) | `src/session/message.ts:752`. Sole reader of session messages → ModelMessage[] for ALL agents (orchestrator, architect, build, mirror, vision-judge). | Add structural validity check after building `assistantMessage.parts`: at least one `text` part with non-empty text OR one `tool-${name}` part. Skip otherwise. Single source — fixes provider replay for every agent type, not just orchestrator. |
-| `recordOrchestratorStreamError` | `src/engine/persist.ts:1940` (writer); `src/orchestrator/agent.ts:435` (sole caller). | After recording, count stream-error artifacts in last 60s for this task. If `>= 3`, mark the task `failed` with a structured error. Resource-governance fuse, not workflow FSM (rule 13/23). Threshold + window are hardcoded constants — no config knob to drift. |
-| `listOrchestratorStreamErrorArtifacts` | `src/engine/store.ts:761`. Existing helper for `describe.ts::recent_stream_failures`. | Reuse for the fuse window query. |
-| `Message.AbortedError` | `src/session/message.ts` (existing skip branch for aborted reasoning-only assistants). | Untouched. The new check is broader — both error-tagged and silently-broken empty-content turns are filtered. |
-| `reviveZombieTasks` | `src/engine/runtime.ts:79`. Wakes any active task with no in-flight loop. | Untouched. The fuse marks the task terminal, so `isTaskActive` returns false, so revive naturally stops. No new "if-stream-error-then-skip" guard at the revive layer (avoids repeating the 2026-04-30 wedge regression). |
+| Target                                 | Existing call sites / siblings                                                                                                                        | Change                                                                                                                                                                                                                                                             |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `toModelMessages` (assistant branch)   | `src/session/message.ts:752`. Sole reader of session messages → ModelMessage[] for ALL agents (orchestrator, architect, build, mirror, vision-judge). | Add structural validity check after building `assistantMessage.parts`: at least one `text` part with non-empty text OR one `tool-${name}` part. Skip otherwise. Single source — fixes provider replay for every agent type, not just orchestrator.                 |
+| `recordOrchestratorStreamError`        | `src/engine/persist.ts:1940` (writer); `src/orchestrator/agent.ts:435` (sole caller).                                                                 | After recording, count stream-error artifacts in last 60s for this task. If `>= 3`, mark the task `failed` with a structured error. Resource-governance fuse, not workflow FSM (rule 13/23). Threshold + window are hardcoded constants — no config knob to drift. |
+| `listOrchestratorStreamErrorArtifacts` | `src/engine/store.ts:761`. Existing helper for `describe.ts::recent_stream_failures`.                                                                 | Reuse for the fuse window query.                                                                                                                                                                                                                                   |
+| `Message.AbortedError`                 | `src/session/message.ts` (existing skip branch for aborted reasoning-only assistants).                                                                | Untouched. The new check is broader — both error-tagged and silently-broken empty-content turns are filtered.                                                                                                                                                      |
+| `reviveZombieTasks`                    | `src/engine/runtime.ts:79`. Wakes any active task with no in-flight loop.                                                                             | Untouched. The fuse marks the task terminal, so `isTaskActive` returns false, so revive naturally stops. No new "if-stream-error-then-skip" guard at the revive layer (avoids repeating the 2026-04-30 wedge regression).                                          |
 
 ## Implementation
 
@@ -61,11 +61,7 @@ In the `if (streamErrors.length > 0)` branch (lines 427-443), after `recordOrche
 const FUSE_THRESHOLD = 3
 const FUSE_WINDOW_MS = 60_000
 const { listOrchestratorStreamErrorArtifacts } = await import("@/engine/store")
-const recent = listOrchestratorStreamErrorArtifacts(
-  taskID,
-  Date.now() - FUSE_WINDOW_MS,
-  FUSE_THRESHOLD,
-)
+const recent = listOrchestratorStreamErrorArtifacts(taskID, Date.now() - FUSE_WINDOW_MS, FUSE_THRESHOLD)
 if (recent.length >= FUSE_THRESHOLD) {
   log.error("orchestrator stream-error fuse tripped — marking task failed", {
     taskID,

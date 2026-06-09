@@ -45,4 +45,3 @@ describe("channel runtime text formatting", () => {
     expect(parts.join("")).toBe(text)
   })
 })
-

@@ -37,8 +37,17 @@ describe("runHookIsolated (audit W2-V19)", () => {
 
   test("sync throw is isolated → returns undefined, does NOT propagate", async () => {
     const calls: any[] = []
-    const fakeLog = ((msg: string, extra: any) => { calls.push({ msg, extra }) }) as any
-    const out = await runHookIsolated("chat.params", () => { throw new Error("plugin bug") }, [], fakeLog)
+    const fakeLog = ((msg: string, extra: any) => {
+      calls.push({ msg, extra })
+    }) as any
+    const out = await runHookIsolated(
+      "chat.params",
+      () => {
+        throw new Error("plugin bug")
+      },
+      [],
+      fakeLog,
+    )
     expect(out).toBeUndefined()
     expect(calls.length).toBe(1)
     expect(calls[0].extra.hook).toBe("chat.params")
@@ -47,10 +56,14 @@ describe("runHookIsolated (audit W2-V19)", () => {
 
   test("async rejection is isolated → returns undefined, does NOT propagate", async () => {
     const calls: any[] = []
-    const fakeLog = ((msg: string, extra: any) => { calls.push({ msg, extra }) }) as any
+    const fakeLog = ((msg: string, extra: any) => {
+      calls.push({ msg, extra })
+    }) as any
     const out = await runHookIsolated(
       "config",
-      async () => { throw new Error("config blew up") },
+      async () => {
+        throw new Error("config blew up")
+      },
       [],
       fakeLog,
     )
@@ -62,10 +75,14 @@ describe("runHookIsolated (audit W2-V19)", () => {
 
   test("non-Error throw is stringified safely (no second crash)", async () => {
     const calls: any[] = []
-    const fakeLog = ((msg: string, extra: any) => { calls.push({ msg, extra }) }) as any
+    const fakeLog = ((msg: string, extra: any) => {
+      calls.push({ msg, extra })
+    }) as any
     const out = await runHookIsolated(
       "event",
-      () => { throw "string-thrown-not-an-Error" },
+      () => {
+        throw "string-thrown-not-an-Error"
+      },
       [],
       fakeLog,
     )
@@ -79,11 +96,20 @@ describe("runHookIsolated (audit W2-V19)", () => {
     // hook #3 — that's the whole point of isolation.
     const order: number[] = []
     const calls: any[] = []
-    const fakeLog = ((m: string, e: any) => { calls.push({ m, extra: e }) }) as any
+    const fakeLog = ((m: string, e: any) => {
+      calls.push({ m, extra: e })
+    }) as any
     const hooks = [
-      () => { order.push(1) },
-      () => { order.push(2); throw new Error("middle") },
-      () => { order.push(3) },
+      () => {
+        order.push(1)
+      },
+      () => {
+        order.push(2)
+        throw new Error("middle")
+      },
+      () => {
+        order.push(3)
+      },
     ]
     for (let i = 0; i < hooks.length; i++) {
       await runHookIsolated(`hook${i}`, hooks[i], [], fakeLog)
@@ -95,7 +121,13 @@ describe("runHookIsolated (audit W2-V19)", () => {
 
   test("hook arguments are forwarded as-is", async () => {
     const seen: any[] = []
-    await runHookIsolated("test", (a: number, b: string) => { seen.push([a, b]) }, [42, "x"])
+    await runHookIsolated(
+      "test",
+      (a: number, b: string) => {
+        seen.push([a, b])
+      },
+      [42, "x"],
+    )
     expect(seen).toEqual([[42, "x"]])
   })
 })

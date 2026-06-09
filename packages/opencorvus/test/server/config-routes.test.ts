@@ -55,7 +55,7 @@ describe("config prompt routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as Array<{
+        const body = (await response.json()) as Array<{
           key: string
           scope: string
           prompt: string
@@ -68,10 +68,23 @@ describe("config prompt routes", () => {
         // System-scope slots: core_header + agent_generate (legacy spec/goal/
         // acceptance _system slots were dropped when per-agent scope
         // became the single source of truth).
-        expect(body.some((item) => item.key === "core_header" && item.scope === "system" && item.prompt === "Custom core header")).toBe(true)
+        expect(
+          body.some(
+            (item) => item.key === "core_header" && item.scope === "system" && item.prompt === "Custom core header",
+          ),
+        ).toBe(true)
         expect(body.some((item) => item.key === "agent_generate" && item.scope === "system")).toBe(true)
         // Agent-scope: user override on an agent surfaces as configured_prompt.
-        expect(body.some((item) => item.key === "explore" && item.scope === "agent" && item.prompt_mode === "override" && item.prompt === "Custom explore prompt" && item.configured_prompt === "Custom explore prompt")).toBe(true)
+        expect(
+          body.some(
+            (item) =>
+              item.key === "explore" &&
+              item.scope === "agent" &&
+              item.prompt_mode === "override" &&
+              item.prompt === "Custom explore prompt" &&
+              item.configured_prompt === "Custom explore prompt",
+          ),
+        ).toBe(true)
         const intent = body.find((item) => item.key === "intent-analysis" && item.scope === "agent")
         expect(intent?.prompt_mode).toBe("append")
         expect(intent?.prompt).toBe("Custom intent append")
@@ -120,7 +133,7 @@ describe("config prompt routes", () => {
     expect(start).toBeGreaterThan(0)
     const body = source.slice(start, source.indexOf("const updated = await Config.get()", start))
 
-    expect(body).toContain("validateConfigModelReferences(partial, \"config\")")
+    expect(body).toContain('validateConfigModelReferences(partial, "config")')
     expect(body.indexOf("validateConfigModelReferences")).toBeLessThan(body.indexOf("Config.update"))
   })
 })

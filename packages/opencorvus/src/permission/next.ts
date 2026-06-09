@@ -136,33 +136,36 @@ export namespace PermissionNext {
     ),
   }
 
-  const state = lazyInstanceState(() => {
-    const projectID = Instance.project.id
-    const row = Database.use((db) =>
-      db.select().from(PermissionTable).where(eq(PermissionTable.project_id, projectID)).get(),
-    )
-    const stored = row?.data ?? ([] as Ruleset)
+  const state = lazyInstanceState(
+    () => {
+      const projectID = Instance.project.id
+      const row = Database.use((db) =>
+        db.select().from(PermissionTable).where(eq(PermissionTable.project_id, projectID)).get(),
+      )
+      const stored = row?.data ?? ([] as Ruleset)
 
-    const pending: Record<
-      string,
-      {
-        info: Request
-        resolve: () => void
-        reject: (e: any) => void
-        timer: ReturnType<typeof setTimeout> | undefined
+      const pending: Record<
+        string,
+        {
+          info: Request
+          resolve: () => void
+          reject: (e: any) => void
+          timer: ReturnType<typeof setTimeout> | undefined
+        }
+      > = {}
+
+      return {
+        pending,
+        approved: stored,
       }
-    > = {}
-
-    return {
-      pending,
-      approved: stored,
-    }
-  }, async (s) => {
-    for (const id of Object.keys(s.pending)) {
-      clearTimeout(s.pending[id].timer)
-      delete s.pending[id]
-    }
-  })
+    },
+    async (s) => {
+      for (const id of Object.keys(s.pending)) {
+        clearTimeout(s.pending[id].timer)
+        delete s.pending[id]
+      }
+    },
+  )
 
   const PERMISSION_MIN_TIMEOUT_MS = 1000
   const PERMISSION_REJECT_TIMEOUT_MS = Math.max(
@@ -193,7 +196,11 @@ export namespace PermissionNext {
             }
             const timer = setTimeout(() => {
               if (!s.pending[id]) return
-              log.info("permission timeout rejected", { id, permission: request.permission, patterns: request.patterns })
+              log.info("permission timeout rejected", {
+                id,
+                permission: request.permission,
+                patterns: request.patterns,
+              })
               delete s.pending[id]
               Bus.publish(Event.Replied, {
                 sessionID: request.sessionID,

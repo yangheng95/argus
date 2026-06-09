@@ -75,7 +75,10 @@ describe("mission_state — missionID is resolved from the session, not the agen
         // route does), so corrupt the metadata directly and prove the tool's
         // own missionDir() guard still blocks traversal / bad ids.
         for (const bad of ["../escape", "a/b", "a\\b", "FOO", "foo.bar", "foo bar", "a".repeat(65)]) {
-          const session = await ensureMissionSession({ missionID: `ok-${Date.now()}-${Math.random().toString(36).slice(2)}`, defaultCwd: tmp.path })
+          const session = await ensureMissionSession({
+            missionID: `ok-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            defaultCwd: tmp.path,
+          })
           await Session.mergeMetadata({ sessionID: session.id, patch: { mission: { id: bad } } })
           await expect(
             tool.execute({ action: "read", file: "frontier.md" } as any, ctxForSession(session.id)),
@@ -148,7 +151,10 @@ describe("mission_state read / write / list", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await MissionStateTool.init()
-        await tool.execute({ action: "write", file: "tasks.md", content: "task list" } as any, await missionCtx("tv-replay"))
+        await tool.execute(
+          { action: "write", file: "tasks.md", content: "task list" } as any,
+          await missionCtx("tv-replay"),
+        )
         const dir = path.join(tmp.path, ".opencorvus", "runtime", "mission", "tv-replay")
         const entries = await fs.readdir(dir)
         expect(entries.sort()).toEqual(["tasks.md"])

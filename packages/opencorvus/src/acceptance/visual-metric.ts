@@ -20,12 +20,7 @@
 import z from "zod"
 import ssim from "ssim.js"
 import { EngineConfig } from "@/engine/config"
-import {
-  decodePNG,
-  nonWhiteDensity,
-  uniqueColorBucketCount,
-  type DecodedPNG,
-} from "@/util/pixel-stats"
+import { decodePNG, nonWhiteDensity, uniqueColorBucketCount, type DecodedPNG } from "@/util/pixel-stats"
 
 /** 每一条硬门的判定记录。 */
 export interface VisualGateResult {
@@ -36,12 +31,7 @@ export interface VisualGateResult {
   note: string
 }
 
-export type VisualGateName =
-  | "phash_hamming"
-  | "ssim"
-  | "chart_region_density"
-  | "unique_color_ratio"
-  | "text_hit_ratio"
+export type VisualGateName = "phash_hamming" | "ssim" | "chart_region_density" | "unique_color_ratio" | "text_hit_ratio"
 
 export interface VisualMetricResult {
   passed: boolean
@@ -182,10 +172,7 @@ export async function computeVisualMetric(input: {
   renderedText?: string
   thresholds: VisualThresholdsType
 }): Promise<VisualMetricResult> {
-  const [rendered, reference] = await Promise.all([
-    decodePNG(input.renderedPath),
-    decodePNG(input.referencePath),
-  ])
+  const [rendered, reference] = await Promise.all([decodePNG(input.renderedPath), decodePNG(input.referencePath)])
   const t = input.thresholds
 
   // ---- 1. pHash 汉明距离 -------------------------------------------------
@@ -197,7 +184,10 @@ export async function computeVisualMetric(input: {
     passed: hamming <= t.phash_hamming_max,
     threshold: t.phash_hamming_max,
     value: hamming,
-    note: hamming <= t.phash_hamming_max ? "" : `aHash hamming=${hamming} > ${t.phash_hamming_max} — 整体结构与 reference 偏差过大`,
+    note:
+      hamming <= t.phash_hamming_max
+        ? ""
+        : `aHash hamming=${hamming} > ${t.phash_hamming_max} — 整体结构与 reference 偏差过大`,
   }
 
   // ---- 2. SSIM -----------------------------------------------------------

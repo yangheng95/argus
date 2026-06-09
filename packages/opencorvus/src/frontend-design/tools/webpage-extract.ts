@@ -28,8 +28,7 @@ import { captureSingleFileHtml } from "@/web-clone/singlefile-capture"
 const log = Log.create({ service: "webpage-evidence.tool.webpage_extract" })
 
 export const WebpageExtractTool = Tool.define("webpage_extract", {
-  description:
-    `Extract a live webpage via headless Chrome. Captures the DOM tree, ~33 computed CSS properties per element, and a full-page PNG screenshot.
+  description: `Extract a live webpage via headless Chrome. Captures the DOM tree, ~33 computed CSS properties per element, and a full-page PNG screenshot.
 
 Writes to the output directory (defaults to the worktree):
   - reference.png                the reference screenshot — visual target for later scoring
@@ -50,10 +49,7 @@ Use this only when URL evidence is missing for the requested output directory. D
       .optional(),
     viewport_width: z.number().int().positive().describe("Viewport width in logical pixels. Default 1440.").optional(),
     viewport_height: z.number().int().positive().describe("Viewport height in logical pixels. Default 900.").optional(),
-    scope_selector: z
-      .string()
-      .describe("CSS selector scoping the extraction (default: <body>).")
-      .optional(),
+    scope_selector: z.string().describe("CSS selector scoping the extraction (default: <body>).").optional(),
     keep_images: z
       .boolean()
       .describe("When true, download image assets into images/ and populate assets.imageMap. Default true.")
@@ -110,9 +106,9 @@ Use this only when URL evidence is missing for the requested output directory. D
     const singleFilePath = path.join(outputDir, "singlefile.html")
     let singleFile:
       | {
-        outputPath: string
-        bytes: number
-      }
+          outputPath: string
+          bytes: number
+        }
       | undefined
     let singleFileError: string | undefined
     try {
@@ -130,7 +126,9 @@ Use this only when URL evidence is missing for the requested output directory. D
         outputDir,
         error: singleFileError,
       })
-      await fs.writeFile(path.join(outputDir, "singlefile-failure.txt"), `${singleFileError}\n`, "utf8").catch(() => undefined)
+      await fs
+        .writeFile(path.join(outputDir, "singlefile-failure.txt"), `${singleFileError}\n`, "utf8")
+        .catch(() => undefined)
     }
 
     const summary = {

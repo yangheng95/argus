@@ -11,10 +11,7 @@ import { resolve } from "node:path"
 
 describe("engine_goal.retry_count column retired", () => {
   test("Drizzle schema body has no retry_count column declaration", () => {
-    const source = readFileSync(
-      resolve(import.meta.dir, "../src/engine/engine.sql.ts"),
-      "utf8",
-    )
+    const source = readFileSync(resolve(import.meta.dir, "../src/engine/engine.sql.ts"), "utf8")
     const tableStart = source.indexOf("export const EngineGoalTable = sqliteTable(")
     expect(tableStart).toBeGreaterThan(0)
     // Body extends until the next top-level export.
@@ -24,10 +21,7 @@ describe("engine_goal.retry_count column retired", () => {
   })
 
   test("DDL has no retry_count column declaration on engine_goal", () => {
-    const source = readFileSync(
-      resolve(import.meta.dir, "../src/storage/ddl.ts"),
-      "utf8",
-    )
+    const source = readFileSync(resolve(import.meta.dir, "../src/storage/ddl.ts"), "utf8")
     const goalTableStart = source.indexOf("CREATE TABLE IF NOT EXISTS engine_goal")
     expect(goalTableStart).toBeGreaterThan(0)
     const goalTableEnd = source.indexOf(");", goalTableStart)
@@ -41,10 +35,7 @@ describe("engine_goal.retry_count column retired", () => {
   })
 
   test("openGoalImplementationVersion no longer writes engine_goal.retry_count", () => {
-    const source = readFileSync(
-      resolve(import.meta.dir, "../src/engine/persist.ts"),
-      "utf8",
-    )
+    const source = readFileSync(resolve(import.meta.dir, "../src/engine/persist.ts"), "utf8")
     const fnStart = source.indexOf("function openGoalImplementationVersion(")
     expect(fnStart).toBeGreaterThan(0)
     const fnEnd = source.indexOf("\n}\n", fnStart)
@@ -54,10 +45,7 @@ describe("engine_goal.retry_count column retired", () => {
   })
 
   test("startNewAttempt resetWorkspace path no longer writes engine_goal.retry_count", () => {
-    const source = readFileSync(
-      resolve(import.meta.dir, "../src/engine/persist.ts"),
-      "utf8",
-    )
+    const source = readFileSync(resolve(import.meta.dir, "../src/engine/persist.ts"), "utf8")
     const fnStart = source.indexOf("export function startNewAttempt(")
     expect(fnStart).toBeGreaterThan(0)
     const fnEnd = source.indexOf("\n}\n", fnStart)

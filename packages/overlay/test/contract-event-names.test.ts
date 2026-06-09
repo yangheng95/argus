@@ -1,5 +1,5 @@
-import { test, expect } from "bun:test";
-import path from "node:path";
+import { test, expect } from "bun:test"
+import path from "node:path"
 
 // ── Wire-format contract test ──
 //
@@ -21,8 +21,8 @@ import path from "node:path";
 //   (b) you add the event to META_EVENT_NAMES below with a one-line note
 //       pointing at the route handler that emits it.
 
-const REPO_ROOT = path.resolve(import.meta.dir, "..", "..", "..");
-const OPENAPI_PATH = path.join(REPO_ROOT, "packages", "sdk", "openapi.json");
+const REPO_ROOT = path.resolve(import.meta.dir, "..", "..", "..")
+const OPENAPI_PATH = path.join(REPO_ROOT, "packages", "sdk", "openapi.json")
 
 // SSE control frames the route handlers insert directly into the stream;
 // they are NOT BusEvent and intentionally absent from openapi.json's Event.*.
@@ -45,41 +45,41 @@ const META_EVENT_NAMES = new Set<string>([
   // App-level SSE connect / heartbeat
   "server.connected",
   "server.heartbeat",
-]);
+])
 
 async function loadProducerEventNames(): Promise<Set<string>> {
-  const text = await Bun.file(OPENAPI_PATH).text();
+  const text = await Bun.file(OPENAPI_PATH).text()
   const spec = JSON.parse(text) as {
-    components?: { schemas?: Record<string, unknown> };
-  };
-  const schemas = spec.components?.schemas ?? {};
-  const names = new Set<string>();
-  for (const key of Object.keys(schemas)) {
-    if (!key.startsWith("Event.")) continue;
-    // "Event.task.created" → "task.created"
-    names.add(key.slice("Event.".length));
+    components?: { schemas?: Record<string, unknown> }
   }
-  return names;
+  const schemas = spec.components?.schemas ?? {}
+  const names = new Set<string>()
+  for (const key of Object.keys(schemas)) {
+    if (!key.startsWith("Event.")) continue
+    // "Event.task.created" → "task.created"
+    names.add(key.slice("Event.".length))
+  }
+  return names
 }
 
 test("openapi.json declares the terminal task events the overlay's OS-notification path depends on", async () => {
-  const producer = await loadProducerEventNames();
+  const producer = await loadProducerEventNames()
   // These four events are the difference between "OS toast actually pings
   // the operator when work finishes" and "the operator never gets notified".
   // If openapi.json lacks them, the engine BusEvent.define was rolled back
   // or the SDK was not rebuilt after the engine change.
-  expect(producer.has("interaction.requested")).toBe(true);
-  expect(producer.has("task.completed")).toBe(true);
-  expect(producer.has("task.failed")).toBe(true);
-  expect(producer.has("task.cancelled")).toBe(true);
-});
+  expect(producer.has("interaction.requested")).toBe(true)
+  expect(producer.has("task.completed")).toBe(true)
+  expect(producer.has("task.failed")).toBe(true)
+  expect(producer.has("task.cancelled")).toBe(true)
+})
 
 test("openapi.json does NOT declare the historical bogus event names that masked the bug", async () => {
-  const producer = await loadProducerEventNames();
+  const producer = await loadProducerEventNames()
   // These names appeared in consumer code and fixtures but were never
   // emitted by any producer. The renames in 2026-05-12 retired them.
-  expect(producer.has("interaction.created")).toBe(false);
-});
+  expect(producer.has("interaction.created")).toBe(false)
+})
 
 test("every event the overlay's OS-notification path listens to is a known wire event", async () => {
   // Single source of truth: this list mirrors the type checks in
@@ -103,10 +103,8 @@ test("every event the overlay's OS-notification path listens to is a known wire 
     "review.stream.progress",
     "review.stream.chunk",
     "integrity.review.completed",
-  ];
-  const producer = await loadProducerEventNames();
-  const unknown = overlaySubscribes.filter(
-    (name) => !producer.has(name) && !META_EVENT_NAMES.has(name),
-  );
-  expect(unknown).toEqual([]);
-});
+  ]
+  const producer = await loadProducerEventNames()
+  const unknown = overlaySubscribes.filter((name) => !producer.has(name) && !META_EVENT_NAMES.has(name))
+  expect(unknown).toEqual([])
+})

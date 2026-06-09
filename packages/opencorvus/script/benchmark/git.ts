@@ -40,10 +40,7 @@ async function gitTopLevel(dir: string): Promise<string | undefined> {
     stdout: "pipe",
     stderr: "pipe",
   })
-  const [code, stdout] = await Promise.all([
-    proc.exited,
-    new Response(proc.stdout).text(),
-  ])
+  const [code, stdout] = await Promise.all([proc.exited, new Response(proc.stdout).text()])
   if (code !== 0) return undefined
   return path.resolve(stdout.trim())
 }

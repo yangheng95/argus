@@ -4,16 +4,16 @@
 // (which lazy-loads from the acceptance API when necessary) and renders it
 // through the shared DiffView component.
 
-import { createResource, createMemo, Show } from "solid-js";
-import { DiffView, changeStatusLabel, type FileChange } from "./DiffView";
-import { resolveDiff, type DiffTarget } from "../services/diff";
-import { Panel } from "./primitives/Panel";
-import { t } from "../utils/i18n";
-import type { JSX } from "solid-js";
+import { createResource, createMemo, Show } from "solid-js"
+import { DiffView, changeStatusLabel, type FileChange } from "./DiffView"
+import { resolveDiff, type DiffTarget } from "../services/diff"
+import { Panel } from "./primitives/Panel"
+import { t } from "../utils/i18n"
+import type { JSX } from "solid-js"
 
 export interface DiffPreviewPanelProps {
   /** Diff target to show — null/empty renders the empty state. */
-  target: DiffTarget | null;
+  target: DiffTarget | null
 }
 
 export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
@@ -22,25 +22,25 @@ export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
   // instantaneous as long as the underlying acceptance cache is still warm.
   const [change] = createResource<FileChange | null, string>(
     () => {
-      const target = props.target;
-      if (!target?.filePath) return "";
-      return `${target.goalRunID || "task"}:${target.filePath}`;
+      const target = props.target
+      if (!target?.filePath) return ""
+      return `${target.goalRunID || "task"}:${target.filePath}`
     },
     async (key) => {
-      if (!key) return null;
-      const target = props.target;
-      if (!target?.filePath) return null;
-      return resolveDiff(target);
+      if (!key) return null
+      const target = props.target
+      if (!target?.filePath) return null
+      return resolveDiff(target)
     },
-  );
+  )
 
-  const item = createMemo(() => change());
-  const loading = () => change.loading;
+  const item = createMemo(() => change())
+  const loading = () => change.loading
 
   // Compute header content in a memo so Panel's Show reads a stable reference,
   // avoiding double-creation of DOM nodes from the ternary getter.
   const headerContent = createMemo((): JSX.Element | undefined => {
-    if (!props.target?.filePath) return undefined;
+    if (!props.target?.filePath) return undefined
     return (
       <>
         <span class="diff-preview-copy">
@@ -65,8 +65,8 @@ export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
           </span>
         </Show>
       </>
-    );
-  });
+    )
+  })
 
   return (
     <Panel class="diff-preview-panel" header={headerContent()}>
@@ -101,5 +101,5 @@ export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
         </Show>
       </Show>
     </Panel>
-  );
+  )
 }

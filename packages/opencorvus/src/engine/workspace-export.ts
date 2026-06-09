@@ -29,9 +29,10 @@ export async function collectMainWorktreeDiff(
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((file) => !ProjectRuntimePaths.isEvidenceInputRelativePath(file))
-  const patchResult = await $`git -c core.quotepath=false diff --no-ext-diff ${range} -- . ":(exclude)frontend-design-skeleton" ":(exclude)frontend-design-skeleton/**" ":(exclude)web-clone-source" ":(exclude)web-clone-source/**" ":(exclude)webpage-evidence" ":(exclude)webpage-evidence/**"`
-    .cwd(cwd)
-    .quiet()
-    .nothrow()
+  const patchResult =
+    await $`git -c core.quotepath=false diff --no-ext-diff ${range} -- . ":(exclude)frontend-design-skeleton" ":(exclude)frontend-design-skeleton/**" ":(exclude)web-clone-source" ":(exclude)web-clone-source/**" ":(exclude)webpage-evidence" ":(exclude)webpage-evidence/**"`
+      .cwd(cwd)
+      .quiet()
+      .nothrow()
   return { changedFiles, patch: patchResult.stdout.toString() }
 }

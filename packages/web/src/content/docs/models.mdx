@@ -7,11 +7,11 @@ OpenCorvus picks a model in three scenarios; configure each independently. See [
 
 ## Three knobs
 
-| Scenario | Where to set |
-|---|---|
-| Default execution model | `model` field in [config](/docs/config/) |
-| Per-agent model | `agent.<name>.model` (see `packages/opencorvus/src/config/config.ts:1053-1067`, `1191`, `1232`, `1239`, `1246`) |
-| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL` env |
+| Scenario                          | Where to set                                                                                                    |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Default execution model           | `model` field in [config](/docs/config/)                                                                        |
+| Per-agent model                   | `agent.<name>.model` (see `packages/opencorvus/src/config/config.ts:1053-1067`, `1191`, `1232`, `1239`, `1246`) |
+| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL` env                                                                                   |
 
 Example splitting plan vs execute:
 
@@ -19,10 +19,10 @@ Example splitting plan vs execute:
 {
   "model": "alibaba-cn/qwen3.5-plus",
   "agent": {
-    "requirements":   { "model": "anthropic/claude-sonnet-4-6" },
-    "planner":        { "model": "anthropic/claude-sonnet-4-6" },
-    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" }
-  }
+    "requirements": { "model": "anthropic/claude-sonnet-4-6" },
+    "planner": { "model": "anthropic/claude-sonnet-4-6" },
+    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" },
+  },
 }
 ```
 

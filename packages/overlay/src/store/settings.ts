@@ -1,144 +1,141 @@
 // ── Settings Store ──
 // Solid reactive store for overlay settings.
 
-import { createStore } from "solid-js/store";
-import { DEFAULT_SERVER } from "../services/default-server";
-import { PROJECT_EDITOR_IDS, getHostTransport, type ProjectEditorID } from "../services/host-transport";
-import { requireInitialVsCodeHostTheme } from "../services/host-theme";
-import { DEFAULT_THEME_ID, sanitizeThemeForHost } from "../services/theme-registry";
-import { sanitizeLocale } from "../utils/i18n";
+import { createStore } from "solid-js/store"
+import { DEFAULT_SERVER } from "../services/default-server"
+import { PROJECT_EDITOR_IDS, getHostTransport, type ProjectEditorID } from "../services/host-transport"
+import { requireInitialVsCodeHostTheme } from "../services/host-theme"
+import { DEFAULT_THEME_ID, sanitizeThemeForHost } from "../services/theme-registry"
+import { sanitizeLocale } from "../utils/i18n"
 
 // ── Types ──
 
-export type ToolPermAction = "allow" | "ask" | "deny";
-export type ExecutorID = "opencorvus" | "codex" | "claude-code";
+export type ToolPermAction = "allow" | "ask" | "deny"
+export type ExecutorID = "opencorvus" | "codex" | "claude-code"
 
 export interface ToolPermissions {
-  websearch:          ToolPermAction;
-  webfetch:           ToolPermAction;
-  skill:              ToolPermAction;
-  external_directory: ToolPermAction;
-  task:               ToolPermAction;
-  schedule:           ToolPermAction;
+  websearch: ToolPermAction
+  webfetch: ToolPermAction
+  skill: ToolPermAction
+  external_directory: ToolPermAction
+  task: ToolPermAction
+  schedule: ToolPermAction
 }
 
 export interface OverlaySettings {
-  serverUrl: string;
-  autoServer: boolean;
-  password: string;
-  username: string;
-  executor: ExecutorID;
-  projectEditor: ProjectEditorID;
-  initGit: boolean;
-  sidebarCollapsed: boolean;
-  rightPanelCollapsed: boolean;
-  sidebarWidth: number | null;
-  sectionsWidth: number | null;
-  centerWorkbenchWidth: number | null;
-  centerWorkbenchPanelWeights: Record<string, number> | null;
+  serverUrl: string
+  autoServer: boolean
+  password: string
+  username: string
+  executor: ExecutorID
+  projectEditor: ProjectEditorID
+  initGit: boolean
+  sidebarCollapsed: boolean
+  rightPanelCollapsed: boolean
+  sidebarWidth: number | null
+  sectionsWidth: number | null
+  centerWorkbenchWidth: number | null
+  centerWorkbenchPanelWeights: Record<string, number> | null
   /** Mission page column widths — persisted independently of the Panel's
    *  sidebarWidth/sectionsWidth so resizing one mode never moves the other
    *  (the ledger/channels content differs from the Panel's chat list /
    *  inspector, so their ideal widths differ too). */
-  missionLedgerWidth: number | null;
-  missionChannelsWidth: number | null;
-  opacity: number;
-  zoom: number;
-  theme: string;
-  locale: string;
+  missionLedgerWidth: number | null
+  missionChannelsWidth: number | null
+  opacity: number
+  zoom: number
+  theme: string
+  locale: string
   /** Active working directory. Empty string means the user has not yet
    *  selected one; the UI must surface an explicit "select directory" CTA. */
-  directory: string;
-  workspaceTaskID: string;
-  workspaceDirectory: string;
+  directory: string
+  workspaceTaskID: string
+  workspaceDirectory: string
   /** Last persisted directory value; used to detect uncommitted changes and
    *  restored on next cold start by loadSettings(). */
-  savedDirectory: string;
+  savedDirectory: string
   /** Preferred IDE used by the workspace launcher and file-link open actions. */
-  preferredProjectEditor: ProjectEditorID;
+  preferredProjectEditor: ProjectEditorID
   /** Incremented each time the workspace is invalidated/reset */
-  workspaceEpoch: number;
+  workspaceEpoch: number
   /** Incremented each time the working directory changes */
-  directoryEpoch: number;
+  directoryEpoch: number
   /** Default tool permission actions; synced from server config */
-  toolPermissions: ToolPermissions;
+  toolPermissions: ToolPermissions
   /** Surface task lifecycle (success / failure / cancellation / pending
    *  interaction) as an OS-level desktop notification. Tauri acceptance uses
    *  the native notification plugin; browser dev mode uses the Web
    *  Notification API after the Settings gesture grants permission. Default
    *  ON because the user explicitly asked for it; can be turned off in
    *  General settings. */
-  desktopNotifications: boolean;
+  desktopNotifications: boolean
 }
 
 // ── Sanitisers ──
 
 function sanitizeTheme(value: any): string {
-  return sanitizeThemeForHost(value);
+  return sanitizeThemeForHost(value)
 }
 
 function settingsTheme(input: Partial<OverlaySettings>): string {
   if (typeof input?.theme === "string" && input.theme.trim()) {
-    return sanitizeTheme(input.theme);
+    return sanitizeTheme(input.theme)
   }
   if (getHostTransport().kind === "vscode") {
-    return requireInitialVsCodeHostTheme();
+    return requireInitialVsCodeHostTheme()
   }
-  return DEFAULT_SETTINGS.theme;
+  return DEFAULT_SETTINGS.theme
 }
 
-export const MIN_WINDOW_OPACITY = 0.5;
+export const MIN_WINDOW_OPACITY = 0.5
 
 export function sanitizeOpacity(value: any): number {
-  const n = parseFloat(String(value ?? ""));
-  if (!Number.isFinite(n)) return 0.99;
-  return Math.max(
-    MIN_WINDOW_OPACITY,
-    Math.min(1, Math.round(n * 100) / 100),
-  );
+  const n = parseFloat(String(value ?? ""))
+  if (!Number.isFinite(n)) return 0.99
+  return Math.max(MIN_WINDOW_OPACITY, Math.min(1, Math.round(n * 100) / 100))
 }
 
 function sanitizeZoom(value: any): number {
-  const n = parseFloat(String(value ?? ""));
-  if (!Number.isFinite(n)) return 1;
-  return Math.min(1.6, Math.max(0.8, n));
+  const n = parseFloat(String(value ?? ""))
+  if (!Number.isFinite(n)) return 1
+  return Math.min(1.6, Math.max(0.8, n))
 }
 
 function sanitizePaneWidth(value: any): number | null {
-  const n = parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return n;
+  const n = parseInt(String(value ?? ""), 10)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return n
 }
 
 export function sanitizePanelWeights(value: any): Record<string, number> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
   const entries = Object.entries(value)
     .map(([key, raw]) => {
-      const weight = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
-      return [key, weight] as const;
+      const weight = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""))
+      return [key, weight] as const
     })
-    .filter(([key, weight]) => key.length > 0 && Number.isFinite(weight) && weight > 0);
-  return entries.length > 0 ? Object.fromEntries(entries) : null;
+    .filter(([key, weight]) => key.length > 0 && Number.isFinite(weight) && weight > 0)
+  return entries.length > 0 ? Object.fromEntries(entries) : null
 }
 
 function defaultAutoServer(url: string): boolean {
-  return !url || url === DEFAULT_SERVER;
+  return !url || url === DEFAULT_SERVER
 }
 
 function sanitizeAutoServer(value: any, serverUrl: string): boolean {
-  if (value === true || value === false) return value;
-  return defaultAutoServer(serverUrl);
+  if (value === true || value === false) return value
+  return defaultAutoServer(serverUrl)
 }
 
 export function sanitizeExecutor(value: any): ExecutorID {
-  const text = String(value || "").trim();
-  if (text === "opencorvus" || text === "codex" || text === "claude-code") return text;
-  return DEFAULT_SETTINGS.executor;
+  const text = String(value || "").trim()
+  if (text === "opencorvus" || text === "codex" || text === "claude-code") return text
+  return DEFAULT_SETTINGS.executor
 }
 
 export function sanitizeProjectEditor(value: any): ProjectEditorID {
-  const text = String(value || "").trim();
-  return PROJECT_EDITOR_IDS.includes(text as ProjectEditorID) ? text as ProjectEditorID : "vscode";
+  const text = String(value || "").trim()
+  return PROJECT_EDITOR_IDS.includes(text as ProjectEditorID) ? (text as ProjectEditorID) : "vscode"
 }
 
 // ── Default locale ──
@@ -149,11 +146,11 @@ const DEFAULT_LOCALE = sanitizeLocale(
     : typeof navigator !== "undefined"
       ? navigator.language
       : "en-US",
-);
+)
 
 // ── Defaults ──
 
-export const DEFAULT_THEME = DEFAULT_THEME_ID;
+export const DEFAULT_THEME = DEFAULT_THEME_ID
 
 export const DEFAULT_SETTINGS: OverlaySettings = {
   serverUrl: DEFAULT_SERVER,
@@ -183,62 +180,46 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   workspaceEpoch: 0,
   directoryEpoch: 0,
   toolPermissions: {
-    websearch:          "allow",
-    webfetch:           "allow",
-    skill:              "allow",
+    websearch: "allow",
+    webfetch: "allow",
+    skill: "allow",
     external_directory: "allow",
-    task:               "allow",
-    schedule:           "allow",
+    task: "allow",
+    schedule: "allow",
   },
   desktopNotifications: true,
-};
+}
 
 // ── Store ──
 
-export const [settingsStore, setSettingsStore] =
-  createStore<OverlaySettings>({ ...DEFAULT_SETTINGS });
+export const [settingsStore, setSettingsStore] = createStore<OverlaySettings>({ ...DEFAULT_SETTINGS })
 
 // ── applySettings ──
 
 export function applySettings(input: Partial<OverlaySettings>): void {
   const nativeInput = input as Partial<OverlaySettings> & {
-    workspaceTaskId?: unknown;
-  };
-  const canonicalWorkspaceTaskID =
-    typeof input?.workspaceTaskID === "string"
-      ? input.workspaceTaskID.trim()
-      : "";
-  const workspaceTaskID =
-    canonicalWorkspaceTaskID
-      ? canonicalWorkspaceTaskID
-      : typeof nativeInput?.workspaceTaskId === "string"
-        ? nativeInput.workspaceTaskId.trim()
-        : DEFAULT_SETTINGS.workspaceTaskID;
+    workspaceTaskId?: unknown
+  }
+  const canonicalWorkspaceTaskID = typeof input?.workspaceTaskID === "string" ? input.workspaceTaskID.trim() : ""
+  const workspaceTaskID = canonicalWorkspaceTaskID
+    ? canonicalWorkspaceTaskID
+    : typeof nativeInput?.workspaceTaskId === "string"
+      ? nativeInput.workspaceTaskId.trim()
+      : DEFAULT_SETTINGS.workspaceTaskID
   const serverUrl =
-    typeof input?.serverUrl === "string" && input.serverUrl.trim()
-      ? input.serverUrl.trim()
-      : DEFAULT_SETTINGS.serverUrl;
+    typeof input?.serverUrl === "string" && input.serverUrl.trim() ? input.serverUrl.trim() : DEFAULT_SETTINGS.serverUrl
 
   setSettingsStore({
     serverUrl,
     autoServer: sanitizeAutoServer(input?.autoServer, serverUrl),
-    password:
-      typeof input?.password === "string"
-        ? input.password
-        : DEFAULT_SETTINGS.password,
+    password: typeof input?.password === "string" ? input.password : DEFAULT_SETTINGS.password,
     username:
-      typeof input?.username === "string" && input.username.trim()
-        ? input.username.trim()
-        : DEFAULT_SETTINGS.username,
-    executor:
-      sanitizeExecutor(input?.executor),
-    projectEditor:
-      sanitizeProjectEditor(input?.projectEditor),
+      typeof input?.username === "string" && input.username.trim() ? input.username.trim() : DEFAULT_SETTINGS.username,
+    executor: sanitizeExecutor(input?.executor),
+    projectEditor: sanitizeProjectEditor(input?.projectEditor),
     initGit: true,
     sidebarCollapsed:
-      typeof input?.sidebarCollapsed === "boolean"
-        ? input.sidebarCollapsed
-        : DEFAULT_SETTINGS.sidebarCollapsed,
+      typeof input?.sidebarCollapsed === "boolean" ? input.sidebarCollapsed : DEFAULT_SETTINGS.sidebarCollapsed,
     rightPanelCollapsed:
       typeof input?.rightPanelCollapsed === "boolean"
         ? input.rightPanelCollapsed
@@ -252,12 +233,8 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
     theme: settingsTheme(input ?? {}),
-    locale: sanitizeLocale(
-      (typeof input?.locale === "string" ? input.locale : "") ||
-        DEFAULT_SETTINGS.locale,
-    ),
-    directory:
-      typeof input?.directory === "string" ? input.directory.trim() : "",
+    locale: sanitizeLocale((typeof input?.locale === "string" ? input.locale : "") || DEFAULT_SETTINGS.locale),
+    directory: typeof input?.directory === "string" ? input.directory.trim() : "",
     workspaceTaskID,
     workspaceDirectory:
       typeof input?.workspaceDirectory === "string"
@@ -265,79 +242,80 @@ export function applySettings(input: Partial<OverlaySettings>): void {
         : DEFAULT_SETTINGS.workspaceDirectory,
     preferredProjectEditor: sanitizeProjectEditor((input as any)?.preferredProjectEditor),
     desktopNotifications: input?.desktopNotifications !== false,
-  });
+  })
 }
 
 // ── saveSettings ──
 
 export function saveSettings(): void {
-  const s = settingsStore;
+  const s = settingsStore
   void getHostTransport()
     .native({ kind: "settings.save", payload: bootstrapOverlaySettings(s) })
-    .catch(() => undefined);
+    .catch(() => undefined)
 }
 
 // ── loadSettings ──
 
 export async function loadSettings(): Promise<void> {
-  let persisted: unknown;
+  let persisted: unknown
   try {
-    persisted = await getHostTransport().native({ kind: "settings.load" });
+    persisted = await getHostTransport().native({ kind: "settings.load" })
   } catch {
-    persisted = undefined;
+    persisted = undefined
   }
   if (persisted && typeof persisted === "object" && !Array.isArray(persisted)) {
-    applySettings(persisted as Partial<OverlaySettings>);
-    setSavedDirectory(savedDirectoryValue((persisted as Partial<OverlaySettings>).directory));
-    return;
+    applySettings(persisted as Partial<OverlaySettings>)
+    setSavedDirectory(savedDirectoryValue((persisted as Partial<OverlaySettings>).directory))
+    return
   }
-  applySettings({ ...DEFAULT_SETTINGS });
-  setSavedDirectory(DEFAULT_SETTINGS.savedDirectory);
+  applySettings({ ...DEFAULT_SETTINGS })
+  setSavedDirectory(DEFAULT_SETTINGS.savedDirectory)
 }
 
 // ── Runtime setters ──
 
 export function setSavedDirectory(path: string): void {
-  setSettingsStore("savedDirectory", typeof path === "string" ? path : "");
+  setSettingsStore("savedDirectory", typeof path === "string" ? path : "")
 }
 
 export function bumpWorkspaceEpoch(): void {
-  setSettingsStore("workspaceEpoch", (n) => n + 1);
+  setSettingsStore("workspaceEpoch", (n) => n + 1)
 }
 
 export function bumpDirectoryEpoch(): void {
-  setSettingsStore("directoryEpoch", (n) => n + 1);
+  setSettingsStore("directoryEpoch", (n) => n + 1)
 }
 
 // ── Directory helpers ──
 
 export function savedDirectoryValue(directory: any): string {
-  const next = typeof directory === "string" ? directory.trim() : "";
-  return next;
+  const next = typeof directory === "string" ? directory.trim() : ""
+  return next
 }
 
 export function settingsDirectory(settings: Partial<OverlaySettings> | null | undefined): string {
-  return typeof settings?.directory === "string" ? settings.directory.trim() : "";
+  return typeof settings?.directory === "string" ? settings.directory.trim() : ""
 }
 
 // ── bootstrapOverlaySettings ──
 
-export function bootstrapOverlaySettings(
-  input: Partial<OverlaySettings> = settingsStore,
-): Omit<OverlaySettings, "savedDirectory" | "workspaceEpoch" | "directoryEpoch" | "toolPermissions"> & {
-  directory?: string;
-  sidebarWidth?: number;
-  sectionsWidth?: number;
-  centerWorkbenchWidth?: number;
-  centerWorkbenchPanelWeights?: Record<string, number>;
-  missionLedgerWidth?: number;
-  missionChannelsWidth?: number;
-  preferredProjectEditor?: ProjectEditorID;
-  workspaceTaskID?: string;
-  workspaceTaskId?: string;
-  workspaceDirectory?: string;
+export function bootstrapOverlaySettings(input: Partial<OverlaySettings> = settingsStore): Omit<
+  OverlaySettings,
+  "savedDirectory" | "workspaceEpoch" | "directoryEpoch" | "toolPermissions"
+> & {
+  directory?: string
+  sidebarWidth?: number
+  sectionsWidth?: number
+  centerWorkbenchWidth?: number
+  centerWorkbenchPanelWeights?: Record<string, number>
+  missionLedgerWidth?: number
+  missionChannelsWidth?: number
+  preferredProjectEditor?: ProjectEditorID
+  workspaceTaskID?: string
+  workspaceTaskId?: string
+  workspaceDirectory?: string
 } {
-  const workspaceTaskID = input.workspaceTaskID || undefined;
+  const workspaceTaskID = input.workspaceTaskID || undefined
   return {
     serverUrl: input.serverUrl ?? DEFAULT_SETTINGS.serverUrl,
     autoServer: input.autoServer ?? DEFAULT_SETTINGS.autoServer,
@@ -364,34 +342,34 @@ export function bootstrapOverlaySettings(
     workspaceTaskID,
     workspaceTaskId: workspaceTaskID,
     workspaceDirectory: input.workspaceDirectory || undefined,
-  };
+  }
 }
 
 // ── Workspace memory helpers ──
 
 export function looksLikeExecutionWorkspace(value: any): boolean {
-  const text = String(value || "").trim();
-  if (!text) return false;
-  return /(^|[\\/])goal-workspace([\\/]|$)/i.test(text);
+  const text = String(value || "").trim()
+  if (!text) return false
+  return /(^|[\\/])goal-workspace([\\/]|$)/i.test(text)
 }
 
 export function workspaceRestoreDirectory(value: any): string {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (!text) return "";
-  if (looksLikeExecutionWorkspace(text)) return "";
-  return text;
+  const text = typeof value === "string" ? value.trim() : ""
+  if (!text) return ""
+  if (looksLikeExecutionWorkspace(text)) return ""
+  return text
 }
 
 // ── Test / timing helpers ──
 
 export function overlayTestConfig(): Record<string, unknown> | null {
-  if (typeof window === "undefined") return null;
-  const value = (window as any).__overlayTest;
-  return value && typeof value === "object" ? value : null;
+  if (typeof window === "undefined") return null
+  const value = (window as any).__overlayTest
+  return value && typeof value === "object" ? value : null
 }
 
 export function overlayTiming(name: string, fallback: number, min = 50): number {
-  const value = Number(overlayTestConfig()?.[name]);
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(min, Math.floor(value));
+  const value = Number(overlayTestConfig()?.[name])
+  if (!Number.isFinite(value)) return fallback
+  return Math.max(min, Math.floor(value))
 }

@@ -9,16 +9,18 @@ export const ToolFailureClassification = z.enum([
 
 export type ToolFailureClassification = z.infer<typeof ToolFailureClassification>
 
-export const ToolFailureCause = z.object({
-  kind: z.string().min(1),
-  name: z.string().min(1),
-  message: z.string().min(1),
-  originSite: z.string().min(1),
-  classification: ToolFailureClassification,
-  data: z.record(z.string(), z.unknown()).optional(),
-}).meta({
-  ref: "ToolFailureCause",
-})
+export const ToolFailureCause = z
+  .object({
+    kind: z.string().min(1),
+    name: z.string().min(1),
+    message: z.string().min(1),
+    originSite: z.string().min(1),
+    classification: ToolFailureClassification,
+    data: z.record(z.string(), z.unknown()).optional(),
+  })
+  .meta({
+    ref: "ToolFailureCause",
+  })
 
 export type ToolFailureCause = z.infer<typeof ToolFailureCause>
 

@@ -286,7 +286,6 @@ export function Session() {
     )
   })
 
-
   // Helper: Find next visible message boundary in direction
   const findNextVisibleMessage = (direction: "next" | "prev"): string | null => {
     const children = scroll.getChildren()
@@ -702,11 +701,16 @@ export function Session() {
           return
         }
 
-        void copyFormattedMessage(lastAssistantMessage, sync.data.part[lastAssistantMessage.id] ?? [], {
-          thinking: showThinking(),
-          toolDetails: showDetails(),
-          assistantMetadata: showAssistantMetadata(),
-        }, toast)
+        void copyFormattedMessage(
+          lastAssistantMessage,
+          sync.data.part[lastAssistantMessage.id] ?? [],
+          {
+            thinking: showThinking(),
+            toolDetails: showDetails(),
+            assistantMetadata: showAssistantMetadata(),
+          },
+          toast,
+        )
         dialog.clear()
       },
     },
@@ -899,117 +903,117 @@ export function Session() {
         }}
       >
         <box flexDirection="row">
-        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
-          <Show when={session()}>
-            <Show when={showHeader() && (!sidebarVisible() || !wide())}>
-              <Header />
-            </Show>
-            <scrollbox
-              ref={(r) => (scroll = r)}
-              viewportOptions={{
-                paddingRight: showScrollbar() ? 1 : 0,
-              }}
-              verticalScrollbarOptions={{
-                paddingLeft: 1,
-                visible: showScrollbar(),
-                trackOptions: {
-                  backgroundColor: theme.backgroundElement,
-                  foregroundColor: theme.border,
-                },
-              }}
-              stickyScroll={true}
-              stickyStart="bottom"
-              flexGrow={1}
-              scrollAcceleration={scrollAcceleration()}
-            >
-              <For each={messages()}>
-                {(message, index) => (
-                  <Switch>
-                    <Match when={message.role === "user"}>
-                      <UserMessage
-                        index={index()}
-                        onMouseUp={() => {
-                          if (renderer.getSelection()?.getSelectedText()) return
-                          dialog.replace(() => (
-                            <DialogMessage
-                              messageID={message.id}
-                              sessionID={route.sessionID}
-                              setPrompt={(promptInfo) => prompt.set(promptInfo)}
-                            />
-                          ))
-                        }}
-                        message={message as UserMessage}
-                        parts={sync.data.part[message.id] ?? []}
-                        pending={pending()}
-                      />
-                    </Match>
-                    <Match when={message.role === "assistant"}>
-                      <AssistantMessage
-                        last={lastAssistant()?.id === message.id}
-                        message={message as AssistantMessage}
-                        parts={sync.data.part[message.id] ?? []}
-                      />
-                    </Match>
-                  </Switch>
-                )}
-              </For>
-            </scrollbox>
-            <Show when={session()?.parentID} fallback={<Footer />}>
-              <SubagentFooter />
-            </Show>
-            <box flexShrink={0}>
-              <Show when={permissions().length > 0}>
-                <PermissionPrompt request={permissions()[0]} />
+          <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
+            <Show when={session()}>
+              <Show when={showHeader() && (!sidebarVisible() || !wide())}>
+                <Header />
               </Show>
-              <Show when={permissions().length === 0 && questions().length > 0}>
-                <QuestionPrompt request={questions()[0]} />
-              </Show>
-              <Show when={promptVisible()}>
-                <TuiPluginRuntime.Slot
-                  name="session_prompt"
-                  mode="replace"
-                  session_id={route.sessionID}
-                  visible={promptVisible()}
-                  disabled={promptDisabled()}
-                  on_submit={toBottom}
-                  ref={bindPrompt}
-                >
-                  <Prompt
-                    visible={promptVisible()}
-                    ref={bindPrompt}
-                    disabled={promptDisabled()}
-                    onSubmit={() => {
-                      toBottom()
-                    }}
-                    sessionID={route.sessionID}
-                    right={<TuiPluginRuntime.Slot name="session_prompt_right" session_id={route.sessionID} />}
-                  />
-                </TuiPluginRuntime.Slot>
-              </Show>
-            </box>
-          </Show>
-          <Toast />
-        </box>
-        <Show when={sidebarVisible()}>
-          <Switch>
-            <Match when={wide()}>
-              <Sidebar sessionID={route.sessionID} />
-            </Match>
-            <Match when={!wide()}>
-              <box
-                position="absolute"
-                top={0}
-                left={0}
-                right={0}
-                bottom={0}
-                alignItems="flex-end"
-                backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
+              <scrollbox
+                ref={(r) => (scroll = r)}
+                viewportOptions={{
+                  paddingRight: showScrollbar() ? 1 : 0,
+                }}
+                verticalScrollbarOptions={{
+                  paddingLeft: 1,
+                  visible: showScrollbar(),
+                  trackOptions: {
+                    backgroundColor: theme.backgroundElement,
+                    foregroundColor: theme.border,
+                  },
+                }}
+                stickyScroll={true}
+                stickyStart="bottom"
+                flexGrow={1}
+                scrollAcceleration={scrollAcceleration()}
               >
-                <Sidebar sessionID={route.sessionID} />
+                <For each={messages()}>
+                  {(message, index) => (
+                    <Switch>
+                      <Match when={message.role === "user"}>
+                        <UserMessage
+                          index={index()}
+                          onMouseUp={() => {
+                            if (renderer.getSelection()?.getSelectedText()) return
+                            dialog.replace(() => (
+                              <DialogMessage
+                                messageID={message.id}
+                                sessionID={route.sessionID}
+                                setPrompt={(promptInfo) => prompt.set(promptInfo)}
+                              />
+                            ))
+                          }}
+                          message={message as UserMessage}
+                          parts={sync.data.part[message.id] ?? []}
+                          pending={pending()}
+                        />
+                      </Match>
+                      <Match when={message.role === "assistant"}>
+                        <AssistantMessage
+                          last={lastAssistant()?.id === message.id}
+                          message={message as AssistantMessage}
+                          parts={sync.data.part[message.id] ?? []}
+                        />
+                      </Match>
+                    </Switch>
+                  )}
+                </For>
+              </scrollbox>
+              <Show when={session()?.parentID} fallback={<Footer />}>
+                <SubagentFooter />
+              </Show>
+              <box flexShrink={0}>
+                <Show when={permissions().length > 0}>
+                  <PermissionPrompt request={permissions()[0]} />
+                </Show>
+                <Show when={permissions().length === 0 && questions().length > 0}>
+                  <QuestionPrompt request={questions()[0]} />
+                </Show>
+                <Show when={promptVisible()}>
+                  <TuiPluginRuntime.Slot
+                    name="session_prompt"
+                    mode="replace"
+                    session_id={route.sessionID}
+                    visible={promptVisible()}
+                    disabled={promptDisabled()}
+                    on_submit={toBottom}
+                    ref={bindPrompt}
+                  >
+                    <Prompt
+                      visible={promptVisible()}
+                      ref={bindPrompt}
+                      disabled={promptDisabled()}
+                      onSubmit={() => {
+                        toBottom()
+                      }}
+                      sessionID={route.sessionID}
+                      right={<TuiPluginRuntime.Slot name="session_prompt_right" session_id={route.sessionID} />}
+                    />
+                  </TuiPluginRuntime.Slot>
+                </Show>
               </box>
-            </Match>
-          </Switch>
-        </Show>
+            </Show>
+            <Toast />
+          </box>
+          <Show when={sidebarVisible()}>
+            <Switch>
+              <Match when={wide()}>
+                <Sidebar sessionID={route.sessionID} />
+              </Match>
+              <Match when={!wide()}>
+                <box
+                  position="absolute"
+                  top={0}
+                  left={0}
+                  right={0}
+                  bottom={0}
+                  alignItems="flex-end"
+                  backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
+                >
+                  <Sidebar sessionID={route.sessionID} />
+                </box>
+              </Match>
+            </Switch>
+          </Show>
         </box>
       </context.Provider>
     </PathFormatterProvider>
@@ -1071,10 +1075,7 @@ function copyFormattedMessage(
     })
 }
 
-function CopyMessageButton(props: {
-  message: UserMessage | AssistantMessage
-  parts: Part[]
-}) {
+function CopyMessageButton(props: { message: UserMessage | AssistantMessage; parts: Part[] }) {
   const ctx = use()
   const { theme } = useTheme()
   const toast = useToast()
@@ -1085,11 +1086,16 @@ function CopyMessageButton(props: {
       onMouseUp={(evt) => {
         evt.preventDefault()
         evt.stopPropagation()
-        void copyFormattedMessage(props.message, props.parts, {
-          thinking: ctx.showThinking(),
-          toolDetails: ctx.showDetails(),
-          assistantMetadata: ctx.showAssistantMetadata(),
-        }, toast)
+        void copyFormattedMessage(
+          props.message,
+          props.parts,
+          {
+            thinking: ctx.showThinking(),
+            toolDetails: ctx.showDetails(),
+            assistantMetadata: ctx.showAssistantMetadata(),
+          },
+          toast,
+        )
       }}
     >
       <span style={{ bg: theme.backgroundElement, fg: theme.textMuted }}> copy </span>
@@ -1912,7 +1918,8 @@ function SearchCode(props: ToolProps<typeof SearchCodeTool>) {
   const pathFormatter = usePathFormatter()
   return (
     <InlineTool icon="✱" pending="Searching content..." complete={props.input.pattern} part={props.part}>
-      Search Code "{props.input.pattern}" <Show when={props.input.path}>in {pathFormatter.format(props.input.path)} </Show>
+      Search Code "{props.input.pattern}"{" "}
+      <Show when={props.input.path}>in {pathFormatter.format(props.input.path)} </Show>
       <Show when={props.metadata.matches}>
         ({props.metadata.matches} {props.metadata.matches === 1 ? "match" : "matches"})
       </Show>

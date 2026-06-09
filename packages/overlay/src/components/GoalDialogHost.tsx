@@ -1,21 +1,21 @@
-import { createEffect } from "solid-js";
-import { dialogStore, setDialogStore } from "../store/dialog";
-import { closeGoalDialog, saveGoalDialog } from "../services/dialog";
-import { t } from "../utils/i18n";
-import { Dialog } from "./primitives/Dialog";
-import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea";
-import { Button } from "./ui/Button";
+import { createEffect } from "solid-js"
+import { dialogStore, setDialogStore } from "../store/dialog"
+import { closeGoalDialog, saveGoalDialog } from "../services/dialog"
+import { t } from "../utils/i18n"
+import { Dialog } from "./primitives/Dialog"
+import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
+import { Button } from "./ui/Button"
 
 export function GoalDialogHost() {
-  let titleRef: HTMLTextAreaElement | undefined;
+  let titleRef: HTMLTextAreaElement | undefined
 
   createEffect(() => {
-    if (!dialogStore.goal.open) return;
+    if (!dialogStore.goal.open) return
     queueMicrotask(() => {
-      titleRef?.focus();
-      titleRef?.select();
-    });
-  });
+      titleRef?.focus()
+      titleRef?.select()
+    })
+  })
 
   return (
     <Dialog
@@ -54,8 +54,8 @@ export function GoalDialogHost() {
         class="goal-dialog-form"
         id="goalForm"
         onSubmit={(event) => {
-          event.preventDefault();
-          void saveGoalDialog();
+          event.preventDefault()
+          void saveGoalDialog()
         }}
       >
         <input type="hidden" name="goalId" id="goalId" value={dialogStore.goal.goalID} />
@@ -71,10 +71,10 @@ export function GoalDialogHost() {
             placeholder={t("goal.field.title_placeholder")}
             value={dialogStore.goal.title}
             ref={(el) => {
-              titleRef = el;
+              titleRef = el
             }}
             onInput={(event) => {
-              setDialogStore("goal", "title", event.currentTarget.value);
+              setDialogStore("goal", "title", event.currentTarget.value)
             }}
           />
         </label>
@@ -89,11 +89,11 @@ export function GoalDialogHost() {
             placeholder={t("goal.field.acceptance_placeholder")}
             value={dialogStore.goal.acceptance}
             onInput={(event) => {
-              setDialogStore("goal", "acceptance", event.currentTarget.value);
+              setDialogStore("goal", "acceptance", event.currentTarget.value)
             }}
           />
         </label>
       </form>
     </Dialog>
-  );
+  )
 }

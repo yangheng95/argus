@@ -62,8 +62,7 @@ export async function executeWebFetch(params: z.infer<typeof WebFetchParameters>
       acceptHeader = "text/html;q=1.0, application/xhtml+xml;q=0.9, text/plain;q=0.8, text/markdown;q=0.7, */*;q=0.1"
       break
     default:
-      acceptHeader =
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+      acceptHeader = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
   }
   const headers = {
     "User-Agent":

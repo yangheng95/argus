@@ -49,23 +49,96 @@ const STATS_OK = {
     status: { active: 1, queued: 2, waiting: 1, failed: 1, completed: 2 },
     summary: null,
     recent: [
-      { id: "task_active_payment", title: "Refactor checkout payment service", status: "active", priority: "high", directory: FIXTURE_DIR, updated: Date.now() - 30_000 },
-      { id: "task_queue_locale", title: "Wire i18n for invoice templates", status: "queued", priority: "normal", directory: FIXTURE_DIR, updated: Date.now() - 120_000 },
-      { id: "task_queue_perf", title: "Investigate panel render latency on cold boot", status: "queued", priority: "normal", directory: FIXTURE_DIR, updated: Date.now() - 200_000 },
-      { id: "task_waiting_oauth", title: "Slack OAuth: pending operator confirmation", status: "waiting", priority: "critical", directory: FIXTURE_DIR, updated: Date.now() - 240_000 },
-      { id: "task_failed_migration", title: "Drizzle migration to embedded SQLite", status: "failed", priority: "high", directory: FIXTURE_DIR, updated: Date.now() - 360_000 },
-      { id: "task_completed_design", title: "Design tokens — flat redesign step 9", status: "completed", priority: "normal", directory: FIXTURE_DIR, updated: Date.now() - 600_000 },
-      { id: "task_completed_docs", title: "Docs: orchestrator gating", status: "completed", priority: "low", directory: FIXTURE_DIR, updated: Date.now() - 720_000 },
+      {
+        id: "task_active_payment",
+        title: "Refactor checkout payment service",
+        status: "active",
+        priority: "high",
+        directory: FIXTURE_DIR,
+        updated: Date.now() - 30_000,
+      },
+      {
+        id: "task_queue_locale",
+        title: "Wire i18n for invoice templates",
+        status: "queued",
+        priority: "normal",
+        directory: FIXTURE_DIR,
+        updated: Date.now() - 120_000,
+      },
+      {
+        id: "task_queue_perf",
+        title: "Investigate panel render latency on cold boot",
+        status: "queued",
+        priority: "normal",
+        directory: FIXTURE_DIR,
+        updated: Date.now() - 200_000,
+      },
+      {
+        id: "task_waiting_oauth",
+        title: "Slack OAuth: pending operator confirmation",
+        status: "waiting",
+        priority: "critical",
+        directory: FIXTURE_DIR,
+        updated: Date.now() - 240_000,
+      },
+      {
+        id: "task_failed_migration",
+        title: "Drizzle migration to embedded SQLite",
+        status: "failed",
+        priority: "high",
+        directory: FIXTURE_DIR,
+        updated: Date.now() - 360_000,
+      },
+      {
+        id: "task_completed_design",
+        title: "Design tokens — flat redesign step 9",
+        status: "completed",
+        priority: "normal",
+        directory: FIXTURE_DIR,
+        updated: Date.now() - 600_000,
+      },
+      {
+        id: "task_completed_docs",
+        title: "Docs: orchestrator gating",
+        status: "completed",
+        priority: "low",
+        directory: FIXTURE_DIR,
+        updated: Date.now() - 720_000,
+      },
     ],
   },
   capabilities: { total: 14, queries: 8, mutations: 6 },
-  channelRuntime: { running: true, status: "running", channels: ["slack", "discord", "github"], detail: "Tunnel healthy — 3 channels bound" },
+  channelRuntime: {
+    running: true,
+    status: "running",
+    channels: ["slack", "discord", "github"],
+    detail: "Tunnel healthy — 3 channels bound",
+  },
 }
 
 const CHANNELS_OK = [
-  { id: "slack", name: "Slack", summary: "Routed channel #orion-ops bound to operator org", status: "configured", runtime_status: "running" },
-  { id: "discord", name: "Discord", summary: "Guild orion-platform — bot user OrionGate", status: "configured", runtime_status: "running" },
-  { id: "github", name: "GitHub Issues", summary: "Repo orion-eng/orion — webhook secret missing", status: "partial", runtime_status: "running", runtime_detail: "Webhook secret unset; inbound dispatch disabled" },
+  {
+    id: "slack",
+    name: "Slack",
+    summary: "Routed channel #orion-ops bound to operator org",
+    status: "configured",
+    runtime_status: "running",
+  },
+  {
+    id: "discord",
+    name: "Discord",
+    summary: "Guild orion-platform — bot user OrionGate",
+    status: "configured",
+    runtime_status: "running",
+  },
+  {
+    id: "github",
+    name: "GitHub Issues",
+    summary: "Repo orion-eng/orion — webhook secret missing",
+    status: "partial",
+    runtime_status: "running",
+    runtime_detail: "Webhook secret unset; inbound dispatch disabled",
+  },
   { id: "telegram", name: "Telegram", summary: "Not yet configured", status: "missing", runtime_status: "stopped" },
 ]
 
@@ -78,8 +151,20 @@ const CHANNEL_RUNTIME_OK = {
 }
 
 const TASK_BINDINGS_FIXTURE = [
-  { id: "bind_slack_orion_ops", task_id: "task_active_payment", platform: "slack", channel: "#orion-ops", thread: "1716321023.0001" },
-  { id: "bind_discord_orion_dev", task_id: "task_active_payment", platform: "discord", channel: "general", thread: "thread-001" },
+  {
+    id: "bind_slack_orion_ops",
+    task_id: "task_active_payment",
+    platform: "slack",
+    channel: "#orion-ops",
+    thread: "1716321023.0001",
+  },
+  {
+    id: "bind_discord_orion_dev",
+    task_id: "task_active_payment",
+    platform: "discord",
+    channel: "general",
+    thread: "thread-001",
+  },
 ]
 
 const GLOBAL_TASKS = STATS_OK.tasks.recent.map((row) => ({
@@ -94,20 +179,30 @@ const GLOBAL_TASKS = STATS_OK.tasks.recent.map((row) => ({
     queue: row.status === "queued" ? { order: row.id === "task_queue_locale" ? 1 : 2 } : undefined,
   },
   overview: { headline: row.id === "task_active_payment" ? "Checkout payments refactor — chasing PCI scope cut" : "" },
-  interactions: row.status === "waiting"
-    ? [{ id: `${row.id}_int_1`, type: "approval", status: "pending", prompt: "Confirm rotating Slack signing secret before next deploy" }]
-    : [],
+  interactions:
+    row.status === "waiting"
+      ? [
+          {
+            id: `${row.id}_int_1`,
+            type: "approval",
+            status: "pending",
+            prompt: "Confirm rotating Slack signing secret before next deploy",
+          },
+        ]
+      : [],
 }))
 
 const DECOMPOSE_FIXTURE = {
   proposal_id: "prop_visual_demo",
   requirement: "Tighten the gateway empty states and align decomposition copy with the design language guide.",
-  summary: "Three tactical tasks: prune redundant copy on the composer, surface design-token violations as inline warnings, and add a focus-trap on the proposal review modal.",
+  summary:
+    "Three tactical tasks: prune redundant copy on the composer, surface design-token violations as inline warnings, and add a focus-trap on the proposal review modal.",
   tasks: [
     {
       id: "cand_copy_alignment",
       title: "Audit gateway composer + proposal copy for tone parity",
-      description: "Walk every visible string in the composer and proposal flows. Cross-check against zh-CN.json and en-US.json for tone parity, replace ambiguous verbs, and run the panel-revision bump if any visible label changes.",
+      description:
+        "Walk every visible string in the composer and proposal flows. Cross-check against zh-CN.json and en-US.json for tone parity, replace ambiguous verbs, and run the panel-revision bump if any visible label changes.",
       acceptance: [
         "All composer / proposal labels match the operator-tone glossary in docs/product/zh-CN/index.md",
         "panel_revision bumped via script/bump-panel-revision.ts",
@@ -122,7 +217,8 @@ const DECOMPOSE_FIXTURE = {
     {
       id: "cand_token_audit",
       title: "Surface design-token violations on gateway surfaces",
-      description: "Add a build-time lint that lists hex / rgba / bare-px / bare-duration literals in styles/surfaces/gateway*.css and fails CI with line-precise hints.",
+      description:
+        "Add a build-time lint that lists hex / rgba / bare-px / bare-duration literals in styles/surfaces/gateway*.css and fails CI with line-precise hints.",
       acceptance: [
         "New script packages/overlay/script/check-design-tokens.ts wired into typecheck",
         "Coverage test for gateway.css extends flat-redesign-color-literal-coverage",
@@ -137,7 +233,8 @@ const DECOMPOSE_FIXTURE = {
     {
       id: "cand_proposal_focus",
       title: "Add focus trap and Esc-to-close to GatewayProposalReview",
-      description: "The proposal review currently floats inside the workbench column without a focus trap; tab cycles out into the ledger column and Esc does nothing.",
+      description:
+        "The proposal review currently floats inside the workbench column without a focus trap; tab cycles out into the ledger column and Esc does nothing.",
       acceptance: [
         "Tab cycle stays inside .gateway-proposal until the operator chooses Discard or Create",
         "Esc closes the proposal via onDiscard (after a confirm if any candidate is included)",
@@ -307,10 +404,17 @@ async function applyMocks(page: OverlayPage): Promise<void> {
     }
     // The Mission launcher POSTs /mission/wake (was the gateway decompose
     // route). It returns the new/resumed mission + session ids.
-    if (/\/mission\/wake/.test(url) && method === "POST") return void ok({ missionID: "mission_visual_demo", sessionID: "session_mission_visual", created: true })
+    if (/\/mission\/wake/.test(url) && method === "POST")
+      return void ok({ missionID: "mission_visual_demo", sessionID: "session_mission_visual", created: true })
     if (/\/session\/session_mission_visual\/conversation/.test(url) && method === "GET") {
       return void ok({
-        board: { kind: "session", sessionID: "session_mission_visual", status: "active", title: "Mission Control", directory: "/workspace/mission-demo" },
+        board: {
+          kind: "session",
+          sessionID: "session_mission_visual",
+          status: "active",
+          title: "Mission Control",
+          directory: "/workspace/mission-demo",
+        },
         transcript: [
           {
             info: {
@@ -335,8 +439,14 @@ async function applyMocks(page: OverlayPage): Promise<void> {
         ],
         timeline: [],
         events: [],
-        view: { topLevelSessionIDs: ["session_mission_visual"], sessions: [{ sessionID: "session_mission_visual", kind: "mission" }] },
-        agentView: { topLevelSessionIDs: ["session_mission_visual"], sessions: [{ sessionID: "session_mission_visual", kind: "mission" }] },
+        view: {
+          topLevelSessionIDs: ["session_mission_visual"],
+          sessions: [{ sessionID: "session_mission_visual", kind: "mission" }],
+        },
+        agentView: {
+          topLevelSessionIDs: ["session_mission_visual"],
+          sessions: [{ sessionID: "session_mission_visual", kind: "mission" }],
+        },
         history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
       })
     }
@@ -352,19 +462,21 @@ async function applyMocks(page: OverlayPage): Promise<void> {
     if (/\/task\/[^/]+\/board/.test(url) && method === "GET") {
       const taskID = decodeURIComponent(url.match(/\/task\/([^/]+)\/board/)?.[1] ?? "")
       const item = GLOBAL_TASKS.find((row) => row.task.id === taskID)
-      const summary = item?.task.id === "task_active_payment"
-        ? "Refactor focuses on token-level checkout flow. Currently auditing PCI footprint of the legacy adapter."
-        : ""
+      const summary =
+        item?.task.id === "task_active_payment"
+          ? "Refactor focuses on token-level checkout flow. Currently auditing PCI footprint of the legacy adapter."
+          : ""
       return void ok({
         task: item?.task ?? null,
         overview: { headline: summary },
-        goalWorkflows: item?.task.id === "task_active_payment"
-          ? [
-              { id: "goal_audit", title: "Audit PCI scope of checkout adapter", status: "completed" },
-              { id: "goal_extract", title: "Extract tokenised payment service", status: "running" },
-              { id: "goal_replay", title: "Replay PCI-bound transactions in staging", status: "pending" },
-            ]
-          : [],
+        goalWorkflows:
+          item?.task.id === "task_active_payment"
+            ? [
+                { id: "goal_audit", title: "Audit PCI scope of checkout adapter", status: "completed" },
+                { id: "goal_extract", title: "Extract tokenised payment service", status: "running" },
+                { id: "goal_replay", title: "Replay PCI-bound transactions in staging", status: "pending" },
+              ]
+            : [],
         interactions: item?.interactions ?? [],
         lastSequence: 1,
       })
@@ -410,13 +522,16 @@ async function bootstrapOverlay(page: OverlayPage): Promise<void> {
   // (capabilities, session, etc.). setPageMode / applyDirectory are
   // installed at module load, well before init's network work, so they
   // are the right "ready" signal for headed visual capture.
-  await page.waitForFunction(() => {
-    const w = window as unknown as {
-      setPageMode?: (mode: "panel" | "mission") => void
-      applyDirectory?: unknown
-    }
-    return typeof w.setPageMode === "function" && typeof w.applyDirectory === "function"
-  }, { timeout: 20_000 })
+  await page.waitForFunction(
+    () => {
+      const w = window as unknown as {
+        setPageMode?: (mode: "panel" | "mission") => void
+        applyDirectory?: unknown
+      }
+      return typeof w.setPageMode === "function" && typeof w.applyDirectory === "function"
+    },
+    { timeout: 20_000 },
+  )
   // Apply the fixture directory + switch into Mission mode via the
   // app-store helpers the overlay deliberately exposes on `window`
   // for headed automation.
@@ -470,28 +585,29 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
   await step("02-ledger-loaded", async () => {
     await page.waitForSelector('[data-ui="mission-project-group"]', { timeout: 5_000 })
     await page.waitForSelector('[data-ui="mission-row"]', { timeout: 5_000 })
-    await page.waitForFunction(
-      () => document.querySelectorAll('[data-ui="mission-project-group"]').length >= 2,
-      { timeout: 5_000 },
-    )
+    await page.waitForFunction(() => document.querySelectorAll('[data-ui="mission-project-group"]').length >= 2, {
+      timeout: 5_000,
+    })
     await page.evaluate(() => {
-      const headings = [...document.querySelectorAll<HTMLButtonElement>('[data-ui="mission-project-group"] .project-group-heading')]
+      const headings = [
+        ...document.querySelectorAll<HTMLButtonElement>('[data-ui="mission-project-group"] .project-group-heading'),
+      ]
       if (headings.length < 2) throw new Error("expected at least two mission project group headings")
       headings[0].click()
     })
-    await page.waitForFunction(
-      () => document.querySelectorAll('[data-ui="mission-row"]').length === 1,
-      { timeout: 5_000 },
-    )
+    await page.waitForFunction(() => document.querySelectorAll('[data-ui="mission-row"]').length === 1, {
+      timeout: 5_000,
+    })
     await page.evaluate(() => {
-      const heading = document.querySelector<HTMLButtonElement>('[data-ui="mission-project-group"] .project-group-heading')
+      const heading = document.querySelector<HTMLButtonElement>(
+        '[data-ui="mission-project-group"] .project-group-heading',
+      )
       if (!heading) throw new Error("mission project group heading missing after collapse")
       heading.click()
     })
-    await page.waitForFunction(
-      () => document.querySelectorAll('[data-ui="mission-row"]').length === 2,
-      { timeout: 5_000 },
-    )
+    await page.waitForFunction(() => document.querySelectorAll('[data-ui="mission-row"]').length === 2, {
+      timeout: 5_000,
+    })
     await new Promise((r) => setTimeout(r, 300))
   })
 
@@ -549,7 +665,8 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
       const refresh = document.querySelector('[data-ui="mission-refresh"]')
       if (!panel) throw new Error("missing Mission Task button")
       if (panel.querySelector("[data-oc-icon], svg")) throw new Error("Mission Task button should not render an icon")
-      if (panel.textContent?.trim() !== "Task") throw new Error(`Mission Task button label mismatch: ${panel.textContent}`)
+      if (panel.textContent?.trim() !== "Task")
+        throw new Error(`Mission Task button label mismatch: ${panel.textContent}`)
       if (!create) throw new Error("missing Mission create button")
       if (refresh) throw new Error("Mission refresh button should be removed")
     })
@@ -573,18 +690,24 @@ async function run(): Promise<void> {
   if (!(await isPortBound(VITE_PORT))) {
     throw new Error(
       `mission-visual-loop: vite dev is not listening on :${VITE_PORT}. ` +
-      `Start it in a separate shell with ` +
-      `\`bun run --cwd packages/overlay dev:vite\` and re-run this script.`,
+        `Start it in a separate shell with ` +
+        `\`bun run --cwd packages/overlay dev:vite\` and re-run this script.`,
     )
   }
   console.log(`[mission-visual-loop] connecting to external vite on :${VITE_PORT}`)
   let browser: OverlayBrowser | undefined
   const cleanup = async () => {
-    try { await browser?.close() } catch {}
+    try {
+      await browser?.close()
+    } catch {}
     // Vite is operator-managed — never kill it from inside the loop.
   }
-  process.on("SIGINT", () => { void cleanup().then(() => process.exit(130)) })
-  process.on("SIGTERM", () => { void cleanup().then(() => process.exit(143)) })
+  process.on("SIGINT", () => {
+    void cleanup().then(() => process.exit(130))
+  })
+  process.on("SIGTERM", () => {
+    void cleanup().then(() => process.exit(143))
+  })
 
   try {
     console.log(`[mission-visual-loop] launching chrome`)

@@ -64,7 +64,7 @@ blocked.
 4. Update `Card`, `ChatBubble`, `ChatBubbleChild`, and `RequirementsPanel` to
    pass the owning stream status into `CardParts`.
 5. Update CSS so raw active text preserves line breaks with `white-space:
-   pre-wrap`.
+pre-wrap`.
 6. Remove `textFromCard()` / `textFromPart()` from agent workflow projection.
    Keep trace report summaries when present; otherwise use stable metadata in
    the rail row rather than正文 content.

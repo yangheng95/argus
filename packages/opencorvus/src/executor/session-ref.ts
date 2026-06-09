@@ -18,12 +18,8 @@ function stringValue(input: unknown) {
 
 export function extractExecutorSessionRef(event: CodingEventInfo): ExecutorSessionRef | undefined {
   const meta = record("meta" in event ? event.meta : undefined) ?? {}
-  const threadID =
-    stringValue(meta.thread_id) ??
-    stringValue(meta.threadId)
-  const turnID =
-    stringValue(meta.turn_id) ??
-    stringValue(meta.turnId)
+  const threadID = stringValue(meta.thread_id) ?? stringValue(meta.threadId)
+  const turnID = stringValue(meta.turn_id) ?? stringValue(meta.turnId)
   const nativeSessionID =
     stringValue("sessionID" in event ? event.sessionID : undefined) ??
     stringValue(meta.session_id) ??
@@ -46,11 +42,12 @@ function executorMetadata(input: unknown): PersistedExecutorSessionRef {
     nativeSessionID: stringValue(item.native_session_id) ?? stringValue(item.nativeSessionID),
     threadID: stringValue(item.thread_id) ?? stringValue(item.threadID),
     turnID: stringValue(item.turn_id) ?? stringValue(item.turnID),
-    updatedAt: typeof item.updated_at === "number"
-      ? item.updated_at
-      : typeof item.updatedAt === "number"
-        ? item.updatedAt
-        : undefined,
+    updatedAt:
+      typeof item.updated_at === "number"
+        ? item.updated_at
+        : typeof item.updatedAt === "number"
+          ? item.updatedAt
+          : undefined,
   }
 }
 

@@ -1,4 +1,10 @@
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contract"
+import {
+  CodingCapabilities,
+  CodingRunInput,
+  CodingResumeInput,
+  type CodingEventInfo,
+  type CodingProvider,
+} from "./contract"
 import { decode, record, text } from "./contract"
 
 type Call = {
@@ -41,26 +47,25 @@ export namespace CodexExecutor {
         ...(input.runtimeDir ? { runtimeDir: input.runtimeDir } : {}),
       },
       max_output_tokens: undefined,
-      tools: (input.tools ?? [])
-        .flatMap((item) => {
-          if (item.type === "function") {
-            return [
-              {
-                type: "function",
-                name: item.name,
-                description: item.description,
-                parameters: item.inputSchema ?? {
-                  type: "object",
-                  properties: {},
-                  additionalProperties: true,
-                },
+      tools: (input.tools ?? []).flatMap((item) => {
+        if (item.type === "function") {
+          return [
+            {
+              type: "function",
+              name: item.name,
+              description: item.description,
+              parameters: item.inputSchema ?? {
+                type: "object",
+                properties: {},
+                additionalProperties: true,
               },
-            ]
-          }
-          const type = builtin(item.name)
-          if (!type) return []
-          return [{ type }]
-        }),
+            },
+          ]
+        }
+        const type = builtin(item.name)
+        if (!type) return []
+        return [{ type }]
+      }),
     }
   }
 
@@ -97,11 +102,15 @@ export namespace CodexExecutor {
             const prev = calls.get(key) ?? { id, name: "", input: "" }
             const name = typeof next.name === "string" ? next.name : prev.name
             const input = typeof next.arguments === "string" ? next.arguments : prev.input
-            setCall(calls, [key, typeof next.id === "string" ? next.id : "", typeof next.call_id === "string" ? next.call_id : ""], {
-              id,
-              name,
-              input,
-            })
+            setCall(
+              calls,
+              [key, typeof next.id === "string" ? next.id : "", typeof next.call_id === "string" ? next.call_id : ""],
+              {
+                id,
+                name,
+                input,
+              },
+            )
             if (type === "response.output_item.done" && name && !sent.has(id)) {
               sent.add(id)
               return [{ type: "tool_call", id, name, input }]
@@ -110,7 +119,12 @@ export namespace CodexExecutor {
           }
 
           if (next.type === "function_call_output") {
-            const id = typeof next.call_id === "string" ? next.call_id : typeof next.id === "string" ? next.id : keyOf(item, next)
+            const id =
+              typeof next.call_id === "string"
+                ? next.call_id
+                : typeof next.id === "string"
+                  ? next.id
+                  : keyOf(item, next)
             return [{ type: "tool_result", id, output: text(next.output) }]
           }
 
@@ -128,7 +142,16 @@ export namespace CodexExecutor {
           }
           prev.input += delta
           if (typeof item.name === "string" && item.name) prev.name = item.name
-          setCall(calls, [key, prev.id, typeof item.item_id === "string" ? item.item_id : "", typeof item.call_id === "string" ? item.call_id : ""], prev)
+          setCall(
+            calls,
+            [
+              key,
+              prev.id,
+              typeof item.item_id === "string" ? item.item_id : "",
+              typeof item.call_id === "string" ? item.call_id : "",
+            ],
+            prev,
+          )
           return delta ? [{ type: "tool_delta", id: prev.id, name: prev.name || undefined, delta }] : []
         }
 
@@ -143,7 +166,16 @@ export namespace CodexExecutor {
           const input = typeof item.arguments === "string" ? item.arguments : prev.input
           const name = typeof item.name === "string" ? item.name : prev.name
           const id = prev.id
-          setCall(calls, [key, id, typeof item.item_id === "string" ? item.item_id : "", typeof item.call_id === "string" ? item.call_id : ""], { id, name, input })
+          setCall(
+            calls,
+            [
+              key,
+              id,
+              typeof item.item_id === "string" ? item.item_id : "",
+              typeof item.call_id === "string" ? item.call_id : "",
+            ],
+            { id, name, input },
+          )
           if (!name || sent.has(id)) return []
           sent.add(id)
           return [{ type: "tool_call", id, name, input }]

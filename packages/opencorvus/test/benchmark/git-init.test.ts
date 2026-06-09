@@ -23,14 +23,16 @@ test("benchmark git init creates an isolated repo inside a parent worktree", asy
     stdout: "pipe",
     stderr: "pipe",
   })
-  const [exitCode, stderr] = await Promise.all([
-    proc.exited,
-    new Response(proc.stderr).text(),
-  ])
+  const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()])
 
   expect(stderr).toBe("")
   expect(exitCode).toBe(0)
-  expect(await fs.stat(path.join(dir, ".git")).then((stat) => stat.isDirectory()).catch(() => false)).toBe(true)
+  expect(
+    await fs
+      .stat(path.join(dir, ".git"))
+      .then((stat) => stat.isDirectory())
+      .catch(() => false),
+  ).toBe(true)
 
   const topProc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
     cwd: dir,
@@ -38,10 +40,7 @@ test("benchmark git init creates an isolated repo inside a parent worktree", asy
     stdout: "pipe",
     stderr: "pipe",
   })
-  const [topExit, top] = await Promise.all([
-    topProc.exited,
-    new Response(topProc.stdout).text(),
-  ])
+  const [topExit, top] = await Promise.all([topProc.exited, new Response(topProc.stdout).text()])
   expect(topExit).toBe(0)
   expect(path.resolve(top.trim())).toBe(dir)
 })
@@ -66,17 +65,19 @@ test("benchmark helper repairs explicit project dirs that inherit the parent rep
 
   await ensureStandaloneGitRepo(dir)
 
-  expect(await fs.stat(path.join(dir, ".git")).then((stat) => stat.isDirectory()).catch(() => false)).toBe(true)
+  expect(
+    await fs
+      .stat(path.join(dir, ".git"))
+      .then((stat) => stat.isDirectory())
+      .catch(() => false),
+  ).toBe(true)
   const topProc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
     cwd: dir,
     env: standaloneGitEnvForProject(dir),
     stdout: "pipe",
     stderr: "pipe",
   })
-  const [topExit, top] = await Promise.all([
-    topProc.exited,
-    new Response(topProc.stdout).text(),
-  ])
+  const [topExit, top] = await Promise.all([topProc.exited, new Response(topProc.stdout).text()])
   expect(topExit).toBe(0)
   expect(path.resolve(top.trim())).toBe(dir)
 })

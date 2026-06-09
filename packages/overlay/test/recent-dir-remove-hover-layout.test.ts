@@ -11,7 +11,10 @@ function selectorRuleBody(selector: string): string {
   for (const chunk of CONVERSATION_CSS.replace(/\/\*[\s\S]*?\*\//g, "").split("}")) {
     const openIdx = chunk.indexOf("{")
     if (openIdx < 0) continue
-    const selectors = chunk.slice(0, openIdx).split(",").map((item) => item.trim())
+    const selectors = chunk
+      .slice(0, openIdx)
+      .split(",")
+      .map((item) => item.trim())
     if (selectors.includes(selector)) return chunk.slice(openIdx + 1)
   }
   throw new Error(`selector not found: ${selector}`)

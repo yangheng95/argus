@@ -61,7 +61,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function countSoloTopLevelRules(selector: string): number {
@@ -103,9 +105,7 @@ describe(".extension-row base rule is a single source", () => {
   })
 
   test("the canonical body declares the actually-rendered transparent background", () => {
-    expect(soloRuleBody(".extension-row")).toMatch(
-      /background:\s*transparent/,
-    )
+    expect(soloRuleBody(".extension-row")).toMatch(/background:\s*transparent/)
   })
 
   test("the canonical body declares the actually-rendered borderless chrome", () => {
@@ -133,10 +133,9 @@ describe(".extension-row base rule is a single source", () => {
       const lastLine = raw.slice(lastNewline + 1)
       if (lastLine !== lastLine.trimStart()) continue
       const body = chunk.slice(openIdx + 1)
-      const usesChromeImportant =
-        /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(
-          body,
-        )
+      const usesChromeImportant = /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(
+        body,
+      )
       if (!usesChromeImportant) continue
       const segments = head.split(",").map((s) => s.trim())
       for (const segment of segments) {
@@ -150,8 +149,7 @@ describe(".extension-row base rule is a single source", () => {
       const openIdx = chunk.indexOf("{")
       if (openIdx < 0) continue
       const selector = chunk.slice(0, openIdx).trim()
-      const isThemeSelector =
-        /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector) continue
 
       expect(selector).not.toMatch(/(?:^|\s|:is\([^)]*)\.extension-row(?:\b|[:.[#])/)

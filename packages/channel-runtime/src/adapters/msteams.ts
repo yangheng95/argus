@@ -95,13 +95,15 @@ export class MSTeamsAdapter implements ChannelAdapter {
       conversation: { id: this.session.get(channel)?.conversationId ?? channel },
       ...(thread ? { replyToId: thread } : {}),
       ...(title ? { text: title } : {}),
-      attachments: [{
-        contentType: "application/vnd.microsoft.card.hero",
-        content: {
-          title: title ?? filename,
-          images: [{ url }],
+      attachments: [
+        {
+          contentType: "application/vnd.microsoft.card.hero",
+          content: {
+            title: title ?? filename,
+            images: [{ url }],
+          },
         },
-      }],
+      ],
     })
   }
 

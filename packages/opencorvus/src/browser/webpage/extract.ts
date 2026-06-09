@@ -478,7 +478,9 @@ async function nodeDownloadImages(
       }
       if (totalBytes + r.buf.length > IMAGE_DOWNLOAD_MAX_TOTAL_BYTES) {
         skipped++
-        onProgress?.(`skipped image ${r.url}: image download total bytes would exceed ${IMAGE_DOWNLOAD_MAX_TOTAL_BYTES}`)
+        onProgress?.(
+          `skipped image ${r.url}: image download total bytes would exceed ${IMAGE_DOWNLOAD_MAX_TOTAL_BYTES}`,
+        )
         continue
       }
       const ext = mimeToExt(r.mime)
@@ -747,25 +749,28 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
   onProgress?.(`Browser: ${chromePath}`)
 
   const sidecarRuntime = await resolveBrowserNodeSidecarRuntime()
-  const nodeResult = await extractPageViaNode({
-    url,
-    viewport,
-    scopeSelector,
-    waitMs,
-    noScreenshots,
-    captureHtml: Boolean(captureHtmlPath),
-    executablePath: chromePath,
-    nodeExecutable: sidecarRuntime.nodeExecutable,
-    playwrightRequirePath: sidecarRuntime.playwrightRequirePath,
-    launchTimeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(),
-    navigationTimeoutMs: 60_000,
-    browserExtractSource: browserExtract.toString(),
-    maxDepth: MAX_DEPTH,
-    maxChildren: MAX_CHILDREN,
-    maxTextLen: MAX_TEXT_LEN,
-    styleProps: STYLE_PROPERTIES as string[],
-    skipTags: Array.from(SKIP_TAGS),
-  }, signal)
+  const nodeResult = await extractPageViaNode(
+    {
+      url,
+      viewport,
+      scopeSelector,
+      waitMs,
+      noScreenshots,
+      captureHtml: Boolean(captureHtmlPath),
+      executablePath: chromePath,
+      nodeExecutable: sidecarRuntime.nodeExecutable,
+      playwrightRequirePath: sidecarRuntime.playwrightRequirePath,
+      launchTimeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(),
+      navigationTimeoutMs: 60_000,
+      browserExtractSource: browserExtract.toString(),
+      maxDepth: MAX_DEPTH,
+      maxChildren: MAX_CHILDREN,
+      maxTextLen: MAX_TEXT_LEN,
+      styleProps: STYLE_PROPERTIES as string[],
+      skipTags: Array.from(SKIP_TAGS),
+    },
+    signal,
+  )
 
   if (!nodeResult.ok) {
     throw new UrlExtractError(

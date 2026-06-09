@@ -69,9 +69,7 @@ describe("FactCheckReportSchema (anti-recursion)", () => {
 
 describe("deriveFactCheckVerdict", () => {
   test("items_total=0 → clean (explicit boundary)", () => {
-    expect(
-      deriveFactCheckVerdict({ items_total: 0, items_inspected: 0, corrected: [], unresolved: [] }),
-    ).toBe("clean")
+    expect(deriveFactCheckVerdict({ items_total: 0, items_inspected: 0, corrected: [], unresolved: [] })).toBe("clean")
   })
 
   test("blocking corrected → needs_orchestrator_action", () => {
@@ -105,9 +103,9 @@ describe("deriveFactCheckVerdict", () => {
   })
 
   test("<50% inspected and no corrections → inconclusive", () => {
-    expect(
-      deriveFactCheckVerdict({ items_total: 10, items_inspected: 4, corrected: [], unresolved: [] }),
-    ).toBe("inconclusive")
+    expect(deriveFactCheckVerdict({ items_total: 10, items_inspected: 4, corrected: [], unresolved: [] })).toBe(
+      "inconclusive",
+    )
   })
 
   test("minor corrections only → minor_corrections", () => {
@@ -130,9 +128,7 @@ describe("deriveFactCheckVerdict", () => {
   })
 
   test("fully inspected, all verified → clean", () => {
-    expect(
-      deriveFactCheckVerdict({ items_total: 5, items_inspected: 5, corrected: [], unresolved: [] }),
-    ).toBe("clean")
+    expect(deriveFactCheckVerdict({ items_total: 5, items_inspected: 5, corrected: [], unresolved: [] })).toBe("clean")
   })
 })
 

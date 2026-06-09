@@ -99,7 +99,13 @@ function conversationPayload(taskID: string, lastSequence: number) {
     transcript: [],
     timeline: [],
     events: [],
-    eventReplay: { cursor: lastSequence, latestSequence: lastSequence, complete: true, limit: 500, sinceTimestamp: null },
+    eventReplay: {
+      cursor: lastSequence,
+      latestSequence: lastSequence,
+      complete: true,
+      limit: 500,
+      sinceTimestamp: null,
+    },
     history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view: { sessions: [] },
     agentView: { sessions: [] },
@@ -324,7 +330,7 @@ describe("startSSE stream error handling", () => {
       } satisfies HostTransport
 
       globalThis.setTimeout = ((handler: TimerHandler, timeout?: number) => {
-        timers.push({ fn: () => typeof handler === "function" ? handler() : undefined, ms: Number(timeout) })
+        timers.push({ fn: () => (typeof handler === "function" ? handler() : undefined), ms: Number(timeout) })
         return timers.length as unknown as ReturnType<typeof setTimeout>
       }) as typeof globalThis.setTimeout
       globalThis.clearTimeout = ((_handle?: ReturnType<typeof setTimeout>) => {}) as typeof globalThis.clearTimeout
@@ -336,12 +342,14 @@ describe("startSSE stream error handling", () => {
         setBoardStore("taskSequence", 6)
 
         startSSE({ kind: "task", id: "tsk_expired" }, 5)
-        handlers!.onEvent(JSON.stringify({
-          type: "task.live_replay_expired",
-          task_id: "tsk_expired",
-          sequence: 0,
-          payload: { reason: "selected task live replay retention expired" },
-        }))
+        handlers!.onEvent(
+          JSON.stringify({
+            type: "task.live_replay_expired",
+            task_id: "tsk_expired",
+            sequence: 0,
+            payload: { reason: "selected task live replay retention expired" },
+          }),
+        )
         handlers!.onClose?.("server-fatal-close")
 
         const reconnect = timers.find((timer) => timer.ms === 3000)
@@ -420,7 +428,7 @@ describe("startSSE stream error handling", () => {
       } satisfies HostTransport
 
       globalThis.setTimeout = ((handler: TimerHandler, timeout?: number) => {
-        timers.push({ fn: () => typeof handler === "function" ? handler() : undefined, ms: Number(timeout) })
+        timers.push({ fn: () => (typeof handler === "function" ? handler() : undefined), ms: Number(timeout) })
         return timers.length as unknown as ReturnType<typeof setTimeout>
       }) as typeof globalThis.setTimeout
       globalThis.clearTimeout = ((_handle?: ReturnType<typeof setTimeout>) => {}) as typeof globalThis.clearTimeout
@@ -460,9 +468,7 @@ describe("startSSE stream error handling", () => {
         status: 200,
         ok: true,
         headers: {},
-        body: input.path === "task/tsk_same/conversation"
-          ? conversationPayload("tsk_same", 77) as T
-          : null as T,
+        body: input.path === "task/tsk_same/conversation" ? (conversationPayload("tsk_same", 77) as T) : (null as T),
       }),
       openStream: (input: StreamOpenRequest, _h: StreamHandlers) => {
         streams.push(input)
@@ -492,9 +498,7 @@ describe("startSSE stream error handling", () => {
 
     await selectTask("tsk_same")
 
-    expect(streams).toEqual([
-      { path: "task/tsk_same/events", query: { after: "77", after_live: "0" } },
-    ])
+    expect(streams).toEqual([{ path: "task/tsk_same/events", query: { after: "77", after_live: "0" } }])
   })
 
   test("task-list periodic refresh reloads the global list even without stream events", async () => {

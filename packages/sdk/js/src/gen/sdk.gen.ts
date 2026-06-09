@@ -146,6 +146,10 @@ import type {
   ProjectCurrentInitGitErrors,
   ProjectCurrentInitGitResponses,
   ProjectCurrentResponses,
+  ProjectCurrentWorktreesDeleteErrors,
+  ProjectCurrentWorktreesDeleteResponses,
+  ProjectCurrentWorktreesErrors,
+  ProjectCurrentWorktreesResponses,
   ProjectListResponses,
   ProjectUpdateErrors,
   ProjectUpdateResponses,
@@ -245,6 +249,7 @@ import type {
   SessionUpdateErrors,
   SessionUpdateResponses,
   SkillDirectoriesResponses,
+  SkillImportFileResponses,
   SkillInstalledResponses,
   SkillInstallResponses,
   SkillMarketResponses,
@@ -284,6 +289,8 @@ import type {
   TaskListResponses,
   TaskMessageErrors,
   TaskMessageResponses,
+  TaskOperatorModelContextErrors,
+  TaskOperatorModelContextResponses,
   TaskProgressErrors,
   TaskProgressResponses,
   TaskProjectArchiveErrors,
@@ -404,6 +411,47 @@ class HeyApiRegistry<T> {
   }
 }
 
+export class Worktrees extends HeyApiClient {
+  /**
+   * Delete a current project worktree
+   *
+   * Remove a git worktree registered for the current project.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      worktreeRemoveInput?: WorktreeRemoveInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { key: "worktreeRemoveInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ProjectCurrentWorktreesDeleteResponses,
+      ProjectCurrentWorktreesDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/project/current/worktrees",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Current extends HeyApiClient {
   /**
    * Initialize git in current directory
@@ -426,6 +474,34 @@ export class Current extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  /**
+   * List current project worktrees
+   *
+   * List git worktrees registered for the current project and their live goal binding, if any.
+   */
+  public worktrees<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<
+      ProjectCurrentWorktreesResponses,
+      ProjectCurrentWorktreesErrors,
+      ThrowOnError
+    >({
+      url: "/project/current/worktrees",
+      ...options,
+      ...params,
+    })
+  }
+
+  private _worktrees?: Worktrees
+  get worktrees2(): Worktrees {
+    return (this._worktrees ??= new Worktrees({ client: this.client }))
   }
 }
 
@@ -1748,6 +1824,7 @@ export class Session extends HeyApiClient {
         | "explore"
         | "deep-research"
         | "frontend-research"
+        | "visual-qa"
         | "evaluator"
         | "system"
       goalID?: string
@@ -3400,6 +3477,55 @@ export class Skill extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<SkillInstallResponses, unknown, ThrowOnError>({
       url: "/skill/install",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Import a dropped skill source
+   *
+   * Write a dropped SKILL.md file, skill directory, or zip archive into the current project's .opencorvus skill directory.
+   */
+  public importFile<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      filename?: string
+      content?: string
+      sourceName?: string
+      files?: Array<{
+        path: string
+        content?: string
+        contentBase64?: string
+      }>
+      archiveBase64?: string
+      policy?: PermissionAction
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "filename" },
+            { in: "body", key: "content" },
+            { in: "body", key: "sourceName" },
+            { in: "body", key: "files" },
+            { in: "body", key: "archiveBase64" },
+            { in: "body", key: "policy" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillImportFileResponses, unknown, ThrowOnError>({
+      url: "/skill/import-file",
       ...options,
       ...params,
       headers: {
@@ -5577,16 +5703,36 @@ export class Task extends HeyApiClient {
                 /**
                  * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                  */
-                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
               }
             | {
                 /**
                  * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
                  */
                 type: "prebuilt"
-                name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
+                name:
+                  | "factuality"
+                  | "relevance"
+                  | "contains"
+                  | "exact_match"
+                  | "length_within"
+                  | "json_schema"
+                  | "visual-evidence-bundle"
                 config?: {
                   [key: string]: unknown
+                }
+                /**
+                 * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                 */
+                spec?: {
+                  kind: "visual_evidence_bundle"
+                  viewport?: string
+                }
+                /**
+                 * For name=visual-evidence-bundle, requires a passing current bundle.
+                 */
+                expect?: {
+                  status: "passed"
                 }
               }
             | {
@@ -5722,16 +5868,36 @@ export class Task extends HeyApiClient {
                   /**
                    * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                    */
-                  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+                  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
                 }
               | {
                   /**
                    * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
                    */
                   type: "prebuilt"
-                  name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
+                  name:
+                    | "factuality"
+                    | "relevance"
+                    | "contains"
+                    | "exact_match"
+                    | "length_within"
+                    | "json_schema"
+                    | "visual-evidence-bundle"
                   config?: {
                     [key: string]: unknown
+                  }
+                  /**
+                   * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                   */
+                  spec?: {
+                    kind: "visual_evidence_bundle"
+                    viewport?: string
+                  }
+                  /**
+                   * For name=visual-evidence-bundle, requires a passing current bundle.
+                   */
+                  expect?: {
+                    status: "passed"
                   }
                 }
               | {
@@ -6130,6 +6296,40 @@ export class Task extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<TaskTranscriptResponses, TaskTranscriptErrors, ThrowOnError>({
       url: "/task/{taskID}/transcript",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get task operator model context
+   *
+   * Return the agent and effective model that a task-level operator message will use. This mirrors the task message append path so overlay model controls do not guess from raw config.
+   */
+  public operatorModelContext<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      TaskOperatorModelContextResponses,
+      TaskOperatorModelContextErrors,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/operator-model-context",
       ...options,
       ...params,
     })
@@ -6978,16 +7178,36 @@ export class Goal extends HeyApiClient {
               /**
                * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                */
-              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
             }
           | {
               /**
                * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
                */
               type: "prebuilt"
-              name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
+              name:
+                | "factuality"
+                | "relevance"
+                | "contains"
+                | "exact_match"
+                | "length_within"
+                | "json_schema"
+                | "visual-evidence-bundle"
               config?: {
                 [key: string]: unknown
+              }
+              /**
+               * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+               */
+              spec?: {
+                kind: "visual_evidence_bundle"
+                viewport?: string
+              }
+              /**
+               * For name=visual-evidence-bundle, requires a passing current bundle.
+               */
+              expect?: {
+                status: "passed"
               }
             }
           | {

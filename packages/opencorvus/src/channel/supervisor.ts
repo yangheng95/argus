@@ -203,17 +203,23 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
     })
     await sttPipeline.init().catch(() => undefined)
     runtime.setSTT(sttPipeline)
-  } catch { /* STT optional */ }
+  } catch {
+    /* STT optional */
+  }
 
   // Vision pipeline (optional)
   if (dashscope.key && process.env.OPENCORVUS_VISION_MODEL) {
     try {
-      runtime.setVision(new VisionPipeline({
-        apiKey: dashscope.key,
-        baseURL: dashscope.baseURL,
-        model: process.env.OPENCORVUS_VISION_MODEL,
-      }))
-    } catch { /* Vision optional */ }
+      runtime.setVision(
+        new VisionPipeline({
+          apiKey: dashscope.key,
+          baseURL: dashscope.baseURL,
+          model: process.env.OPENCORVUS_VISION_MODEL,
+        }),
+      )
+    } catch {
+      /* Vision optional */
+    }
   }
 
   // Register adapters

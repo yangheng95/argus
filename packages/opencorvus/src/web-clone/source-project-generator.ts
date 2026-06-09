@@ -52,7 +52,8 @@ const DEFAULT_SOURCE_PROJECT_PRIMARY_VIEWPORT = {
   evidenceSource: "default" as const,
 }
 
-export const SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS: SourceProjectVisualIterationViewport[] = buildSourceProjectVisualIterationViewports(DEFAULT_SOURCE_PROJECT_PRIMARY_VIEWPORT)
+export const SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS: SourceProjectVisualIterationViewport[] =
+  buildSourceProjectVisualIterationViewports(DEFAULT_SOURCE_PROJECT_PRIMARY_VIEWPORT)
 
 function buildSourceProjectVisualIterationViewports(primary: {
   width: number
@@ -74,7 +75,8 @@ function buildSourceProjectVisualIterationViewports(primary: {
       height: 844,
       evidenceRole: "responsive_review",
       evidenceSource: "default",
-      comparison: "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+      comparison:
+        "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
     },
     {
       name: "wide-review",
@@ -82,14 +84,20 @@ function buildSourceProjectVisualIterationViewports(primary: {
       height: 1080,
       evidenceRole: "responsive_review",
       evidenceSource: "default",
-      comparison: "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+      comparison:
+        "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
     },
   ]
 }
 
-export function renderSourceProjectVisualIterationMatrix(viewports: readonly SourceProjectVisualIterationViewport[] = SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS): string {
+export function renderSourceProjectVisualIterationMatrix(
+  viewports: readonly SourceProjectVisualIterationViewport[] = SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS,
+): string {
   return viewports
-    .map((viewport) => `${viewport.name} ${viewport.width}x${viewport.height} (${viewport.evidenceRole}, ${viewport.evidenceSource}): ${viewport.comparison}`)
+    .map(
+      (viewport) =>
+        `${viewport.name} ${viewport.width}x${viewport.height} (${viewport.evidenceRole}, ${viewport.evidenceSource}): ${viewport.comparison}`,
+    )
     .join(" ")
 }
 
@@ -999,15 +1007,16 @@ export async function generateWebCloneSourceProject(
   await assertWebpageEvidenceInputs(webpageEvidenceDir)
   await prepareOutputDir(outputDir, input.overwrite === true)
 
-  const [sourceSkeleton, rawCriticalCss, rawFullSourceCss, contentModel, componentTree, assetManifest, pageIr] = await Promise.all([
-    readText(path.join(webpageEvidenceDir, "source-skeleton", "index.html")),
-    readOptionalText(path.join(webpageEvidenceDir, "source-skeleton", "critical.css")),
-    readOptionalText(path.join(webpageEvidenceDir, "source-skeleton", "full-source.css")),
-    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "content-model.json")),
-    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "component-tree.json")),
-    readJsonOptional(path.join(webpageEvidenceDir, "assets", "manifest.json")),
-    readJsonOptional(path.join(webpageEvidenceDir, "page.ir.json")),
-  ])
+  const [sourceSkeleton, rawCriticalCss, rawFullSourceCss, contentModel, componentTree, assetManifest, pageIr] =
+    await Promise.all([
+      readText(path.join(webpageEvidenceDir, "source-skeleton", "index.html")),
+      readOptionalText(path.join(webpageEvidenceDir, "source-skeleton", "critical.css")),
+      readOptionalText(path.join(webpageEvidenceDir, "source-skeleton", "full-source.css")),
+      readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "content-model.json")),
+      readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "component-tree.json")),
+      readJsonOptional(path.join(webpageEvidenceDir, "assets", "manifest.json")),
+      readJsonOptional(path.join(webpageEvidenceDir, "page.ir.json")),
+    ])
   const extractedAssets = new Map<string, ExtractedPublicAsset>()
   const criticalCss = sanitizeCssSidecar(rawCriticalCss, extractedAssets)
   const fullSourceCss = sanitizeCssSidecar(rawFullSourceCss, extractedAssets)
@@ -1018,7 +1027,14 @@ export async function generateWebCloneSourceProject(
   const irChildrenByNodeId = extractIrChildrenByNodeId(pageIr)
   const documentContext = extractDocumentContext(pageIr)
   const svgPaths = await readSvgPathData(webpageEvidenceDir)
-  const sourceDomProject = renderSourceDomProject(sourceSkeleton, previewImagePaths, nodeStyleFallbacks, nodeBoundsById, irChildrenByNodeId, projectData.sourceComponentPatterns)
+  const sourceDomProject = renderSourceDomProject(
+    sourceSkeleton,
+    previewImagePaths,
+    nodeStyleFallbacks,
+    nodeBoundsById,
+    irChildrenByNodeId,
+    projectData.sourceComponentPatterns,
+  )
   const replacementPlan = buildSourceDomReplacementPlan(sourceDomProject.regionMetrics, projectData)
   const visualIteration = await buildSourceProjectVisualIteration(webpageEvidenceDir)
 
@@ -1041,17 +1057,23 @@ export async function generateWebCloneSourceProject(
   files.set("src/components/ContentTable.tsx", renderContentTableTsx())
   files.set("src/data/sourceDomRegions.ts", renderSourceDomRegionsTs(sourceDomProject.regionMetrics))
   files.set("src/data/sourceDomReplacementPlan.ts", renderSourceDomReplacementPlanTs(replacementPlan))
-  files.set("src/data/sourceDomIterationState.ts", renderSourceDomIterationStateTs(
-    sourceDomProject.regionMetrics,
-    replacementPlan,
-    sourceDomProject.semanticReplacementMetrics,
-    visualIteration,
-  ))
+  files.set(
+    "src/data/sourceDomIterationState.ts",
+    renderSourceDomIterationStateTs(
+      sourceDomProject.regionMetrics,
+      replacementPlan,
+      sourceDomProject.semanticReplacementMetrics,
+      visualIteration,
+    ),
+  )
   files.set("src/data/sourceSvgAssetGroups.ts", renderSourceSvgAssetGroupsTs(sourceDomProject.svgAssetGroups))
   files.set("src/data/sourceFaqGroups.ts", renderSourceFaqGroupsTs(sourceDomProject.faqGroups))
   files.set("src/data/svgPaths.ts", renderSvgPathsTs(svgPaths))
   files.set("src/data/sourceData.ts", renderSourceDataTs(projectData))
-  files.set("src/styles.css", renderStylesCss({ hasCriticalCss: criticalCss.length > 0, hasFullCss: fullSourceCss.length > 0 }))
+  files.set(
+    "src/styles.css",
+    renderStylesCss({ hasCriticalCss: criticalCss.length > 0, hasFullCss: fullSourceCss.length > 0 }),
+  )
   if (criticalCss.length > 0) files.set("src/styles/source-critical.css", criticalCss)
   if (fullSourceCss.length > 0) files.set("src/styles/source-full.css", fullSourceCss)
 
@@ -1076,7 +1098,8 @@ export async function generateWebCloneSourceProject(
     sourceDomRegions: {
       count: sourceDomProject.regionMetrics.length,
       largestBytes: Math.max(0, ...sourceDomProject.regionMetrics.map((region) => region.bytes)),
-      highPriorityCount: sourceDomProject.regionMetrics.filter((region) => region.replacementPriority === "high").length,
+      highPriorityCount: sourceDomProject.regionMetrics.filter((region) => region.replacementPriority === "high")
+        .length,
       metricsModule: "src/data/sourceDomRegions.ts",
       replacementPlanModule: "src/data/sourceDomReplacementPlan.ts",
       replacementPlanCount: replacementPlan.length,
@@ -1172,7 +1195,7 @@ function extractNodeStyleFallbacks(pageIr: unknown): Map<string, string> {
     const row = value as Record<string, unknown>
     if (typeof row.id === "string" && Array.isArray(row.attrs)) {
       const styleAttr = row.attrs.find((attr) => {
-        const attrRow = attr && typeof attr === "object" ? attr as Record<string, unknown> : {}
+        const attrRow = attr && typeof attr === "object" ? (attr as Record<string, unknown>) : {}
         return attrRow.name === "style" && typeof attrRow.value === "string"
       }) as Record<string, unknown> | undefined
       if (typeof styleAttr?.value === "string") {
@@ -1314,7 +1337,7 @@ function irAttrsToDomAttribs(attrs: unknown): Record<string, string> {
   const result: Record<string, string> = {}
   if (!Array.isArray(attrs)) return result
   for (const attr of attrs) {
-    const row = attr && typeof attr === "object" ? attr as Record<string, unknown> : undefined
+    const row = attr && typeof attr === "object" ? (attr as Record<string, unknown>) : undefined
     if (!row || typeof row.name !== "string") continue
     if (row.name === "d" && typeof row.assetId === "string") {
       result["data-asset-d"] = `../assets/svg/${row.assetId}.path.txt`
@@ -1422,7 +1445,8 @@ function readSourceReplacementKind(value: unknown): SourceDomReplacementPlanItem
     value === "navigation_or_footer_component" ||
     value === "event_or_news_list_component" ||
     value === "baseline_defer"
-  ) return value
+  )
+    return value
   return undefined
 }
 
@@ -1470,7 +1494,7 @@ function sanitizeCssSidecar(css: string, extractedAssets: Map<string, ExtractedP
   const assetSafeCss = css
     .replace(/url\(\s*(["']?)(data:[^)]+?)\1\s*\)/gi, (_match, _quote: string, dataUrl: string) => {
       const asset = extractDataUrlAsset(dataUrl, extractedAssets)
-      return asset ? `url("/${asset.relativePath}")` : "url(\"\")"
+      return asset ? `url("/${asset.relativePath}")` : 'url("")'
     })
     .replace(/data:[^"')\s]+/gi, "")
   return stripSourceProvenanceCssRules(normalizePseudoElementDirectionOrder(expandNestedAmpersandCss(assetSafeCss)))
@@ -1538,8 +1562,9 @@ function isSourceProvenanceCssSelector(selector: string): boolean {
 }
 
 function normalizePseudoElementDirectionOrder(css: string): string {
-  return css.replace(/(::?)(before|after):dir\(([^)]+)\)/g, (_match, pseudoPrefix: string, pseudoName: string, dir: string) =>
-    `:dir(${dir})${pseudoPrefix}${pseudoName}`
+  return css.replace(
+    /(::?)(before|after):dir\(([^)]+)\)/g,
+    (_match, pseudoPrefix: string, pseudoName: string, dir: string) => `:dir(${dir})${pseudoPrefix}${pseudoName}`,
   )
 }
 
@@ -1694,53 +1719,61 @@ function sanitizeAssetPreview(preview: string | undefined): string | undefined {
 }
 
 function renderPackageJson(packageName: string): string {
-  return `${JSON.stringify({
-    name: packageName,
-    private: true,
-    version: "0.0.0",
-    type: "module",
-    scripts: {
-      dev: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteDev,
-      typecheck: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.typecheck,
-      build: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteBuild,
-      preview: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.vitePreview,
+  return `${JSON.stringify(
+    {
+      name: packageName,
+      private: true,
+      version: "0.0.0",
+      type: "module",
+      scripts: {
+        dev: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteDev,
+        typecheck: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.typecheck,
+        build: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteBuild,
+        preview: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.vitePreview,
+      },
+      packageManager: GENERATED_FRONTEND_PACKAGE_PROFILE.packageManager,
+      dependencies: {
+        "@vitejs/plugin-react": "^5.0.0",
+        typescript: "^5.8.0",
+        vite: "^7.0.0",
+        react: "^19.0.0",
+        "react-dom": "^19.0.0",
+      },
+      devDependencies: {
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
+      },
     },
-    packageManager: GENERATED_FRONTEND_PACKAGE_PROFILE.packageManager,
-    dependencies: {
-      "@vitejs/plugin-react": "^5.0.0",
-      typescript: "^5.8.0",
-      vite: "^7.0.0",
-      react: "^19.0.0",
-      "react-dom": "^19.0.0",
-    },
-    devDependencies: {
-      "@types/react": "^19.0.0",
-      "@types/react-dom": "^19.0.0",
-    },
-  }, null, 2)}\n`
+    null,
+    2,
+  )}\n`
 }
 
 function renderTsconfigJson(): string {
-  return `${JSON.stringify({
-    compilerOptions: {
-      target: "ES2022",
-      useDefineForClassFields: true,
-      lib: ["DOM", "DOM.Iterable", "ES2022"],
-      allowJs: false,
-      skipLibCheck: true,
-      esModuleInterop: true,
-      allowSyntheticDefaultImports: true,
-      strict: true,
-      forceConsistentCasingInFileNames: true,
-      module: "ESNext",
-      moduleResolution: "Bundler",
-      resolveJsonModule: true,
-      isolatedModules: true,
-      noEmit: true,
-      jsx: "react-jsx",
+  return `${JSON.stringify(
+    {
+      compilerOptions: {
+        target: "ES2022",
+        useDefineForClassFields: true,
+        lib: ["DOM", "DOM.Iterable", "ES2022"],
+        allowJs: false,
+        skipLibCheck: true,
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+        strict: true,
+        forceConsistentCasingInFileNames: true,
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        resolveJsonModule: true,
+        isolatedModules: true,
+        noEmit: true,
+        jsx: "react-jsx",
+      },
+      include: ["src"],
     },
-    include: ["src"],
-  }, null, 2)}\n`
+    null,
+    2,
+  )}\n`
 }
 
 function renderViteConfigTs(): string {
@@ -1777,10 +1810,7 @@ function renderIndexHtml(documentContext: DocumentContext): string {
 }
 
 function renderViteEnvDts(): string {
-  return [
-    '/// <reference types="vite/client" />',
-    "",
-  ].join("\n")
+  return ['/// <reference types="vite/client" />', ""].join("\n")
 }
 
 function renderHtmlAttributes(attrs: Record<string, string>): string {
@@ -1791,11 +1821,7 @@ function renderHtmlAttributes(attrs: Record<string, string>): string {
 }
 
 function escapeHtmlAttribute(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("\"", "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
+  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
 }
 
 function renderMainTsx(): string {
@@ -1833,7 +1859,7 @@ function renderSourceClonePageTsx(): string {
     "export function SourceClonePage() {",
     "  return (",
     "    <SourceDomPage",
-    "      sourceComponentNames={sourceComponents.map((component) => component.name).join(\",\")}",
+    '      sourceComponentNames={sourceComponents.map((component) => component.name).join(",")}',
     "      tableCount={sourceTables.length}",
     "    />",
     "  )",
@@ -1877,15 +1903,16 @@ function renderSourceDomProject(
     omitSourceProvenanceAttributes: true,
   }
   const bodyLines = renderSkeletonBodyJsx(sourceSkeleton, 3, context)
-  const imports = Array.from(currentImports.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([componentName, importPath]) =>
-    `import { ${componentName} } from ${JSON.stringify(importPath)}`
-  )
-  const svgAssetGroupImports = currentSvgAssetGroupNames.size > 0
-    ? [
-        'import { SourceAssetPathGroup } from "./SourceAssetPathGroup"',
-        'import { sourceSvgAssetGroups } from "../data/sourceSvgAssetGroups"',
-      ]
-    : []
+  const imports = Array.from(currentImports.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([componentName, importPath]) => `import { ${componentName} } from ${JSON.stringify(importPath)}`)
+  const svgAssetGroupImports =
+    currentSvgAssetGroupNames.size > 0
+      ? [
+          'import { SourceAssetPathGroup } from "./SourceAssetPathGroup"',
+          'import { sourceSvgAssetGroups } from "../data/sourceSvgAssetGroups"',
+        ]
+      : []
   const sourceDomPage = [
     "// @ts-nocheck",
     'import { AssetPath } from "./AssetPath"',
@@ -1946,7 +1973,7 @@ function renderSourceAssetPathGroupTsx(): string {
     "    <>",
     "      {items.map((item, index) => (",
     "        <AssetPath",
-    "          key={`${item.assetPath}-${typeof item.id === \"string\" ? item.id : index}`}",
+    '          key={`${item.assetPath}-${typeof item.id === "string" ? item.id : index}`}',
     "          {...(item as SVGProps<SVGPathElement> & { assetPath: string })}",
     "        />",
     "      ))}",
@@ -1965,7 +1992,7 @@ function renderSourceFaqListTsx(): string {
     "export function SourceFaqList({ group }: { group: SourceFaqGroup }) {",
     "  return (",
     "    <div",
-    "      data-base-widget=\"true\"",
+    '      data-base-widget="true"',
     "      data-container-name={group.dataAttributes.containerName}",
     "      data-an-widget-id={group.dataAttributes.widgetId}",
     "      className={group.classes.container}",
@@ -2008,13 +2035,13 @@ function renderSourceFaqListTsx(): string {
     "      <button",
     "        className={group.classes.summary}",
     "        id={item.summaryId}",
-    "        aria-expanded=\"false\"",
+    '        aria-expanded="false"',
     "        aria-controls={detailsId}",
     "      >",
     "        <div className={group.classes.summaryLine}>",
     "          <span className={group.classes.background} />",
     "          <div className={group.classes.summaryText}>{item.question}</div>",
-    "          <div className={group.classes.iconPresentation} role=\"presentation\">",
+    '          <div className={group.classes.iconPresentation} role="presentation">',
     "            <div className={group.classes.iconWrapper}>",
     "              <div className={group.classes.iconHorizontal} />",
     "              <div className={group.classes.iconVertical} />",
@@ -2037,11 +2064,7 @@ function renderSourceFaqListTsx(): string {
   ].join("\n")
 }
 
-function renderSkeletonBodyJsx(
-  sourceSkeleton: string,
-  indentLevel: number,
-  context: SourceDomRenderContext,
-): string[] {
+function renderSkeletonBodyJsx(sourceSkeleton: string, indentLevel: number, context: SourceDomRenderContext): string[] {
   const document = parseDocument(sourceSkeleton, {
     lowerCaseAttributeNames: false,
     lowerCaseTags: false,
@@ -2062,11 +2085,7 @@ function findFirstElement(node: DomNode, tagName: string): DomNode | undefined {
   return undefined
 }
 
-function renderDomNodeJsx(
-  node: DomNode,
-  indentLevel: number,
-  context: SourceDomRenderContext,
-): string[] {
+function renderDomNodeJsx(node: DomNode, indentLevel: number, context: SourceDomRenderContext): string[] {
   if (node.type === "text") {
     const text = normalizeTextNode(node.data ?? "")
     return text ? [`${indent(indentLevel)}{${JSON.stringify(text)}}`] : []
@@ -2074,9 +2093,12 @@ function renderDomNodeJsx(
   if (node.type !== "tag" && node.type !== "script" && node.type !== "style") return []
   const tag = node.name ?? "div"
   if (tag.toLowerCase() === "script" || tag.toLowerCase() === "style") return []
-  const mergedChildren = mergeDomChildrenBySourceId(node.children ?? [], node.attribs?.["data-source-node-id"]
-    ? context.irChildrenByNodeId.get(node.attribs["data-source-node-id"]) ?? []
-    : [])
+  const mergedChildren = mergeDomChildrenBySourceId(
+    node.children ?? [],
+    node.attribs?.["data-source-node-id"]
+      ? (context.irChildrenByNodeId.get(node.attribs["data-source-node-id"]) ?? [])
+      : [],
+  )
   let children = renderDomChildrenJsx(mergedChildren, indentLevel + 1, context)
   const previewImage = renderMissingPreviewImage({ ...node, children: mergedChildren }, indentLevel + 1, context)
   if (previewImage) children.unshift(previewImage)
@@ -2089,18 +2111,10 @@ function renderDomNodeJsx(
   const componentTag = toJsxTagName(tag, tag.toLowerCase() === "path" && Boolean(node.attribs?.["data-asset-d"]))
   const open = `${indent(indentLevel)}<${componentTag}${attrText ? ` ${attrText}` : ""}`
   if (VOID_TAGS.has(tag.toLowerCase()) || children.length === 0) return [`${open} />`]
-  return [
-    `${open}>`,
-    ...children,
-    `${indent(indentLevel)}</${componentTag}>`,
-  ]
+  return [`${open}>`, ...children, `${indent(indentLevel)}</${componentTag}>`]
 }
 
-function renderDomChildrenJsx(
-  children: DomNode[],
-  indentLevel: number,
-  context: SourceDomRenderContext,
-): string[] {
+function renderDomChildrenJsx(children: DomNode[], indentLevel: number, context: SourceDomRenderContext): string[] {
   const rendered: string[] = []
   let assetPathRun: DomNode[] = []
 
@@ -2127,13 +2141,12 @@ function renderDomChildrenJsx(
   return rendered
 }
 
-function renderSourceSvgAssetGroupUse(
-  nodes: DomNode[],
-  indentLevel: number,
-  context: SourceDomRenderContext,
-): string {
+function renderSourceSvgAssetGroupUse(nodes: DomNode[], indentLevel: number, context: SourceDomRenderContext): string {
   const groupName = allocateSourceSvgAssetGroupName(context)
-  context.svgAssetGroups.set(groupName, nodes.map((node) => sourceSvgAssetGroupItem(node, context.nodeStyleFallbacks)))
+  context.svgAssetGroups.set(
+    groupName,
+    nodes.map((node) => sourceSvgAssetGroupItem(node, context.nodeStyleFallbacks)),
+  )
   context.currentSvgAssetGroupNames.add(groupName)
   return `${indent(indentLevel)}<SourceAssetPathGroup items={sourceSvgAssetGroups[${JSON.stringify(groupName)}]} />`
 }
@@ -2234,15 +2247,16 @@ function renderExtractedSourceRegion(node: DomNode, context: SourceDomRenderCont
   context.currentSvgAssetGroupNames = parentSvgAssetGroupNames
   context.currentImports = parentImports
 
-  const nestedImports = Array.from(imports.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([name, importPath]) =>
-    `import { ${name} } from ${JSON.stringify(importPath)}`
-  )
-  const svgAssetGroupImports = svgAssetGroupNames.size > 0
-    ? [
-        'import { SourceAssetPathGroup } from "../SourceAssetPathGroup"',
-        'import { sourceSvgAssetGroups } from "../../data/sourceSvgAssetGroups"',
-      ]
-    : []
+  const nestedImports = Array.from(imports.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, importPath]) => `import { ${name} } from ${JSON.stringify(importPath)}`)
+  const svgAssetGroupImports =
+    svgAssetGroupNames.size > 0
+      ? [
+          'import { SourceAssetPathGroup } from "../SourceAssetPathGroup"',
+          'import { sourceSvgAssetGroups } from "../../data/sourceSvgAssetGroups"',
+        ]
+      : []
   const content = [
     "// @ts-nocheck",
     'import { AssetPath } from "../AssetPath"',
@@ -2285,7 +2299,10 @@ function sourceNodeBounds(node: DomNode, context: SourceDomRenderContext): Sourc
   return sourceNodeId ? context.nodeBoundsById.get(sourceNodeId) : undefined
 }
 
-function sourceComponentPatternForNode(node: DomNode, context: SourceDomRenderContext): SourceComponentPattern | undefined {
+function sourceComponentPatternForNode(
+  node: DomNode,
+  context: SourceDomRenderContext,
+): SourceComponentPattern | undefined {
   const sourceNodeId = node.attribs?.["data-source-node-id"]
   return sourceNodeId ? context.sourceComponentPatternsByNodeId.get(sourceNodeId) : undefined
 }
@@ -2319,7 +2336,10 @@ function renderSemanticNewsListRegion(
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: semanticList.rootClassName,
     gridClassName: semanticList.gridClassName,
-    textPreview: semanticList.items.map((item) => item.title).join(" | ").slice(0, 180),
+    textPreview: semanticList.items
+      .map((item) => item.title)
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: semanticList.componentName,
@@ -2346,7 +2366,10 @@ function renderSemanticRepeatedListRegion(
     itemCount: collection.items.length,
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: collection.rootClassName,
-    textPreview: collection.items.map((item) => item.title).join(" | ").slice(0, 180),
+    textPreview: collection.items
+      .map((item) => item.title)
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: collection.componentName,
@@ -2381,7 +2404,9 @@ function renderSemanticDataTableRegion(
       semanticTable.titleText,
       ...semanticTable.headers.map((header) => header.label),
       ...semanticTable.rows.slice(0, 4).map((row) => row.label),
-    ].join(" | ").slice(0, 180),
+    ]
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: semanticTable.componentName,
@@ -2411,11 +2436,9 @@ function renderSemanticMetricRankingCardRegion(
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: ranking.rootClassName,
     cardContainerClassName: ranking.listClassName,
-    textPreview: [
-      ranking.titleText,
-      ...ranking.headerLabels,
-      ...ranking.rows.slice(0, 6).map((row) => row.label),
-    ].join(" | ").slice(0, 180),
+    textPreview: [ranking.titleText, ...ranking.headerLabels, ...ranking.rows.slice(0, 6).map((row) => row.label)]
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: ranking.componentName,
@@ -2444,7 +2467,9 @@ function renderSemanticMetricChartCardRegion(
     itemCount: card.stats.length,
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: card.rootClassName,
-    textPreview: [card.title, card.ticker, ...card.stats.map((stat) => `${stat.label} ${stat.value}`)].join(" | ").slice(0, 180),
+    textPreview: [card.title, card.ticker, ...card.stats.map((stat) => `${stat.label} ${stat.value}`)]
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: card.componentName,
@@ -2475,10 +2500,9 @@ function renderSemanticEventCardListRegion(
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: semanticList.rootClassName,
     cardContainerClassName: semanticList.itemsClassName,
-    textPreview: [
-      semanticList.titleText,
-      ...semanticList.items.slice(0, 6).map((item) => item.title),
-    ].join(" | ").slice(0, 180),
+    textPreview: [semanticList.titleText, ...semanticList.items.slice(0, 6).map((item) => item.title)]
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: semanticList.componentName,
@@ -2514,7 +2538,10 @@ function renderSemanticFooterRegion(
       ...footer.socialLinks.slice(0, 4).map((item) => item.label),
       ...footerLinks.slice(0, 8).map((item) => item.label),
       ...legalText.slice(0, 2),
-    ].filter(Boolean).join(" | ").slice(0, 180),
+    ]
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: footer.componentName,
@@ -2540,7 +2567,11 @@ function renderSemanticHeaderNavigationRegion(
     sourceRegionComponentName,
     sourceNodeId: header.rootSourceNodeId,
     replacementKind: "navigation_or_footer_component",
-    itemCount: header.menuItems.length + (header.searchButton ? 1 : 0) + (header.languageButton ? 1 : 0) + (header.offerLink ? 1 : 0),
+    itemCount:
+      header.menuItems.length +
+      (header.searchButton ? 1 : 0) +
+      (header.languageButton ? 1 : 0) +
+      (header.offerLink ? 1 : 0),
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: header.rootClassName,
     textPreview: [
@@ -2548,7 +2579,10 @@ function renderSemanticHeaderNavigationRegion(
       ...header.menuItems.map((item) => item.label),
       header.languageButton?.label,
       header.offerLink?.label,
-    ].filter(Boolean).join(" | ").slice(0, 180),
+    ]
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: header.componentName,
@@ -2579,11 +2613,10 @@ function renderSemanticMapSurfaceRegion(
     mapPathCount: mapSurface.paths.length,
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: mapSurface.rootClassName,
-    textPreview: [
-      mapSurface.titleText,
-      ...mapSurface.legendLabels,
-      mapSurface.footerLink?.label,
-    ].filter(Boolean).join(" | ").slice(0, 180),
+    textPreview: [mapSurface.titleText, ...mapSurface.legendLabels, mapSurface.footerLink?.label]
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: mapSurface.componentName,
@@ -2613,10 +2646,10 @@ function renderSemanticLinkGridRegion(
     itemCount: linkGrid.links.length,
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: linkGrid.rootClassName,
-    textPreview: [
-      linkGrid.titleText,
-      ...linkGrid.links.slice(0, 12).map((item) => item.label),
-    ].filter(Boolean).join(" | ").slice(0, 180),
+    textPreview: [linkGrid.titleText, ...linkGrid.links.slice(0, 12).map((item) => item.label)]
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: linkGrid.componentName,
@@ -2652,7 +2685,10 @@ function renderSemanticIdeaCardCollectionRegion(
       ...collection.tabs.map((tab) => tab.label),
       ...collection.cards.slice(0, 6).map((card) => card.title),
       collection.moreLink?.label,
-    ].filter(Boolean).join(" | ").slice(0, 180),
+    ]
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: collection.componentName,
@@ -2670,7 +2706,8 @@ function renderSemanticFaqRegion(
   const groupName = allocateSourceFaqGroupName(context)
   context.faqGroups.set(groupName, faqGroup)
   const componentName = sourceRegionComponentName.replace(/Region\d*$/, "FAQ")
-  const semanticComponentName = componentName === sourceRegionComponentName ? `${sourceRegionComponentName}FAQ` : componentName
+  const semanticComponentName =
+    componentName === sourceRegionComponentName ? `${sourceRegionComponentName}FAQ` : componentName
   const faqItems = faqGroup.columns.flat()
   const content = [
     "// @ts-nocheck",
@@ -2695,10 +2732,7 @@ function renderSemanticFaqRegion(
     itemCount: faqItems.length,
     bytes: Buffer.byteLength(content, "utf8"),
     rootClassName: node.attribs?.class ?? faqGroup.classes.container,
-    textPreview: [
-      faqGroup.title,
-      ...faqItems.slice(0, 6).map((item) => item.question),
-    ].join(" | ").slice(0, 180),
+    textPreview: [faqGroup.title, ...faqItems.slice(0, 6).map((item) => item.question)].join(" | ").slice(0, 180),
   })
   return {
     componentName: semanticComponentName,
@@ -2733,7 +2767,10 @@ function renderSemanticSectionShellRegion(
       ...section.tabs.map((tab) => tab.label),
       section.footerLink?.label,
       ...section.children.map((child) => child.componentName),
-    ].filter(Boolean).join(" | ").slice(0, 180),
+    ]
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 180),
   })
   return {
     componentName: section.componentName,
@@ -2792,14 +2829,15 @@ function isSemanticRepeatedListCandidate(node: DomNode): boolean {
   if (tag !== "ul" && tag !== "ol" && node.attribs?.["data-source-role"] !== "list") return false
   const itemNodes = directElementChildren(node).filter((child) => child.type === "tag")
   if (itemNodes.length < 3) return false
-  const extractableItems = itemNodes
-    .map((item, index) => semanticRepeatedListItem(item, index))
-    .filter(Boolean)
+  const extractableItems = itemNodes.map((item, index) => semanticRepeatedListItem(item, index)).filter(Boolean)
   return extractableItems.length >= 3
 }
 
 function semanticRepeatedListItem(node: DomNode, index: number): SemanticRepeatedListItemCandidate | undefined {
-  const anchor = findDescendantElement(node, (child) => child.name?.toLowerCase() === "a" && normalizeVisibleText(visibleText(child)).length > 0)
+  const anchor = findDescendantElement(
+    node,
+    (child) => child.name?.toLowerCase() === "a" && normalizeVisibleText(visibleText(child)).length > 0,
+  )
   const titleCandidate = semanticRepeatedListTitle(node, anchor)
   if (!anchor || !titleCandidate) return undefined
   const image = findDescendantElement(node, (child) => child.name?.toLowerCase() === "img")
@@ -2822,13 +2860,14 @@ function semanticRepeatedListItem(node: DomNode, index: number): SemanticRepeate
 }
 
 function semanticRepeatedListTitle(node: DomNode, anchor?: DomNode): SemanticRepeatedListTitleCandidate | undefined {
-  const titleNode = findDescendantElement(anchor ?? node, (child) => {
-    if (child.type !== "tag") return false
-    const tag = child.name?.toLowerCase() ?? ""
-    if (/^h[1-6]$/.test(tag)) return true
-    if (tag === "p" || tag === "span") return /(?:headline|title|promo)/i.test(child.attribs?.class ?? "")
-    return false
-  }) ?? anchor
+  const titleNode =
+    findDescendantElement(anchor ?? node, (child) => {
+      if (child.type !== "tag") return false
+      const tag = child.name?.toLowerCase() ?? ""
+      if (/^h[1-6]$/.test(tag)) return true
+      if (tag === "p" || tag === "span") return /(?:headline|title|promo)/i.test(child.attribs?.class ?? "")
+      return false
+    }) ?? anchor
   const text = normalizeVisibleText(titleNode ? visibleText(titleNode) : "")
   return titleNode && text ? { sourceNode: titleNode, text } : undefined
 }
@@ -2870,23 +2909,39 @@ function extractSemanticDataTable(node: DomNode, sourceRegionComponentName: stri
   const rows = directTableRows(table)
   if (rows.length < 3) return undefined
   const headerCells = tableRowCells(rows[0] ?? [])
-  const headers = headerCells.slice(1).map(semanticDataTableHeader).filter((item): item is SemanticDataTableHeader => Boolean(item))
-  const dataRows = rows.slice(1).map((row) => semanticDataTableRow(row, headers.length)).filter((item): item is SemanticDataTableRow => Boolean(item))
+  const headers = headerCells
+    .slice(1)
+    .map(semanticDataTableHeader)
+    .filter((item): item is SemanticDataTableHeader => Boolean(item))
+  const dataRows = rows
+    .slice(1)
+    .map((row) => semanticDataTableRow(row, headers.length))
+    .filter((item): item is SemanticDataTableRow => Boolean(item))
   if (headers.length < 2 || dataRows.length < 2) return undefined
 
   const header = findDirectChildBySourceRole(node, "header")
   const headerWrapper = header ? firstElementChild(header) : undefined
   const titleWrapper = headerWrapper ? firstElementChild(headerWrapper) : undefined
   const titleContainer = titleWrapper ? firstElementChild(titleWrapper) : undefined
-  const titleLink = titleContainer ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a") : undefined
+  const titleLink = titleContainer
+    ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a")
+    : undefined
   const titleNode = findDescendantElement(titleContainer ?? node, (child) => /^h[1-4]$/i.test(child.name ?? ""))
-  const content = findDescendantElement(node, (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/))
-  const tableContainer = findAncestorElement(node, table, (child) => hasClassMatching(child, /^tableContainer-/)) ??
+  const content = findDescendantElement(
+    node,
+    (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/),
+  )
+  const tableContainer =
+    findAncestorElement(node, table, (child) => hasClassMatching(child, /^tableContainer-/)) ??
     findAncestorElement(node, table, (child) => hasClassMatching(child, /^container-/) && child !== node)
   const innerContainer = tableContainer ? firstElementChild(tableContainer) : undefined
   const body = findDescendantElement(table, (child) => child.name?.toLowerCase() === "tbody")
   const componentName = semanticTableComponentName(sourceRegionComponentName, titleNode ? visibleText(titleNode) : "")
-  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, ["data-base-widget", "data-container-name", "data-an-widget-id"])
+  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, [
+    "data-base-widget",
+    "data-container-name",
+    "data-an-widget-id",
+  ])
 
   return {
     componentName,
@@ -2901,7 +2956,9 @@ function extractSemanticDataTable(node: DomNode, sourceRegionComponentName: stri
     titleId: titleNode?.attribs?.id,
     titleHref: normalizeReferencedAssetUrl(titleLink?.attribs?.href ?? ""),
     titleLinkClassName: titleLink?.attribs?.class ?? "",
-    titleText: normalizeVisibleText(titleNode ? visibleText(titleNode) : sourceRegionComponentName.replace(/Region\d*$/, "")),
+    titleText: normalizeVisibleText(
+      titleNode ? visibleText(titleNode) : sourceRegionComponentName.replace(/Region\d*$/, ""),
+    ),
     contentClassName: content?.attribs?.class ?? "",
     tableContainerClassName: tableContainer?.attribs?.class ?? "",
     tableContainerStyle: parseStyleRecord(tableContainer?.attribs?.style ?? ""),
@@ -2922,7 +2979,9 @@ function semanticTableComponentName(sourceRegionComponentName: string, title: st
 function directTableRows(table: DomNode): DomNode[] {
   const bodies = directElementChildren(table).filter((child) => /^(?:thead|tbody|tfoot)$/i.test(child.name ?? ""))
   const rowParents = bodies.length > 0 ? bodies : [table]
-  return rowParents.flatMap((parent) => directElementChildren(parent).filter((child) => child.name?.toLowerCase() === "tr"))
+  return rowParents.flatMap((parent) =>
+    directElementChildren(parent).filter((child) => child.name?.toLowerCase() === "tr"),
+  )
 }
 
 function tableRowCells(row: DomNode): DomNode[] {
@@ -2969,8 +3028,9 @@ function semanticDataTableRow(row: DomNode, expectedCellCount: number): Semantic
 }
 
 function semanticDataTableCell(cell: DomNode): SemanticDataTableCell {
-  const valueNode = findDescendantElement(cell, (child) =>
-    hasClassMatching(child, /^(?:js-symbol-last|value)-/) || child.attribs?.class === "js-symbol-last",
+  const valueNode = findDescendantElement(
+    cell,
+    (child) => hasClassMatching(child, /^(?:js-symbol-last|value)-/) || child.attribs?.class === "js-symbol-last",
   )
   const unitNode = findDescendantElement(cell, (child) => hasClassMatching(child, /^(?:currency|unit)-/))
   const rowNode = findAncestorElement(cell, valueNode ?? unitNode ?? cell, (child) => hasClassMatching(child, /^row-/))
@@ -3026,13 +3086,18 @@ function extractSemanticMetricChartCard(
   const header = findDescendantElement(node, (child) => hasClassMatching(child, /^header-/))
   const headerLink = findSemanticMetricChartHeaderLink(node)
   const titleNode = headerLink ? semanticMetricChartTitleNode(headerLink) : undefined
-  const tickerNode = headerLink ? findDescendantElement(headerLink, (child) => hasClassMatching(child, /^tickerBox-/)) : undefined
+  const tickerNode = headerLink
+    ? findDescendantElement(headerLink, (child) => hasClassMatching(child, /^tickerBox-/))
+    : undefined
   const title = normalizeVisibleText(titleNode ? visibleText(titleNode) : "")
   if (!headerLink || !title) return undefined
   const content = findDescendantElement(node, (child) => hasClassMatching(child, /^content-/))
   const chartShell = content ? firstElementChild(content) : findSemanticMetricChartFrame(node)
   const chartFrame = findSemanticMetricChartFrame(node)
-  const statsWrapper = findDescendantElement(node, (child) => hasClassMatching(child, /^wrapper-vE74cYTn/) || hasClassMatching(child, /^stats/))
+  const statsWrapper = findDescendantElement(
+    node,
+    (child) => hasClassMatching(child, /^wrapper-vE74cYTn/) || hasClassMatching(child, /^stats/),
+  )
   const statsContainer = statsWrapper ? firstElementChild(statsWrapper) : undefined
   const stats = semanticMetricChartStats(node)
   if (!chartFrame || stats.length < 1) return undefined
@@ -3061,10 +3126,12 @@ function extractSemanticMetricChartCard(
 }
 
 function findSemanticMetricChartHeaderLink(node: DomNode): DomNode | undefined {
-  return findDescendantElement(node, (child) =>
-    child.name?.toLowerCase() === "a" &&
-    Boolean(semanticMetricChartTitleNode(child)) &&
-    Boolean(findDescendantElement(child, (candidate) => hasClassMatching(candidate, /^tickerBox-/)))
+  return findDescendantElement(
+    node,
+    (child) =>
+      child.name?.toLowerCase() === "a" &&
+      Boolean(semanticMetricChartTitleNode(child)) &&
+      Boolean(findDescendantElement(child, (candidate) => hasClassMatching(candidate, /^tickerBox-/))),
   )
 }
 
@@ -3074,9 +3141,14 @@ function semanticMetricChartTitleNode(node: DomNode): DomNode | undefined {
 
 function findSemanticMetricChartFrame(node: DomNode): DomNode | undefined {
   const lightweightChart = findDescendantElement(node, (child) => hasClassMatching(child, /^tv-lightweight-charts$/))
-  return lightweightChart ?? findDescendantElement(node, (child) =>
-    child.name?.toLowerCase() === "canvas" &&
-    /backgroundImage|background-image|url\(/.test(child.attribs?.style ?? "")
+  return (
+    lightweightChart ??
+    findDescendantElement(
+      node,
+      (child) =>
+        child.name?.toLowerCase() === "canvas" &&
+        /backgroundImage|background-image|url\(/.test(child.attribs?.style ?? ""),
+    )
   )
 }
 
@@ -3104,14 +3176,24 @@ function isSemanticMetricChartStatNode(node: DomNode): boolean {
   if (hasClassMatching(node, /^wrapper-yXjDRT2e/)) return true
   const children = directElementChildren(node)
   if (children.length < 2 || children.length > 3) return false
-  return children.some((child) => hasClassMatching(child, /^label-/)) &&
+  return (
+    children.some((child) => hasClassMatching(child, /^label-/)) &&
     children.some((child) => hasClassMatching(child, /^value-/))
+  )
 }
 
 function semanticChartNode(node: DomNode, depth: number): SemanticChartNode | undefined {
   if (depth > 8 || node.type !== "tag") return undefined
   const tagName = node.name?.toLowerCase()
-  if (tagName !== "table" && tagName !== "tbody" && tagName !== "tr" && tagName !== "td" && tagName !== "div" && tagName !== "canvas") return undefined
+  if (
+    tagName !== "table" &&
+    tagName !== "tbody" &&
+    tagName !== "tr" &&
+    tagName !== "td" &&
+    tagName !== "div" &&
+    tagName !== "canvas"
+  )
+    return undefined
   const children = directElementChildren(node)
     .map((child) => semanticChartNode(child, depth + 1))
     .filter((child): child is SemanticChartNode => Boolean(child))
@@ -3140,26 +3222,38 @@ function extractSemanticMetricRankingCard(
   if (rows.length < 3) return undefined
 
   const wrapper = firstElementChild(node)
-  const titleNode = findDescendantElement(wrapper ?? node, (child) =>
-    child !== headerRow &&
-    (
-      child.attribs?.["data-source-role"] === "header" ||
-      hasClassMatching(child, /^header-/) ||
-      hasClassMatching(child, /^title-/)
-    ) &&
-    normalizeVisibleText(visibleText(child)).length > 0,
+  const titleNode = findDescendantElement(
+    wrapper ?? node,
+    (child) =>
+      child !== headerRow &&
+      (child.attribs?.["data-source-role"] === "header" ||
+        hasClassMatching(child, /^header-/) ||
+        hasClassMatching(child, /^title-/)) &&
+      normalizeVisibleText(visibleText(child)).length > 0,
   )
   const firstItem = directElementChildren(list).find((child) => child.name?.toLowerCase() === "li")
   const firstOuter = firstItem ? firstElementChild(firstItem) : undefined
   const firstInner = firstOuter ? firstElementChild(firstOuter) : undefined
-  const firstImage = firstItem ? findDescendantElement(firstItem, (child) => child.name?.toLowerCase() === "img") : undefined
-  const firstLink = firstItem ? findDescendantElement(firstItem, (child) => child.name?.toLowerCase() === "a") : undefined
+  const firstImage = firstItem
+    ? findDescendantElement(firstItem, (child) => child.name?.toLowerCase() === "img")
+    : undefined
+  const firstLink = firstItem
+    ? findDescendantElement(firstItem, (child) => child.name?.toLowerCase() === "a")
+    : undefined
   const firstTitleContainer = firstLink ? firstElementChild(firstLink) : undefined
-  const firstLabel = firstLink ? findDescendantElement(firstLink, (child) => hasClassMatching(child, /^title-/)) : undefined
+  const firstLabel = firstLink
+    ? findDescendantElement(firstLink, (child) => hasClassMatching(child, /^title-/))
+    : undefined
   const firstValueCell = firstItem ? findDescendantElement(firstItem, isSemanticMetricValueCell) : undefined
-  const firstValue = firstValueCell ? findDescendantElement(firstValueCell, (child) => hasClassMatching(child, /^value-/)) : undefined
-  const firstUnit = firstValueCell ? findDescendantElement(firstValueCell, (child) => hasClassMatching(child, /^unit-/)) : undefined
-  const titleText = normalizeVisibleText(titleNode ? visibleText(titleNode) : sourceRegionComponentName.replace(/Region\d*$/, ""))
+  const firstValue = firstValueCell
+    ? findDescendantElement(firstValueCell, (child) => hasClassMatching(child, /^value-/))
+    : undefined
+  const firstUnit = firstValueCell
+    ? findDescendantElement(firstValueCell, (child) => hasClassMatching(child, /^unit-/))
+    : undefined
+  const titleText = normalizeVisibleText(
+    titleNode ? visibleText(titleNode) : sourceRegionComponentName.replace(/Region\d*$/, ""),
+  )
   const componentName = `${toPascalIdentifier(titleText || sourceRegionComponentName.replace(/Region\d*$/, ""))}Ranking`
 
   return {
@@ -3201,9 +3295,10 @@ function findSemanticMetricRankingHeaderRow(node: DomNode): DomNode | undefined 
   return findDescendantElement(node, (child) => {
     if (semanticMetricRankingHeaderLabels(child).length < 2) return false
     if (child.attribs?.["data-source-role"] === "header") return true
-    return hasClassMatching(child, /^header-/) && (
-      hasClassMatching(child, /^column/) ||
-      /\b(country|gdp|growth|nominal|rate|inflation|unemployment|market cap|population)\b/i.test(visibleText(child))
+    return (
+      hasClassMatching(child, /^header-/) &&
+      (hasClassMatching(child, /^column/) ||
+        /\b(country|gdp|growth|nominal|rate|inflation|unemployment|market cap|population)\b/i.test(visibleText(child)))
     )
   })
 }
@@ -3220,14 +3315,16 @@ function semanticMetricRankingRow(item: DomNode): SemanticMetricRankingRow | und
   const label = normalizeVisibleText(labelNode ? visibleText(labelNode) : anchor ? visibleText(anchor) : "")
   if (!label) return undefined
   const image = findDescendantElement(item, (child) => child.name?.toLowerCase() === "img")
-  const values = findDescendantElements(item, isSemanticMetricValueCell).map((cell) => {
-    const valueNode = findDescendantElement(cell, (child) => hasClassMatching(child, /^value-/))
-    const unitNode = findDescendantElement(cell, (child) => hasClassMatching(child, /^unit-/))
-    return {
-      value: normalizeVisibleText(valueNode ? visibleText(valueNode) : visibleText(cell)),
-      unit: normalizeVisibleText(unitNode ? visibleText(unitNode) : ""),
-    }
-  }).filter((cell) => cell.value || cell.unit)
+  const values = findDescendantElements(item, isSemanticMetricValueCell)
+    .map((cell) => {
+      const valueNode = findDescendantElement(cell, (child) => hasClassMatching(child, /^value-/))
+      const unitNode = findDescendantElement(cell, (child) => hasClassMatching(child, /^unit-/))
+      return {
+        value: normalizeVisibleText(valueNode ? visibleText(valueNode) : visibleText(cell)),
+        unit: normalizeVisibleText(unitNode ? visibleText(unitNode) : ""),
+      }
+    })
+    .filter((cell) => cell.value || cell.unit)
   if (values.length < 1) return undefined
   return {
     label,
@@ -3279,24 +3376,39 @@ function isSemanticEventCardListCandidate(node: DomNode): boolean {
   return true
 }
 
-function extractSemanticEventCardList(node: DomNode, sourceRegionComponentName: string): SemanticEventCardList | undefined {
+function extractSemanticEventCardList(
+  node: DomNode,
+  sourceRegionComponentName: string,
+): SemanticEventCardList | undefined {
   const itemsContainer = findSemanticEventCardContainer(node)
   const cardAnchors = itemsContainer ? semanticEventCardAnchors(itemsContainer) : []
   if (!itemsContainer || cardAnchors.length < 3) return undefined
-  const items = cardAnchors.map(semanticEventCardItem).filter((item): item is SemanticEventCardItem => Boolean(item)).slice(0, 80)
+  const items = cardAnchors
+    .map(semanticEventCardItem)
+    .filter((item): item is SemanticEventCardItem => Boolean(item))
+    .slice(0, 80)
   if (items.length < 3) return undefined
 
   const header = findDirectChildBySourceRole(node, "header")
   const headerWrapper = header ? firstElementChild(header) : undefined
   const titleWrapper = headerWrapper ? firstElementChild(headerWrapper) : undefined
   const titleContainer = titleWrapper ? firstElementChild(titleWrapper) : undefined
-  const titleLink = titleContainer ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a") : undefined
+  const titleLink = titleContainer
+    ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a")
+    : undefined
   const titleNode = findDescendantElement(titleContainer ?? node, (child) => /^h[1-4]$/i.test(child.name ?? ""))
-  const content = findDescendantElement(node, (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/))
+  const content = findDescendantElement(
+    node,
+    (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/),
+  )
   const wrapper = content ? firstElementChild(content) : undefined
   const container = wrapper ? firstElementChild(wrapper) : undefined
   const componentName = sourceRegionComponentName.replace(/Region\d*$/, "List")
-  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, ["data-base-widget", "data-container-name", "data-an-widget-id"])
+  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, [
+    "data-base-widget",
+    "data-container-name",
+    "data-an-widget-id",
+  ])
   const chromeClassNames = directElementChildren(itemsContainer)
     .filter((child) => !isSemanticEventCardAnchor(child))
     .map((child) => child.attribs?.class ?? "")
@@ -3316,7 +3428,9 @@ function extractSemanticEventCardList(node: DomNode, sourceRegionComponentName: 
     titleId: titleNode?.attribs?.id,
     titleHref: normalizeReferencedAssetUrl(titleLink?.attribs?.href ?? ""),
     titleLinkClassName: titleLink?.attribs?.class ?? "",
-    titleText: normalizeVisibleText(titleNode ? visibleText(titleNode) : sourceRegionComponentName.replace(/Region\d*$/, "")),
+    titleText: normalizeVisibleText(
+      titleNode ? visibleText(titleNode) : sourceRegionComponentName.replace(/Region\d*$/, ""),
+    ),
     contentClassName: content?.attribs?.class ?? "",
     wrapperClassName: wrapper?.attribs?.class ?? "",
     containerClassName: container?.attribs?.class ?? "",
@@ -3355,14 +3469,28 @@ function semanticEventCardItem(anchor: DomNode): SemanticEventCardItem | undefin
   const date = findDescendantElement(anchor, (child) => hasClassMatching(child, /^date-/))
   const day = findDescendantElement(anchor, (child) => hasClassMatching(child, /^day-/))
   const dot = findDescendantElement(anchor, (child) => hasClassMatching(child, /^dot-/))
-  const timestampWrapper = findDescendantElement(anchor, (child) => hasClassMatching(child, /^wrap-/) && /GMT|UTC|20\d{2}/.test(child.attribs?.title ?? ""))
-  const badge = timestampWrapper ? findDescendantElement(timestampWrapper, (child) => hasClassMatching(child, /^badge-/)) : undefined
+  const timestampWrapper = findDescendantElement(
+    anchor,
+    (child) => hasClassMatching(child, /^wrap-/) && /GMT|UTC|20\d{2}/.test(child.attribs?.title ?? ""),
+  )
+  const badge = timestampWrapper
+    ? findDescendantElement(timestampWrapper, (child) => hasClassMatching(child, /^badge-/))
+    : undefined
   const badgeContent = badge ? firstElementChild(badge) : undefined
   const titleBlock = findDescendantElement(anchor, (child) => hasClassMatching(child, /^titleBlock-/))
-  const flag = titleBlock ? findDescendantElement(titleBlock, (child) => child.name?.toLowerCase() === "img") : undefined
-  const column = titleBlock ? findDescendantElement(titleBlock, (child) => hasClassMatching(child, /^column-/)) : undefined
+  const flag = titleBlock
+    ? findDescendantElement(titleBlock, (child) => child.name?.toLowerCase() === "img")
+    : undefined
+  const column = titleBlock
+    ? findDescendantElement(titleBlock, (child) => hasClassMatching(child, /^column-/))
+    : undefined
   const statsNode = findDescendantElement(anchor, (child) => hasClassMatching(child, /^stats-/))
-  const stats = statsNode ? directElementChildren(statsNode).map(semanticEventCardStat).filter((item): item is SemanticEventCardStat => Boolean(item)).slice(0, 8) : []
+  const stats = statsNode
+    ? directElementChildren(statsNode)
+        .map(semanticEventCardStat)
+        .filter((item): item is SemanticEventCardStat => Boolean(item))
+        .slice(0, 8)
+    : []
   if (stats.length === 0) return undefined
   return {
     href: normalizeReferencedAssetUrl(anchor.attribs?.href ?? ""),
@@ -3392,7 +3520,10 @@ function semanticEventCardItem(anchor: DomNode): SemanticEventCardItem | undefin
 function semanticEventCardStat(node: DomNode): SemanticEventCardStat | undefined {
   const titleNode = findDescendantElement(node, (child) => hasClassMatching(child, /^title-/))
   const valueWrap = findDescendantElement(node, (child) => hasClassMatching(child, /^valueWrap-/))
-  const valueNode = findDescendantElement(node, (child) => hasClassMatching(child, /^value-/) || hasClassMatching(child, /^highlighted-/))
+  const valueNode = findDescendantElement(
+    node,
+    (child) => hasClassMatching(child, /^value-/) || hasClassMatching(child, /^highlighted-/),
+  )
   const unitNode = findDescendantElement(node, (child) => hasClassMatching(child, /^unit-/))
   const label = normalizeVisibleText(titleNode ? visibleText(titleNode) : "")
   const value = normalizeVisibleText(valueNode ? visibleText(valueNode) : "")
@@ -3418,30 +3549,65 @@ function isSemanticFooterCandidate(node: DomNode): boolean {
 }
 
 function extractSemanticFooter(node: DomNode, sourceRegionComponentName: string): SemanticFooter | undefined {
-  const promo = findDescendantElement(node, (child) => /(?:promo-footer|footer-shell)/i.test(child.attribs?.class ?? ""))
+  const promo = findDescendantElement(node, (child) =>
+    /(?:promo-footer|footer-shell)/i.test(child.attribs?.class ?? ""),
+  )
   const visualRoot = findDescendantElement(node, (child) => hasClassMatching(child, /^root-/))
-  const container = findDescendantElement(visualRoot ?? promo ?? node, (child) => hasClassMatching(child, /^container-/))
-  const content = container ? directElementChildren(container).find((child) => hasClassMatching(child, /^content-/)) : undefined
-  const leading = content ? directElementChildren(content).find((child) => child.name?.toLowerCase() === "div" && !hasClassMatching(child, /^footerLinks-/)) : undefined
+  const container = findDescendantElement(visualRoot ?? promo ?? node, (child) =>
+    hasClassMatching(child, /^container-/),
+  )
+  const content = container
+    ? directElementChildren(container).find((child) => hasClassMatching(child, /^content-/))
+    : undefined
+  const leading = content
+    ? directElementChildren(content).find(
+        (child) => child.name?.toLowerCase() === "div" && !hasClassMatching(child, /^footerLinks-/),
+      )
+    : undefined
   const logoSocials = findDescendantElement(leading ?? node, (child) => hasClassMatching(child, /^logoSocials-/))
-  const logoAnchor = logoSocials ? findDescendantElement(logoSocials, (child) => child.name?.toLowerCase() === "a" && hasClassMatching(child, /^logoWrapper-/)) : undefined
-  const logoMark = logoAnchor ? findDescendantElement(logoAnchor, (child) => hasClassMatching(child, /^logo-/)) : undefined
-  const socials = logoSocials ? findDescendantElement(logoSocials, (child) => hasClassMatching(child, /^socials-/)) : undefined
+  const logoAnchor = logoSocials
+    ? findDescendantElement(
+        logoSocials,
+        (child) => child.name?.toLowerCase() === "a" && hasClassMatching(child, /^logoWrapper-/),
+      )
+    : undefined
+  const logoMark = logoAnchor
+    ? findDescendantElement(logoAnchor, (child) => hasClassMatching(child, /^logo-/))
+    : undefined
+  const socials = logoSocials
+    ? findDescendantElement(logoSocials, (child) => hasClassMatching(child, /^socials-/))
+    : undefined
   const socialLinks = (socials ? directElementChildren(socials) : [])
     .filter((child) => child.name?.toLowerCase() === "a")
     .map(semanticFooterLink)
     .filter((item): item is SemanticFooterLink => Boolean(item))
-  const copyrightContainer = findDescendantElement(leading ?? node, (child) => hasClassMatching(child, /^copyrightContainer-/))
-  const languageButton = findDescendantElement(copyrightContainer ?? node, (child) => child.name?.toLowerCase() === "button" && /language/i.test(child.attribs?.class ?? ""))
-  const copyright = findDescendantElement(copyrightContainer ?? node, (child) => child.name?.toLowerCase() === "p" && hasClassMatching(child, /^copyright-/))
+  const copyrightContainer = findDescendantElement(leading ?? node, (child) =>
+    hasClassMatching(child, /^copyrightContainer-/),
+  )
+  const languageButton = findDescendantElement(
+    copyrightContainer ?? node,
+    (child) => child.name?.toLowerCase() === "button" && /language/i.test(child.attribs?.class ?? ""),
+  )
+  const copyright = findDescendantElement(
+    copyrightContainer ?? node,
+    (child) => child.name?.toLowerCase() === "p" && hasClassMatching(child, /^copyright-/),
+  )
   const footerLinks = findDescendantElement(content ?? node, (child) => hasClassMatching(child, /^footerLinks-/))
   const linkGroups = extractSemanticFooterLinkGroups(footerLinks)
   const footerLinkCount = linkGroups.flatMap((group) => group.columns).flatMap((column) => column.links).length
   if (socialLinks.length + footerLinkCount < 4) return undefined
-  const backgroundImage = container ? directElementChildren(container).find((child) => hasClassMatching(child, /^backgroundImage-/)) : undefined
-  const lookFirstContainer = container ? directElementChildren(container).find((child) => hasClassMatching(child, /^lookFirstContainer-/)) : undefined
-  const pepeContainer = lookFirstContainer ? findDescendantElement(lookFirstContainer, (child) => hasClassMatching(child, /^pepeContainer-/)) : undefined
-  const pepeLauncher = container ? directElementChildren(container).find((child) => hasClassMatching(child, /^pepeLauncher-/)) : undefined
+  const backgroundImage = container
+    ? directElementChildren(container).find((child) => hasClassMatching(child, /^backgroundImage-/))
+    : undefined
+  const lookFirstContainer = container
+    ? directElementChildren(container).find((child) => hasClassMatching(child, /^lookFirstContainer-/))
+    : undefined
+  const pepeContainer = lookFirstContainer
+    ? findDescendantElement(lookFirstContainer, (child) => hasClassMatching(child, /^pepeContainer-/))
+    : undefined
+  const pepeLauncher = container
+    ? directElementChildren(container).find((child) => hasClassMatching(child, /^pepeLauncher-/))
+    : undefined
   const images = findDescendantElements(lookFirstContainer ?? node, (child) => child.name?.toLowerCase() === "img")
     .map((image) => ({
       src: normalizeReferencedAssetUrl(image.attribs?.src ?? ""),
@@ -3452,7 +3618,8 @@ function extractSemanticFooter(node: DomNode, sourceRegionComponentName: string)
     .slice(0, 12)
   const componentName = sourceRegionComponentName.replace(/Region\d*$/, "Navigation")
   return {
-    componentName: componentName === sourceRegionComponentName ? `${sourceRegionComponentName}Navigation` : componentName,
+    componentName:
+      componentName === sourceRegionComponentName ? `${sourceRegionComponentName}Navigation` : componentName,
     rootClassName: node.attribs?.class ?? "",
     rootSourceNodeId: node.attribs?.["data-source-node-id"],
     dataNosnippet: node.attribs?.["data-nosnippet"],
@@ -3510,7 +3677,7 @@ function extractSemanticFooterLinkGroups(footerLinks?: DomNode): SemanticFooterL
   const groups = groupNodes.length > 0 ? groupNodes : [footerLinks]
   return groups
     .map((group) => ({
-      className: group === footerLinks ? "" : group.attribs?.class ?? "",
+      className: group === footerLinks ? "" : (group.attribs?.class ?? ""),
       columns: extractSemanticFooterLinkColumns(group),
     }))
     .filter((group) => group.columns.length > 0)
@@ -3522,15 +3689,19 @@ function extractSemanticFooterLinkColumns(group: DomNode): SemanticFooterLinkCol
   const columns = columnNodes.length > 0 ? columnNodes : [group]
   return columns
     .map((column) => {
-      const titleNode = directElementChildren(column).find((child) => hasClassMatching(child, /^footerLinksColumnTitle-/))
-      const listNode = directElementChildren(column).find((child) => hasClassMatching(child, /^footerLinksColumnList-/) || child.name?.toLowerCase() === "ul")
+      const titleNode = directElementChildren(column).find((child) =>
+        hasClassMatching(child, /^footerLinksColumnTitle-/),
+      )
+      const listNode = directElementChildren(column).find(
+        (child) => hasClassMatching(child, /^footerLinksColumnList-/) || child.name?.toLowerCase() === "ul",
+      )
       const anchorScope = listNode ?? column
       const links = findDescendantElements(anchorScope, (child) => child.name?.toLowerCase() === "a")
         .map(semanticFooterLink)
         .filter((item): item is SemanticFooterLink => Boolean(item))
         .slice(0, 40)
       return {
-        className: column === group ? "" : column.attribs?.class ?? "",
+        className: column === group ? "" : (column.attribs?.class ?? ""),
         titleClassName: titleNode?.attribs?.class ?? "",
         title: normalizeVisibleText(titleNode ? visibleText(titleNode) : ""),
         listClassName: listNode?.attribs?.class ?? "",
@@ -3569,8 +3740,11 @@ function isSemanticHeaderNavigationCandidate(node: DomNode): boolean {
   if (!nav) return false
   const menuItems = extractSemanticHeaderMenuItems(nav, new Map())
   if (menuItems.length < 3) return false
-  const searchButton = findDescendantElement(node, (child) =>
-    child.name?.toLowerCase() === "button" && normalizeVisibleText(child.attribs?.["aria-label"] ?? visibleText(child)).toLowerCase() === "search",
+  const searchButton = findDescendantElement(
+    node,
+    (child) =>
+      child.name?.toLowerCase() === "button" &&
+      normalizeVisibleText(child.attribs?.["aria-label"] ?? visibleText(child)).toLowerCase() === "search",
   )
   return Boolean(searchButton) || /\b(products|community|markets|brokers)\b/i.test(visibleText(node))
 }
@@ -3590,8 +3764,9 @@ function extractSemanticHeaderNavigation(
   const logoArea = findDescendantByClass(node, /^tv-header__area--logo-menu$/)
   const hamburger = findDescendantByClass(node, /^tv-header__hamburger-menu$/)
   const logoWrapper = findDescendantByClass(node, /^tv-header__logo$/)
-  const logoLink = findDescendantElement(logoWrapper ?? node, (child) =>
-    child.name?.toLowerCase() === "a" && hasClassMatching(child, /^tv-header__link--logo$/),
+  const logoLink = findDescendantElement(
+    logoWrapper ?? node,
+    (child) => child.name?.toLowerCase() === "a" && hasClassMatching(child, /^tv-header__link--logo$/),
   )
   const logoIconWrapper = findDescendantByClass(logoLink ?? node, /^tv-header__icon$/)
   const logoTextWrapper = findDescendantByClass(logoLink ?? node, /^tv-header__logo-text$/)
@@ -3600,21 +3775,29 @@ function extractSemanticHeaderNavigation(
   const middleContent = findDescendantByClass(node, /^tv-header__middle-content$/)
   const searchArea = findDescendantByClass(node, /^tv-header__area--search$/)
   const searchContainer = findDescendantByClass(node, /^tv-header-search-container$/)
-  const searchButton = findDescendantElement(searchContainer ?? node, (child) =>
-    child.name?.toLowerCase() === "button" && hasClassMatching(child, /^tv-header-search-container__button--full$/),
+  const searchButton = findDescendantElement(
+    searchContainer ?? node,
+    (child) =>
+      child.name?.toLowerCase() === "button" && hasClassMatching(child, /^tv-header-search-container__button--full$/),
   )
-  const simpleSearchButton = findDescendantElement(searchContainer ?? node, (child) =>
-    child.name?.toLowerCase() === "button" && hasClassMatching(child, /^tv-header-search-container__button--simple$/),
+  const simpleSearchButton = findDescendantElement(
+    searchContainer ?? node,
+    (child) =>
+      child.name?.toLowerCase() === "button" && hasClassMatching(child, /^tv-header-search-container__button--simple$/),
   )
-  const menu = findDescendantElement(nav, (child) => child.name?.toLowerCase() === "ul" && hasClassMatching(child, /^tv-header__main-menu$/))
+  const menu = findDescendantElement(
+    nav,
+    (child) => child.name?.toLowerCase() === "ul" && hasClassMatching(child, /^tv-header__main-menu$/),
+  )
   const userArea = findDescendantByClass(node, /^tv-header__area--user$/)
   const languageButton = findDescendantByClass(userArea ?? node, /^tv-header__language-button$/)
   const anonymousUserButton = findDescendantByClass(userArea ?? node, /^tv-header__user-menu-button--anonymous$/)
   const loggedUserButton = findDescendantByClass(userArea ?? node, /^tv-header__user-menu-button--logged$/)
   const offerShell = findDescendantByClass(userArea ?? node, /^js-offer-button$/)
   const offerContainer = findDescendantByClass(offerShell ?? userArea ?? node, /^tv-header__offer-button-container/)
-  const offerAnchor = findDescendantElement(offerContainer ?? node, (child) =>
-    child.name?.toLowerCase() === "a" && hasClassMatching(child, /^tv-header__offer-button$/),
+  const offerAnchor = findDescendantElement(
+    offerContainer ?? node,
+    (child) => child.name?.toLowerCase() === "a" && hasClassMatching(child, /^tv-header__offer-button$/),
   )
   const offerContent = findDescendantElement(offerAnchor ?? node, (child) => hasClassMatching(child, /^content-/))
   const offerChildren = findDescendantElement(offerContent ?? node, (child) => hasClassMatching(child, /^children-/))
@@ -3624,7 +3807,8 @@ function extractSemanticHeaderNavigation(
   if (!logoHeaderLink) return undefined
   const componentBase = sourceRegionComponentName.replace(/Region\d*$/, "Navigation")
   return {
-    componentName: componentBase === sourceRegionComponentName ? `${sourceRegionComponentName}Navigation` : componentBase,
+    componentName:
+      componentBase === sourceRegionComponentName ? `${sourceRegionComponentName}Navigation` : componentBase,
     rootClassName: node.attribs?.class ?? "",
     rootSourceNodeId: node.attribs?.["data-source-node-id"],
     rootDataAttrs: pickDataAttributes(node.attribs ?? {}, ["data-source-role"]),
@@ -3635,10 +3819,16 @@ function extractSemanticHeaderNavigation(
     logoWrapperClassName: logoWrapper?.attribs?.class ?? "",
     logoLink: logoHeaderLink,
     logoIconWrapperClassName: logoIconWrapper?.attribs?.class ?? "",
-    logoIcon: semanticSvgIcon(findDescendantElement(logoIconWrapper ?? logoLink ?? node, (child) => child.name?.toLowerCase() === "svg"), context.nodeStyleFallbacks),
+    logoIcon: semanticSvgIcon(
+      findDescendantElement(logoIconWrapper ?? logoLink ?? node, (child) => child.name?.toLowerCase() === "svg"),
+      context.nodeStyleFallbacks,
+    ),
     logoTextWrapperClassName: logoTextWrapper?.attribs?.class ?? "",
     logoTextIcon: logoTextWrapper
-      ? semanticSvgIcon(findDescendantElement(logoTextWrapper, (child) => child.name?.toLowerCase() === "svg"), context.nodeStyleFallbacks)
+      ? semanticSvgIcon(
+          findDescendantElement(logoTextWrapper, (child) => child.name?.toLowerCase() === "svg"),
+          context.nodeStyleFallbacks,
+        )
       : undefined,
     logoTextFallback: logoTextWrapper ? undefined : semanticHeaderLogoFallbackText(logoHeaderLink),
     logoProClassName: logoPro?.attribs?.class ?? "",
@@ -3647,19 +3837,25 @@ function extractSemanticHeaderNavigation(
     searchAreaClassName: searchArea?.attribs?.class ?? "",
     searchContainerClassName: searchContainer?.attribs?.class ?? "",
     searchButton: searchButton ? semanticHeaderButton(searchButton, context.nodeStyleFallbacks) : undefined,
-    simpleSearchButton: simpleSearchButton ? semanticHeaderButton(simpleSearchButton, context.nodeStyleFallbacks) : undefined,
+    simpleSearchButton: simpleSearchButton
+      ? semanticHeaderButton(simpleSearchButton, context.nodeStyleFallbacks)
+      : undefined,
     navClassName: nav.attribs?.class ?? "",
     menuClassName: menu?.attribs?.class ?? "",
     menuItems,
     userAreaClassName: userArea?.attribs?.class ?? "",
     languageButton: languageButton ? semanticHeaderButton(languageButton, context.nodeStyleFallbacks) : undefined,
-    anonymousUserButton: anonymousUserButton ? semanticHeaderButton(anonymousUserButton, context.nodeStyleFallbacks) : undefined,
+    anonymousUserButton: anonymousUserButton
+      ? semanticHeaderButton(anonymousUserButton, context.nodeStyleFallbacks)
+      : undefined,
     loggedUserButtonClassName: loggedUserButton?.attribs?.class ?? "",
     offerShellClassName: offerShell?.attribs?.class ?? "",
     offerPropsId: offerShell?.attribs?.["data-props-id"],
     offerRenderMode: offerShell?.attribs?.["data-render-mode"],
     offerContainerClassName: offerContainer?.attribs?.class ?? "",
-    offerLink: offerAnchor ? semanticHeaderLink(offerAnchor, normalizeVisibleText(visibleText(offerAnchor))) : undefined,
+    offerLink: offerAnchor
+      ? semanticHeaderLink(offerAnchor, normalizeVisibleText(visibleText(offerAnchor)))
+      : undefined,
     offerContentClassName: offerContent?.attribs?.class ?? "",
     offerChildrenClassName: offerChildren?.attribs?.class ?? "",
     offerTitleClassName: offerTitle?.attribs?.class ?? "",
@@ -3667,14 +3863,22 @@ function extractSemanticHeaderNavigation(
 }
 
 function findSemanticHeaderNav(node: DomNode): DomNode | undefined {
-  return findDescendantElement(node, (child) =>
-    child.name?.toLowerCase() === "nav" &&
-    (child.attribs?.["data-source-role"] === "nav" || hasClassMatching(child, /^tv-header__area--menu$/)),
+  return findDescendantElement(
+    node,
+    (child) =>
+      child.name?.toLowerCase() === "nav" &&
+      (child.attribs?.["data-source-role"] === "nav" || hasClassMatching(child, /^tv-header__area--menu$/)),
   )
 }
 
-function extractSemanticHeaderMenuItems(nav: DomNode, nodeStyleFallbacks: Map<string, string>): SemanticHeaderMenuItem[] {
-  const menu = findDescendantElement(nav, (child) => child.name?.toLowerCase() === "ul" && hasClassMatching(child, /^tv-header__main-menu$/))
+function extractSemanticHeaderMenuItems(
+  nav: DomNode,
+  nodeStyleFallbacks: Map<string, string>,
+): SemanticHeaderMenuItem[] {
+  const menu = findDescendantElement(
+    nav,
+    (child) => child.name?.toLowerCase() === "ul" && hasClassMatching(child, /^tv-header__main-menu$/),
+  )
   const listItems = menu ? directElementChildren(menu).filter((child) => child.name?.toLowerCase() === "li") : []
   return listItems
     .map((item): SemanticHeaderMenuItem | undefined => {
@@ -3683,7 +3887,9 @@ function extractSemanticHeaderMenuItems(nav: DomNode, nodeStyleFallbacks: Map<st
       const href = normalizeReferencedAssetUrl(link.attribs?.href ?? "")
       const label = normalizeVisibleText(visibleText(link))
       if (!href || !label) return undefined
-      const chevron = findDescendantElement(link, (child) => hasClassMatching(child, /^tv-header__main-menu-item__chevron$/))
+      const chevron = findDescendantElement(link, (child) =>
+        hasClassMatching(child, /^tv-header__main-menu-item__chevron$/),
+      )
       return {
         className: item.attribs?.class ?? "",
         dropdownRootIndex: item.attribs?.["data-main-menu-dropdown-root-index"],
@@ -3695,7 +3901,10 @@ function extractSemanticHeaderMenuItems(nav: DomNode, nodeStyleFallbacks: Map<st
         chevronAriaHasPopup: chevron?.attribs?.["aria-haspopup"],
         chevronAriaExpanded: chevron?.attribs?.["aria-expanded"],
         chevronRole: chevron?.attribs?.role,
-        chevronIcon: semanticSvgIcon(findDescendantElement(chevron ?? link, (child) => child.name?.toLowerCase() === "svg"), nodeStyleFallbacks),
+        chevronIcon: semanticSvgIcon(
+          findDescendantElement(chevron ?? link, (child) => child.name?.toLowerCase() === "svg"),
+          nodeStyleFallbacks,
+        ),
       }
     })
     .filter((item): item is SemanticHeaderMenuItem => Boolean(item))
@@ -3703,8 +3912,11 @@ function extractSemanticHeaderMenuItems(nav: DomNode, nodeStyleFallbacks: Map<st
 }
 
 function semanticHeaderButton(node: DomNode, nodeStyleFallbacks: Map<string, string>): SemanticHeaderButton {
-  const textNode = findDescendantElement(node, (child) =>
-    hasClassMatching(child, /^tv-header-search-container__text$/) || hasClassMatching(child, /^tv-header__offer-button-title$/),
+  const textNode = findDescendantElement(
+    node,
+    (child) =>
+      hasClassMatching(child, /^tv-header-search-container__text$/) ||
+      hasClassMatching(child, /^tv-header__offer-button-title$/),
   )
   const visibleLabel = normalizeVisibleText(visibleText(textNode ?? node))
   return {
@@ -3714,7 +3926,10 @@ function semanticHeaderButton(node: DomNode, nodeStyleFallbacks: Map<string, str
     ariaHasPopup: node.attribs?.["aria-haspopup"],
     ariaExpanded: node.attribs?.["aria-expanded"],
     type: node.attribs?.type,
-    icon: semanticSvgIcon(findDescendantElement(node, (child) => child.name?.toLowerCase() === "svg"), nodeStyleFallbacks),
+    icon: semanticSvgIcon(
+      findDescendantElement(node, (child) => child.name?.toLowerCase() === "svg"),
+      nodeStyleFallbacks,
+    ),
     textClassName: textNode?.attribs?.class,
   }
 }
@@ -3741,13 +3956,20 @@ function semanticHeaderLogoFallbackText(link: SemanticHeaderLink): string | unde
   return label || undefined
 }
 
-function semanticSvgIcon(svg: DomNode | undefined, nodeStyleFallbacks: Map<string, string>): SemanticSvgIcon | undefined {
+function semanticSvgIcon(
+  svg: DomNode | undefined,
+  nodeStyleFallbacks: Map<string, string>,
+): SemanticSvgIcon | undefined {
   if (!svg || svg.type !== "tag" || svg.name?.toLowerCase() !== "svg") return undefined
-  const paths = findDescendantElements(svg, (child) => child.name?.toLowerCase() === "path" && Boolean(child.attribs?.["data-asset-d"]))
+  const paths = findDescendantElements(
+    svg,
+    (child) => child.name?.toLowerCase() === "path" && Boolean(child.attribs?.["data-asset-d"]),
+  )
     .map((pathNode) => semanticMapPath(pathNode, nodeStyleFallbacks))
     .filter((item): item is SemanticMapPath => Boolean(item))
-  const circles = findDescendantElements(svg, (child) => child.name?.toLowerCase() === "circle")
-    .map((circle) => semanticElementAttributeRecord(circle))
+  const circles = findDescendantElements(svg, (child) => child.name?.toLowerCase() === "circle").map((circle) =>
+    semanticElementAttributeRecord(circle),
+  )
   return {
     width: svg.attribs?.width,
     height: svg.attribs?.height,
@@ -3802,13 +4024,17 @@ function extractSemanticMapSurface(
 ): SemanticMapSurface | undefined {
   const svg = findDominantAssetSvg(node)
   if (!svg?.attribs?.viewBox) return undefined
-  const pathNodes = findDescendantElements(svg, (child) => child.name?.toLowerCase() === "path" && Boolean(child.attribs?.["data-asset-d"]))
+  const pathNodes = findDescendantElements(
+    svg,
+    (child) => child.name?.toLowerCase() === "path" && Boolean(child.attribs?.["data-asset-d"]),
+  )
   if (pathNodes.length < 16) return undefined
   const mapAncestorChain = elementAncestorChain(node, svg)
-  const directBodyWrapper = mapAncestorChain.find((ancestor, index) =>
-    index > 0 &&
-    findParentElement(node, ancestor) === node &&
-    (ancestor.attribs?.["data-source-role"] === "card" || hasClassMatching(ancestor, /^card-/))
+  const directBodyWrapper = mapAncestorChain.find(
+    (ancestor, index) =>
+      index > 0 &&
+      findParentElement(node, ancestor) === node &&
+      (ancestor.attribs?.["data-source-role"] === "card" || hasClassMatching(ancestor, /^card-/)),
   )
   const bodyWrapperIndex = directBodyWrapper ? mapAncestorChain.indexOf(directBodyWrapper) : -1
   const mapFrameStartIndex = bodyWrapperIndex >= 0 ? bodyWrapperIndex + 1 : 1
@@ -3820,25 +4046,42 @@ function extractSemanticMapSurface(
   const headerWrapper = header ? firstElementChild(header) : undefined
   const titleWrapper = headerWrapper ? firstElementChild(headerWrapper) : undefined
   const titleContainer = titleWrapper ? firstElementChild(titleWrapper) : undefined
-  const titleLink = titleContainer ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a") : undefined
+  const titleLink = titleContainer
+    ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a")
+    : undefined
   const titleScope = titleContainer ?? directBodyWrapper ?? node
-  const titleNode = findDescendantElement(titleScope, (child) => /^h[1-4]$/i.test(child.name ?? "") || hasClassMatching(child, /^title-/))
-  const content = mapAncestorChain.find((child) =>
-    child !== node &&
-    child.attribs?.["data-qa-id"] !== "core-map-content" &&
-    (child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/))
+  const titleNode = findDescendantElement(
+    titleScope,
+    (child) => /^h[1-4]$/i.test(child.name ?? "") || hasClassMatching(child, /^title-/),
   )
-  const mapContainer = findAncestorElement(node, svg, (child) => hasClassMatching(child, /^mapContainer-/)) ??
+  const content = mapAncestorChain.find(
+    (child) =>
+      child !== node &&
+      child.attribs?.["data-qa-id"] !== "core-map-content" &&
+      (child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/)),
+  )
+  const mapContainer =
+    findAncestorElement(node, svg, (child) => hasClassMatching(child, /^mapContainer-/)) ??
     findAncestorElement(node, svg, (child) => hasClassMatching(child, /^container-/) && child !== node)
-  const mapWrapper = findAncestorElement(node, svg, (child) => hasClassMatching(child, /^mapWrapper-/)) ??
+  const mapWrapper =
+    findAncestorElement(node, svg, (child) => hasClassMatching(child, /^mapWrapper-/)) ??
     findAncestorElement(node, svg, (child) => hasClassMatching(child, /^wrapper-/))
-  const mapSpan = findAncestorElement(node, svg, (child) => child.attribs?.["data-qa-id"] === "core-map-content") ??
+  const mapSpan =
+    findAncestorElement(node, svg, (child) => child.attribs?.["data-qa-id"] === "core-map-content") ??
     findAncestorElement(node, svg, (child) => child.name?.toLowerCase() === "span" && hasClassMatching(child, /^map-/))
   const legend = extractSemanticMapLegend(node, svg, nodeStyleFallbacks)
-  const footerAnchor = findDescendantElement(node, (child) =>
-    child.name?.toLowerCase() === "a" && Boolean(findAncestorElement(node, child, (ancestor) => ancestor.attribs?.["data-source-role"] === "footer")),
+  const footerAnchor = findDescendantElement(
+    node,
+    (child) =>
+      child.name?.toLowerCase() === "a" &&
+      Boolean(findAncestorElement(node, child, (ancestor) => ancestor.attribs?.["data-source-role"] === "footer")),
   )
-  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, ["data-base-widget", "data-container-name", "data-an-widget-id", "data-source-role"])
+  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, [
+    "data-base-widget",
+    "data-container-name",
+    "data-an-widget-id",
+    "data-source-role",
+  ])
   const componentName = sourceRegionComponentName.replace(/Region\d*$/, "Surface")
   return {
     componentName: componentName === sourceRegionComponentName ? `${sourceRegionComponentName}Surface` : componentName,
@@ -3855,7 +4098,9 @@ function extractSemanticMapSurface(
     titleId: titleNode?.attribs?.id,
     titleHref: normalizeReferencedAssetUrl(titleLink?.attribs?.href ?? ""),
     titleLinkClassName: titleLink?.attribs?.class ?? "",
-    titleText: normalizeVisibleText(titleNode ? visibleText(titleNode) : sourceRegionComponentName.replace(/Region\d*$/, "")),
+    titleText: normalizeVisibleText(
+      titleNode ? visibleText(titleNode) : sourceRegionComponentName.replace(/Region\d*$/, ""),
+    ),
     contentClassName: content?.attribs?.class ?? "",
     mapContainerClassName: mapContainer?.attribs?.class ?? "",
     mapWrapperClassName: mapWrapper?.attribs?.class ?? "",
@@ -3865,17 +4110,26 @@ function extractSemanticMapSurface(
     svgClassName: svg.attribs.class ?? "",
     legend,
     legendLabels: extractMapLegendLabels(node),
-    paths: pathNodes.map((pathNode) => semanticMapPath(pathNode, nodeStyleFallbacks)).filter((item): item is SemanticMapPath => Boolean(item)).slice(0, 500),
+    paths: pathNodes
+      .map((pathNode) => semanticMapPath(pathNode, nodeStyleFallbacks))
+      .filter((item): item is SemanticMapPath => Boolean(item))
+      .slice(0, 500),
     footerLink: footerAnchor ? semanticFooterLink(footerAnchor) : undefined,
   }
 }
 
 function findDominantAssetSvg(node: DomNode): DomNode | undefined {
-  const svgs = findDescendantElements(node, (child) => child.name?.toLowerCase() === "svg" && Boolean(child.attribs?.viewBox))
+  const svgs = findDescendantElements(
+    node,
+    (child) => child.name?.toLowerCase() === "svg" && Boolean(child.attribs?.viewBox),
+  )
   return svgs
     .map((svg) => ({
       svg,
-      pathCount: findDescendantElements(svg, (child) => child.name?.toLowerCase() === "path" && Boolean(child.attribs?.["data-asset-d"])).length,
+      pathCount: findDescendantElements(
+        svg,
+        (child) => child.name?.toLowerCase() === "path" && Boolean(child.attribs?.["data-asset-d"]),
+      ).length,
     }))
     .filter((item) => item.pathCount >= 16)
     .sort((a, b) => b.pathCount - a.pathCount)[0]?.svg
@@ -3914,10 +4168,13 @@ function semanticElementFrame(node: DomNode, nodeStyleFallbacks: Map<string, str
   }
 }
 
-function semanticElementStyleRecord(node: DomNode, nodeStyleFallbacks: Map<string, string>): Record<string, string> | undefined {
+function semanticElementStyleRecord(
+  node: DomNode,
+  nodeStyleFallbacks: Map<string, string>,
+): Record<string, string> | undefined {
   const attrs = node.attribs ?? {}
   const fallbackStyle = attrs["data-source-node-id"] ? nodeStyleFallbacks.get(attrs["data-source-node-id"]) : undefined
-  return parseStyleRecord(fallbackStyle ? `${attrs.style ?? ""};${fallbackStyle}` : attrs.style ?? "")
+  return parseStyleRecord(fallbackStyle ? `${attrs.style ?? ""};${fallbackStyle}` : (attrs.style ?? ""))
 }
 
 function semanticElementFrameRole(node: DomNode): string | undefined {
@@ -3946,21 +4203,26 @@ function extractSemanticMapLegend(
   dominantSvg: DomNode,
   nodeStyleFallbacks: Map<string, string>,
 ): SemanticMapLegend | undefined {
-  const legendContainer = findDescendantElement(root, (child) =>
-    child !== root &&
-    hasClassMatching(child, /(?:^|-)legend-/) &&
-    Boolean(findDescendantElement(child, (grandchild) =>
-      grandchild !== dominantSvg &&
-      grandchild.name?.toLowerCase() === "svg" &&
-      Boolean(grandchild.attribs?.viewBox),
-    )),
+  const legendContainer = findDescendantElement(
+    root,
+    (child) =>
+      child !== root &&
+      hasClassMatching(child, /(?:^|-)legend-/) &&
+      Boolean(
+        findDescendantElement(
+          child,
+          (grandchild) =>
+            grandchild !== dominantSvg &&
+            grandchild.name?.toLowerCase() === "svg" &&
+            Boolean(grandchild.attribs?.viewBox),
+        ),
+      ),
   )
   const legendSvg = legendContainer
-    ? findDescendantElement(legendContainer, (child) =>
-      child !== dominantSvg &&
-      child.name?.toLowerCase() === "svg" &&
-      Boolean(child.attribs?.viewBox),
-    )
+    ? findDescendantElement(
+        legendContainer,
+        (child) => child !== dominantSvg && child.name?.toLowerCase() === "svg" && Boolean(child.attribs?.viewBox),
+      )
     : undefined
   if (!legendContainer || !legendSvg) return undefined
   const toolbar = findParentElement(legendContainer, legendSvg)
@@ -3970,7 +4232,8 @@ function extractSemanticMapLegend(
   if (items.length === 0) return undefined
   return {
     containerFrame: semanticElementFrame(legendContainer, nodeStyleFallbacks),
-    toolbarFrame: toolbar && toolbar !== legendContainer ? semanticElementFrame(toolbar, nodeStyleFallbacks) : undefined,
+    toolbarFrame:
+      toolbar && toolbar !== legendContainer ? semanticElementFrame(toolbar, nodeStyleFallbacks) : undefined,
     svg: semanticSvgRoot(legendSvg),
     items,
   }
@@ -3987,12 +4250,20 @@ function semanticSvgRoot(svg: DomNode): SemanticSvgRoot {
   }
 }
 
-function semanticMapLegendItem(node: DomNode, nodeStyleFallbacks: Map<string, string>): SemanticMapLegendItem | undefined {
+function semanticMapLegendItem(
+  node: DomNode,
+  nodeStyleFallbacks: Map<string, string>,
+): SemanticMapLegendItem | undefined {
   if (node.type !== "tag" || node.name?.toLowerCase() !== "g") return undefined
   const tooltip = directElementChildren(node).find((child) => hasClassMatching(child, /^apply-common-tooltip$/))
-  const figureGroup = tooltip ? findDescendantElement(tooltip, (child) => hasClassMatching(child, /^groupFigure-/)) : undefined
+  const figureGroup = tooltip
+    ? findDescendantElement(tooltip, (child) => hasClassMatching(child, /^groupFigure-/))
+    : undefined
   const pathNodes = figureGroup
-    ? findDescendantElements(figureGroup, (child) => child.name?.toLowerCase() === "path" && Boolean(child.attribs?.["data-asset-d"]))
+    ? findDescendantElements(
+        figureGroup,
+        (child) => child.name?.toLowerCase() === "path" && Boolean(child.attribs?.["data-asset-d"]),
+      )
     : []
   const paths = pathNodes
     .map((pathNode) => semanticMapPath(pathNode, nodeStyleFallbacks))
@@ -4026,15 +4297,26 @@ function semanticMapLegendText(node: DomNode): SemanticMapLegendText {
 
 function extractMapLegendLabels(node: DomNode): string[] {
   const labels = [
-    ...findDescendantElements(node, (child) => child.name?.toLowerCase() === "text").map((child) => normalizeVisibleText(visibleText(child))),
-    ...findDescendantElements(node, (child) => child.attribs?.title ? /\d|%/.test(child.attribs.title) : false).map((child) => normalizeVisibleText(child.attribs?.title ?? "")),
+    ...findDescendantElements(node, (child) => child.name?.toLowerCase() === "text").map((child) =>
+      normalizeVisibleText(visibleText(child)),
+    ),
+    ...findDescendantElements(node, (child) => (child.attribs?.title ? /\d|%/.test(child.attribs.title) : false)).map(
+      (child) => normalizeVisibleText(child.attribs?.title ?? ""),
+    ),
   ].filter(Boolean)
   return Array.from(new Set(labels)).slice(0, 16)
 }
 
 function isSemanticLinkGridCandidate(node: DomNode): boolean {
   if (node.type !== "tag") return false
-  if (isSemanticDataTableCandidate(node) || isSemanticMetricRankingCardCandidate(node) || isSemanticEventCardListCandidate(node) || isSemanticIdeaCardCollectionCandidate(node) || isSemanticMapSurfaceCandidate(node)) return false
+  if (
+    isSemanticDataTableCandidate(node) ||
+    isSemanticMetricRankingCardCandidate(node) ||
+    isSemanticEventCardListCandidate(node) ||
+    isSemanticIdeaCardCollectionCandidate(node) ||
+    isSemanticMapSurfaceCandidate(node)
+  )
+    return false
   const container = findLinkGridContainer(node)
   if (!container) return false
   const links = semanticLinkGridAnchors(container)
@@ -4071,18 +4353,36 @@ function extractSemanticLinkGrid(node: DomNode, sourceRegionComponentName: strin
   const headerWrapper = header ? firstElementChild(header) : undefined
   const titleWrapper = headerWrapper ? firstElementChild(headerWrapper) : undefined
   const titleContainer = titleWrapper ? firstElementChild(titleWrapper) : undefined
-  const titleLink = titleContainer ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a") : undefined
-  const titleNode = findDescendantElement(titleContainer ?? node, (child) => /^h[1-4]$/i.test(child.name ?? "") || hasClassMatching(child, /^title-/))
-  const content = findDescendantElement(node, (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/))
-  const titleText = normalizeVisibleText(titleNode ? visibleText(titleNode) : findFirstHeadingText(node) ?? sourceRegionComponentName.replace(/Region\d*$/, ""))
+  const titleLink = titleContainer
+    ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a")
+    : undefined
+  const titleNode = findDescendantElement(
+    titleContainer ?? node,
+    (child) => /^h[1-4]$/i.test(child.name ?? "") || hasClassMatching(child, /^title-/),
+  )
+  const content = findDescendantElement(
+    node,
+    (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/),
+  )
+  const titleText = normalizeVisibleText(
+    titleNode
+      ? visibleText(titleNode)
+      : (findFirstHeadingText(node) ?? sourceRegionComponentName.replace(/Region\d*$/, "")),
+  )
   const replacementKind = semanticLinkGridReplacementKind(node, titleText)
   const componentBase = titleText ? toPascalIdentifier(titleText) : sourceRegionComponentName.replace(/Region\d*$/, "")
-  const suffix = replacementKind === "event_or_news_list_component"
-    ? "List"
-    : replacementKind === "card_collection_component"
-      ? "Cards"
-      : "Links"
-  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, ["data-base-widget", "data-container-name", "data-an-widget-id", "data-source-role"])
+  const suffix =
+    replacementKind === "event_or_news_list_component"
+      ? "List"
+      : replacementKind === "card_collection_component"
+        ? "Cards"
+        : "Links"
+  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, [
+    "data-base-widget",
+    "data-container-name",
+    "data-an-widget-id",
+    "data-source-role",
+  ])
   return {
     componentName: `${componentBase}${suffix}`,
     replacementKind,
@@ -4124,7 +4424,8 @@ function isSemanticIdeaCardCollectionCandidate(node: DomNode): boolean {
   const containerDistance = descendantElementDistance(node, container)
   if (containerDistance === undefined || containerDistance > 7) return false
   const attrs = node.attribs ?? {}
-  const label = `${attrs["data-container-name"] ?? ""} ${attrs["data-an-widget-id"] ?? ""} ${findFirstHeadingText(node) ?? ""} ${visibleText(node)}`.toLowerCase()
+  const label =
+    `${attrs["data-container-name"] ?? ""} ${attrs["data-an-widget-id"] ?? ""} ${findFirstHeadingText(node) ?? ""} ${visibleText(node)}`.toLowerCase()
   if (/\bideas?\b/.test(label)) return true
   if (findSemanticSectionTabs(node).length >= 2 && /\b(popular|recent|video)\b/.test(label)) return true
   return cards.length >= 4 && /\bby\s+\S+|\bboosts?\b/.test(label)
@@ -4147,12 +4448,26 @@ function extractSemanticIdeaCardCollection(
   const headerWrapper = header ? firstElementChild(header) : undefined
   const titleWrapper = headerWrapper ? firstElementChild(headerWrapper) : undefined
   const titleContainer = titleWrapper ? firstElementChild(titleWrapper) : undefined
-  const titleLink = titleContainer ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a") : undefined
-  const titleNode = findDescendantElement(titleContainer ?? node, (child) => /^h[1-4]$/i.test(child.name ?? "") || hasClassMatching(child, /^title-/))
-  const content = findDescendantElement(node, (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/))
+  const titleLink = titleContainer
+    ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a")
+    : undefined
+  const titleNode = findDescendantElement(
+    titleContainer ?? node,
+    (child) => /^h[1-4]$/i.test(child.name ?? "") || hasClassMatching(child, /^title-/),
+  )
+  const content = findDescendantElement(
+    node,
+    (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/),
+  )
   const tabs = findSemanticSectionTabs(node)
   const tabList = tabs[0] ? findAncestorElement(node, tabs[0], (child) => child.attribs?.role === "tablist") : undefined
-  const tabsScrollWrap = tabList ? findAncestorElement(node, tabList, (child) => hasClassMatching(child, /^scrollWrap-/) || Boolean(child.attribs?.["data-name"]?.includes("tabs"))) : undefined
+  const tabsScrollWrap = tabList
+    ? findAncestorElement(
+        node,
+        tabList,
+        (child) => hasClassMatching(child, /^scrollWrap-/) || Boolean(child.attribs?.["data-name"]?.includes("tabs")),
+      )
+    : undefined
   const tabsContainer = tabsScrollWrap
     ? findAncestorElement(node, tabsScrollWrap, (child) => hasClassMatching(child, /^tabsContainer-/))
     : tabList
@@ -4162,7 +4477,11 @@ function extractSemanticIdeaCardCollection(
   const cardsWrapper = filmstripContainer ? findParentElement(node, filmstripContainer) : undefined
   const moreLinkNode = directElementChildren(cardsContainer).find(isSemanticIdeaMoreLinkNode)
   const componentBase = sourceRegionComponentName.replace(/Region\d*$/, "Cards")
-  const titleText = normalizeVisibleText(titleNode ? visibleText(titleNode) : findFirstHeadingText(node) ?? sourceRegionComponentName.replace(/Region\d*$/, ""))
+  const titleText = normalizeVisibleText(
+    titleNode
+      ? visibleText(titleNode)
+      : (findFirstHeadingText(node) ?? sourceRegionComponentName.replace(/Region\d*$/, "")),
+  )
   const chromeItems = directElementChildren(cardsContainer)
     .filter((child) => !isSemanticIdeaCardNode(child) && !isSemanticIdeaMoreLinkNode(child))
     .map((child) => ({
@@ -4175,7 +4494,12 @@ function extractSemanticIdeaCardCollection(
   return {
     componentName: componentBase === sourceRegionComponentName ? `${sourceRegionComponentName}Cards` : componentBase,
     rootClassName: node.attribs?.class ?? "",
-    rootDataAttrs: pickDataAttributes(node.attribs ?? {}, ["data-base-widget", "data-container-name", "data-an-widget-id", "data-source-role"]),
+    rootDataAttrs: pickDataAttributes(node.attribs ?? {}, [
+      "data-base-widget",
+      "data-container-name",
+      "data-an-widget-id",
+      "data-source-role",
+    ]),
     rootSourceNodeId: node.attribs?.["data-source-node-id"],
     rootStyle: semanticNodeStyleRecord(node, context),
     headerClassName: header?.attribs?.class ?? "",
@@ -4214,9 +4538,7 @@ function findSemanticIdeaCardsContainer(node: DomNode): DomNode | undefined {
     const className = child.attribs?.class ?? ""
     return hasClassMatching(child, /^items-/) || /(?:filmstrip|cards?|items)/i.test(className)
   })
-  return candidates
-    .sort((a, b) => semanticIdeaCardNodes(b).length - semanticIdeaCardNodes(a).length)
-    [0]
+  return candidates.sort((a, b) => semanticIdeaCardNodes(b).length - semanticIdeaCardNodes(a).length)[0]
 }
 
 function semanticIdeaCardNodes(node: DomNode): DomNode[] {
@@ -4227,9 +4549,12 @@ function isSemanticIdeaCardNode(node: DomNode): boolean {
   if (node.type !== "tag" || node.name?.toLowerCase() !== "article") return false
   const attrs = node.attribs ?? {}
   if (attrs["data-source-role"] !== "card" && !hasClassMatching(node, /^ideaCard-/)) return false
-  return Boolean(findDescendantElement(node, (child) =>
-    child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-link-title",
-  ))
+  return Boolean(
+    findDescendantElement(
+      node,
+      (child) => child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-link-title",
+    ),
+  )
 }
 
 function isSemanticIdeaMoreLinkNode(node: DomNode): boolean {
@@ -4241,11 +4566,13 @@ function isSemanticIdeaMoreLinkNode(node: DomNode): boolean {
 
 function semanticIdeaCardItem(card: DomNode, context: SourceDomRenderContext): SemanticIdeaCard | undefined {
   const mergedCard = mergeDomNodeWithIrChildren(card, context)
-  const titleAnchor = findDescendantElement(mergedCard, (child) =>
-    child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-link-title",
+  const titleAnchor = findDescendantElement(
+    mergedCard,
+    (child) => child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-link-title",
   )
-  const paragraphAnchor = findDescendantElement(mergedCard, (child) =>
-    child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-link-paragraph",
+  const paragraphAnchor = findDescendantElement(
+    mergedCard,
+    (child) => child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-link-paragraph",
   )
   const title = normalizeVisibleText(titleAnchor ? visibleText(titleAnchor) : "")
   if (!title || !titleAnchor) return undefined
@@ -4253,18 +4580,30 @@ function semanticIdeaCardItem(card: DomNode, context: SourceDomRenderContext): S
   const textBlock = findAncestorElement(mergedCard, titleAnchor, (child) => hasClassMatching(child, /^text-block-/))
   const paragraphContainer = paragraphAnchor ? firstElementChild(paragraphAnchor) : undefined
   const paragraphContent = paragraphContainer ? firstElementChild(paragraphContainer) : undefined
-  const rawPreview = findDescendantElement(card, (child) => hasClassMatching(child, /^preview-/) || /\bpreview-fSver7BK\b/.test(child.attribs?.class ?? ""))
-  const preview = findDescendantElement(mergedCard, (child) => hasClassMatching(child, /^preview-/) || /\bpreview-fSver7BK\b/.test(child.attribs?.class ?? ""))
-  const previewGrid = preview ? findDescendantElement(preview, (child) => hasClassMatching(child, /^preview-grid-/)) : undefined
-  const imageLink = preview ? findDescendantElement(preview, (child) =>
-    child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-link-image",
-  ) : undefined
-  const picture = imageLink ? findDescendantElement(imageLink, (child) => child.name?.toLowerCase() === "picture") : undefined
+  const rawPreview = findDescendantElement(
+    card,
+    (child) => hasClassMatching(child, /^preview-/) || /\bpreview-fSver7BK\b/.test(child.attribs?.class ?? ""),
+  )
+  const preview = findDescendantElement(
+    mergedCard,
+    (child) => hasClassMatching(child, /^preview-/) || /\bpreview-fSver7BK\b/.test(child.attribs?.class ?? ""),
+  )
+  const previewGrid = preview
+    ? findDescendantElement(preview, (child) => hasClassMatching(child, /^preview-grid-/))
+    : undefined
+  const imageLink = preview
+    ? findDescendantElement(
+        preview,
+        (child) => child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-link-image",
+      )
+    : undefined
+  const picture = imageLink
+    ? findDescendantElement(imageLink, (child) => child.name?.toLowerCase() === "picture")
+    : undefined
   const image = imageLink ? findDescendantElement(imageLink, (child) => child.name?.toLowerCase() === "img") : undefined
   const imageSrc = image ? semanticIdeaImageSource(image, context) : undefined
-  const previewFallbackImageSrc = rawPreview && !containsClass(rawPreview, "image-fSver7BK")
-    ? consumePreviewImagePath(context)
-    : undefined
+  const previewFallbackImageSrc =
+    rawPreview && !containsClass(rawPreview, "image-fSver7BK") ? consumePreviewImagePath(context) : undefined
   const logoLink = previewGrid ? semanticIdeaLogoLink(previewGrid) : undefined
   const strategyBadge = previewGrid ? semanticIdeaStrategyBadge(previewGrid, context) : undefined
   const previewBadgeRow = logoLink
@@ -4274,27 +4613,50 @@ function semanticIdeaCardItem(card: DomNode, context: SourceDomRenderContext): S
       : undefined
   const previewChromeClassNames = previewGrid
     ? directElementChildren(previewGrid)
-      .filter((child) => child !== imageLink)
-      .filter((child) => child !== logoLink?.sourceNode)
-      .filter((child) => child !== strategyBadge?.sourceNode)
-      .filter((child) => child !== previewBadgeRow)
-      .map((child) => child.attribs?.class ?? "")
-      .filter(Boolean)
-      .slice(0, 6)
+        .filter((child) => child !== imageLink)
+        .filter((child) => child !== logoLink?.sourceNode)
+        .filter((child) => child !== strategyBadge?.sourceNode)
+        .filter((child) => child !== previewBadgeRow)
+        .map((child) => child.attribs?.class ?? "")
+        .filter(Boolean)
+        .slice(0, 6)
     : []
   const metaRow = findDescendantElement(mergedCard, (child) => hasClassMatching(child, /^credsButtonsRow-/))
-  const publicationInfo = metaRow ? findDescendantElement(metaRow, (child) => hasClassMatching(child, /^publicationInfoWrapper-/)) : undefined
-  const authorWrap = findDescendantElement(mergedCard, (child) => child.attribs?.["data-qa-id"] === "ui-lib-card-link-author")
-  const authorLink = authorWrap ? findDescendantElement(authorWrap, (child) => child.name?.toLowerCase() === "a") : undefined
-  const authorNode = authorWrap ? findDescendantElement(authorWrap, (child) => hasClassMatching(child, /^cardAuthor-/)) : undefined
+  const publicationInfo = metaRow
+    ? findDescendantElement(metaRow, (child) => hasClassMatching(child, /^publicationInfoWrapper-/))
+    : undefined
+  const authorWrap = findDescendantElement(
+    mergedCard,
+    (child) => child.attribs?.["data-qa-id"] === "ui-lib-card-link-author",
+  )
+  const authorLink = authorWrap
+    ? findDescendantElement(authorWrap, (child) => child.name?.toLowerCase() === "a")
+    : undefined
+  const authorNode = authorWrap
+    ? findDescendantElement(authorWrap, (child) => hasClassMatching(child, /^cardAuthor-/))
+    : undefined
   const dateNode = findDescendantElement(mergedCard, (child) => child.name?.toLowerCase() === "time")
-  const dateWrap = dateNode ? findAncestorElement(mergedCard, dateNode, (child) => hasClassMatching(child, /^section-/)) : undefined
+  const dateWrap = dateNode
+    ? findAncestorElement(mergedCard, dateNode, (child) => hasClassMatching(child, /^section-/))
+    : undefined
   const buttons = findDescendantElement(mergedCard, (child) => hasClassMatching(child, /^buttons-/))
-  const commentButton = findDescendantElement(buttons ?? mergedCard, (child) => child.attribs?.["data-qa-id"] === "ui-lib-card-comment-button")
-  const likeButton = findDescendantElement(buttons ?? mergedCard, (child) => child.attribs?.["data-qa-id"] === "ui-lib-card-like-button")
-  const likeDigit = likeButton ? findDescendantElement(likeButton, (child) => hasClassMatching(child, /^digit-/)) : undefined
-  const likeDigitGrid = likeDigit ? findAncestorElement(likeButton ?? mergedCard, likeDigit, (child) => hasClassMatching(child, /^digitGrid-/)) : undefined
-  const likeCountWrap = likeDigit ? findAncestorElement(likeButton ?? mergedCard, likeDigit, (child) => hasClassMatching(child, /^container-/)) : undefined
+  const commentButton = findDescendantElement(
+    buttons ?? mergedCard,
+    (child) => child.attribs?.["data-qa-id"] === "ui-lib-card-comment-button",
+  )
+  const likeButton = findDescendantElement(
+    buttons ?? mergedCard,
+    (child) => child.attribs?.["data-qa-id"] === "ui-lib-card-like-button",
+  )
+  const likeDigit = likeButton
+    ? findDescendantElement(likeButton, (child) => hasClassMatching(child, /^digit-/))
+    : undefined
+  const likeDigitGrid = likeDigit
+    ? findAncestorElement(likeButton ?? mergedCard, likeDigit, (child) => hasClassMatching(child, /^digitGrid-/))
+    : undefined
+  const likeCountWrap = likeDigit
+    ? findAncestorElement(likeButton ?? mergedCard, likeDigit, (child) => hasClassMatching(child, /^container-/))
+    : undefined
 
   return {
     rootClassName: card.attribs?.class ?? "",
@@ -4338,7 +4700,9 @@ function semanticIdeaCardItem(card: DomNode, context: SourceDomRenderContext): S
     commentClassName: commentButton?.attribs?.class ?? "",
     commentAriaLabel: commentButton?.attribs?.["aria-label"],
     likeClassName: likeButton?.attribs?.class ?? "",
-    likeAriaLabel: findDescendantElement(likeButton ?? mergedCard, (child) => Boolean(child.attribs?.["aria-label"]?.includes("boost")))?.attribs?.["aria-label"],
+    likeAriaLabel: findDescendantElement(likeButton ?? mergedCard, (child) =>
+      Boolean(child.attribs?.["aria-label"]?.includes("boost")),
+    )?.attribs?.["aria-label"],
     likeCountWrapClassName: likeCountWrap?.attribs?.class ?? "",
     likeDigitGridClassName: likeDigitGrid?.attribs?.class ?? "",
     likeDigitClassName: likeDigit?.attribs?.class ?? "",
@@ -4347,8 +4711,9 @@ function semanticIdeaCardItem(card: DomNode, context: SourceDomRenderContext): S
 }
 
 function semanticIdeaLogoLink(node: DomNode): (SemanticIdeaLogoLink & { sourceNode: DomNode }) | undefined {
-  const link = findDescendantElement(node, (child) =>
-    child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-preview-link-icon",
+  const link = findDescendantElement(
+    node,
+    (child) => child.name?.toLowerCase() === "a" && child.attribs?.["data-qa-id"] === "ui-lib-card-preview-link-icon",
   )
   const image = link ? findDescendantElement(link, (child) => child.name?.toLowerCase() === "img") : undefined
   const href = normalizeReferencedAssetUrl(link?.attribs?.href ?? "")
@@ -4366,9 +4731,13 @@ function semanticIdeaLogoLink(node: DomNode): (SemanticIdeaLogoLink & { sourceNo
   }
 }
 
-function semanticIdeaStrategyBadge(node: DomNode, context: SourceDomRenderContext): (SemanticIdeaStrategyBadge & { sourceNode: DomNode }) | undefined {
-  const badge = findDescendantElement(node, (child) =>
-    hasClassMatching(child, /^root-cYxls/) || /\b(Long|Short|Neutral)\b/.test(child.attribs?.title ?? ""),
+function semanticIdeaStrategyBadge(
+  node: DomNode,
+  context: SourceDomRenderContext,
+): (SemanticIdeaStrategyBadge & { sourceNode: DomNode }) | undefined {
+  const badge = findDescendantElement(
+    node,
+    (child) => hasClassMatching(child, /^root-cYxls/) || /\b(Long|Short|Neutral)\b/.test(child.attribs?.title ?? ""),
   )
   if (!badge) return undefined
   const iconNode = findDescendantElement(badge, (child) => hasClassMatching(child, /^ideaStrategyIcon-/))
@@ -4379,14 +4748,20 @@ function semanticIdeaStrategyBadge(node: DomNode, context: SourceDomRenderContex
     title: badge.attribs?.title,
     iconClassName: iconNode?.attribs?.class ?? "",
     labelClassName: labelNode?.attribs?.class ?? "",
-    label: normalizeVisibleText(labelNode ? visibleText(labelNode) : badge.attribs?.title ?? ""),
-    icon: semanticSvgIcon(findDescendantElement(badge, (child) => child.name?.toLowerCase() === "svg"), context.nodeStyleFallbacks),
+    label: normalizeVisibleText(labelNode ? visibleText(labelNode) : (badge.attribs?.title ?? "")),
+    icon: semanticSvgIcon(
+      findDescendantElement(badge, (child) => child.name?.toLowerCase() === "svg"),
+      context.nodeStyleFallbacks,
+    ),
   }
 }
 
 function semanticIdeaMoreLink(anchor: DomNode, context: SourceDomRenderContext): SemanticIdeaMoreLink | undefined {
   const href = normalizeReferencedAssetUrl(anchor.attribs?.href ?? "")
-  const content = findDescendantElement(anchor, (child) => child.name?.toLowerCase() === "p" || hasClassMatching(child, /^content-/))
+  const content = findDescendantElement(
+    anchor,
+    (child) => child.name?.toLowerCase() === "p" || hasClassMatching(child, /^content-/),
+  )
   const wrap = content ? firstElementChild(content) : undefined
   const textNode = findDescendantElement(anchor, (child) => hasClassMatching(child, /^text-/))
   const arrow = findDescendantElement(anchor, (child) => hasClassMatching(child, /^arrow-/))
@@ -4401,7 +4776,10 @@ function semanticIdeaMoreLink(anchor: DomNode, context: SourceDomRenderContext):
     textClassName: textNode?.attribs?.class ?? "",
     label,
     arrowClassName: arrow?.attribs?.class ?? "",
-    icon: semanticSvgIcon(findDescendantElement(arrow ?? anchor, (child) => child.name?.toLowerCase() === "svg"), context.nodeStyleFallbacks),
+    icon: semanticSvgIcon(
+      findDescendantElement(arrow ?? anchor, (child) => child.name?.toLowerCase() === "svg"),
+      context.nodeStyleFallbacks,
+    ),
   }
 }
 
@@ -4412,7 +4790,10 @@ function semanticIdeaImageSource(image: DomNode, context: SourceDomRenderContext
   return normalizeReferencedAssetUrl(src)
 }
 
-function consumePreviewImagePath(context: { previewImagePaths: string[]; previewImageIndex: number }): string | undefined {
+function consumePreviewImagePath(context: {
+  previewImagePaths: string[]
+  previewImageIndex: number
+}): string | undefined {
   const imagePath = context.previewImagePaths[context.previewImageIndex]
   context.previewImageIndex += 1
   return imagePath
@@ -4425,7 +4806,14 @@ function omitSourceNode<T extends { sourceNode: DomNode }>(value: T): Omit<T, "s
 
 function isSemanticSectionShellCandidate(node: DomNode): boolean {
   if (node.type !== "tag") return false
-  if (isSemanticDataTableCandidate(node) || isSemanticMetricRankingCardCandidate(node) || isSemanticEventCardListCandidate(node) || isSemanticIdeaCardCollectionCandidate(node) || isSemanticLinkGridCandidate(node)) return false
+  if (
+    isSemanticDataTableCandidate(node) ||
+    isSemanticMetricRankingCardCandidate(node) ||
+    isSemanticEventCardListCandidate(node) ||
+    isSemanticIdeaCardCollectionCandidate(node) ||
+    isSemanticLinkGridCandidate(node)
+  )
+    return false
   const compositeCardContainer = isCompositeSemanticCardContainer(node)
   if (node.attribs?.["data-base-widget"] !== "true" && !compositeCardContainer) return false
   if (hasUncoveredMixedCardSiblings(node)) return false
@@ -4446,14 +4834,15 @@ function isCompositeSemanticCardContainer(node: DomNode): boolean {
   if (node.type !== "tag") return false
   const cardChildren = directElementChildren(node).filter(isSemanticCardLikeElement)
   if (cardChildren.length < 2) return false
-  return cardChildren.some((child) =>
-    isSemanticMetricRankingCardCandidate(child) ||
-    isSemanticDataTableCandidate(child) ||
-    isSemanticEventCardListCandidate(child) ||
-    isSemanticIdeaCardCollectionCandidate(child) ||
-    isSemanticMapSurfaceCandidate(child) ||
-    isSemanticLinkGridCandidate(child) ||
-    isSemanticNewsListCandidate(child, countRenderableElements(child))
+  return cardChildren.some(
+    (child) =>
+      isSemanticMetricRankingCardCandidate(child) ||
+      isSemanticDataTableCandidate(child) ||
+      isSemanticEventCardListCandidate(child) ||
+      isSemanticIdeaCardCollectionCandidate(child) ||
+      isSemanticMapSurfaceCandidate(child) ||
+      isSemanticLinkGridCandidate(child) ||
+      isSemanticNewsListCandidate(child, countRenderableElements(child)),
   )
 }
 
@@ -4471,20 +4860,22 @@ function dominantSvgBelongsToMixedCardSibling(node: DomNode, svg: DomNode): bool
 }
 
 function hasUncoveredMixedCardSiblings(node: DomNode): boolean {
-  const containers = findDescendantElements(node, (child) =>
-    directElementChildren(child).filter(isSemanticCardLikeElement).length > 1
+  const containers = findDescendantElements(
+    node,
+    (child) => directElementChildren(child).filter(isSemanticCardLikeElement).length > 1,
   )
   return containers.some((container) =>
     directElementChildren(container)
       .filter(isSemanticCardLikeElement)
-      .some((card) => !isSemanticSectionChildCandidate(card))
+      .some((card) => !isSemanticSectionChildCandidate(card)),
   )
 }
 
 function hasSemanticCardSurfaceChild(node: DomNode): boolean {
   function visit(child: DomNode, depth: number): boolean {
     if (depth > 5 || child.type !== "tag") return false
-    if (child !== node && child.attribs?.["data-source-role"] === "card" && isSemanticMapSurfaceCandidate(child)) return true
+    if (child !== node && child.attribs?.["data-source-role"] === "card" && isSemanticMapSurfaceCandidate(child))
+      return true
     return directElementChildren(child).some((grandchild) => visit(grandchild, depth + 1))
   }
   return directElementChildren(node).some((child) => visit(child, 1))
@@ -4530,26 +4921,47 @@ function extractSemanticSectionShell(
   const headerWrapper = header ? firstElementChild(header) : undefined
   const titleWrapper = headerWrapper ? firstElementChild(headerWrapper) : undefined
   const titleContainer = titleWrapper ? firstElementChild(titleWrapper) : undefined
-  const titleLink = titleContainer ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a") : undefined
+  const titleLink = titleContainer
+    ? findDescendantElement(titleContainer, (child) => child.name?.toLowerCase() === "a")
+    : undefined
   const tabs = findSemanticSectionTabs(node)
   const compositeCardContainer = isCompositeSemanticCardContainer(node)
   const titleSearchRoot = titleContainer ?? (header ? node : undefined)
   const titleNode = titleSearchRoot
-    ? findDescendantElement(titleSearchRoot, (child) => /^h[1-4]$/i.test(child.name ?? "") || hasClassMatching(child, /^title-/))
+    ? findDescendantElement(
+        titleSearchRoot,
+        (child) => /^h[1-4]$/i.test(child.name ?? "") || hasClassMatching(child, /^title-/),
+      )
     : undefined
-  const titleText = normalizeVisibleText(titleNode
-    ? visibleText(titleNode)
-    : findDirectChildBySourceRole(node, "header") || tabs.length > 0 || node.attribs?.["data-base-widget"] === "true"
-      ? findFirstHeadingText(node) ?? sourceRegionComponentName.replace(/Region\d*$/, "")
-      : "")
-  const content = compositeCardContainer && node.attribs?.["data-base-widget"] !== "true"
-    ? undefined
-    : findDescendantElement(node, (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/))
-  const tabsContainer = tabs[0] ? findAncestorElement(node, tabs[0], (child) => child.attribs?.role === "tablist") : undefined
-  const footerAnchor = findDescendantElement(node, (child) =>
-    child.name?.toLowerCase() === "a" && Boolean(findAncestorElement(node, child, (ancestor) => ancestor.attribs?.["data-source-role"] === "footer")),
+  const titleText = normalizeVisibleText(
+    titleNode
+      ? visibleText(titleNode)
+      : findDirectChildBySourceRole(node, "header") || tabs.length > 0 || node.attribs?.["data-base-widget"] === "true"
+        ? (findFirstHeadingText(node) ?? sourceRegionComponentName.replace(/Region\d*$/, ""))
+        : "",
   )
-  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, ["data-base-widget", "data-container-name", "data-an-widget-id", "data-source-role"])
+  const content =
+    compositeCardContainer && node.attribs?.["data-base-widget"] !== "true"
+      ? undefined
+      : findDescendantElement(
+          node,
+          (child) => child.attribs?.["data-qa-id"]?.endsWith("-content") || hasClassMatching(child, /^content-/),
+        )
+  const tabsContainer = tabs[0]
+    ? findAncestorElement(node, tabs[0], (child) => child.attribs?.role === "tablist")
+    : undefined
+  const footerAnchor = findDescendantElement(
+    node,
+    (child) =>
+      child.name?.toLowerCase() === "a" &&
+      Boolean(findAncestorElement(node, child, (ancestor) => ancestor.attribs?.["data-source-role"] === "footer")),
+  )
+  const rootDataAttrs = pickDataAttributes(node.attribs ?? {}, [
+    "data-base-widget",
+    "data-container-name",
+    "data-an-widget-id",
+    "data-source-role",
+  ])
   const componentBase = sourceRegionComponentName.replace(/Region(\d*)$/, "Section$1")
   return {
     componentName: componentBase === sourceRegionComponentName ? `${sourceRegionComponentName}Section` : componentBase,
@@ -4577,7 +4989,8 @@ function extractSemanticSectionShell(
 
 function renderSemanticSectionChild(node: DomNode, context: SourceDomRenderContext): SemanticSectionChild | undefined {
   const childSourceRegionComponentName = allocateSourceRegionComponentName(node, context)
-  const ref = renderSemanticNewsListRegion(node, childSourceRegionComponentName, context) ??
+  const ref =
+    renderSemanticNewsListRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticEventCardListRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticDataTableRegion(node, childSourceRegionComponentName, context) ??
     renderSemanticMetricRankingCardRegion(node, childSourceRegionComponentName, context) ??
@@ -4601,7 +5014,9 @@ function findSemanticSectionTabs(node: DomNode): DomNode[] {
 
 function semanticSectionTab(node: DomNode): SemanticSectionTab | undefined {
   const attrs = node.attribs ?? {}
-  const label = normalizeVisibleText(attrs["data-overflow-tooltip-text"] ?? attrs["data-qa-id"] ?? attrs["aria-label"] ?? visibleText(node))
+  const label = normalizeVisibleText(
+    attrs["data-overflow-tooltip-text"] ?? attrs["data-qa-id"] ?? attrs["aria-label"] ?? visibleText(node),
+  )
   if (!label) return undefined
   const tagName = node.name?.toLowerCase() === "a" ? "a" : "button"
   return {
@@ -4626,7 +5041,8 @@ function semanticSectionShellReplacementKind(
   const text = `${titleText} ${visibleText(node)}`.toLowerCase()
   if (/\b(ideas?|video|popular|recent)\b/.test(text)) return "card_collection_component"
   if (/\b(news|calendar|event|dow jones|reuters)\b/.test(text)) return "event_or_news_list_component"
-  if (/\b(map|trend|inflation|industrial|indicator|heatmap|country|countries)\b/.test(text)) return "data_table_or_heatmap_component"
+  if (/\b(map|trend|inflation|industrial|indicator|heatmap|country|countries)\b/.test(text))
+    return "data_table_or_heatmap_component"
   return "navigation_or_footer_component"
 }
 
@@ -4663,27 +5079,32 @@ function directNewsCardAnchors(node: DomNode): DomNode[] {
 function semanticNewsItem(anchor: DomNode): SemanticNewsItem | undefined {
   const article = findDescendantElement(anchor, (child) => child.name?.toLowerCase() === "article")
   const container = article ? firstElementChild(article) : undefined
-  const header = findDescendantElement(anchor, (child) =>
-    child.attribs?.["data-source-role"] === "header" || hasClassMatching(child, /^header-/),
+  const header = findDescendantElement(
+    anchor,
+    (child) => child.attribs?.["data-source-role"] === "header" || hasClassMatching(child, /^header-/),
   )
   const titleNode = findDescendantElement(anchor, (child) => {
     const qa = child.attribs?.["data-qa-id"] ?? ""
     return /news-headline-(?:title|unauth-title)/.test(qa)
   })
-  const title = normalizeVisibleText(titleNode?.attribs?.["data-overflow-tooltip-text"] ?? visibleText(titleNode ?? anchor))
+  const title = normalizeVisibleText(
+    titleNode?.attribs?.["data-overflow-tooltip-text"] ?? visibleText(titleNode ?? anchor),
+  )
   if (!title) return undefined
 
   const relativeTime = findDescendantElement(anchor, (child) => child.name?.toLowerCase() === "relative-time")
-  const dateWrapper = relativeTime ? findAncestorElement(anchor, relativeTime, (child) => child.name?.toLowerCase() === "span") : undefined
+  const dateWrapper = relativeTime
+    ? findAncestorElement(anchor, relativeTime, (child) => child.name?.toLowerCase() === "span")
+    : undefined
   const logoImages = header
     ? findDescendantElements(header, (child) => child.name?.toLowerCase() === "img")
-      .map((image) => ({
-        src: normalizeReferencedAssetUrl(image.attribs?.src ?? ""),
-        alt: image.attribs?.alt ?? "",
-        className: image.attribs?.class ?? "",
-      }))
-      .filter((image) => image.src)
-      .slice(0, 6)
+        .map((image) => ({
+          src: normalizeReferencedAssetUrl(image.attribs?.src ?? ""),
+          alt: image.attribs?.alt ?? "",
+          className: image.attribs?.class ?? "",
+        }))
+        .filter((image) => image.src)
+        .slice(0, 6)
     : []
   return {
     href: normalizeReferencedAssetUrl(anchor.attribs?.href ?? ""),
@@ -4703,7 +5124,7 @@ function semanticNewsItem(anchor: DomNode): SemanticNewsItem | undefined {
 
 function normalizeNewsSourceLabel(value: string): string {
   return normalizeVisibleText(value)
-    .replace(/\b(news|flash)\b/ig, " ")
+    .replace(/\b(news|flash)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
 }
@@ -4714,7 +5135,9 @@ function renderSemanticNewsListComponent(list: SemanticNewsList): string {
     list.rootClassName ? `className={${JSON.stringify(list.rootClassName)}}` : "",
     list.rootQaId ? `data-qa-id={${JSON.stringify(list.rootQaId)}}` : "",
     list.rootSourceNodeId ? `data-source-region={${JSON.stringify(list.rootSourceNodeId)}}` : "",
-  ].filter(Boolean).join(" ")
+  ]
+    .filter(Boolean)
+    .join(" ")
   return [
     "// @ts-nocheck",
     "// semantic-source-replacement: generated from repeated source news/event cards with explicit data and render loops.",
@@ -4727,12 +5150,12 @@ function renderSemanticNewsListComponent(list: SemanticNewsList): string {
     list.wrapperClassName ? `      <div className={${JSON.stringify(list.wrapperClassName)}}>` : "      <div>",
     list.gridClassName ? `        <div className={${JSON.stringify(list.gridClassName)}}>` : "        <div>",
     `          {${itemsName}.map((item) => (`,
-    "            <a className={item.cardClassName} href={item.href} key={`${item.href}-${item.title}`} target=\"_blank\" rel=\"noreferrer\">",
-    "              <article className={item.articleClassName} data-qa-id=\"news-headline-card\">",
+    '            <a className={item.cardClassName} href={item.href} key={`${item.href}-${item.title}`} target="_blank" rel="noreferrer">',
+    '              <article className={item.articleClassName} data-qa-id="news-headline-card">',
     "                <div className={item.containerClassName}>",
     "                  <div className={item.headerClassName}>",
     "                    {item.logoImages.length > 0 ? (",
-    "                      <ul className=\"semantic-source-logo-list\">",
+    '                      <ul className="semantic-source-logo-list">',
     "                        {item.logoImages.map((logo) => (",
     "                          <li key={`${item.href}-${logo.src}`}>",
     "                            <img className={logo.className} src={logo.src} alt={logo.alt} />",
@@ -4742,7 +5165,7 @@ function renderSemanticNewsListComponent(list: SemanticNewsList): string {
     "                    ) : null}",
     "                    {item.timestampTitle ? (",
     "                      <span className={item.dateClassName}>",
-    "                        <relative-time className=\"apply-common-tooltip\" title={item.timestampTitle} />",
+    '                        <relative-time className="apply-common-tooltip" title={item.timestampTitle} />',
     "                      </span>",
     "                    ) : null}",
     "                    {item.sourceLabel ? <span>{` ${item.sourceLabel} `}</span> : null}",
@@ -4775,7 +5198,7 @@ function renderSemanticRepeatedListComponent(collection: SemanticRepeatedListCol
     "  return (",
     `    <${rootTag} className={${JSON.stringify(collection.rootClassName)}} data-source-region={${JSON.stringify(collection.rootSourceNodeId ?? "")}}>`,
     "      {items.map((item) => (",
-    "        <li key={item.id} className={item.itemClassName} data-source-role=\"promo_item\">",
+    '        <li key={item.id} className={item.itemClassName} data-source-role="promo_item">',
     "          <article className={item.cardClassName}>",
     "            {item.imageSrc ? <img className={item.imageClassName} src={item.imageSrc} alt={item.imageAlt} /> : null}",
     "            <a href={item.href}>",
@@ -5099,7 +5522,7 @@ function renderSemanticFooterComponent(footer: SemanticFooter): string {
     "                <div className={footer.copyrightContainerClassName}>",
     "                  {footer.languageLabel ? <button className={footer.languageButtonClassName}>{footer.languageLabel}</button> : null}",
     "                  <p className={footer.copyrightClassName}>",
-    "                    {footer.legalParts.map((part, index) => part.kind === \"link\" && part.link ? (",
+    '                    {footer.legalParts.map((part, index) => part.kind === "link" && part.link ? (',
     "                      <a className={part.link.className} href={part.link.href} target={part.link.target} rel={part.link.rel} key={`${part.link.href}-${index}`}>{part.text}</a>",
     "                    ) : (",
     "                      <span key={`${part.text}-${index}`}>{part.text}</span>",
@@ -5171,7 +5594,7 @@ function renderSemanticHeaderNavigationComponent(header: SemanticHeaderNavigatio
     "function HeaderButton({ button }) {",
     "  if (!button) return null",
     "  return (",
-    "    <button className={button.className} aria-label={button.ariaLabel} aria-haspopup={button.ariaHasPopup} aria-expanded={button.ariaExpanded} type={button.type ?? \"button\"}>",
+    '    <button className={button.className} aria-label={button.ariaLabel} aria-haspopup={button.ariaHasPopup} aria-expanded={button.ariaExpanded} type={button.type ?? "button"}>',
     "      <HeaderIcon icon={button.icon} />",
     "      {button.label ? (button.textClassName ? <span className={button.textClassName}>{button.label}</span> : button.label) : null}",
     "    </button>",
@@ -5200,7 +5623,7 @@ function renderSemanticHeaderNavigationComponent(header: SemanticHeaderNavigatio
     "                  <HeaderIcon icon={header.logoTextIcon} />",
     "                </span>",
     "              ) : null}",
-    "              {!header.logoTextIcon && header.logoTextFallback ? <span className=\"semantic-source-header-logo-text\">{header.logoTextFallback}</span> : null}",
+    '              {!header.logoTextIcon && header.logoTextFallback ? <span className="semantic-source-header-logo-text">{header.logoTextFallback}</span> : null}',
     "              {header.logoProClassName ? <span className={header.logoProClassName} /> : null}",
     "            </a>",
     "          </span>",
@@ -5232,7 +5655,7 @@ function renderSemanticHeaderNavigationComponent(header: SemanticHeaderNavigatio
     "        <div className={header.userAreaClassName}>",
     "          <HeaderButton button={header.languageButton} />",
     "          <HeaderButton button={header.anonymousUserButton} />",
-    "          {header.loggedUserButtonClassName ? <button aria-label=\"Open user menu\" type=\"button\" className={header.loggedUserButtonClassName} /> : null}",
+    '          {header.loggedUserButtonClassName ? <button aria-label="Open user menu" type="button" className={header.loggedUserButtonClassName} /> : null}',
     "          {header.offerLink ? (",
     "            <div className={header.offerShellClassName} data-props-id={header.offerPropsId} data-render-mode={header.offerRenderMode}>",
     "              <div className={header.offerContainerClassName}>",
@@ -5268,7 +5691,7 @@ function renderSemanticMapSurfaceComponent(surface: SemanticMapSurface): string 
     `const ${surfaceName} = ${JSON.stringify(surface, null, 2)} as const`,
     "",
     "function Frame({ frame, children }) {",
-    "  const Element = frame.tagName || \"div\"",
+    '  const Element = frame.tagName || "div"',
     "  return (",
     "    <Element className={frame.className || undefined} id={frame.id} style={frame.style} {...frame.dataAttrs}>",
     "      {children}",
@@ -5320,7 +5743,7 @@ function renderSemanticMapSurfaceComponent(surface: SemanticMapSurface): string 
     "  const legendSvg = (",
     "    <svg width={legend.svg.width} height={legend.svg.height} viewBox={legend.svg.viewBox} fill={legend.svg.fill} className={legend.svg.className} style={legend.svg.style}>",
     "      {legend.items.map((item, index) => (",
-    "        <g className={item.className} key={`${item.tooltipTitle ?? \"legend\"}-${index}`} {...item.dataAttrs}>",
+    '        <g className={item.className} key={`${item.tooltipTitle ?? "legend"}-${index}`} {...item.dataAttrs}>',
     "          <g className={item.tooltipClassName} title={item.tooltipTitle}>",
     "            {item.rect ? <rect {...item.rect} /> : null}",
     "            <g className={item.figureGroupClassName}>",
@@ -5347,7 +5770,7 @@ function renderSemanticMapSurfaceComponent(surface: SemanticMapSurface): string 
     "",
     "function MapSvg({ surface }) {",
     "  return (",
-    "    <svg viewBox={surface.svgViewBox} fill=\"currentColor\" preserveAspectRatio=\"xMidYMid meet\" className={surface.svgClassName} style={{ width: \"100%\", height: \"auto\", display: \"block\" }}>",
+    '    <svg viewBox={surface.svgViewBox} fill="currentColor" preserveAspectRatio="xMidYMid meet" className={surface.svgClassName} style={{ width: "100%", height: "auto", display: "block" }}>',
     "      {surface.paths.map((path, index) => (",
     "        <AssetPath key={`${path.assetPath}-${path.id ?? index}`} {...path} />",
     "      ))}",
@@ -5356,7 +5779,7 @@ function renderSemanticMapSurfaceComponent(surface: SemanticMapSurface): string 
     "}",
     "",
     "function MapContent({ surface }) {",
-    "  const mapContainerIndex = surface.mapFrameNodes.findIndex((frame) => frame.semanticRole === \"mapContainer\")",
+    '  const mapContainerIndex = surface.mapFrameNodes.findIndex((frame) => frame.semanticRole === "mapContainer")',
     "  const outerFrames = mapContainerIndex >= 0 ? surface.mapFrameNodes.slice(0, mapContainerIndex + 1) : []",
     "  const innerFrames = mapContainerIndex >= 0 ? surface.mapFrameNodes.slice(mapContainerIndex + 1) : surface.mapFrameNodes",
     "  const mapSvg = (",
@@ -5395,7 +5818,7 @@ function renderSemanticMapSurfaceComponent(surface: SemanticMapSurface): string 
     "      {surface.headerClassName ? <MapTitle surface={surface} /> : null}",
     "      <MapBody surface={surface} />",
     "      {surface.footerLink ? (",
-    "        <div className=\"semantic-source-map-footer\">",
+    '        <div className="semantic-source-map-footer">',
     "          <a className={surface.footerLink.className} href={surface.footerLink.href} target={surface.footerLink.target} rel={surface.footerLink.rel}>",
     "            {surface.footerLink.label}",
     "          </a>",
@@ -5486,7 +5909,7 @@ function renderSemanticIdeaCardCollectionComponent(collection: SemanticIdeaCardC
     "  if (!badge) return null",
     "  return (",
     "    <span className={badge.className} title={badge.title}>",
-    "      <span role=\"img\" className={badge.iconClassName} aria-hidden=\"true\">",
+    '      <span role="img" className={badge.iconClassName} aria-hidden="true">',
     "        <SemanticIcon icon={badge.icon} />",
     "      </span>",
     "      {badge.label ? <span className={badge.labelClassName}>{badge.label}</span> : null}",
@@ -5501,7 +5924,7 @@ function renderSemanticIdeaCardCollectionComponent(collection: SemanticIdeaCardC
     "      <p className={link.contentClassName}>",
     "        <span className={link.wrapClassName}>",
     "          <span className={link.textClassName}>{link.label}</span>",
-    "          <span role=\"img\" className={link.arrowClassName} aria-hidden=\"true\">",
+    '          <span role="img" className={link.arrowClassName} aria-hidden="true">',
     "            <SemanticIcon icon={link.icon} />",
     "          </span>",
     "        </span>",
@@ -5538,13 +5961,13 @@ function renderSemanticIdeaCardCollectionComponent(collection: SemanticIdeaCardC
     "        {collection.tabs.length > 0 ? (",
     "          <div className={collection.tabsContainerClassName}>",
     "            <div className={collection.tabsScrollWrapClassName} data-name={collection.tabsScrollWrapDataName} style={collection.tabsScrollWrapStyle}>",
-    "              <div id={collection.tabsListId} role=\"tablist\" aria-orientation={collection.tabsListOrientation} className={collection.tabsListClassName}>",
-    "                {collection.tabs.map((tab) => tab.tagName === \"a\" ? (",
+    '              <div id={collection.tabsListId} role="tablist" aria-orientation={collection.tabsListOrientation} className={collection.tabsListClassName}>',
+    '                {collection.tabs.map((tab) => tab.tagName === "a" ? (',
     "                  <a key={tab.id ?? tab.label} id={tab.id} className={tab.className} href={tab.href} role={tab.role} aria-selected={tab.ariaSelected} aria-disabled={tab.ariaDisabled} aria-label={tab.ariaLabel} data-id={tab.dataId} data-qa-id={tab.dataQaId}>",
     "                    <span>{tab.label}</span>",
     "                  </a>",
     "                ) : (",
-    "                  <button key={tab.id ?? tab.label} id={tab.id} type=\"button\" className={tab.className} role={tab.role} aria-selected={tab.ariaSelected} aria-disabled={tab.ariaDisabled} aria-label={tab.ariaLabel} data-id={tab.dataId} data-qa-id={tab.dataQaId}>",
+    '                  <button key={tab.id ?? tab.label} id={tab.id} type="button" className={tab.className} role={tab.role} aria-selected={tab.ariaSelected} aria-disabled={tab.ariaDisabled} aria-label={tab.ariaLabel} data-id={tab.dataId} data-qa-id={tab.dataQaId}>',
     "                    <span>{tab.label}</span>",
     "                  </button>",
     "                ))}",
@@ -5571,7 +5994,7 @@ function renderSemanticIdeaCardCollectionComponent(collection: SemanticIdeaCardC
     "                    ) : null}",
     "                  </div>",
     "                  <div className={card.previewClassName}>",
-    "                    {card.previewFallbackImageSrc ? <img className=\"image-fSver7BK\" src={card.previewFallbackImageSrc} alt=\"\" /> : null}",
+    '                    {card.previewFallbackImageSrc ? <img className="image-fSver7BK" src={card.previewFallbackImageSrc} alt="" /> : null}',
     "                    <div className={card.previewGridClassName}>",
     "                      {card.previewChromeClassNames.map((className) => <div className={className} key={`${card.href}-${className}`} />)}",
     "                      {(card.logoLink || card.strategyBadge) ? (",
@@ -5585,9 +6008,9 @@ function renderSemanticIdeaCardCollectionComponent(collection: SemanticIdeaCardC
     "                        </div>",
     "                      ) : null}",
     "                      {card.imageSrc ? (",
-    "                        <a href={card.href} data-qa-id=\"ui-lib-card-link-image\" tabIndex={-1} aria-hidden=\"true\" className={card.imageLinkClassName}>",
+    '                        <a href={card.href} data-qa-id="ui-lib-card-link-image" tabIndex={-1} aria-hidden="true" className={card.imageLinkClassName}>',
     "                          <picture className={card.imagePictureClassName}>",
-    "                            <img style={card.imageStyle} alt=\"\" src={card.imageSrc} role=\"presentation\" loading=\"lazy\" className={card.imageClassName} />",
+    '                            <img style={card.imageStyle} alt="" src={card.imageSrc} role="presentation" loading="lazy" className={card.imageClassName} />',
     "                          </picture>",
     "                        </a>",
     "                      ) : null}",
@@ -5595,7 +6018,7 @@ function renderSemanticIdeaCardCollectionComponent(collection: SemanticIdeaCardC
     "                  </div>",
     "                  <div className={card.metaRowClassName}>",
     "                    <div className={card.publicationInfoClassName}>",
-    "                      <address className={card.authorWrapClassName} data-qa-id=\"ui-lib-card-link-author\">",
+    '                      <address className={card.authorWrapClassName} data-qa-id="ui-lib-card-link-author">',
     "                        {card.authorHref ? (",
     "                          <a href={card.authorHref} className={card.authorLinkClassName}>",
     "                            <span className={card.authorClassName}>{card.author}</span>",
@@ -5611,8 +6034,8 @@ function renderSemanticIdeaCardCollectionComponent(collection: SemanticIdeaCardC
     "                      ) : null}",
     "                    </div>",
     "                    <div className={card.buttonsClassName}>",
-    "                      {card.commentHref ? <a data-qa-id=\"ui-lib-card-comment-button\" title=\"Comment\" href={card.commentHref} aria-label={card.commentAriaLabel} className={card.commentClassName}><span /></a> : null}",
-    "                      <button className={card.likeClassName} type=\"button\" title=\"Boost\" aria-pressed=\"false\" data-qa-id=\"ui-lib-card-like-button\">",
+    '                      {card.commentHref ? <a data-qa-id="ui-lib-card-comment-button" title="Comment" href={card.commentHref} aria-label={card.commentAriaLabel} className={card.commentClassName}><span /></a> : null}',
+    '                      <button className={card.likeClassName} type="button" title="Boost" aria-pressed="false" data-qa-id="ui-lib-card-like-button">',
     "                        <span className={card.likeCountWrapClassName}>",
     "                          <span className={card.likeDigitGridClassName}>",
     "                            <span className={card.likeDigitClassName}>{card.likeCount}</span>",
@@ -5648,12 +6071,12 @@ function renderSemanticSectionShellComponent(section: SemanticSectionShell): str
   const tabRenderLines = [
     "        {section.tabs.length > 0 ? (",
     "          <div className={section.tabsContainerClassName}>",
-    "            {section.tabs.map((tab) => tab.tagName === \"a\" ? (",
+    '            {section.tabs.map((tab) => tab.tagName === "a" ? (',
     "              <a key={tab.id ?? tab.label} id={tab.id} className={tab.className} href={tab.href} role={tab.role} aria-selected={tab.ariaSelected} aria-disabled={tab.ariaDisabled} aria-label={tab.ariaLabel} data-id={tab.dataId} data-qa-id={tab.dataQaId}>",
     "                <span>{tab.label}</span>",
     "              </a>",
     "            ) : (",
-    "              <button key={tab.id ?? tab.label} id={tab.id} type=\"button\" className={tab.className} role={tab.role} aria-selected={tab.ariaSelected} aria-disabled={tab.ariaDisabled} aria-label={tab.ariaLabel} data-id={tab.dataId} data-qa-id={tab.dataQaId}>",
+    '              <button key={tab.id ?? tab.label} id={tab.id} type="button" className={tab.className} role={tab.role} aria-selected={tab.ariaSelected} aria-disabled={tab.ariaDisabled} aria-label={tab.ariaLabel} data-id={tab.dataId} data-qa-id={tab.dataQaId}>',
     "                <span>{tab.label}</span>",
     "              </button>",
     "            ))}",
@@ -5668,10 +6091,7 @@ function renderSemanticSectionShellComponent(section: SemanticSectionShell): str
         ...childRenderLines.map((line) => `  ${line}`),
         "      </div>",
       ]
-    : [
-        ...tabRenderLines,
-        ...childRenderLines,
-      ]
+    : [...tabRenderLines, ...childRenderLines]
   return [
     "// @ts-nocheck",
     "// semantic-source-replacement: generated from source section chrome plus semantic child surfaces.",
@@ -5707,7 +6127,7 @@ function renderSemanticSectionShellComponent(section: SemanticSectionShell): str
     "      ) : null}",
     ...contentRenderLines,
     "      {section.footerLink ? (",
-    "        <div className=\"semantic-source-section-footer\">",
+    '        <div className="semantic-source-section-footer">',
     "          <a className={section.footerLink.className} href={section.footerLink.href} target={section.footerLink.target} rel={section.footerLink.rel}>",
     "            {section.footerLink.label}",
     "          </a>",
@@ -5751,7 +6171,7 @@ function mergeDomNodeWithIrChildren(node: DomNode, context: SourceDomRenderConte
   const id = node.attribs?.["data-source-node-id"]
   const mergedChildren = mergeDomChildrenBySourceId(
     node.children ?? [],
-    id ? context.irChildrenByNodeId.get(id) ?? [] : [],
+    id ? (context.irChildrenByNodeId.get(id) ?? []) : [],
   )
   return {
     ...node,
@@ -5771,9 +6191,17 @@ function findParentElement(root: DomNode, target: DomNode): DomNode | undefined 
   return visit(root)
 }
 
-function findAncestorElement(root: DomNode, target: DomNode, predicate: (node: DomNode) => boolean): DomNode | undefined {
+function findAncestorElement(
+  root: DomNode,
+  target: DomNode,
+  predicate: (node: DomNode) => boolean,
+): DomNode | undefined {
   function visit(current: DomNode, ancestors: DomNode[]): DomNode | undefined {
-    if (current === target) return ancestors.slice().reverse().find((ancestor) => ancestor.type === "tag" && predicate(ancestor))
+    if (current === target)
+      return ancestors
+        .slice()
+        .reverse()
+        .find((ancestor) => ancestor.type === "tag" && predicate(ancestor))
     for (const child of current.children ?? []) {
       const found = visit(child, [...ancestors, current])
       if (found) return found
@@ -5784,9 +6212,7 @@ function findAncestorElement(root: DomNode, target: DomNode, predicate: (node: D
 }
 
 function isSourceSvgAssetPathNode(node: DomNode): boolean {
-  return node.type === "tag" &&
-    node.name?.toLowerCase() === "path" &&
-    Boolean(node.attribs?.["data-asset-d"])
+  return node.type === "tag" && node.name?.toLowerCase() === "path" && Boolean(node.attribs?.["data-asset-d"])
 }
 
 function allocateSourceSvgAssetGroupName(context: SourceDomRenderContext): string {
@@ -5794,10 +6220,7 @@ function allocateSourceSvgAssetGroupName(context: SourceDomRenderContext): strin
   return `sourceSvgAssetGroup${String(context.svgAssetGroupCount).padStart(3, "0")}`
 }
 
-function sourceSvgAssetGroupItem(
-  node: DomNode,
-  nodeStyleFallbacks: Map<string, string>,
-): SourceSvgAssetGroupItem {
+function sourceSvgAssetGroupItem(node: DomNode, nodeStyleFallbacks: Map<string, string>): SourceSvgAssetGroupItem {
   const attribs = node.attribs ?? {}
   const item: SourceSvgAssetGroupItem = { assetPath: normalizeAssetPath(attribs["data-asset-d"] ?? "") }
   const fallbackStyle = attribs["data-source-node-id"]
@@ -5814,9 +6237,8 @@ function sourceSvgAssetGroupItem(
       if (style) item.style = style
       continue
     }
-    const value = (name === "src" || name === "href" || name === "xlinkHref")
-      ? normalizeReferencedAssetUrl(rawValue)
-      : rawValue
+    const value =
+      name === "src" || name === "href" || name === "xlinkHref" ? normalizeReferencedAssetUrl(rawValue) : rawValue
     item[name] = value
   }
   if (fallbackStyle && !hasStyle) {
@@ -5833,38 +6255,74 @@ function allocateSourceFaqGroupName(context: SourceDomRenderContext): string {
 
 function extractSourceFaqGroup(node: DomNode, context: SourceDomRenderContext): SourceFaqGroup | undefined {
   const heading = findFirstHeadingText(node) ?? ""
-  const label = `${heading} ${node.attribs?.["data-container-name"] ?? ""} ${node.attribs?.["data-an-widget-id"] ?? ""}`.toLowerCase()
+  const label =
+    `${heading} ${node.attribs?.["data-container-name"] ?? ""} ${node.attribs?.["data-an-widget-id"] ?? ""}`.toLowerCase()
   if (!/\bfaq\b|frequently asked/.test(label)) return undefined
 
   const columnNodes = findDescendantElements(node, (child) => hasClassMatching(child, /^column-/))
   const itemColumns = columnNodes
-    .map((column) => findDescendantElements(column, isFaqItemElement).map((item) => sourceFaqItem(item)).filter((item): item is SourceFaqItem => Boolean(item)))
+    .map((column) =>
+      findDescendantElements(column, isFaqItemElement)
+        .map((item) => sourceFaqItem(item))
+        .filter((item): item is SourceFaqItem => Boolean(item)),
+    )
     .filter((column) => column.length > 0)
-  const columns = itemColumns.length > 0
-    ? itemColumns
-    : [findDescendantElements(node, isFaqItemElement).map((item) => sourceFaqItem(item)).filter((item): item is SourceFaqItem => Boolean(item))]
+  const columns =
+    itemColumns.length > 0
+      ? itemColumns
+      : [
+          findDescendantElements(node, isFaqItemElement)
+            .map((item) => sourceFaqItem(item))
+            .filter((item): item is SourceFaqItem => Boolean(item)),
+        ]
   const itemCount = columns.reduce((sum, column) => sum + column.length, 0)
   if (itemCount < 4) return undefined
 
   const firstItem = findDescendantElements(node, isFaqItemElement)[0]
-  const firstSummary = firstItem ? findDescendantElement(firstItem, (child) => child.name?.toLowerCase() === "button") : undefined
-  const firstDetailsWrapper = firstItem ? findDescendantElement(firstItem, (child) => hasClassMatching(child, /^detailsWrapper-/)) : undefined
-  const firstDetails = firstItem ? findDescendantElement(firstItem, (child) => hasClassMatching(child, /^details-/)) : undefined
+  const firstSummary = firstItem
+    ? findDescendantElement(firstItem, (child) => child.name?.toLowerCase() === "button")
+    : undefined
+  const firstDetailsWrapper = firstItem
+    ? findDescendantElement(firstItem, (child) => hasClassMatching(child, /^detailsWrapper-/))
+    : undefined
+  const firstDetails = firstItem
+    ? findDescendantElement(firstItem, (child) => hasClassMatching(child, /^details-/))
+    : undefined
   const header = findDescendantElement(node, (child) => hasClassMatching(child, /^header-/))
-  const headerWrapper = header ? findDescendantElement(header, (child) => hasClassMatching(child, /^wrapper-/)) : undefined
-  const titleAndHintWrapper = header ? findDescendantElement(header, (child) => hasClassMatching(child, /^titleAndHintWrapper-/)) : undefined
-  const titleContainer = header ? findDescendantElement(header, (child) => hasClassMatching(child, /^container-/)) : undefined
+  const headerWrapper = header
+    ? findDescendantElement(header, (child) => hasClassMatching(child, /^wrapper-/))
+    : undefined
+  const titleAndHintWrapper = header
+    ? findDescendantElement(header, (child) => hasClassMatching(child, /^titleAndHintWrapper-/))
+    : undefined
+  const titleContainer = header
+    ? findDescendantElement(header, (child) => hasClassMatching(child, /^container-/))
+    : undefined
   const titleNode = findDescendantElement(node, (child) => /^h[1-4]$/i.test(child.name ?? ""))
   const content = findDescendantElement(node, (child) => hasClassMatching(child, /^content-/))
   const wrapper = content ? findDescendantElement(content, (child) => hasClassMatching(child, /^wrapper-/)) : undefined
   const firstColumn = columnNodes[0]
-  const firstSummaryLine = firstSummary ? findDescendantElement(firstSummary, (child) => hasClassMatching(child, /^summaryLine-/)) : undefined
-  const firstBackground = firstSummary ? findDescendantElement(firstSummary, (child) => hasClassMatching(child, /^background-/)) : undefined
-  const firstSummaryText = firstSummary ? findDescendantElement(firstSummary, (child) => hasClassMatching(child, /^summaryText-/)) : undefined
-  const firstIconPresentation = firstSummary ? findDescendantElement(firstSummary, (child) => child.attribs?.role === "presentation") : undefined
-  const firstIconWrapper = firstIconPresentation ? findDescendantElement(firstIconPresentation, (child) => hasClassMatching(child, /^wrapper-/)) : undefined
-  const firstIconHorizontal = firstIconWrapper ? findDescendantElement(firstIconWrapper, (child) => hasClassMatching(child, /^horizontal-/)) : undefined
-  const firstIconVertical = firstIconWrapper ? findDescendantElement(firstIconWrapper, (child) => hasClassMatching(child, /^vertical-/)) : undefined
+  const firstSummaryLine = firstSummary
+    ? findDescendantElement(firstSummary, (child) => hasClassMatching(child, /^summaryLine-/))
+    : undefined
+  const firstBackground = firstSummary
+    ? findDescendantElement(firstSummary, (child) => hasClassMatching(child, /^background-/))
+    : undefined
+  const firstSummaryText = firstSummary
+    ? findDescendantElement(firstSummary, (child) => hasClassMatching(child, /^summaryText-/))
+    : undefined
+  const firstIconPresentation = firstSummary
+    ? findDescendantElement(firstSummary, (child) => child.attribs?.role === "presentation")
+    : undefined
+  const firstIconWrapper = firstIconPresentation
+    ? findDescendantElement(firstIconPresentation, (child) => hasClassMatching(child, /^wrapper-/))
+    : undefined
+  const firstIconHorizontal = firstIconWrapper
+    ? findDescendantElement(firstIconWrapper, (child) => hasClassMatching(child, /^horizontal-/))
+    : undefined
+  const firstIconVertical = firstIconWrapper
+    ? findDescendantElement(firstIconWrapper, (child) => hasClassMatching(child, /^vertical-/))
+    : undefined
 
   return {
     title: normalizeVisibleText(heading || "Frequently asked questions"),
@@ -5901,12 +6359,18 @@ function extractSourceFaqGroup(node: DomNode, context: SourceDomRenderContext): 
 }
 
 function isFaqItemElement(node: DomNode): boolean {
-  return node.type === "tag" && hasClassMatching(node, /^item-/) && Boolean(findDescendantElement(node, (child) => child.name?.toLowerCase() === "button"))
+  return (
+    node.type === "tag" &&
+    hasClassMatching(node, /^item-/) &&
+    Boolean(findDescendantElement(node, (child) => child.name?.toLowerCase() === "button"))
+  )
 }
 
 function sourceFaqItem(node: DomNode): SourceFaqItem | undefined {
   const summary = findDescendantElement(node, (child) => child.name?.toLowerCase() === "button")
-  const summaryText = summary ? findDescendantElement(summary, (child) => hasClassMatching(child, /^summaryText-/)) : undefined
+  const summaryText = summary
+    ? findDescendantElement(summary, (child) => hasClassMatching(child, /^summaryText-/))
+    : undefined
   const question = normalizeVisibleText(summaryText ? visibleText(summaryText) : "")
   if (!question) return undefined
   const detailsWrapper = findDescendantElement(node, (child) => hasClassMatching(child, /^detailsWrapper-/))
@@ -5914,9 +6378,11 @@ function sourceFaqItem(node: DomNode): SourceFaqItem | undefined {
   return {
     question,
     answerText: normalizeVisibleText(details ? visibleText(details) : ""),
-    links: details ? findDescendantElements(details, (child) => child.name?.toLowerCase() === "a")
-      .map((link) => ({ href: link.attribs?.href ?? "", label: normalizeVisibleText(visibleText(link)) }))
-      .filter((link) => link.href || link.label) : [],
+    links: details
+      ? findDescendantElements(details, (child) => child.name?.toLowerCase() === "a")
+          .map((link) => ({ href: link.attribs?.href ?? "", label: normalizeVisibleText(visibleText(link)) }))
+          .filter((link) => link.href || link.label)
+      : [],
     order: extractCssProperty(node.attribs?.style ?? "", "order"),
     itemClassName: node.attribs?.class,
     summaryId: summary?.attribs?.id,
@@ -5962,7 +6428,10 @@ function normalizeVisibleText(value: string): string {
   return decodeEntities(value).replace(/\s+/g, " ").trim()
 }
 
-function sourceDomReplacementPriority(bytes: number, elementCount: number): SourceDomRegionMetric["replacementPriority"] {
+function sourceDomReplacementPriority(
+  bytes: number,
+  elementCount: number,
+): SourceDomRegionMetric["replacementPriority"] {
   if (bytes >= 32_000 || elementCount >= 220) return "high"
   if (bytes >= 12_000 || elementCount >= 80) return "medium"
   return "low"
@@ -5972,52 +6441,56 @@ function buildSourceDomReplacementPlan(
   regions: SourceDomRegionMetric[],
   data: SourceProjectData,
 ): SourceDomReplacementPlanItem[] {
-  return regions
-    .map((region) => {
-      const replacementKind = classifySourceDomReplacementKind(region)
-      const recommendedComponentName = semanticReplacementComponentName(region, replacementKind)
-      const dataSources = sourceDomDataSources(data, replacementKind)
-      const assetSources = sourceDomAssetSources(data, replacementKind)
-      const styleSources = sourceDomStyleSources(replacementKind)
-      const visualSources = sourceDomVisualSources(region)
-      return {
-        regionComponentName: region.componentName,
-        regionFilePath: region.filePath,
-        priority: region.replacementPriority,
-        recommendedComponentName,
-        replacementKind,
-        problem: sourceDomReplacementProblem(region),
-        sourceMap: {
-          sourceNodeId: region.sourceNodeId,
-          sourceSegmentId: region.sourceSegmentId,
-          bounds: region.sourceBounds,
-          domRegion: region.filePath,
-          styleSources,
-          dataSources,
-          assetSources,
-          visualSources,
-        },
-        reusableSources: sourceDomReusableSources(region, replacementKind),
+  return regions.map((region) => {
+    const replacementKind = classifySourceDomReplacementKind(region)
+    const recommendedComponentName = semanticReplacementComponentName(region, replacementKind)
+    const dataSources = sourceDomDataSources(data, replacementKind)
+    const assetSources = sourceDomAssetSources(data, replacementKind)
+    const styleSources = sourceDomStyleSources(replacementKind)
+    const visualSources = sourceDomVisualSources(region)
+    return {
+      regionComponentName: region.componentName,
+      regionFilePath: region.filePath,
+      priority: region.replacementPriority,
+      recommendedComponentName,
+      replacementKind,
+      problem: sourceDomReplacementProblem(region),
+      sourceMap: {
+        sourceNodeId: region.sourceNodeId,
+        sourceSegmentId: region.sourceSegmentId,
+        bounds: region.sourceBounds,
+        domRegion: region.filePath,
+        styleSources,
         dataSources,
         assetSources,
-        generatedCleanupTargets: sourceDomGeneratedCleanupTargets(region),
-        verticalSliceSteps: sourceDomVerticalSliceSteps(region, recommendedComponentName, replacementKind),
-        firstReplacementStep: sourceDomFirstReplacementStep(region, recommendedComponentName, replacementKind),
-        parityGuard: sourceDomParityGuard(region, replacementKind),
-      }
-    })
+        visualSources,
+      },
+      reusableSources: sourceDomReusableSources(region, replacementKind),
+      dataSources,
+      assetSources,
+      generatedCleanupTargets: sourceDomGeneratedCleanupTargets(region),
+      verticalSliceSteps: sourceDomVerticalSliceSteps(region, recommendedComponentName, replacementKind),
+      firstReplacementStep: sourceDomFirstReplacementStep(region, recommendedComponentName, replacementKind),
+      parityGuard: sourceDomParityGuard(region, replacementKind),
+    }
+  })
 }
 
-function classifySourceDomReplacementKind(region: SourceDomRegionMetric): SourceDomReplacementPlanItem["replacementKind"] {
-  if (region.sourceComponentPattern?.recommendedReplacementKind) return region.sourceComponentPattern.recommendedReplacementKind
+function classifySourceDomReplacementKind(
+  region: SourceDomRegionMetric,
+): SourceDomReplacementPlanItem["replacementKind"] {
+  if (region.sourceComponentPattern?.recommendedReplacementKind)
+    return region.sourceComponentPattern.recommendedReplacementKind
   const componentWords = region.componentName.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
   const haystack = `${componentWords} ${region.heading ?? ""} ${region.textPreview}`.toLowerCase()
   if (/\b(main content|page shell)\b/.test(haystack)) return "baseline_defer"
   if (/\b(faq|frequently asked|what is|formula)\b/.test(haystack)) return "faq_disclosure_component"
-  if (/\b(footer|header|navigation|tools|subscriptions|social|community|market data provided)\b/.test(haystack)) return "navigation_or_footer_component"
+  if (/\b(footer|header|navigation|tools|subscriptions|social|community|market data provided)\b/.test(haystack))
+    return "navigation_or_footer_component"
   if (/\b(ideas?|stocks?|mortgage|savings)\b/.test(haystack)) return "card_collection_component"
   if (/\b(news|calendar|event|today|actual|forecast|prior)\b/.test(haystack)) return "event_or_news_list_component"
-  if (/\b(heatmap|indicator|gdp|country|countries|rate|table)\b/.test(haystack)) return "data_table_or_heatmap_component"
+  if (/\b(heatmap|indicator|gdp|country|countries|rate|table)\b/.test(haystack))
+    return "data_table_or_heatmap_component"
   if (/\b(map|industrial|inflation)\b/.test(haystack)) return "map_or_chart_asset_component"
   return "baseline_defer"
 }
@@ -6054,7 +6527,8 @@ function sourceDomReusableSources(
     "web-clone-source/source-skeleton/critical.css",
     "web-clone-source/source-ir/style-profile.json",
   ]
-  if (kind === "map_or_chart_asset_component") sources.push("src/data/svgPaths.ts", "src/data/sourceSvgAssetGroups.ts", "web-clone-source/assets/svg/")
+  if (kind === "map_or_chart_asset_component")
+    sources.push("src/data/svgPaths.ts", "src/data/sourceSvgAssetGroups.ts", "web-clone-source/assets/svg/")
   if (kind === "faq_disclosure_component") sources.push("src/data/sourceFaqGroups.ts")
   if (kind === "navigation_or_footer_component") sources.push("web-clone-source/source-ir/component-tree.json")
   return Array.from(new Set(sources))
@@ -6066,8 +6540,10 @@ function sourceDomDataSources(
 ): string[] {
   const sources = ["src/data/sourceData.ts"]
   if (kind === "data_table_or_heatmap_component" && data.tables.length > 0) sources.push("sourceTables")
-  if (kind === "card_collection_component" && (data.cards.length > 0 || data.lists.length > 0)) sources.push("sourceCards", "sourceLists")
-  if (kind === "event_or_news_list_component" && (data.lists.length > 0 || data.repeatedGroups.length > 0)) sources.push("sourceLists", "sourceRepeatedGroups")
+  if (kind === "card_collection_component" && (data.cards.length > 0 || data.lists.length > 0))
+    sources.push("sourceCards", "sourceLists")
+  if (kind === "event_or_news_list_component" && (data.lists.length > 0 || data.repeatedGroups.length > 0))
+    sources.push("sourceLists", "sourceRepeatedGroups")
   if (kind === "faq_disclosure_component") sources.push("sourceTextSignals", "sourceFaqGroups")
   if (kind === "navigation_or_footer_component") sources.push("sourceComponents", "sourceTextSignals")
   return Array.from(new Set(sources))
@@ -6078,8 +6554,10 @@ function sourceDomAssetSources(
   kind: SourceDomReplacementPlanItem["replacementKind"],
 ): string[] {
   const sources: string[] = []
-  if (kind === "map_or_chart_asset_component") sources.push("src/data/svgPaths.ts", "src/data/sourceSvgAssetGroups.ts", "public/assets/svg/")
-  if (kind === "card_collection_component" || kind === "map_or_chart_asset_component") sources.push("public/assets/images/")
+  if (kind === "map_or_chart_asset_component")
+    sources.push("src/data/svgPaths.ts", "src/data/sourceSvgAssetGroups.ts", "public/assets/svg/")
+  if (kind === "card_collection_component" || kind === "map_or_chart_asset_component")
+    sources.push("public/assets/images/")
   if (data.assets.length > 0) sources.push("src/data/sourceData.ts:sourceAssets")
   return Array.from(new Set(sources))
 }
@@ -6097,13 +6575,17 @@ function sourceDomStyleSources(kind: SourceDomReplacementPlanItem["replacementKi
 }
 
 function sourceDomVisualSources(region: SourceDomRegionMetric): string[] {
-  return Array.from(new Set([
-    "web-clone-source/reference.png",
-    "reference.png",
-    "web-clone-source/visual-surface-candidates.json",
-    region.sourceNodeId ? `source-node:${region.sourceNodeId}` : "",
-    region.sourceSegmentId ? `source-segment:${region.sourceSegmentId}` : "",
-  ].filter(Boolean)))
+  return Array.from(
+    new Set(
+      [
+        "web-clone-source/reference.png",
+        "reference.png",
+        "web-clone-source/visual-surface-candidates.json",
+        region.sourceNodeId ? `source-node:${region.sourceNodeId}` : "",
+        region.sourceSegmentId ? `source-segment:${region.sourceSegmentId}` : "",
+      ].filter(Boolean),
+    ),
+  )
 }
 
 function sourceDomGeneratedCleanupTargets(region: SourceDomRegionMetric): string[] {
@@ -6161,17 +6643,16 @@ function sourceDomParityGuard(
   kind: SourceDomReplacementPlanItem["replacementKind"],
 ): string {
   const base = `Before deleting ${region.componentName}, compare the root app against web-clone-source/reference.png and keep unchanged clone surfaces above the requested visual threshold.`
-  if (kind === "map_or_chart_asset_component") return `${base} Check map/chart fills, legend ticks, geographic/chart geometry, and extracted asset references.`
-  if (kind === "data_table_or_heatmap_component") return `${base} Check row/column count, cell colors, typography, and numeric text coverage.`
-  if (kind === "card_collection_component") return `${base} Check card count, thumbnail rendering, titles, author/time metadata, and carousel overflow.`
+  if (kind === "map_or_chart_asset_component")
+    return `${base} Check map/chart fills, legend ticks, geographic/chart geometry, and extracted asset references.`
+  if (kind === "data_table_or_heatmap_component")
+    return `${base} Check row/column count, cell colors, typography, and numeric text coverage.`
+  if (kind === "card_collection_component")
+    return `${base} Check card count, thumbnail rendering, titles, author/time metadata, and carousel overflow.`
   return base
 }
 
-function shouldExtractSourceRegion(
-  node: DomNode,
-  siblings: DomNode[],
-  context: SourceDomRenderContext,
-): boolean {
+function shouldExtractSourceRegion(node: DomNode, siblings: DomNode[], context: SourceDomRenderContext): boolean {
   if (!context.extractRegions || context.regionDepth >= context.maxRegionDepth) return false
   if (context.regionFiles.size >= context.maxRegionCount) return false
   if (node.type !== "tag") return false
@@ -6181,7 +6662,8 @@ function shouldExtractSourceRegion(
   if (isSourcePageShellNode(node)) return false
   if (isSingleSemanticChildWrapper(node)) return false
   const sourcePattern = sourceComponentPatternForNode(node, context)
-  if (sourcePattern?.recommendedReplacementKind && sourcePattern.recommendedReplacementKind !== "baseline_defer") return true
+  if (sourcePattern?.recommendedReplacementKind && sourcePattern.recommendedReplacementKind !== "baseline_defer")
+    return true
   if (isSemanticHeaderNavigationCandidate(node)) return true
   if (isSemanticFooterCandidate(node)) return true
   if (isSemanticIdeaCardCollectionCandidate(node)) return true
@@ -6210,7 +6692,8 @@ function shouldExtractSourceRegion(
   const headingCount = countHeadings(node)
   if (headingCount > 1) return false
   if (findFirstHeadingText(node) && (siblingElementCount >= 3 || elementCount > 60)) return true
-  if (context.regionDepth >= 2 && siblingElementCount >= 3 && elementCount > 16 && visibleText(node).length > 16) return true
+  if (context.regionDepth >= 2 && siblingElementCount >= 3 && elementCount > 16 && visibleText(node).length > 16)
+    return true
   if (siblingElementCount >= 4 && elementCount > 80 && visibleText(node).length > 16) return true
   return false
 }
@@ -6219,8 +6702,19 @@ function isSingleSemanticChildWrapper(node: DomNode): boolean {
   if (node.type !== "tag") return false
   const children = directElementChildren(node)
   if (children.length !== 1) return false
-  if (normalizeVisibleText((node.children ?? []).filter((child) => child.type === "text").map((child) => child.data ?? "").join(" "))) return false
-  return isSemanticIdeaCardCollectionCandidate(children[0] as DomNode) || isSemanticSectionShellCandidate(children[0] as DomNode)
+  if (
+    normalizeVisibleText(
+      (node.children ?? [])
+        .filter((child) => child.type === "text")
+        .map((child) => child.data ?? "")
+        .join(" "),
+    )
+  )
+    return false
+  return (
+    isSemanticIdeaCardCollectionCandidate(children[0] as DomNode) ||
+    isSemanticSectionShellCandidate(children[0] as DomNode)
+  )
 }
 
 function isSourcePageShellNode(node: DomNode): boolean {
@@ -6305,7 +6799,8 @@ function descendantElementDistance(root: DomNode, target: DomNode): number | und
 function allocateSourceRegionComponentName(node: DomNode, context: SourceDomRenderContext): string {
   const tag = node.name?.toLowerCase() ?? "region"
   const className = node.attribs?.class ?? ""
-  const explicitLabel = (/(\btv-header\b)/.test(className) ? "Header" : undefined) ??
+  const explicitLabel =
+    (/(\btv-header\b)/.test(className) ? "Header" : undefined) ??
     (/(\btv-footer\b)/.test(className) ? "Footer" : undefined) ??
     (/(\btv-main\b)/.test(className) ? "Page Shell" : undefined) ??
     (tag === "main" ? "Main Content" : undefined) ??
@@ -6343,7 +6838,10 @@ function findFirstHeadingText(node: DomNode): string | undefined {
 }
 
 function visibleText(node: DomNode): string {
-  if (node.type === "text") return decodeEntities(node.data ?? "").replace(/\s+/g, " ").trim()
+  if (node.type === "text")
+    return decodeEntities(node.data ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
   if (node.type !== "tag" && node.type !== "script" && node.type !== "style") return ""
   if (node.name?.toLowerCase() === "script" || node.name?.toLowerCase() === "style") return ""
   return (node.children ?? []).map(visibleText).filter(Boolean).join(" ").replace(/\s+/g, " ").trim()
@@ -6463,7 +6961,8 @@ function renderJsxAttributes(
     : undefined
   let hasStyle = false
   for (const [rawName, rawValue] of Object.entries(attribs)) {
-    if (omitSourceProvenanceAttributes && (rawName === "data-source-node-id" || rawName === "data-source-segment-id")) continue
+    if (omitSourceProvenanceAttributes && (rawName === "data-source-node-id" || rawName === "data-source-segment-id"))
+      continue
     if (isAssetPath && rawName === "data-asset-d") {
       parts.push(`assetPath={${JSON.stringify(normalizeAssetPath(rawValue))}}`)
       continue
@@ -6477,9 +6976,8 @@ function renderJsxAttributes(
       if (style) parts.push(`style={${style}}`)
       continue
     }
-    const value = (name === "src" || name === "href" || name === "xlinkHref")
-      ? normalizeReferencedAssetUrl(rawValue)
-      : rawValue
+    const value =
+      name === "src" || name === "href" || name === "xlinkHref" ? normalizeReferencedAssetUrl(rawValue) : rawValue
     parts.push(`${name}={${JSON.stringify(value)}}`)
   }
   if (fallbackStyle && !hasStyle) {
@@ -6513,7 +7011,10 @@ function renderStyleObject(style: string): string | undefined {
     const colon = part.indexOf(":")
     if (colon < 1) continue
     const key = part.slice(0, colon).trim()
-    const value = part.slice(colon + 1).trim().replace(/\s*!important\s*$/i, "")
+    const value = part
+      .slice(colon + 1)
+      .trim()
+      .replace(/\s*!important\s*$/i, "")
     if (!key || !value) continue
     const styleKey = toStyleKey(key)
     entries.set(styleKey, `${JSON.stringify(styleKey)}: ${JSON.stringify(value)}`)
@@ -6529,7 +7030,10 @@ function renderStyleRecord(style: string): Record<string, string> | undefined {
     const colon = part.indexOf(":")
     if (colon < 1) continue
     const key = part.slice(0, colon).trim()
-    const value = part.slice(colon + 1).trim().replace(/\s*!important\s*$/i, "")
+    const value = part
+      .slice(colon + 1)
+      .trim()
+      .replace(/\s*!important\s*$/i, "")
     if (!key || !value) continue
     entries[toStyleKey(key)] = value
   }
@@ -6759,7 +7263,7 @@ function renderSourceDomRegionsTs(regions: SourceDomRegionMetric[]): string {
   return [
     "export const sourceDomRegions = " + JSON.stringify(regions, null, 2) + " as const",
     "",
-    "export const highPrioritySourceDomRegions = sourceDomRegions.filter((region) => region.replacementPriority === \"high\")",
+    'export const highPrioritySourceDomRegions = sourceDomRegions.filter((region) => region.replacementPriority === "high")',
     "",
   ].join("\n")
 }
@@ -6768,7 +7272,7 @@ function renderSourceDomReplacementPlanTs(items: SourceDomReplacementPlanItem[])
   return [
     "export const sourceDomReplacementPlan = " + JSON.stringify(items, null, 2) + " as const",
     "",
-    "export const highPrioritySourceDomReplacementPlan = sourceDomReplacementPlan.filter((item) => item.priority === \"high\")",
+    'export const highPrioritySourceDomReplacementPlan = sourceDomReplacementPlan.filter((item) => item.priority === "high")',
     "",
   ].join("\n")
 }
@@ -6797,18 +7301,26 @@ function renderSourceDomIterationStateTs(
         sourceNodeId: region.sourceNodeId,
         sourceSegmentId: region.sourceSegmentId,
         replacementKind: plan?.replacementKind ?? classifySourceDomReplacementKind(region),
-        recommendedComponentName: plan?.recommendedComponentName ?? semanticReplacementComponentName(region, plan?.replacementKind ?? classifySourceDomReplacementKind(region)),
-        firstReplacementStep: plan?.firstReplacementStep ?? sourceDomFirstReplacementStep(
-          region,
+        recommendedComponentName:
+          plan?.recommendedComponentName ??
           semanticReplacementComponentName(region, plan?.replacementKind ?? classifySourceDomReplacementKind(region)),
-          plan?.replacementKind ?? classifySourceDomReplacementKind(region),
-        ),
-        parityGuard: plan?.parityGuard ?? sourceDomParityGuard(region, plan?.replacementKind ?? classifySourceDomReplacementKind(region)),
+        firstReplacementStep:
+          plan?.firstReplacementStep ??
+          sourceDomFirstReplacementStep(
+            region,
+            semanticReplacementComponentName(region, plan?.replacementKind ?? classifySourceDomReplacementKind(region)),
+            plan?.replacementKind ?? classifySourceDomReplacementKind(region),
+          ),
+        parityGuard:
+          plan?.parityGuard ??
+          sourceDomParityGuard(region, plan?.replacementKind ?? classifySourceDomReplacementKind(region)),
       }
     })
   const nextReplacement = remainingGeneratedRegions[0] ?? null
   const viewportMatrix = visualIteration.viewportMatrix
-  const viewportNames = viewportMatrix.map((viewport) => `${viewport.name} ${viewport.width}x${viewport.height}`).join(", ")
+  const viewportNames = viewportMatrix
+    .map((viewport) => `${viewport.name} ${viewport.width}x${viewport.height}`)
+    .join(", ")
   const state = {
     version: 1,
     purpose: "source-dom-maintainable-iteration-state",
@@ -6822,7 +7334,8 @@ function renderSourceDomIterationStateTs(
       referenceImage: "web-clone-source/reference.png",
       comparisonTool: visualIteration.comparisonTool,
       viewportMatrix,
-      evidenceRule: "Do not delete a source-dom region after replacement until desktop-reference has measured evidence and responsive-review captures have either matching evidence or an explicit source-evidence gap.",
+      evidenceRule:
+        "Do not delete a source-dom region after replacement until desktop-reference has measured evidence and responsive-review captures have either matching evidence or an explicit source-evidence gap.",
     },
     recommendedLoop: [
       `Adopt the current source project as the visual baseline and compare the viewport matrix (${viewportNames}) against reference.png or matching reference artifacts.`,
@@ -6849,10 +7362,12 @@ function renderSourceDomIterationStateTs(
 }
 
 function compareSourceDomRegionReplacementOrder(a: SourceDomRegionMetric, b: SourceDomRegionMetric): number {
-  return sourceDomPriorityRank(a.replacementPriority) - sourceDomPriorityRank(b.replacementPriority) ||
+  return (
+    sourceDomPriorityRank(a.replacementPriority) - sourceDomPriorityRank(b.replacementPriority) ||
     b.bytes - a.bytes ||
     b.elementCount - a.elementCount ||
     a.componentName.localeCompare(b.componentName)
+  )
 }
 
 function sourceDomPriorityRank(value: SourceDomRegionMetric["replacementPriority"]): number {
@@ -6868,7 +7383,9 @@ function renderSourceSvgAssetGroupsTs(groups: Map<string, SourceSvgAssetGroupIte
     "  [attribute: string]: unknown",
     "}",
     "",
-    "export const sourceSvgAssetGroups = " + JSON.stringify(Object.fromEntries(groups), null, 2) + " as const satisfies Record<string, readonly SourceSvgAssetGroupItem[]>",
+    "export const sourceSvgAssetGroups = " +
+      JSON.stringify(Object.fromEntries(groups), null, 2) +
+      " as const satisfies Record<string, readonly SourceSvgAssetGroupItem[]>",
     "",
   ].join("\n")
 }
@@ -6893,16 +7410,15 @@ function renderSourceFaqGroupsTs(groups: Map<string, SourceFaqGroup>): string {
     "  detailsId?: string",
     "}",
     "",
-    "export const sourceFaqGroups = " + JSON.stringify(Object.fromEntries(groups), null, 2) + " as const satisfies Record<string, SourceFaqGroup>",
+    "export const sourceFaqGroups = " +
+      JSON.stringify(Object.fromEntries(groups), null, 2) +
+      " as const satisfies Record<string, SourceFaqGroup>",
     "",
   ].join("\n")
 }
 
 function renderSvgPathsTs(paths: Record<string, string>): string {
-  return [
-    "export const svgPaths: Record<string, string> = " + JSON.stringify(paths, null, 2),
-    "",
-  ].join("\n")
+  return ["export const svgPaths: Record<string, string> = " + JSON.stringify(paths, null, 2), ""].join("\n")
 }
 
 function renderStylesCss(input: { hasCriticalCss: boolean; hasFullCss: boolean }): string {
@@ -6915,7 +7431,9 @@ function renderStylesCss(input: { hasCriticalCss: boolean; hasFullCss: boolean }
     ".semantic-source-header-logo-text { display: inline-flex; align-items: center; margin-inline-start: 2px; color: currentColor; font-family: -apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif; font-size: 26px; font-weight: 700; line-height: 28px; letter-spacing: 0; }",
     "",
     "",
-  ].filter(Boolean).join("\n")
+  ]
+    .filter(Boolean)
+    .join("\n")
 }
 
 function renderReadme(webpageEvidenceDir: string, visualIteration: SourceProjectVisualIteration): string {
@@ -6954,11 +7472,25 @@ function renderReadme(webpageEvidenceDir: string, visualIteration: SourceProject
 }
 
 function collectVisibleStrings(value: unknown, key = ""): string[] {
-  const visibleKeys = new Set(["alt", "fields", "headers", "items", "label", "rows", "sampleTexts", "text", "textPreview", "title", "value"])
+  const visibleKeys = new Set([
+    "alt",
+    "fields",
+    "headers",
+    "items",
+    "label",
+    "rows",
+    "sampleTexts",
+    "text",
+    "textPreview",
+    "title",
+    "value",
+  ])
   if (typeof value === "string") return visibleKeys.has(key) ? [value] : []
   if (Array.isArray(value)) return value.flatMap((item) => collectVisibleStrings(item, key))
   if (!value || typeof value !== "object") return []
-  return Object.entries(value as Record<string, unknown>).flatMap(([childKey, child]) => collectVisibleStrings(child, childKey))
+  return Object.entries(value as Record<string, unknown>).flatMap(([childKey, child]) =>
+    collectVisibleStrings(child, childKey),
+  )
 }
 
 function collectSkeletonText(html: string): string[] {
@@ -7001,21 +7533,23 @@ function readStringArray(value: unknown): string[] {
 function readTableRows(value: unknown): string[][] {
   if (!Array.isArray(value)) return []
   return value
-    .map((row) => Array.isArray(row) ? row.map((cell) => readString(cell) ?? "") : [])
+    .map((row) => (Array.isArray(row) ? row.map((cell) => readString(cell) ?? "") : []))
     .filter((row) => row.some((cell) => cell.length > 0))
 }
 
 function readArray(value: unknown, key: string): unknown[] {
   const row = asRecord(value)
-  return Array.isArray(row[key]) ? row[key] as unknown[] : []
+  return Array.isArray(row[key]) ? (row[key] as unknown[]) : []
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? value as Record<string, unknown> : {}
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {}
 }
 
 function readString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? decodeEntities(value).replace(/\s+/g, " ").trim() : undefined
+  return typeof value === "string" && value.trim().length > 0
+    ? decodeEntities(value).replace(/\s+/g, " ").trim()
+    : undefined
 }
 
 function toComponentName(name: string, index: number): string {
@@ -7030,7 +7564,10 @@ function toComponentName(name: string, index: number): string {
 }
 
 function normalizePackageName(value: string): string {
-  const normalized = value.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "")
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
   return normalized || "web-clone-source-project"
 }
 
@@ -7040,7 +7577,7 @@ function decodeEntities(value: string): string {
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
+    .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
 }
 
@@ -7052,7 +7589,7 @@ async function assertWebpageEvidenceInputs(webpageEvidenceDir: string): Promise<
   ]
   const missing: string[] = []
   for (const file of required) {
-    if (!await exists(file)) missing.push(file)
+    if (!(await exists(file))) missing.push(file)
   }
   if (missing.length > 0) throw new Error(`Webpage evidence source-project inputs are missing: ${missing.join(", ")}`)
 }
@@ -7092,7 +7629,7 @@ async function copyPublicAssets(
 
 async function copyReferenceImage(webpageEvidenceDir: string, outputDir: string): Promise<boolean> {
   const source = path.join(webpageEvidenceDir, "reference.png")
-  if (!await exists(source)) return false
+  if (!(await exists(source))) return false
   await fs.copyFile(source, path.join(outputDir, "reference.png"))
   return true
 }
@@ -7113,7 +7650,7 @@ async function copyDecodedImageAssets(sourceDir: string, targetDir: string): Pro
 
 async function readPreviewImagePaths(webpageEvidenceDir: string): Promise<string[]> {
   const imagesDir = path.join(webpageEvidenceDir, "assets", "images")
-  if (!await exists(imagesDir)) return []
+  if (!(await exists(imagesDir))) return []
   const entries = await fs.readdir(imagesDir, { withFileTypes: true })
   return entries
     .filter((entry) => entry.isFile() && /\.webp\.txt$/i.test(entry.name))
@@ -7125,7 +7662,7 @@ async function readPreviewImagePaths(webpageEvidenceDir: string): Promise<string
 
 async function readSvgPathData(webpageEvidenceDir: string): Promise<Record<string, string>> {
   const svgDir = path.join(webpageEvidenceDir, "assets", "svg")
-  if (!await exists(svgDir)) return {}
+  if (!(await exists(svgDir))) return {}
   const entries = await fs.readdir(svgDir, { withFileTypes: true })
   const result: Record<string, string> = {}
   for (const entry of entries) {
@@ -7174,12 +7711,13 @@ async function buildSourceProjectVisualIteration(webpageEvidenceDir: string): Pr
   const reference = asRecord(provenance.reference)
   const referenceWidth = readPositiveInteger(reference.width)
   const referenceHeight = readPositiveInteger(reference.height)
-  const referenceViewport = referenceWidth && referenceHeight
-    ? readVisualViewport({
-        width: referenceWidth,
-        height: inferReferenceViewportHeight(referenceWidth, referenceHeight),
-      })
-    : undefined
+  const referenceViewport =
+    referenceWidth && referenceHeight
+      ? readVisualViewport({
+          width: referenceWidth,
+          height: inferReferenceViewportHeight(referenceWidth, referenceHeight),
+        })
+      : undefined
   const primary = manifestViewport
     ? { ...manifestViewport, evidenceSource: "capture_viewport" as const }
     : extractedViewport
@@ -7196,7 +7734,9 @@ async function buildSourceProjectVisualIteration(webpageEvidenceDir: string): Pr
   }
 }
 
-async function readExtractedPageViewport(webpageEvidenceDir: string): Promise<{ width: number; height: number } | undefined> {
+async function readExtractedPageViewport(
+  webpageEvidenceDir: string,
+): Promise<{ width: number; height: number } | undefined> {
   const extractedPage = asRecord(await readJsonOptional(path.join(webpageEvidenceDir, "extracted-page.json")))
   return readVisualViewport(asRecord(extractedPage.viewport))
 }

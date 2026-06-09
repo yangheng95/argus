@@ -112,14 +112,8 @@ export type AcceptanceManifestFailureDetail = {
   evidence: string
 }
 
-export function digestCommand(input: {
-  command: string
-  cwd?: string
-  script?: string
-}) {
-  return createHash("sha256")
-    .update(JSON.stringify(input))
-    .digest("hex")
+export function digestCommand(input: { command: string; cwd?: string; script?: string }) {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex")
 }
 
 export function failureSignatureForCheck(input: {
@@ -177,9 +171,10 @@ export function validateAcceptanceEvidenceManifest(
     failedCheckIds,
     failedCoverageIds: [],
     failedReviewIds: [],
-    summary: failedCheckIds.length === 0
-      ? `Acceptance evidence gate passed ${manifest.requiredChecks.length} required check(s).`
-      : `Acceptance evidence gate failed ${failedCheckIds.length} required check(s).`,
+    summary:
+      failedCheckIds.length === 0
+        ? `Acceptance evidence gate passed ${manifest.requiredChecks.length} required check(s).`
+        : `Acceptance evidence gate failed ${failedCheckIds.length} required check(s).`,
   }
 }
 
@@ -227,18 +222,11 @@ export function acceptanceManifestFailureDetails(
       status: item.status,
       command: item.command,
       exitCode: item.exitCode,
-      evidence: firstEvidence([
-        item.failureReason,
-        item.failureSignature?.normalizedError,
-        item.outputExcerpt,
-      ]),
+      evidence: firstEvidence([item.failureReason, item.failureSignature?.normalizedError, item.outputExcerpt]),
     }))
 
   const missingCheckDetails = manifest.requiredChecks
-    .filter((item) =>
-      failedCheckIds.has(item.id) &&
-      !manifest.checkResults.some((result) => result.id === item.id),
-    )
+    .filter((item) => failedCheckIds.has(item.id) && !manifest.checkResults.some((result) => result.id === item.id))
     .map((item) => ({
       kind: "check" as const,
       id: item.id,
@@ -294,25 +282,19 @@ function sortFailureDetailsByFunctionalPriority(
 ) {
   const primary = new Set(manifest.functionalAssessment?.primaryFailureIds ?? [])
   const auxiliary = new Set(manifest.functionalAssessment?.auxiliaryFailureIds ?? [])
-  const rank = (id: string) =>
-    primary.has(id) ? 0 :
-    auxiliary.has(id) ? 1 :
-    2
-  return [...details].sort((a, b) =>
-    rank(a.id) - rank(b.id) || a.id.localeCompare(b.id)
-  )
+  const rank = (id: string) => (primary.has(id) ? 0 : auxiliary.has(id) ? 1 : 2)
+  return [...details].sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id))
 }
 
-export function formatAcceptanceManifestFailureDetails(
-  manifest: AcceptanceEvidenceManifest,
-  limit = 20,
-): string[] {
-  return acceptanceManifestFailureDetails(manifest).slice(0, limit).map((item) => {
-    const status = item.status ? ` status=${item.status}` : ""
-    const command = item.command ? ` command=${item.command}` : ""
-    const exitCode = item.exitCode === undefined ? "" : ` exit=${item.exitCode}`
-    return `[${item.kind}] ${item.id} ${item.name}${status}${exitCode}${command}: ${item.evidence}`
-  })
+export function formatAcceptanceManifestFailureDetails(manifest: AcceptanceEvidenceManifest, limit = 20): string[] {
+  return acceptanceManifestFailureDetails(manifest)
+    .slice(0, limit)
+    .map((item) => {
+      const status = item.status ? ` status=${item.status}` : ""
+      const command = item.command ? ` command=${item.command}` : ""
+      const exitCode = item.exitCode === undefined ? "" : ` exit=${item.exitCode}`
+      return `[${item.kind}] ${item.id} ${item.name}${status}${exitCode}${command}: ${item.evidence}`
+    })
 }
 
 function firstEvidence(items: Array<string | undefined>): string {
@@ -320,51 +302,55 @@ function firstEvidence(items: Array<string | undefined>): string {
   return found?.trim().slice(0, 500) ?? "No evidence captured."
 }
 
-export function persistAcceptanceEvidenceManifest(input: {
-  manifest: AcceptanceEvidenceManifest
-}) {
+export function persistAcceptanceEvidenceManifest(input: { manifest: AcceptanceEvidenceManifest }) {
   if (!input.manifest.taskId || !input.manifest.runId || !input.manifest.acceptanceId) {
     return
   }
   Database.use((db) => {
     if (input.manifest.surfaceManifest) {
-      db.insert(EngineArtifactTable).values({
-        id: input.manifest.surfaceManifest.id,
+      db.insert(EngineArtifactTable)
+        .values({
+          id: input.manifest.surfaceManifest.id,
+          task_id: input.manifest.taskId!,
+          run_id: input.manifest.runId!,
+          acceptance_id: input.manifest.acceptanceId!,
+          kind: "acceptance_surface_manifest",
+          label: "acceptance-surface-manifest",
+          payload: input.manifest.surfaceManifest,
+          time_created: input.manifest.surfaceManifest.timeCreated,
+          time_updated: input.manifest.surfaceManifest.timeCreated,
+        })
+        .run()
+    }
+    for (const review of input.manifest.specialistReviews ?? []) {
+      db.insert(EngineArtifactTable)
+        .values({
+          id: review.id,
+          task_id: review.taskId,
+          run_id: review.runId,
+          goal_run_id: review.goalRunId,
+          acceptance_id: review.acceptanceId,
+          kind: "acceptance_specialist_review",
+          label: `acceptance-specialist-review:${review.reviewer}`,
+          payload: review,
+          time_created: review.timeCreated,
+          time_updated: review.timeCreated,
+        })
+        .run()
+    }
+    db.insert(EngineArtifactTable)
+      .values({
+        id: input.manifest.id,
         task_id: input.manifest.taskId!,
         run_id: input.manifest.runId!,
         acceptance_id: input.manifest.acceptanceId!,
-        kind: "acceptance_surface_manifest",
-        label: "acceptance-surface-manifest",
-        payload: input.manifest.surfaceManifest,
-        time_created: input.manifest.surfaceManifest.timeCreated,
-        time_updated: input.manifest.surfaceManifest.timeCreated,
-      }).run()
-    }
-    for (const review of input.manifest.specialistReviews ?? []) {
-      db.insert(EngineArtifactTable).values({
-        id: review.id,
-        task_id: review.taskId,
-        run_id: review.runId,
-        goal_run_id: review.goalRunId,
-        acceptance_id: review.acceptanceId,
-        kind: "acceptance_specialist_review",
-        label: `acceptance-specialist-review:${review.reviewer}`,
-        payload: review,
-        time_created: review.timeCreated,
-        time_updated: review.timeCreated,
-      }).run()
-    }
-    db.insert(EngineArtifactTable).values({
-      id: input.manifest.id,
-      task_id: input.manifest.taskId!,
-      run_id: input.manifest.runId!,
-      acceptance_id: input.manifest.acceptanceId!,
-      kind: "acceptance_evidence_manifest",
-      label: "acceptance-evidence-manifest",
-      payload: input.manifest,
-      time_created: input.manifest.timeCreated,
-      time_updated: input.manifest.timeCreated,
-    }).run()
+        kind: "acceptance_evidence_manifest",
+        label: "acceptance-evidence-manifest",
+        payload: input.manifest,
+        time_created: input.manifest.timeCreated,
+        time_updated: input.manifest.timeCreated,
+      })
+      .run()
   })
   void EngineProtocol.emit(
     EngineEvent.AcceptanceEvidenceUpdated,
@@ -388,11 +374,15 @@ export function findLatestAcceptanceSurfaceManifest(input: {
   acceptanceID: string
 }): AcceptanceSurfaceManifest | undefined {
   const row = Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.acceptance_id, input.acceptanceID),
-        eq(EngineArtifactTable.kind, "acceptance_surface_manifest"),
-      ))
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.acceptance_id, input.acceptanceID),
+          eq(EngineArtifactTable.kind, "acceptance_surface_manifest"),
+        ),
+      )
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
@@ -403,11 +393,15 @@ export function findLatestAcceptanceEvidenceManifest(input: {
   acceptanceID: string
 }): AcceptanceEvidenceManifest | undefined {
   const row = Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.acceptance_id, input.acceptanceID),
-        eq(EngineArtifactTable.kind, "acceptance_evidence_manifest"),
-      ))
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.acceptance_id, input.acceptanceID),
+          eq(EngineArtifactTable.kind, "acceptance_evidence_manifest"),
+        ),
+      )
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
@@ -428,11 +422,15 @@ export function findAcceptanceEvidenceManifestHistory(input: {
 }): AcceptanceEvidenceManifest[] {
   const limit = input.limit ?? 5
   const rows = Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, input.taskID),
-        eq(EngineArtifactTable.kind, "acceptance_evidence_manifest"),
-      ))
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, "acceptance_evidence_manifest"),
+        ),
+      )
       .orderBy(desc(EngineArtifactTable.time_created))
       .all()
       .filter((item) => item.time_created < input.beforeTime)
@@ -454,12 +452,11 @@ export function acceptanceFailureSignatureKeys(manifest: AcceptanceEvidenceManif
     )
   const coverageKeys = manifest.finalGate.failedCoverageIds.map((item) => `coverage:${item}`)
   const reviewKeys = (manifest.finalGate.failedReviewIds ?? []).map((item) => `review:${item}`)
-  const specialistKeys = (manifest.specialistReviews ?? [])
-    .flatMap((review) =>
-      review.findings
-        .filter((finding) => finding.proposedSeverity === "blocking")
-        .map((finding) => `specialist:${review.reviewer}:${finding.category}:${finding.claim}`),
-    )
+  const specialistKeys = (manifest.specialistReviews ?? []).flatMap((review) =>
+    review.findings
+      .filter((finding) => finding.proposedSeverity === "blocking")
+      .map((finding) => `specialist:${review.reviewer}:${finding.category}:${finding.claim}`),
+  )
   return [...new Set([...readinessKeys, ...checkKeys, ...coverageKeys, ...reviewKeys, ...specialistKeys])].sort()
 }
 
@@ -494,10 +491,6 @@ export function createManifestId() {
  * context: repeated acceptance signatures are strategy-change feedback, not
  * authorization to terminal-fail a task.
  */
-export function countPriorRepeatedAcceptanceFailureSignals(
-  decisions: ReadonlyArray<{ key: string }>,
-): number {
-  return decisions.filter((entry) =>
-    entry.key.startsWith("acceptance_repeated_failure_signature_"),
-  ).length
+export function countPriorRepeatedAcceptanceFailureSignals(decisions: ReadonlyArray<{ key: string }>): number {
+  return decisions.filter((entry) => entry.key.startsWith("acceptance_repeated_failure_signature_")).length
 }

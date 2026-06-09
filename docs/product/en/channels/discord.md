@@ -23,12 +23,12 @@ Discord's **Threads** (public/private) map directly to OpenCorvus threads. For r
 
 ## Message type support
 
-| Type | Supported |
-|---|---|
-| Text | ✅ (Markdown subset) |
-| Image / attachment | ✅ |
-| Voice message | ✅ via STT |
-| Slash command | ⚠️ not yet; regular messages only |
+| Type               | Supported                         |
+| ------------------ | --------------------------------- |
+| Text               | ✅ (Markdown subset)              |
+| Image / attachment | ✅                                |
+| Voice message      | ✅ via STT                        |
+| Slash command      | ⚠️ not yet; regular messages only |
 
 ## Troubleshooting
 

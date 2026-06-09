@@ -18,9 +18,9 @@ HTTP 服务器（`packages/opencorvus/src/server/server.ts`）把路由切成两
 
 内置 workflow 定义在 `packages/opencorvus/src/engine/workflow.ts`，当前只有两条：
 
-| Workflow | 形态 | 适用场景 |
-|---|---|---|
-| `direct` | 按需 `analyze_intent`，然后 `build` | 显式 `kind=build`、局部编辑、bugfix、短调试 |
+| Workflow   | 形态                                                                                                                            | 适用场景                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `direct`   | 按需 `analyze_intent`，然后 `build`                                                                                             | 显式 `kind=build`、局部编辑、bugfix、短调试       |
 | `pipeline` | 按需 `(frontend_design / frontend_research)` → `analyze_intent` → `requirements` → `architect` → per-goal `build` → `integrity` | 多文件功能、UI 复刻、重构、需要明确验收证据的任务 |
 
 workflow 定义是给 orchestrator 的 prompt 上下文。orchestrator 可以基于证据跳过可选步骤或重新路由。`integrity` 是 pipeline 的最终 session-bound review。
@@ -47,14 +47,14 @@ Worker sessions
 
 ## 职责边界
 
-| 组件 | 职责 | 当前源码 |
-|---|---|---|
-| Channel / API | 把外部输入转成 task 创建、消息和控制操作 | `packages/opencorvus/src/channel/ingress.ts`、`packages/opencorvus/src/server/routes/` |
-| Engine | 存储 task、spec、requirements、goals、plan versions、artifacts、interactions，并投影状态 | `packages/opencorvus/src/engine/engine.sql.ts`、`packages/opencorvus/src/engine/store.ts` |
-| Orchestrator | 唯一任务级决策者；读取 `describeTask`，派发 typed tools，根据证据决定恢复路径 | `packages/opencorvus/src/orchestrator/agent.ts`、`packages/opencorvus/src/orchestrator/tools.ts` |
-| Workflow | 声明内置 `direct` / `pipeline` 建议路径，并从 artifact 投影进度 | `packages/opencorvus/src/engine/workflow.ts` |
-| Build agent | 实现 direct task 或 architect 产出的单个 goal | `packages/opencorvus/src/build/agent.ts` |
-| Integrity | pipeline 的最终系统复核；向 orchestrator 返回 pass / non-pass 证据 | `packages/opencorvus/src/integrity/` |
+| 组件          | 职责                                                                                     | 当前源码                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Channel / API | 把外部输入转成 task 创建、消息和控制操作                                                 | `packages/opencorvus/src/channel/ingress.ts`、`packages/opencorvus/src/server/routes/`           |
+| Engine        | 存储 task、spec、requirements、goals、plan versions、artifacts、interactions，并投影状态 | `packages/opencorvus/src/engine/engine.sql.ts`、`packages/opencorvus/src/engine/store.ts`        |
+| Orchestrator  | 唯一任务级决策者；读取 `describeTask`，派发 typed tools，根据证据决定恢复路径            | `packages/opencorvus/src/orchestrator/agent.ts`、`packages/opencorvus/src/orchestrator/tools.ts` |
+| Workflow      | 声明内置 `direct` / `pipeline` 建议路径，并从 artifact 投影进度                          | `packages/opencorvus/src/engine/workflow.ts`                                                     |
+| Build agent   | 实现 direct task 或 architect 产出的单个 goal                                            | `packages/opencorvus/src/build/agent.ts`                                                         |
+| Integrity     | pipeline 的最终系统复核；向 orchestrator 返回 pass / non-pass 证据                       | `packages/opencorvus/src/integrity/`                                                             |
 
 ## 两层循环
 

@@ -115,9 +115,7 @@ function handoffFixture(): CompactionHandoff.Info {
     durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
     activeBuildContracts: [],
     todos: [],
-    workingContext: [
-      "Only structured compaction handoffs may become compacted history boundaries.",
-    ],
+    workingContext: ["Only structured compaction handoffs may become compacted history boundaries."],
     chronology: [
       {
         event: "Validated that legacy prose summaries do not compact away older turns",
@@ -139,8 +137,20 @@ function handoffFixture(): CompactionHandoff.Info {
       },
     },
     decisions: [],
-    evidence: [{ kind: "file", value: "packages/opencorvus/src/session/message.ts", detail: "boundary check uses structured handoff validation" }],
-    files: [{ path: "packages/opencorvus/src/session/message.ts", status: "modified", detail: "compaction boundary validation" }],
+    evidence: [
+      {
+        kind: "file",
+        value: "packages/opencorvus/src/session/message.ts",
+        detail: "boundary check uses structured handoff validation",
+      },
+    ],
+    files: [
+      {
+        path: "packages/opencorvus/src/session/message.ts",
+        status: "modified",
+        detail: "compaction boundary validation",
+      },
+    ],
     testsAndCommands: [],
     errorsAndBlockers: [],
     userMessages: ["Preserve compaction boundaries only when the handoff is structured."],
@@ -417,7 +427,7 @@ describe("session.message.toModelMessage", () => {
     const wire = JSON.stringify(result)
     expect(wire).toContain("<compaction-handoff>")
     expect(wire).toContain("Harden compaction handoff so sessions resume with requirements intact")
-    expect(wire).not.toContain("\"role\":\"assistant\"")
+    expect(wire).not.toContain('"role":"assistant"')
     expect(wire).not.toContain("This internal summary should not replay as assistant content.")
   })
 
@@ -1127,7 +1137,8 @@ describe("session.message.toModelMessage", () => {
             toolName: "read",
             output: {
               type: "error-text",
-              value: "tool-input-invalid/InvalidToolInputError at session.processor.tool-error: Expected object, received array",
+              value:
+                "tool-input-invalid/InvalidToolInputError at session.processor.tool-error: Expected object, received array",
             },
           },
         ],
@@ -1153,7 +1164,7 @@ describe("session.message.toModelMessage", () => {
             tool: "read",
             state: {
               status: "completed",
-              input: "{\"path\":\"src/index.ts\"}",
+              input: '{"path":"src/index.ts"}',
               output: "ok",
               title: "Read",
               metadata: {},
@@ -1169,7 +1180,7 @@ describe("session.message.toModelMessage", () => {
     expect((result[1] as any).content[0].input).toEqual({ path: "src/index.ts" })
 
     const bodyMessages = convertToOpenAICompatibleChatMessages(result as any)
-    expect(bodyMessages[1].tool_calls[0].function.arguments).toBe("{\"path\":\"src/index.ts\"}")
+    expect(bodyMessages[1].tool_calls[0].function.arguments).toBe('{"path":"src/index.ts"}')
   })
 
   test("projects earlier stateful-snapshot tool results to a superseded note", async () => {
@@ -1180,9 +1191,7 @@ describe("session.message.toModelMessage", () => {
     const input: Message.WithParts[] = [
       {
         info: userInfo("m-u1"),
-        parts: [
-          { ...basePart("m-u1", "u1"), type: "text", text: "check state" },
-        ] as Message.Part[],
+        parts: [{ ...basePart("m-u1", "u1"), type: "text", text: "check state" }] as Message.Part[],
       },
       {
         info: assistantInfo(firstAssistant, "m-u1"),
@@ -1205,9 +1214,7 @@ describe("session.message.toModelMessage", () => {
       },
       {
         info: userInfo(secondUser),
-        parts: [
-          { ...basePart(secondUser, "u2"), type: "text", text: "check again" },
-        ] as Message.Part[],
+        parts: [{ ...basePart(secondUser, "u2"), type: "text", text: "check again" }] as Message.Part[],
       },
       {
         info: assistantInfo(secondAssistant, secondUser),
@@ -1235,7 +1242,10 @@ describe("session.message.toModelMessage", () => {
     const toolResults = out
       .filter((m) => m.role === "tool")
       .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
-      .filter((c: any) => c.type === "tool-result") as Array<{ toolCallId: string; output: { type: string; value: string } }>
+      .filter((c: any) => c.type === "tool-result") as Array<{
+      toolCallId: string
+      output: { type: string; value: string }
+    }>
 
     expect(toolResults.length).toBe(2)
     const first = toolResults.find((r) => r.toolCallId === "call-first")!
@@ -1250,9 +1260,7 @@ describe("session.message.toModelMessage", () => {
     const input: Message.WithParts[] = [
       {
         info: userInfo("m-u1"),
-        parts: [
-          { ...basePart("m-u1", "u1"), type: "text", text: "run" },
-        ] as Message.Part[],
+        parts: [{ ...basePart("m-u1", "u1"), type: "text", text: "run" }] as Message.Part[],
       },
       {
         info: assistantInfo("m-a1", "m-u1"),
@@ -1275,9 +1283,7 @@ describe("session.message.toModelMessage", () => {
       },
       {
         info: userInfo("m-u2"),
-        parts: [
-          { ...basePart("m-u2", "u2"), type: "text", text: "again" },
-        ] as Message.Part[],
+        parts: [{ ...basePart("m-u2", "u2"), type: "text", text: "again" }] as Message.Part[],
       },
       {
         info: assistantInfo("m-a2", "m-u2"),
@@ -1304,7 +1310,10 @@ describe("session.message.toModelMessage", () => {
     const toolResults = out
       .filter((m) => m.role === "tool")
       .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
-      .filter((c: any) => c.type === "tool-result") as Array<{ toolCallId: string; output: { type: string; value: string } }>
+      .filter((c: any) => c.type === "tool-result") as Array<{
+      toolCallId: string
+      output: { type: string; value: string }
+    }>
     expect(toolResults.length).toBe(2)
     expect(toolResults[0].output.value).toBe("OUTPUT_FIRST")
     expect(toolResults[1].output.value).toBe("OUTPUT_SECOND")
@@ -1314,9 +1323,7 @@ describe("session.message.toModelMessage", () => {
     const input: Message.WithParts[] = [
       {
         info: userInfo("m-u1"),
-        parts: [
-          { ...basePart("m-u1", "u1"), type: "text", text: "check state once" },
-        ] as Message.Part[],
+        parts: [{ ...basePart("m-u1", "u1"), type: "text", text: "check state once" }] as Message.Part[],
       },
       {
         info: assistantInfo("m-a1", "m-u1"),
@@ -1343,7 +1350,10 @@ describe("session.message.toModelMessage", () => {
     const toolResults = out
       .filter((m) => m.role === "tool")
       .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
-      .filter((c: any) => c.type === "tool-result") as Array<{ toolCallId: string; output: { type: string; value: string } }>
+      .filter((c: any) => c.type === "tool-result") as Array<{
+      toolCallId: string
+      output: { type: string; value: string }
+    }>
     expect(toolResults.length).toBe(1)
     expect(toolResults[0].output.value).toBe("FAILED_GOALS_SNAPSHOT")
   })
@@ -1396,7 +1406,9 @@ describe("session.message.toModelMessage", () => {
     const input: Message.WithParts[] = [
       {
         info: userInfo("u-compaction-reasoning"),
-        parts: [{ ...basePart("u-compaction-reasoning", "up"), type: "text", text: "continue rewrite" }] as Message.Part[],
+        parts: [
+          { ...basePart("u-compaction-reasoning", "up"), type: "text", text: "continue rewrite" },
+        ] as Message.Part[],
       },
       {
         info: assistantInfo("a-compaction-reasoning", "u-compaction-reasoning"),
@@ -1404,7 +1416,7 @@ describe("session.message.toModelMessage", () => {
           {
             ...basePart("a-compaction-reasoning", "ar"),
             type: "reasoning",
-            text: 'The user is asking me to select a tool for the current issue.',
+            text: "The user is asking me to select a tool for the current issue.",
             time: { start: 0 },
           },
           {
@@ -1583,10 +1595,7 @@ describe("session.message.filterCompacted", () => {
 
     const result = await Message.filterCompacted(stream(newestFirst))
 
-    expect(result.map((message) => message.info.id)).toEqual([
-      compactionUser,
-      compactionSummary,
-    ])
+    expect(result.map((message) => message.info.id)).toEqual([compactionUser, compactionSummary])
   })
 
   test("does not accept legacy prose summaries as compaction boundaries", async () => {
@@ -1773,8 +1782,7 @@ describe("session.message.fromError", () => {
         requestBodyValues: {},
         statusCode: 429,
         responseHeaders: { "content-type": "application/json" },
-        responseBody:
-          '{"error":{"message":"usage allocated quota exceeded. please try again later."}}',
+        responseBody: '{"error":{"message":"usage allocated quota exceeded. please try again later."}}',
       }),
       { providerID: "alibaba-coding-plan-cn" },
     ) as Message.APIError

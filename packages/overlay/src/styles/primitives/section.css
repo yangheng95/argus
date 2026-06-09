@@ -81,6 +81,9 @@
 }
 
 /* Variant selectors let surface files adjust look via data attributes. */
-.oc-section[data-variant] {}
-.oc-section[data-size] {}
-.oc-section[data-tone] {}
+.oc-section[data-variant] {
+}
+.oc-section[data-size] {
+}
+.oc-section[data-tone] {
+}

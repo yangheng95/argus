@@ -2,21 +2,18 @@ import path from "path"
 
 export async function loadBenchmarkEnv(metaDir: string, options?: { cwd?: string }) {
   const locked = new Set(
-    Object.entries(process.env)
-      .flatMap(([key, value]) => typeof value === "string" && value.trim() ? [key] : []),
+    Object.entries(process.env).flatMap(([key, value]) => (typeof value === "string" && value.trim() ? [key] : [])),
   )
   const packageRoot = path.resolve(metaDir, "../..")
   const repoRoot = path.resolve(metaDir, "../../../..")
   const cwd = options?.cwd ? path.resolve(options.cwd) : process.cwd()
-  const files = [...new Set([
-    path.join(repoRoot, ".env"),
-    path.join(packageRoot, ".env"),
-    path.join(cwd, ".env"),
-  ])]
+  const files = [...new Set([path.join(repoRoot, ".env"), path.join(packageRoot, ".env"), path.join(cwd, ".env")])]
   const loaded: string[] = []
 
   for (const file of files) {
-    const text = await Bun.file(file).text().catch(() => "")
+    const text = await Bun.file(file)
+      .text()
+      .catch(() => "")
     if (!text) continue
     loaded.push(file)
     for (const raw of text.split(/\r?\n/)) {
@@ -31,10 +28,7 @@ export async function loadBenchmarkEnv(metaDir: string, options?: { cwd?: string
         process.env[key] = ""
         continue
       }
-      if (
-        (value.startsWith("\"") && value.endsWith("\""))
-        || (value.startsWith("'") && value.endsWith("'"))
-      ) {
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
         process.env[key] = value.slice(1, -1)
         continue
       }
@@ -94,7 +88,7 @@ export async function prepareLocalProviders() {
   } catch {}
   const merged = {
     ...existing,
-    provider: { ...(existing.provider as Record<string, unknown> ?? {}), ...providers },
+    provider: { ...((existing.provider as Record<string, unknown>) ?? {}), ...providers },
   }
   await Bun.write(cfgPath, JSON.stringify(merged, null, 2))
 }
@@ -133,10 +127,7 @@ async function resetBenchmarkState() {
   await Instance.disposeAll().catch(() => undefined)
 }
 
-export function explicitModel(
-  providers: Awaited<ReturnType<typeof providerList>>,
-  explicit: string,
-) {
+export function explicitModel(providers: Awaited<ReturnType<typeof providerList>>, explicit: string) {
   if (explicit.startsWith("alibaba-coding-plan/")) {
     throw new Error(
       `benchmark model "${explicit}" rejected: international alibaba-coding-plan endpoint does not accept 国内 sk-sp-* keys (rule 8). Use alibaba-coding-plan-cn/<model> instead.`,

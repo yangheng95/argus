@@ -57,6 +57,9 @@
 /* Variant selectors let surface files adjust look via data attributes
  * rather than modifier classes. Panel itself ships no defaults here —
  * this block reserves the selector contract for surface overrides. */
-.oc-panel[data-variant] {}
-.oc-panel[data-size] {}
-.oc-panel[data-tone] {}
+.oc-panel[data-variant] {
+}
+.oc-panel[data-size] {
+}
+.oc-panel[data-tone] {
+}

@@ -8,13 +8,13 @@ The Files panel can show hundreds of changed-file rows with `+0/-0`. Clicking a 
 
 ## Call-Point Audit
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Files panel source merge | `packages/overlay/src/components/ChangesPanel.tsx` | Keep as the single UI entry. It merges board-derived acceptance groups with agent-derived structured file evidence. |
-| Diff lazy lookup | `packages/overlay/src/services/diff.ts` | Keep. It resolves only acceptance-backed `runID` / `goalRunID` diffs. |
-| Agent file extraction | `packages/overlay/src/utils/file-change-summary.ts` | Change. Do not promote bare tool input paths or string-only patch file lists into diff rows. |
-| Inline tool file display | `packages/overlay/src/components/InlineToolPart.tsx` | Keep reading `toolFileChangesFromState`; it already depends on structured tool metadata. |
-| Tests | `packages/overlay/test/agent-file-changes.test.ts`, `packages/overlay/test/diff-resolve-inflight-cache.test.ts` | Update/add targeted regression coverage for non-diff path inputs and acceptance stat hydration. |
+| Surface                  | File                                                                                                            | Decision                                                                                                            |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Files panel source merge | `packages/overlay/src/components/ChangesPanel.tsx`                                                              | Keep as the single UI entry. It merges board-derived acceptance groups with agent-derived structured file evidence. |
+| Diff lazy lookup         | `packages/overlay/src/services/diff.ts`                                                                         | Keep. It resolves only acceptance-backed `runID` / `goalRunID` diffs.                                               |
+| Agent file extraction    | `packages/overlay/src/utils/file-change-summary.ts`                                                             | Change. Do not promote bare tool input paths or string-only patch file lists into diff rows.                        |
+| Inline tool file display | `packages/overlay/src/components/InlineToolPart.tsx`                                                            | Keep reading `toolFileChangesFromState`; it already depends on structured tool metadata.                            |
+| Tests                    | `packages/overlay/test/agent-file-changes.test.ts`, `packages/overlay/test/diff-resolve-inflight-cache.test.ts` | Update/add targeted regression coverage for non-diff path inputs and acceptance stat hydration.                     |
 
 ## Root Cause
 

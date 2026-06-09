@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { AgentRunError, buildHardErrorFromFinalMessage, buildUnsatisfiedTerminalToolError } from "../../src/agent/runner"
+import {
+  AgentRunError,
+  buildHardErrorFromFinalMessage,
+  buildUnsatisfiedTerminalToolError,
+} from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 
 /**

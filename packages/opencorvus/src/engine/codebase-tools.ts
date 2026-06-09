@@ -53,10 +53,7 @@ async function collectLimitedLines(input: ReadableStream<Uint8Array>, limit: num
 }
 
 function evidencePathMatches(normalized: string, relative: string): boolean {
-  return (
-    normalized.endsWith(`/webpage-evidence/${relative}`) ||
-    normalized === `webpage-evidence/${relative}`
-  )
+  return normalized.endsWith(`/webpage-evidence/${relative}`) || normalized === `webpage-evidence/${relative}`
 }
 
 function evidencePathIncludes(normalized: string, relativeDir: string): boolean {
@@ -68,10 +65,7 @@ function evidencePathIncludes(normalized: string, relativeDir: string): boolean 
 
 function rawWebpageEvidenceArtifactReason(relPath: string): string | null {
   const normalized = relPath.replace(/\\/g, "/")
-  if (
-    evidencePathMatches(normalized, "extracted-page.json") ||
-    evidencePathMatches(normalized, "capture.html")
-  ) {
+  if (evidencePathMatches(normalized, "extracted-page.json") || evidencePathMatches(normalized, "capture.html")) {
     return "raw webpage evidence extraction JSON"
   }
   return null
@@ -113,8 +107,20 @@ function detectBinaryKind(buf: Buffer, filePath: string): string | null {
   if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "a PNG image"
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "a JPEG image"
   if (buf.length >= 4 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return "a GIF image"
-  if (buf.length >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return "a WebP image"
-  if (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return "a PDF document"
+  if (
+    buf.length >= 12 &&
+    buf[0] === 0x52 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x46 &&
+    buf[8] === 0x57 &&
+    buf[9] === 0x45 &&
+    buf[10] === 0x42 &&
+    buf[11] === 0x50
+  )
+    return "a WebP image"
+  if (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46)
+    return "a PDF document"
   if (buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b) return "a ZIP/Office archive"
   // NUL-heavy probe — text files should not contain NUL bytes in the first 4KB
   const sample = buf.subarray(0, Math.min(buf.length, 4096))
@@ -195,14 +201,16 @@ export function createCodebaseTools(projectDir?: string) {
             return `Error: start_line ${start_line ?? 1} is past end of file (${lines.length} lines).`
           }
           const slice = lines.slice(startIndex, startIndex + limit)
-          const numbered = slice.map((line, i) => {
-            const safeLine = sanitizeInlineDataUrisForPrompt(line)
-            const displayLine =
-              safeLine.length > READ_FILE_MAX_LINE_CHARS
-                ? `${safeLine.slice(0, READ_FILE_MAX_LINE_CHARS)}... (line truncated, ${safeLine.length - READ_FILE_MAX_LINE_CHARS} more chars)`
-                : safeLine
-            return `${String(startIndex + i + 1).padStart(5)} | ${displayLine}`
-          }).join("\n")
+          const numbered = slice
+            .map((line, i) => {
+              const safeLine = sanitizeInlineDataUrisForPrompt(line)
+              const displayLine =
+                safeLine.length > READ_FILE_MAX_LINE_CHARS
+                  ? `${safeLine.slice(0, READ_FILE_MAX_LINE_CHARS)}... (line truncated, ${safeLine.length - READ_FILE_MAX_LINE_CHARS} more chars)`
+                  : safeLine
+              return `${String(startIndex + i + 1).padStart(5)} | ${displayLine}`
+            })
+            .join("\n")
           const remaining = lines.length - (startIndex + slice.length)
           if (remaining > 0) {
             if (isWebpageEvidencePromptExcerpt(filePath)) {
@@ -307,10 +315,7 @@ export function createCodebaseTools(projectDir?: string) {
         "List files and directories at a given path. " +
         "Use this to understand project layout and find relevant directories.",
       inputSchema: z.object({
-        path: z
-          .string()
-          .optional()
-          .describe("Directory path relative to project root (default: project root)"),
+        path: z.string().optional().describe("Directory path relative to project root (default: project root)"),
       }),
       execute: async ({ path: dirPath }) => {
         const abs = dirPath ? safePath(dirPath) : dir

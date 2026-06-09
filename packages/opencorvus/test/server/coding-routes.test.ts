@@ -56,17 +56,21 @@ describe("coding assistant routes", () => {
     await Instance.provide({
       directory: first.path,
       fn: async () => {
-        listedID = (await Session.create({
-          kind: "assistant",
-          title: "listed",
-          metadata: { codingAssistant: { surface: "right-sidebar" } },
-        })).id
-        otherDirectoryID = (await Session.createNext({
-          kind: "assistant",
-          directory: second.path,
-          title: "other directory",
-          metadata: { codingAssistant: { surface: "right-sidebar" } },
-        })).id
+        listedID = (
+          await Session.create({
+            kind: "assistant",
+            title: "listed",
+            metadata: { codingAssistant: { surface: "right-sidebar" } },
+          })
+        ).id
+        otherDirectoryID = (
+          await Session.createNext({
+            kind: "assistant",
+            directory: second.path,
+            title: "other directory",
+            metadata: { codingAssistant: { surface: "right-sidebar" } },
+          })
+        ).id
         await Session.create({ kind: "assistant", title: "plain assistant" })
         const app = Server.App()
         const response = await app.request("/coding/sessions", {
@@ -95,13 +99,16 @@ describe("coding assistant routes", () => {
       fn: async () => {
         otherProjectTaskID = "task_other_project"
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: otherProjectTaskID,
-            project_id: Instance.project.id,
-            title: "Other project task",
-            request: "other project",
-            source: "test",
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: otherProjectTaskID,
+              project_id: Instance.project.id,
+              title: "Other project task",
+              request: "other project",
+              source: "test",
+            })
+            .run(),
         )
       },
     })
@@ -119,13 +126,16 @@ describe("coding assistant routes", () => {
         const { session } = (await created.json()) as { session: Session.Info }
         const taskID = "task_current_project"
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            title: "Current project task",
-            request: "current project",
-            source: "test",
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Current project task",
+              request: "current project",
+              source: "test",
+            })
+            .run(),
         )
 
         const selected = await app.request(`/coding/session/${session.id}/selection`, {
@@ -224,9 +234,7 @@ describe("coding assistant routes", () => {
 
         expect(prompted.status).toBe(202)
         const { taskID } = (await prompted.json()) as { taskID: string }
-        const row = Database.use((db) =>
-          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get(),
-        )
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get())
         expect(row?.metadata.input).toMatchObject({
           agent: "coding-assistant",
           tools: { panel: true },
@@ -281,9 +289,7 @@ describe("coding assistant routes", () => {
 
         expect(prompted.status).toBe(202)
         const { taskID } = (await prompted.json()) as { taskID: string }
-        const row = Database.use((db) =>
-          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get(),
-        )
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get())
         expect(row?.metadata.input).toMatchObject({
           agent: "coding-assistant",
           extra: {
@@ -322,7 +328,15 @@ describe("coding assistant routes", () => {
           }),
         })
         expect(syncPrompt.status).toBe(200)
-        const body = (await syncPrompt.json()) as { info: { agent?: string; system?: string; systemMode?: string; tools?: Record<string, boolean>; extra?: Record<string, unknown> } }
+        const body = (await syncPrompt.json()) as {
+          info: {
+            agent?: string
+            system?: string
+            systemMode?: string
+            tools?: Record<string, boolean>
+            extra?: Record<string, unknown>
+          }
+        }
         expect(body.info.agent).toBe("coding-assistant")
         expect(body.info.system).toBeUndefined()
         expect(body.info.systemMode).toBeUndefined()

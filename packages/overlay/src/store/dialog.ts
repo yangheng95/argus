@@ -1,5 +1,5 @@
-import { createStore } from "solid-js/store";
-import type { AppDialogOptions } from "../services/app-dialog";
+import { createStore } from "solid-js/store"
+import type { AppDialogOptions } from "../services/app-dialog"
 
 export type ConfigDialogTab =
   | "general"
@@ -12,11 +12,11 @@ export type ConfigDialogTab =
   | "memory"
   | "providers"
   | "agent-models"
-  | "about";
+  | "about"
 
 export interface ConfigSection {
-  id: ConfigDialogTab;
-  labelKey: string;
+  id: ConfigDialogTab
+  labelKey: string
 }
 
 // Single source for the config sections, their i18n label keys, and their
@@ -37,41 +37,41 @@ export const CONFIG_SECTIONS: readonly ConfigSection[] = [
   { id: "providers", labelKey: "cmdk.settings.providers" },
   { id: "agent-models", labelKey: "cmdk.settings.agent_models" },
   { id: "about", labelKey: "about.title" },
-];
+]
 
 export interface AppDialogState extends AppDialogOptions {
-  open: boolean;
-  epoch: number;
-  countdownDeadlineMs: number;
+  open: boolean
+  epoch: number
+  countdownDeadlineMs: number
 }
 
 export interface SessionDialogState {
-  open: boolean;
-  title: string;
-  bodyHtml: string;
+  open: boolean
+  title: string
+  bodyHtml: string
 }
 
 export interface GoalDialogState {
-  open: boolean;
-  goalID: string;
-  title: string;
-  acceptance: string;
-  saving: boolean;
+  open: boolean
+  goalID: string
+  title: string
+  acceptance: string
+  saving: boolean
 }
 
 export interface ConfigDialogState {
-  open: boolean;
-  activeTab: ConfigDialogTab;
-  sidebarWidth: number | null;
-  agentModelsScope: "project" | "session";
-  agentModelsSessionID: string | null;
+  open: boolean
+  activeTab: ConfigDialogTab
+  sidebarWidth: number | null
+  agentModelsScope: "project" | "session"
+  agentModelsSessionID: string | null
 }
 
 export interface DialogState {
-  app: AppDialogState;
-  session: SessionDialogState;
-  goal: GoalDialogState;
-  config: ConfigDialogState;
+  app: AppDialogState
+  session: SessionDialogState
+  goal: GoalDialogState
+  config: ConfigDialogState
 }
 
 const DEFAULT_DIALOG_STATE: DialogState = {
@@ -115,6 +115,6 @@ const DEFAULT_DIALOG_STATE: DialogState = {
     agentModelsScope: "project",
     agentModelsSessionID: null,
   },
-};
+}
 
-export const [dialogStore, setDialogStore] = createStore<DialogState>(DEFAULT_DIALOG_STATE);
+export const [dialogStore, setDialogStore] = createStore<DialogState>(DEFAULT_DIALOG_STATE)

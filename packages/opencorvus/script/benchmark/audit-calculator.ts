@@ -26,8 +26,21 @@ function record(id: string, req: string, status: Finding["status"], note: string
 }
 
 // --- 1. static inspection -------------------------------------------------
-async function fileExists(p: string) { try { await fs.stat(p); return true } catch { return false } }
-async function readSafe(p: string) { try { return await fs.readFile(p, "utf8") } catch { return "" } }
+async function fileExists(p: string) {
+  try {
+    await fs.stat(p)
+    return true
+  } catch {
+    return false
+  }
+}
+async function readSafe(p: string) {
+  try {
+    return await fs.readFile(p, "utf8")
+  } catch {
+    return ""
+  }
+}
 
 const pkgPath = path.join(ROOT, "package.json")
 const pkg = await readSafe(pkgPath)
@@ -49,14 +62,28 @@ const srcFiles = await listSrc(ROOT)
 const codeBundle = (await Promise.all(srcFiles.map(readSafe))).join("\n")
 
 // --- 2. build -------------------------------------------------------------
-function run(cmd: string, args: string[], opts: { cwd?: string; timeoutMs?: number } = {}): Promise<{ code: number; out: string; err: string }> {
+function run(
+  cmd: string,
+  args: string[],
+  opts: { cwd?: string; timeoutMs?: number } = {},
+): Promise<{ code: number; out: string; err: string }> {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { cwd: opts.cwd ?? ROOT, shell: true })
-    let out = "", err = ""
-    child.stdout.on("data", (d) => { out += d.toString() })
-    child.stderr.on("data", (d) => { err += d.toString() })
-    const t = setTimeout(() => { child.kill("SIGKILL") }, opts.timeoutMs ?? 600_000)
-    child.on("close", (code) => { clearTimeout(t); resolve({ code: code ?? -1, out, err }) })
+    let out = "",
+      err = ""
+    child.stdout.on("data", (d) => {
+      out += d.toString()
+    })
+    child.stderr.on("data", (d) => {
+      err += d.toString()
+    })
+    const t = setTimeout(() => {
+      child.kill("SIGKILL")
+    }, opts.timeoutMs ?? 600_000)
+    child.on("close", (code) => {
+      clearTimeout(t)
+      resolve({ code: code ?? -1, out, err })
+    })
   })
 }
 
@@ -85,11 +112,17 @@ async function startPreview(): Promise<string> {
   // Vite preview on a deterministic port
   const port = 4173 + Math.floor(Math.random() * 200)
   preview = spawn("npx", ["--yes", "vite", "preview", "--port", String(port), "--strictPort", "--host", "127.0.0.1"], {
-    cwd: ROOT, shell: true, stdio: ["ignore", "pipe", "pipe"],
+    cwd: ROOT,
+    shell: true,
+    stdio: ["ignore", "pipe", "pipe"],
   })
   let log = ""
-  preview.stdout?.on("data", (d) => { log += d.toString() })
-  preview.stderr?.on("data", (d) => { log += d.toString() })
+  preview.stdout?.on("data", (d) => {
+    log += d.toString()
+  })
+  preview.stderr?.on("data", (d) => {
+    log += d.toString()
+  })
   // Wait until "Local:" line shows up (vite logs the URL)
   const url = `http://127.0.0.1:${port}/`
   const t0 = Date.now()
@@ -118,7 +151,9 @@ if (baseURL) {
   browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"])
   page = await browser.newPage()
   page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${e.message}`))
-  page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(`console.error: ${m.text()}`) })
+  page.on("console", (m) => {
+    if (m.type() === "error") consoleErrors.push(`console.error: ${m.text()}`)
+  })
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(baseURL, { waitUntil: "networkidle", timeout: 30_000 })
   await new Promise((r) => setTimeout(r, 1500))
@@ -146,16 +181,27 @@ async function readDisplay(): Promise<string> {
   if (!page) return ""
   return await page.evaluate(() => {
     const candidates = [
-      ".display .result", ".display .current", ".display-current", ".display .value",
-      ".display", "#display", "[data-testid=display]", ".screen", ".main-display",
-      ".result", "#result", ".calculator__display",
+      ".display .result",
+      ".display .current",
+      ".display-current",
+      ".display .value",
+      ".display",
+      "#display",
+      "[data-testid=display]",
+      ".screen",
+      ".main-display",
+      ".result",
+      "#result",
+      ".calculator__display",
     ]
     for (const sel of candidates) {
       const el = document.querySelector(sel)
       if (el && (el.textContent || "").trim()) return (el.textContent || "").trim()
     }
     // fallback: largest text block
-    const all = Array.from(document.querySelectorAll("body *")).filter((e) => /^\d|Error/.test((e.textContent || "").trim()))
+    const all = Array.from(document.querySelectorAll("body *")).filter((e) =>
+      /^\d|Error/.test((e.textContent || "").trim()),
+    )
     return (all[0]?.textContent || "").trim()
   })
 }
@@ -218,7 +264,12 @@ if (page && baseURL) {
     return labels.map((l) => ({ l, present: texts.has(l) }))
   }, fnLabels)
   for (const f of fnPresent) {
-    record(`R3-${f.l}`, `function key ${f.l} present`, f.present ? "pass" : "fail", f.present ? "" : "no button with that exact label")
+    record(
+      `R3-${f.l}`,
+      `function key ${f.l} present`,
+      f.present ? "pass" : "fail",
+      f.present ? "" : "no button with that exact label",
+    )
   }
 
   // R4: AC / C / ⌫ buttons present
@@ -233,17 +284,32 @@ if (page && baseURL) {
   }
 
   // R5: live expression display under main result
-  const liveExpr = /currentExpression|live[-_ ]expression|expression-display|active.*operand|highlight/i.test(codeBundle)
-  record("R5-live-expr", "live expression / current operand highlight", liveExpr ? "pass" : "warn", liveExpr ? "code refs found" : "no code reference; visual-only check pending")
+  const liveExpr = /currentExpression|live[-_ ]expression|expression-display|active.*operand|highlight/i.test(
+    codeBundle,
+  )
+  record(
+    "R5-live-expr",
+    "live expression / current operand highlight",
+    liveExpr ? "pass" : "warn",
+    liveExpr ? "code refs found" : "no code reference; visual-only check pending",
+  )
 
   // R6: history panel — exists, max 20, click-to-fill, clear-history
   const histRefs = {
-    cap20: /(?:max|MAX|HISTORY_LIMIT|MAX_HISTORY)\s*[:=]\s*20|\.slice\(\s*-?20\s*\)|\.slice\(0,\s*20\s*\)|\.length\s*>\s*20|history.*20|20.*history/.test(codeBundle),
+    cap20:
+      /(?:max|MAX|HISTORY_LIMIT|MAX_HISTORY)\s*[:=]\s*20|\.slice\(\s*-?20\s*\)|\.slice\(0,\s*20\s*\)|\.length\s*>\s*20|history.*20|20.*history/.test(
+        codeBundle,
+      ),
     clearHistory: /clear[_-]?history|clearHistory|清空历史/i.test(codeBundle),
     clickToFill: /history.*click|clickHistory|onHistoryClick|历史.*点击|click.*history/i.test(codeBundle),
     persist: /localStorage.*history|history.*localStorage/i.test(codeBundle),
   }
-  record("R6-cap20", "history cap = 20", histRefs.cap20 ? "pass" : "warn", histRefs.cap20 ? "" : "no obvious cap-20 in code; could still be there")
+  record(
+    "R6-cap20",
+    "history cap = 20",
+    histRefs.cap20 ? "pass" : "warn",
+    histRefs.cap20 ? "" : "no obvious cap-20 in code; could still be there",
+  )
   record("R6-clear", "clear history present", histRefs.clearHistory ? "pass" : "fail", "")
   record("R6-fillback", "click history to fill back", histRefs.clickToFill ? "pass" : "warn", "")
   record("R6-persist", "history persisted to localStorage", histRefs.persist ? "pass" : "warn", "")
@@ -263,7 +329,12 @@ if (page && baseURL) {
 
   // R8: pressed-state visual feedback
   const pressedFeedback = /:active|pressed|btn--active|button-pressed|key-pressed|active\s*\{/i.test(codeBundle)
-  record("R8-pressed", "pressed-state visual feedback", pressedFeedback ? "pass" : "warn", "css :active or active class")
+  record(
+    "R8-pressed",
+    "pressed-state visual feedback",
+    pressedFeedback ? "pass" : "warn",
+    "css :active or active class",
+  )
 
   // R9: scientific notation > 12 digits
   await pressKey("Escape").catch(() => {})
@@ -271,7 +342,12 @@ if (page && baseURL) {
   await pressKey("Enter")
   await new Promise((r) => setTimeout(r, 300))
   const sci = await readDisplay()
-  record("R9-sci", "result switches to scientific notation when > 12 digits", /e\+?\d|E\+?\d/.test(sci) ? "pass" : "fail", `display="${sci}"`)
+  record(
+    "R9-sci",
+    "result switches to scientific notation when > 12 digits",
+    /e\+?\d|E\+?\d/.test(sci) ? "pass" : "fail",
+    `display="${sci}"`,
+  )
 
   // R10: dark default + light theme toggle persisted
   const themeRefs = {
@@ -284,15 +360,29 @@ if (page && baseURL) {
   record("R10-dark-default", "dark theme as default", themeRefs.darkClass ? "pass" : "warn", "")
   // capture light-theme screenshot if a toggle is clickable
   const togglerSelectors = [
-    "[data-testid=theme-toggle]", ".theme-toggle", "#theme-toggle",
-    "button[aria-label*=theme i]", "button[aria-label*=主题 i]",
+    "[data-testid=theme-toggle]",
+    ".theme-toggle",
+    "#theme-toggle",
+    "button[aria-label*=theme i]",
+    "button[aria-label*=主题 i]",
   ]
   let toggled = false
   for (const sel of togglerSelectors) {
     const ok = await page.$(sel)
-    if (ok) { try { await ok.click(); toggled = true; break } catch {} }
+    if (ok) {
+      try {
+        await ok.click()
+        toggled = true
+        break
+      } catch {}
+    }
   }
-  if (!toggled) toggled = await clickByText("☀️") || await clickByText("🌙") || await clickByText("Light") || await clickByText("浅色")
+  if (!toggled)
+    toggled =
+      (await clickByText("☀️")) ||
+      (await clickByText("🌙")) ||
+      (await clickByText("Light")) ||
+      (await clickByText("浅色"))
   await new Promise((r) => setTimeout(r, 300))
   await shot("04-after-theme-toggle.png")
 
@@ -309,14 +399,32 @@ if (page && baseURL) {
     }))
     const display = document.querySelector(".display, #display, .calculator__display, .screen, .main-display, .result")
     const dcs = display ? getComputedStyle(display as Element) : null
-    return { buttons: top, display: dcs ? { font: dcs.fontFamily, fontSize: dcs.fontSize, textAlign: dcs.textAlign } : null }
+    return {
+      buttons: top,
+      display: dcs ? { font: dcs.fontFamily, fontSize: dcs.fontSize, textAlign: dcs.textAlign } : null,
+    }
   })
   await fs.writeFile(path.join(REPORT_DIR, "layout.json"), JSON.stringify(layout, null, 2))
   const xs = layout.buttons.map((b) => b.cs.x).filter((n) => Number.isFinite(n))
   const cols = new Set(xs.map((x) => Math.round(x / 8)))
-  record("R11-grid", "approximately 4-column grid", cols.size >= 3 && cols.size <= 6 ? "pass" : "warn", `unique x-buckets=${cols.size}`)
-  record("R11-mono", "monospace font on display", /mono|courier|consolas|menlo/i.test(layout.display?.font || "") ? "pass" : "warn", `font=${layout.display?.font}`)
-  record("R11-right-align", "display right-aligned", /right|end/i.test(layout.display?.textAlign || "") ? "pass" : "warn", `textAlign=${layout.display?.textAlign}`)
+  record(
+    "R11-grid",
+    "approximately 4-column grid",
+    cols.size >= 3 && cols.size <= 6 ? "pass" : "warn",
+    `unique x-buckets=${cols.size}`,
+  )
+  record(
+    "R11-mono",
+    "monospace font on display",
+    /mono|courier|consolas|menlo/i.test(layout.display?.font || "") ? "pass" : "warn",
+    `font=${layout.display?.font}`,
+  )
+  record(
+    "R11-right-align",
+    "display right-aligned",
+    /right|end/i.test(layout.display?.textAlign || "") ? "pass" : "warn",
+    `textAlign=${layout.display?.textAlign}`,
+  )
 
   // R12: mobile 360px
   await page.setViewportSize({ width: 360, height: 720 })
@@ -324,10 +432,19 @@ if (page && baseURL) {
   await new Promise((r) => setTimeout(r, 800))
   await shot("05-mobile-360.png")
   const mobileCheck = await page.evaluate(() => {
-    const root = document.querySelector(".calculator, .calc, .calculator-container, main, body > *") as HTMLElement | null
-    return root ? { clientWidth: root.clientWidth, scrollWidth: root.scrollWidth, overflow: getComputedStyle(root).overflow } : null
+    const root = document.querySelector(
+      ".calculator, .calc, .calculator-container, main, body > *",
+    ) as HTMLElement | null
+    return root
+      ? { clientWidth: root.clientWidth, scrollWidth: root.scrollWidth, overflow: getComputedStyle(root).overflow }
+      : null
   })
-  record("R12-mobile", "mobile 360px renders without horizontal scroll", mobileCheck && mobileCheck.scrollWidth <= 380 ? "pass" : "warn", JSON.stringify(mobileCheck))
+  record(
+    "R12-mobile",
+    "mobile 360px renders without horizontal scroll",
+    mobileCheck && mobileCheck.scrollWidth <= 380 ? "pass" : "warn",
+    JSON.stringify(mobileCheck),
+  )
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.reload({ waitUntil: "networkidle" })
   await new Promise((r) => setTimeout(r, 600))
@@ -335,32 +452,59 @@ if (page && baseURL) {
   // R13: no lorem / no obvious placeholder text
   const visible = (await page.evaluate(() => document.body.innerText || "")) as string
   const placeholderHit = /lorem ipsum|TODO|FIXME|placeholder/i.test(visible)
-  record("R13-no-placeholder", "no lorem/TODO/placeholder visible", placeholderHit ? "fail" : "pass", placeholderHit ? "found in DOM" : "")
+  record(
+    "R13-no-placeholder",
+    "no lorem/TODO/placeholder visible",
+    placeholderHit ? "fail" : "pass",
+    placeholderHit ? "found in DOM" : "",
+  )
 
   // R14/15/16: pure frontend, single entry, README
   const reactsHasBackend = /\b(server|express|koa|fastify|axios|fetch\(['"]https?:)/i.test(codeBundle)
-  record("R14-pure-frontend", "no backend / no external API", !reactsHasBackend || /https?:\/\/(localhost|127\.0\.0\.1)/.test(codeBundle) ? "pass" : "warn", "")
+  record(
+    "R14-pure-frontend",
+    "no backend / no external API",
+    !reactsHasBackend || /https?:\/\/(localhost|127\.0\.0\.1)/.test(codeBundle) ? "pass" : "warn",
+    "",
+  )
   const hasIndexHtml = await fileExists(path.join(ROOT, "index.html"))
   const hasDist = await fileExists(path.join(ROOT, "dist", "index.html"))
-  record("R15-single-entry", "index.html as entry (or dist after build)", hasIndexHtml || hasDist ? "pass" : "fail", `index=${hasIndexHtml} dist=${hasDist}`)
+  record(
+    "R15-single-entry",
+    "index.html as entry (or dist after build)",
+    hasIndexHtml || hasDist ? "pass" : "fail",
+    `index=${hasIndexHtml} dist=${hasDist}`,
+  )
   const readmeHasRunInstructions = /(npm\s+(?:install|run\s+(?:dev|build|preview))|bun\s+run|yarn|pnpm)/i.test(readme)
   const readmeHasShortcuts = /(快捷键|shortcuts?|键盘|keyboard)/i.test(readme)
   record("R16-readme-run", "README has run instructions", readmeHasRunInstructions ? "pass" : "fail", "")
   record("R16-readme-shortcuts", "README documents keyboard shortcuts", readmeHasShortcuts ? "pass" : "warn", "")
 
   // Console errors are a hard fail per the spec.
-  record("R13-console", "no console errors / red text", consoleErrors.length === 0 ? "pass" : "fail", consoleErrors.slice(0, 5).join(" | "))
+  record(
+    "R13-console",
+    "no console errors / red text",
+    consoleErrors.length === 0 ? "pass" : "fail",
+    consoleErrors.slice(0, 5).join(" | "),
+  )
 }
 
 // --- 5. tests / typecheck (best-effort) -----------------------------------
 if (pkgJson.scripts?.["test:run"] || pkgJson.scripts?.test) {
-  const r = await run("npm", ["run", pkgJson.scripts?.["test:run"] ? "test:run" : "test", "--", "--reporter=basic"], { timeoutMs: 180_000 })
+  const r = await run("npm", ["run", pkgJson.scripts?.["test:run"] ? "test:run" : "test", "--", "--reporter=basic"], {
+    timeoutMs: 180_000,
+  })
   record("TESTS", "unit tests", r.code === 0 ? "pass" : "warn", `exit=${r.code}\n${(r.err || r.out).slice(-1500)}`)
 } else record("TESTS", "unit tests", "skip", "no test script in package.json")
 
 // --- 6. cleanup -----------------------------------------------------------
-try { await browser?.close() } catch {}
-try { preview?.kill("SIGTERM"); setTimeout(() => preview?.kill("SIGKILL"), 1500).unref() } catch {}
+try {
+  await browser?.close()
+} catch {}
+try {
+  preview?.kill("SIGTERM")
+  setTimeout(() => preview?.kill("SIGKILL"), 1500).unref()
+} catch {}
 
 // --- 7. report ------------------------------------------------------------
 const passed = findings.filter((f) => f.status === "pass").length

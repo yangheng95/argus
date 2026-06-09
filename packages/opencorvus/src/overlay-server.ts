@@ -16,9 +16,10 @@ installProcessErrorLogging()
 
 const argv = hideBin(process.argv)
 const requestedCommand = argv.find((arg) => !arg.startsWith("-"))
-const commands: CommandModule<any, any>[] = requestedCommand === "mcp"
-  ? [(await import("./cli/cmd/mcp")).McpCommand]
-  : [(await import("./cli/cmd/serve")).ServeCommand]
+const commands: CommandModule<any, any>[] =
+  requestedCommand === "mcp"
+    ? [(await import("./cli/cmd/mcp")).McpCommand]
+    : [(await import("./cli/cmd/serve")).ServeCommand]
 
 const cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })

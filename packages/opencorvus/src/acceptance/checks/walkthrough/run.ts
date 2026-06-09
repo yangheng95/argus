@@ -17,10 +17,7 @@ export type WalkthroughResult = WalkthroughExecutionResult & {
 }
 
 type BrowserRuntimeLike = {
-  launch: (input: {
-    headless: true
-    args: string[]
-  }) => Promise<Browser>
+  launch: (input: { headless: true; args: string[] }) => Promise<Browser>
 }
 
 export type RunWalkthroughDependencies = {
@@ -52,7 +49,11 @@ export async function runWalkthroughWithDependencies(
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
     const page = await context.newPage()
-    const execution = await executeWalkthrough({ page: page as unknown as WalkthroughPage, baseUrl: input.baseUrl, steps })
+    const execution = await executeWalkthrough({
+      page: page as unknown as WalkthroughPage,
+      baseUrl: input.baseUrl,
+      steps,
+    })
     const screenshotPath = path.join(input.outDir, `${sanitize(input.spec.id)}.png`)
     await page.screenshot({ path: screenshotPath, type: "png" })
     return {
@@ -65,7 +66,9 @@ export async function runWalkthroughWithDependencies(
         `steps=${steps.length}`,
         `passed=${execution.passed}`,
         `final_path=${execution.finalPath}`,
-        execution.firstFailure ? `first_failure=${execution.firstFailure.index}:${execution.firstFailure.message}` : undefined,
+        execution.firstFailure
+          ? `first_failure=${execution.firstFailure.index}:${execution.firstFailure.message}`
+          : undefined,
         execution.pageErrors.length > 0 ? `page_errors=${execution.pageErrors.join("; ")}` : undefined,
         execution.consoleErrors.length > 0 ? `console_errors=${execution.consoleErrors.join("; ")}` : undefined,
       ].filter((item): item is string => Boolean(item)),
@@ -87,8 +90,7 @@ async function runWalkthroughViaNode(input: {
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs()
   const runtime = await resolveBrowserNodeSidecarRuntime()
   const run = await runBrowserNodeSidecar<
-    | { ok: true; execution: WalkthroughExecutionResult }
-    | { ok: false; message: string; stack?: string }
+    { ok: true; execution: WalkthroughExecutionResult } | { ok: false; message: string; stack?: string }
   >({
     runtime,
     script: NODE_WALKTHROUGH_SCRIPT,
@@ -121,7 +123,9 @@ async function runWalkthroughViaNode(input: {
         ? `first_failure=${result.execution.firstFailure.index}:${result.execution.firstFailure.message}`
         : undefined,
       result.execution.pageErrors.length > 0 ? `page_errors=${result.execution.pageErrors.join("; ")}` : undefined,
-      result.execution.consoleErrors.length > 0 ? `console_errors=${result.execution.consoleErrors.join("; ")}` : undefined,
+      result.execution.consoleErrors.length > 0
+        ? `console_errors=${result.execution.consoleErrors.join("; ")}`
+        : undefined,
     ].filter((item): item is string => Boolean(item)),
   }
 }

@@ -21,18 +21,7 @@ interface RunResult {
 
 async function runCheck(distDir: string, args: string[]): Promise<RunResult> {
   const proc = Bun.spawn(
-    [
-      "bun",
-      CHECK_SCRIPT,
-      "cli",
-      "--dir",
-      distDir,
-      "--platforms",
-      "linux-x64",
-      "--version",
-      "9.9.9",
-      ...args,
-    ],
+    ["bun", CHECK_SCRIPT, "cli", "--dir", distDir, "--platforms", "linux-x64", "--version", "9.9.9", ...args],
     { stdout: "pipe", stderr: "pipe" },
   )
   const exitCode = await proc.exited

@@ -47,6 +47,19 @@ export type NotFoundError = {
   }
 }
 
+export type ProjectWorktree = {
+  name: string
+  branch?: string
+  directory: string
+  goalID?: string
+  status: "primary" | "active" | "expired"
+  removable: boolean
+}
+
+export type WorktreeRemoveInput = {
+  directory: string
+}
+
 export type TerminalProfile = {
   id: string
   label: string
@@ -1295,10 +1308,6 @@ export type Workspace = {
   }
 }
 
-export type WorktreeRemoveInput = {
-  directory: string
-}
-
 export type WorktreeResetInput = {
   directory: string
 }
@@ -1356,6 +1365,7 @@ export type Session = {
     | "explore"
     | "deep-research"
     | "frontend-research"
+    | "visual-qa"
     | "evaluator"
     | "system"
   goalID?: string
@@ -1412,6 +1422,7 @@ export type GlobalSession = {
     | "explore"
     | "deep-research"
     | "frontend-research"
+    | "visual-qa"
     | "evaluator"
     | "system"
   goalID?: string
@@ -3525,6 +3536,78 @@ export type ProjectCurrentInitGitResponses = {
 
 export type ProjectCurrentInitGitResponse = ProjectCurrentInitGitResponses[keyof ProjectCurrentInitGitResponses]
 
+export type ProjectCurrentWorktreesDeleteData = {
+  body?: WorktreeRemoveInput
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current/worktrees"
+}
+
+export type ProjectCurrentWorktreesDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectCurrentWorktreesDeleteError =
+  ProjectCurrentWorktreesDeleteErrors[keyof ProjectCurrentWorktreesDeleteErrors]
+
+export type ProjectCurrentWorktreesDeleteResponses = {
+  /**
+   * Worktree removed
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ProjectCurrentWorktreesDeleteResponse =
+  ProjectCurrentWorktreesDeleteResponses[keyof ProjectCurrentWorktreesDeleteResponses]
+
+export type ProjectCurrentWorktreesData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current/worktrees"
+}
+
+export type ProjectCurrentWorktreesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectCurrentWorktreesError = ProjectCurrentWorktreesErrors[keyof ProjectCurrentWorktreesErrors]
+
+export type ProjectCurrentWorktreesResponses = {
+  /**
+   * Project worktrees
+   */
+  200: Array<ProjectWorktree>
+}
+
+export type ProjectCurrentWorktreesResponse = ProjectCurrentWorktreesResponses[keyof ProjectCurrentWorktreesResponses]
+
 export type ProjectUpdateData = {
   body?: {
     name?: string
@@ -4684,6 +4767,7 @@ export type SessionCreateData = {
       | "explore"
       | "deep-research"
       | "frontend-research"
+      | "visual-qa"
       | "evaluator"
       | "system"
     goalID?: string
@@ -6694,6 +6778,44 @@ export type SkillInstallResponses = {
 
 export type SkillInstallResponse = SkillInstallResponses[keyof SkillInstallResponses]
 
+export type SkillImportFileData = {
+  body?: {
+    filename?: string
+    content?: string
+    sourceName?: string
+    files?: Array<{
+      path: string
+      content?: string
+      contentBase64?: string
+    }>
+    archiveBase64?: string
+    policy?: PermissionAction
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/import-file"
+}
+
+export type SkillImportFileResponses = {
+  /**
+   * Imported project skill file
+   */
+  200: {
+    name: string
+    source: string
+    kind: "path"
+    names?: Array<string>
+    sources?: Array<string>
+  }
+}
+
+export type SkillImportFileResponse = SkillImportFileResponses[keyof SkillImportFileResponses]
+
 export type SkillRemoveData = {
   body?: {
     source: string
@@ -8222,6 +8344,13 @@ export type BrowserPreviewTaskTargetResponses = {
       height: number
     }>
     diagnostics: Array<string>
+    candidates: Array<{
+      id: string
+      url: string
+      source: "task-artifact"
+      selected: boolean
+      timeUpdated: number
+    }>
     source: "task-artifact" | "none"
   }
 }
@@ -8264,6 +8393,13 @@ export type BrowserPreviewSaveTaskTargetResponses = {
       height: number
     }>
     diagnostics: Array<string>
+    candidates: Array<{
+      id: string
+      url: string
+      source: "task-artifact"
+      selected: boolean
+      timeUpdated: number
+    }>
     source: "task-artifact" | "none"
   }
 }
@@ -8273,7 +8409,7 @@ export type BrowserPreviewSaveTaskTargetResponse =
 
 export type BrowserPreviewCaptureTaskTargetData = {
   body?: {
-    targetID?: string
+    targetID: string
     viewportID?: "desktop" | "tablet" | "mobile"
   }
   path: {
@@ -8310,6 +8446,13 @@ export type BrowserPreviewCaptureTaskTargetResponses = {
         height: number
       }>
       diagnostics: Array<string>
+      candidates: Array<{
+        id: string
+        url: string
+        source: "task-artifact"
+        selected: boolean
+        timeUpdated: number
+      }>
       source: "task-artifact" | "none"
     }
     viewport: {
@@ -8335,6 +8478,7 @@ export type BrowserPreviewCaptureTaskTargetResponses = {
       path?: string
       sha?: string
       bytes?: number
+      manifest?: unknown
       layers?: unknown
       dom?: unknown
       capture_error?: unknown
@@ -8607,16 +8751,36 @@ export type TaskCreateData = {
               /**
                * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                */
-              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
             }
           | {
               /**
                * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
                */
               type: "prebuilt"
-              name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
+              name:
+                | "factuality"
+                | "relevance"
+                | "contains"
+                | "exact_match"
+                | "length_within"
+                | "json_schema"
+                | "visual-evidence-bundle"
               config?: {
                 [key: string]: unknown
+              }
+              /**
+               * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+               */
+              spec?: {
+                kind: "visual_evidence_bundle"
+                viewport?: string
+              }
+              /**
+               * For name=visual-evidence-bundle, requires a passing current bundle.
+               */
+              expect?: {
+                status: "passed"
               }
             }
           | {
@@ -8752,16 +8916,36 @@ export type TaskCreateData = {
                 /**
                  * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                  */
-                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
               }
             | {
                 /**
                  * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
                  */
                 type: "prebuilt"
-                name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
+                name:
+                  | "factuality"
+                  | "relevance"
+                  | "contains"
+                  | "exact_match"
+                  | "length_within"
+                  | "json_schema"
+                  | "visual-evidence-bundle"
                 config?: {
                   [key: string]: unknown
+                }
+                /**
+                 * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                 */
+                spec?: {
+                  kind: "visual_evidence_bundle"
+                  viewport?: string
+                }
+                /**
+                 * For name=visual-evidence-bundle, requires a passing current bundle.
+                 */
+                expect?: {
+                  status: "passed"
                 }
               }
             | {
@@ -11019,6 +11203,51 @@ export type TaskTranscriptResponses = {
 
 export type TaskTranscriptResponse = TaskTranscriptResponses[keyof TaskTranscriptResponses]
 
+export type TaskOperatorModelContextData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/operator-model-context"
+}
+
+export type TaskOperatorModelContextErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskOperatorModelContextError = TaskOperatorModelContextErrors[keyof TaskOperatorModelContextErrors]
+
+export type TaskOperatorModelContextResponses = {
+  /**
+   * Task operator model context
+   */
+  200: {
+    taskID: string
+    sessionID: string
+    agent: string
+    model: {
+      providerID: string
+      modelID: string
+    }
+  }
+}
+
+export type TaskOperatorModelContextResponse =
+  TaskOperatorModelContextResponses[keyof TaskOperatorModelContextResponses]
+
 export type TaskRunsData = {
   body?: never
   path: {
@@ -12284,16 +12513,36 @@ export type GoalUpdateData = {
             /**
              * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
              */
-            inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+            inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
           }
         | {
             /**
              * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
              */
             type: "prebuilt"
-            name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
+            name:
+              | "factuality"
+              | "relevance"
+              | "contains"
+              | "exact_match"
+              | "length_within"
+              | "json_schema"
+              | "visual-evidence-bundle"
             config?: {
               [key: string]: unknown
+            }
+            /**
+             * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+             */
+            spec?: {
+              kind: "visual_evidence_bundle"
+              viewport?: string
+            }
+            /**
+             * For name=visual-evidence-bundle, requires a passing current bundle.
+             */
+            expect?: {
+              status: "passed"
             }
           }
         | {

@@ -179,7 +179,7 @@ test("evidence prompt includes bounded frontend-design contract", () => {
 
   expect(prompt).toContain("# Frontend Design Contract")
   expect(prompt).toContain("web-clone-source/reference.png")
-  expect(prompt).toContain("inspect_integrity_evidence({ section: \"frontend_design_contract\" })")
+  expect(prompt).toContain('inspect_integrity_evidence({ section: "frontend_design_contract" })')
 })
 
 test("large integrity initial prompts stay compact and omit retired context surfaces", () => {

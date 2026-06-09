@@ -8,49 +8,67 @@ import { limitSummary, markdownList, requireReportString } from "@/agent/report"
 export namespace GoalReport {
   export const FileChange = z.object({
     path: z.string().min(1),
-    summary: z.string().min(1).describe(
-      "What changed in this file and why. One or two sentences, concrete — not 'updated foo'.",
-    ),
+    summary: z
+      .string()
+      .min(1)
+      .describe("What changed in this file and why. One or two sentences, concrete — not 'updated foo'."),
   })
 
   export const CheckRun = z.object({
     name: z.string().min(1),
     command: z.string().min(1),
     exit_code: z.number().int(),
-    output_excerpt: z.string().optional().describe(
-      "Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.",
-    ),
+    output_excerpt: z
+      .string()
+      .optional()
+      .describe("Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green."),
   })
 
   export const DesignDecision = z.object({
     choice: z.string().min(1).describe("The decision made, stated as a concrete claim."),
-    alternatives: z.array(z.string()).default([]).describe(
-      "Alternatives that were considered and rejected. Empty array if none were weighed.",
-    ),
-    reason: z.string().min(1).describe(
-      "Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.",
-    ),
+    alternatives: z
+      .array(z.string())
+      .default([])
+      .describe("Alternatives that were considered and rejected. Empty array if none were weighed."),
+    reason: z
+      .string()
+      .min(1)
+      .describe("Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice."),
   })
 
   export const Report = z.object({
-    files_changed: z.array(FileChange).describe(
-      "Every file touched in this goal. May be empty if the goal's acceptance " +
-        "was met by reusing a prior attempt's worktree without further edits — " +
-        "the orchestrator cross-checks against the host's actual_changed_files " +
-        "ground truth.",
-    ),
-    checks_run: z.array(CheckRun).default([]).describe(
-      "Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.",
-    ),
-    implementation_approach: z.string().min(40).describe(
-      "The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.",
-    ),
-    design_decisions: z.array(DesignDecision).default([]).describe(
-      "Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.",
-    ),
-    blockers: z.array(z.string()).default([]).describe(
-      "Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.",
-    ),
+    files_changed: z
+      .array(FileChange)
+      .describe(
+        "Every file touched in this goal. May be empty if the goal's acceptance " +
+          "was met by reusing a prior attempt's worktree without further edits — " +
+          "the orchestrator cross-checks against the host's actual_changed_files " +
+          "ground truth.",
+      ),
+    checks_run: z
+      .array(CheckRun)
+      .default([])
+      .describe(
+        "Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.",
+      ),
+    implementation_approach: z
+      .string()
+      .min(40)
+      .describe(
+        "The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.",
+      ),
+    design_decisions: z
+      .array(DesignDecision)
+      .default([])
+      .describe(
+        "Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.",
+      ),
+    blockers: z
+      .array(z.string())
+      .default([])
+      .describe(
+        "Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.",
+      ),
     followup_workload_guidance: z
       .string()
       .trim()
@@ -106,7 +124,9 @@ export function buildGoalReport(report: GoalReport.ReportInput) {
         ? `## Follow-up Workload Guidance\n${report.followup_workload_guidance}`
         : undefined,
       `## Files Changed\n${fileLines.length ? markdownList(fileLines) : "- no files changed"}`,
-    ].filter((section): section is string => Boolean(section)).join("\n\n"),
+    ]
+      .filter((section): section is string => Boolean(section))
+      .join("\n\n"),
   }
 }
 
@@ -144,23 +164,23 @@ export async function extractGoalReport(sessionID: string): Promise<GoalReport.R
   if (calls.length === 0) {
     throw new Error(
       "extractGoalReport: executor did not call `goal_report` before terminating. " +
-      "The goal contract requires exactly one terminal `goal_report` tool call with " +
-      "implementation_approach and design_decisions. Missing call means the executor " +
-      "violated the contract — goal must fail and replan, not silently pass.",
+        "The goal contract requires exactly one terminal `goal_report` tool call with " +
+        "implementation_approach and design_decisions. Missing call means the executor " +
+        "violated the contract — goal must fail and replan, not silently pass.",
     )
   }
   if (calls.length > 1) {
     throw new Error(
       `extractGoalReport: executor called \`goal_report\` ${calls.length} times. ` +
-      "The contract specifies exactly one terminal call. Multiple calls mean the " +
-      "executor used it as a progress update — reject rather than pick one arbitrarily.",
+        "The contract specifies exactly one terminal call. Multiple calls mean the " +
+        "executor used it as a progress update — reject rather than pick one arbitrarily.",
     )
   }
   const parsed = GoalReport.Report.safeParse(calls[0])
   if (!parsed.success) {
     throw new Error(
       `extractGoalReport: \`goal_report\` input failed schema validation: ` +
-      parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+        parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
     )
   }
   return parsed.data

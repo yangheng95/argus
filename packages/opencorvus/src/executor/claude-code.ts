@@ -1,4 +1,11 @@
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, codingRuntimeEnv, type CodingEventInfo, type CodingProvider } from "./contract"
+import {
+  CodingCapabilities,
+  CodingRunInput,
+  CodingResumeInput,
+  codingRuntimeEnv,
+  type CodingEventInfo,
+  type CodingProvider,
+} from "./contract"
 import { decode, record, text } from "./contract"
 import { assertExecutorModel } from "./runtime-env"
 
@@ -52,11 +59,11 @@ export namespace ClaudeCodeExecutor {
           input.toolMode === "none"
             ? []
             : tools.length > 0
-            ? tools
-            : {
-                type: "preset",
-                preset: "claude_code",
-              },
+              ? tools
+              : {
+                  type: "preset",
+                  preset: "claude_code",
+                },
       },
     }
   }

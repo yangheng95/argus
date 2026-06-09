@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { architectValidationFindings, architectValidationIssues, type ArchitectCollector } from "../../src/architect/output-tools"
+import {
+  architectValidationFindings,
+  architectValidationIssues,
+  type ArchitectCollector,
+} from "../../src/architect/output-tools"
 import { validatePersistedArchitectFidelity } from "../../src/orchestrator/tools"
 import type { AcceptanceSpec } from "../../src/acceptance/types"
 
@@ -10,32 +14,40 @@ const essentialAcceptanceVisualSpec: AcceptanceSpec = {
   title: "Final rendered page matches the authoritative visual references for final-page",
   severity: "essential",
   trigger: "on_integrity",
-  scorers: [{
-    type: "llm_judge",
-    name: "rendered-reference-fidelity",
-    criteria: "Compare final rendered_output against the authoritative references and frontend template visual_consistency_contract.",
-    inputs: ["visual_evidence"],
-  }],
+  scorers: [
+    {
+      type: "llm_judge",
+      name: "rendered-reference-fidelity",
+      criteria:
+        "Compare final rendered_output against the authoritative references and frontend template visual_consistency_contract.",
+      inputs: ["visual_evidence"],
+    },
+  ],
 }
 
 const textOnlyAcceptanceVisualSpec: AcceptanceSpec = {
   ...essentialAcceptanceVisualSpec,
-  scorers: [{
-    type: "llm_judge",
-    name: "rendered-reference-fidelity",
-    criteria: "Compare final rendered_output against the authoritative references and frontend template visual_consistency_contract.",
-  }],
+  scorers: [
+    {
+      type: "llm_judge",
+      name: "rendered-reference-fidelity",
+      criteria:
+        "Compare final rendered_output against the authoritative references and frontend template visual_consistency_contract.",
+    },
+  ],
 }
 
 const prebuiltVisualEvidenceSpec: AcceptanceSpec = {
   ...essentialAcceptanceVisualSpec,
-  scorers: [{
-    type: "prebuilt",
-    name: "visual-evidence-bundle",
-    config: {},
-    spec: { kind: "visual_evidence_bundle", viewport: "desktop-primary" },
-    expect: { status: "passed" },
-  }],
+  scorers: [
+    {
+      type: "prebuilt",
+      name: "visual-evidence-bundle",
+      config: {},
+      spec: { kind: "visual_evidence_bundle", viewport: "desktop-primary" },
+      expect: { status: "passed" },
+    },
+  ],
 }
 
 function collectorForReferenceTask(specs: AcceptanceSpec[]): ArchitectCollector {
@@ -66,13 +78,15 @@ function collectorForReferenceTask(specs: AcceptanceSpec[]): ArchitectCollector 
     ],
     traceability: [{ requirementID: "REQ-visual", goalIDs: ["goal_verify"] }],
     source_coverage: [],
-    reference_coverage: [{
-      id: "ref-page",
-      surface: "final-page",
-      goal_ids: ["goal_verify"],
-      visual_spec_ids: [],
-      expectation: "Restore the authoritative reference page 1:1.",
-    }],
+    reference_coverage: [
+      {
+        id: "ref-page",
+        surface: "final-page",
+        goal_ids: ["goal_verify"],
+        visual_spec_ids: [],
+        expectation: "Restore the authoritative reference page 1:1.",
+      },
+    ],
     assembly_owners: [],
     contract_graph: { version: 1, contracts: [], dependency_contracts: [] },
     validation_findings: [],
@@ -94,14 +108,16 @@ describe("orchestrator architect fidelity diagnostics", () => {
             assemblyOwners: [],
           },
         },
-        design_specs: [{
-          id: "vis-hero",
-          category: "layout",
-          title: "Hero layout",
-          requirement: "Restore the hero layout exactly.",
-          applies_to: "hero",
-          severity: "must",
-        }],
+        design_specs: [
+          {
+            id: "vis-hero",
+            category: "layout",
+            title: "Hero layout",
+            requirement: "Restore the hero layout exactly.",
+            applies_to: "hero",
+            severity: "must",
+          },
+        ],
       } as any,
       goals: [
         { id: "goal_feature", owned_paths: ["packages/opencorvus/src/orchestrator/tools.ts"] },
@@ -110,7 +126,9 @@ describe("orchestrator architect fidelity diagnostics", () => {
       workDir,
     })
 
-    expect(issues).toContain("Missing source coverage for existing owned paths: packages/opencorvus/src/orchestrator/tools.ts, packages/opencorvus/test/orchestrator/architect-fidelity-gate.test.ts")
+    expect(issues).toContain(
+      "Missing source coverage for existing owned paths: packages/opencorvus/src/orchestrator/tools.ts, packages/opencorvus/test/orchestrator/architect-fidelity-gate.test.ts",
+    )
     expect(issues).toContain("Missing reference coverage for visual specs: vis-hero")
     expect(issues).toContain("Missing assembly ownership: multi-goal tasks must register at least one assembly owner")
   })
@@ -121,35 +139,43 @@ describe("orchestrator architect fidelity diagnostics", () => {
       task: {
         metadata: {
           architect_fidelity: {
-            sourceCoverage: [{
-              id: "src-orchestrator-tools",
-              paths: ["packages/opencorvus/src/orchestrator/tools.ts"],
-              goal_ids: ["goal_feature"],
-              action: "modify",
-              rationale: "Feature goal owns the existing orchestrator dispatch behavior.",
-            }],
-            referenceCoverage: [{
-              id: "ref-hero",
-              surface: "hero",
-              goal_ids: ["goal_feature"],
-              visual_spec_ids: ["vis-hero"],
-              expectation: "Feature goal must restore the hero 1:1 from the authoritative reference.",
-            }],
-            assemblyOwners: [{
-              surface: "final-deliverable",
-              goal_id: "goal_feature",
-              rationale: "Feature goal owns the shared stitched deliverable.",
-            }],
+            sourceCoverage: [
+              {
+                id: "src-orchestrator-tools",
+                paths: ["packages/opencorvus/src/orchestrator/tools.ts"],
+                goal_ids: ["goal_feature"],
+                action: "modify",
+                rationale: "Feature goal owns the existing orchestrator dispatch behavior.",
+              },
+            ],
+            referenceCoverage: [
+              {
+                id: "ref-hero",
+                surface: "hero",
+                goal_ids: ["goal_feature"],
+                visual_spec_ids: ["vis-hero"],
+                expectation: "Feature goal must restore the hero 1:1 from the authoritative reference.",
+              },
+            ],
+            assemblyOwners: [
+              {
+                surface: "final-deliverable",
+                goal_id: "goal_feature",
+                rationale: "Feature goal owns the shared stitched deliverable.",
+              },
+            ],
           },
         },
-        design_specs: [{
-          id: "vis-hero",
-          category: "layout",
-          title: "Hero layout",
-          requirement: "Restore the hero layout exactly.",
-          applies_to: "hero",
-          severity: "must",
-        }],
+        design_specs: [
+          {
+            id: "vis-hero",
+            category: "layout",
+            title: "Hero layout",
+            requirement: "Restore the hero layout exactly.",
+            applies_to: "hero",
+            severity: "must",
+          },
+        ],
       } as any,
       goals: [
         { id: "goal_feature", owned_paths: ["packages/opencorvus/src/orchestrator/tools.ts"] },
@@ -174,9 +200,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
         },
         design_specs: [],
       } as any,
-      goals: [
-        { id: "goal_feature", owned_paths: ["packages/opencorvus/src/orchestrator/tools.ts"] },
-      ],
+      goals: [{ id: "goal_feature", owned_paths: ["packages/opencorvus/src/orchestrator/tools.ts"] }],
       workDir,
       executionStarted: true,
     })
@@ -195,23 +219,25 @@ describe("orchestrator architect fidelity diagnostics", () => {
             assemblyOwners: [],
           },
         },
-        design_specs: [{
-          id: "vis-hero",
-          category: "layout",
-          title: "Hero layout",
-          requirement: "Restore the hero layout exactly.",
-          applies_to: "hero",
-          severity: "must",
-        }],
+        design_specs: [
+          {
+            id: "vis-hero",
+            category: "layout",
+            title: "Hero layout",
+            requirement: "Restore the hero layout exactly.",
+            applies_to: "hero",
+            severity: "must",
+          },
+        ],
       } as any,
-      goals: [
-        { id: "goal_feature", owned_paths: ["packages/opencorvus/src/orchestrator/tools.ts"] },
-      ],
+      goals: [{ id: "goal_feature", owned_paths: ["packages/opencorvus/src/orchestrator/tools.ts"] }],
       workDir,
       executionStarted: true,
     })
 
-    expect(issues).not.toContain("Missing source coverage for existing owned paths: packages/opencorvus/src/orchestrator/tools.ts")
+    expect(issues).not.toContain(
+      "Missing source coverage for existing owned paths: packages/opencorvus/src/orchestrator/tools.ts",
+    )
     expect(issues).toContain("Missing reference coverage for visual specs: vis-hero")
   })
 
@@ -225,10 +251,12 @@ describe("orchestrator architect fidelity diagnostics", () => {
     })
 
     expect(
-      findings.some((finding) =>
-        finding.severity === "concern" && finding.message.includes(
-          "Missing essential visual evidence acceptance: reference-driven tasks must include a verification/integration goal with an essential on_integrity acceptance spec that consumes a VisualEvidenceBundle.",
-        ),
+      findings.some(
+        (finding) =>
+          finding.severity === "concern" &&
+          finding.message.includes(
+            "Missing essential visual evidence acceptance: reference-driven tasks must include a verification/integration goal with an essential on_integrity acceptance spec that consumes a VisualEvidenceBundle.",
+          ),
       ),
     ).toBe(true)
   })

@@ -57,10 +57,7 @@ function runLoop(opts: LoopHarnessOpts): { iterations: Array<{ taskID: string; a
     const applied = taskID === selectedTaskID
     log.push({ taskID, applied })
     if (opts.queuedAtEnd?.[iter]) convQueued = true
-    const shouldContinue =
-      opts.variant === "pre-fix"
-        ? convQueued && requestTaskID === selectedTaskID
-        : convQueued
+    const shouldContinue = opts.variant === "pre-fix" ? convQueued && requestTaskID === selectedTaskID : convQueued
     if (!shouldContinue) break
     if (iter >= 10) break // safety cap to prevent runaway loops
   }
@@ -82,7 +79,7 @@ describe("loadConversation loop condition (audit W2-V16)", () => {
     const { iterations } = runLoop({
       initialTaskID: "A",
       switchAtIteration: { 1: "B" }, // user switches at start of iter 1
-      queuedAtEnd: { 1: true },     // parallel call bumps queued
+      queuedAtEnd: { 1: true }, // parallel call bumps queued
       variant: "pre-fix",
     })
     // Pre-fix: only one iteration ran. B never got a turn.

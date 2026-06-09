@@ -107,9 +107,7 @@ describe("isWebviewMessage", () => {
 
   test("accepts every uppercase canonical method", () => {
     for (const m of ["GET", "POST", "PUT", "PATCH", "DELETE"]) {
-      expect(
-        isWebviewMessage({ protocol: PROTOCOL_VERSION, type: "request", method: m }),
-      ).toBe(true)
+      expect(isWebviewMessage({ protocol: PROTOCOL_VERSION, type: "request", method: m })).toBe(true)
     }
   })
 
@@ -177,17 +175,20 @@ describe("schema snapshot (audit F8)", () => {
   })
 
   test("WEBVIEW_MESSAGE_TYPES is the canonical, ordered set", () => {
-    expect(WEBVIEW_MESSAGE_TYPES).toEqual([
-      "request",
-      "stream.open",
-      "stream.close",
-      "request.abort",
-    ])
+    expect(WEBVIEW_MESSAGE_TYPES).toEqual(["request", "stream.open", "stream.close", "request.abort"])
   })
 
   test("ExtensionMessage union shape is JSON-clonable (no methods, no symbols)", () => {
     const samples: ExtensionMessage[] = [
-      { protocol: PROTOCOL_VERSION, type: "response", id: "x", ok: true, status: 200, headers: {}, body: { kind: "empty" } },
+      {
+        protocol: PROTOCOL_VERSION,
+        type: "response",
+        id: "x",
+        ok: true,
+        status: 200,
+        headers: {},
+        body: { kind: "empty" },
+      },
       { protocol: PROTOCOL_VERSION, type: "stream.event", id: "x", events: ["a", "b"] },
       { protocol: PROTOCOL_VERSION, type: "stream.error", id: "x", message: "boom" },
       { protocol: PROTOCOL_VERSION, type: "stream.close", id: "x", reason: "done" },

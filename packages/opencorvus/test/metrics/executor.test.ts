@@ -5,18 +5,10 @@ import { Database } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import {
-  executeMetrics,
-  normalize,
-  type JudgeRunner,
-} from "../../src/metrics/executor"
+import { executeMetrics, normalize, type JudgeRunner } from "../../src/metrics/executor"
 import { Shell } from "../../src/shell/shell"
 import { DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
-import {
-  readResultsForIteration,
-  registerBaselineSpec,
-  writeMetricResult,
-} from "../../src/metrics/store"
+import { readResultsForIteration, registerBaselineSpec, writeMetricResult } from "../../src/metrics/store"
 import { resetDatabase } from "../fixture/db"
 import type { VisualEvidenceBundle } from "../../src/acceptance/visual-evidence"
 
@@ -97,18 +89,20 @@ function visualBundle(overrides: Partial<VisualEvidenceBundle> = {}): VisualEvid
       majorCount: 0,
       minorCount: 0,
     },
-    regions: [{
-      id: "region_header",
-      label: "Header",
-      requirementIDs: ["REQ-visual"],
-      acceptanceSpecIDs: ["acc-final-visual"],
-      sourceRefs: ["webpage-evidence/reference.png"],
-      viewport: "desktop-primary",
-      required: true,
-      status: "passing",
-      evidenceRefs: ["webpage-evidence/rendered.png", "webpage-evidence/eval-result.json"],
-      notes: "Header matches the reference.",
-    }],
+    regions: [
+      {
+        id: "region_header",
+        label: "Header",
+        requirementIDs: ["REQ-visual"],
+        acceptanceSpecIDs: ["acc-final-visual"],
+        sourceRefs: ["webpage-evidence/reference.png"],
+        viewport: "desktop-primary",
+        required: true,
+        status: "passing",
+        evidenceRefs: ["webpage-evidence/rendered.png", "webpage-evidence/eval-result.json"],
+        notes: "Header matches the reference.",
+      },
+    ],
   }
   return { ...bundle, ...overrides }
 }
@@ -234,14 +228,9 @@ describe("executeMetrics — shell evaluator", () => {
       evaluator_config: { cmd: "exit 1" },
       source_requirement_ids: [],
     })
-    const outcome = await executeMetrics(
-      { task_id: taskID, iteration: 0 },
-      { workDir: os.tmpdir() },
-    )
+    const outcome = await executeMetrics({ task_id: taskID, iteration: 0 }, { workDir: os.tmpdir() })
     expect(outcome.results).toHaveLength(2)
-    const byName = new Map(
-      outcome.results.map((r, i) => [`r${i}`, r] as const),
-    )
+    const byName = new Map(outcome.results.map((r, i) => [`r${i}`, r] as const))
     void byName
     const fresh = outcome.results.filter((r) => r.evidence_fresh)
     expect(fresh.length).toBe(2)
@@ -270,10 +259,7 @@ describe("executeMetrics — shell evaluator", () => {
       evaluator_config: { cmd, parse: "stdout_number" },
       source_requirement_ids: [],
     })
-    const outcome = await executeMetrics(
-      { task_id: taskID, iteration: 0 },
-      { workDir: os.tmpdir() },
-    )
+    const outcome = await executeMetrics({ task_id: taskID, iteration: 0 }, { workDir: os.tmpdir() })
     expect(outcome.results).toHaveLength(1)
     const r = outcome.results[0]
     expect(r.evidence_fresh).toBe(true)

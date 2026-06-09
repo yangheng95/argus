@@ -40,13 +40,13 @@ adding a host-side state gate that auto-dispatches goals.
 
 Relevant call sites and sources searched before changing prompt text:
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | Single source of orchestrator decision discipline. | Add explicit process-fact and pending-goal dispatch invariant. |
-| `packages/opencorvus/src/orchestrator/loop.ts` | Single-pass loop, no host auto-rewake by design. | Leave unchanged; do not add state-machine dispatch. |
-| `packages/opencorvus/src/orchestrator/agent.ts` | Persists real orchestrator messages and tool calls. | Leave unchanged; the issue was a valid `finish='stop'` model choice. |
-| `packages/opencorvus/src/orchestrator/tools.ts` | `build` and `propose_task` are the real mutation surfaces. | Leave unchanged; no tool was called in the bad wake. |
-| `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts` | Current prompt text regression tests. | Add assertions for the new invariant. |
+| Surface                                                      | Evidence                                                   | Decision                                                             |
+| ------------------------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------- |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt`  | Single source of orchestrator decision discipline.         | Add explicit process-fact and pending-goal dispatch invariant.       |
+| `packages/opencorvus/src/orchestrator/loop.ts`               | Single-pass loop, no host auto-rewake by design.           | Leave unchanged; do not add state-machine dispatch.                  |
+| `packages/opencorvus/src/orchestrator/agent.ts`              | Persists real orchestrator messages and tool calls.        | Leave unchanged; the issue was a valid `finish='stop'` model choice. |
+| `packages/opencorvus/src/orchestrator/tools.ts`              | `build` and `propose_task` are the real mutation surfaces. | Leave unchanged; no tool was called in the bad wake.                 |
+| `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts` | Current prompt text regression tests.                      | Add assertions for the new invariant.                                |
 
 ## Fix
 
@@ -61,4 +61,3 @@ Add a prompt-only invariant:
   integrity verdict, and no external blocker, do not answer with only status
   text or ask whether to proceed. Dispatch `build({ goalID })` for the first
   eligible pending goal or dispatch the smallest real tool needed before build.
-

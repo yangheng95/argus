@@ -45,7 +45,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function ruleBody(selector: string): string {
@@ -59,11 +61,7 @@ function ruleBody(selector: string): string {
 }
 
 describe("settings-panel section headers render Title Case", () => {
-  for (const sel of [
-    ".about-section-title",
-    ".config-panel-group-title",
-    ".agent-model-tier-label",
-  ]) {
+  for (const sel of [".about-section-title", ".config-panel-group-title", ".agent-model-tier-label"]) {
     test(`${sel} does not force-uppercase`, () => {
       expect(ruleBody(sel)).not.toContain("text-transform: uppercase")
     })

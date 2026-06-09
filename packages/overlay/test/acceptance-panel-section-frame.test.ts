@@ -33,10 +33,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
-const BOARD = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "components", "Board.tsx"),
-  "utf8",
-)
+const BOARD = readFileSync(path.resolve(import.meta.dir, "..", "src", "components", "Board.tsx"), "utf8")
 
 describe("AcceptancePanel renders inside a collapsible section frame", () => {
   // 2026-05-04 follow-up: the bare `<details class="section">` wrapper

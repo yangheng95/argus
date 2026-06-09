@@ -71,7 +71,9 @@ function decodePng(input: string): PNG {
   } else if (existsSync(input)) {
     buffer = readFileSync(input) as Buffer
   } else {
-    throw new EvaluateError({ reason: `cannot decode image: not a data URL or valid file path (${input.slice(0, 60)}…)` })
+    throw new EvaluateError({
+      reason: `cannot decode image: not a data URL or valid file path (${input.slice(0, 60)}…)`,
+    })
   }
 
   return PNG.sync.read(buffer)
@@ -129,10 +131,7 @@ export interface EvaluateVisualCtx {
 }
 
 /** Compare a design screenshot to a rendered screenshot — returns an `EvaluationReport`. */
-export async function evaluateVisual(
-  input: EvaluateInput,
-  ctx?: EvaluateVisualCtx,
-): Promise<EvaluationReport> {
+export async function evaluateVisual(input: EvaluateInput, ctx?: EvaluateVisualCtx): Promise<EvaluationReport> {
   const parsed = EvaluateInputSchema.parse(input)
 
   ctx?.emit?.({ phase: "decode" })

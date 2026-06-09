@@ -108,11 +108,7 @@ export namespace WorkerTurnDescriptor {
 
   export function get(input: { id: string; sessionID: string }): Info | undefined {
     return Database.use((db) => {
-      const row = db
-        .select()
-        .from(WorkerTurnDescriptorTable)
-        .where(eq(WorkerTurnDescriptorTable.id, input.id))
-        .get()
+      const row = db.select().from(WorkerTurnDescriptorTable).where(eq(WorkerTurnDescriptorTable.id, input.id)).get()
       if (!row || row.session_id !== input.sessionID) return undefined
       return fromRow(row)
     })

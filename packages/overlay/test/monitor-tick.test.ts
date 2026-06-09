@@ -28,7 +28,10 @@ describe("makeMonitorTick (audit W2-V24)", () => {
     const tick = makeMonitorTick({
       isHidden: () => true,
       isConnected: () => false,
-      check: async () => { checks++; return true },
+      check: async () => {
+        checks++
+        return true
+      },
     })
     await tick()
     expect(checks).toBe(0)
@@ -39,7 +42,10 @@ describe("makeMonitorTick (audit W2-V24)", () => {
     const tick = makeMonitorTick({
       isHidden: () => false,
       isConnected: () => true,
-      check: async () => { checks++; return true },
+      check: async () => {
+        checks++
+        return true
+      },
     })
     await tick()
     expect(checks).toBe(0)
@@ -51,8 +57,13 @@ describe("makeMonitorTick (audit W2-V24)", () => {
     const tick = makeMonitorTick({
       isHidden: () => false,
       isConnected: () => false,
-      check: async () => { checks++; return true },
-      onReconnect: async () => { reconnects++ },
+      check: async () => {
+        checks++
+        return true
+      },
+      onReconnect: async () => {
+        reconnects++
+      },
     })
     await tick()
     expect(checks).toBe(1)
@@ -65,7 +76,9 @@ describe("makeMonitorTick (audit W2-V24)", () => {
       isHidden: () => false,
       isConnected: () => false,
       check: async () => false,
-      onReconnect: async () => { reconnects++ },
+      onReconnect: async () => {
+        reconnects++
+      },
     })
     await tick()
     expect(reconnects).toBe(0)
@@ -86,7 +99,9 @@ describe("makeMonitorTick (audit W2-V24)", () => {
         checks++
         return checkDeferred.promise
       },
-      onReconnect: async () => { reconnects++ },
+      onReconnect: async () => {
+        reconnects++
+      },
     })
 
     const t1 = tick() // tick #1: enters, awaits check
@@ -116,7 +131,9 @@ describe("makeMonitorTick (audit W2-V24)", () => {
         checks++
         return checkDeferred2.promise
       },
-      onReconnect: async () => { reconnects++ },
+      onReconnect: async () => {
+        reconnects++
+      },
     })
     const t5 = tick2()
     await new Promise((r) => setTimeout(r, 0))
@@ -154,8 +171,13 @@ describe("makeMonitorTick (audit W2-V24)", () => {
     const tick = makeMonitorTick({
       isHidden: () => false,
       isConnected: () => false,
-      check: async () => { checks++; return true },
-      onReconnect: async () => { throw new Error("reconnect failed") },
+      check: async () => {
+        checks++
+        return true
+      },
+      onReconnect: async () => {
+        throw new Error("reconnect failed")
+      },
       warn: (...a) => warnings.push(a),
     })
     await tick()

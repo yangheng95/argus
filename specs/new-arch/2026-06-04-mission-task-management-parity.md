@@ -18,18 +18,18 @@ model as task management:
 
 ## Current callsites
 
-| Area | Callsite | Disposition |
-| --- | --- | --- |
-| Panel task tab | `packages/overlay/src/index.html` `#btnCreateTask` and `#taskListPanel` | Keep task behavior unchanged. |
-| Mission entry | `packages/overlay/src/index.html` `#btnMission`, wired in `main.tsx` | Keep as the Mission tab entry. |
-| Mission page header | `packages/overlay/src/components/Mission.tsx` `MissionHeader` | Remove row-level refresh action; retain the Panel back affordance only as page navigation. |
-| New task flow | `main.tsx` `btnCreateTask` clears selection and focuses `#solidChatComposer textarea` | Mirror in Mission by clearing selected mission, showing launcher, and focusing the Mission composer in the workbench column. |
-| Mission list | `Mission.tsx` renders `MissionList` with `loadMissions` | Extend `MissionList` actions; do not reintroduce `TaskList` or `visibleTasks`. |
-| Task row actions | `TaskList.tsx` `CancelButton`, `RenameButton`, `DeleteButton` | Reuse the same interaction pattern locally in `MissionList`, backed by Mission APIs. |
-| Mission API | `packages/opencorvus/src/server/routes/mission.ts` has `GET /mission` and `POST /mission/wake` | Add mission-scoped abort, rename, and delete routes that validate the row is a real Mission session. |
-| Session source | `Session.setTitle`, `Session.remove`, `SessionPrompt.cancel` | Use these session primitives. Do not duplicate session storage. |
-| Mission input | `MissionComposer` currently renders custom textarea shell | Replace its text input shell with `ChatComposer` while keeping the optional missionID field and wake endpoint. |
-| Conversation card role | `Conversation` -> `ChatBubble` / card role utils | Ensure `mission` messages get their own role styling and do not collapse into assistant/user ambiguity. |
+| Area                   | Callsite                                                                                       | Disposition                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Panel task tab         | `packages/overlay/src/index.html` `#btnCreateTask` and `#taskListPanel`                        | Keep task behavior unchanged.                                                                                                |
+| Mission entry          | `packages/overlay/src/index.html` `#btnMission`, wired in `main.tsx`                           | Keep as the Mission tab entry.                                                                                               |
+| Mission page header    | `packages/overlay/src/components/Mission.tsx` `MissionHeader`                                  | Remove row-level refresh action; retain the Panel back affordance only as page navigation.                                   |
+| New task flow          | `main.tsx` `btnCreateTask` clears selection and focuses `#solidChatComposer textarea`          | Mirror in Mission by clearing selected mission, showing launcher, and focusing the Mission composer in the workbench column. |
+| Mission list           | `Mission.tsx` renders `MissionList` with `loadMissions`                                        | Extend `MissionList` actions; do not reintroduce `TaskList` or `visibleTasks`.                                               |
+| Task row actions       | `TaskList.tsx` `CancelButton`, `RenameButton`, `DeleteButton`                                  | Reuse the same interaction pattern locally in `MissionList`, backed by Mission APIs.                                         |
+| Mission API            | `packages/opencorvus/src/server/routes/mission.ts` has `GET /mission` and `POST /mission/wake` | Add mission-scoped abort, rename, and delete routes that validate the row is a real Mission session.                         |
+| Session source         | `Session.setTitle`, `Session.remove`, `SessionPrompt.cancel`                                   | Use these session primitives. Do not duplicate session storage.                                                              |
+| Mission input          | `MissionComposer` currently renders custom textarea shell                                      | Replace its text input shell with `ChatComposer` while keeping the optional missionID field and wake endpoint.               |
+| Conversation card role | `Conversation` -> `ChatBubble` / card role utils                                               | Ensure `mission` messages get their own role styling and do not collapse into assistant/user ambiguity.                      |
 
 ## API design
 

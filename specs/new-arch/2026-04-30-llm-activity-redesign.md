@@ -4,11 +4,11 @@
 
 ## 触发事故
 
-| Task | 现象 | 真因 |
-|---|---|---|
-| `tsk_ddc529dfd0011ajJTgBqdlroyk` G3 | board 显示"运行 28 分钟无更新" | provider 持续返回 HTTP 429（usage allocated quota exceeded），底层每 30s 退避一次重试 24+ 次，没有 totalMs 上限、没有重试上限、没有 fail-fast 路径 |
-| `tsk_ddc529dfd0011ajJTgBqdlroyk` G4 | board 显示"运行 18 分钟无更新" | TLS 流式错误 `unknown certificate verification error` 后 session 5s 内连发 `idle / status=aborted / status=completed` 三条互相冲突的 terminal 事件；`engine_artifact kind=goal_run_attempt` 没有写入对应的 `attempt-completed/failed`，attempt 永远停在 `running` |
-| `tsk_ddc67008f001pRQAXurqfkwPtT` | architect 之后短暂有 6 个 0ms 寿命的 orchestrator session | TLS 错触发 5 次重试，每次起一个新 orchestrator session（重试粒度 = session 级而不是 activity 级） |
+| Task                                | 现象                                                      | 真因                                                                                                                                                                                                                                                              |
+| ----------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsk_ddc529dfd0011ajJTgBqdlroyk` G3 | board 显示"运行 28 分钟无更新"                            | provider 持续返回 HTTP 429（usage allocated quota exceeded），底层每 30s 退避一次重试 24+ 次，没有 totalMs 上限、没有重试上限、没有 fail-fast 路径                                                                                                                |
+| `tsk_ddc529dfd0011ajJTgBqdlroyk` G4 | board 显示"运行 18 分钟无更新"                            | TLS 流式错误 `unknown certificate verification error` 后 session 5s 内连发 `idle / status=aborted / status=completed` 三条互相冲突的 terminal 事件；`engine_artifact kind=goal_run_attempt` 没有写入对应的 `attempt-completed/failed`，attempt 永远停在 `running` |
+| `tsk_ddc67008f001pRQAXurqfkwPtT`    | architect 之后短暂有 6 个 0ms 寿命的 orchestrator session | TLS 错触发 5 次重试，每次起一个新 orchestrator session（重试粒度 = session 级而不是 activity 级）                                                                                                                                                                 |
 
 **共性**：每一处都是因为 LLM 网络/流式调用层缺一个**单一来源、可终结的活动单元**。`util/stream-activity.ts` 已经把"物理活性探针"做对了（idle gate + pause/resume + abortableIterable + winner cause via DOMException reason），但**没有人**在它之上提供重试调度、错误分类、终态事件、状态机收口——这一层是本次新增。
 
@@ -29,34 +29,34 @@
 ```ts
 export type ErrorClass =
   // 优先级最高，非重试 ──────────────────────────────────────────
-  | "external_abort"     // 外部 AbortSignal 触发；下游必须翻译成 aborted（非 failed）
-  | "total_timeout"      // 整个 activity 跨重试累计超出 totalMs；非重试
+  | "external_abort" // 外部 AbortSignal 触发；下游必须翻译成 aborted（非 failed）
+  | "total_timeout" // 整个 activity 跨重试累计超出 totalMs；非重试
   // 单独成类，可重试（默认） ───────────────────────────────────
-  | "first_byte"         // 请求发出后 firstByteMs 内未收到第一帧
-  | "idle"               // 第一帧后帧间静默 > idleMs
-  | "rate_limit"         // HTTP 429（永远 transient）
-  | "tls"                // 证书 / handshake / SNI / SSL
-  | "network"            // ECONNRESET / ETIMEDOUT / DNS / fetch failed
-  | "server_5xx"         // 500 / 502 / 503 / 504
-  | "stream_protocol"    // SSE 帧坏 / JSON 半截 / tool_use 块缺失
+  | "first_byte" // 请求发出后 firstByteMs 内未收到第一帧
+  | "idle" // 第一帧后帧间静默 > idleMs
+  | "rate_limit" // HTTP 429（永远 transient）
+  | "tls" // 证书 / handshake / SNI / SSL
+  | "network" // ECONNRESET / ETIMEDOUT / DNS / fetch failed
+  | "server_5xx" // 500 / 502 / 503 / 504
+  | "stream_protocol" // SSE 帧坏 / JSON 半截 / tool_use 块缺失
   // 客户端语义错误，非重试 ─────────────────────────────────────
-  | "client_4xx"         // 一般 4xx（除下面单列）
-  | "request_timeout"    // 408 — 单列；与 idle 区分（408 是上游主动超时，idle 是我方水位）
-  | "payload_too_large"  // 413 — context overflow 也归这里
-  | "context_overflow"   // 模型 context window 溢出（provider 报 invalid_request_error → 由 classify 识别 token / context 关键字升格为此类）
+  | "client_4xx" // 一般 4xx（除下面单列）
+  | "request_timeout" // 408 — 单列；与 idle 区分（408 是上游主动超时，idle 是我方水位）
+  | "payload_too_large" // 413 — context overflow 也归这里
+  | "context_overflow" // 模型 context window 溢出（provider 报 invalid_request_error → 由 classify 识别 token / context 关键字升格为此类）
   | "unknown"
 ```
 
 **重试性矩阵**（默认 policy；可被 callsite 覆盖）：
 
-| Class | 重试 | 备注 |
-|---|---|---|
-| `external_abort` | 否 | 走 aborted 终态 |
-| `total_timeout`  | 否 | 走 failed 终态 |
-| `client_4xx`     | 否 | prompt / auth bug，再试无意义 |
-| `request_timeout` | 否 | 408 表明上游已放弃；让 orchestrator 决定下一步 |
-| `payload_too_large` / `context_overflow` | 否 | 必须缩 prompt，调用方需要 backstop |
-| 其它（含 `rate_limit / tls / idle / first_byte / network / server_5xx / stream_protocol / unknown`） | 是 | maxRetries[cls] + totalMs 兜底 |
+| Class                                                                                                | 重试 | 备注                                           |
+| ---------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------------- |
+| `external_abort`                                                                                     | 否   | 走 aborted 终态                                |
+| `total_timeout`                                                                                      | 否   | 走 failed 终态                                 |
+| `client_4xx`                                                                                         | 否   | prompt / auth bug，再试无意义                  |
+| `request_timeout`                                                                                    | 否   | 408 表明上游已放弃；让 orchestrator 决定下一步 |
+| `payload_too_large` / `context_overflow`                                                             | 否   | 必须缩 prompt，调用方需要 backstop             |
+| 其它（含 `rate_limit / tls / idle / first_byte / network / server_5xx / stream_protocol / unknown`） | 是   | maxRetries[cls] + totalMs 兜底                 |
 
 ## 策略对象
 
@@ -64,14 +64,14 @@ export type ErrorClass =
 export interface LLMActivityPolicy {
   /** 起到终态的硬上限（含重试期间的所有 sleep）。
    *  此 deadline 同时绑定到 race signal，attempt 与 backoff 都会被它中断。 */
-  totalMs: number                              // default 30 * 60_000
+  totalMs: number // default 30 * 60_000
 
   /** 帧间静默上限。仅在第一帧到达后启动；每个 chunk / bump() reset。 */
-  idleMs: number                               // default 180_000
+  idleMs: number // default 180_000
 
   /** 请求发出 → 第一帧之间的水位。第一帧到达后，转交 idle 计时器。
    *  firstByteMs 和 idleMs 覆盖不同阶段，允许 firstByteMs 小于 idleMs。 */
-  firstByteMs: number                          // default 60_000
+  firstByteMs: number // default 60_000
 
   /** 各 ErrorClass 的最大重试次数（首次不计）。可重试类通过这里限流；
    *  非重试类配置忽略。 */
@@ -128,20 +128,35 @@ backoffMs(cls, attempt, remainingTotalMs) {
 
 ```ts
 export type LLMActivityEvent =
-  | { type: "started";   id: string; ts: number; sessionID: string; goalRunID?: string; provider: string; model: string }
+  | { type: "started"; id: string; ts: number; sessionID: string; goalRunID?: string; provider: string; model: string }
   | { type: "heartbeat"; id: string; ts: number; kind: HeartbeatKind }
-  | { type: "paused";    id: string; ts: number; reason: string }
-  | { type: "resumed";   id: string; ts: number; reason: string }
-  | { type: "retry";     id: string; ts: number; attempt: number; cls: ErrorClass; backoffMs: number; reason: string }
-  | { type: "terminal";  id: string; ts: number; outcome: "done" | "failed" | "aborted"; cls?: ErrorClass; error?: { name: string; message: string } }
+  | { type: "paused"; id: string; ts: number; reason: string }
+  | { type: "resumed"; id: string; ts: number; reason: string }
+  | { type: "retry"; id: string; ts: number; attempt: number; cls: ErrorClass; backoffMs: number; reason: string }
+  | {
+      type: "terminal"
+      id: string
+      ts: number
+      outcome: "done" | "failed" | "aborted"
+      cls?: ErrorClass
+      error?: { name: string; message: string }
+    }
 
 export type HeartbeatKind =
   | "first-byte"
-  | "text-delta" | "reasoning-delta"
-  | "tool-input-start" | "tool-input-delta" | "tool-input-end"
-  | "tool-call" | "tool-result" | "tool-error"
-  | "step-start" | "step-finish"
-  | "executor-progress" | "executor-usage" | "executor-diff"
+  | "text-delta"
+  | "reasoning-delta"
+  | "tool-input-start"
+  | "tool-input-delta"
+  | "tool-input-end"
+  | "tool-call"
+  | "tool-result"
+  | "tool-error"
+  | "step-start"
+  | "step-finish"
+  | "executor-progress"
+  | "executor-usage"
+  | "executor-diff"
   | "manual"
 ```
 
@@ -200,14 +215,14 @@ export async function withLLMActivity<T>(
 
 ## 单一来源迁移（rule 8）— 已收口范围
 
-| 现有写状态者 | 改为 |
-|---|---|
-| `util/stream-activity.ts` 的 idle gate / pause / resume | **保留**，作为 LLMActivity 的内部组件之一（不删） |
-| 各 agent 内部 `try { … } catch { retry }` | **删除**，统一通过 `withLLMActivity` 包裹 |
-| `session.bridge` 自己合成 `streaming/aborted/completed` | **缩窄职责**：只负责 session lifecycle / overlay protocol 翻译。把 LLMActivityEvent → session.status 只翻译为 streaming / paused / retry，不再合成 terminal aborted+completed 双发；terminal 直接由 activity 终态写一条。 |
+| 现有写状态者                                                                            | 改为                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `util/stream-activity.ts` 的 idle gate / pause / resume                                 | **保留**，作为 LLMActivity 的内部组件之一（不删）                                                                                                                                                                                                                                |
+| 各 agent 内部 `try { … } catch { retry }`                                               | **删除**，统一通过 `withLLMActivity` 包裹                                                                                                                                                                                                                                        |
+| `session.bridge` 自己合成 `streaming/aborted/completed`                                 | **缩窄职责**：只负责 session lifecycle / overlay protocol 翻译。把 LLMActivityEvent → session.status 只翻译为 streaming / paused / retry，不再合成 terminal aborted+completed 双发；terminal 直接由 activity 终态写一条。                                                        |
 | `engine_artifact kind=goal_run_attempt` 由 build agent step + finalizeBuildAttempt 推导 | **不变**：attempt-completed 仍由 build 领域结果（merge / commit / evidence）触发。LLM activity 只在**带 goalRunID 的 build-scoped 调用 failed/aborted**时，作为 build 的失败信号补一条 `attempt-failed` / `attempt-aborted`——activity terminal=done **不**写 attempt-completed。 |
-| Board "stalled" 启发式（看 message 时间戳） | **改用** activity `lastActivityAt` + attempt 状态。 |
-| 散落的 retry：architect / build / requirements / orchestrator 自旋 | **删除**，由 runner 在更高层处理 |
+| Board "stalled" 启发式（看 message 时间戳）                                             | **改用** activity `lastActivityAt` + attempt 状态。                                                                                                                                                                                                                              |
+| 散落的 retry：architect / build / requirements / orchestrator 自旋                      | **删除**，由 runner 在更高层处理                                                                                                                                                                                                                                                 |
 
 ## 可观测性（不影响控制流）
 
@@ -239,7 +254,7 @@ export async function withLLMActivity<T>(
    - winner cause 不丢
    - pause/resume 嵌套
    - heartbeat kind 全集
-   当前调用方不变。
+     当前调用方不变。
 2. **改 `llm/api.ts` / `provider/*` 的所有流式调用**走 `withLLMActivity`；让 provider adapter 在所有 stream 帧上 bump 正确的 HeartbeatKind。删除分散的 retry 逻辑。
 3. **改 `session.bridge`** 缩窄职责：只翻译 LLMActivityEvent，不再自合成 terminal aborted+completed 双发。
 4. **改 build path**：把 build-scoped activity 的 failed/aborted terminal 同步成 `attempt-failed` / `attempt-aborted`（`attempt-completed` 路径**不**改）。
@@ -259,12 +274,12 @@ export async function withLLMActivity<T>(
 
 ## Review 收口（v1 → v2 codex 修订）
 
-| Codex 评审点 | v1 设计 | v2 修订 |
-|---|---|---|
-| 错误分类不互斥 / 不完整 | 9 类，靠字符串猜 idle 来源 | 11 类按优先级，winner cause 走 controller reason，不靠 string match |
-| 四道闸竞态 | totalMs 仅在 shouldRetry 里查 | totalMs 同时绑 race signal；backoff 按 remainingTotalMs 截断；idle 在第一帧后启动 |
-| terminal 二态 | done/failed | done/failed/**aborted**；external_abort 走 aborted |
-| heartbeat bump 范围 | 只列 chunk/tool-arg | 加 pause/resume + 14 种 HeartbeatKind 完整覆盖 |
+| Codex 评审点               | v1 设计                                        | v2 修订                                                                                         |
+| -------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 错误分类不互斥 / 不完整    | 9 类，靠字符串猜 idle 来源                     | 11 类按优先级，winner cause 走 controller reason，不靠 string match                             |
+| 四道闸竞态                 | totalMs 仅在 shouldRetry 里查                  | totalMs 同时绑 race signal；backoff 按 remainingTotalMs 截断；idle 在第一帧后启动               |
+| terminal 二态              | done/failed                                    | done/failed/**aborted**；external_abort 走 aborted                                              |
+| heartbeat bump 范围        | 只列 chunk/tool-arg                            | 加 pause/resume + 14 种 HeartbeatKind 完整覆盖                                                  |
 | 单一来源破坏 build attempt | 用 activity terminal=done 推 attempt-completed | activity 仅推 failed/aborted 到 attempt；completed 仍由 build 领域（merge/commit/evidence）触发 |
 
 并加注：原 v1 误把 `util/stream-activity.ts` 列入"删除"——v2 改为**保留并复用**，新增的只是其上一层的重试/分类/终态调度。

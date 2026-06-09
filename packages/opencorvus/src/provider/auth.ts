@@ -151,13 +151,15 @@ export namespace ProviderAuth {
       const currentInputs = input.inputs ?? {}
       return method.prompts
         .filter((p) => !p.condition || p.condition(currentInputs))
-        .map((p): Prompt => ({
-          type: p.type,
-          key: p.key,
-          message: p.message,
-          placeholder: "placeholder" in p ? p.placeholder : undefined,
-          options: "options" in p ? p.options : undefined,
-        }))
+        .map(
+          (p): Prompt => ({
+            type: p.type,
+            key: p.key,
+            message: p.message,
+            placeholder: "placeholder" in p ? p.placeholder : undefined,
+            options: "options" in p ? p.options : undefined,
+          }),
+        )
     },
   )
 

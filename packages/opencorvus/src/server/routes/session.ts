@@ -36,10 +36,7 @@ import { SessionAgentIdentity } from "@/session/agent-identity"
 
 const log = Log.create({ service: "server" })
 
-async function applySessionPromptRouteOverlay(
-  sessionID: string,
-  prompt: Omit<SessionPrompt.PromptInput, "sessionID">,
-) {
+async function applySessionPromptRouteOverlay(sessionID: string, prompt: Omit<SessionPrompt.PromptInput, "sessionID">) {
   const session = await Session.get(sessionID)
   if (isRightSidebarCodingAssistantSession(session)) {
     return applyRightSidebarCodingAssistantPromptOverlay(prompt)
@@ -50,9 +47,7 @@ async function applySessionPromptRouteOverlay(
 function protocolSessionEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
   const timestamp = event.time.emitted
   if (!(typeof timestamp === "number" && timestamp > 0)) {
-    throw new Error(
-      `protocolSessionEvent: event ${event.id} missing time.emitted (schema-invariant violated)`,
-    )
+    throw new Error(`protocolSessionEvent: event ${event.id} missing time.emitted (schema-invariant violated)`)
   }
   const notify = BusEvent.resolveNotify(event.type, event.payload ?? {})
   return {
@@ -339,8 +334,9 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const session = await Session.get(sessionID)
-        const transcript = enrichMissionSessionTranscript(await Session.messages({ sessionID }))
-          .filter(conversationMessageHasDisplay)
+        const transcript = enrichMissionSessionTranscript(await Session.messages({ sessionID })).filter(
+          conversationMessageHasDisplay,
+        )
         const board = {
           kind: "session" as const,
           sessionID,
@@ -406,28 +402,32 @@ export const SessionRoutes = lazy(() =>
             { sessionID },
           )
           const stopMirror = subscribeSessionMirror(sessionID)
-          await writeData(JSON.stringify({
-            event_id: `session-connected-${Date.now()}`,
-            session_id: sessionID,
-            type: "session.connected",
-            emittedAt: Date.now(),
-            timestamp: Date.now(),
-            sequence: 0,
-            summary: "Session event stream connected",
-            payload: { sessionID },
-          }))
+          await writeData(
+            JSON.stringify({
+              event_id: `session-connected-${Date.now()}`,
+              session_id: sessionID,
+              type: "session.connected",
+              emittedAt: Date.now(),
+              timestamp: Date.now(),
+              sequence: 0,
+              summary: "Session event stream connected",
+              payload: { sessionID },
+            }),
+          )
           const heartbeat = setInterval(() => {
             const now = Date.now()
-            void writeData(JSON.stringify({
-              event_id: `session-heartbeat-${now}`,
-              session_id: sessionID,
-              type: "session.heartbeat",
-              emittedAt: now,
-              timestamp: now,
-              sequence: 0,
-              summary: "Session event stream heartbeat",
-              payload: { sessionID },
-            }))
+            void writeData(
+              JSON.stringify({
+                event_id: `session-heartbeat-${now}`,
+                session_id: sessionID,
+                type: "session.heartbeat",
+                emittedAt: now,
+                timestamp: now,
+                sequence: 0,
+                summary: "Session event stream heartbeat",
+                payload: { sessionID },
+              }),
+            )
           }, 10_000)
           await new Promise<void>((resolve) => {
             stream.onAbort(() => {
@@ -790,7 +790,9 @@ export const SessionRoutes = lazy(() =>
           auto: body.auto,
           focus: body.focus,
         })
-        const result = await SessionContext.provide(session, () => SessionPrompt.loop({ sessionID, result_mode: "summary" }))
+        const result = await SessionContext.provide(session, () =>
+          SessionPrompt.loop({ sessionID, result_mode: "summary" }),
+        )
         return c.json(result.info.role === "assistant" && CompactionHandoff.isValidSummaryMessage(result.info))
       },
     )

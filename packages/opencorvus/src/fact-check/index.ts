@@ -34,7 +34,6 @@ const log = Log.create({ service: "fact-check-agent" })
  *  namespace, producing TS2552 against the local `targetMessageText`. */
 const TARGET_MESSAGE_TEXT_CAP = 8000
 
-
 function renderFactCheckItems(items: FactCheckItem[]): string {
   if (items.length === 0) {
     return "_No fact-check items registered by the upstream worker. Inspect the message content itself for load-bearing factual claims and verify those._"
@@ -71,7 +70,8 @@ function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput, targetMessageT
   if (targetMessageText.trim().length > 0) {
     const truncated = targetMessageText.length > TARGET_MESSAGE_TEXT_CAP
     const body = truncated
-      ? targetMessageText.slice(0, TARGET_MESSAGE_TEXT_CAP) + `\n\n…(truncated; ${targetMessageText.length - TARGET_MESSAGE_TEXT_CAP} more chars)`
+      ? targetMessageText.slice(0, TARGET_MESSAGE_TEXT_CAP) +
+        `\n\n…(truncated; ${targetMessageText.length - TARGET_MESSAGE_TEXT_CAP} more chars)`
       : targetMessageText
     sections.push(`# Target message content\n\n\`\`\`\n${body}\n\`\`\``)
   } else {
@@ -80,8 +80,7 @@ function buildFactCheckUserPrompt(input: FactCheckAgent.RunInput, targetMessageT
     )
   }
   sections.push(
-    `# Registered fact-check items (${input.factCheckItems.length})\n\n` +
-      renderFactCheckItems(input.factCheckItems),
+    `# Registered fact-check items (${input.factCheckItems.length})\n\n` + renderFactCheckItems(input.factCheckItems),
   )
   sections.push(
     "# Output contract\n\n" +
@@ -180,10 +179,14 @@ export namespace FactCheckAgent {
       items: input.factCheckItems.length,
     })
 
-    const retrievalTools = await filterAgentTools(createReadonlyRetrievalTools(undefined, { websearch: false }), "fact-check", {
-      taskID: input.taskID,
-      sessionID: input.orchestratorSessionID,
-    })
+    const retrievalTools = await filterAgentTools(
+      createReadonlyRetrievalTools(undefined, { websearch: false }),
+      "fact-check",
+      {
+        taskID: input.taskID,
+        sessionID: input.orchestratorSessionID,
+      },
+    )
     const outputToolKit = createFactCheckOutputTools()
     // Load target message text up-front so the prompt builder has it.
     const targetMessageText = await loadTargetMessageText(input.targetSessionID, input.targetMessageID)

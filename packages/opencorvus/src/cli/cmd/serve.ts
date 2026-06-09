@@ -3,10 +3,7 @@ import { cmd } from "./cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
 import { Flag } from "../../flag/flag"
 import { createConnection } from "net"
-import {
-  clearServerShutdownHandler,
-  registerServerShutdownHandler,
-} from "../../server/shutdown"
+import { clearServerShutdownHandler, registerServerShutdownHandler } from "../../server/shutdown"
 
 /** Hide the console window on Windows using Win32 API. */
 function hideConsoleWindow() {
@@ -112,7 +109,9 @@ export const ServeCommand = cmd({
       const { InstanceBootstrap } = await import("../../project/bootstrap")
       const { Instance } = await import("../../project/instance")
       const { listLiveRunsForProject } = await import("../../engine/store")
-      const { abortActiveTasksForProject, abortLiveExecutionForProject, abortRuns } = await import("../../engine/writer")
+      const { abortActiveTasksForProject, abortLiveExecutionForProject, abortRuns } = await import(
+        "../../engine/writer"
+      )
 
       return Instance.provide({
         directory,
@@ -176,9 +175,8 @@ export const ServeCommand = cmd({
     }
     registerServerShutdownHandler(requestShutdown)
 
-    const signals: NodeJS.Signals[] = process.platform === "win32"
-      ? ["SIGINT", "SIGTERM", "SIGBREAK"]
-      : ["SIGINT", "SIGTERM"]
+    const signals: NodeJS.Signals[] =
+      process.platform === "win32" ? ["SIGINT", "SIGTERM", "SIGBREAK"] : ["SIGINT", "SIGTERM"]
     for (const signal of signals) {
       process.on(signal, () => {
         void requestShutdown(signal)

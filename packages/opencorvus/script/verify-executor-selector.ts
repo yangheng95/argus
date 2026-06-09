@@ -48,7 +48,7 @@ try {
     // Use JS click instead of Playwright's geometric click so the chip
     // doesn't have to be hit-tested at exact viewport coords.
     await page.$eval(".executor-chip", (el) => {
-      (el as HTMLElement).scrollIntoView({ block: "center" })
+      ;(el as HTMLElement).scrollIntoView({ block: "center" })
       ;(el as HTMLElement).click()
     })
     await new Promise((r) => setTimeout(r, 300))

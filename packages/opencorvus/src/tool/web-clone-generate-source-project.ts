@@ -11,23 +11,23 @@ It writes framework components, sourceData arrays, CSS sidecars, copied assets, 
   parameters: z.object({
     webpageEvidenceDir: z
       .string()
-      .describe("Directory containing source-skeleton/, source-ir/, assets/, and reference.png. Defaults to <execution directory>/web-clone-source.")
+      .describe(
+        "Directory containing source-skeleton/, source-ir/, assets/, and reference.png. Defaults to <execution directory>/web-clone-source.",
+      )
       .optional(),
     outputDir: z
       .string()
-      .describe("Directory where the editable React project should be written. Defaults to <execution directory>/web-clone-source-project.")
+      .describe(
+        "Directory where the editable React project should be written. Defaults to <execution directory>/web-clone-source-project.",
+      )
       .optional(),
-    packageName: z
-      .string()
-      .describe("Optional package name for the generated React project.")
-      .optional(),
-    overwrite: z
-      .boolean()
-      .describe("Replace an existing non-empty output directory. Defaults to false.")
-      .optional(),
+    packageName: z.string().describe("Optional package name for the generated React project.").optional(),
+    overwrite: z.boolean().describe("Replace an existing non-empty output directory. Defaults to false.").optional(),
   }),
   async execute(params) {
-    const webpageEvidenceDir = resolveInputPath(params.webpageEvidenceDir ?? path.join(Instance.directory, "web-clone-source"))
+    const webpageEvidenceDir = resolveInputPath(
+      params.webpageEvidenceDir ?? path.join(Instance.directory, "web-clone-source"),
+    )
     const outputDir = resolveInputPath(params.outputDir ?? path.join(Instance.directory, "web-clone-source-project"))
     const result = await generateWebCloneSourceProject({
       webpageEvidenceDir,

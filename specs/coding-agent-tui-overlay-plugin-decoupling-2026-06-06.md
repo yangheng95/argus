@@ -46,18 +46,18 @@ Readability verification after the right-pane presentation fix:
 
 ## Call Points
 
-| Area | Call point | Decision |
-| --- | --- | --- |
-| Overlay main | `packages/overlay/src/main.tsx` | Import only `codingAgentTuiPlugin`; do not import panel internals. |
-| Overlay plugin | `packages/overlay/src/plugins/coding-agent-tui/index.tsx` | Own activity metadata, body/mount IDs, and panel component. |
-| Overlay plugin panel | `packages/overlay/src/plugins/coding-agent-tui/CodingAgentTuiPanel.tsx` | Render backend-captured OpenTUI spans and own focus, keyboard, paste, resize, polling, and restart controls. |
-| Overlay plugin embed target | `packages/overlay/src/plugins/coding-agent-tui/embedded-target.ts` | Own `/tui/embed/start`, `/status`, `/input`, `/resize`, and `/stop` client calls with explicit project directory. |
-| Overlay plugin terminal helper | `packages/overlay/src/plugins/coding-agent-tui/terminal-size.ts` | Own terminal resize dedupe helper. |
-| OpenCorvus backend | `packages/opencorvus/src/server/routes/tui.ts` | Expose project-scoped embedded TUI routes as the single backend preview/evidence target for the overlay plugin. |
-| OpenCorvus backend | `packages/opencorvus/src/tui/embedded.ts` | Own the sidecar process lifecycle and JSON-lines protocol. |
-| OpenCorvus backend | `packages/opencorvus/src/tui/embedded-worker.tsx` | Run the mature OpenTUI/Solid test renderer with `TuiRoot`, serialize styled spans, and apply input/resize. |
-| TUI root | `packages/opencorvus/src/cli/cmd/tui/app.tsx` | Export `TuiRoot` so both the CLI and embedded worker use the same OpenTUI app tree. |
-| TUI slots | `packages/opencorvus/src/cli/cmd/tui/plugin/slots.tsx` | Render fallback children before runtime setup and notify Solid when host slot view/register state changes. |
+| Area                           | Call point                                                              | Decision                                                                                                          |
+| ------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Overlay main                   | `packages/overlay/src/main.tsx`                                         | Import only `codingAgentTuiPlugin`; do not import panel internals.                                                |
+| Overlay plugin                 | `packages/overlay/src/plugins/coding-agent-tui/index.tsx`               | Own activity metadata, body/mount IDs, and panel component.                                                       |
+| Overlay plugin panel           | `packages/overlay/src/plugins/coding-agent-tui/CodingAgentTuiPanel.tsx` | Render backend-captured OpenTUI spans and own focus, keyboard, paste, resize, polling, and restart controls.      |
+| Overlay plugin embed target    | `packages/overlay/src/plugins/coding-agent-tui/embedded-target.ts`      | Own `/tui/embed/start`, `/status`, `/input`, `/resize`, and `/stop` client calls with explicit project directory. |
+| Overlay plugin terminal helper | `packages/overlay/src/plugins/coding-agent-tui/terminal-size.ts`        | Own terminal resize dedupe helper.                                                                                |
+| OpenCorvus backend             | `packages/opencorvus/src/server/routes/tui.ts`                          | Expose project-scoped embedded TUI routes as the single backend preview/evidence target for the overlay plugin.   |
+| OpenCorvus backend             | `packages/opencorvus/src/tui/embedded.ts`                               | Own the sidecar process lifecycle and JSON-lines protocol.                                                        |
+| OpenCorvus backend             | `packages/opencorvus/src/tui/embedded-worker.tsx`                       | Run the mature OpenTUI/Solid test renderer with `TuiRoot`, serialize styled spans, and apply input/resize.        |
+| TUI root                       | `packages/opencorvus/src/cli/cmd/tui/app.tsx`                           | Export `TuiRoot` so both the CLI and embedded worker use the same OpenTUI app tree.                               |
+| TUI slots                      | `packages/opencorvus/src/cli/cmd/tui/plugin/slots.tsx`                  | Render fallback children before runtime setup and notify Solid when host slot view/register state changes.        |
 
 ## Implementation Decision
 

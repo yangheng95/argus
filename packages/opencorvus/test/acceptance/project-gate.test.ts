@@ -644,7 +644,6 @@ console.log("lint scope ok", cwd())
       manifest.reviewEvidence.find((item) => item.id === "review:workspace_export")?.evidence.join("\n"),
     ).toContain("missing_declared_files=src/app.ts")
   })
-
 })
 
 async function packageFixture(

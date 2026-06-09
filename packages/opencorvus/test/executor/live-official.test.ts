@@ -9,13 +9,18 @@ import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
-const RUN_LIVE = process.env.OPENCORVUS_RUN_LIVE_EXECUTOR_TESTS === "1" || process.env.OPENCORVUS_RUN_LIVE_EXECUTOR_TESTS === "true"
+const RUN_LIVE =
+  process.env.OPENCORVUS_RUN_LIVE_EXECUTOR_TESTS === "1" || process.env.OPENCORVUS_RUN_LIVE_EXECUTOR_TESTS === "true"
 const liveCodex = RUN_LIVE && !!Bun.which("codex") ? test : test.skip
 const liveClaude = RUN_LIVE && (!!Bun.which("claude") || !!Bun.which("claude.exe")) ? test : test.skip
 
 const repoRoot = path.resolve(import.meta.dir, "..", "..")
-const mcpServerModule = pathToFileURL(path.join(repoRoot, "node_modules", "@modelcontextprotocol", "sdk", "dist", "esm", "server", "mcp.js")).href
-const mcpStdioModule = pathToFileURL(path.join(repoRoot, "node_modules", "@modelcontextprotocol", "sdk", "dist", "esm", "server", "stdio.js")).href
+const mcpServerModule = pathToFileURL(
+  path.join(repoRoot, "node_modules", "@modelcontextprotocol", "sdk", "dist", "esm", "server", "mcp.js"),
+).href
+const mcpStdioModule = pathToFileURL(
+  path.join(repoRoot, "node_modules", "@modelcontextprotocol", "sdk", "dist", "esm", "server", "stdio.js"),
+).href
 
 afterEach(async () => {
   delete process.env.OPENCORVUS_EXECUTOR_CODEX_MAX_TURNS
@@ -118,10 +123,7 @@ async function runLiveSmoke(executorName: "codex" | "claude-code") {
   })
 }
 
-async function waitForStatus(
-  executor: ReturnType<typeof ExecutorRegistry.require>,
-  queueTaskID: string,
-) {
+async function waitForStatus(executor: ReturnType<typeof ExecutorRegistry.require>, queueTaskID: string) {
   let status = await executor.status(queueTaskID)
   for (let index = 0; index < 180 && status.status !== "completed" && status.status !== "failed"; index++) {
     await Bun.sleep(1000)

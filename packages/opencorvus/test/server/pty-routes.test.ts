@@ -164,7 +164,15 @@ describe("server.pty-routes", () => {
           body: ptyCreateBody(inputEchoCommand(tmp.path), "Initial TUI"),
         })
         expect(first.status).toBe(200)
-        const active = (await first.json()) as { id: string; title: string; command: string; args: string[]; cwd: string; status: string; pid: number }
+        const active = (await first.json()) as {
+          id: string
+          title: string
+          command: string
+          args: string[]
+          cwd: string
+          status: string
+          pid: number
+        }
         expect(active.id).toBeString()
 
         const second = await app.request("/", {
@@ -196,7 +204,9 @@ describe("server.pty-routes", () => {
         const remove = await app.request(`/${active.id}`, { method: "DELETE" })
         expect(remove.status).toBe(200)
         expect(await remove.json()).toBe(true)
-        expect(((await (await app.request("/")).json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([secondActive.id])
+        expect(((await (await app.request("/")).json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([
+          secondActive.id,
+        ])
 
         const removeSecond = await app.request(`/${secondActive.id}`, { method: "DELETE" })
         expect(removeSecond.status).toBe(200)
@@ -282,7 +292,9 @@ describe("server.pty-routes", () => {
           Bus.subscribe(Pty.Event.Created, (event) => events.push(`${event.type}:${event.properties.info.title}`)),
           Bus.subscribe(Pty.Event.Updated, (event) => events.push(`${event.type}:${event.properties.info.title}`)),
           Bus.subscribe(Pty.Event.Deleted, (event) => events.push(`${event.type}:${event.properties.id}`)),
-          Bus.subscribe(Pty.Event.Exited, (event) => events.push(`${event.type}:${event.properties.id}:${event.properties.exitCode}`)),
+          Bus.subscribe(Pty.Event.Exited, (event) =>
+            events.push(`${event.type}:${event.properties.id}:${event.properties.exitCode}`),
+          ),
         ]
         try {
           const create = await app.request("/", {

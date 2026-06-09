@@ -108,7 +108,7 @@ describe("config PATCH provider sub-shape validation", () => {
             "to-be-removed": {
               name: "Temp",
               api: "https://api.example.com/v1",
-              models: { "m1": { name: "M1" } },
+              models: { m1: { name: "M1" } },
             },
           },
         })

@@ -1,10 +1,10 @@
-export function collectText(result: {
-  text?: string
-  steps: Array<{ text?: string }>
-}) {
+export function collectText(result: { text?: string; steps: Array<{ text?: string }> }) {
   const direct = result.text?.trim() || ""
   if (direct) return direct
-  return result.steps.map((step) => step.text?.trim() || "").filter(Boolean).join("\n\n")
+  return result.steps
+    .map((step) => step.text?.trim() || "")
+    .filter(Boolean)
+    .join("\n\n")
 }
 
 export function summarizeToolUsage(steps: Array<{ toolCalls?: unknown[] }>) {
@@ -22,10 +22,7 @@ export function summarizeToolUsage(steps: Array<{ toolCalls?: unknown[] }>) {
 }
 
 export function countToolCalls(steps: Array<{ toolCalls?: unknown[] }>) {
-  return steps.reduce(
-    (sum, step) => sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0),
-    0,
-  )
+  return steps.reduce((sum, step) => sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0), 0)
 }
 
 export function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string {
@@ -42,11 +39,7 @@ function headingLevel(line: string) {
   return match ? match[1].length : 0
 }
 
-export function sectionBody(
-  text: string,
-  names: string[],
-  options?: { respectHeadingLevel?: boolean },
-) {
+export function sectionBody(text: string, names: string[], options?: { respectHeadingLevel?: boolean }) {
   const lines = text.split(/\r?\n/)
   const respectHeadingLevel = options?.respectHeadingLevel === true
   for (let i = 0; i < lines.length; i++) {
@@ -69,38 +62,43 @@ export function sectionBody(
   return ""
 }
 
-export function parseListSection(
-  text: string,
-  names: string[],
-  options?: { respectHeadingLevel?: boolean },
-) {
+export function parseListSection(text: string, names: string[], options?: { respectHeadingLevel?: boolean }) {
   return sectionBody(text, names, options)
     .split(/\r?\n/)
     .flatMap((line) => {
-      const value = line.trim().replace(/^[-*\u2022]\s+/, "").replace(/^\d+[.)\u3001]\s+/, "")
+      const value = line
+        .trim()
+        .replace(/^[-*\u2022]\s+/, "")
+        .replace(/^\d+[.)\u3001]\s+/, "")
       return value ? [value] : []
     })
 }
 
 export function parseNamedPairs(text: string) {
   return text.split(/\r?\n/).flatMap((line) => {
-    const value = line.trim().replace(/^[-*\u2022]\s+/, "").replace(/^\d+[.)\u3001]\s+/, "")
+    const value = line
+      .trim()
+      .replace(/^[-*\u2022]\s+/, "")
+      .replace(/^\d+[.)\u3001]\s+/, "")
     if (!value) return []
     const pair = value.split(/[:\uFF1A]/)
     if (pair.length < 2) return []
-    return [{
-      question: pair[0].trim(),
-      assumption: pair.slice(1).join(":").trim(),
-    }]
+    return [
+      {
+        question: pair[0].trim(),
+        assumption: pair.slice(1).join(":").trim(),
+      },
+    ]
   })
 }
 
 export function firstContentLine(text: string) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => !!line && !/^#{1,6}\s+/.test(line))
-    || ""
+  return (
+    text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => !!line && !/^#{1,6}\s+/.test(line)) || ""
+  )
 }
 
 export function splitBlocks(text: string) {

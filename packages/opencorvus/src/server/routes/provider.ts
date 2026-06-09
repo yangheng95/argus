@@ -192,7 +192,10 @@ export const ProviderRoutes = lazy(() =>
         z.object({
           api: z.string().min(1).meta({ description: "OpenAI-compatible base URL, usually ending in /v1" }),
           apiKey: z.string().optional().meta({ description: "Optional API key used as a Bearer token" }),
-          providerID: z.string().optional().meta({ description: "Optional provider ID whose saved auth key may be used" }),
+          providerID: z
+            .string()
+            .optional()
+            .meta({ description: "Optional provider ID whose saved auth key may be used" }),
         }),
       ),
       async (c) => {

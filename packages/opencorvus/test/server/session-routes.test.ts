@@ -44,15 +44,11 @@ describe("session routes", () => {
           },
         })
         expect(logs.status).toBe(200)
-        const body = await logs.json() as { lines: string[] }
+        const body = (await logs.json()) as { lines: string[] }
         const line = [...body.lines]
           .reverse()
           .map((item) => JSON.parse(item) as Record<string, unknown>)
-          .find((item) =>
-            item.service === "server" &&
-            item.message === "session.get" &&
-            item.sessionID === session.id
-          )
+          .find((item) => item.service === "server" && item.message === "session.get" && item.sessionID === session.id)
 
         expect(line).toBeDefined()
         expect(line?.sessionID).toBe(session.id)
@@ -63,11 +59,12 @@ describe("session routes", () => {
         const requestCompleted = [...body.lines]
           .reverse()
           .map((item) => JSON.parse(item) as Record<string, unknown>)
-          .find((item) =>
-            item.service === "server" &&
-            item.message === "request" &&
-            item.requestID === requestID &&
-            item.status === "completed"
+          .find(
+            (item) =>
+              item.service === "server" &&
+              item.message === "request" &&
+              item.requestID === requestID &&
+              item.status === "completed",
           )
         expect(requestCompleted).toMatchObject({
           method: "GET",
@@ -89,15 +86,18 @@ describe("session routes", () => {
 
     const logs = await app.request("/log/tail?n=500")
     expect(logs.status).toBe(200)
-    const body = await logs.json() as { lines: string[] }
+    const body = (await logs.json()) as { lines: string[] }
     const records = body.lines.map((item) => JSON.parse(item) as Record<string, unknown>)
 
-    const boundaryCompletion = [...records].reverse().find((item) =>
-      item.service === "server" &&
-      item.message === "request" &&
-      item.requestID === requestID &&
-      item.status === "completed"
-    )
+    const boundaryCompletion = [...records]
+      .reverse()
+      .find(
+        (item) =>
+          item.service === "server" &&
+          item.message === "request" &&
+          item.requestID === requestID &&
+          item.status === "completed",
+      )
     expect(boundaryCompletion).toMatchObject({
       method: "GET",
       path: "/session/missing-directory",
@@ -105,11 +105,9 @@ describe("session routes", () => {
     })
     expect(typeof boundaryCompletion?.duration).toBe("number")
 
-    const routeFailure = [...records].reverse().find((item) =>
-      item.service === "server" &&
-      item.message === "request failed" &&
-      item.requestID === requestID
-    )
+    const routeFailure = [...records]
+      .reverse()
+      .find((item) => item.service === "server" && item.message === "request failed" && item.requestID === requestID)
     expect(routeFailure).toMatchObject({
       method: "GET",
       path: "/session/missing-directory",
@@ -131,20 +129,23 @@ describe("session routes", () => {
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: session.id,
-            source: "panel",
-            title: "delete bound task",
-            request: "delete bound task",
-            priority: "normal",
-            metadata: { cancelled: true },
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-            time_completed: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              source: "panel",
+              title: "delete bound task",
+              request: "delete bound task",
+              priority: "normal",
+              metadata: { cancelled: true },
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now,
+            })
+            .run(),
         )
 
         const removed = await app.request(`/session/${session.id}?deleteTasks=true`, {
@@ -155,12 +156,12 @@ describe("session routes", () => {
         })
 
         expect(removed.status).toBe(200)
-        expect(Database.use((db) =>
-          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-        )).toBeUndefined()
-        expect(Database.use((db) =>
-          db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get(),
-        )).toBeUndefined()
+        expect(
+          Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get()),
+        ).toBeUndefined()
+        expect(
+          Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get()),
+        ).toBeUndefined()
       },
     })
   })
@@ -176,19 +177,22 @@ describe("session routes", () => {
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: session.id,
-            source: "panel",
-            title: "keep bound task",
-            request: "keep bound task",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-            time_completed: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              source: "panel",
+              title: "keep bound task",
+              request: "keep bound task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now,
+            })
+            .run(),
         )
 
         const removed = await app.request(`/session/${session.id}`, {
@@ -199,13 +203,11 @@ describe("session routes", () => {
         })
 
         expect(removed.status).toBe(200)
-        expect(Database.use((db) =>
-          db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get(),
-        )).toBeUndefined()
+        expect(
+          Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get()),
+        ).toBeUndefined()
 
-        const task = Database.use((db) =>
-          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-        )
+        const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(task?.session_id).toBeNull()
 
         const listed = await app.request("/tasks", {
@@ -215,7 +217,7 @@ describe("session routes", () => {
         })
 
         expect(listed.status).toBe(200)
-        const body = await listed.json() as {
+        const body = (await listed.json()) as {
           tasks: Array<{ task: { id: string; sessionID?: string | null } }>
         }
         expect(body.tasks).toHaveLength(1)

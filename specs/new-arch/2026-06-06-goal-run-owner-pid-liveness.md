@@ -16,13 +16,13 @@ Evidence:
 
 `isGoalRunOrphaned` is the single predicate used by all owner-orphan readers:
 
-| Call site | Decision |
-| --- | --- |
-| `engine/describe.ts` | Keep; should report orphan only after physical owner death is proven. |
-| `engine/goal-status.ts` | Keep; board status should stay running for a foreign but live owner. |
-| `engine/workflow.ts` | Keep; workflow projection should not mark a live foreign owner failed. |
+| Call site                              | Decision                                                                            |
+| -------------------------------------- | ----------------------------------------------------------------------------------- |
+| `engine/describe.ts`                   | Keep; should report orphan only after physical owner death is proven.               |
+| `engine/goal-status.ts`                | Keep; board status should stay running for a foreign but live owner.                |
+| `engine/workflow.ts`                   | Keep; workflow projection should not mark a live foreign owner failed.              |
 | `engine/persist.ts::beginBuildAttempt` | Keep; duplicate build must still be refused unless the prior owner process is dead. |
-| `engine/orphan.ts::observeOrphanRuns` | Keep; run orphan derivation should ignore only physically dead goal runs. |
+| `engine/orphan.ts::observeOrphanRuns`  | Keep; run orphan derivation should ignore only physically dead goal runs.           |
 
 ## Fix
 
@@ -33,4 +33,3 @@ Preserve owner stamp as the single source, but refine the liveness fact:
 3. Foreign owner stamp with a dead or unparsable PID: orphan.
 
 This reuses the existing physical probe `Ownership.isPidAlive`. It avoids adding dispatch gates, UI-specific fallback, or retry heuristics.
-

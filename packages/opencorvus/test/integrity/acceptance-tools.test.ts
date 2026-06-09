@@ -42,18 +42,20 @@ function visualBundle(taskID: string, projectDirectory: string): VisualEvidenceB
       majorCount: 0,
       minorCount: 0,
     },
-    regions: [{
-      id: "region_header",
-      label: "Header",
-      requirementIDs: ["REQ-visual"],
-      acceptanceSpecIDs: ["acc-final-visual"],
-      sourceRefs: ["webpage-evidence/reference.png"],
-      viewport: "desktop-primary",
-      required: true,
-      status: "passing",
-      evidenceRefs: ["webpage-evidence/rendered.png", "webpage-evidence/eval-result.json"],
-      notes: "Header matches.",
-    }],
+    regions: [
+      {
+        id: "region_header",
+        label: "Header",
+        requirementIDs: ["REQ-visual"],
+        acceptanceSpecIDs: ["acc-final-visual"],
+        sourceRefs: ["webpage-evidence/reference.png"],
+        viewport: "desktop-primary",
+        required: true,
+        status: "passing",
+        evidenceRefs: ["webpage-evidence/rendered.png", "webpage-evidence/eval-result.json"],
+        notes: "Header matches.",
+      },
+    ],
   }
 }
 

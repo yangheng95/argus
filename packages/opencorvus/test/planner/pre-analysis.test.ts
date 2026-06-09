@@ -26,8 +26,10 @@ function extractFileRefs(request: string): string[] {
 }
 
 function extractRequirements(request: string): string[] {
-  const CN_ACTION_PAT = /^(?:添加|修改|删除|创建|导出|导入|确保|实现|重构|优化|移除|更新|替换|支持|使用|配置|设置|检查|启用|禁用)/
-  const EN_ACTION_PAT = /^(?:add|create|modify|delete|remove|implement|ensure|replace|fix|refactor|export|import|enable|disable|configure|check|support)\s/i
+  const CN_ACTION_PAT =
+    /^(?:添加|修改|删除|创建|导出|导入|确保|实现|重构|优化|移除|更新|替换|支持|使用|配置|设置|检查|启用|禁用)/
+  const EN_ACTION_PAT =
+    /^(?:add|create|modify|delete|remove|implement|ensure|replace|fix|refactor|export|import|enable|disable|configure|check|support)\s/i
   const requirements: string[] = []
   for (const line of request.split("\n")) {
     const trimmed = line.trim()
@@ -123,11 +125,7 @@ describe("pre-analysis: requirement extraction", () => {
 - 导出 Middleware 类型
 - 添加 use 方法`
     const reqs = extractRequirements(request)
-    expect(reqs).toEqual([
-      "添加 Middleware 类型",
-      "导出 Middleware 类型",
-      "添加 use 方法",
-    ])
+    expect(reqs).toEqual(["添加 Middleware 类型", "导出 Middleware 类型", "添加 use 方法"])
   })
 
   test("extracts numbered items", () => {
@@ -176,7 +174,8 @@ describe("pre-analysis: entity extraction", () => {
 
 describe("pre-analysis: working directory extraction", () => {
   test("extracts from 绝对路径", () => {
-    const request = "工作目录是 eval-workspace/e5（绝对路径: D:/myhexin-local/argus-opencode/packages/opencorvus/eval-workspace/e5）"
+    const request =
+      "工作目录是 eval-workspace/e5（绝对路径: D:/myhexin-local/argus-opencode/packages/opencorvus/eval-workspace/e5）"
     const workDir = extractWorkDir(request)
     expect(workDir).toBe("D:/myhexin-local/argus-opencode/packages/opencorvus/eval-workspace/e5")
   })

@@ -33,11 +33,7 @@ import {
   VisualEvidenceBundleListSchema,
   type VisualEvidenceBundle,
 } from "@/acceptance/visual-evidence"
-import {
-  readResultsForIteration,
-  readSpecsForTask,
-  writeMetricResult,
-} from "./store"
+import { readResultsForIteration, readSpecsForTask, writeMetricResult } from "./store"
 import type { MetricDirection, MetricResult, MetricSpec } from "./types"
 
 const log = Log.create({ service: "metric-executor" })
@@ -222,11 +218,7 @@ export function normalize(rawValue: number, spec: MetricSpec): number {
   return clip01(t)
 }
 
-function meetsThreshold(
-  rawValue: number,
-  threshold: number,
-  direction: MetricDirection,
-): boolean {
+function meetsThreshold(rawValue: number, threshold: number, direction: MetricDirection): boolean {
   if (direction === "higher_better") return rawValue >= threshold
   return rawValue <= threshold
 }
@@ -251,10 +243,7 @@ interface ShellConfig {
   expected_exit_code?: number
 }
 
-async function runShell(
-  spec: MetricSpec,
-  ctx: MetricExecutorContext,
-): Promise<RawEvaluation> {
+async function runShell(spec: MetricSpec, ctx: MetricExecutorContext): Promise<RawEvaluation> {
   const cfg = spec.evaluator_config as unknown as ShellConfig
   if (!cfg || typeof cfg.cmd !== "string" || cfg.cmd.length === 0) {
     throw new Error(`shell evaluator for ${spec.id} missing cmd`)
@@ -391,10 +380,7 @@ async function runJudge(
 
 function formatJudgeEvidenceRef(rationale: string, visualEvidence: VisualEvidenceBundle[] | undefined): string {
   if (!visualEvidence?.length) return rationale
-  return [
-    rationale,
-    ...visualEvidence.map((bundle) => summarizeVisualEvidenceBundle(bundle)),
-  ].join(" | ")
+  return [rationale, ...visualEvidence.map((bundle) => summarizeVisualEvidenceBundle(bundle))].join(" | ")
 }
 
 // ---------------------------------------------------------------------------
@@ -439,10 +425,7 @@ interface AggregatorConfig {
   iteration_offset?: number
 }
 
-async function runAggregator(
-  spec: MetricSpec,
-  input: ExecuteMetricsInput,
-): Promise<RawEvaluation> {
+async function runAggregator(spec: MetricSpec, input: ExecuteMetricsInput): Promise<RawEvaluation> {
   const cfg = spec.evaluator_config as unknown as AggregatorConfig
   if (!cfg || !Array.isArray(cfg.of) || cfg.of.length === 0) {
     throw new Error(`aggregator evaluator for ${spec.id} missing 'of' list`)
@@ -458,9 +441,7 @@ async function runAggregator(
   }
   const results = readResultsForIteration(input.task_id, iteration)
   const wanted = new Set(cfg.of)
-  const values = results
-    .filter((r) => wanted.has(r.metric_spec_id) && r.evidence_fresh)
-    .map((r) => r.normalized_value)
+  const values = results.filter((r) => wanted.has(r.metric_spec_id) && r.evidence_fresh).map((r) => r.normalized_value)
   if (values.length === 0) {
     return {
       raw_value: 0,

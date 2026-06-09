@@ -12,8 +12,17 @@ import { Log } from "../../src/util/log"
 import { Filesystem } from "../../src/util/filesystem"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { TextReader, Uint8ArrayWriter, ZipWriter } from "@zip.js/zip.js"
 
 Log.init({ print: false })
+
+async function zipBase64(files: Record<string, string>) {
+  const writer = new ZipWriter(new Uint8ArrayWriter())
+  for (const [name, content] of Object.entries(files)) {
+    await writer.add(name, new TextReader(content))
+  }
+  return Buffer.from(await writer.close()).toString("base64")
+}
 
 const cleanupTargets = [
   path.resolve(process.cwd(), "opencorvus.jsonc"),
@@ -62,7 +71,7 @@ describe("skill routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as Array<{ id: string; trust: string; recommended_policy: string }>
+        const body = (await response.json()) as Array<{ id: string; trust: string; recommended_policy: string }>
         expect(body.some((item) => item.id === "openai-skills")).toBe(true)
         expect(body.some((item) => item.id === "anthropic-skills")).toBe(true)
         expect(body.every((item) => item.recommended_policy === "ask")).toBe(true)
@@ -111,7 +120,7 @@ describe("skill routes", () => {
           },
         })
         expect(listed.status).toBe(200)
-        const body = await listed.json() as Array<{
+        const body = (await listed.json()) as Array<{
           name: string
           source_type: string
           source?: string
@@ -136,6 +145,168 @@ describe("skill routes", () => {
     })
   }, 40000)
 
+  test("POST /skill/import-file writes a dropped SKILL.md into project .opencorvus", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const imported = await app.request("/skill/import-file", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            filename: "SKILL.md",
+            policy: "ask",
+            content: [
+              "---",
+              "name: dropped-review",
+              "description: Dropped review skill",
+              "---",
+              "",
+              "Use this skill after dropping the file into the overlay.",
+            ].join("\n"),
+          }),
+        })
+
+        expect(imported.status).toBe(200)
+        const importBody = (await imported.json()) as { name: string; source: string; kind: string }
+        expect(importBody.name).toBe("dropped-review")
+        expect(importBody.kind).toBe("path")
+        expect(importBody.source).toBe(path.join(tmp.path, ".opencorvus", "skill", "dropped-review", "SKILL.md"))
+        expect(await Filesystem.exists(importBody.source)).toBe(true)
+
+        const listed = await app.request("/skill/installed", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(listed.status).toBe(200)
+        const body = (await listed.json()) as Array<{
+          name: string
+          source_type: string
+          location: string
+          policy: string
+        }>
+        const item = body.find((entry) => entry.name === "dropped-review")
+        expect(item).toBeDefined()
+        expect(item?.source_type).toBe("unknown")
+        expect(item?.location).toBe(importBody.source)
+        expect(item?.policy).toBe("ask")
+      },
+    })
+  }, 20000)
+
+  test("POST /skill/import-file imports a dropped skill directory with bundled files", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const imported = await app.request("/skill/import-file", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            sourceName: "folder-skill",
+            policy: "ask",
+            files: [
+              {
+                path: "folder-skill/SKILL.md",
+                content: [
+                  "---",
+                  "name: folder-review",
+                  "description: Folder review skill",
+                  "---",
+                  "",
+                  "Use this skill from a dropped directory.",
+                ].join("\n"),
+              },
+              {
+                path: "folder-skill/scripts/review.txt",
+                content: "folder-script",
+              },
+            ],
+          }),
+        })
+
+        expect(imported.status).toBe(200)
+        const body = (await imported.json()) as { name: string; source: string; names?: string[] }
+        expect(body.name).toBe("folder-review")
+        expect(body.names).toEqual(["folder-review"])
+        expect(body.source).toBe(path.join(tmp.path, ".opencorvus", "skill", "folder-review", "SKILL.md"))
+        expect(await Filesystem.readText(path.join(tmp.path, ".opencorvus", "skill", "folder-review", "scripts", "review.txt"))).toBe(
+          "folder-script",
+        )
+
+        const listed = await app.request("/skill/installed", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        const installed = (await listed.json()) as Array<{ name: string; policy: string }>
+        expect(installed.find((item) => item.name === "folder-review")?.policy).toBe("ask")
+      },
+    })
+  }, 20000)
+
+  test("POST /skill/import-file imports a dropped skill zip archive", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const archiveBase64 = await zipBase64({
+          "zip-skill/SKILL.md": [
+            "---",
+            "name: zip-review",
+            "description: Zip review skill",
+            "---",
+            "",
+            "Use this skill from a dropped zip archive.",
+          ].join("\n"),
+          "zip-skill/references/guide.md": "zip-reference",
+        })
+        const imported = await app.request("/skill/import-file", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            filename: "zip-skill.zip",
+            policy: "allow",
+            archiveBase64,
+          }),
+        })
+
+        expect(imported.status).toBe(200)
+        const body = (await imported.json()) as { name: string; source: string; names?: string[] }
+        expect(body.name).toBe("zip-review")
+        expect(body.names).toEqual(["zip-review"])
+        expect(body.source).toBe(path.join(tmp.path, ".opencorvus", "skill", "zip-review", "SKILL.md"))
+        expect(
+          await Filesystem.readText(path.join(tmp.path, ".opencorvus", "skill", "zip-review", "references", "guide.md")),
+        ).toBe("zip-reference")
+
+        const listed = await app.request("/skill/installed", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        const installed = (await listed.json()) as Array<{ name: string; policy: string }>
+        expect(installed.find((item) => item.name === "zip-review")?.policy).toBe("allow")
+      },
+    })
+  }, 20000)
+
   // After /skill/remove, /skill/installed still surfaces the skill — Config layer caches
   // skills.paths even after Skill.state.reset()/Config.state.reset(). Pending a deeper
   // cache invalidation fix in the manager.
@@ -144,14 +315,9 @@ describe("skill routes", () => {
     const skillDir = path.join(tmp.path, "skill-two")
     await Filesystem.write(
       path.join(skillDir, "SKILL.md"),
-      [
-        "---",
-        "name: local-note",
-        "description: Local note skill",
-        "---",
-        "",
-        "Use this skill for note taking.",
-      ].join("\n"),
+      ["---", "name: local-note", "description: Local note skill", "---", "", "Use this skill for note taking."].join(
+        "\n",
+      ),
     )
 
     await Instance.provide({
@@ -188,7 +354,7 @@ describe("skill routes", () => {
             "x-opencorvus-directory": tmp.path,
           },
         })
-        const body = await listed.json() as Array<{ name: string; policy: string }>
+        const body = (await listed.json()) as Array<{ name: string; policy: string }>
         expect(body.find((item) => item.name === "local-note")?.policy).toBe("deny")
 
         const removed = await app.request("/skill/remove", {
@@ -209,7 +375,7 @@ describe("skill routes", () => {
             "x-opencorvus-directory": tmp.path,
           },
         })
-        const afterBody = await after.json() as Array<{ name: string }>
+        const afterBody = (await after.json()) as Array<{ name: string }>
         expect(afterBody.some((item) => item.name === "local-note")).toBe(false)
       },
     })
@@ -256,7 +422,7 @@ describe("skill routes", () => {
           },
         })
         expect(listed.status).toBe(200)
-        const body = await listed.json() as Array<{ name: string; policy: string }>
+        const body = (await listed.json()) as Array<{ name: string; policy: string }>
         expect(body.find((item) => item.name === "route-installed-skill")?.policy).toBe("ask")
 
         const tool = await SkillTool.init()
@@ -291,7 +457,7 @@ describe("skill routes", () => {
       },
     })
     expect(market.status).toBe(200)
-    const entries = await market.json() as Array<{
+    const entries = (await market.json()) as Array<{
       id: string
       name: string
       source?: string
@@ -309,7 +475,7 @@ describe("skill routes", () => {
       },
     })
     expect(before.status).toBe(200)
-    const beforeBody = await before.json() as Array<{ name: string }>
+    const beforeBody = (await before.json()) as Array<{ name: string }>
     const beforeNames = new Set(beforeBody.map((item) => item.name))
 
     const installed = await app.request("/skill/install", {
@@ -332,15 +498,13 @@ describe("skill routes", () => {
       },
     })
     expect(listed.status).toBe(200)
-    const body = await listed.json() as Array<{
+    const body = (await listed.json()) as Array<{
       name: string
       policy: string
       source_type: string
       source?: string
     }>
-    const installedSkills = body.filter(
-      (item) => item.source_type === "managed_git" && !beforeNames.has(item.name),
-    )
+    const installedSkills = body.filter((item) => item.source_type === "managed_git" && !beforeNames.has(item.name))
     expect(installedSkills.length > 0).toBe(true)
     expect(installedSkills.every((item) => item.policy === entry!.recommended_policy)).toBe(true)
 

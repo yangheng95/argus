@@ -7,30 +7,30 @@ OpenCorvus ships a set of built-in tools the agent can call. Tools live under `p
 
 ## Built-in tools
 
-| Tool | Purpose |
-|---|---|
-| `bash` | Execute shell commands through the configured shell |
-| `read` | Read a file (line-numbered, range-aware) |
-| `write` | Create or overwrite a file |
-| `edit` | Apply targeted string replacements |
-| `apply_patch` | Apply a unified diff |
-| `glob` | Find files by glob pattern |
-| `grep` | Search file contents (ripgrep) |
-| `codesearch` | Higher-level code search |
-| `ls` | Directory listing |
-| `webfetch` | Fetch URL contents |
-| `websearch` | Run a web search |
-| `lsp` | Query the language server |
-| `memory` | Persistent memory store |
-| `todo` / `todowrite` | Manage the agent's plan/todo list |
-| `task` / `task-report` | Sub-agent dispatch (`dispatch_goal` / `retry_goal`) |
-| `goal-report` | Report goal completion to the orchestrator |
-| `panel` | Operate the OpenCorvus control panel |
-| `question` | Ask the user (when `OPENCORVUS_ENABLE_QUESTION_TOOL=1`) |
-| `schedule` | Schedule follow-up actions |
-| `batch` | Run a batch of tools in one turn |
-| `external-directory` | Reference data outside the repo |
-| `analytics` | Emit telemetry events |
+| Tool                   | Purpose                                                 |
+| ---------------------- | ------------------------------------------------------- |
+| `bash`                 | Execute shell commands through the configured shell     |
+| `read`                 | Read a file (line-numbered, range-aware)                |
+| `write`                | Create or overwrite a file                              |
+| `edit`                 | Apply targeted string replacements                      |
+| `apply_patch`          | Apply a unified diff                                    |
+| `glob`                 | Find files by glob pattern                              |
+| `grep`                 | Search file contents (ripgrep)                          |
+| `codesearch`           | Higher-level code search                                |
+| `ls`                   | Directory listing                                       |
+| `webfetch`             | Fetch URL contents                                      |
+| `websearch`            | Run a web search                                        |
+| `lsp`                  | Query the language server                               |
+| `memory`               | Persistent memory store                                 |
+| `todo` / `todowrite`   | Manage the agent's plan/todo list                       |
+| `task` / `task-report` | Sub-agent dispatch (`dispatch_goal` / `retry_goal`)     |
+| `goal-report`          | Report goal completion to the orchestrator              |
+| `panel`                | Operate the OpenCorvus control panel                    |
+| `question`             | Ask the user (when `OPENCORVUS_ENABLE_QUESTION_TOOL=1`) |
+| `schedule`             | Schedule follow-up actions                              |
+| `batch`                | Run a batch of tools in one turn                        |
+| `external-directory`   | Reference data outside the repo                         |
+| `analytics`            | Emit telemetry events                                   |
 
 ## Disabling a tool
 
@@ -38,8 +38,8 @@ OpenCorvus ships a set of built-in tools the agent can call. Tools live under `p
 {
   "tools": {
     "write": false,
-    "bash": false
-  }
+    "bash": false,
+  },
 }
 ```
 

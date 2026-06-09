@@ -23,13 +23,13 @@ That is correct for the first terminal batch wake, but wrong after the batch not
 
 ## Call-Point Audit
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/engine/runtime.ts::syncGoalRuns` | Performs terminal batch wake, records `goal_batch_notification`, and currently clears blocked before the notification check. | Move the existing notification check before blocked-run resume. |
-| `packages/opencorvus/src/engine/state.ts::blockActiveRunForTask` | Writes the real `orchestrator_stream_error` block. | Leave unchanged. |
-| `packages/opencorvus/src/orchestrator/agent.ts` | Converts `session prompt loop finished` into stream-error block. | Leave unchanged. |
-| `packages/opencorvus/src/session/prompt/state.ts` | Emits the concrete `session prompt loop finished` error to pending callers. | Leave unchanged. |
-| `packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts` | Existing terminal batch tests cover first wake and duplicate notification. | Add regression for already-notified terminal batch preserving stream-error blocked run. |
+| Surface                                                                | Evidence                                                                                                                     | Decision                                                                                |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/engine/runtime.ts::syncGoalRuns`              | Performs terminal batch wake, records `goal_batch_notification`, and currently clears blocked before the notification check. | Move the existing notification check before blocked-run resume.                         |
+| `packages/opencorvus/src/engine/state.ts::blockActiveRunForTask`       | Writes the real `orchestrator_stream_error` block.                                                                           | Leave unchanged.                                                                        |
+| `packages/opencorvus/src/orchestrator/agent.ts`                        | Converts `session prompt loop finished` into stream-error block.                                                             | Leave unchanged.                                                                        |
+| `packages/opencorvus/src/session/prompt/state.ts`                      | Emits the concrete `session prompt loop finished` error to pending callers.                                                  | Leave unchanged.                                                                        |
+| `packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts` | Existing terminal batch tests cover first wake and duplicate notification.                                                   | Add regression for already-notified terminal batch preserving stream-error blocked run. |
 
 ## Fix
 

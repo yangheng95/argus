@@ -21,21 +21,21 @@ There are two stability defects:
 
 `rg -n "profileLocks|withProfileLock|destroySession|createSession|recordToolCall|sessionId" packages/opencorvus/src/mcp/browser`
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/mcp/browser/sessions.ts` | `profileLocks` protects profile reuse/destroy, while `getSession` returns the mutable page directly. | Add a per-session operation lock as resource integrity, not LLM routing. |
-| `packages/opencorvus/src/mcp/browser/tools.ts` | `traced()` wraps every registered tool and already sees `args.sessionId`. | Wrap session-scoped handlers in the per-session lock at the common wrapper. |
-| `packages/opencorvus/test/mcp/browser-session-lifecycle.test.ts` | Existing tests cover browser launch coalescing and profile create/destroy races. | Add lock ordering and throw-release tests. |
+| Surface                                                          | Evidence                                                                                             | Decision                                                                    |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `packages/opencorvus/src/mcp/browser/sessions.ts`                | `profileLocks` protects profile reuse/destroy, while `getSession` returns the mutable page directly. | Add a per-session operation lock as resource integrity, not LLM routing.    |
+| `packages/opencorvus/src/mcp/browser/tools.ts`                   | `traced()` wraps every registered tool and already sees `args.sessionId`.                            | Wrap session-scoped handlers in the per-session lock at the common wrapper. |
+| `packages/opencorvus/test/mcp/browser-session-lifecycle.test.ts` | Existing tests cover browser launch coalescing and profile create/destroy races.                     | Add lock ordering and throw-release tests.                                  |
 
 `rg -n "browserPreview|browser-preview|persistBrowserPreviewTarget|extractBrowserPreviewUrlFromText|captureTaskTarget|verifyBrowserPreview" packages/opencorvus/src packages/opencorvus/test packages/overlay/test`
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/browser-preview/extract.ts` | Persists the first loopback URL extracted from process output. | Verify the extracted URL is reachable before persisting. |
-| `packages/opencorvus/src/browser-preview/target.ts` | Resolver intentionally reads only saved task artifacts. | Keep this single source. Do not scan package metadata or ports. |
-| `packages/opencorvus/src/browser-preview/verification.ts` | Capture already fails visibly when target is missing or capture fails. | No separate fallback target. |
-| `packages/opencorvus/test/tool/bash.test.ts` | Background process output persists task preview targets. | Add positive and negative reachability coverage. |
-| `packages/opencorvus/test/browser-preview/target.test.ts` | Covers extraction and target resolution. | Keep URL parsing behavior unchanged. |
+| Surface                                                   | Evidence                                                               | Decision                                                        |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `packages/opencorvus/src/browser-preview/extract.ts`      | Persists the first loopback URL extracted from process output.         | Verify the extracted URL is reachable before persisting.        |
+| `packages/opencorvus/src/browser-preview/target.ts`       | Resolver intentionally reads only saved task artifacts.                | Keep this single source. Do not scan package metadata or ports. |
+| `packages/opencorvus/src/browser-preview/verification.ts` | Capture already fails visibly when target is missing or capture fails. | No separate fallback target.                                    |
+| `packages/opencorvus/test/tool/bash.test.ts`              | Background process output persists task preview targets.               | Add positive and negative reachability coverage.                |
+| `packages/opencorvus/test/browser-preview/target.test.ts` | Covers extraction and target resolution.                               | Keep URL parsing behavior unchanged.                            |
 
 ## Design
 
@@ -55,4 +55,3 @@ This is not a fallback. The saved preview target remains the single source for o
 
 - `browser-session-lifecycle`: same-session operations run in insertion order and release the lock after errors.
 - `bash`: background output persists a reachable URL and does not persist an unreachable URL.
-

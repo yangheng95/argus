@@ -48,7 +48,9 @@ await Instance.provide({
     console.log(ts(`           directory=${Instance.directory}`))
 
     const session = await ensureMissionSession({ missionID: MISSION_ID, defaultCwd: Instance.directory })
-    console.log(ts(`Mission session: id=${session.id} kind=${session.kind} title=${session.title} missionID=${MISSION_ID}`))
+    console.log(
+      ts(`Mission session: id=${session.id} kind=${session.kind} title=${session.title} missionID=${MISSION_ID}`),
+    )
 
     // Separate readonly connection for inspection (DB file is initialised by now).
     const raw = new RawSqlite(Database.Path(), { readonly: true })

@@ -155,8 +155,7 @@ export function CodingRoutes() {
       "/session/:sessionID",
       describeRoute({
         summary: "Claim right sidebar coding assistant session",
-        description:
-          "Validate and return an existing project-bound right sidebar coding assistant session.",
+        description: "Validate and return an existing project-bound right sidebar coding assistant session.",
         operationId: "coding.session.get",
         responses: {
           200: {

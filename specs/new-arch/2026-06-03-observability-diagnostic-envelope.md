@@ -57,54 +57,54 @@ ID, exact path, response body preview, and stack traces are structured fields.
 
 ### Core/server
 
-| Site | Current behavior | Defect |
-|---|---|---|
-| `packages/opencorvus/src/server/server.ts:65` | `onError` logs `failed` with `{ error }` only. | No method, path, status, request ID, response error name, directory, or diagnostic ID. |
-| `packages/opencorvus/src/server/server.ts:133` | Request log records method/path before `await next()`. | No final status, duration, or error outcome. |
-| `packages/opencorvus/src/server/server.ts:138` | `log.time("request")` stops only after `await next()`. | Thrown errors skip the completion log. |
-| `packages/opencorvus/src/server/routes/app.ts:340` | `/log/tail` returns empty lines when the log file is absent/unreadable. | Log read failure appears as "no logs". |
-| `packages/opencorvus/src/server/routes/provider.ts:91` | `/provider/refresh` returns 200 with `{ ok:false, error }`. | Refresh failures bypass `onError`, status mapping, and request error logs. |
-| `packages/opencorvus/src/server/routes/provider.ts:126` | `/provider/hexin/refresh` also catches and returns 200 on failure. | Same bypass, but for model discovery. |
-| `packages/opencorvus/src/provider/hexin-discovery.ts:15` | Startup discovery can silently fall back to cache/empty. | UI receives an empty catalog without the upstream cause. |
+| Site                                                     | Current behavior                                                        | Defect                                                                                 |
+| -------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/server/server.ts:65`            | `onError` logs `failed` with `{ error }` only.                          | No method, path, status, request ID, response error name, directory, or diagnostic ID. |
+| `packages/opencorvus/src/server/server.ts:133`           | Request log records method/path before `await next()`.                  | No final status, duration, or error outcome.                                           |
+| `packages/opencorvus/src/server/server.ts:138`           | `log.time("request")` stops only after `await next()`.                  | Thrown errors skip the completion log.                                                 |
+| `packages/opencorvus/src/server/routes/app.ts:340`       | `/log/tail` returns empty lines when the log file is absent/unreadable. | Log read failure appears as "no logs".                                                 |
+| `packages/opencorvus/src/server/routes/provider.ts:91`   | `/provider/refresh` returns 200 with `{ ok:false, error }`.             | Refresh failures bypass `onError`, status mapping, and request error logs.             |
+| `packages/opencorvus/src/server/routes/provider.ts:126`  | `/provider/hexin/refresh` also catches and returns 200 on failure.      | Same bypass, but for model discovery.                                                  |
+| `packages/opencorvus/src/provider/hexin-discovery.ts:15` | Startup discovery can silently fall back to cache/empty.                | UI receives an empty catalog without the upstream cause.                               |
 
 ### Error serialization
 
-| Site | Current behavior | Defect |
-|---|---|---|
-| `packages/util/src/error.ts:60` | `NamedError.toObject()` returns `{ name, data }`. | Cause chain, stack, status, method/path, provider/model, and request ID vanish. |
-| `packages/opencorvus/src/server/error.ts:5` | OpenAPI error schemas describe `{ name, data }`. | SDKs cannot carry diagnostic context. |
-| `packages/opencorvus/src/session/message.ts:62` | `Message.APIError` has some upstream HTTP fields. | No provider ID, model ID, request ID, path, or cause chain. |
-| `packages/opencorvus/src/session/llm.ts:243` | `streamText.onError` publishes `Message.fromError(event.error, { providerID })`. | Model ID and provider request data are known elsewhere but not emitted. |
-| `packages/opencorvus/src/session/events.ts:6` | `session.error` schema is tied to assistant error shape. | Cannot carry route, request, provider/model, or source component context. |
-| `packages/opencorvus/src/orchestrator/agent.ts:516` | Orchestrator stores only `reason` and `errorName`. | The durable artifact loses the actual upstream failure context. |
-| `packages/opencorvus/src/engine/persist.ts:2294` | `orchestrator-stream-error` payload stores a reduced reason/name/session ID. | Root-cause fields are not recoverable later. |
+| Site                                                | Current behavior                                                                 | Defect                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `packages/util/src/error.ts:60`                     | `NamedError.toObject()` returns `{ name, data }`.                                | Cause chain, stack, status, method/path, provider/model, and request ID vanish. |
+| `packages/opencorvus/src/server/error.ts:5`         | OpenAPI error schemas describe `{ name, data }`.                                 | SDKs cannot carry diagnostic context.                                           |
+| `packages/opencorvus/src/session/message.ts:62`     | `Message.APIError` has some upstream HTTP fields.                                | No provider ID, model ID, request ID, path, or cause chain.                     |
+| `packages/opencorvus/src/session/llm.ts:243`        | `streamText.onError` publishes `Message.fromError(event.error, { providerID })`. | Model ID and provider request data are known elsewhere but not emitted.         |
+| `packages/opencorvus/src/session/events.ts:6`       | `session.error` schema is tied to assistant error shape.                         | Cannot carry route, request, provider/model, or source component context.       |
+| `packages/opencorvus/src/orchestrator/agent.ts:516` | Orchestrator stores only `reason` and `errorName`.                               | The durable artifact loses the actual upstream failure context.                 |
+| `packages/opencorvus/src/engine/persist.ts:2294`    | `orchestrator-stream-error` payload stores a reduced reason/name/session ID.     | Root-cause fields are not recoverable later.                                    |
 
 ### Overlay/Tauri/WebView
 
-| Site | Current behavior | Defect |
-|---|---|---|
-| `packages/overlay/src/services/api.ts:284` | `ApiError` stores status/path/body. | No headers, request ID, cause, or normalized envelope. |
-| `packages/overlay/src/services/api.ts:297` | `formatApiErrorMessage()` ignores `NamedError.data.message`. | User-facing error can degrade into a JSON blob or generic path/status. |
-| `packages/overlay/src/services/api.ts:358` | `apiJsonWithTimeout()` wraps timeout/failure into plain errors. | Structured `ApiError` data can be lost. |
-| `packages/overlay/src/services/init.ts:289` | `loadConfigInfo()` writes partial failures to `configLoadErrors`. | The UI barely consumes this store; errors become empty states. |
-| `packages/overlay/src/services/init.ts:334` | `loadProviderInfo()` records provider/auth failures similarly. | Provider refresh can show success while reload failed. |
-| `packages/overlay/src/components/settings/ProvidersPanel.tsx:104` | Refresh calls `loadProviderInfo()` after POST. | Partial reload failure is not rendered as refresh failure. |
-| `packages/overlay/src/components/ExecutorSelector.tsx:248` | Model picker reloads providers but does not show `configLoadErrors`. | Provider API failure becomes "no providers/no models". |
-| `packages/overlay/src/main.tsx:1529` | `initApp()` failure is only `console.error`. | Startup failure can leave the UI in a static/empty state. |
-| `packages/overlay/src-tauri/src/main.rs:985` | Exited sidecar clears `sidecar_log_path`. | The previous crash log path is discarded. |
-| `packages/vscode-extension/src/sidecar/manager.ts:149` | Sidecar stderr goes to OutputChannel. | No stable file path is passed to diagnostics. |
-| `packages/overlay/src/components/LogViewer.tsx:67` | LogViewer catches `/log/tail` failure and clears logs. | Log retrieval failure is presented as an empty log. |
+| Site                                                              | Current behavior                                                     | Defect                                                                 |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `packages/overlay/src/services/api.ts:284`                        | `ApiError` stores status/path/body.                                  | No headers, request ID, cause, or normalized envelope.                 |
+| `packages/overlay/src/services/api.ts:297`                        | `formatApiErrorMessage()` ignores `NamedError.data.message`.         | User-facing error can degrade into a JSON blob or generic path/status. |
+| `packages/overlay/src/services/api.ts:358`                        | `apiJsonWithTimeout()` wraps timeout/failure into plain errors.      | Structured `ApiError` data can be lost.                                |
+| `packages/overlay/src/services/init.ts:289`                       | `loadConfigInfo()` writes partial failures to `configLoadErrors`.    | The UI barely consumes this store; errors become empty states.         |
+| `packages/overlay/src/services/init.ts:334`                       | `loadProviderInfo()` records provider/auth failures similarly.       | Provider refresh can show success while reload failed.                 |
+| `packages/overlay/src/components/settings/ProvidersPanel.tsx:104` | Refresh calls `loadProviderInfo()` after POST.                       | Partial reload failure is not rendered as refresh failure.             |
+| `packages/overlay/src/components/ExecutorSelector.tsx:248`        | Model picker reloads providers but does not show `configLoadErrors`. | Provider API failure becomes "no providers/no models".                 |
+| `packages/overlay/src/main.tsx:1529`                              | `initApp()` failure is only `console.error`.                         | Startup failure can leave the UI in a static/empty state.              |
+| `packages/overlay/src-tauri/src/main.rs:985`                      | Exited sidecar clears `sidecar_log_path`.                            | The previous crash log path is discarded.                              |
+| `packages/vscode-extension/src/sidecar/manager.ts:149`            | Sidecar stderr goes to OutputChannel.                                | No stable file path is passed to diagnostics.                          |
+| `packages/overlay/src/components/LogViewer.tsx:67`                | LogViewer catches `/log/tail` failure and clears logs.               | Log retrieval failure is presented as an empty log.                    |
 
 ### Tests and docs
 
-| Area | Current coverage | Missing coverage |
-|---|---|---|
-| Server `onError` tests | Status mapping and no-stack response. | Production route logs with path/status/request ID/stack in log. |
-| `/log` and `/log/tail` | Mostly indirect stubs. | Contract tests for write, tail, invalid input, and read failure. |
-| Provider refresh | Refresh behavior and some provider errors. | Failure logs, HTTP status, upstream body, cache source, proxy/network detail. |
-| Overlay `AppLog` | Many tests stub `/log`. | Flush contract and permanent failure behavior. |
-| LogViewer helpers | Primitive existence checks. | JSON log parsing, malformed line handling, filtering, copy output. |
-| Troubleshooting docs | Mention static/fixed paths. | Actual `Global.Path.log`, `%LOCALAPPDATA%\opencorvus\log`, and `/log/tail`. |
+| Area                   | Current coverage                           | Missing coverage                                                              |
+| ---------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
+| Server `onError` tests | Status mapping and no-stack response.      | Production route logs with path/status/request ID/stack in log.               |
+| `/log` and `/log/tail` | Mostly indirect stubs.                     | Contract tests for write, tail, invalid input, and read failure.              |
+| Provider refresh       | Refresh behavior and some provider errors. | Failure logs, HTTP status, upstream body, cache source, proxy/network detail. |
+| Overlay `AppLog`       | Many tests stub `/log`.                    | Flush contract and permanent failure behavior.                                |
+| LogViewer helpers      | Primitive existence checks.                | JSON log parsing, malformed line handling, filtering, copy output.            |
+| Troubleshooting docs   | Mention static/fixed paths.                | Actual `Global.Path.log`, `%LOCALAPPDATA%\opencorvus\log`, and `/log/tail`.   |
 
 ## Root Cause
 

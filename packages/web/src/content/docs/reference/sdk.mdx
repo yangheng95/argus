@@ -28,16 +28,16 @@ const client = createOpenCorvusClient({
 
 `createOpenCorvusClient()` accepts the generated fetch-client config plus OpenCorvus additions:
 
-| Option | Purpose |
-|---|---|
-| `baseUrl` | OpenCorvus server URL. Defaults to the generated server default. |
-| `directory` | Adds `x-opencorvus-directory` for project-scoped requests. Windows MSYS paths like `/c/repo` are normalized. |
-| `username` | Basic Auth username. Defaults to `opencorvus`. |
-| `password` | Basic Auth password. Use `OPENCORVUS_SERVER_PASSWORD` when the server is protected. |
-| `headers` | Extra headers. An explicit `Authorization` header is preserved and not replaced by `password`. |
-| `fetch` | Custom Fetch implementation for proxying, tracing, tests, or in-process adapters. |
-| `throwOnError` | When `true`, failed responses throw instead of returning `{ error }`. |
-| `responseStyle` | Generated client response mode: default fields object, or `"data"` for data-only responses. |
+| Option          | Purpose                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| `baseUrl`       | OpenCorvus server URL. Defaults to the generated server default.                                             |
+| `directory`     | Adds `x-opencorvus-directory` for project-scoped requests. Windows MSYS paths like `/c/repo` are normalized. |
+| `username`      | Basic Auth username. Defaults to `opencorvus`.                                                               |
+| `password`      | Basic Auth password. Use `OPENCORVUS_SERVER_PASSWORD` when the server is protected.                          |
+| `headers`       | Extra headers. An explicit `Authorization` header is preserved and not replaced by `password`.               |
+| `fetch`         | Custom Fetch implementation for proxying, tracing, tests, or in-process adapters.                            |
+| `throwOnError`  | When `true`, failed responses throw instead of returning `{ error }`.                                        |
+| `responseStyle` | Generated client response mode: default fields object, or `"data"` for data-only responses.                  |
 
 ## Calls and Return Values
 
@@ -118,17 +118,17 @@ If `OPENCORVUS_SERVER_PASSWORD` is set, `createOpenCorvus()` passes it into the 
 
 The SDK follows OpenAPI `operationId` names. Dotted segments become namespaces; snake_case method names become camelCase. For example, `session.prompt_async` becomes `client.session.promptAsync()`.
 
-| Namespace | Examples |
-|---|---|
-| `client.global.*` | `health`, `event`, `config.get`, `db.reset` |
-| `client.task.*` | `create`, `list`, `message`, `retry`, `replan`, `followup` |
-| `client.session.*` | `create`, `prompt`, `promptAsync`, `events`, `trace` |
-| `client.goal.*` / `client.run.*` | Goal and run inspection/control routes |
-| `client.channel.*` | Channel runtime and attachment routes |
-| `client.mcp.*` | MCP server lifecycle and auth routes |
-| `client.permission.*` | Permission reply/reject routes |
-| `client.provider.*` | Provider model, auth, and refresh routes |
-| `client.tui.runtime.*` | Managed TUI runtime routes |
+| Namespace                        | Examples                                                   |
+| -------------------------------- | ---------------------------------------------------------- |
+| `client.global.*`                | `health`, `event`, `config.get`, `db.reset`                |
+| `client.task.*`                  | `create`, `list`, `message`, `retry`, `replan`, `followup` |
+| `client.session.*`               | `create`, `prompt`, `promptAsync`, `events`, `trace`       |
+| `client.goal.*` / `client.run.*` | Goal and run inspection/control routes                     |
+| `client.channel.*`               | Channel runtime and attachment routes                      |
+| `client.mcp.*`                   | MCP server lifecycle and auth routes                       |
+| `client.permission.*`            | Permission reply/reject routes                             |
+| `client.provider.*`              | Provider model, auth, and refresh routes                   |
+| `client.tui.runtime.*`           | Managed TUI runtime routes                                 |
 
 Use [HTTP API reference](/docs/reference/api/) as the exhaustive operation list; each `operationId` maps directly to the SDK namespace/method shape above.
 

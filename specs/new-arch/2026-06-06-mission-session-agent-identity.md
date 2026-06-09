@@ -21,10 +21,10 @@ message.
 
 Observed database state:
 
-| Session | Mission | State |
-| --- | --- | --- |
+| Session                          | Mission            | State                                                                                                  |
+| -------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------ |
 | `ses_1685c9c58ffecDeMafFkgy5FjJ` | `3c7e280c3acc31bc` | Polluted: mission messages first, then coding user and assistant messages in the same mission session. |
-| `ses_16790b0ddffegZkRomLK5OY77O` | `11a7dd0b0ec266ec` | Clean: only mission user and assistant messages. |
+| `ses_16790b0ddffegZkRomLK5OY77O` | `11a7dd0b0ec266ec` | Clean: only mission user and assistant messages.                                                       |
 
 The polluted mission session contains coding tool calls including `write`, `edit`,
 `bash`, browser tools, and `todowrite`. The user-visible card still rendered as Mission
@@ -33,22 +33,22 @@ because the transcript grouping uses the mission session/channel, while executio
 
 ## Call-Site Audit
 
-| Surface | File | Current behavior | Required behavior |
-| --- | --- | --- | --- |
-| Mission wake | `packages/opencorvus/src/server/routes/mission.ts` | Calls `SessionWake.wake({ agent: "mission" })`. | Keep. This entry is already correct. |
-| Session wake | `packages/opencorvus/src/session/wake.ts` | Defaults missing wake agent to the configured default agent. | Keep for new generic sessions only; do not use it to infer continuation identity for existing mission sessions. |
-| Shared session identity helper | `packages/opencorvus/src/session/agent-identity.ts` | Missing. Each caller could independently fall back to default agent. | Single helper owns the agent-owned `SessionKind -> agent` mapping for append/continuation inputs. |
-| Generic prompt routes | `packages/opencorvus/src/server/routes/session.ts` | `prompt` and `prompt_async` pass request body through `applySessionPromptRouteOverlay`. | Normalize continuation identity at this boundary before enqueue or execute. |
-| Route overlay | `packages/opencorvus/src/server/routes/session.ts` | Only overlays right-sidebar coding context. | Extend the same input-construction layer to restore session-owned agent identity for mission continuations. |
-| Task queue | `packages/opencorvus/src/scheduler/task-queue-service.ts` | Direct queue callers can enqueue a prompt without `agent`. | Normalize queued and immediately executed prompt inputs before metadata persistence or execution. |
-| Session wake | `packages/opencorvus/src/session/wake.ts` | Existing session wake defaults missing agent to configured default agent. | Existing agent-owned sessions use the session-owned identity before defaulting. |
-| TUI runtime | `packages/opencorvus/src/tui/runtime.ts` | Runtime submit accepts optional `agent` and can call prompt or queue directly. | Load the target session and normalize submit prompt before sync or async execution. |
-| Direct reply / task message context | `packages/opencorvus/src/task-api/index.ts` | Direct reply can preserve a polluted historical envelope. | Preserve the existing build-envelope refusal, then normalize agent-owned target sessions before writing a reply. |
-| User message creation | `packages/opencorvus/src/session/prompt/parts.ts` | Missing `agent` becomes `Agent.defaultAgent`. | Keep defaulting only for new generic direct prompts. Continuation inputs should arrive with an explicit agent. |
-| Session execution loop | `packages/opencorvus/src/session/loop.ts` | Uses `lastUser.agent` as the execution identity and tool source. | Keep. This is the correct single execution source. |
-| Runtime contract set | `packages/opencorvus/src/session/loop.ts` | Protects stage agents, not mission. | Do not add mission to the stage runtime contract set as a workaround. Mission is a primary session agent, not a stage worker runtime contract. |
-| Panel composer | `packages/overlay/src/services/task.ts` | Selected session source posts to `session/:id/prompt_async` without `agent`. | It may remain thin if the server normalizes identity. Optional client metadata must not be the authority. |
-| Direct agent reply | `packages/opencorvus/src/task-api/index.ts` | Explicitly tags replies with the target prompt agent and documents that `Message.User.agent` controls execution. | Use this as the design precedent: continuation envelopes must preserve the target session agent. |
+| Surface                             | File                                                      | Current behavior                                                                                                 | Required behavior                                                                                                                              |
+| ----------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mission wake                        | `packages/opencorvus/src/server/routes/mission.ts`        | Calls `SessionWake.wake({ agent: "mission" })`.                                                                  | Keep. This entry is already correct.                                                                                                           |
+| Session wake                        | `packages/opencorvus/src/session/wake.ts`                 | Defaults missing wake agent to the configured default agent.                                                     | Keep for new generic sessions only; do not use it to infer continuation identity for existing mission sessions.                                |
+| Shared session identity helper      | `packages/opencorvus/src/session/agent-identity.ts`       | Missing. Each caller could independently fall back to default agent.                                             | Single helper owns the agent-owned `SessionKind -> agent` mapping for append/continuation inputs.                                              |
+| Generic prompt routes               | `packages/opencorvus/src/server/routes/session.ts`        | `prompt` and `prompt_async` pass request body through `applySessionPromptRouteOverlay`.                          | Normalize continuation identity at this boundary before enqueue or execute.                                                                    |
+| Route overlay                       | `packages/opencorvus/src/server/routes/session.ts`        | Only overlays right-sidebar coding context.                                                                      | Extend the same input-construction layer to restore session-owned agent identity for mission continuations.                                    |
+| Task queue                          | `packages/opencorvus/src/scheduler/task-queue-service.ts` | Direct queue callers can enqueue a prompt without `agent`.                                                       | Normalize queued and immediately executed prompt inputs before metadata persistence or execution.                                              |
+| Session wake                        | `packages/opencorvus/src/session/wake.ts`                 | Existing session wake defaults missing agent to configured default agent.                                        | Existing agent-owned sessions use the session-owned identity before defaulting.                                                                |
+| TUI runtime                         | `packages/opencorvus/src/tui/runtime.ts`                  | Runtime submit accepts optional `agent` and can call prompt or queue directly.                                   | Load the target session and normalize submit prompt before sync or async execution.                                                            |
+| Direct reply / task message context | `packages/opencorvus/src/task-api/index.ts`               | Direct reply can preserve a polluted historical envelope.                                                        | Preserve the existing build-envelope refusal, then normalize agent-owned target sessions before writing a reply.                               |
+| User message creation               | `packages/opencorvus/src/session/prompt/parts.ts`         | Missing `agent` becomes `Agent.defaultAgent`.                                                                    | Keep defaulting only for new generic direct prompts. Continuation inputs should arrive with an explicit agent.                                 |
+| Session execution loop              | `packages/opencorvus/src/session/loop.ts`                 | Uses `lastUser.agent` as the execution identity and tool source.                                                 | Keep. This is the correct single execution source.                                                                                             |
+| Runtime contract set                | `packages/opencorvus/src/session/loop.ts`                 | Protects stage agents, not mission.                                                                              | Do not add mission to the stage runtime contract set as a workaround. Mission is a primary session agent, not a stage worker runtime contract. |
+| Panel composer                      | `packages/overlay/src/services/task.ts`                   | Selected session source posts to `session/:id/prompt_async` without `agent`.                                     | It may remain thin if the server normalizes identity. Optional client metadata must not be the authority.                                      |
+| Direct agent reply                  | `packages/opencorvus/src/task-api/index.ts`               | Explicitly tags replies with the target prompt agent and documents that `Message.User.agent` controls execution. | Use this as the design precedent: continuation envelopes must preserve the target session agent.                                               |
 
 ## Design
 
@@ -110,14 +110,14 @@ session prompt route, but the identity regression must be covered on the server 
 
 Required regression coverage:
 
-| Layer | Test |
-| --- | --- |
-| Server route | Posting to `POST /session/:missionSessionID/prompt_async` without `agent` enqueues a prompt whose normalized input has `agent: "mission"`. |
-| Server route | `POST /session/:missionSessionID/prompt` follows the same identity normalization as `prompt_async`. |
-| Task queue | Direct `TaskQueueService.enqueuePrompt` and `executePrompt` calls normalize agent-owned sessions before metadata persistence or execution. |
-| Session wake | `SessionWake.wake()` on an existing mission session writes `agent: "mission"` even when the caller passes `agent: "coding"`. |
-| Direct reply | Build-envelope refusal still happens before normalization; non-build polluted envelopes should not be propagated for agent-owned sessions. |
-| Negative control | A normal coding/right-sidebar session still receives coding identity and project team tool overlays. |
+| Layer            | Test                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Server route     | Posting to `POST /session/:missionSessionID/prompt_async` without `agent` enqueues a prompt whose normalized input has `agent: "mission"`. |
+| Server route     | `POST /session/:missionSessionID/prompt` follows the same identity normalization as `prompt_async`.                                        |
+| Task queue       | Direct `TaskQueueService.enqueuePrompt` and `executePrompt` calls normalize agent-owned sessions before metadata persistence or execution. |
+| Session wake     | `SessionWake.wake()` on an existing mission session writes `agent: "mission"` even when the caller passes `agent: "coding"`.               |
+| Direct reply     | Build-envelope refusal still happens before normalization; non-build polluted envelopes should not be propagated for agent-owned sessions. |
+| Negative control | A normal coding/right-sidebar session still receives coding identity and project team tool overlays.                                       |
 
 ## Incident Cleanup
 

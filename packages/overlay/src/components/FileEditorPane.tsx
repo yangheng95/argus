@@ -1,26 +1,21 @@
 import { createEffect, createMemo, createResource, createSignal, Show } from "solid-js"
 import { apiJson } from "../services/api"
-import {
-  closeFileEditor,
-  selectedFilePath,
-  shortWorkbenchPath,
-  type FileContent,
-} from "../services/file-workbench"
+import { closeFileEditor, selectedFilePath, shortWorkbenchPath, type FileContent } from "../services/file-workbench"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { CodeEditor } from "./primitives/CodeEditor"
 
 async function readFileContent(path: string): Promise<FileContent | null> {
   if (!path) return null
-  return await apiJson(`file/content?path=${encodeURIComponent(path)}`) as FileContent
+  return (await apiJson(`file/content?path=${encodeURIComponent(path)}`)) as FileContent
 }
 
 async function writeFileContent(path: string, content: string): Promise<FileContent> {
-  return await apiJson("file/content", {
+  return (await apiJson("file/content", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, content }),
-  }) as FileContent
+  })) as FileContent
 }
 
 function canEdit(content: FileContent | null | undefined): boolean {
@@ -33,10 +28,7 @@ export function FileEditorPane() {
   const [saving, setSaving] = createSignal(false)
   const [error, setError] = createSignal("")
 
-  const [content, { mutate }] = createResource(
-    () => selectedFilePath(),
-    readFileContent,
-  )
+  const [content, { mutate }] = createResource(() => selectedFilePath(), readFileContent)
 
   createEffect(() => {
     const next = content()
@@ -86,7 +78,9 @@ export function FileEditorPane() {
           <div class="file-editor-title" title={path()}>
             <span class="file-editor-title-name">{shortWorkbenchPath(path())}</span>
             <Show when={dirty()}>
-              <span class="file-editor-dirty" aria-label={t("file_editor.unsaved")}>*</span>
+              <span class="file-editor-dirty" aria-label={t("file_editor.unsaved")}>
+                *
+              </span>
             </Show>
           </div>
           <button
@@ -111,7 +105,11 @@ export function FileEditorPane() {
         <div class="file-editor-body">
           <Show
             when={!content.loading}
-            fallback={<div class="file-editor-empty"><p>{t("diff.loading")}</p></div>}
+            fallback={
+              <div class="file-editor-empty">
+                <p>{t("diff.loading")}</p>
+              </div>
+            }
           >
             <Show
               when={editable()}
@@ -122,11 +120,7 @@ export function FileEditorPane() {
                 </div>
               }
             >
-              <CodeEditor
-                value={draft()}
-                ariaLabel={t("file_editor.title")}
-                onValueChange={setDraft}
-              />
+              <CodeEditor value={draft()} ariaLabel={t("file_editor.title")} onValueChange={setDraft} />
             </Show>
           </Show>
         </div>

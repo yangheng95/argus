@@ -2,12 +2,12 @@
 
 ## Prerequisites
 
-| Dependency | Version | Notes |
-|---|---|---|
-| Bun | ≥ 1.3.13 | Declared as `packageManager` in `package.json:7` |
-| Node.js | ≥ 22 | `@tsconfig/node22` target |
-| Git | any | Used for worktree-based parallel execution |
-| Python | ≥ 3.9 (optional) | Required by code execution and some skills |
+| Dependency | Version          | Notes                                            |
+| ---------- | ---------------- | ------------------------------------------------ |
+| Bun        | ≥ 1.3.13         | Declared as `packageManager` in `package.json:7` |
+| Node.js    | ≥ 22             | `@tsconfig/node22` target                        |
+| Git        | any              | Used for worktree-based parallel execution       |
+| Python     | ≥ 3.9 (optional) | Required by code execution and some skills       |
 
 On Windows: use `python`, **not `python3`** (the Store stub intercepts it).
 
@@ -54,7 +54,7 @@ Drop a minimal `~/.opencorvus/config/opencorvus.json`:
 
 ```jsonc
 {
-  "model": "alibaba-cn/qwen3.5-plus"
+  "model": "alibaba-cn/qwen3.5-plus",
 }
 ```
 

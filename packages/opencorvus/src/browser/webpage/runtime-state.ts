@@ -95,7 +95,9 @@ const STATE_POINTS = [
   { id: "scroll-75", label: "scroll 75 percent", ratio: 0.75 },
 ] as const
 
-export async function captureWebpageRuntimeStateEvidence(input: RuntimeStateCaptureInput): Promise<RuntimeStateEvidence> {
+export async function captureWebpageRuntimeStateEvidence(
+  input: RuntimeStateCaptureInput,
+): Promise<RuntimeStateEvidence> {
   const stateDir = path.join(input.outputDir, "interaction-states")
   await fs.mkdir(stateDir, { recursive: true })
   await fs.mkdir(path.join(input.outputDir, "source-ir"), { recursive: true })
@@ -197,11 +199,7 @@ async function captureRuntimeStateSnapshotsViaNode(input: {
   return result.snapshots
 }
 
-function browserCaptureRuntimeState(args: {
-  id: string
-  label: string
-  screenshot: string
-}): RuntimeStateSnapshot {
+function browserCaptureRuntimeState(args: { id: string; label: string; screenshot: string }): RuntimeStateSnapshot {
   function textOf(el: Element): string | undefined {
     const text = (el.textContent || "").replace(/\s+/g, " ").trim()
     return text ? text.slice(0, 160) : undefined
@@ -210,9 +208,15 @@ function browserCaptureRuntimeState(args: {
   function selectorOf(el: Element): string {
     const tag = el.tagName.toLowerCase()
     const id = el.id ? `#${el.id}` : ""
-    const classes = typeof el.className === "string"
-      ? el.className.split(/\s+/).filter(Boolean).slice(0, 2).map((item) => `.${item}`).join("")
-      : ""
+    const classes =
+      typeof el.className === "string"
+        ? el.className
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((item) => `.${item}`)
+            .join("")
+        : ""
     return `${tag}${id}${classes}`
   }
 
@@ -318,7 +322,10 @@ function browserCaptureRuntimeState(args: {
         return {
           label: `interactive row near y=${rowY}`,
           itemCount: items.length,
-          texts: items.map((item) => item.text).filter((text): text is string => Boolean(text)).slice(0, 16),
+          texts: items
+            .map((item) => item.text)
+            .filter((text): text is string => Boolean(text))
+            .slice(0, 16),
           roles: Array.from(new Set(items.map((item) => item.role || item.tag))).slice(0, 8),
           bounds: { x: left, y: top, w: right - left, h: bottom - top },
         }
@@ -410,7 +417,9 @@ export function deriveRuntimeStateObservations(snapshots: RuntimeStateSnapshot[]
 
   const observations: RuntimeStateObservation[] = []
   for (const [key, elements] of rows) {
-    const uniqueScrolls = Array.from(new Set(elements.map((element) => element.documentBounds.y - element.bounds.y))).sort((a, b) => a - b)
+    const uniqueScrolls = Array.from(
+      new Set(elements.map((element) => element.documentBounds.y - element.bounds.y)),
+    ).sort((a, b) => a - b)
     if (uniqueScrolls.length < 2) continue
     const viewportYs = elements.map((element) => element.bounds.y)
     const documentYs = elements.map((element) => element.documentBounds.y)
@@ -421,13 +430,17 @@ export function deriveRuntimeStateObservations(snapshots: RuntimeStateSnapshot[]
       kind: "persistent-viewport-position",
       description: "Element text and viewport Y remain stable while document scroll position changes.",
       elementKey: key,
-      texts: Array.from(new Set(elements.map((element) => element.text).filter((text): text is string => Boolean(text)))).slice(0, 8),
+      texts: Array.from(
+        new Set(elements.map((element) => element.text).filter((text): text is string => Boolean(text))),
+      ).slice(0, 8),
       roles: Array.from(new Set(elements.map((element) => element.role || element.tag))).slice(0, 8),
       scrollYs: uniqueScrolls,
       viewportYRange: { min: Math.min(...viewportYs), max: Math.max(...viewportYs) },
       documentYRange: { min: Math.min(...documentYs), max: Math.max(...documentYs) },
       evidenceSnapshotIds: snapshots
-        .filter((snapshot) => elements.some((element) => snapshot.scrollY === element.documentBounds.y - element.bounds.y))
+        .filter((snapshot) =>
+          elements.some((element) => snapshot.scrollY === element.documentBounds.y - element.bounds.y),
+        )
         .map((snapshot) => snapshot.id),
     })
   }

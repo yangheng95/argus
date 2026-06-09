@@ -109,7 +109,11 @@ export function findRecentBrowserPreviewTargets(taskID: string, limit = 12): Per
       .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_TARGET_KIND)))
-      .orderBy(desc(EngineArtifactTable.time_updated), desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .orderBy(
+        desc(EngineArtifactTable.time_updated),
+        desc(EngineArtifactTable.time_created),
+        desc(EngineArtifactTable.id),
+      )
       .limit(Math.max(limit * 3, limit))
       .all(),
   )
@@ -173,8 +177,14 @@ function findBrowserPreviewTargetByUrl(input: {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_TARGET_KIND)))
-      .orderBy(desc(EngineArtifactTable.time_updated), desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .where(
+        and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_TARGET_KIND)),
+      )
+      .orderBy(
+        desc(EngineArtifactTable.time_updated),
+        desc(EngineArtifactTable.time_created),
+        desc(EngineArtifactTable.id),
+      )
       .limit(30)
       .all(),
   )
@@ -234,15 +244,14 @@ export function persistBrowserPreviewEvidence(input: {
   return id
 }
 
-export function latestBrowserPreviewEvidenceID(input: {
-  taskID: string
-  targetID?: string
-}): string | undefined {
+export function latestBrowserPreviewEvidenceID(input: { taskID: string; targetID?: string }): string | undefined {
   const rows = Database.use((db) =>
     db
       .select({ id: EngineArtifactTable.id, payload: EngineArtifactTable.payload })
       .from(EngineArtifactTable)
-      .where(and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_EVIDENCE_KIND)))
+      .where(
+        and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_EVIDENCE_KIND)),
+      )
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .limit(20)
       .all(),

@@ -133,11 +133,7 @@ export function taskIDForSession(sessionID: string): string | undefined {
 
     // Direct hit: `current` is the root session of a task.
     const task = Database.use((db) =>
-      db
-        .select({ id: EngineTaskTable.id })
-        .from(EngineTaskTable)
-        .where(eq(EngineTaskTable.session_id, current!))
-        .get(),
+      db.select({ id: EngineTaskTable.id }).from(EngineTaskTable).where(eq(EngineTaskTable.session_id, current!)).get(),
     )
     if (task?.id) {
       for (const sid of visited) taskIDCache.set(sid, task.id)

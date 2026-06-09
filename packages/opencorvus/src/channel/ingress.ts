@@ -51,30 +51,30 @@ export namespace ChannelIngress {
     }
 
     return ChannelIngressResult.parse(
-      await ControlMessage.handle(ControlMessageInput.parse({
-        surface: input.platform,
-        text: input.text,
-        taskID: input.task_id ?? binding?.task_id ?? undefined,
-        executor: input.executor,
-        channel: input.channel,
-        thread: input.thread,
-        user_id: input.user_id,
-        request_id: input.request_id,
-        source: input.source,
-        allow_create: input.allow_create,
-        metadata: meta(input),
-        // Forward channel attachments — without this, slack/feishu/etc.
-        // file uploads disappear at the control-plane boundary before
-        // panel.create_task / panel.send_task_message can do anything
-        // with them. Each MessageAttachmentInput (`{filename, mime, url?,
-        // data?}`) is normalized into ControlAttachment's required data-URL
-        // form so the downstream control-plane LLM session sees the bytes
-        // as multimodal file parts and panel.* tools can decode them
-        // strictly via decodeDataUrlBase64.
-        ...(input.attachments.length > 0
-          ? { attachments: input.attachments.map(toControlAttachment) }
-          : {}),
-      })),
+      await ControlMessage.handle(
+        ControlMessageInput.parse({
+          surface: input.platform,
+          text: input.text,
+          taskID: input.task_id ?? binding?.task_id ?? undefined,
+          executor: input.executor,
+          channel: input.channel,
+          thread: input.thread,
+          user_id: input.user_id,
+          request_id: input.request_id,
+          source: input.source,
+          allow_create: input.allow_create,
+          metadata: meta(input),
+          // Forward channel attachments — without this, slack/feishu/etc.
+          // file uploads disappear at the control-plane boundary before
+          // panel.create_task / panel.send_task_message can do anything
+          // with them. Each MessageAttachmentInput (`{filename, mime, url?,
+          // data?}`) is normalized into ControlAttachment's required data-URL
+          // form so the downstream control-plane LLM session sees the bytes
+          // as multimodal file parts and panel.* tools can decode them
+          // strictly via decodeDataUrlBase64.
+          ...(input.attachments.length > 0 ? { attachments: input.attachments.map(toControlAttachment) } : {}),
+        }),
+      ),
     )
   }
 
@@ -91,22 +91,19 @@ export namespace ChannelIngress {
    * bindings so the query cost is negligible.
    */
   export function bindingsByTaskID(taskID: string) {
-    if (!taskID) return [] as Array<{
-      id: string
-      task_id: string
-      platform: string
-      channel: string
-      thread: string
-      payload: Record<string, unknown> | null
-      time_created: number | null
-      time_updated: number | null
-    }>
+    if (!taskID)
+      return [] as Array<{
+        id: string
+        task_id: string
+        platform: string
+        channel: string
+        thread: string
+        payload: Record<string, unknown> | null
+        time_created: number | null
+        time_updated: number | null
+      }>
     return Database.use((db) =>
-      db
-        .select()
-        .from(EngineChannelBindingTable)
-        .where(eq(EngineChannelBindingTable.task_id, taskID))
-        .all(),
+      db.select().from(EngineChannelBindingTable).where(eq(EngineChannelBindingTable.task_id, taskID)).all(),
     )
   }
 
@@ -123,25 +120,13 @@ export namespace ChannelIngress {
       const existing = db
         .select({ task_id: T.task_id })
         .from(T)
-        .where(
-          and(
-            eq(T.platform, input.platform),
-            eq(T.channel, input.channel),
-            eq(T.thread, input.thread),
-          ),
-        )
+        .where(and(eq(T.platform, input.platform), eq(T.channel, input.channel), eq(T.thread, input.thread)))
         .get()
       const now = Date.now()
       if (existing) {
         db.update(T)
           .set({ task_id: input.taskID, payload: input.payload ?? {}, time_updated: now })
-          .where(
-            and(
-              eq(T.platform, input.platform),
-              eq(T.channel, input.channel),
-              eq(T.thread, input.thread),
-            ),
-          )
+          .where(and(eq(T.platform, input.platform), eq(T.channel, input.channel), eq(T.thread, input.thread)))
           .run()
       } else {
         db.insert(T)
@@ -177,7 +162,12 @@ async function tryReplyInteraction(
     }
     if (["always", "allow always", "approve always"].includes(value)) {
       const result = await EngineService.replyInteraction(pending.id, { reply: "always", autoReply: false })
-      return { kind: "interaction", message: "Permission granted (always).", task_id: taskID, interaction_id: result.id }
+      return {
+        kind: "interaction",
+        message: "Permission granted (always).",
+        task_id: taskID,
+        interaction_id: result.id,
+      }
     }
     if (["reject", "deny", "no", "n"].includes(value)) {
       const result = await EngineService.rejectInteraction(pending.id, { autoReply: false })
@@ -243,9 +233,7 @@ function toControlAttachment(att: z.infer<typeof MessageAttachmentInput>): {
   }
   throw new Error(
     `ChannelIngress attachment "${filename ?? att.mime}": expected base64 \`data\` field or \`url\` of form "data:<mime>;base64,<bytes>"; got ${
-      typeof att.url === "string" && att.url.length > 60
-        ? `${att.url.slice(0, 60)}…`
-        : JSON.stringify(att.url)
+      typeof att.url === "string" && att.url.length > 60 ? `${att.url.slice(0, 60)}…` : JSON.stringify(att.url)
     }`,
   )
 }

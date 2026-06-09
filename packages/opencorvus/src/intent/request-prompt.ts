@@ -10,7 +10,8 @@ export function renderUserRequestSection(input: {
   taskID?: string
   bundlePath?: string
 }): string {
-  const bundlePath = input.bundlePath ??
+  const bundlePath =
+    input.bundlePath ??
     (input.taskID ? ProjectRuntimePaths.taskRelative(input.taskID, "intent", "request.md") : USER_REQUEST_BUNDLE_PATH)
   const lines: string[] = [input.heading, ""]
   if (input.title?.trim()) {

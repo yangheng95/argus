@@ -288,10 +288,7 @@ export interface Hooks {
    *
    * - `context`: Additional context strings appended to the default prompt
    */
-  "experimental.session.compacting"?: (
-    input: { sessionID: string },
-    output: { context: string[] },
-  ) => Promise<void>
+  "experimental.session.compacting"?: (input: { sessionID: string }, output: { context: string[] }) => Promise<void>
   "experimental.text.complete"?: (
     input: { sessionID: string; messageID: string; partID: string },
     output: { text: string },
@@ -314,10 +311,7 @@ export interface Hooks {
       checks: Array<{
         name: string
         mode: "soft" | "strict"
-        run: (ctx: {
-          request?: string
-          acceptance: { summary: string; diffs?: any[] }
-        }) => Promise<{
+        run: (ctx: { request?: string; acceptance: { summary: string; diffs?: any[] } }) => Promise<{
           status: "passed" | "failed" | "skipped"
           evidence: string
           artifacts?: Array<{ kind: string; label: string; payload: Record<string, any> }>

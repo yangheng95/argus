@@ -14,25 +14,21 @@ import { TaskStatusHeader } from "./components/TaskStatusHeader"
 import { ProjectDirectoryBar } from "./components/TaskDirBar"
 import { ChatComposer } from "./components/ChatComposer"
 import { WindowControls } from "./components/WindowControls"
-import {
-  LeftPanelHeaderCollapseControl,
-} from "./components/PanelHeaderCollapseControl"
 import { TitlebarMenubar } from "./components/titlebar/TitlebarMenubar"
 import { ConnectionBadge } from "./components/ConnectionBadge"
 import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { FileEditorPane } from "./components/FileEditorPane"
-import { FileChangesPanel } from "./components/FileChangesPanel"
+import { FileChangesPanel, type FileChangesActiveView } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
+import { McpPanel, SkillsPanel } from "./components/settings/SkillMarketPanel"
+import { MemoryPanel } from "./components/MemoryPanel"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
-import { loadTasks, boardStore, loadBoard,
-  activeTaskID,
-  activeSessionID,
-} from "./store/board"
+import { loadTasks, boardStore, loadBoard, activeTaskID, activeSessionID } from "./store/board"
 import { messageStore } from "./store/messages"
 import { appStore } from "./store/app"
 import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, renameTask } from "./services/task"
@@ -53,7 +49,13 @@ import {
   toggleDevtools,
 } from "./services/theme"
 import { settingsStore, setSettingsStore, saveSettings } from "./store/settings"
-import { initPaneResizers, cancelPaneResize, currentUIScale, renderPaneLayout, PANEL_PANE_CONFIG } from "./services/pane"
+import {
+  initPaneResizers,
+  cancelPaneResize,
+  currentUIScale,
+  renderPaneLayout,
+  PANEL_PANE_CONFIG,
+} from "./services/pane"
 import { panelMessage } from "./services/chat"
 import { ConnectionBanner } from "./components/ConnectionBanner"
 import { CommandPalette } from "./components/CommandPalette"
@@ -71,11 +73,7 @@ import { nativeOpen } from "./utils/native"
 import { hydrateIconPlaceholders } from "./utils/icon-html"
 import { installNativeContextMenuSuppression } from "./utils/context-menu"
 import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
-import {
-  applyDirectory,
-  activeDirectory,
-  openPathInSelectedEditor,
-} from "./services/workspace"
+import { applyDirectory, activeDirectory, openPathInSelectedEditor } from "./services/workspace"
 import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
@@ -162,14 +160,18 @@ window.addEventListener(
 
 const [logOpen, setLogOpen] = createSignal(false)
 
+window.addEventListener("oc:open-logs", () => setLogOpen(true), listenerOpts)
+
 // ── Workspace (secondary panel, stacked above composer) state ──
 // workspaceOpen drives layout visibility; workspaceTarget is remembered across
 // open/close cycles so reopening restores the last active diff target.
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
+const [fileChangesActiveView, setFileChangesActiveView] = createSignal<FileChangesActiveView>("changes")
 
 type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"
-type RightActivity = Exclude<CenterWorkbenchPanel, "file"> | "assistant"
+type RightActivity = Exclude<CenterWorkbenchPanel, "file">
+type LeftActivity = "tasks" | "assistant" | "memory" | "skill" | "mcp"
 
 const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
 const CENTER_WORKBENCH_MIN_PANEL_WIDTH = 128
@@ -184,22 +186,38 @@ const CENTER_WORKBENCH_PANEL_ORDER: readonly CenterWorkbenchPanel[] = [
 ]
 
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
-  { id: "workflow", icon: "workflow", labelKey: "chat.title" },
-  { id: "inspector", icon: "inspect", labelKey: "sections.title" },
-  { id: "notifications", icon: "notifications", labelKey: "notify.center_label" },
-  { id: "explorer", icon: "folder", labelKey: "explorer.title" },
-  { id: "diff", icon: "files", labelKey: "workspace.diff" },
-  { id: "browser", icon: "web-search", labelKey: "browser_preview.title" },
-  { id: "assistant", icon: "message", labelKey: "coding_assistant.title" },
+  { id: "workflow", icon: "workflow", labelKey: "chat.title", tooltipKey: "activity.tooltip.workflow" },
+  { id: "inspector", icon: "inspect", labelKey: "sections.title", tooltipKey: "activity.tooltip.inspector" },
+  { id: "explorer", icon: "folder", labelKey: "explorer.title", tooltipKey: "activity.tooltip.explorer" },
+  { id: "diff", icon: "files", labelKey: "workspace.diff", tooltipKey: "activity.tooltip.diff" },
+  { id: "browser", icon: "web-search", labelKey: "browser_preview.title", tooltipKey: "activity.tooltip.browser" },
+  {
+    id: "notifications",
+    icon: "notifications",
+    labelKey: "notify.center_label",
+    tooltipKey: "activity.tooltip.notifications",
+  },
+]
+
+const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
+  { id: "tasks", icon: "tasks", labelKey: "sidebar.title", tooltipKey: "activity.tooltip.tasks" },
+  { id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant" },
+  { id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory" },
+  { id: "skill", icon: "config-skill", labelKey: "skill.title", tooltipKey: "activity.tooltip.skill" },
+  { id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp" },
 ]
 
 const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
 const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>("workflow")
 const activeRightActivity = () => selectedRightActivity()
+const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
+const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] =
+  createSignal<Exclude<LeftActivity, "assistant">>("tasks")
+const activeLeftActivity = () => selectedLeftActivity()
 
 function activateCodingAssistantSession(): void {
   openCenterWorkbenchPanel("workflow")
-  setSelectedRightActivity("assistant")
+  setSelectedLeftActivity("assistant")
   void selectCodingAssistantSession().catch((error) => {
     reportOverlayRuntimeError("coding-assistant.select", error)
   })
@@ -210,13 +228,40 @@ function isCenterWorkbenchPanelOpen(panel: CenterWorkbenchPanel): boolean {
 }
 
 function isRightActivityOpen(activity: RightActivity): boolean {
-  if (activity === "assistant") return selectedRightActivity() === "assistant" && isCenterWorkbenchPanelOpen("workflow")
   return isCenterWorkbenchPanelOpen(activity)
 }
 
+function isLeftActivityOpen(activity: LeftActivity): boolean {
+  if (activity === "assistant") return selectedLeftActivity() === "assistant" && isCenterWorkbenchPanelOpen("workflow")
+  return selectedLeftActivity() === activity
+}
+
+function hasWorkspaceDiffTarget(): boolean {
+  return !!untrack(workspaceTarget).filePath
+}
+
+function openDiffActivity(): void {
+  if (hasWorkspaceDiffTarget()) {
+    setWorkspaceOpen(true)
+    setFileChangesActiveView("diff")
+  }
+  openCenterWorkbenchPanel("diff")
+}
+
+function selectDiffActivity(): void {
+  const diffOpen = isCenterWorkbenchPanelOpen("diff")
+  const diffViewActive = untrack(fileChangesActiveView) === "diff"
+  const hasTarget = hasWorkspaceDiffTarget()
+  if (diffOpen && (!hasTarget || diffViewActive)) {
+    closeCenterWorkbenchPanel("diff")
+    return
+  }
+  openDiffActivity()
+}
+
 function selectRightActivity(activity: RightActivity): void {
-  if (activity === "assistant") {
-    activateCodingAssistantSession()
+  if (activity === "diff") {
+    selectDiffActivity()
     return
   }
   if (untrack(centerWorkbenchPanels).includes(activity)) {
@@ -226,8 +271,25 @@ function selectRightActivity(activity: RightActivity): void {
   }
 }
 
+function openRightActivity(activity: RightActivity): void {
+  if (activity === "diff") {
+    openDiffActivity()
+    return
+  }
+  openCenterWorkbenchPanel(activity)
+}
+
+function selectLeftActivity(activity: LeftActivity): void {
+  if (activity === "assistant") {
+    activateCodingAssistantSession()
+    return
+  }
+  setSelectedLeftActivity(activity)
+  setSelectedLeftPanelActivity(activity)
+}
+
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
-  setCenterWorkbenchPanels((current) => current.includes(panel) ? current : [...current, panel])
+  setCenterWorkbenchPanels((current) => (current.includes(panel) ? current : [...current, panel]))
   if (panel !== "file") setSelectedRightActivity(panel)
 }
 
@@ -236,7 +298,7 @@ function closeCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
   if (panel === "file") closeFileEditor()
   setCenterWorkbenchPanels((current) => current.filter((item) => item !== panel))
   const selected = untrack(selectedRightActivity)
-  if (selected === panel || (panel === "workflow" && selected === "assistant")) {
+  if (selected === panel) {
     setSelectedRightActivity(null)
   }
 }
@@ -252,7 +314,9 @@ function clampCenterWorkbenchWidth(value: number): number {
 }
 
 function centerWorkbenchWidth(): number {
-  return clampCenterWorkbenchWidth(settingsStore.centerWorkbenchWidth ?? DEFAULT_CENTER_WORKBENCH_WIDTH * currentUIScale())
+  return clampCenterWorkbenchWidth(
+    settingsStore.centerWorkbenchWidth ?? DEFAULT_CENTER_WORKBENCH_WIDTH * currentUIScale(),
+  )
 }
 
 function renderCenterWorkbenchWidth(width = centerWorkbenchWidth()): void {
@@ -337,9 +401,7 @@ function debugGoalBoardFiles(gw: any): string {
       if (typeof stats.deletions === "number") deletions = (deletions ?? 0) + stats.deletions
     }
   }
-  const statText = statFiles === undefined
-    ? "—"
-    : `${statFiles} files, +${additions ?? 0}/-${deletions ?? 0}`
+  const statText = statFiles === undefined ? "—" : `${statFiles} files, +${additions ?? 0}/-${deletions ?? 0}`
   return `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; commits=${commitRefs.size ? Array.from(commitRefs).join(",") : "none"}; diffStats=${statText}`
 }
 
@@ -601,6 +663,7 @@ function buildTaskDebugBlob(board: any): string {
 /** Open the workspace panel. */
 function openWorkspace(): void {
   setWorkspaceOpen(true)
+  setFileChangesActiveView("diff")
   openCenterWorkbenchPanel("diff")
 }
 
@@ -632,12 +695,14 @@ document.addEventListener(
     if (!target) return
     const imageTrigger = target.closest<HTMLElement>("[data-image-preview-trigger]")
     if (imageTrigger) {
-      const src = imageTrigger.getAttribute("data-image-preview-src")
-        || imageTrigger.querySelector("img")?.getAttribute("src")
-        || ""
-      const alt = imageTrigger.getAttribute("data-image-preview-alt")
-        || imageTrigger.querySelector("img")?.getAttribute("alt")
-        || ""
+      const src =
+        imageTrigger.getAttribute("data-image-preview-src") ||
+        imageTrigger.querySelector("img")?.getAttribute("src") ||
+        ""
+      const alt =
+        imageTrigger.getAttribute("data-image-preview-alt") ||
+        imageTrigger.querySelector("img")?.getAttribute("alt") ||
+        ""
       ev.preventDefault()
       openImagePreview(src, alt)
       return
@@ -716,7 +781,10 @@ document.addEventListener(
 
 window.addEventListener(
   "acceptance:focus-changes",
-  () => openCenterWorkbenchPanel("diff"),
+  () => {
+    setFileChangesActiveView("changes")
+    openCenterWorkbenchPanel("diff")
+  },
   listenerOpts,
 )
 
@@ -783,13 +851,7 @@ const missionMountEl = document.getElementById("solidMissionMount")
 if (missionMountEl) {
   missionMountEl.innerHTML = ""
   render(
-    () => (
-      <Mission
-        workspaceTarget={workspaceTarget}
-        workspaceOpen={workspaceOpen}
-        closeWorkspace={closeWorkspace}
-      />
-    ),
+    () => <Mission workspaceTarget={workspaceTarget} workspaceOpen={workspaceOpen} closeWorkspace={closeWorkspace} />,
     missionMountEl,
   )
 }
@@ -828,7 +890,15 @@ const fileChangesMountEl = document.getElementById("solidFileChangesMount")
 if (fileChangesMountEl) {
   fileChangesMountEl.innerHTML = ""
   render(
-    () => <FileChangesPanel diffOpen={workspaceOpen()} diffTarget={workspaceTarget()} onCloseDiff={closeWorkspace} />,
+    () => (
+      <FileChangesPanel
+        diffOpen={workspaceOpen()}
+        diffTarget={workspaceTarget()}
+        activeView={fileChangesActiveView()}
+        onActiveViewChange={setFileChangesActiveView}
+        onCloseDiff={closeWorkspace}
+      />
+    ),
     fileChangesMountEl,
   )
 }
@@ -836,7 +906,10 @@ if (fileChangesMountEl) {
 const fileExplorerMountEl = document.getElementById("solidFileExplorerMount")
 if (fileExplorerMountEl) {
   fileExplorerMountEl.innerHTML = ""
-  render(() => <FileExplorerPanel active={() => isCenterWorkbenchPanelOpen("explorer")} directory={activeDirectory} />, fileExplorerMountEl)
+  render(
+    () => <FileExplorerPanel active={() => isCenterWorkbenchPanelOpen("explorer")} directory={activeDirectory} />,
+    fileExplorerMountEl,
+  )
 }
 
 // ── Sidebar title backdoor: double-click resets DB ──
@@ -871,7 +944,11 @@ if (sidebarTitleEl) {
             typeof res.body === "string"
               ? res.body
               : (() => {
-                  try { return JSON.stringify(res.body, null, 2) } catch { return String(res.body) }
+                  try {
+                    return JSON.stringify(res.body, null, 2)
+                  } catch {
+                    return String(res.body)
+                  }
                 })()
           }`,
         })
@@ -890,6 +967,39 @@ if (sidebarTitleEl) {
 }
 
 // ── Mount: TaskList ──
+
+const LEFT_ACTIVITY_BODY_IDS: Record<Exclude<LeftActivity, "assistant">, string> = {
+  tasks: "leftPanelTasks",
+  memory: "leftPanelMemory",
+  skill: "leftPanelSkills",
+  mcp: "leftPanelMcp",
+}
+
+const LEFT_ACTIVITY_TITLE_KEYS: Record<Exclude<LeftActivity, "assistant">, string> = {
+  tasks: "sidebar.title",
+  memory: "memory.title",
+  skill: "skill.title",
+  mcp: "mcp.title",
+}
+
+disposers.push(
+  createRoot((dispose) => {
+    createEffect(() => {
+      const activity = selectedLeftPanelActivity()
+      for (const [id, elementID] of Object.entries(LEFT_ACTIVITY_BODY_IDS) as Array<
+        [Exclude<LeftActivity, "assistant">, string]
+      >) {
+        const element = document.getElementById(elementID)
+        if (element) element.dataset.active = id === activity ? "true" : "false"
+      }
+      const title = document.getElementById("leftPanelTitle")
+      if (title) title.textContent = t(LEFT_ACTIVITY_TITLE_KEYS[activity])
+      const taskActions = document.getElementById("leftPanelTaskActions")
+      if (taskActions) taskActions.dataset.active = activity === "tasks" ? "true" : "false"
+    })
+    return dispose
+  }),
+)
 
 const taskListEl = document.getElementById("taskListPanel")
 if (taskListEl) {
@@ -1021,7 +1131,7 @@ if (windowControlsEl) {
 
 const titlebarMenuEl = document.getElementById("solidTitlebarMenu")
 if (titlebarMenuEl) {
-  render(() => <TitlebarMenubar onOpenLog={() => setLogOpen(true)} />, titlebarMenuEl)
+  render(() => <TitlebarMenubar />, titlebarMenuEl)
 }
 
 const projectDirectoryBarEl = document.getElementById("solidProjectDirectoryBarMount")
@@ -1046,14 +1156,36 @@ if (rightActivityToolbarEl) {
   )
 }
 
-const leftPanelCollapseControlEl = document.getElementById("solidLeftPanelCollapseControl")
-if (leftPanelCollapseControlEl) {
-  render(() => <LeftPanelHeaderCollapseControl />, leftPanelCollapseControlEl)
+const leftActivityToolbarEl = document.getElementById("solidLeftActivityToolbar")
+if (leftActivityToolbarEl) {
+  render(
+    () => (
+      <SideActivityToolbar
+        side="left"
+        activities={LEFT_ACTIVITIES}
+        active={activeLeftActivity}
+        isActive={isLeftActivityOpen}
+        ariaLabelKey="activity.left"
+        onSelect={selectLeftActivity}
+      />
+    ),
+    leftActivityToolbarEl,
+  )
 }
 
-const leftCollapsedRailControlEl = document.getElementById("solidLeftCollapsedRailControl")
-if (leftCollapsedRailControlEl) {
-  render(() => <LeftPanelHeaderCollapseControl />, leftCollapsedRailControlEl)
+const leftSkillsPanelEl = document.getElementById("solidLeftSkillsPanel")
+if (leftSkillsPanelEl) {
+  render(() => <SkillsPanel compact />, leftSkillsPanelEl)
+}
+
+const leftMcpPanelEl = document.getElementById("solidLeftMcpPanel")
+if (leftMcpPanelEl) {
+  render(() => <McpPanel compact />, leftMcpPanelEl)
+}
+
+const leftMemoryPanelEl = document.getElementById("solidLeftMemoryPanel")
+if (leftMemoryPanelEl) {
+  render(() => <MemoryPanel taskID={activeTaskID() || undefined} compact />, leftMemoryPanelEl)
 }
 
 const browserPreviewEl = document.getElementById("solidBrowserPreviewMount")
@@ -1065,7 +1197,7 @@ if (browserPreviewEl) {
         directory={activeDirectory}
         refreshKey={() => boardStore.boardUpdatedAt}
         taskID={() => activeTaskID() || undefined}
-        onReady={() => selectRightActivity("browser")}
+        onReady={() => openRightActivity("browser")}
       />
     ),
     browserPreviewEl,
@@ -1352,7 +1484,7 @@ disposers.push(
     })
 
     createEffect(() => {
-      const sidebarCollapsed = settingsStore.sidebarCollapsed
+      const sidebarCollapsed = false
       const rightPanelCollapsed = settingsStore.rightPanelCollapsed
 
       const sidebar = document.getElementById("sidebar")
@@ -1372,12 +1504,15 @@ disposers.push(
         leftResizer.dataset.disabled = String(sidebarCollapsed)
       }
 
-      renderPaneLayout({
-        sidebarCollapsed,
-        rightPanelCollapsed,
-        sidebarWidth: settingsStore.sidebarWidth,
-        sectionsWidth: settingsStore.sectionsWidth,
-      }, PANEL_PANE_CONFIG)
+      renderPaneLayout(
+        {
+          sidebarCollapsed,
+          rightPanelCollapsed,
+          sidebarWidth: settingsStore.sidebarWidth,
+          sectionsWidth: settingsStore.sectionsWidth,
+        },
+        PANEL_PANE_CONFIG,
+      )
     })
 
     // Task status header + elapsed timer moved to <TaskStatusHeader/> component
@@ -1395,7 +1530,7 @@ disposers.push(
 
 const paneCallbacks = {
   getState: () => ({
-    sidebarCollapsed: settingsStore.sidebarCollapsed,
+    sidebarCollapsed: false,
     rightPanelCollapsed: settingsStore.rightPanelCollapsed,
     sidebarWidth: settingsStore.sidebarWidth,
     sectionsWidth: settingsStore.sectionsWidth,

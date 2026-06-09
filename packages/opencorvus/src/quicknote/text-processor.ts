@@ -22,7 +22,7 @@ export function extractTitle(content: string): string {
   if (!content || content.length === 0) {
     return ""
   }
-  
+
   // 去除首尾空白后截取前 15 个字符
   const trimmed = content.trim()
   return trimmed.slice(0, TITLE_LENGTH)
@@ -38,13 +38,13 @@ export function generateSummary(content: string): string {
   if (!content || content.length === 0) {
     return ""
   }
-  
+
   const trimmed = content.trim()
   // 如果内容超过最大长度，截取并添加省略号
   if (trimmed.length > MAX_SUMMARY_LENGTH) {
     return trimmed.slice(0, MAX_SUMMARY_LENGTH - 3) + "..."
   }
-  
+
   return trimmed
 }
 
@@ -77,9 +77,9 @@ export function processText(content: string): {
       error: "内容不能为空",
     }
   }
-  
+
   const valid = validateContent(content)
-  
+
   if (!valid) {
     return {
       title: "",
@@ -88,7 +88,7 @@ export function processText(content: string): {
       error: `内容长度不能超过 ${MAX_CONTENT_LENGTH} 字符`,
     }
   }
-  
+
   return {
     title: extractTitle(content),
     summary: generateSummary(content),

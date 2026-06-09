@@ -12,65 +12,79 @@ import { AttachmentStore } from "../../src/storage/attachment-store"
 
 describe("AttachmentStore.displayFilename", () => {
   test("returns the original name when it is shell-safe", () => {
-    expect(AttachmentStore.displayFilename({
-      filename: "screenshot.png",
-      mime: "image/png",
-      sha: "deadbeefdeadbeef",
-      index: 0,
-    })).toBe("screenshot.png")
+    expect(
+      AttachmentStore.displayFilename({
+        filename: "screenshot.png",
+        mime: "image/png",
+        sha: "deadbeefdeadbeef",
+        index: 0,
+      }),
+    ).toBe("screenshot.png")
   })
 
   test("accepts CJK + space (matches stageToWorktree's safe regex)", () => {
-    expect(AttachmentStore.displayFilename({
-      filename: "另一个 截图.png",
-      mime: "image/png",
-      sha: "abcd1234",
-      index: 1,
-    })).toBe("另一个 截图.png")
+    expect(
+      AttachmentStore.displayFilename({
+        filename: "另一个 截图.png",
+        mime: "image/png",
+        sha: "abcd1234",
+        index: 1,
+      }),
+    ).toBe("另一个 截图.png")
   })
 
   test("falls back to attachment-<i>-<sha8>.<ext> when name is missing", () => {
-    expect(AttachmentStore.displayFilename({
-      filename: undefined,
-      mime: "image/png",
-      sha: "529bae80ab6f5364",
-      index: 0,
-    })).toBe("attachment-1-529bae80.png")
+    expect(
+      AttachmentStore.displayFilename({
+        filename: undefined,
+        mime: "image/png",
+        sha: "529bae80ab6f5364",
+        index: 0,
+      }),
+    ).toBe("attachment-1-529bae80.png")
   })
 
   test("falls back when name contains shell-unsafe characters", () => {
-    expect(AttachmentStore.displayFilename({
-      filename: "evil$name|with;chars.png",
-      mime: "image/png",
-      sha: "0123456789abcdef",
-      index: 2,
-    })).toBe("attachment-3-01234567.png")
+    expect(
+      AttachmentStore.displayFilename({
+        filename: "evil$name|with;chars.png",
+        mime: "image/png",
+        sha: "0123456789abcdef",
+        index: 2,
+      }),
+    ).toBe("attachment-3-01234567.png")
   })
 
   test("falls back when name contains a path separator", () => {
-    expect(AttachmentStore.displayFilename({
-      filename: "../etc/passwd",
-      mime: "text/plain",
-      sha: "abc123def456",
-      index: 0,
-    })).toBe("attachment-1-abc123de.txt")
+    expect(
+      AttachmentStore.displayFilename({
+        filename: "../etc/passwd",
+        mime: "text/plain",
+        sha: "abc123def456",
+        index: 0,
+      }),
+    ).toBe("attachment-1-abc123de.txt")
   })
 
   test("uses 'noref' when sha is also missing — never invents a hex handle", () => {
-    expect(AttachmentStore.displayFilename({
-      filename: "",
-      mime: "image/png",
-      sha: undefined,
-      index: 0,
-    })).toBe("attachment-1-noref.png")
+    expect(
+      AttachmentStore.displayFilename({
+        filename: "",
+        mime: "image/png",
+        sha: undefined,
+        index: 0,
+      }),
+    ).toBe("attachment-1-noref.png")
   })
 
   test("treats omitted index as the first attachment", () => {
-    expect(AttachmentStore.displayFilename({
-      filename: undefined,
-      mime: "image/jpeg",
-      sha: "abcd0000",
-    })).toBe("attachment-1-abcd0000.jpg")
+    expect(
+      AttachmentStore.displayFilename({
+        filename: undefined,
+        mime: "image/jpeg",
+        sha: "abcd0000",
+      }),
+    ).toBe("attachment-1-abcd0000.jpg")
   })
 
   test("never returns a bare 64-char sha — that was the original bug", () => {

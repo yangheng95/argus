@@ -38,10 +38,7 @@ export namespace ControlMessage {
     return runResult.result
   }
 
-  export async function handleStream(
-    raw: z.input<typeof ControlMessageInput>,
-    onEvent: StreamCallback,
-  ) {
+  export async function handleStream(raw: z.input<typeof ControlMessageInput>, onEvent: StreamCallback) {
     const input = ControlMessageInput.parse(raw)
     const runResult = await run(input, onEvent)
     if (runResult.timeline) appendTimeline(input, runResult.result)
@@ -143,10 +140,13 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
 
     throw new Error(structuredOutputFailureMessage(result))
   } catch (error) {
-    const output = finalizeResult(ControlMessageResult.parse({
-      kind: "panel_response",
-      message: `Control message processing failed: ${error instanceof Error ? error.message : String(error)}`,
-    }), control)
+    const output = finalizeResult(
+      ControlMessageResult.parse({
+        kind: "panel_response",
+        message: `Control message processing failed: ${error instanceof Error ? error.message : String(error)}`,
+      }),
+      control,
+    )
     log.error("panel request failed", {
       input: payload,
       panel_session_id: control?.info.id,
@@ -163,7 +163,9 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       // Best-effort cleanup in finally — if the session was already removed
       // (concurrent teardown) we move on; any real failure surfaces in the
       // log but does not mask the main-branch result.
-      await Session.remove(control!.info.id).catch(err => log.warn("panel control session remove failed", { error: String(err) }))
+      await Session.remove(control!.info.id).catch((err) =>
+        log.warn("panel control session remove failed", { error: String(err) }),
+      )
       log.info("panel control session removed", {
         input: payload,
         panel_session_id: control!.info.id,

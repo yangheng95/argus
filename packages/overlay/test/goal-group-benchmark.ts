@@ -39,7 +39,8 @@ const boardData = {
     time: { created: Date.now() - 120_000 },
   },
   spec: {
-    content: "## Requirements\n\n1. User authentication with JWT tokens\n2. REST API endpoints for dashboard data\n3. Role-based access control",
+    content:
+      "## Requirements\n\n1. User authentication with JWT tokens\n2. REST API endpoints for dashboard data\n3. Role-based access control",
   },
   plan: {
     summary: "Three-phase implementation: auth module, API layer, access control",
@@ -53,13 +54,15 @@ const boardData = {
     {
       id: "run",
       title: "Run",
-      cards: [{
-        id: "run-1",
-        kind: "run",
-        title: "OpenCorvus / executing",
-        status: "running",
-        time: Date.now(),
-      }],
+      cards: [
+        {
+          id: "run-1",
+          kind: "run",
+          title: "OpenCorvus / executing",
+          status: "running",
+          time: Date.now(),
+        },
+      ],
     },
     {
       id: "acceptance",
@@ -110,9 +113,7 @@ const boardData = {
       goalStatus: "running",
       orderIndex: 0,
       priority: "blocking",
-      steps: [
-        { stepID: "build", label: "Executor", status: "running" },
-      ],
+      steps: [{ stepID: "build", label: "Executor", status: "running" }],
     },
     {
       goalID: "goal-api",
@@ -120,9 +121,7 @@ const boardData = {
       goalStatus: "running",
       orderIndex: 1,
       priority: "blocking",
-      steps: [
-        { stepID: "build", label: "Executor", status: "running" },
-      ],
+      steps: [{ stepID: "build", label: "Executor", status: "running" }],
     },
     {
       goalID: "goal-rbac",
@@ -130,9 +129,7 @@ const boardData = {
       goalStatus: "running",
       orderIndex: 2,
       priority: "blocking",
-      steps: [
-        { stepID: "build", label: "Executor", status: "running" },
-      ],
+      steps: [{ stepID: "build", label: "Executor", status: "running" }],
     },
   ],
   overview: [],
@@ -153,8 +150,24 @@ const transcriptMessages = [
       time: { created: Date.now() - 110_000 },
     },
     parts: [
-      { id: "sp1", type: "text", text: "Let me analyze the codebase to understand the current authentication setup..." },
-      { id: "sp2", type: "tool", tool: "search_code", state: { status: "completed", input: { query: "auth middleware" }, output: "Found 3 files", title: "search_code", metadata: {}, time: { start: Date.now() - 109_000, end: Date.now() - 108_500 } } },
+      {
+        id: "sp1",
+        type: "text",
+        text: "Let me analyze the codebase to understand the current authentication setup...",
+      },
+      {
+        id: "sp2",
+        type: "tool",
+        tool: "search_code",
+        state: {
+          status: "completed",
+          input: { query: "auth middleware" },
+          output: "Found 3 files",
+          title: "search_code",
+          metadata: {},
+          time: { start: Date.now() - 109_000, end: Date.now() - 108_500 },
+        },
+      },
     ],
   },
   {
@@ -166,7 +179,11 @@ const transcriptMessages = [
       time: { created: Date.now() - 108_000 },
     },
     parts: [
-      { id: "sp3", type: "text", text: "Based on the analysis, here are the requirements:\n\n1. JWT-based authentication\n2. Dashboard API with CRUD\n3. Role-based access control" },
+      {
+        id: "sp3",
+        type: "text",
+        text: "Based on the analysis, here are the requirements:\n\n1. JWT-based authentication\n2. Dashboard API with CRUD\n3. Role-based access control",
+      },
     ],
   },
   // Planner message
@@ -180,7 +197,19 @@ const transcriptMessages = [
     },
     parts: [
       { id: "pp1", type: "text", text: "Creating implementation plan with 3 parallel goals..." },
-      { id: "pp2", type: "tool", tool: "create_plan", state: { status: "completed", input: {}, output: "Plan created with 3 goals", title: "create_plan", metadata: {}, time: { start: Date.now() - 99_000, end: Date.now() - 98_000 } } },
+      {
+        id: "pp2",
+        type: "tool",
+        tool: "create_plan",
+        state: {
+          status: "completed",
+          input: {},
+          output: "Plan created with 3 goals",
+          title: "create_plan",
+          metadata: {},
+          time: { start: Date.now() - 99_000, end: Date.now() - 98_000 },
+        },
+      },
     ],
   },
   // Goal agent message
@@ -192,9 +221,7 @@ const transcriptMessages = [
       sessionID: "goal-session-1",
       time: { created: Date.now() - 95_000 },
     },
-    parts: [
-      { id: "gp1", type: "text", text: "Decomposed into 3 implementation goals for parallel execution" },
-    ],
+    parts: [{ id: "gp1", type: "text", text: "Decomposed into 3 implementation goals for parallel execution" }],
   },
   // ── Executor messages for Goal A (auth) ──
   {
@@ -206,8 +233,24 @@ const transcriptMessages = [
       time: { created: Date.now() - 80_000 },
     },
     parts: [
-      { id: "ea1", type: "text", text: "Starting JWT authentication implementation. Let me read the existing middleware..." },
-      { id: "ea2", type: "tool", tool: "read_file", state: { status: "completed", input: { path: "src/middleware/auth.ts" }, output: "// Empty auth middleware\nexport function authMiddleware() { ... }", title: "read_file", metadata: {}, time: { start: Date.now() - 79_000, end: Date.now() - 78_500 } } },
+      {
+        id: "ea1",
+        type: "text",
+        text: "Starting JWT authentication implementation. Let me read the existing middleware...",
+      },
+      {
+        id: "ea2",
+        type: "tool",
+        tool: "read_file",
+        state: {
+          status: "completed",
+          input: { path: "src/middleware/auth.ts" },
+          output: "// Empty auth middleware\nexport function authMiddleware() { ... }",
+          title: "read_file",
+          metadata: {},
+          time: { start: Date.now() - 79_000, end: Date.now() - 78_500 },
+        },
+      },
     ],
   },
   {
@@ -220,7 +263,19 @@ const transcriptMessages = [
     },
     parts: [
       { id: "ea3", type: "text", text: "Writing JWT token generation and verification logic..." },
-      { id: "ea4", type: "tool", tool: "write_file", state: { status: "completed", input: { path: "src/auth/jwt.ts" }, output: "File written: src/auth/jwt.ts (45 lines)", title: "write_file", metadata: {}, time: { start: Date.now() - 74_000, end: Date.now() - 73_000 } } },
+      {
+        id: "ea4",
+        type: "tool",
+        tool: "write_file",
+        state: {
+          status: "completed",
+          input: { path: "src/auth/jwt.ts" },
+          output: "File written: src/auth/jwt.ts (45 lines)",
+          title: "write_file",
+          metadata: {},
+          time: { start: Date.now() - 74_000, end: Date.now() - 73_000 },
+        },
+      },
     ],
   },
   {
@@ -233,7 +288,19 @@ const transcriptMessages = [
     },
     parts: [
       { id: "ea5", type: "text", text: "Implementing login and refresh token endpoints..." },
-      { id: "ea6", type: "tool", tool: "write_file", state: { status: "completed", input: { path: "src/routes/auth.ts" }, output: "File written: src/routes/auth.ts (78 lines)", title: "write_file", metadata: {}, time: { start: Date.now() - 69_000, end: Date.now() - 68_000 } } },
+      {
+        id: "ea6",
+        type: "tool",
+        tool: "write_file",
+        state: {
+          status: "completed",
+          input: { path: "src/routes/auth.ts" },
+          output: "File written: src/routes/auth.ts (78 lines)",
+          title: "write_file",
+          metadata: {},
+          time: { start: Date.now() - 69_000, end: Date.now() - 68_000 },
+        },
+      },
     ],
   },
   {
@@ -246,7 +313,18 @@ const transcriptMessages = [
     },
     parts: [
       { id: "ea7", type: "text", text: "Writing tests for the auth module..." },
-      { id: "ea8", type: "tool", tool: "run_tests", state: { status: "running", input: { file: "test/auth.test.ts" }, title: "run_tests", metadata: {}, time: { start: Date.now() - 64_000 } } },
+      {
+        id: "ea8",
+        type: "tool",
+        tool: "run_tests",
+        state: {
+          status: "running",
+          input: { file: "test/auth.test.ts" },
+          title: "run_tests",
+          metadata: {},
+          time: { start: Date.now() - 64_000 },
+        },
+      },
     ],
   },
   // ── Executor messages for Goal B (API) ──
@@ -260,7 +338,19 @@ const transcriptMessages = [
     },
     parts: [
       { id: "eb1", type: "text", text: "Starting dashboard API implementation. Reading existing router setup..." },
-      { id: "eb2", type: "tool", tool: "read_file", state: { status: "completed", input: { path: "src/routes/index.ts" }, output: "import { Router } from 'express';\nconst router = Router();\n...", title: "read_file", metadata: {}, time: { start: Date.now() - 77_000, end: Date.now() - 76_500 } } },
+      {
+        id: "eb2",
+        type: "tool",
+        tool: "read_file",
+        state: {
+          status: "completed",
+          input: { path: "src/routes/index.ts" },
+          output: "import { Router } from 'express';\nconst router = Router();\n...",
+          title: "read_file",
+          metadata: {},
+          time: { start: Date.now() - 77_000, end: Date.now() - 76_500 },
+        },
+      },
     ],
   },
   {
@@ -273,7 +363,19 @@ const transcriptMessages = [
     },
     parts: [
       { id: "eb3", type: "text", text: "Creating CRUD endpoints for dashboard widgets..." },
-      { id: "eb4", type: "tool", tool: "write_file", state: { status: "completed", input: { path: "src/routes/dashboard.ts" }, output: "File written: src/routes/dashboard.ts (120 lines)", title: "write_file", metadata: {}, time: { start: Date.now() - 71_000, end: Date.now() - 70_000 } } },
+      {
+        id: "eb4",
+        type: "tool",
+        tool: "write_file",
+        state: {
+          status: "completed",
+          input: { path: "src/routes/dashboard.ts" },
+          output: "File written: src/routes/dashboard.ts (120 lines)",
+          title: "write_file",
+          metadata: {},
+          time: { start: Date.now() - 71_000, end: Date.now() - 70_000 },
+        },
+      },
     ],
   },
   {
@@ -286,7 +388,19 @@ const transcriptMessages = [
     },
     parts: [
       { id: "eb5", type: "text", text: "Adding user preferences API with validation..." },
-      { id: "eb6", type: "tool", tool: "write_file", state: { status: "completed", input: { path: "src/routes/preferences.ts" }, output: "File written: src/routes/preferences.ts (65 lines)", title: "write_file", metadata: {}, time: { start: Date.now() - 66_000, end: Date.now() - 65_500 } } },
+      {
+        id: "eb6",
+        type: "tool",
+        tool: "write_file",
+        state: {
+          status: "completed",
+          input: { path: "src/routes/preferences.ts" },
+          output: "File written: src/routes/preferences.ts (65 lines)",
+          title: "write_file",
+          metadata: {},
+          time: { start: Date.now() - 66_000, end: Date.now() - 65_500 },
+        },
+      },
     ],
   },
   // ── Executor messages for Goal C (RBAC) — just started ──
@@ -300,7 +414,18 @@ const transcriptMessages = [
     },
     parts: [
       { id: "ec1", type: "text", text: "Reading the existing permission model to understand the role hierarchy..." },
-      { id: "ec2", type: "tool", tool: "search_code", state: { status: "running", input: { query: "role permission" }, title: "search_code", metadata: {}, time: { start: Date.now() - 39_000 } } },
+      {
+        id: "ec2",
+        type: "tool",
+        tool: "search_code",
+        state: {
+          status: "running",
+          input: { query: "role permission" },
+          title: "search_code",
+          metadata: {},
+          time: { start: Date.now() - 39_000 },
+        },
+      },
     ],
   },
 ]
@@ -324,16 +449,18 @@ const server = Bun.serve({
     if (path === "/global/health") return send({ version: "benchmark" })
     if (path === "/tasks" || path === "/global/tasks") {
       return send({
-        tasks: [{
-          task: {
-            id: TASK_ID,
-            requestID: "req-1",
-            request: boardData.task.request,
-            status: boardData.task.status,
-            time_created: boardData.task.time.created,
-            time_updated: Date.now(),
+        tasks: [
+          {
+            task: {
+              id: TASK_ID,
+              requestID: "req-1",
+              request: boardData.task.request,
+              status: boardData.task.status,
+              time_created: boardData.task.time.created,
+              time_updated: Date.now(),
+            },
           },
-        }],
+        ],
       })
     }
     if (path === `/task/${TASK_ID}/board`) {
@@ -364,7 +491,7 @@ const server = Bun.serve({
         headers: {
           "content-type": "text/event-stream",
           "cache-control": "no-cache",
-          "connection": "keep-alive",
+          connection: "keep-alive",
         },
       })
     }
@@ -411,11 +538,11 @@ const server = Bun.serve({
     const file = Bun.file(new URL(name, src))
     const ext = name.slice(name.lastIndexOf("."))
     const type = types[ext] || "application/octet-stream"
-    return file.exists().then((ok: boolean) =>
-      ok
-        ? new Response(file, { headers: { "content-type": type } })
-        : new Response("not found", { status: 404 }),
-    )
+    return file
+      .exists()
+      .then((ok: boolean) =>
+        ok ? new Response(file, { headers: { "content-type": type } }) : new Response("not found", { status: 404 }),
+      )
   },
 })
 
@@ -469,12 +596,13 @@ await page.goto(serverUrl, { waitUntil: "load" })
 console.log("  Browser opened. Waiting for overlay to connect...")
 
 // Wait for connection
-await page.waitForFunction(
-  () => document.querySelector("#connBadge")?.getAttribute("data-status") === "online",
-  { timeout: 15_000 },
-).catch(() => {
-  console.log("  (connection badge not found, continuing anyway)")
-})
+await page
+  .waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online", {
+    timeout: 15_000,
+  })
+  .catch(() => {
+    console.log("  (connection badge not found, continuing anyway)")
+  })
 
 // Auto-select the task
 await page.evaluate((taskID: string) => {
@@ -490,9 +618,7 @@ await new Promise((r) => setTimeout(r, 1500))
 
 if (SHOT_MODE) {
   const path = await import("node:path")
-  const outDir = path.resolve(
-    new URL("../../../docs/cards-visual/", import.meta.url).pathname.replace(/^\/+/, ""),
-  )
+  const outDir = path.resolve(new URL("../../../docs/cards-visual/", import.meta.url).pathname.replace(/^\/+/, ""))
   await Bun.$`mkdir -p ${outDir}`.quiet().catch(() => {})
 
   const overview = path.join(outDir, "benchmark-overview.png")
@@ -588,7 +714,9 @@ if (SHOT_MODE) {
   )
   console.log("\n  card tree (depth/kind/stage/status/title/childCardCount):")
   for (const t of tree) {
-    console.log(`    ${"  ".repeat(Number(t.depth))}d=${t.depth} ${t.kind}/${t.stage} [${t.status}] "${t.title}" ch=${t.childCardCount} ${t.w}x${t.h} exp=${t.expanded} bodyH=${t.bodyH} bodyOv=${t.bodyOverflow} bodyMaxH=${t.bodyMaxH}`)
+    console.log(
+      `    ${"  ".repeat(Number(t.depth))}d=${t.depth} ${t.kind}/${t.stage} [${t.status}] "${t.title}" ch=${t.childCardCount} ${t.w}x${t.h} exp=${t.expanded} bodyH=${t.bodyH} bodyOv=${t.bodyOverflow} bodyMaxH=${t.bodyMaxH}`,
+    )
   }
 
   await browser.close()

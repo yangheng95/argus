@@ -32,7 +32,10 @@ const fullSnapshotEvery = envInt("VSCODE_BENCH_FULL_SNAPSHOT_EVERY", 25)
 const buildEvery = envInt("VSCODE_BENCH_BUILD_EVERY", 25)
 const e2eEvery = envInt("VSCODE_BENCH_E2E_EVERY", 25)
 const visualE2eEvery = envInt("VSCODE_BENCH_VISUAL_E2E_EVERY", 0)
-const reportPath = path.resolve(repoRoot, process.env.VSCODE_BENCH_REPORT ?? "tmp/vscode-extension-100-round-report.jsonl")
+const reportPath = path.resolve(
+  repoRoot,
+  process.env.VSCODE_BENCH_REPORT ?? "tmp/vscode-extension-100-round-report.jsonl",
+)
 
 const sourceGuards: Array<{
   name: string
@@ -85,31 +88,71 @@ async function main() {
     console.log(`[round ${round}/${rounds}] start`)
     const checks: CheckResult[] = []
 
-    checks.push(await commandCheck("vscode.typecheck", repoRoot, [bunBin, "run", "--cwd", "packages/vscode-extension", "typecheck"]))
-    checks.push(await commandCheck("vscode.unit", repoRoot, [bunBin, "run", "--cwd", "packages/vscode-extension", "test"]))
-    checks.push(await commandCheck("transport-protocol.unit", path.join(repoRoot, "packages", "transport-protocol"), [bunBin, "test"]))
+    checks.push(
+      await commandCheck("vscode.typecheck", repoRoot, [
+        bunBin,
+        "run",
+        "--cwd",
+        "packages/vscode-extension",
+        "typecheck",
+      ]),
+    )
+    checks.push(
+      await commandCheck("vscode.unit", repoRoot, [bunBin, "run", "--cwd", "packages/vscode-extension", "test"]),
+    )
+    checks.push(
+      await commandCheck("transport-protocol.unit", path.join(repoRoot, "packages", "transport-protocol"), [
+        bunBin,
+        "test",
+      ]),
+    )
     checks.push(await sourceGuardCheck())
     checks.push(
-      await commandCheck("snapshot.smoke.no-destructive-api", repoRoot, [
-        bunBin,
-        "packages/opencorvus/script/benchmark/snapshot-benchmark.ts",
-      ], {
-        SNAPSHOT_BENCH_ONLY: "gc.no-destructive-api",
-        SNAPSHOT_BENCH_IDLE_TIMEOUT_MS: String(idleMs),
-      }),
+      await commandCheck(
+        "snapshot.smoke.no-destructive-api",
+        repoRoot,
+        [bunBin, "packages/opencorvus/script/benchmark/snapshot-benchmark.ts"],
+        {
+          SNAPSHOT_BENCH_ONLY: "gc.no-destructive-api",
+          SNAPSHOT_BENCH_IDLE_TIMEOUT_MS: String(idleMs),
+        },
+      ),
     )
 
     if (buildEvery > 0 && round % buildEvery === 0) {
-      checks.push(await commandCheck("vscode.build.production.skip-ui", extensionRoot, ["node", "esbuild.mjs", "--production", "--skip-ui"]))
+      checks.push(
+        await commandCheck("vscode.build.production.skip-ui", extensionRoot, [
+          "node",
+          "esbuild.mjs",
+          "--production",
+          "--skip-ui",
+        ]),
+      )
       checks.push(await commandCheck("vscode.bundle.audit", extensionRoot, [bunBin, "run", "script/audit-bundle.ts"]))
     }
 
     if (e2eEvery > 0 && round % e2eEvery === 0) {
-      checks.push(await commandCheck("vscode.e2e.ui", repoRoot, [bunBin, "run", "--cwd", "packages/vscode-extension", "test:e2e:vscode"]))
+      checks.push(
+        await commandCheck("vscode.e2e.ui", repoRoot, [
+          bunBin,
+          "run",
+          "--cwd",
+          "packages/vscode-extension",
+          "test:e2e:vscode",
+        ]),
+      )
     }
 
     if (visualE2eEvery > 0 && round % visualE2eEvery === 0) {
-      checks.push(await commandCheck("vscode.e2e.visual", repoRoot, [bunBin, "run", "--cwd", "packages/vscode-extension", "test:e2e:visual"]))
+      checks.push(
+        await commandCheck("vscode.e2e.visual", repoRoot, [
+          bunBin,
+          "run",
+          "--cwd",
+          "packages/vscode-extension",
+          "test:e2e:visual",
+        ]),
+      )
     }
 
     if (fullSnapshotEvery > 0 && round % fullSnapshotEvery === 0) {

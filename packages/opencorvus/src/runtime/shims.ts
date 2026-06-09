@@ -119,11 +119,11 @@ function readWinProxyRegistry(): WinProxySettings | undefined {
   // avoids pulling in a native dependency just for proxy detection.
   const child_process = require("child_process") as typeof import("child_process")
   const out = child_process
-    .execFileSync(
-      "reg.exe",
-      ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 },
-    )
+    .execFileSync("reg.exe", ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 2000,
+    })
     .toString()
 
   const grab = (name: string, type: string) => {

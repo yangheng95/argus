@@ -35,14 +35,14 @@ export interface ResolveWebpageEvidenceOutputDirInput {
  * `mkdir -p` is always invoked so tools can immediately write artifacts
  * without each having to repeat the existence check.
  */
-export async function resolveWebpageEvidenceOutputDir(input: ResolveWebpageEvidenceOutputDirInput = {}): Promise<string> {
+export async function resolveWebpageEvidenceOutputDir(
+  input: ResolveWebpageEvidenceOutputDirInput = {},
+): Promise<string> {
   if (input.override) {
     if (input.sessionID) {
       return resolveSessionOverride(input.override, input.sessionID)
     }
-    const base = path.isAbsolute(input.override)
-      ? input.override
-      : path.resolve(Instance.directory, input.override)
+    const base = path.isAbsolute(input.override) ? input.override : path.resolve(Instance.directory, input.override)
     await fs.mkdir(base, { recursive: true })
     return base
   }
@@ -74,9 +74,7 @@ async function resolveSessionDefault(sessionID: string): Promise<string> {
 async function resolveSessionOverride(override: string, sessionID: string): Promise<string> {
   const evidenceRoot = await resolveSessionDefault(sessionID)
   const viewRoot = path.resolve(Instance.directory, WEBPAGE_EVIDENCE_SUBDIR)
-  const requested = path.isAbsolute(override)
-    ? path.resolve(override)
-    : path.resolve(Instance.directory, override)
+  const requested = path.isAbsolute(override) ? path.resolve(override) : path.resolve(Instance.directory, override)
 
   if (samePath(requested, viewRoot)) return evidenceRoot
   if (isPathInside(viewRoot, requested)) {
@@ -91,7 +89,7 @@ async function resolveSessionOverride(override: string, sessionID: string): Prom
 
   throw new Error(
     `resolveWebpageEvidenceOutputDir: task sessions may only write webpage evidence artifacts under ${WEBPAGE_EVIDENCE_SUBDIR}/; ` +
-    `refusing outputDir=${override}`,
+      `refusing outputDir=${override}`,
   )
 }
 

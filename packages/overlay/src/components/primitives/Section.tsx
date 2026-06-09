@@ -14,44 +14,53 @@
 // CSS: src/styles/primitives/section.css
 // Migration target: Step 9.E — Board / FilesSection / GoalWorkflowGroup sections.
 
-import { type JSX, splitProps, Show } from "solid-js";
+import { type JSX, splitProps, Show } from "solid-js"
 
 export interface SectionProps {
   /** Section title displayed in the header. */
-  title: string;
+  title: string
   /** Icon slot rendered left of the title (wrap in <Icon> or a span). */
-  icon?: JSX.Element;
+  icon?: JSX.Element
   /** Open on first render. Default: false. */
-  defaultOpen?: boolean;
+  defaultOpen?: boolean
   /** Trailing badge content (text or JSX rendered inside .oc-section__badge). */
-  badge?: JSX.Element;
+  badge?: JSX.Element
   /** data-tone applied to .oc-section__badge (drives tone styling). */
-  badgeTone?: string;
+  badgeTone?: string
   /** id applied to .oc-section__badge (for DOM accessors). */
-  badgeId?: string;
+  badgeId?: string
   /** data-variant applied to .oc-section__badge ("status" | "metric"). */
-  badgeVariant?: string;
+  badgeVariant?: string
   /** id applied to .oc-section__body — used by DOM accessors like syncSectionPhases. */
-  bodyId?: string;
+  bodyId?: string
   /** id forwarded to the <details> root — used by DOM accessors. */
-  id?: string;
+  id?: string
   /** Ref forwarded to the <details> element. */
-  ref?: ((el: HTMLDetailsElement) => void) | HTMLDetailsElement;
+  ref?: ((el: HTMLDetailsElement) => void) | HTMLDetailsElement
   /** Extra class names on the root. */
-  class?: string;
+  class?: string
   /** data-* attributes forwarded to root. */
-  [key: `data-${string}`]: string | boolean | undefined;
+  [key: `data-${string}`]: string | boolean | undefined
   /** attr:* attributes forwarded to root (e.g. attr:data-phase-state). */
-  [key: `attr:${string}`]: string | undefined;
-  children: JSX.Element;
+  [key: `attr:${string}`]: string | undefined
+  children: JSX.Element
 }
 
 export function Section(rawProps: SectionProps) {
   const [local, rest] = splitProps(rawProps, [
-    "title", "icon", "defaultOpen",
-    "badge", "badgeTone", "badgeId", "badgeVariant",
-    "bodyId", "id", "ref", "class", "children",
-  ]);
+    "title",
+    "icon",
+    "defaultOpen",
+    "badge",
+    "badgeTone",
+    "badgeId",
+    "badgeVariant",
+    "bodyId",
+    "id",
+    "ref",
+    "class",
+    "children",
+  ])
 
   return (
     <details
@@ -63,7 +72,9 @@ export function Section(rawProps: SectionProps) {
     >
       <summary class="oc-section__head">
         <Show when={local.icon}>
-          <span class="oc-section__icon" aria-hidden="true">{local.icon}</span>
+          <span class="oc-section__icon" aria-hidden="true">
+            {local.icon}
+          </span>
         </Show>
         <span class="oc-section__title">{local.title}</span>
         <Show when={local.badge !== undefined && local.badge !== null && local.badge !== ""}>
@@ -77,7 +88,9 @@ export function Section(rawProps: SectionProps) {
           </span>
         </Show>
       </summary>
-      <div class="oc-section__body" id={local.bodyId}>{local.children}</div>
+      <div class="oc-section__body" id={local.bodyId}>
+        {local.children}
+      </div>
     </details>
-  );
+  )
 }

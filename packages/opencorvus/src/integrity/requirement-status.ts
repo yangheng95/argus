@@ -160,9 +160,7 @@ export function computeRequirementStatusSnapshot(
   const reqRows = findRequirements(input.specSnapshotID)
   if (reqRows.length === 0) return []
 
-  const goalsForSnapshot = listGoals(input.taskID).filter(
-    (g) => g.spec_snapshot_id === input.specSnapshotID,
-  )
+  const goalsForSnapshot = listGoals(input.taskID).filter((g) => g.spec_snapshot_id === input.specSnapshotID)
 
   // Memoize tip goal_run + evidence per goalID — multiple REQs may share a
   // claiming goal and we must NOT re-query the artifact stream per pair.
@@ -201,8 +199,7 @@ export function computeRequirementStatusSnapshot(
       const checks = evidence?.checks ?? []
       for (const c of checks) {
         if (!c.spec_id) continue
-        const passed =
-          c.status === "passed" ? true : c.status === "failed" ? false : undefined
+        const passed = c.status === "passed" ? true : c.status === "failed" ? false : undefined
         checksBySpec.set(c.spec_id, { passed, summary: summaryClip(c.evidence) })
       }
 

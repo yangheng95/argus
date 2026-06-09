@@ -94,10 +94,9 @@ export async function awaitTaskLoopIdle(taskID: string, idleTimeoutMs: number) {
   let lastSignature = ""
   let idleDeadline = Date.now() + idleTimeoutMs
   while (true) {
-    const signature = [
-      taskLoopAbort.has(taskID) ? "loop" : "",
-      Orchestrator.isRunning(taskID) ? "orchestrator" : "",
-    ].filter(Boolean).join("+")
+    const signature = [taskLoopAbort.has(taskID) ? "loop" : "", Orchestrator.isRunning(taskID) ? "orchestrator" : ""]
+      .filter(Boolean)
+      .join("+")
 
     if (!signature) return
 
@@ -107,7 +106,9 @@ export async function awaitTaskLoopIdle(taskID: string, idleTimeoutMs: number) {
     }
 
     if (Date.now() > idleDeadline) {
-      throw new Error(`awaitTaskLoopIdle: task ${taskID} did not become idle after ${idleTimeoutMs}ms without state changes`)
+      throw new Error(
+        `awaitTaskLoopIdle: task ${taskID} did not become idle after ${idleTimeoutMs}ms without state changes`,
+      )
     }
 
     await new Promise<void>((resolve) => setTimeout(resolve, 50))
@@ -121,20 +122,22 @@ export async function runTaskLoop(input: {
   hooks: RuntimeHooks
 }) {
   const prev = taskLoopChain.get(input.taskID) ?? Promise.resolve()
-  const next = prev.catch(() => undefined).then(async () => {
-    const localAbort = new AbortController()
-    taskLoopAbort.set(input.taskID, localAbort)
-    try {
-      await runTaskLoopInner({
-        ...input,
-        signal: combineSignals([input.signal, localAbort.signal]),
-      })
-    } finally {
-      if (taskLoopAbort.get(input.taskID) === localAbort) {
-        taskLoopAbort.delete(input.taskID)
+  const next = prev
+    .catch(() => undefined)
+    .then(async () => {
+      const localAbort = new AbortController()
+      taskLoopAbort.set(input.taskID, localAbort)
+      try {
+        await runTaskLoopInner({
+          ...input,
+          signal: combineSignals([input.signal, localAbort.signal]),
+        })
+      } finally {
+        if (taskLoopAbort.get(input.taskID) === localAbort) {
+          taskLoopAbort.delete(input.taskID)
+        }
       }
-    }
-  })
+    })
   taskLoopChain.set(input.taskID, next)
   // Clean up only if we're still the tail — a later call may have chained
   // on top of `next` before it resolved, and that one must stay in the map.

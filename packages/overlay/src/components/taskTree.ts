@@ -12,31 +12,31 @@
  *  disabled on any nested row, not only the cross-directory ones —
  *  see TaskRow.canDrag in TaskList.tsx). */
 export type TaskTreeEntry = {
-  item: any;
-  depth: number;
-  directChildren: any[];
-  crossDirectory: boolean;
-  expanded: boolean;
-};
+  item: any
+  depth: number
+  directChildren: any[]
+  crossDirectory: boolean
+  expanded: boolean
+}
 
 /** Result of walking the filtered task list once: a parentID→children map
  *  for direct lineage edges, the set of top-level items (parent missing
  *  from the filtered set OR a cycle victim), and the cycle victims for
  *  diagnostic purposes. */
 export type TaskTreeShape = {
-  childMap: Map<string, any[]>;
-  topLevelItems: any[];
-  cycleVictims: Set<string>;
-};
+  childMap: Map<string, any[]>
+  topLevelItems: any[]
+  cycleVictims: Set<string>
+}
 
 function getID(item: any): string | undefined {
-  const id = item?.task?.id;
-  return typeof id === "string" && id ? id : undefined;
+  const id = item?.task?.id
+  return typeof id === "string" && id ? id : undefined
 }
 
 function getParentID(item: any): string | undefined {
-  const pid = item?.task?.parentTaskID;
-  return typeof pid === "string" && pid ? pid : undefined;
+  const pid = item?.task?.parentTaskID
+  return typeof pid === "string" && pid ? pid : undefined
 }
 
 /** Build the lineage shape from a flat, filter-applied item list.
@@ -52,54 +52,52 @@ function getParentID(item: any): string | undefined {
  *  Multiple concurrent calls on a tight render loop are fine — the
  *  function holds no shared state. */
 export function buildTaskTree(items: readonly any[]): TaskTreeShape {
-  const byID = new Map<string, any>();
+  const byID = new Map<string, any>()
   for (const item of items) {
-    const id = getID(item);
-    if (id) byID.set(id, item);
+    const id = getID(item)
+    if (id) byID.set(id, item)
   }
-  const cycleVictims = new Set<string>();
+  const cycleVictims = new Set<string>()
   for (const item of items) {
-    const startID = getID(item);
-    if (!startID || cycleVictims.has(startID)) continue;
-    const seen = new Set<string>();
-    let cur: any = item;
+    const startID = getID(item)
+    if (!startID || cycleVictims.has(startID)) continue
+    const seen = new Set<string>()
+    let cur: any = item
     while (cur) {
-      const curID = getID(cur);
-      if (!curID) break;
+      const curID = getID(cur)
+      if (!curID) break
       if (seen.has(curID)) {
-        console.warn(
-          `[TaskList] task tree cycle detected involving ${curID} — rendering cycle members as top-level`,
-        );
-        for (const v of seen) cycleVictims.add(v);
-        cycleVictims.add(curID);
-        break;
+        console.warn(`[TaskList] task tree cycle detected involving ${curID} — rendering cycle members as top-level`)
+        for (const v of seen) cycleVictims.add(v)
+        cycleVictims.add(curID)
+        break
       }
-      seen.add(curID);
-      const parentID = getParentID(cur);
-      if (!parentID) break;
-      const next = byID.get(parentID);
-      if (!next) break; // parent not in filtered set — orphan, not cycle
-      cur = next;
+      seen.add(curID)
+      const parentID = getParentID(cur)
+      if (!parentID) break
+      const next = byID.get(parentID)
+      if (!next) break // parent not in filtered set — orphan, not cycle
+      cur = next
     }
   }
-  const childMap = new Map<string, any[]>();
-  const isNestedChild = new Set<string>();
+  const childMap = new Map<string, any[]>()
+  const isNestedChild = new Set<string>()
   for (const item of items) {
-    const id = getID(item);
-    const parentID = getParentID(item);
-    if (!id || !parentID) continue;
-    if (cycleVictims.has(id) || cycleVictims.has(parentID)) continue;
-    if (!byID.has(parentID)) continue; // orphan — parent filtered out
-    const arr = childMap.get(parentID) ?? [];
-    arr.push(item);
-    childMap.set(parentID, arr);
-    isNestedChild.add(id);
+    const id = getID(item)
+    const parentID = getParentID(item)
+    if (!id || !parentID) continue
+    if (cycleVictims.has(id) || cycleVictims.has(parentID)) continue
+    if (!byID.has(parentID)) continue // orphan — parent filtered out
+    const arr = childMap.get(parentID) ?? []
+    arr.push(item)
+    childMap.set(parentID, arr)
+    isNestedChild.add(id)
   }
   const topLevelItems = items.filter((item) => {
-    const id = getID(item);
-    return !id || !isNestedChild.has(id);
-  });
-  return { childMap, topLevelItems, cycleVictims };
+    const id = getID(item)
+    return !id || !isNestedChild.has(id)
+  })
+  return { childMap, topLevelItems, cycleVictims }
 }
 
 /** Depth-first flatten of a directory group's top-level items into a
@@ -117,23 +115,23 @@ export function flattenGroup(
   expanded: ReadonlySet<string>,
   projectDirectoryOf: (item: any) => string,
 ): TaskTreeEntry[] {
-  const out: TaskTreeEntry[] = [];
+  const out: TaskTreeEntry[] = []
   const visit = (item: any, depth: number) => {
-    const id = getID(item);
-    const direct = (id && childMap.get(id)) ?? [];
-    const itemDir = projectDirectoryOf(item);
-    const isExpanded = id ? expanded.has(id) : false;
+    const id = getID(item)
+    const direct = (id && childMap.get(id)) ?? []
+    const itemDir = projectDirectoryOf(item)
+    const isExpanded = id ? expanded.has(id) : false
     out.push({
       item,
       depth,
       directChildren: direct,
       crossDirectory: depth > 0 && itemDir !== groupDirectory,
       expanded: isExpanded,
-    });
+    })
     if (id && isExpanded && direct.length > 0) {
-      for (const child of direct) visit(child, depth + 1);
+      for (const child of direct) visit(child, depth + 1)
     }
-  };
-  for (const item of topLevel) visit(item, 0);
-  return out;
+  }
+  for (const item of topLevel) visit(item, 0)
+  return out
 }

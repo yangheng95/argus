@@ -16,6 +16,7 @@
 - **接口**：`GET /config` · `PATCH /config`（JSON Merge Patch RFC 7396）· SSE `config.changed`
 
 **字段分组**（来源：`src/config/config.ts` 的 ConfigSchema）：
+
 ```
 顶层：      $schema · logLevel · server · share · autoupdate · snapshot · watcher
            disabled_providers · enabled_providers · tool_permissions
@@ -40,6 +41,7 @@ experimental: auto_question · batch_tool · disable_paste_summary · continue_l
 > **2026-05-11 新增**：顶级 `locale: "en-US" | "zh-CN"` —— operator-selected system language used for assistant replies and Overlay localization（commit `c19da3136` / `bdc33b9b0`）。**这是行为类设置**（影响 LLM 回复语言 + SDK 透传），属 Layer 1，**不**属 Overlay UI 偏好的 `locale`（后者继续存在于 localStorage，仅控制前端 UI 文案）。
 >
 > **2026-05-12 更正**：以下旧 schema 字段已删除，不再存在：
+>
 > - `assistant.spec{}` / `assistant.goal{}` / `assistant.planner{}` / `assistant.evaluator{}` /
 >   `assistant.adaptive{}` —— planner / acceptance review 整体下线（见 [01-agents.md](01-agents.md)），
 >   spec/goal/adaptive 字段在 workflow 系统替代后删除。
@@ -55,6 +57,7 @@ experimental: auto_question · batch_tool · disable_paste_summary · continue_l
 - **不影响系统行为**
 
 **字段**：
+
 - 连接：`serverUrl` · `autoServer` · `password`
 - 窗口：`alwaysOnTop` · `opacity`
 - 工作区：`directory` · `directoryMode` · `initGit`
@@ -68,20 +71,21 @@ experimental: auto_question · batch_tool · disable_paste_summary · continue_l
 - 重连时从 server API 恢复，**不从 config 或 localStorage**
 
 **字段**：
+
 - `workspaceTaskID` · `workspaceDirectory`
 - `savedDirectory` · `tempDirectory`
 - `workspaceEpoch` · `directoryEpoch`
 
 ## 已删除的内容（本方案执行后）
 
-| 项 | 代码路径 | 状态 |
-|---|---|---|
-| `PanelSettings` namespace | ~~`panel/settings.ts`~~ | 已删除 |
-| `panel/api.ts` | ~~`panel/api.ts`~~ | 已删除（路由由 `server/routes/panel.ts` 承担） |
-| `syncUnattendedConfig()` | `overlay/src/services/config.ts` | 已移除双向同步 |
-| localStorage keys `oc_unattended` · `oc_auto_permission` · `oc_auto_question` | overlay | 改读 server config |
-| Overlay `updateConfig()` 全量替换 | overlay | 改为 partial diff |
-| 死字段 `spec{}` · `max_replans` · `same_plan_retry_limit` · `stage_max_retries` | config schema | 已废弃 |
+| 项                                                                              | 代码路径                         | 状态                                           |
+| ------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------- |
+| `PanelSettings` namespace                                                       | ~~`panel/settings.ts`~~          | 已删除                                         |
+| `panel/api.ts`                                                                  | ~~`panel/api.ts`~~               | 已删除（路由由 `server/routes/panel.ts` 承担） |
+| `syncUnattendedConfig()`                                                        | `overlay/src/services/config.ts` | 已移除双向同步                                 |
+| localStorage keys `oc_unattended` · `oc_auto_permission` · `oc_auto_question`   | overlay                          | 改读 server config                             |
+| Overlay `updateConfig()` 全量替换                                               | overlay                          | 改为 partial diff                              |
+| 死字段 `spec{}` · `max_replans` · `same_plan_retry_limit` · `stage_max_retries` | config schema                    | 已废弃                                         |
 
 ## 数据流（重设计后）
 
@@ -95,6 +99,7 @@ opencorvus.jsonc ──→ Config.get() ──→ Zod 验证 + 层级合并 ─�
 ```
 
 **关键变化**：
+
 1. Overlay 不再 `GET→clone→mutate→PATCH` 全量，只发变化字段
 2. Config 变更后 SSE 推送，所有 Overlay 自动 `setAppStore("config", newConfig)`
 3. `scaffoldProjectConfig` 直接导入 `EngineConfig.defaults`，不硬编码

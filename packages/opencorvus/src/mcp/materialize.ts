@@ -38,12 +38,7 @@ export async function materializeMcpToolResult(input: {
       if ("blob" in resource && resource.blob) {
         const mime = resource.mimeType ?? "application/octet-stream"
         attachments.push(
-          await AttachmentStore.write(
-            input.projectID,
-            Buffer.from(resource.blob, "base64"),
-            mime,
-            resource.uri,
-          ),
+          await AttachmentStore.write(input.projectID, Buffer.from(resource.blob, "base64"), mime, resource.uri),
         )
       }
       continue
@@ -51,9 +46,10 @@ export async function materializeMcpToolResult(input: {
     throw new Error(`Unsupported MCP content item type: ${(contentItem as { type?: string }).type ?? "(missing)"}`)
   }
 
-  const metadata = input.result.metadata && typeof input.result.metadata === "object" && !Array.isArray(input.result.metadata)
-    ? input.result.metadata as Record<string, unknown>
-    : {}
+  const metadata =
+    input.result.metadata && typeof input.result.metadata === "object" && !Array.isArray(input.result.metadata)
+      ? (input.result.metadata as Record<string, unknown>)
+      : {}
   const browser = browserObservationMetadata(
     (input.result as { structuredContent?: unknown }).structuredContent,
     attachments,
@@ -91,7 +87,8 @@ function browserObservationMetadata(
   const width = numberValue(screenshot.width)
   const height = numberValue(screenshot.height)
   const mimeType = stringValue(screenshot.mimeType)
-  const hasScreenshotPayload = typeof screenshot.data === "string" || width !== undefined || height !== undefined || mimeType
+  const hasScreenshotPayload =
+    typeof screenshot.data === "string" || width !== undefined || height !== undefined || mimeType
   if (!hasScreenshotPayload) return
 
   const attachment = attachments.find((item) => item.mime.startsWith("image/"))

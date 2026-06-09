@@ -128,7 +128,9 @@ export class SlackGateway {
         text,
       })
     }
-    const uploads = (attachments ?? []).map(fileUpload).filter((item): item is NonNullable<typeof item> => Boolean(item))
+    const uploads = (attachments ?? [])
+      .map(fileUpload)
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
     if (uploads.length === 0) return
     await this.app.client.files.uploadV2({
       channel_id: channel,

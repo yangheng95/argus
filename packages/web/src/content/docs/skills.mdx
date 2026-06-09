@@ -18,16 +18,16 @@ my-skill/
 
 Frontmatter fields (`src/skill/skill.ts:26-45`):
 
-| Field | Type | Description |
-|---|---|---|
-| `name` | string (required) | Global unique ID |
-| `description` | string (required) | One-line description used by the agent to decide when to activate |
-| `platforms` | `("win32"\|"darwin"\|"linux")[]` | Platform filter; empty = all |
-| `auto_detect.files` | string[] | Discovery hint when these files exist |
-| `auto_detect.deps` | string[] | Discovery hint when `package.json` lists these deps |
-| `auto_detect.task_signals` | object | Discovery hint from task signals such as image attachment, non-Figma URL, Figma URL, package scripts, or request text |
-| `priority` | number | Sort order (higher first, default 0) |
-| `required_tools` | string[] | Tool hints the skill expects the agent may need |
+| Field                      | Type                             | Description                                                                                                           |
+| -------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `name`                     | string (required)                | Global unique ID                                                                                                      |
+| `description`              | string (required)                | One-line description used by the agent to decide when to activate                                                     |
+| `platforms`                | `("win32"\|"darwin"\|"linux")[]` | Platform filter; empty = all                                                                                          |
+| `auto_detect.files`        | string[]                         | Discovery hint when these files exist                                                                                 |
+| `auto_detect.deps`         | string[]                         | Discovery hint when `package.json` lists these deps                                                                   |
+| `auto_detect.task_signals` | object                           | Discovery hint from task signals such as image attachment, non-Figma URL, Figma URL, package scripts, or request text |
+| `priority`                 | number                           | Sort order (higher first, default 0)                                                                                  |
+| `required_tools`           | string[]                         | Tool hints the skill expects the agent may need                                                                       |
 
 ## Skill ↔ agent relationship
 
@@ -39,10 +39,10 @@ Sessions receive a Skill Policy block that lists available skills. Agents should
 
 Shipped with the binary (`src/skill/skill.ts`), exactly two:
 
-| Name | Purpose |
-|---|---|
+| Name                    | Purpose                                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
 | `ainvest-design-system` | Provide the bundled Ainvest UI tokens, components, rules, and assets for Ainvest frontend work |
-| `research-report` | Produce a sourced Markdown research report using `websearch` and targeted `webfetch` |
+| `research-report`       | Produce a sourced Markdown research report using `websearch` and targeted `webfetch`           |
 
 Other skills must be loaded through configured skill paths or URLs if you need them.
 
@@ -87,9 +87,9 @@ Clones into `~/.config/opencorvus/skills-market/<slug>/`, appends to `skills.pat
     "skill": {
       "*": "ask",
       "research-report": "allow",
-      "local-note": "deny"
-    }
-  }
+      "local-note": "deny",
+    },
+  },
 }
 ```
 

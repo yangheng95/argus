@@ -26,8 +26,18 @@ describe("isolated acceptance LKG evaluation", () => {
           const task = seedTask({ id: uniqueID("task_lkg_isolated_normal") })
           const previousSha = await commitFile(dir, "app.txt", "previous\n", "previous")
           const roundSha = await commitFile(dir, "app.txt", "regressed\n", "round")
-          const rendered = await AttachmentStore.write(Instance.project.id, pngBuffer([0, 0, 0, 255]), "image/png", "rendered.png")
-          const reference = await AttachmentStore.write(Instance.project.id, pngBuffer([0, 0, 0, 255]), "image/png", "reference.png")
+          const rendered = await AttachmentStore.write(
+            Instance.project.id,
+            pngBuffer([0, 0, 0, 255]),
+            "image/png",
+            "rendered.png",
+          )
+          const reference = await AttachmentStore.write(
+            Instance.project.id,
+            pngBuffer([0, 0, 0, 255]),
+            "image/png",
+            "reference.png",
+          )
           const inputTask = withLKG(task, previousSha, 1.1)
           const primaryBefore = await head(dir)
 
@@ -61,13 +71,15 @@ describe("isolated acceptance LKG evaluation", () => {
           await commitFile(dir, "app.txt", "previous\n", "previous")
           const roundSha = await commitFile(dir, "app.txt", "round\n", "round")
 
-          await expect(evaluateLKGInIsolatedWorktree({
-            task,
-            iteration: 3,
-            roundCommitSha: roundSha,
-            renderedRefUrl: "/attachment/missing/rendered.png",
-            referenceRefUrl: "/attachment/missing/reference.png",
-          })).rejects.toThrow(/rendered attachment/)
+          await expect(
+            evaluateLKGInIsolatedWorktree({
+              task,
+              iteration: 3,
+              roundCommitSha: roundSha,
+              renderedRefUrl: "/attachment/missing/rendered.png",
+              referenceRefUrl: "/attachment/missing/reference.png",
+            }),
+          ).rejects.toThrow(/rendered attachment/)
 
           await expect(fs.stat(evalDir(dir, task.id, 3, roundSha))).rejects.toThrow()
           expect(await head(dir)).toBe(roundSha)
@@ -115,7 +127,12 @@ function seedTask(input: { id: string }): TaskRow {
     time_updated: now,
     time_started: now,
   } as TaskRow
-  Database.use((db) => db.insert(EngineTaskTable).values(row as any).run())
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values(row as any)
+      .run(),
+  )
   return row
 }
 

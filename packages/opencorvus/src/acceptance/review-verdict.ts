@@ -31,10 +31,7 @@ export const DeferredCheck = z.object({
 export type DeferredCheckType = z.infer<typeof DeferredCheck>
 
 export const ToolCallEvidence = z.object({
-  tool: z
-    .string()
-    .min(1)
-    .describe("Tool name as declared on the acceptance review tool set."),
+  tool: z.string().min(1).describe("Tool name as declared on the acceptance review tool set."),
   passed: z
     .boolean()
     .describe(
@@ -54,11 +51,7 @@ export const RejectionDetail = z.object({
     .optional()
     .describe("The goal id this rejection is attributed to. Omit for task-scope failures."),
   category: z.enum(["build", "test", "lint", "runtime", "quality", "startup", "visual"]),
-  check_id: z
-    .string()
-    .min(1)
-    .optional()
-    .describe("Deferred check id this rejection directly cites."),
+  check_id: z.string().min(1).optional().describe("Deferred check id this rejection directly cites."),
   file: z.string().optional().describe("Affected file path, if applicable"),
   error: z.string().min(8).describe("Description of the error or issue. Minimum 8 chars."),
   suggestion: z.string().optional().describe("Suggested fix approach for the next build/replan step"),

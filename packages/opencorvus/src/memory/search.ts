@@ -154,7 +154,8 @@ export namespace MemorySearch {
 
     const results: Memory.SearchResult[] = []
     for (const row of rows) {
-      if (!matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID, input.sessionSet)) continue
+      if (!matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID, input.sessionSet))
+        continue
       if (!matchesKinds(row.kind, input.kinds)) continue
       if (!matchesSources(row.source, input.sources)) continue
 
@@ -247,7 +248,9 @@ export namespace MemorySearch {
     )
 
     return rows
-      .filter((row) => matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID, input.sessionSet))
+      .filter((row) =>
+        matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID, input.sessionSet),
+      )
       .filter((row) => matchesKinds(row.kind, input.kinds))
       .filter((row) => matchesSources(row.source, input.sources))
       .map((row, idx) => ({

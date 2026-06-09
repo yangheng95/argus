@@ -21,18 +21,21 @@ async function projectIDFor(directory: string) {
 function seedTask(projectID: string, taskID: string) {
   const now = Date.now()
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "worktree runtime materialization",
-      request: "materialize webpage evidence artifacts",
-      priority: "normal",
-      budget: { max_executor_groups: 1 },
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "worktree runtime materialization",
+        request: "materialize webpage evidence artifacts",
+        priority: "normal",
+        budget: { max_executor_groups: 1 },
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run(),
   )
 }
 
@@ -130,9 +133,15 @@ describe("Worktree lifecycle", () => {
 
     expect(await Filesystem.exists(path.join(info.directory, "frontend-design-skeleton"))).toBe(false)
     expect(await Filesystem.exists(path.join(info.directory, "web-clone-source"))).toBe(false)
-    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe("source package")
-    expect(await Filesystem.readText(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe("reference")
-    expect(await Filesystem.readText(path.join(info.directory, paths.skeletonProjectRelative, "README.md"))).toBe("frontend skeleton")
+    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(
+      "source package",
+    )
+    expect(await Filesystem.readText(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
+      "reference",
+    )
+    expect(await Filesystem.readText(path.join(info.directory, paths.skeletonProjectRelative, "README.md"))).toBe(
+      "frontend skeleton",
+    )
     const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)
@@ -173,8 +182,12 @@ describe("Worktree lifecycle", () => {
     })
 
     expect(reused.directory).toBe(info.directory)
-    expect(await Filesystem.readText(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe("source package")
-    expect(await Filesystem.readText(path.join(reused.directory, paths.skeletonProjectRelative, "README.md"))).toBe("frontend skeleton")
+    expect(await Filesystem.readText(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe(
+      "source package",
+    )
+    expect(await Filesystem.readText(path.join(reused.directory, paths.skeletonProjectRelative, "README.md"))).toBe(
+      "frontend skeleton",
+    )
     const status = await $`git status --porcelain=v1`.cwd(reused.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)
@@ -230,7 +243,9 @@ describe("Worktree lifecycle", () => {
     })
 
     await fs.rm(path.join(info.directory, paths.relativeDir), { recursive: true, force: true })
-    expect(await Filesystem.exists(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(false)
+    expect(await Filesystem.exists(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
+      false,
+    )
 
     const reused = await Instance.provide({
       directory: tmp.path,
@@ -239,8 +254,12 @@ describe("Worktree lifecycle", () => {
 
     expect(reused.directory).toBe(info.directory)
     expect(await Filesystem.exists(path.join(reused.directory, "web-clone-source"))).toBe(false)
-    expect(await Filesystem.readText(path.join(reused.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe("reference")
-    expect(await Filesystem.readText(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe("source package")
+    expect(await Filesystem.readText(path.join(reused.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
+      "reference",
+    )
+    expect(await Filesystem.readText(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe(
+      "source package",
+    )
     const status = await $`git status --porcelain=v1`.cwd(reused.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)
@@ -277,8 +296,12 @@ describe("Worktree lifecycle", () => {
 
     expect(recovered).toMatchObject({ status: "recovered", directory: info.directory, branch: info.branch })
     expect(await Filesystem.exists(path.join(info.directory, "web-clone-source"))).toBe(false)
-    expect(await Filesystem.readText(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe("reference")
-    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe("source package")
+    expect(await Filesystem.readText(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
+      "reference",
+    )
+    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(
+      "source package",
+    )
     const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)
@@ -314,8 +337,12 @@ describe("Worktree lifecycle", () => {
 
     expect(await Filesystem.exists(path.join(info.directory, "scratch.txt"))).toBe(false)
     expect(await Filesystem.exists(path.join(info.directory, "web-clone-source"))).toBe(false)
-    expect(await Filesystem.readText(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe("reference")
-    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe("source package")
+    expect(await Filesystem.readText(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
+      "reference",
+    )
+    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(
+      "source package",
+    )
     const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)

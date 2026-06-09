@@ -14,7 +14,9 @@ export function researchRequestHashInput(input: {
     input.request,
     input.clarificationTranscript?.trim() ? `Clarification transcript:\n${input.clarificationTranscript.trim()}` : "",
     input.operatorNotes?.trim() ? `Operator notes:\n${input.operatorNotes.trim()}` : "",
-  ].filter(Boolean).join("\n\n")
+  ]
+    .filter(Boolean)
+    .join("\n\n")
 }
 
 export function researchBriefIsStale(input: {

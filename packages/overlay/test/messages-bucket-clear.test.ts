@@ -3,8 +3,8 @@
 // dropped. The naive assignment in the old impl merged instead of replacing,
 // so buckets from a previous task leaked into the next.
 
-import { test, expect } from "bun:test";
-import { enqueueEvent, messageStore, setMessages, clearEventQueue } from "../src/store/messages";
+import { test, expect } from "bun:test"
+import { enqueueEvent, messageStore, setMessages, clearEventQueue } from "../src/store/messages"
 
 test("setMessages([]) clears messagesBySession", async () => {
   enqueueEvent({
@@ -12,11 +12,11 @@ test("setMessages([]) clears messagesBySession", async () => {
     payload: {
       info: { id: "m-bucket-clear", sessionID: "sess-to-be-cleared", role: "assistant", time: { created: 1 } },
     },
-  });
-  await Bun.sleep(80);
-  expect(Object.keys(messageStore.messagesBySession)).toContain("sess-to-be-cleared");
+  })
+  await Bun.sleep(80)
+  expect(Object.keys(messageStore.messagesBySession)).toContain("sess-to-be-cleared")
 
-  setMessages([]);
-  clearEventQueue();
-  expect(Object.keys(messageStore.messagesBySession)).toEqual([]);
-});
+  setMessages([])
+  clearEventQueue()
+  expect(Object.keys(messageStore.messagesBySession)).toEqual([])
+})

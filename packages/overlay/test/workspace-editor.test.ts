@@ -1,18 +1,11 @@
 import { afterEach, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import {
-  __setHostTransportForTest,
-  type HostTransport,
-  type NativeCommand,
-} from "../src/services/host-transport"
+import { __setHostTransportForTest, type HostTransport, type NativeCommand } from "../src/services/host-transport"
 import { setLocaleData } from "../src/utils/i18n"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
-const { editorTargetPath, openDirectoryInEditor, openPathInSelectedEditor } = await import(
-  "../src/services/workspace"
-)
+const { editorTargetPath, openDirectoryInEditor, openPathInSelectedEditor } = await import("../src/services/workspace")
 const { applySettings, DEFAULT_SETTINGS } = await import("../src/store/settings")
 const { pathBreadcrumb } = await import("../src/utils/dom-utils")
 
@@ -98,7 +91,6 @@ test("markdown file links no longer open the built-in workspace file preview", (
 test("cwd breadcrumb keeps editor launchers out of the directory control", () => {
   setLocaleData("en-US", {
     "cwd.browse": "Switch Folder…",
-    "cwd.new": "New",
     "cwd.open": "Reveal in File Manager",
     "cwd.open_in_editor": "Open in {{name}}",
     "cwd.choose_level": "Use this folder",
@@ -111,4 +103,5 @@ test("cwd breadcrumb keeps editor launchers out of the directory control", () =>
   expect(html).not.toContain("Open in PyCharm")
   expect(html).not.toContain(">VS<")
   expect(html).not.toContain(">Py<")
+  expect(html).not.toContain('data-path-action="create"')
 })

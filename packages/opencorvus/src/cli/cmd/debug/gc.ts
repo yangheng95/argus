@@ -4,8 +4,7 @@ import { cmd } from "../cmd"
 
 export const GcCommand = cmd({
   command: "gc",
-  describe:
-    "garbage-collect stale projects (expired or orphan) and their snapshot / session_diff directories",
+  describe: "garbage-collect stale projects (expired or orphan) and their snapshot / session_diff directories",
   builder: (yargs) =>
     yargs
       .option("apply", {

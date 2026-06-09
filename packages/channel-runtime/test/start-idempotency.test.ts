@@ -49,7 +49,10 @@ function stubClient() {
     tui: {
       runtime: {
         start: async () => ({ data: {}, error: undefined }),
-        submitTask: async () => ({ data: { accepted: true, taskID: "task_mock", waited: false, completed: false }, error: undefined }),
+        submitTask: async () => ({
+          data: { accepted: true, taskID: "task_mock", waited: false, completed: false },
+          error: undefined,
+        }),
       },
     },
   }

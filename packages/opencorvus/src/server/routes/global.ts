@@ -241,7 +241,11 @@ export const GlobalRoutes = lazy(() =>
       validator(
         "json",
         z.object({
-          projectDir: z.string().describe("Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB."),
+          projectDir: z
+            .string()
+            .describe(
+              "Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB.",
+            ),
         }),
       ),
       async (c) => {

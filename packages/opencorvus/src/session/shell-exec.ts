@@ -42,7 +42,9 @@ export namespace SessionShell {
       } else {
         const { SessionLoop } = await import("./loop")
         const session = await Session.get(input.sessionID)
-        SessionContext.provide(session, () => SessionLoop.loop({ sessionID: input.sessionID, resume_existing: true })).catch((error: any) => {
+        SessionContext.provide(session, () =>
+          SessionLoop.loop({ sessionID: input.sessionID, resume_existing: true }),
+        ).catch((error: any) => {
           log.error("session loop failed to resume after shell command", { sessionID: input.sessionID, error })
         })
       }

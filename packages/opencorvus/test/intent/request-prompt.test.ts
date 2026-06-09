@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  renderUserRequestSection,
-  USER_REQUEST_BUNDLE_PATH,
-} from "../../src/intent/request-prompt"
+import { renderUserRequestSection, USER_REQUEST_BUNDLE_PATH } from "../../src/intent/request-prompt"
 
 describe("user request prompt injection", () => {
   test("injects the full user request and points at request.md audit copy", () => {

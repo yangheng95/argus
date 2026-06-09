@@ -4,8 +4,7 @@ import { join } from "node:path"
 
 // Vite replaces this token at build time; the test runner has to provide
 // a stub before importing any module that transitively depends on it.
-;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ =
-  "test"
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
 const MISSION_LIST_TSX = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
@@ -57,7 +56,7 @@ test("mission-helpers.ts no longer exports composeTaskText", () => {
 // ── New mission launcher surface present ─────────────────────
 
 test("Mission.tsx uses wakeMission from the mission service", () => {
-  expect(MISSION_TSX).toContain('wakeMission')
+  expect(MISSION_TSX).toContain("wakeMission")
 })
 
 test("Mission wake result opens the shared mission conversation surface", () => {
@@ -118,10 +117,23 @@ test("Mission ledger renders mission-created task projections under each mission
 
 test("Mission ledger back action is a text-only Task button", () => {
   const backButton = MISSION_LIST_TSX.match(/data-ui="mission-back-panel"[\s\S]*?<\/Button>/)?.[0] ?? ""
-  expect(backButton).toContain("<span>{t(\"mission.back\")}</span>")
+  expect(backButton).toContain('<span>{t("mission.back")}</span>')
   expect(backButton).not.toContain("<Icon")
   expect(I18N_EN_US).toContain('"mission.back": "Task"')
   expect(I18N_ZH_CN).toContain('"mission.back": "Task"')
+})
+
+test("Mission ledger header mirrors Task panel action primitives", () => {
+  const newButton = MISSION_LIST_TSX.match(/<Button[\s\S]*?data-ui="mission-new"[\s\S]*?<\/Button>/)?.[0] ?? ""
+  expect(newButton).toContain('variant="solid"')
+  expect(newButton).toContain('size="md"')
+  expect(newButton).toContain('tone="accent"')
+  expect(newButton).toContain('class="sidebar-btn-icon"')
+  expect(MISSION_CSS).toContain('.oc-button[data-ui="mission-new"][data-variant="solid"]')
+  expect(MISSION_CSS).toContain("--oc-button-height: calc(28px * var(--ui-scale));")
+  expect(MISSION_LIST_TSX).toContain('class="mission-ledger-search search-field"')
+  expect(MISSION_LIST_TSX).toContain('class="mission-ledger-search-input search-field-input"')
+  expect(MISSION_LIST_TSX).toContain('data-ui="mission-ledger-search-clear"')
 })
 
 test("Mission conversation header shows fixed-position mission start time instead of close", () => {

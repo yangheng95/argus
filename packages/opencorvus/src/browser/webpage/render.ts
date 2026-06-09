@@ -49,10 +49,7 @@ export const RenderOutputSchema = z.object({
 export type RenderOutput = z.infer<typeof RenderOutputSchema>
 
 export interface RenderFilesCtx {
-  emit?: (event: {
-    phase: "launch-browser" | "load-page" | "screenshot"
-    detail?: string
-  }) => void
+  emit?: (event: { phase: "launch-browser" | "load-page" | "screenshot"; detail?: string }) => void
 }
 
 /**
@@ -166,10 +163,12 @@ async function renderFilesViaNode(input: NodeRenderInput): Promise<NodeRenderRes
   }
 }
 
-export async function resolveNodeRenderSidecarRuntime(input: {
-  execPath?: string
-  platform?: NodeJS.Platform
-} = {}): Promise<{ nodeExecutable: string; playwrightRequirePath: string }> {
+export async function resolveNodeRenderSidecarRuntime(
+  input: {
+    execPath?: string
+    platform?: NodeJS.Platform
+  } = {},
+): Promise<{ nodeExecutable: string; playwrightRequirePath: string }> {
   const runtime = await resolveBrowserNodeSidecarRuntime(input)
   return {
     nodeExecutable: runtime.nodeExecutable,

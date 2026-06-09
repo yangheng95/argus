@@ -64,13 +64,8 @@ describe("engineering-craft shared fragment", () => {
 
   test("Build wires composeBuildCore into the live session core", () => {
     // Guard the single composition site so a refactor cannot bypass it.
-    const buildAgentSrc = fs.readFileSync(
-      path.join(import.meta.dir, "../../src/build/agent.ts"),
-      "utf8",
-    )
-    expect(buildAgentSrc).toContain(
-      'import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"',
-    )
+    const buildAgentSrc = fs.readFileSync(path.join(import.meta.dir, "../../src/build/agent.ts"), "utf8")
+    expect(buildAgentSrc).toContain('import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"')
     expect(buildAgentSrc).toMatch(/core:\s*withFactCheckRegistration\(composeBuildCore\(autoIteration\)\)/)
   })
 
@@ -79,10 +74,7 @@ describe("engineering-craft shared fragment", () => {
     // real composition point (agent core: line), not just the .txt — a future
     // change that pollutes integrity would edit agent.ts, not the core file.
     expect(INTEGRITY_TEAM_CORE).not.toContain(HEADING)
-    const integritySrc = fs.readFileSync(
-      path.join(import.meta.dir, "../../src/integrity/team-agent.ts"),
-      "utf8",
-    )
+    const integritySrc = fs.readFileSync(path.join(import.meta.dir, "../../src/integrity/team-agent.ts"), "utf8")
     expect(integritySrc).not.toContain("engineering-craft")
     expect(integritySrc).toContain("core: withFactCheckRegistration(TEAM_CORE)")
   })

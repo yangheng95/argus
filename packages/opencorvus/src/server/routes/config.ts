@@ -82,18 +82,13 @@ export const ConfigRoutes = lazy(() =>
         // schema. RFC 7396 still allows `null` to signal deletion.
         if (partial.provider != null) {
           if (typeof partial.provider !== "object" || Array.isArray(partial.provider)) {
-            return c.json(
-              { error: "config.provider must be a record of providerID -> ProviderConfig" },
-              400,
-            )
+            return c.json({ error: "config.provider must be a record of providerID -> ProviderConfig" }, 400)
           }
           for (const [pid, value] of Object.entries(partial.provider as Record<string, unknown>)) {
             if (value === null) continue
             const parsed = Config.Provider.safeParse(value)
             if (!parsed.success) {
-              const issues = parsed.error.issues
-                .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
-                .join("; ")
+              const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`).join("; ")
               return c.json({ error: `config.provider.${pid}: ${issues}` }, 400)
             }
           }

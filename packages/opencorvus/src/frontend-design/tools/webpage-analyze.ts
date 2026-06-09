@@ -32,7 +32,9 @@ function renderPrdEvidenceSummary(input: {
   assetCount: number
 }): string {
   const segmentRows = input.segments.slice(0, 32).map((segment) => {
-    const bounds = segment.bounds ? `${segment.bounds.x},${segment.bounds.y},${segment.bounds.w}x${segment.bounds.h}` : "unknown"
+    const bounds = segment.bounds
+      ? `${segment.bounds.x},${segment.bounds.y},${segment.bounds.w}x${segment.bounds.h}`
+      : "unknown"
     const text = segment.textPreview.slice(0, 4).join(" | ")
     return `- ${segment.name}: tag=${segment.tag}, strategy=${segment.strategy}, bounds=${bounds}${text ? `, text=${text}` : ""}`
   })
@@ -55,7 +57,9 @@ function renderPrdEvidenceSummary(input: {
     `- Visual surface candidates: ${input.paths.visualSurfaceCandidatesPath}`,
     "",
     "## Page Surface Inventory",
-    segmentRows.length > 0 ? segmentRows.join("\n") : "- No segments detected; inspect reference pixels and source skeleton manually.",
+    segmentRows.length > 0
+      ? segmentRows.join("\n")
+      : "- No segments detected; inspect reference pixels and source skeleton manually.",
     "",
     "## Source Handoff Rules",
     "- Treat `web-clone-source/implementation-blueprint.md`, `source-ir/*`, `source-skeleton/critical.css`, and reusable assets as the downstream build source.",
@@ -127,7 +131,7 @@ Use this only after \`webpage_compile\` has produced \`page.ir.json\` and \`asse
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new Error(
           `Missing web-clone IR artifacts. \`webpage_analyze\` requires \`${pageIrPath}\` and ` +
-          `\`${assetManifestPath}\`; run \`webpage_compile\` after extraction before analysis.`,
+            `\`${assetManifestPath}\`; run \`webpage_compile\` after extraction before analysis.`,
         )
       }
       throw error
@@ -147,22 +151,30 @@ Use this only after \`webpage_compile\` has produced \`page.ir.json\` and \`asse
     const visualSurfaceCandidatesPath = path.join(outputDir, "visual-surface-candidates.json")
     const prdEvidencePath = path.join(outputDir, "prd-evidence-summary.md")
     await Promise.all([
-      fs.writeFile(visualSurfaceCandidatesPath, `${JSON.stringify(buildVisualSurfaceCandidates(handoff.segments), null, 2)}\n`, "utf8"),
-      fs.writeFile(prdEvidencePath, renderPrdEvidenceSummary({
-        page,
-        segments: handoff.segments.segments,
-        paths: {
-          referencePath: path.join(outputDir, "reference.png"),
-          pageIrPath,
-          assetManifestPath,
-          segmentsPath: path.join(outputDir, "segments.json"),
-          codegenContextPath: path.join(outputDir, "codegen-context.json"),
-          sourceSkeletonPath: path.join(outputDir, "source-skeleton"),
-          sourceIrPath: path.join(outputDir, "source-ir"),
-          visualSurfaceCandidatesPath,
-        },
-        assetCount: assetGraph.assets.length,
-      }), "utf8"),
+      fs.writeFile(
+        visualSurfaceCandidatesPath,
+        `${JSON.stringify(buildVisualSurfaceCandidates(handoff.segments), null, 2)}\n`,
+        "utf8",
+      ),
+      fs.writeFile(
+        prdEvidencePath,
+        renderPrdEvidenceSummary({
+          page,
+          segments: handoff.segments.segments,
+          paths: {
+            referencePath: path.join(outputDir, "reference.png"),
+            pageIrPath,
+            assetManifestPath,
+            segmentsPath: path.join(outputDir, "segments.json"),
+            codegenContextPath: path.join(outputDir, "codegen-context.json"),
+            sourceSkeletonPath: path.join(outputDir, "source-skeleton"),
+            sourceIrPath: path.join(outputDir, "source-ir"),
+            visualSurfaceCandidatesPath,
+          },
+          assetCount: assetGraph.assets.length,
+        }),
+        "utf8",
+      ),
     ])
 
     return {

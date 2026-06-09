@@ -6,11 +6,7 @@ import { Log } from "@/util/log"
 import { withTimeout } from "@/util/await-with-timeout"
 import { isLiveGoalRunStatus } from "./catalog"
 import { updateGoalRun } from "./persist"
-import {
-  findActiveRunForTask,
-  findGoalRun,
-  listGoalRunsForTask,
-} from "./store"
+import { findActiveRunForTask, findGoalRun, listGoalRunsForTask } from "./store"
 
 const log = Log.create({ service: "engine.execution-abort" })
 
@@ -34,15 +30,19 @@ export async function abortChildExecutionForSession(input: {
   result.promptCancelled = true
   result.activityGateAborted = true
 
-  const goalRun = listGoalRunsForTask(input.taskID)
-    .find((row) => row.session_id === input.sessionID && isLiveGoalRunStatus(row.status))
+  const goalRun = listGoalRunsForTask(input.taskID).find(
+    (row) => row.session_id === input.sessionID && isLiveGoalRunStatus(row.status),
+  )
   if (goalRun) {
-    mergeResult(result, await abortGoalRunExecution({
-      taskID: input.taskID,
-      goalRunID: goalRun.id,
-      reason: input.reason,
-      abortTimeoutMs: input.abortTimeoutMs,
-    }))
+    mergeResult(
+      result,
+      await abortGoalRunExecution({
+        taskID: input.taskID,
+        goalRunID: goalRun.id,
+        reason: input.reason,
+        abortTimeoutMs: input.abortTimeoutMs,
+      }),
+    )
     result.cancelled = true
     return result
   }
@@ -92,10 +92,7 @@ export async function abortGoalRunExecution(input: {
   }
 
   result.cancelled =
-    result.promptCancelled ||
-    result.activityGateAborted ||
-    result.goalRunAborted ||
-    result.executorAbortAttempted
+    result.promptCancelled || result.activityGateAborted || result.goalRunAborted || result.executorAbortAttempted
   return result
 }
 

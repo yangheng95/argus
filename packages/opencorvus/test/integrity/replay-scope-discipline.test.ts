@@ -28,9 +28,24 @@ const realTaskReplayFixture: {
     { id: "REQ-1", description: "DeepSeek API key input and invalid-key feedback.", acceptance: "", non_goals: "" },
     { id: "REQ-2", description: "Streaming chat renders AI replies token by token.", acceptance: "", non_goals: "" },
     { id: "REQ-3", description: "Conversation history persists in localStorage.", acceptance: "", non_goals: "" },
-    { id: "REQ-5", description: "Stop generation, regenerate, and auto-scroll chat controls.", acceptance: "", non_goals: "" },
-    { id: "REQ-6", description: "Chinese error handling for invalid key, rate limit, and network failure.", acceptance: "", non_goals: "" },
-    { id: "REQ-9", description: "DeepSeek model and generation parameter settings persist.", acceptance: "", non_goals: "" },
+    {
+      id: "REQ-5",
+      description: "Stop generation, regenerate, and auto-scroll chat controls.",
+      acceptance: "",
+      non_goals: "",
+    },
+    {
+      id: "REQ-6",
+      description: "Chinese error handling for invalid key, rate limit, and network failure.",
+      acceptance: "",
+      non_goals: "",
+    },
+    {
+      id: "REQ-9",
+      description: "DeepSeek model and generation parameter settings persist.",
+      acceptance: "",
+      non_goals: "",
+    },
   ],
   attempts: [
     {
@@ -53,11 +68,21 @@ const realTaskReplayFixture: {
     {
       round: 3,
       findings: [
-        finding("BF-SV1", "getSettings() does not validate model name against allowed values", ["REQ-9"], ["acc-api-4"]),
+        finding(
+          "BF-SV1",
+          "getSettings() does not validate model name against allowed values",
+          ["REQ-9"],
+          ["acc-api-4"],
+        ),
         finding("BF-SV2", "getSettings() does not clamp temperature to [0,2] range", ["REQ-9"], ["acc-api-4"]),
         finding("BF-SV3", "getSettings() does not clamp maxTokens to [1,8192]", ["REQ-9"], ["acc-api-4"]),
         finding("BF-SV4", "getConversations() performs no structural validation", ["REQ-3", "REQ-6"], ["acc-api-3"]),
-        finding("BF-EH1", "API key whitespace not trimmed before storage or sending", ["REQ-1", "REQ-6"], ["acc-api-1"]),
+        finding(
+          "BF-EH1",
+          "API key whitespace not trimmed before storage or sending",
+          ["REQ-1", "REQ-6"],
+          ["acc-api-1"],
+        ),
         finding("BF-TEST2", "Zero test coverage for stop-generation behavior", ["REQ-5"], ["acc-api-5"]),
       ],
     },
@@ -65,7 +90,12 @@ const realTaskReplayFixture: {
       round: 4,
       findings: [
         finding("BF-1", "getSettings() does not validate model, temperature, or maxTokens", ["REQ-9"], ["acc-api-4"]),
-        finding("BF-2", "Mid-stream network errors lose partial AI response content", ["REQ-2", "REQ-5"], ["acc-chat-3"]),
+        finding(
+          "BF-2",
+          "Mid-stream network errors lose partial AI response content",
+          ["REQ-2", "REQ-5"],
+          ["acc-chat-3"],
+        ),
         finding("BF-3", "Non-standard network errors bypass Chinese error messages", ["REQ-6"], ["acc-int-1"]),
       ],
     },
@@ -88,7 +118,12 @@ const realTaskReplayFixture: {
     {
       round: 7,
       findings: [
-        finding("BF-1-settings-validation", "getSettings() does not validate model, temperature, or maxTokens", ["REQ-9"], ["acc-api-4"]),
+        finding(
+          "BF-1-settings-validation",
+          "getSettings() does not validate model, temperature, or maxTokens",
+          ["REQ-9"],
+          ["acc-api-4"],
+        ),
       ],
     },
     {
@@ -101,12 +136,7 @@ const realTaskReplayFixture: {
   ],
 }
 
-function finding(
-  id: string,
-  title: string,
-  requirementIDs: string[] = [],
-  specIDs: string[] = [],
-): ReplayFinding {
+function finding(id: string, title: string, requirementIDs: string[] = [], specIDs: string[] = []): ReplayFinding {
   return { id, title, severity: "blocking", requirementIDs, specIDs }
 }
 
@@ -181,12 +211,14 @@ describe("integrity replay scope discipline", () => {
     })
     expect(snapshot.droppedUntracedCount).toBe(5)
     expect(snapshot.retainedBlockingFindings.length).toBeLessThanOrEqual(2)
-    expect(snapshot.retainedBlockingFindings).toEqual([{
-      id: "requirements-maturity-scope",
-      title: `Requirements stage did not land ${matureQuote} into bounded REQs`,
-      requirementIDs: [],
-      specIDs: [],
-      userRequestQuotes: [matureQuote],
-    }])
+    expect(snapshot.retainedBlockingFindings).toEqual([
+      {
+        id: "requirements-maturity-scope",
+        title: `Requirements stage did not land ${matureQuote} into bounded REQs`,
+        requirementIDs: [],
+        specIDs: [],
+        userRequestQuotes: [matureQuote],
+      },
+    ])
   })
 })

@@ -15,13 +15,13 @@ This spec follows `CLAUDE.md` rules that matter for this change:
 
 ## Abbreviations
 
-| Term | Meaning |
-| ---- | ------- |
-| DB | Database: OpenCorvus persistent SQLite storage. |
-| LLM | Large Language Model: the model-backed agent runtime. |
-| REQ | Requirement row: user-visible requirement identifier projected from requirement storage. |
-| SSE | Server-Sent Events: streaming HTTP event format used by chat APIs. |
-| UI | User Interface: overlay/runtime display surfaces. |
+| Term | Meaning                                                                                  |
+| ---- | ---------------------------------------------------------------------------------------- |
+| DB   | Database: OpenCorvus persistent SQLite storage.                                          |
+| LLM  | Large Language Model: the model-backed agent runtime.                                    |
+| REQ  | Requirement row: user-visible requirement identifier projected from requirement storage. |
+| SSE  | Server-Sent Events: streaming HTTP event format used by chat APIs.                       |
+| UI   | User Interface: overlay/runtime display surfaces.                                        |
 
 ## User Requirement
 
@@ -33,12 +33,12 @@ latest attempt.
 
 Concrete failure observed on task `tsk_e54c2d091001t145QP2P6xwoqi`:
 
-| Round | Artifact time (UTC) | Verdict | Findings | Reviewers | Phase |
-| ----- | ------------------- | ------- | -------- | --------- | ----- |
-| R1 | 2026-05-23T12:44:15.975Z | needs_correction | 11 | 5 | post_build |
-| R2 | 2026-05-23T13:03:45.075Z | needs_correction | 9 | 5 | post_build |
-| R3 | 2026-05-23T13:15:53.775Z | needs_correction | 10 | 5 | post_build |
-| R4 | 2026-05-23T13:26:25.472Z | needs_correction | 3 | 5 | post_build |
+| Round | Artifact time (UTC)      | Verdict          | Findings | Reviewers | Phase      |
+| ----- | ------------------------ | ---------------- | -------- | --------- | ---------- |
+| R1    | 2026-05-23T12:44:15.975Z | needs_correction | 11       | 5         | post_build |
+| R2    | 2026-05-23T13:03:45.075Z | needs_correction | 9        | 5         | post_build |
+| R3    | 2026-05-23T13:15:53.775Z | needs_correction | 10       | 5         | post_build |
+| R4    | 2026-05-23T13:26:25.472Z | needs_correction | 3        | 5         | post_build |
 
 Readonly DB check used:
 
@@ -127,47 +127,47 @@ rg -n "reviewIntegrity\(|runIntegrityReviewOnce|findLatestIntegrityAttemptArtifa
 
 ### Active `reviewIntegrity` Source Call Sites
 
-| Location | Current behavior | Required change |
-| -------- | ---------------- | --------------- |
-| `packages/opencorvus/src/integrity/team-agent.ts:121` | Active exported team review entrypoint. | Extend input with replay context and real attempt number for task-backed runs. |
-| `packages/opencorvus/src/integrity/index.ts:2` | Re-exports `reviewIntegrity` from `team-agent`. | No semantic change; exported input type changes through the same single source. |
-| `packages/opencorvus/src/orchestrator/tools.ts:1600` `runIntegrityReviewOnce` | Builds current evidence, then calls review. | Build replay context after `phase` is known and pass it to `reviewIntegrity`. |
-| `packages/opencorvus/src/orchestrator/tools.ts:1682` / `1716` | Imports and calls `reviewIntegrity`. | Import helper or build it through integrity export; pass `replayContext`. |
-| `packages/opencorvus/src/acceptance/tools.ts:144` / `156` | Acceptance-triggered integrity review calls the same entrypoint without acceptance evidence context. | Build the same replay context and pass it to `reviewIntegrity`; use the same helper, not duplicated extraction. |
+| Location                                                                      | Current behavior                                                                                     | Required change                                                                                                 |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/integrity/team-agent.ts:121`                         | Active exported team review entrypoint.                                                              | Extend input with replay context and real attempt number for task-backed runs.                                  |
+| `packages/opencorvus/src/integrity/index.ts:2`                                | Re-exports `reviewIntegrity` from `team-agent`.                                                      | No semantic change; exported input type changes through the same single source.                                 |
+| `packages/opencorvus/src/orchestrator/tools.ts:1600` `runIntegrityReviewOnce` | Builds current evidence, then calls review.                                                          | Build replay context after `phase` is known and pass it to `reviewIntegrity`.                                   |
+| `packages/opencorvus/src/orchestrator/tools.ts:1682` / `1716`                 | Imports and calls `reviewIntegrity`.                                                                 | Import helper or build it through integrity export; pass `replayContext`.                                       |
+| `packages/opencorvus/src/acceptance/tools.ts:144` / `156`                     | Acceptance-triggered integrity review calls the same entrypoint without acceptance evidence context. | Build the same replay context and pass it to `reviewIntegrity`; use the same helper, not duplicated extraction. |
 
 ### Same-Name Legacy Definition And Tests
 
-| Location | Current behavior | Required change |
-| -------- | ---------------- | --------------- |
-| `packages/opencorvus/src/integrity/agent.ts:373` | Legacy same-name function, not exported by `integrity/index.ts`. | Do not add replay compatibility to this old path. Before implementation, confirm no active source import remains; if only legacy tests use it, retire/delete in a separate cleanup rather than dual-wiring. |
-| `packages/opencorvus/test/integrity/agent.test.ts:*` | Tests import `../../src/integrity/agent`, the legacy implementation. | Not a replay-aware team-agent test. Do not update these as if they covered the active path; either leave until legacy removal or delete with the legacy file in a separate change. |
-| `packages/opencorvus/test/orchestrator/tools.test.ts:65,105,1543,...` | Mocks `@/integrity.reviewIntegrity`. | Add assertions that orchestrator passes `replayContext.attemptNumber`, prior findings, and changed files since last review. |
-| `packages/opencorvus/test/integrity/team-schema.test.ts:34` | Uses `attempts: 1` payload fixture. | Add a payload fixture for `attempts: 2`; schema itself already permits positive integers. |
-| `packages/opencorvus/test/server/task-conversation-routes.test.ts:78` | Event fixture has `attempts: 1`. | Keep if testing first attempt; add/adjust only if route behavior should display attempt #2. |
+| Location                                                              | Current behavior                                                     | Required change                                                                                                                                                                                             |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/integrity/agent.ts:373`                      | Legacy same-name function, not exported by `integrity/index.ts`.     | Do not add replay compatibility to this old path. Before implementation, confirm no active source import remains; if only legacy tests use it, retire/delete in a separate cleanup rather than dual-wiring. |
+| `packages/opencorvus/test/integrity/agent.test.ts:*`                  | Tests import `../../src/integrity/agent`, the legacy implementation. | Not a replay-aware team-agent test. Do not update these as if they covered the active path; either leave until legacy removal or delete with the legacy file in a separate change.                          |
+| `packages/opencorvus/test/orchestrator/tools.test.ts:65,105,1543,...` | Mocks `@/integrity.reviewIntegrity`.                                 | Add assertions that orchestrator passes `replayContext.attemptNumber`, prior findings, and changed files since last review.                                                                                 |
+| `packages/opencorvus/test/integrity/team-schema.test.ts:34`           | Uses `attempts: 1` payload fixture.                                  | Add a payload fixture for `attempts: 2`; schema itself already permits positive integers.                                                                                                                   |
+| `packages/opencorvus/test/server/task-conversation-routes.test.ts:78` | Event fixture has `attempts: 1`.                                     | Keep if testing first attempt; add/adjust only if route behavior should display attempt #2.                                                                                                                 |
 
 ### Integrity Attempt Storage Call Sites
 
-| Location | Current behavior | Required change |
-| -------- | ---------------- | --------------- |
-| `packages/opencorvus/src/engine/store.ts:697` `findLatestIntegrityAttemptArtifact` | Returns latest attempt for task/spec/phase. | Add `listIntegrityAttemptArtifacts(input)` as the single query source; make `findLatestIntegrityAttemptArtifact` delegate to the list helper. |
-| `packages/opencorvus/src/engine/store.ts:724` `integrityAttemptVerdict` | Extracts verdict from one row. | Keep. Replay helper reads more payload fields but does not change verdict helper. |
-| `packages/opencorvus/src/engine/workflow.ts:361` | Uses latest post-build attempt as workflow gate fact. | Keep latest-only gate behavior; do not replace it with replay list. |
-| `packages/opencorvus/src/engine/persist.ts:2098` `recordIntegrityAttempt` | Persists append-only attempt payload. | No new field required for attempt count; the ordered artifact list is the source of attempt number. |
-| `packages/opencorvus/src/orchestrator/tools.ts:1741` | Records attempt after review. | No persistence schema change; the next review will count this artifact. |
-| `packages/opencorvus/src/acceptance/tools.ts:174` | Records acceptance-triggered attempt. | Same. |
-| `packages/opencorvus/test/orchestrator/tools.test.ts:1646,2803,3788,3857,3946,4061,4386` | Reads latest attempt in tests. | Keep latest helper tests; add list helper tests. |
-| `packages/opencorvus/test/engine/workflow-integrity-step.test.ts:155,221,289` | Records attempts for workflow step tests. | Keep; add coverage that list helper ordering does not break latest helper. |
-| `packages/opencorvus/test/acceptance/project-gate.test.ts:853` | Records attempts for acceptance gate tests. | Keep; no replay prompt assertion unless acceptance integrity caller test is added here. |
+| Location                                                                                 | Current behavior                                      | Required change                                                                                                                               |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/engine/store.ts:697` `findLatestIntegrityAttemptArtifact`       | Returns latest attempt for task/spec/phase.           | Add `listIntegrityAttemptArtifacts(input)` as the single query source; make `findLatestIntegrityAttemptArtifact` delegate to the list helper. |
+| `packages/opencorvus/src/engine/store.ts:724` `integrityAttemptVerdict`                  | Extracts verdict from one row.                        | Keep. Replay helper reads more payload fields but does not change verdict helper.                                                             |
+| `packages/opencorvus/src/engine/workflow.ts:361`                                         | Uses latest post-build attempt as workflow gate fact. | Keep latest-only gate behavior; do not replace it with replay list.                                                                           |
+| `packages/opencorvus/src/engine/persist.ts:2098` `recordIntegrityAttempt`                | Persists append-only attempt payload.                 | No new field required for attempt count; the ordered artifact list is the source of attempt number.                                           |
+| `packages/opencorvus/src/orchestrator/tools.ts:1741`                                     | Records attempt after review.                         | No persistence schema change; the next review will count this artifact.                                                                       |
+| `packages/opencorvus/src/acceptance/tools.ts:174`                                        | Records acceptance-triggered attempt.                 | Same.                                                                                                                                         |
+| `packages/opencorvus/test/orchestrator/tools.test.ts:1646,2803,3788,3857,3946,4061,4386` | Reads latest attempt in tests.                        | Keep latest helper tests; add list helper tests.                                                                                              |
+| `packages/opencorvus/test/engine/workflow-integrity-step.test.ts:155,221,289`            | Records attempts for workflow step tests.             | Keep; add coverage that list helper ordering does not break latest helper.                                                                    |
+| `packages/opencorvus/test/acceptance/project-gate.test.ts:853`                           | Records attempts for acceptance gate tests.           | Keep; no replay prompt assertion unless acceptance integrity caller test is added here.                                                       |
 
 ### Hard-Coded Attempt Lines In `team-agent.ts`
 
-| Line | Current behavior | Required change |
-| ---- | ---------------- | --------------- |
-| `team-agent.ts:174` | Supervisor planning stream reports `attempt=1`. | Use `replayContext.attemptNumber`. |
-| `team-agent.ts:243` | Supervisor consensus stream reports `attempt=1`. | Use `replayContext.attemptNumber`. |
-| `team-agent.ts:403` | Reviewer stream reports `attempt=1`. | Use `replayContext.attemptNumber`. |
-| `team-agent.ts:257` | Completed event emits `attempts=1`. | Emit real `replayContext.attemptNumber`. |
-| `team-agent.ts:631` | No-goals soft event emits `attempts=1`. | Pass real attempt number into `emitSoftIntegrity`. |
+| Line                | Current behavior                                 | Required change                                    |
+| ------------------- | ------------------------------------------------ | -------------------------------------------------- |
+| `team-agent.ts:174` | Supervisor planning stream reports `attempt=1`.  | Use `replayContext.attemptNumber`.                 |
+| `team-agent.ts:243` | Supervisor consensus stream reports `attempt=1`. | Use `replayContext.attemptNumber`.                 |
+| `team-agent.ts:403` | Reviewer stream reports `attempt=1`.             | Use `replayContext.attemptNumber`.                 |
+| `team-agent.ts:257` | Completed event emits `attempts=1`.              | Emit real `replayContext.attemptNumber`.           |
+| `team-agent.ts:631` | No-goals soft event emits `attempts=1`.          | Pass real attempt number into `emitSoftIntegrity`. |
 
 ## Data Design
 
@@ -278,7 +278,7 @@ Attempt numbering source:
   `SpecSnapshotLineage` above.
 - Count same-task attempts across the active snapshot plus inherited
   corrective snapshots from that list; current attempt is `priorAttempts.length
-  + 1`.
+  - 1`.
 - Do not use a separate counter table or host max-round setting.
 - Do not rely on `payload.attempt_number`; artifact order is the source.
 
@@ -287,7 +287,7 @@ Phase handling:
 - Replay memory should list prior attempts for the same task and supplied spec
   snapshot lineage, with each attempt's `phase` rendered.
 - Workflow gates may still use `findLatestIntegrityAttemptArtifact({ phase:
-  "post_build" })`. That is a different data-integrity question from prompt
+"post_build" })`. That is a different data-integrity question from prompt
   replay and should stay latest-only.
 
 Build evidence since last review:
@@ -413,21 +413,24 @@ Add one rendered section to every supervisor/reviewer prompt:
 Current integrity attempt: #2.
 
 Prior attempts for this task/spec:
+
 - Attempt #1 at 2026-05-23T12:44:15.975Z, phase=post_build,
   verdict=needs_correction, reviewers=5.
   Reviewer focuses:
   - rev_streaming_api: DeepSeek SSE streaming implementation...
   - rev_error_resilience: Error handling & runtime resilience...
-  Blocking findings:
+    Blocking findings:
   - BF-1: Stop-generation loses all partial AI response content.
     repair: Fix abort path and stale streaming text reference.
 
 Build evidence after latest integrity attempt:
+
 - Changed files: src/services/storage.ts, src/contexts/SettingsContext.tsx
 - Acceptance summaries: ...
 - Goal runs after latest review: goal_settings completed at ...
 
 Scale signals:
+
 - goals=5
 - requirements=9
 - acceptance_specs=...
@@ -657,13 +660,13 @@ Reviewer count behavior:
 ## Implementation Checklist
 
 1. [ ] Add `listIntegrityAttemptArtifacts` and tests; make latest helper
-   delegate to it.
+       delegate to it.
 2. [ ] Add `integrity/replay-context.ts` helper and unit tests.
 3. [ ] Add prompt renderer snapshot tests for first review and re-review.
 4. [ ] Extend `team-agent.ts` input types and replace all hard-coded attempt
-   values.
+       values.
 5. [ ] Add replay sections to supervisor planning, reviewer, and consensus
-   prompts.
+       prompts.
 6. [ ] Wire `runIntegrityReviewOnce` in `orchestrator/tools.ts`.
 7. [ ] Wire `runAcceptanceIntegrityReview` in `acceptance/tools.ts`.
 8. [ ] Update mocks/tests for all active `reviewIntegrity` callers.
@@ -765,9 +768,7 @@ export type SharedPromptCapOutput = {
 
 export function getSharedIntegrityPromptBudget(): SharedPromptBudget
 
-export function renderSharedIntegrityPromptContext(
-  input: SharedPromptCapInput,
-): SharedPromptCapOutput
+export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput): SharedPromptCapOutput
 ```
 
 `buildIntegrityReplayContext` still builds the raw replay facts. The shared
@@ -807,9 +808,7 @@ export type BuildIntegrityReplayContextInput = {
   goalRuns: GoalRunRow[]
 }
 
-export function buildIntegrityReplayContext(
-  input: BuildIntegrityReplayContextInput,
-): IntegrityReplayContext
+export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextInput): IntegrityReplayContext
 
 export function listIntegrityAttemptArtifacts(input: {
   taskID: string

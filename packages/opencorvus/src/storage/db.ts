@@ -32,9 +32,10 @@ function quoteIdentifier(name: string) {
 
 function readOrdinaryTableShape(sqlite: BunDatabase): SchemaShape {
   const tableRows = sqlite
-    .query<{ name: string }, []>(
-      "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql LIKE 'CREATE TABLE%' ORDER BY name",
-    )
+    .query<
+      { name: string },
+      []
+    >("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql LIKE 'CREATE TABLE%' ORDER BY name")
     .all()
 
   const shape: SchemaShape = new Map()
@@ -199,7 +200,9 @@ export namespace Database {
   // (`Database.Path()`); caller still MUST pass the project directory
   // explicitly so project-scoped scratch under `<projectDir>/.opencorvus/`
   // can be removed alongside the shared DB.
-  export async function reset(projectDir: string): Promise<Array<{ label: string; path: string; ok: boolean; error?: string }>> {
+  export async function reset(
+    projectDir: string,
+  ): Promise<Array<{ label: string; path: string; ok: boolean; error?: string }>> {
     close()
     const dbPath = Path()
     const targets: Array<{ label: string; path: string }> = [
@@ -286,7 +289,9 @@ export namespace Database {
           })
         }
       } catch (err) {
-        effectLog.warn("post-commit effect threw synchronously", { error: err instanceof Error ? err.message : String(err) })
+        effectLog.warn("post-commit effect threw synchronously", {
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
   }

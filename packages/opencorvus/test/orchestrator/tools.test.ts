@@ -914,7 +914,8 @@ describe("orchestrator tools", () => {
         const taskID = `tsk_build_terminal_${now.toString(16)}`
         const parent = await Session.create({ kind: "root", title: "completed build rejection" })
         Database.use((db) =>
-          db.insert(EngineTaskTable)
+          db
+            .insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,
@@ -1824,6 +1825,146 @@ describe("orchestrator tools", () => {
           now: now + 1,
         })
         expect(findLatestOwnershipByID(taskID, ownershipPayload.ownership_id)?.payload.outcome).toBe("cancelled")
+      },
+    })
+  })
+
+  test("add_goal appends a new operator instruction goal to the active plan", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_add_goal_${stamp}`
+    const taskID = `tsk_add_goal_${stamp}`
+    const goalID = `gol_add_goal_existing_${stamp}`
+    const planID = `plan_add_goal_${stamp}`
+    const planNodeID = `plan_node_add_goal_existing_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "add goal",
+      taskTitle: "add goal from operator message",
+      request: "Start with one workflow goal",
+      goalTitle: "Existing goal",
+      goalSlug: "existing-goal",
+      objective: "Implement the existing workflow surface before the operator adds more scoped work.",
+      now,
+    })
+    Database.use((db) => {
+      db.insert(EnginePlanVersionTable)
+        .values({
+          id: planID,
+          task_id: taskID,
+          spec_snapshot_id: `spec_${goalID}`,
+          version: 1,
+          status: "active",
+          summary: "1 goals",
+          prompt: "Start with one workflow goal",
+          metadata: {},
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EnginePlanNodeTable)
+        .values({
+          id: planNodeID,
+          task_id: taskID,
+          plan_version_id: planID,
+          kind: "goal",
+          goal_id: goalID,
+          title: "Existing goal",
+          brief: "existing brief",
+          order_index: 0,
+          metadata: {},
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.update(EngineGoalTable).set({ plan_version_id: planID }).where(eq(EngineGoalTable.id, goalID)).run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "add goal parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.add_goal.execute(
+          {
+            goal: {
+              title: "Operator requested follow-up goal",
+              objective:
+                "Implement the concrete follow-up surface from the latest operator instruction with clear tests and no changes to unrelated workflow goals.",
+              acceptance_specs: [
+                {
+                  id: "ACC-OPERATOR-FOLLOWUP",
+                  source_requirement_id: "REQ-OPERATOR-FOLLOWUP",
+                  goal_id: "operator_followup_goal",
+                  title: "Operator follow-up is implemented",
+                  scorers: [
+                    {
+                      type: "llm_judge",
+                      name: "operator-followup",
+                      criteria: "Confirm the concrete operator-requested follow-up surface is implemented and tested.",
+                    },
+                  ],
+                  severity: "essential",
+                  trigger: "on_goal",
+                },
+              ],
+              owned_paths: ["src/operator-followup.ts"],
+              depends_on: [goalID],
+              priority: "blocking",
+              kind: "feature",
+              requirement_ids: ["REQ-OPERATOR-FOLLOWUP"],
+            },
+            reason: "The latest operator message adds a concrete follow-up surface inside the same task.",
+          },
+          buildToolOptions("add_goal"),
+        )
+
+        expect(String(result)).toContain("Goal added")
+        const goals = Database.use((db) =>
+          db
+            .select()
+            .from(EngineGoalTable)
+            .where(eq(EngineGoalTable.task_id, taskID))
+            .orderBy(EngineGoalTable.order_index)
+            .all(),
+        )
+        expect(goals).toHaveLength(2)
+        const added = goals[1]!
+        expect(added.title).toBe("Operator requested follow-up goal")
+        expect(added.plan_version_id).toBe(planID)
+        expect(added.depends_on).toEqual([goalID])
+        expect(added.order_index).toBe(1)
+        expect(added.acceptance_specs[0]?.goal_id).toBe(added.id)
+
+        const planNodes = Database.use((db) =>
+          db
+            .select()
+            .from(EnginePlanNodeTable)
+            .where(eq(EnginePlanNodeTable.plan_version_id, planID))
+            .orderBy(EnginePlanNodeTable.order_index)
+            .all(),
+        )
+        expect(planNodes).toHaveLength(2)
+        expect(planNodes[1]?.goal_id).toBe(added.id)
+        expect(planNodes[1]?.depends_on_ids).toEqual([planNodeID])
+
+        const plan = findActivePlanForTask(taskID)
+        expect(plan?.summary).toBe("2 goals")
+        const decisions = createDecisionLog(taskID).readByPhase("orchestrator")
+        expect(decisions.some((entry) => entry.key === `added_goal_${added.id}`)).toBe(true)
       },
     })
   })

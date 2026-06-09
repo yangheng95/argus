@@ -28,7 +28,11 @@ describe("memory typed recall", () => {
           sessionID: "ses_memory_compaction",
           promoteScope: "global",
           atomics: [
-            { kind: "lesson", text: "Socket Mode must be enabled before the bot will receive events.", section: "Root Cause" },
+            {
+              kind: "lesson",
+              text: "Socket Mode must be enabled before the bot will receive events.",
+              section: "Root Cause",
+            },
             { kind: "fact", text: "Store xoxb and xapp tokens in project config.", section: "Outcome" },
           ],
         })
@@ -93,7 +97,12 @@ describe("memory typed recall", () => {
           projectId: Instance.project.id,
           scope: "global",
           atomics: [
-            { kind: "lesson", text: "Socket Mode must be enabled before the bot will receive events.", section: "Root Cause", importance: 92 },
+            {
+              kind: "lesson",
+              text: "Socket Mode must be enabled before the bot will receive events.",
+              section: "Root Cause",
+              importance: 92,
+            },
           ],
         })
         Memory.captureEpisode({
@@ -111,7 +120,12 @@ describe("memory typed recall", () => {
           projectId: Instance.project.id,
           scope: "global",
           atomics: [
-            { kind: "lesson", text: "Socket Mode must be enabled before the bot will receive events.", section: "Root Cause", importance: 92 },
+            {
+              kind: "lesson",
+              text: "Socket Mode must be enabled before the bot will receive events.",
+              section: "Root Cause",
+              importance: 92,
+            },
           ],
         })
 

@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import {
-  PROTOCOL_VERSION,
-  type ExtensionMessage,
-  type WebviewMessage,
-} from "@opencorvus-ai/transport-protocol"
+import { PROTOCOL_VERSION, type ExtensionMessage, type WebviewMessage } from "@opencorvus-ai/transport-protocol"
 import { TransportBridge } from "../src/transport/bridge"
 
 /**
@@ -36,7 +32,9 @@ function mockWebview(): MockWebview {
     cspSource: "vscode-test",
     options: {} as any,
     html: "",
-    onDidDispose() { return { dispose() {} } },
+    onDidDispose() {
+      return { dispose() {} }
+    },
     onDidReceiveMessage(fn) {
       receiveHandler = fn
       return { dispose() {} }
@@ -45,13 +43,17 @@ function mockWebview(): MockWebview {
       posted.push(m)
       return Promise.resolve(true) as any
     },
-    asWebviewUri(uri) { return uri },
+    asWebviewUri(uri) {
+      return uri
+    },
     async receive(message) {
       if (!receiveHandler) throw new Error("no message handler attached")
       receiveHandler(message)
       await new Promise((r) => setTimeout(r, 0))
     },
-    get _receiveHandler() { return receiveHandler },
+    get _receiveHandler() {
+      return receiveHandler
+    },
   }
 }
 
@@ -146,7 +148,9 @@ describe("TransportBridge.dispose race with handleRequest (audit W2-C8)", () => 
       expect(errorResp).toBeDefined()
     } finally {
       // Unblock the stalled fetch so the test runner doesn't hang.
-      try { resolveFetch?.(new Response("", { status: 200 })) } catch {}
+      try {
+        resolveFetch?.(new Response("", { status: 200 }))
+      } catch {}
       globalThis.fetch = originalFetch
     }
   })

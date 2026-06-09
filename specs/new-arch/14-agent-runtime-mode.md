@@ -32,12 +32,12 @@
 
 这个命名解决了“如何包裹现有代码”的问题，但也引入了新的抽象泄漏：
 
-| 问题 | 当前后果 |
-| --- | --- |
-| 把执行方式抬成 agent 身份 | `acceptance` / `architect` / `requirements` 被当作另一类 agent，而不是同一种 agent 的另一种运行模式 |
-| `Agent.Info` 混入 runtime 细节 | `permission`、`steps`、`compaction` 可读性下降，配置边界不清晰 |
-| 上下文来源与 agent 概念耦合 | transcript 累积与 DB 派生状态被误解为“不同 agent”而不是“不同 context strategy” |
-| compaction 语义失真 | session checkpoint summary 与 episodic pre-run budget control 被混称为 compact |
+| 问题                           | 当前后果                                                                                            |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| 把执行方式抬成 agent 身份      | `acceptance` / `architect` / `requirements` 被当作另一类 agent，而不是同一种 agent 的另一种运行模式 |
+| `Agent.Info` 混入 runtime 细节 | `permission`、`steps`、`compaction` 可读性下降，配置边界不清晰                                      |
+| 上下文来源与 agent 概念耦合    | transcript 累积与 DB 派生状态被误解为“不同 agent”而不是“不同 context strategy”                      |
+| compaction 语义失真            | session checkpoint summary 与 episodic pre-run budget control 被混称为 compact                      |
 
 结论：
 
@@ -139,10 +139,7 @@ type ContextStrategy =
 `BudgetPolicy` 描述 token 预算接近上限时的行为。
 
 ```ts
-type BudgetPolicy =
-  | { kind: "checkpoint-summary" }
-  | { kind: "pre-run-reduction" }
-  | { kind: "epoch-restart" }
+type BudgetPolicy = { kind: "checkpoint-summary" } | { kind: "pre-run-reduction" } | { kind: "epoch-restart" }
 ```
 
 语义如下：
@@ -188,24 +185,24 @@ interface AgentExecutionPlan {
 
 ### 5.1 现有 interactive 类调用
 
-| 现状 | 推荐建模 |
-| --- | --- |
+| 现状                            | 推荐建模                                                    |
+| ------------------------------- | ----------------------------------------------------------- |
 | `build` / `general` / `explore` | `AgentSpec + interactive + transcript + checkpoint-summary` |
-| `compaction` / `title` | internal helper agent，不作为一类 agent 暴露 |
+| `compaction` / `title`          | internal helper agent，不作为一类 agent 暴露                |
 
 ### 5.2 现有 episodic 类调用
 
-| 现状 | 推荐建模 |
-| --- | --- |
-| `orchestrator` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `requirements` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `architect` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| 现状              | 推荐建模                                                   |
+| ----------------- | ---------------------------------------------------------- |
+| `orchestrator`    | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `requirements`    | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `architect`       | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `frontend-design` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `intent-analysis` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `integrity` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `prosecutor` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `acceptance` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `summary` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `integrity`       | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `prosecutor`      | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `acceptance`      | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `summary`         | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 
 > 注：`planner` 已不在表中——the removed planning package 整目录已删除，相关 episodic 调用并入
 > orchestrator 自身的 LLM 推理（详见 [01-agents.md](01-agents.md) 与

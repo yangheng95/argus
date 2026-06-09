@@ -1,84 +1,84 @@
-import { createStore } from "solid-js/store";
-import type { AgentWorkflowRecord } from "../utils/agent-workflow";
-import { normalizeAgentRole } from "../utils/message";
-import type { BoardSource } from "./board";
+import { createStore } from "solid-js/store"
+import type { AgentWorkflowRecord } from "../utils/agent-workflow"
+import { normalizeAgentRole } from "../utils/message"
+import type { BoardSource } from "./board"
 
 export interface ConversationAgentSessionView {
-  sessionID: string;
-  stage: string;
-  parentSessionID?: string;
-  goalID?: string;
-  messageIDs?: string[];
-  lastDisplayMessageID?: string;
-  firstMessageTime: number;
-  lastMessageTime: number;
-  placement?: "top_level" | "goal_phase" | "hidden" | "filtered" | string;
+  sessionID: string
+  stage: string
+  parentSessionID?: string
+  goalID?: string
+  messageIDs?: string[]
+  lastDisplayMessageID?: string
+  firstMessageTime: number
+  lastMessageTime: number
+  placement?: "top_level" | "goal_phase" | "hidden" | "filtered" | string
   phase?: {
-    stepID: string;
-    phaseID: string;
-  };
+    stepID: string
+    phaseID: string
+  }
 }
 
 export interface ConversationAgentView {
-  sessions?: ConversationAgentSessionView[];
+  sessions?: ConversationAgentSessionView[]
 }
 
 export interface ConversationAgentStore {
-  taskID: string;
-  records: AgentWorkflowRecord[];
+  taskID: string
+  records: AgentWorkflowRecord[]
 }
 
 export const [conversationAgentStore, setConversationAgentStore] = createStore<ConversationAgentStore>({
   taskID: "",
   records: [],
-});
+})
 
 export function conversationAgentSourceKey(source: BoardSource | null): string {
-  return source ? `${source.kind}:${source.id}` : "";
+  return source ? `${source.kind}:${source.id}` : ""
 }
 
 export function conversationAgentRecordsForSource(source: BoardSource | null): AgentWorkflowRecord[] {
-  const key = conversationAgentSourceKey(source);
-  return key && conversationAgentStore.taskID === key ? conversationAgentStore.records : [];
+  const key = conversationAgentSourceKey(source)
+  return key && conversationAgentStore.taskID === key ? conversationAgentStore.records : []
 }
 
 function fallbackLastMessageID(session: ConversationAgentSessionView): string {
-  if (!Array.isArray(session?.messageIDs)) return "";
-  return String(session.messageIDs[session.messageIDs.length - 1] || "");
+  if (!Array.isArray(session?.messageIDs)) return ""
+  return String(session.messageIDs[session.messageIDs.length - 1] || "")
 }
 
 function targetMessageID(session: ConversationAgentSessionView): string {
-  return String(session?.lastDisplayMessageID || "") || fallbackLastMessageID(session);
+  return String(session?.lastDisplayMessageID || "") || fallbackLastMessageID(session)
 }
 
 function renderedTargetForSession(
   session: ConversationAgentSessionView,
   stage: string,
 ): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID"> {
-  const goalID = String(session?.goalID || "");
-  const stepID = String(session?.phase?.stepID || "");
-  const phaseID = String(session?.phase?.phaseID || "");
+  const goalID = String(session?.goalID || "")
+  const stepID = String(session?.phase?.stepID || "")
+  const phaseID = String(session?.phase?.phaseID || "")
   if (goalID && stepID && phaseID) {
-    const renderedCardID = `step:${goalID}:${stepID}`;
+    const renderedCardID = `step:${goalID}:${stepID}`
     return {
       cardID: `${renderedCardID}:phase:${phaseID}`,
       renderedCardID,
-    };
+    }
   }
-  const messageID = targetMessageID(session);
+  const messageID = targetMessageID(session)
   if (stage === "integrity") {
-    return { renderedCardID: `integrity:session:${session.sessionID}` };
+    return { renderedCardID: `integrity:session:${session.sessionID}` }
   }
   return messageID
     ? { renderedCardID: `${stage}:session:${session.sessionID}:message:${messageID}` }
-    : { renderedCardID: `${stage}:session:${session.sessionID}` };
+    : { renderedCardID: `${stage}:session:${session.sessionID}` }
 }
 
 function agentRecordFromSession(session: ConversationAgentSessionView): AgentWorkflowRecord | null {
-  const sessionID = String(session?.sessionID || "");
-  const rawStage = String(session?.stage || "");
-  const stage = normalizeAgentRole(rawStage);
-  const startedAt = Number(session?.firstMessageTime || 0);
+  const sessionID = String(session?.sessionID || "")
+  const rawStage = String(session?.stage || "")
+  const stage = normalizeAgentRole(rawStage)
+  const startedAt = Number(session?.firstMessageTime || 0)
   if (
     !sessionID ||
     !stage ||
@@ -88,9 +88,9 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     rawStage === "filtered" ||
     !(startedAt > 0)
   ) {
-    return null;
+    return null
   }
-  const lastObservedAt = Math.max(startedAt, Number(session?.lastMessageTime || 0));
+  const lastObservedAt = Math.max(startedAt, Number(session?.lastMessageTime || 0))
   return {
     id: sessionID,
     sessionID,
@@ -108,37 +108,37 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     stepID: session?.phase?.stepID,
     phaseID: session?.phase?.phaseID,
     ...renderedTargetForSession(session, stage),
-  };
+  }
 }
 
 function applyDepth(records: AgentWorkflowRecord[]): AgentWorkflowRecord[] {
-  const byID = new Map(records.map((record) => [record.sessionID, record]));
-  const visiting = new Set<string>();
-  const memo = new Map<string, number>();
+  const byID = new Map(records.map((record) => [record.sessionID, record]))
+  const visiting = new Set<string>()
+  const memo = new Map<string, number>()
   const depthOf = (sessionID: string): number => {
-    if (memo.has(sessionID)) return memo.get(sessionID)!;
-    if (visiting.has(sessionID)) return 0;
-    visiting.add(sessionID);
-    const parent = byID.get(sessionID)?.parentSessionID || "";
-    const depth = parent && byID.has(parent) ? depthOf(parent) + 1 : 0;
-    visiting.delete(sessionID);
-    memo.set(sessionID, depth);
-    return depth;
-  };
-  return records.map((record) => ({ ...record, depth: depthOf(record.sessionID) }));
+    if (memo.has(sessionID)) return memo.get(sessionID)!
+    if (visiting.has(sessionID)) return 0
+    visiting.add(sessionID)
+    const parent = byID.get(sessionID)?.parentSessionID || ""
+    const depth = parent && byID.has(parent) ? depthOf(parent) + 1 : 0
+    visiting.delete(sessionID)
+    memo.set(sessionID, depth)
+    return depth
+  }
+  return records.map((record) => ({ ...record, depth: depthOf(record.sessionID) }))
 }
 
 export function resetConversationAgentView(): void {
-  setConversationAgentStore({ taskID: "", records: [] });
+  setConversationAgentStore({ taskID: "", records: [] })
 }
 
 export function hydrateConversationAgentView(taskID: string, view: ConversationAgentView): void {
   const records = (Array.isArray(view?.sessions) ? view.sessions : [])
     .map(agentRecordFromSession)
     .filter((record): record is AgentWorkflowRecord => !!record)
-    .sort((left, right) => left.startedAt - right.startedAt);
+    .sort((left, right) => left.startedAt - right.startedAt)
   setConversationAgentStore({
     taskID,
     records: applyDepth(records),
-  });
+  })
 }

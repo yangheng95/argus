@@ -19,7 +19,7 @@ test("chat bubble CSS gives user and mission roles separate visible treatments",
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="user"] .chat-bubble-shell')
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="user"] .chat-bubble__title-row')
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="mission"] .chat-bubble')
-  expect(CHAT_BUBBLE_CSS).toContain('border-left: calc(3px * var(--ui-scale)) solid var(--card-stage)')
+  expect(CHAT_BUBBLE_CSS).toContain("border-left: calc(3px * var(--ui-scale)) solid var(--card-stage)")
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="mission"] .chat-avatar')
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="mission"] .chat-bubble__title')
 })

@@ -51,7 +51,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function readComponent(rel: string): string {
@@ -91,9 +93,7 @@ describe("surface CSS declares .empty-hint--card on the shared card-chrome group
     // refactor). We assert the modifier sits in the same selector group
     // as `.section-body > .empty-hint`, so all card-chrome empties stay
     // in lockstep.
-    const cardChromeBlock = STYLES.match(
-      /(\.section-body\s*>\s*\.empty-hint[^{]*\{[\s\S]*?border-radius[^}]*\})/,
-    )
+    const cardChromeBlock = STYLES.match(/(\.section-body\s*>\s*\.empty-hint[^{]*\{[\s\S]*?border-radius[^}]*\})/)
     expect(cardChromeBlock).not.toBeNull()
     expect(cardChromeBlock![0]).toContain(".empty-hint--card")
   })

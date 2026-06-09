@@ -19,15 +19,19 @@ function styleSheet(): string {
     "src/styles/primitives/button.css",
     "src/styles/surfaces/sidebar.css",
     "src/styles/surfaces/conversation.css",
-  ].map(css).join("\n")
+  ]
+    .map(css)
+    .join("\n")
 }
 
-test("hover-only action rails do not overlap row text", async () => {
-  const browser = await launchBrowser()
-  try {
-    const page = await browser.newPage()
-    await page.setViewport({ width: 720, height: 360 })
-    await page.setContent(`
+test(
+  "hover-only action rails do not overlap row text",
+  async () => {
+    const browser = await launchBrowser()
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 720, height: 360 })
+      await page.setContent(`
       <!doctype html>
       <html data-theme="dark">
         <head>
@@ -73,52 +77,55 @@ test("hover-only action rails do not overlap row text", async () => {
       </html>
     `)
 
-    const rest = await page.evaluate(() => {
-      const taskActions = document.querySelector<HTMLElement>(".task-row-actions")!
-      const recentRemove = document.querySelector<HTMLElement>(".recent-dir-remove")!
-      return {
-        taskOpacity: getComputedStyle(taskActions.querySelector<HTMLElement>(".oc-button")!).opacity,
-        taskPointerEvents: getComputedStyle(taskActions.querySelector<HTMLElement>(".oc-button")!).pointerEvents,
-        recentOpacity: getComputedStyle(recentRemove).opacity,
-        recentPointerEvents: getComputedStyle(recentRemove).pointerEvents,
-      }
-    })
-    expect(rest).toEqual({
-      taskOpacity: "0",
-      taskPointerEvents: "none",
-      recentOpacity: "0",
-      recentPointerEvents: "none",
-    })
+      const rest = await page.evaluate(() => {
+        const taskActions = document.querySelector<HTMLElement>(".task-row-actions")!
+        const recentRemove = document.querySelector<HTMLElement>(".recent-dir-remove")!
+        return {
+          taskOpacity: getComputedStyle(taskActions.querySelector<HTMLElement>(".oc-button")!).opacity,
+          taskPointerEvents: getComputedStyle(taskActions.querySelector<HTMLElement>(".oc-button")!).pointerEvents,
+          recentOpacity: getComputedStyle(recentRemove).opacity,
+          recentPointerEvents: getComputedStyle(recentRemove).pointerEvents,
+        }
+      })
+      expect(rest).toEqual({
+        taskOpacity: "0",
+        taskPointerEvents: "none",
+        recentOpacity: "0",
+        recentPointerEvents: "none",
+      })
 
-    await page.hover(".task-row-mini")
-    await sleep(260)
-    const taskHover = await page.evaluate(() => {
-      const main = document.querySelector<HTMLElement>(".task-row-main")!.getBoundingClientRect()
-      const actions = document.querySelector<HTMLElement>(".task-row-actions")!.getBoundingClientRect()
-      const stamp = document.querySelector<HTMLElement>(".task-row-stamp")!
-      return {
-        mainRight: main.right,
-        actionsLeft: actions.left,
-        stampOpacity: getComputedStyle(stamp).opacity,
-      }
-    })
-    expect(taskHover.mainRight).toBeLessThanOrEqual(taskHover.actionsLeft)
-    expect(taskHover.stampOpacity).toBe("0")
+      await page.hover(".task-row-mini")
+      await sleep(260)
+      const taskHover = await page.evaluate(() => {
+        const main = document.querySelector<HTMLElement>(".task-row-main")!.getBoundingClientRect()
+        const actions = document.querySelector<HTMLElement>(".task-row-actions")!.getBoundingClientRect()
+        const stamp = document.querySelector<HTMLElement>(".task-row-stamp")!
+        return {
+          mainRight: main.right,
+          actionsLeft: actions.left,
+          stampOpacity: getComputedStyle(stamp).opacity,
+        }
+      })
+      expect(taskHover.mainRight).toBeLessThanOrEqual(taskHover.actionsLeft)
+      expect(taskHover.stampOpacity).toBe("0")
 
-    await page.hover(".recent-dir-row")
-    await sleep(260)
-    const recentHover = await page.evaluate(() => {
-      const item = document.querySelector<HTMLElement>(".recent-dir-item")!.getBoundingClientRect()
-      const remove = document.querySelector<HTMLElement>(".recent-dir-remove")!.getBoundingClientRect()
-      return {
-        itemRight: item.right,
-        removeLeft: remove.left,
-        removePointerEvents: getComputedStyle(document.querySelector<HTMLElement>(".recent-dir-remove")!).pointerEvents,
-      }
-    })
-    expect(recentHover.itemRight).toBeLessThanOrEqual(recentHover.removeLeft)
-    expect(recentHover.removePointerEvents).toBe("auto")
-  } finally {
-    await browser.close()
-  }
-}, { timeout: 120_000 })
+      await page.hover(".recent-dir-row")
+      await sleep(260)
+      const recentHover = await page.evaluate(() => {
+        const item = document.querySelector<HTMLElement>(".recent-dir-item")!.getBoundingClientRect()
+        const remove = document.querySelector<HTMLElement>(".recent-dir-remove")!.getBoundingClientRect()
+        return {
+          itemRight: item.right,
+          removeLeft: remove.left,
+          removePointerEvents: getComputedStyle(document.querySelector<HTMLElement>(".recent-dir-remove")!)
+            .pointerEvents,
+        }
+      })
+      expect(recentHover.itemRight).toBeLessThanOrEqual(recentHover.removeLeft)
+      expect(recentHover.removePointerEvents).toBe("auto")
+    } finally {
+      await browser.close()
+    }
+  },
+  { timeout: 120_000 },
+)

@@ -32,7 +32,9 @@ export function LedgerList<T>(props: LedgerListProps<T>) {
         </div>
       </Show>
       <Show when={!props.loading && props.items.length === 0 && !props.error}>
-        <div class="ledger-empty" data-ui="ledger-empty">{props.emptyLabel}</div>
+        <div class="ledger-empty" data-ui="ledger-empty">
+          {props.emptyLabel}
+        </div>
       </Show>
       <Show when={!props.loading && props.items.length > 0}>
         <For each={props.items}>{(item) => props.children(item)}</For>

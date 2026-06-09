@@ -32,14 +32,19 @@ const anthropicModel = {
   api: { id: "claude-opus-4-7", url: "x", npm: "@ai-sdk/anthropic" },
   name: "Claude Opus 4.7",
   capabilities: {
-    temperature: true, reasoning: false, attachment: true, toolcall: true,
+    temperature: true,
+    reasoning: false,
+    attachment: true,
+    toolcall: true,
     input: { text: true, image: true, audio: false, video: false, pdf: true },
     output: { text: true, audio: false, image: false, video: false, pdf: false },
     interleaved: false,
   },
   cost: { input: 1, output: 1, cache: { read: 0.1, write: 1.25 } },
   limit: { context: 200000, output: 8192 },
-  status: "active", options: {}, headers: {},
+  status: "active",
+  options: {},
+  headers: {},
 } as any
 
 // DashScope path: openai-compatible SDK, qwen-family reasoning model.
@@ -49,14 +54,19 @@ const dashscopeModel = {
   api: { id: "qwen3-coder-plus", url: "https://coding.dashscope.aliyuncs.com/v1", npm: "@ai-sdk/openai-compatible" },
   name: "Qwen3 Coder Plus",
   capabilities: {
-    temperature: true, reasoning: true, attachment: true, toolcall: true,
+    temperature: true,
+    reasoning: true,
+    attachment: true,
+    toolcall: true,
     input: { text: true, image: true, audio: false, video: false, pdf: false },
     output: { text: true, audio: false, image: false, video: false, pdf: false },
     interleaved: { field: "reasoning_content" },
   },
   cost: { input: 1, output: 1 },
   limit: { context: 200000, output: 8192 },
-  status: "active", options: {}, headers: {},
+  status: "active",
+  options: {},
+  headers: {},
 } as any
 
 // ────────── helpers ──────────

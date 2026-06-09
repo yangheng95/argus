@@ -63,10 +63,10 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  It pairs with frontend-design and emits durable
  *                  frontend_research_brief artifacts for requirements and
  *                  architect.
- *   visual-qa      dedicated frontend UI/UX QA worker. UI means User
- *                  Interface; UX means User Experience. It consumes
+ *   visual-qa      dedicated frontend visual GUI fidelity and function QA
+ *                  worker. GUI means Graphical User Interface. It consumes
  *                  frontend-design/build evidence, may repair in-scope visual
- *                  defects, and submits a structured visual QA report.
+ *                  or functional defects, and submits a structured report.
  *   evaluator      LLM judge / evaluator sessions
  *   system         internal maintenance (compaction, summary, title generation)
  */
@@ -177,11 +177,7 @@ export const PartTable = sqliteTable(
   ],
 )
 
-export type SessionControlKind =
-  | "manual_summarize"
-  | "compaction_request"
-  | "subtask_request"
-  | "wake_reason"
+export type SessionControlKind = "manual_summarize" | "compaction_request" | "subtask_request" | "wake_reason"
 
 export type SessionControlStatus = "pending" | "consumed" | "failed"
 

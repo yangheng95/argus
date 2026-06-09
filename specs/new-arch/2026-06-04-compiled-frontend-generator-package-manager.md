@@ -6,14 +6,14 @@ Compiled OpenCorvus webpage/frontend generation currently materializes React/Vit
 
 ## Evidence And Call Sites
 
-| Surface | Current behavior | Action |
-| --- | --- | --- |
-| `packages/opencorvus/src/web-clone/source-project-generator.ts` `renderPackageJson` | Emits `bunx vite`, `bunx tsc`, and `packageManager: "bun@1.3.14"` for the frontend-design source project. | Replace with a shared generated frontend package profile. Scripts must call local bins (`vite`, `tsc`) so npm/pnpm/yarn/bun can run them without forcing Bun. |
-| `packages/opencorvus/src/web-clone/skeleton-project-generator.ts` `renderPackageJson` | Emits `bunx vite` scripts for the older visual baseline project. | Use the same shared generated frontend package profile and local-bin scripts. |
-| `packages/opencorvus/src/frontend-design/skeleton-project-tool.ts` | Calls `generateWebCloneSourceProject`; no package manager decision itself. | No code change needed; it inherits the generator fix in compiled builds. |
-| `packages/opencorvus/src/tool/web-clone-generate-source-project.ts` | Calls `generateWebCloneSourceProject`; no package manager decision itself. | No code change needed; it inherits the generator fix in compiled builds. |
-| `packages/opencorvus/test/tool/web-clone-generate-source-project.test.ts` | Asserts Bun output. | Update to assert npm/default local-bin output and absence of `bunx`. |
-| `packages/opencorvus/test/web-clone/skeleton-project-generator.test.ts` | Asserts Bun output. | Update to assert npm/default local-bin output and absence of `bunx`. |
+| Surface                                                                               | Current behavior                                                                                          | Action                                                                                                                                                        |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/web-clone/source-project-generator.ts` `renderPackageJson`   | Emits `bunx vite`, `bunx tsc`, and `packageManager: "bun@1.3.14"` for the frontend-design source project. | Replace with a shared generated frontend package profile. Scripts must call local bins (`vite`, `tsc`) so npm/pnpm/yarn/bun can run them without forcing Bun. |
+| `packages/opencorvus/src/web-clone/skeleton-project-generator.ts` `renderPackageJson` | Emits `bunx vite` scripts for the older visual baseline project.                                          | Use the same shared generated frontend package profile and local-bin scripts.                                                                                 |
+| `packages/opencorvus/src/frontend-design/skeleton-project-tool.ts`                    | Calls `generateWebCloneSourceProject`; no package manager decision itself.                                | No code change needed; it inherits the generator fix in compiled builds.                                                                                      |
+| `packages/opencorvus/src/tool/web-clone-generate-source-project.ts`                   | Calls `generateWebCloneSourceProject`; no package manager decision itself.                                | No code change needed; it inherits the generator fix in compiled builds.                                                                                      |
+| `packages/opencorvus/test/tool/web-clone-generate-source-project.test.ts`             | Asserts Bun output.                                                                                       | Update to assert npm/default local-bin output and absence of `bunx`.                                                                                          |
+| `packages/opencorvus/test/web-clone/skeleton-project-generator.test.ts`               | Asserts Bun output.                                                                                       | Update to assert npm/default local-bin output and absence of `bunx`.                                                                                          |
 
 ## Decision
 

@@ -65,7 +65,9 @@ describe("tool.memory", () => {
           },
           sessionB,
         )
-        const searchData = JSON.parse(search.output) as { results: Array<{ fileId: string; scope: string; kind: string }> }
+        const searchData = JSON.parse(search.output) as {
+          results: Array<{ fileId: string; scope: string; kind: string }>
+        }
         expect(searchData.results.length).toBeGreaterThan(0)
         expect(searchData.results.some((r) => r.fileId === writeData.fileId)).toBe(true)
         expect(searchData.results.every((r) => r.scope === "global")).toBe(true)
@@ -143,5 +145,4 @@ describe("tool.memory", () => {
       },
     })
   })
-
 })

@@ -3,11 +3,7 @@ import path from "node:path"
 import os from "node:os"
 import z from "zod"
 
-import {
-  assessCaptureDiagnostics,
-  captureReferenceManifest,
-  summarizeCaptureDiagnostics,
-} from "./capture-gate"
+import { assessCaptureDiagnostics, captureReferenceManifest, summarizeCaptureDiagnostics } from "./capture-gate"
 
 function screenshotFilename(inputUrl: string): string {
   try {
@@ -28,8 +24,18 @@ export function createUrlScreenshotTool() {
         "This is the only live-URL capture tool available to frontend-design; do NOT use webfetch for visual work.",
       inputSchema: z.object({
         url: z.string().describe("Live webpage URL to capture. Must start with http:// or https://."),
-        viewport_width: z.number().int().positive().optional().describe("Viewport width in logical pixels. Default 1440."),
-        viewport_height: z.number().int().positive().optional().describe("Viewport height in logical pixels. Default 900."),
+        viewport_width: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Viewport width in logical pixels. Default 1440."),
+        viewport_height: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Viewport height in logical pixels. Default 900."),
       }),
       execute: async ({ url, viewport_width, viewport_height }) => {
         const outDir = path.join(

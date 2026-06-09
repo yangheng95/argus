@@ -21,7 +21,10 @@ import { tmpdir } from "../fixture/fixture"
 
 describe("frontend-design prompt assembly", () => {
   test("core prompt pins visual HTML skeleton restoration workflow", async () => {
-    const prompt = await fs.readFile(path.join(process.cwd(), "src", "prompt", "core", "frontend-design-core.txt"), "utf8")
+    const prompt = await fs.readFile(
+      path.join(process.cwd(), "src", "prompt", "core", "frontend-design-core.txt"),
+      "utf8",
+    )
 
     expect(prompt).toContain("## Visual HTML Skeleton Restoration Algorithm")
     expect(prompt).toContain("Source map")
@@ -45,8 +48,12 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("The candidate component read is the last source component read before selection")
     expect(prompt).toContain("reading a second `src/components/source-dom/*` file")
     expect(prompt).toContain("any `src/components/semantic/*` file")
-    expect(prompt).toContain("When the candidate is a large table/map/content region, do not read neighboring generated regions or global header/footer semantic components before selection")
-    expect(prompt).toContain("when the candidate is `HeaderNavigation`, reading `FooterNavigation`, `App.tsx`, `package.json`, `tsconfig.json`, or full source-IR/style catalogs before recording the header selection is off-process evidence hoarding")
+    expect(prompt).toContain(
+      "When the candidate is a large table/map/content region, do not read neighboring generated regions or global header/footer semantic components before selection",
+    )
+    expect(prompt).toContain(
+      "when the candidate is `HeaderNavigation`, reading `FooterNavigation`, `App.tsx`, `package.json`, `tsconfig.json`, or full source-IR/style catalogs before recording the header selection is off-process evidence hoarding",
+    )
     expect(prompt).toContain("Div-soup boundary")
     expect(prompt).toContain("`<div>` is a valid semantic-neutral layout primitive")
     expect(prompt).toContain("future transcription debt rather than final app source")
@@ -60,16 +67,26 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("data/content snippets are region-owned evidence slices")
     expect(prompt).toContain("must contain only records proven by the currently selected replacement-plan row")
     expect(prompt).toContain("Skeleton root wiring is part of region ownership")
-    expect(prompt).toContain("Do not call `record_frontend_region_selection` for another region until the current region has a factual `record_frontend_replacement_result`")
+    expect(prompt).toContain(
+      "Do not call `record_frontend_region_selection` for another region until the current region has a factual `record_frontend_replacement_result`",
+    )
     expect(prompt).toContain("After a region is selected, switch from evidence browsing to visual-skeleton restoration")
-    expect(prompt).toContain("the next file-changing action should populate or repair that region's HTML/CSS/assets/content")
-    expect(prompt).toContain("Further reads must be limited to direct imports or explicitly named data/style/asset sidecars for that selected region only")
-    expect(prompt).toContain("Do not exhaustively chase every `AssetPath`, `svgPaths`, `asset_*.path.txt`, CSS token, or `critical.css` variable before the first selected-region write")
+    expect(prompt).toContain(
+      "the next file-changing action should populate or repair that region's HTML/CSS/assets/content",
+    )
+    expect(prompt).toContain(
+      "Further reads must be limited to direct imports or explicitly named data/style/asset sidecars for that selected region only",
+    )
+    expect(prompt).toContain(
+      "Do not exhaustively chase every `AssetPath`, `svgPaths`, `asset_*.path.txt`, CSS token, or `critical.css` variable before the first selected-region write",
+    )
     expect(prompt).toContain("Selection is the start of a visual-restoration transaction")
     expect(prompt).toContain("Future regions may be named only as non-rendering comments/visual debt")
     expect(prompt).toContain("never as visible placeholder panels, fake spacers, `min-height` filler, placeholder text")
     expect(prompt).toContain("Before styling a region, inspect the reference pixel evidence for that region/viewport")
-    expect(prompt).toContain("wrong theme, wrong header color, wrong density, or wrong first-viewport background means the region is not ready")
+    expect(prompt).toContain(
+      "wrong theme, wrong header color, wrong density, or wrong first-viewport background means the region is not ready",
+    )
     expect(prompt).toContain("Completed/deferred status must cite visual skeleton render evidence")
     expect(prompt).toContain("Do not record a region as completed from source inspection alone")
     expect(prompt).toContain("Do not record a region as completed if the skeleton contains placeholder UI")
@@ -88,16 +105,22 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("define user-facing semantics")
     expect(prompt).toContain("defines implementation facts")
     expect(prompt).toContain("`source-ir/style-profile.json` is the deterministic region-scoped style source")
-    expect(prompt).toContain("preserve the component kind and use source evidence to repair measured style/layout/assets")
+    expect(prompt).toContain(
+      "preserve the component kind and use source evidence to repair measured style/layout/assets",
+    )
     expect(prompt).toContain("edit the static HTML/CSS visual skeleton")
-    expect(prompt).toContain("The visual HTML skeleton plus the frontend_design contract are part of the deliverable surface")
+    expect(prompt).toContain(
+      "The visual HTML skeleton plus the frontend_design contract are part of the deliverable surface",
+    )
     expect(prompt).toContain("Do not treat `frontend-design-skeleton` as the final app")
     expect(prompt).toContain("Baseline-first rule")
     expect(prompt).toContain("Region iteration algorithm")
     expect(prompt).toContain("at least 95% visual similarity")
     expect(prompt).toContain("call `webpage_evaluate` with `passThreshold: 96`")
     expect(prompt).toContain("a score below 96/100 or similarity below 0.95 is unfinished visual debt")
-    expect(prompt).toContain("do not call the skeleton usable, accepted, ready, complete, or good enough for downstream transcription")
+    expect(prompt).toContain(
+      "do not call the skeleton usable, accepted, ready, complete, or good enough for downstream transcription",
+    )
     expect(prompt).toContain("no relevant placeholder/fake visual debt")
     expect(prompt).toContain("Visual token extraction protocol")
     expect(prompt).toContain("Write source-editable tokens into `visual-html-skeleton/styles/tokens.css`")
@@ -105,14 +128,18 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Benchmark is mainline")
     expect(prompt).toContain("Visual HTML skeleton mode")
     expect(prompt).toContain("It is not an independent design source")
-    expect(prompt).toContain("If the skeleton conflicts with source IR, source skeleton CSS, assets, or visible pixels in `reference.png`, those original artifacts win")
+    expect(prompt).toContain(
+      "If the skeleton conflicts with source IR, source skeleton CSS, assets, or visible pixels in `reference.png`, those original artifacts win",
+    )
     expect(prompt).toContain("Process monitoring is part of the benchmark evidence")
     expect(prompt).toContain("which evidence acquisition tool ran")
     expect(prompt).toContain("which source region was selected")
     expect(prompt).toContain("off-track process defect")
     expect(prompt).toContain("Do not solve benchmark failures by lowering thresholds")
     expect(prompt).not.toContain("Do not loop through render/evaluation attempts")
-    expect(prompt).toContain("Do not change other agent prompts, communication paths, evaluator scoring, runtime source packages, raw webpage evidence, or generated evidence outputs")
+    expect(prompt).toContain(
+      "Do not change other agent prompts, communication paths, evaluator scoring, runtime source packages, raw webpage evidence, or generated evidence outputs",
+    )
     expect(prompt).not.toContain("overallScore >=80/100")
     expect(prompt).not.toContain("100/100")
     expect(prompt).not.toContain("loop state")
@@ -156,10 +183,14 @@ describe("frontend-design prompt assembly", () => {
 
     expect(prompt).toContain("call `create_frontend_skeleton_project`")
     expect(prompt).toContain("# Visual HTML Skeleton Contract")
-    expect(prompt).toContain("frontend_design's first workflow deliverable is a source-editable static HTML/CSS visual skeleton")
+    expect(prompt).toContain(
+      "frontend_design's first workflow deliverable is a source-editable static HTML/CSS visual skeleton",
+    )
     expect(prompt).toContain("Report it as `submit_frontend_template.frontend_project.role=visual_baseline_input`")
     expect(prompt).toContain("not the implementation target or acceptance app root")
-    expect(prompt).toContain("if the skeleton conflicts with those artifacts or visible pixels, the original source evidence wins")
+    expect(prompt).toContain(
+      "if the skeleton conflicts with those artifacts or visible pixels, the original source evidence wins",
+    )
     expect(prompt).toContain("Later workflow stages transcribe this HTML skeleton into project source")
     expect(prompt).toContain("Do not pass `web-clone-target`")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/visual-html-skeleton")
@@ -172,12 +203,18 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("restore the static HTML/CSS skeleton")
     expect(prompt).toContain("Treat `nextSourceDomReplacement` as the first visual-region queue item")
     expect(prompt).toContain("not as a target-project extraction command")
-    expect(prompt).toContain("Default visual HTML skeleton root: `.opencorvus/runtime/tasks/tsk_web_clone/frontend-design/visual-html-skeleton`")
+    expect(prompt).toContain(
+      "Default visual HTML skeleton root: `.opencorvus/runtime/tasks/tsk_web_clone/frontend-design/visual-html-skeleton`",
+    )
     expect(prompt).toContain("Report the public project root as `visual-html-skeleton`")
-    expect(prompt).toContain("do not name `web-clone-target`, a framework app root, or `frontend-design-skeleton` as the current workflow deliverable")
+    expect(prompt).toContain(
+      "do not name `web-clone-target`, a framework app root, or `frontend-design-skeleton` as the current workflow deliverable",
+    )
     expect(prompt).toContain("visual-html-skeleton/index.html")
     expect(prompt).toContain("Root files alone are not a real frontend app")
-    expect(prompt).toContain("benchmark workspaces often contain minimal `package.json`, `tsconfig.json`, `data/`, `.git/`, and `.opencorvus/` shell files")
+    expect(prompt).toContain(
+      "benchmark workspaces often contain minimal `package.json`, `tsconfig.json`, `data/`, `.git/`, and `.opencorvus/` shell files",
+    )
     expect(prompt).toContain("those shell files should not become the skeleton deliverable")
     expect(prompt).toContain("Populate the visual HTML skeleton directly with file-edit tools")
     expect(prompt).toContain("the first editing pass is visual skeleton adoption")
@@ -194,29 +231,46 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Render that HTML skeleton through a real static harness or browser path")
     expect(prompt).toContain("For high-fidelity acceptance, call `webpage_evaluate` with `passThreshold: 96`")
     expect(prompt).toContain("a score below 96/100 or similarity below 0.95 is unfinished visual debt")
-    expect(prompt).toContain("do not call the skeleton accepted, ready, complete, usable, or good enough for downstream transcription")
+    expect(prompt).toContain(
+      "do not call the skeleton accepted, ready, complete, usable, or good enough for downstream transcription",
+    )
     expect(prompt).toContain("visual replacement work should happen source-region by source-region")
-    expect(prompt).toContain("For every major in-scope visual region, call `record_frontend_region_selection` before editing that region's HTML/CSS/assets/content")
-    expect(prompt).toContain("Additional reads after selection must be direct imports or explicitly named data/style/asset sidecars")
+    expect(prompt).toContain(
+      "For every major in-scope visual region, call `record_frontend_region_selection` before editing that region's HTML/CSS/assets/content",
+    )
+    expect(prompt).toContain(
+      "Additional reads after selection must be direct imports or explicitly named data/style/asset sidecars",
+    )
     expect(prompt).toContain("Do not implement by freehand redrawing")
-    expect(prompt).toContain("copy/transcribe observed labels, numeric data, source IDs, class responsibilities, SVG paths/assets")
+    expect(prompt).toContain(
+      "copy/transcribe observed labels, numeric data, source IDs, class responsibilities, SVG paths/assets",
+    )
     expect(prompt).toContain("Render the HTML skeleton through one explicit static URL or file path")
-    expect(prompt).toContain("compare it against `reference.png` with `webpage_render`, `webpage_evaluate` using `passThreshold: 96`, and `webpage_vision_judge` evidence when available")
+    expect(prompt).toContain(
+      "compare it against `reference.png` with `webpage_render`, `webpage_evaluate` using `passThreshold: 96`, and `webpage_vision_judge` evidence when available",
+    )
     expect(prompt).toContain("repair the same region before selecting another region when the score is below 96/100")
     expect(prompt).toContain("Do not use shell listings or build success as visual evidence")
-    expect(prompt).toContain("the skeleton is source-editable static HTML/CSS, not compiled output, not raw source DOM replay")
-    expect(prompt).toContain("Put later React/Vue/etc. project transcription constraints into `quality_project_contract`, not into the current skeleton source")
+    expect(prompt).toContain(
+      "the skeleton is source-editable static HTML/CSS, not compiled output, not raw source DOM replay",
+    )
+    expect(prompt).toContain(
+      "Put later React/Vue/etc. project transcription constraints into `quality_project_contract`, not into the current skeleton source",
+    )
     expect(prompt).not.toContain("React + Vite + TypeScript")
     expect(prompt).not.toContain("Populate the target acceptance project directly")
     expect(prompt).not.toContain("Build should receive the target project that frontend_design already populated")
-    expect(prompt).not.toContain("The host already prepared the frontend-design high-fidelity editable source project before this model turn.")
+    expect(prompt).not.toContain(
+      "The host already prepared the frontend-design high-fidelity editable source project before this model turn.",
+    )
     expect(prompt).not.toContain("Do not call `create_frontend_skeleton_project` again")
   })
 
   test("visual HTML skeleton prompts keep static baseline below source evidence", () => {
     const prompt = FrontendDesignTestHooks.buildUserPrompt({
       title: "Visual draft",
-      request: "先从 https://example.com/page 抽取骨架生成 visual-only HTML design draft，只负责视觉还原，之后再转完整项目。",
+      request:
+        "先从 https://example.com/page 抽取骨架生成 visual-only HTML design draft，只负责视觉还原，之后再转完整项目。",
       taskID: "tsk_visual_draft",
     })
 
@@ -243,25 +297,40 @@ describe("frontend-design prompt assembly", () => {
       directory: tmp.path,
       fn: async () => {
         const tools = createFrontendSkeletonProjectTool()
-        const result = await (tools.create_frontend_skeleton_project as any).execute({
-          sourcePackageDir: sourcePackage,
-          outputDir,
-        }, {})
+        const result = await (tools.create_frontend_skeleton_project as any).execute(
+          {
+            sourcePackageDir: sourcePackage,
+            outputDir,
+          },
+          {},
+        )
 
         expect(result.output).toContain("Bounded next action for frontend_design")
-        expect(result.output).toContain("Do not move, rename, or repurpose this skeleton output as the visual HTML skeleton or target acceptance project")
+        expect(result.output).toContain(
+          "Do not move, rename, or repurpose this skeleton output as the visual HTML skeleton or target acceptance project",
+        )
         expect(result.output).toContain("sourceProjectManifest.json")
         expect(result.output).toContain("sourceDomIterationState.ts")
         expect(result.output).toContain("sourceDomReplacementPlan.ts")
         expect(result.output).toContain("Pre-selection browsing is only for choosing the next source region")
-        expect(result.output).toContain("The candidate component read is the last source component read before selection")
+        expect(result.output).toContain(
+          "The candidate component read is the last source component read before selection",
+        )
         expect(result.output).toContain("do not read a second `src/components/source-dom/*` file")
         expect(result.output).toContain("any `src/components/semantic/*` file")
-        expect(result.output).toContain("If the candidate is a large table/map/content region, do not read neighboring generated regions or global header/footer semantic components before recording that selection")
-        expect(result.output).toContain("If the candidate is `HeaderNavigation`, do not read `FooterNavigation`, `App.tsx`, `package.json`, `tsconfig.json`, or full source-IR/style catalogs before recording the header selection")
+        expect(result.output).toContain(
+          "If the candidate is a large table/map/content region, do not read neighboring generated regions or global header/footer semantic components before recording that selection",
+        )
+        expect(result.output).toContain(
+          "If the candidate is `HeaderNavigation`, do not read `FooterNavigation`, `App.tsx`, `package.json`, `tsconfig.json`, or full source-IR/style catalogs before recording the header selection",
+        )
         expect(result.output).not.toContain("target root `package.json`")
-        expect(result.output).toContain("Do not read `src/data/sourceData.ts`, `src/data/svgPaths.ts`, raw HTML, or generated CSS in full")
-        expect(result.output).toContain("First populate the visual HTML skeleton with source-editable static HTML/CSS/assets")
+        expect(result.output).toContain(
+          "Do not read `src/data/sourceData.ts`, `src/data/svgPaths.ts`, raw HTML, or generated CSS in full",
+        )
+        expect(result.output).toContain(
+          "First populate the visual HTML skeleton with source-editable static HTML/CSS/assets",
+        )
         expect(result.output).toContain("visual-html-skeleton/styles/tokens.css")
         expect(result.output).toContain("Extract visual tokens before broad region styling")
         expect(result.output).toContain("source-ir/style-tokens.json")
@@ -270,31 +339,59 @@ describe("frontend-design prompt assembly", () => {
         expect(result.output).toContain("visual-html-skeleton/index.html")
         expect(result.output).toContain("This is the required pre-region visual write sequence")
         expect(result.output).toContain("Do not start from an empty app scaffold")
-        expect(result.output).toContain("After the visual skeleton baseline exists, render it through one explicit static URL or file path")
-        expect(result.output).toContain("Do not run build/render inside `frontend-design-skeleton` as the final deliverable")
+        expect(result.output).toContain(
+          "After the visual skeleton baseline exists, render it through one explicit static URL or file path",
+        )
+        expect(result.output).toContain(
+          "Do not run build/render inside `frontend-design-skeleton` as the final deliverable",
+        )
         expect(result.output).toContain("Then call `record_frontend_region_selection`")
         expect(result.output).toContain("Skeleton writes after selection must be owned by that selected region")
-        expect(result.output).not.toContain("The next target-project filesystem-changing operation should be a source vertical-slice file write")
-        expect(result.output).not.toContain("Before writing target project source, call `record_frontend_region_selection`")
+        expect(result.output).not.toContain(
+          "The next target-project filesystem-changing operation should be a source vertical-slice file write",
+        )
+        expect(result.output).not.toContain(
+          "Before writing target project source, call `record_frontend_region_selection`",
+        )
         expect(result.output).not.toContain("not `src/main.tsx`, global reset/theme CSS")
-        expect(result.output).toContain("Populate the selected HTML/CSS/assets/content slice by replacing the corresponding visual boundary")
+        expect(result.output).toContain(
+          "Populate the selected HTML/CSS/assets/content slice by replacing the corresponding visual boundary",
+        )
         expect(result.output).toContain("not by adding unrelated placeholder panels or future-region imports")
         expect(result.output).toContain("Data/content snippets are part of the selected region slice")
-        expect(result.output).toContain("do not put records from unselected footer/economy/news/calendar/FAQ/map/chart/card/list regions into the current region's data/content file")
-        expect(result.output).not.toContain("not `src/main.tsx`, global reset/theme CSS, `bash mkdir`, `index.html`, `package.json`, `tsconfig.json`, or bundler config")
+        expect(result.output).toContain(
+          "do not put records from unselected footer/economy/news/calendar/FAQ/map/chart/card/list regions into the current region's data/content file",
+        )
+        expect(result.output).not.toContain(
+          "not `src/main.tsx`, global reset/theme CSS, `bash mkdir`, `index.html`, `package.json`, `tsconfig.json`, or bundler config",
+        )
         expect(result.output).not.toContain("The write tool creates parent directories for new files")
-        expect(result.output).not.toContain("One region selection covers only that selected region's data/component/style/assets/App wiring")
+        expect(result.output).not.toContain(
+          "One region selection covers only that selected region's data/component/style/assets/App wiring",
+        )
         expect(result.output).toContain("then record the replacement result")
         expect(result.output).toContain("Restore the selected source component/row by transcribing its actual labels")
-        expect(result.output).toContain("If the selected skeleton file is already semantic, use it as source evidence first")
-        expect(result.output).toContain("preserve source IDs, ARIA/data attributes, wrapper nesting, asset resolver usage")
-        expect(result.output).toContain("Do not invent simplified SVGs, approximate values, generic styling, fake spacers, or labeled placeholder boxes")
+        expect(result.output).toContain(
+          "If the selected skeleton file is already semantic, use it as source evidence first",
+        )
+        expect(result.output).toContain(
+          "preserve source IDs, ARIA/data attributes, wrapper nesting, asset resolver usage",
+        )
+        expect(result.output).toContain(
+          "Do not invent simplified SVGs, approximate values, generic styling, fake spacers, or labeled placeholder boxes",
+        )
         expect(result.output).not.toContain("Do not run install/build/render/dev-server commands yet")
         expect(result.output).not.toContain("Package-manager commands start only after `src/App.tsx`")
-        expect(result.output).not.toContain("Treat root config files (`package.json`, `tsconfig.json`, bundler config) as late integration edits")
+        expect(result.output).not.toContain(
+          "Treat root config files (`package.json`, `tsconfig.json`, bundler config) as late integration edits",
+        )
         expect(result.output).toContain("use one explicit static URL or file path, call `webpage_render`")
-        expect(result.output).toContain("call `webpage_vision_judge` for visible theme/layout/density/control mismatches, placeholder UI, or fake spacers")
-        expect(result.output).toContain("Do not record completed for charts, maps, tables, calendars, or other complex controls that are only labeled placeholder boxes")
+        expect(result.output).toContain(
+          "call `webpage_vision_judge` for visible theme/layout/density/control mismatches, placeholder UI, or fake spacers",
+        )
+        expect(result.output).toContain(
+          "Do not record completed for charts, maps, tables, calendars, or other complex controls that are only labeled placeholder boxes",
+        )
         expect(result.output).toContain("repair the same region from source evidence")
         expect(result.output).toContain("Do not try multiple dev/preview/Python/Vite servers")
       },
@@ -307,17 +404,19 @@ describe("frontend-design prompt assembly", () => {
       directory: dir,
       fn: async () => {
         const tools = await FrontendDesignTestHooks.createFrontendImplementationTools({})
-        expect(Object.keys(tools)).toEqual(expect.arrayContaining([
-          "bash",
-          "edit",
-          "write",
-          "apply_patch",
-          "web_clone_source_audit",
-          "webpage_render",
-          "webpage_evaluate",
-          "webpage_text_diff",
-          "webpage_vision_judge",
-        ]))
+        expect(Object.keys(tools)).toEqual(
+          expect.arrayContaining([
+            "bash",
+            "edit",
+            "write",
+            "apply_patch",
+            "web_clone_source_audit",
+            "webpage_render",
+            "webpage_evaluate",
+            "webpage_text_diff",
+            "webpage_vision_judge",
+          ]),
+        )
       },
     })
   })
@@ -364,10 +463,13 @@ describe("frontend-design prompt assembly", () => {
       details: { title: "Edited source region" },
     })
 
-    const report = FrontendDesignTestHooks.appendFrontendProcessTrace({
-      summary: "summary",
-      detail: "detail",
-    }, trace)
+    const report = FrontendDesignTestHooks.appendFrontendProcessTrace(
+      {
+        summary: "summary",
+        detail: "detail",
+      },
+      trace,
+    )
 
     expect(report.detail).toContain("## Frontend Design Process Trace")
     expect(report.detail).toContain("passed: create_frontend_skeleton_project")
@@ -390,14 +492,21 @@ describe("frontend-design prompt assembly", () => {
         const persisted = JSON.parse(await fs.readFile(artifact!, "utf8"))
         expect(persisted.purpose).toBe("frontend-design-process-trace")
         expect(persisted.events[0].name).toBe("frontend_design_static_tool_surface")
-        const iterationArtifact = await FrontendDesignTestHooks.writeFrontendIterationStateArtifact("tsk_frontend_trace", trace)
+        const iterationArtifact = await FrontendDesignTestHooks.writeFrontendIterationStateArtifact(
+          "tsk_frontend_trace",
+          trace,
+        )
         expect(iterationArtifact).toContain("frontend-design-iteration-state.json")
         const iterationState = JSON.parse(await fs.readFile(iterationArtifact!, "utf8"))
         expect(iterationState.purpose).toBe("frontend-design-rawproject-iteration-state")
-        const report = FrontendDesignTestHooks.appendFrontendProcessTrace({ summary: "summary", detail: "detail" }, trace, {
-          processTraceArtifact: artifact,
-          iterationStateArtifact: iterationArtifact,
-        })
+        const report = FrontendDesignTestHooks.appendFrontendProcessTrace(
+          { summary: "summary", detail: "detail" },
+          trace,
+          {
+            processTraceArtifact: artifact,
+            iterationStateArtifact: iterationArtifact,
+          },
+        )
         expect(report.detail).toContain(`Process trace artifact: ${artifact}`)
         expect(report.detail).toContain(`Iteration state artifact: ${iterationArtifact}`)
       },
@@ -416,35 +525,63 @@ describe("frontend-design prompt assembly", () => {
       replacementKind: "card_collection_component",
       reason: "nextSourceDomReplacement points at the hero source region.",
     })
-    expect(selectionResult.output).toContain("Next skeleton edits should stay inside this selected region's HTML, CSS, assets, visible content, and representative interaction-state visuals")
-    expect(selectionResult.output).toContain("If you already read this selected region file, the next file-changing action should write or repair the visual skeleton slice")
-    expect(selectionResult.output).toContain("Additional reads before that write must be direct imports or explicitly named data/style/asset sidecars")
-    expect(selectionResult.output).toContain("not unrelated skeleton wrappers, footer/economy/FAQ/chart/list files, whole manifests, broad source data, or exhaustive `AssetPath`/`svgPaths`/`asset_*.path.txt`/CSS-token scans")
+    expect(selectionResult.output).toContain(
+      "Next skeleton edits should stay inside this selected region's HTML, CSS, assets, visible content, and representative interaction-state visuals",
+    )
+    expect(selectionResult.output).toContain(
+      "If you already read this selected region file, the next file-changing action should write or repair the visual skeleton slice",
+    )
+    expect(selectionResult.output).toContain(
+      "Additional reads before that write must be direct imports or explicitly named data/style/asset sidecars",
+    )
+    expect(selectionResult.output).toContain(
+      "not unrelated skeleton wrappers, footer/economy/FAQ/chart/list files, whole manifests, broad source data, or exhaustive `AssetPath`/`svgPaths`/`asset_*.path.txt`/CSS-token scans",
+    )
     expect(selectionResult.output).toContain("Do not pre-read every asset path or CSS token before writing")
     expect(selectionResult.output).toContain("Preserve observed asset IDs/token names and source IDs")
-    expect(selectionResult.output).toContain("The next filesystem-changing skeleton edits must belong to this selected region only")
-    expect(selectionResult.output).toContain("Do not write footer, economy table, FAQ, map, chart, card/list, combined content, or unrelated CSS")
+    expect(selectionResult.output).toContain(
+      "The next filesystem-changing skeleton edits must belong to this selected region only",
+    )
+    expect(selectionResult.output).toContain(
+      "Do not write footer, economy table, FAQ, map, chart, card/list, combined content, or unrelated CSS",
+    )
     expect(selectionResult.output).toContain("Restore the selected source component/row into HTML/CSS/assets")
     expect(selectionResult.output).toContain("faithful HTML/CSS restoration")
     expect(selectionResult.output).toContain("AssetPath` or asset resolver usage")
     expect(selectionResult.output).toContain("Do not replace asset references with guessed inline SVG paths")
     expect(selectionResult.output).toContain("Data/content snippets are region-owned during restoration")
-    expect(selectionResult.output).toContain("Do not select another region until you record this region's replacement result")
-    expect(selectionResult.output).toContain("Skeleton root wiring may include only this region and previously completed region visuals")
-    expect(selectionResult.output).toContain("Before writing files for another region, render this region through one explicit static URL or file path")
+    expect(selectionResult.output).toContain(
+      "Do not select another region until you record this region's replacement result",
+    )
+    expect(selectionResult.output).toContain(
+      "Skeleton root wiring may include only this region and previously completed region visuals",
+    )
+    expect(selectionResult.output).toContain(
+      "Before writing files for another region, render this region through one explicit static URL or file path",
+    )
     expect(selectionResult.output).toContain("feed its screenshot into webpage_evaluate")
     expect(selectionResult.output).toContain("call webpage_vision_judge")
-    FrontendDesignTestHooks.recordFrontendToolResultEvents(trace, "edit", {
-      filePath: "src/components/SourceDomPage.tsx",
-    }, {
-      title: "src/components/SourceDomPage.tsx",
-    })
-    FrontendDesignTestHooks.recordFrontendToolResultEvents(trace, "bash", {
-      command: "bun run build",
-      workdir: "frontend-design-skeleton",
-    }, {
-      title: "Command completed",
-    })
+    FrontendDesignTestHooks.recordFrontendToolResultEvents(
+      trace,
+      "edit",
+      {
+        filePath: "src/components/SourceDomPage.tsx",
+      },
+      {
+        title: "src/components/SourceDomPage.tsx",
+      },
+    )
+    FrontendDesignTestHooks.recordFrontendToolResultEvents(
+      trace,
+      "bash",
+      {
+        command: "bun run build",
+        workdir: "frontend-design-skeleton",
+      },
+      {
+        title: "Command completed",
+      },
+    )
     await (tools.record_frontend_replacement_result as any).execute({
       regionComponentName: "HeroRegion",
       replacementStatus: "completed",
@@ -474,36 +611,39 @@ describe("frontend-design prompt assembly", () => {
     const kit = createFrontendTemplateOutputTools()
     const submit = kit.tools.submit_frontend_template as any
 
-    await submit.execute({
-      design_system: "custom financial dashboard",
-      tech_stack: ["React", "mock API"],
-      final_acceptance_mode: "visual_baseline_allowed",
-      frontend_template: "frontend replica scope",
-      fillable_modules: "frontend implementation source handoff",
-      component_inventory: "component inventory",
-      component_reuse_plan: [
-        {
-          family_id: "comp-chart-panel",
-          name: "Chart panel",
-          observed_surface: "Primary chart panel",
-          source_refs: ["webpage-evidence/reference.png"],
-          implementation_strategy: "extracted_baseline_defer",
-          reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
-          mature_library_candidates: [],
-          props_states: "static baseline until replacement keeps parity",
-          replacement_boundary: "main chart DOM subtree",
-          parity_guard: "desktop reference screenshot remains within threshold",
-          custom_fallback_reason: "not applicable",
-        },
-      ],
-      material_inventory: "material inventory",
-      visual_consistency_contract: "visual consistency contract",
-      ui_data_contract: "UI data contract",
-      template_iteration_notes: ["bounded inventory and implementation review complete"],
-      completeness_review: "frontend template complete enough for handoff",
-      reference_artifacts: ["webpage-evidence/reference.png", "webpage-evidence/prd-evidence-summary.md"],
-      open_questions: [],
-    }, {})
+    await submit.execute(
+      {
+        design_system: "custom financial dashboard",
+        tech_stack: ["React", "mock API"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "frontend replica scope",
+        fillable_modules: "frontend implementation source handoff",
+        component_inventory: "component inventory",
+        component_reuse_plan: [
+          {
+            family_id: "comp-chart-panel",
+            name: "Chart panel",
+            observed_surface: "Primary chart panel",
+            source_refs: ["webpage-evidence/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
+            mature_library_candidates: [],
+            props_states: "static baseline until replacement keeps parity",
+            replacement_boundary: "main chart DOM subtree",
+            parity_guard: "desktop reference screenshot remains within threshold",
+            custom_fallback_reason: "not applicable",
+          },
+        ],
+        material_inventory: "material inventory",
+        visual_consistency_contract: "visual consistency contract",
+        ui_data_contract: "UI data contract",
+        template_iteration_notes: ["bounded inventory and implementation review complete"],
+        completeness_review: "frontend template complete enough for handoff",
+        reference_artifacts: ["webpage-evidence/reference.png", "webpage-evidence/prd-evidence-summary.md"],
+        open_questions: [],
+      },
+      {},
+    )
 
     const collector = kit.getCollector()
     expect(collector.final?.visual_consistency_contract).toBe("visual consistency contract")
@@ -547,10 +687,13 @@ describe("frontend-design prompt assembly", () => {
 
     await expect(submit.execute(payload, {})).rejects.toThrow("requires at least two")
 
-    await submit.execute({
-      ...payload,
-      template_iteration_notes: ["pass 1 inventory complete", "pass 2 implementation handoff complete"],
-    }, {})
+    await submit.execute(
+      {
+        ...payload,
+        template_iteration_notes: ["pass 1 inventory complete", "pass 2 implementation handoff complete"],
+      },
+      {},
+    )
 
     expect(kit.getCollector().final?.template_iteration_notes).toHaveLength(2)
   })
@@ -563,16 +706,22 @@ describe("frontend-design prompt assembly", () => {
   })
 
   test("text-only turns pin frontend_design to direct public report submission", () => {
-    expect(FrontendDesignTestHooks.isTextOnlyNoVisualSource({
-      request: "Build a docs landing page from this written brief.",
-    })).toBe(true)
-    expect(FrontendDesignTestHooks.isTextOnlyNoVisualSource({
-      request: "Clone https://example.com/docs",
-    })).toBe(false)
-    expect(FrontendDesignTestHooks.isTextOnlyNoVisualSource({
-      request: "Clone the attached screenshot",
-      attachments: [{ mime: "image/png", intent: "visual_reference" }],
-    })).toBe(false)
+    expect(
+      FrontendDesignTestHooks.isTextOnlyNoVisualSource({
+        request: "Build a docs landing page from this written brief.",
+      }),
+    ).toBe(true)
+    expect(
+      FrontendDesignTestHooks.isTextOnlyNoVisualSource({
+        request: "Clone https://example.com/docs",
+      }),
+    ).toBe(false)
+    expect(
+      FrontendDesignTestHooks.isTextOnlyNoVisualSource({
+        request: "Clone the attached screenshot",
+        attachments: [{ mime: "image/png", intent: "visual_reference" }],
+      }),
+    ).toBe(false)
 
     const prompt = FrontendDesignTestHooks.buildUserPrompt(
       { title: "Text page", request: "Build a docs landing page from this written brief." },
@@ -600,14 +749,16 @@ describe("frontend-design prompt assembly", () => {
           "desktop-reference 1366x768 (primary_reference, capture_viewport): Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement. mobile-review 390x844 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
         compactEvidence: [
           "## source-ir/component-tree.json",
-          "{\"components\":[{\"name\":\"ProductPage\"}]}",
+          '{"components":[{"name":"ProductPage"}]}',
           "## source-ir/content-model.json",
-          "{\"lists\":[{\"name\":\"Feature list\"}]}",
+          '{"lists":[{"name":"Feature list"}]}',
         ].join("\n"),
       } as any,
     )
 
-    expect(prompt).toContain("Host-prepared means source evidence exists; it does not mean the frontend template or visual HTML skeleton is already designed")
+    expect(prompt).toContain(
+      "Host-prepared means source evidence exists; it does not mean the frontend template or visual HTML skeleton is already designed",
+    )
     expect(prompt).toContain("Use `read_file`, `list_directory`, `find_files`, and `search_code`")
     expect(prompt).toContain("any existing frontend app constraints")
     expect(prompt).toContain("## source-ir/component-tree.json")
@@ -621,8 +772,12 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Do not output a standalone component checklist or advice-only report")
     expect(prompt).toContain("visual HTML skeleton restoration algorithm")
     expect(prompt).toContain("normal frontend-design agent flow")
-    expect(prompt).toContain("Do not install, build, render, or start a dev/preview server inside `frontend-design-skeleton` as the final deliverable")
-    expect(prompt).toContain("Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.")
+    expect(prompt).toContain(
+      "Do not install, build, render, or start a dev/preview server inside `frontend-design-skeleton` as the final deliverable",
+    )
+    expect(prompt).toContain(
+      "Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.",
+    )
     expect(prompt).toContain("source map, region map, one replacement decision per visual region")
     expect(prompt).toContain("HTML/CSS/assets/content restoration with source data/content extraction")
     expect(prompt).toContain("scoped style ownership")
@@ -635,14 +790,20 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("rawproject source nodes/regions/assets/reference screenshots")
     expect(prompt).toContain("A region replacement is complete only after source content/data extraction")
     expect(prompt).toContain("measured webpage_evaluate evidence")
-    expect(prompt).toContain("Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.")
+    expect(prompt).toContain(
+      "Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.",
+    )
     expect(prompt).toContain("Webpage/source evidence stays in task runtime paths")
     expect(prompt).toContain("Do not instruct downstream agents to move or clean `web-clone-source/`")
     expect(prompt).toContain("restore visual parity first")
     expect(prompt).toContain("mature maintained libraries only as later transcription constraints")
-    expect(prompt).toContain("Host-prepared webpage rawproject refinement uses `final_acceptance_mode=visual_baseline_allowed`")
+    expect(prompt).toContain(
+      "Host-prepared webpage rawproject refinement uses `final_acceptance_mode=visual_baseline_allowed`",
+    )
     expect(prompt).toContain("deferred regions must be reported as unfinished visual/source debt")
-    expect(prompt).not.toContain("use `visual_baseline_allowed` only when the operator explicitly accepts captured source regions")
+    expect(prompt).not.toContain(
+      "use `visual_baseline_allowed` only when the operator explicitly accepts captured source regions",
+    )
     expect(prompt).toContain("sourceDomIterationState.ts")
     expect(prompt).toContain("sourceDomReplacementPlan.ts")
     expect(prompt).toContain("sourceDomRegions.ts")
@@ -678,46 +839,75 @@ describe("frontend-design prompt assembly", () => {
         const png = new PNG({ width: 8, height: 8 })
         png.data.fill(255)
         await fs.writeFile(path.join(paths.sourcePackageAbsolute, "reference.png"), PNG.sync.write(png))
-        await fs.writeFile(path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceProjectManifest.json"), JSON.stringify({
-          sourceDomRegions: {
-            count: 1,
-            largestBytes: 24000,
-            highPriorityCount: 1,
-            replacementPlanCount: 1,
-            iterationStateModule: "src/data/sourceDomIterationState.ts",
-            semanticReplacementCount: 0,
-          },
-          visualIteration: {
-            referenceImage: "reference.png",
-            comparisonTool: "webpage_evaluate",
-            viewportMatrix: [{ name: "desktop-reference", width: 1366, height: 768, evidenceRole: "primary_reference" }],
-          },
-        }, null, 2))
-        await fs.writeFile(path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomIterationState.ts"), [
-          "export const sourceDomIterationState = " + JSON.stringify({
-            generatedRegionCount: 1,
-            semanticReplacementCount: 0,
-            remainingRegionCount: 1,
-            nextReplacement: {
-              regionComponentName: "GenericRegion",
-              regionFilePath: "src/components/source-dom/GenericRegion.tsx",
-              priority: "high",
-              replacementKind: "card_collection_component",
-              recommendedComponentName: "GenericCards",
+        await fs.writeFile(
+          path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceProjectManifest.json"),
+          JSON.stringify(
+            {
+              sourceDomRegions: {
+                count: 1,
+                largestBytes: 24000,
+                highPriorityCount: 1,
+                replacementPlanCount: 1,
+                iterationStateModule: "src/data/sourceDomIterationState.ts",
+                semanticReplacementCount: 0,
+              },
+              visualIteration: {
+                referenceImage: "reference.png",
+                comparisonTool: "webpage_evaluate",
+                viewportMatrix: [
+                  { name: "desktop-reference", width: 1366, height: 768, evidenceRole: "primary_reference" },
+                ],
+              },
             },
-          }, null, 2) + " as const",
-          "",
-        ].join("\n"))
-        await fs.writeFile(path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomReplacementPlan.ts"), [
-          "export const sourceDomReplacementPlan = " + JSON.stringify([{
-            regionComponentName: "GenericRegion",
-            regionFilePath: "src/components/source-dom/GenericRegion.tsx",
-            priority: "high",
-            replacementKind: "card_collection_component",
-            firstReplacementStep: "Extract repeated cards into target project source.",
-          }], null, 2) + " as const",
-          "",
-        ].join("\n"))
+            null,
+            2,
+          ),
+        )
+        await fs.writeFile(
+          path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomIterationState.ts"),
+          [
+            "export const sourceDomIterationState = " +
+              JSON.stringify(
+                {
+                  generatedRegionCount: 1,
+                  semanticReplacementCount: 0,
+                  remainingRegionCount: 1,
+                  nextReplacement: {
+                    regionComponentName: "GenericRegion",
+                    regionFilePath: "src/components/source-dom/GenericRegion.tsx",
+                    priority: "high",
+                    replacementKind: "card_collection_component",
+                    recommendedComponentName: "GenericCards",
+                  },
+                },
+                null,
+                2,
+              ) +
+              " as const",
+            "",
+          ].join("\n"),
+        )
+        await fs.writeFile(
+          path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomReplacementPlan.ts"),
+          [
+            "export const sourceDomReplacementPlan = " +
+              JSON.stringify(
+                [
+                  {
+                    regionComponentName: "GenericRegion",
+                    regionFilePath: "src/components/source-dom/GenericRegion.tsx",
+                    priority: "high",
+                    replacementKind: "card_collection_component",
+                    firstReplacementStep: "Extract repeated cards into target project source.",
+                  },
+                ],
+                null,
+                2,
+              ) +
+              " as const",
+            "",
+          ].join("\n"),
+        )
 
         const resolved = await FrontendDesignTestHooks.resolveHostPreparedFrontendProject(taskID)
 
@@ -740,76 +930,114 @@ describe("frontend-design prompt assembly", () => {
       await fs.mkdir(path.join(dir, "src", "components", "source-dom"), { recursive: true })
       await fs.mkdir(path.join(dir, "src", "styles"), { recursive: true })
       await fs.mkdir(path.join(dir, "public", "assets"), { recursive: true })
-      await fs.writeFile(path.join(dir, "src", "components", "source-dom", "NewsRegion.tsx"), "export function NewsRegion() { return null }\n")
+      await fs.writeFile(
+        path.join(dir, "src", "components", "source-dom", "NewsRegion.tsx"),
+        "export function NewsRegion() { return null }\n",
+      )
       await fs.writeFile(path.join(dir, "src", "styles", "source-critical.css"), ".page{}\n")
       await fs.writeFile(path.join(dir, "src", "data", "sourceData.ts"), "export const sourceLists = [] as const\n")
       await fs.writeFile(path.join(dir, "src", "data", "svgPaths.ts"), "export const svgPaths = {} as const\n")
-      await fs.writeFile(path.join(dir, "src", "data", "sourceSvgAssetGroups.ts"), "export const sourceSvgAssetGroups = {} as const\n")
-      await fs.writeFile(path.join(dir, "src", "data", "sourceFaqGroups.ts"), "export const sourceFaqGroups = {} as const\n")
-      await fs.writeFile(path.join(dir, "src", "data", "sourceDomRegions.ts"), "export const sourceDomRegions = [] as const\n")
-      await fs.writeFile(path.join(dir, "src", "data", "sourceProjectManifest.json"), JSON.stringify({
-        sourceDomRegions: {
-          count: 12,
-          largestBytes: 44123,
-          highPriorityCount: 3,
-          replacementPlanCount: 2,
-          iterationStateModule: "src/data/sourceDomIterationState.ts",
-          semanticReplacementCount: 1,
-          svgAssetGroupCount: 1,
-          faqGroupCount: 1,
-        },
-        semanticReplacements: {
-          count: 1,
-          iterationStateModule: "src/data/sourceDomIterationState.ts",
-          components: ["ExistingNewsList"],
-        },
-        visualIteration: {
-          referenceImage: "reference.png",
-          comparisonTool: "webpage_evaluate",
-          viewportMatrix: [
-            {
-              name: "desktop-reference",
-              width: 1440,
-              height: 900,
-              evidenceRole: "primary_reference",
-              comparison: "Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement.",
-            },
-          ],
-          rule: "Use desktop-reference before claiming final parity.",
-        },
-      }, null, 2))
-      await fs.writeFile(path.join(dir, "src", "data", "sourceDomIterationState.ts"), [
-        "export const sourceDomIterationState = " + JSON.stringify({
-          generatedRegionCount: 12,
-          semanticReplacementCount: 1,
-          remainingRegionCount: 11,
-          nextReplacement: {
-            regionComponentName: "NewsRegion",
-            regionFilePath: "src/components/source-dom/NewsRegion.tsx",
-            priority: "high",
-            replacementKind: "event_or_news_list_component",
-            recommendedComponentName: "NewsList",
-            firstReplacementStep: "Render NewsList from source lists and preserve density.",
-            parityGuard: "Compare against reference.png before deleting NewsRegion.",
-          },
-        }, null, 2) + " as const",
-        "",
-      ].join("\n"))
-      await fs.writeFile(path.join(dir, "src", "data", "sourceDomReplacementPlan.ts"), [
-        "export const sourceDomReplacementPlan = " + JSON.stringify([
+      await fs.writeFile(
+        path.join(dir, "src", "data", "sourceSvgAssetGroups.ts"),
+        "export const sourceSvgAssetGroups = {} as const\n",
+      )
+      await fs.writeFile(
+        path.join(dir, "src", "data", "sourceFaqGroups.ts"),
+        "export const sourceFaqGroups = {} as const\n",
+      )
+      await fs.writeFile(
+        path.join(dir, "src", "data", "sourceDomRegions.ts"),
+        "export const sourceDomRegions = [] as const\n",
+      )
+      await fs.writeFile(
+        path.join(dir, "src", "data", "sourceProjectManifest.json"),
+        JSON.stringify(
           {
-            regionComponentName: "NewsRegion",
-            regionFilePath: "src/components/source-dom/NewsRegion.tsx",
-            priority: "high",
-            replacementKind: "event_or_news_list_component",
-            dataSources: ["src/data/sourceData.ts", "sourceLists"],
-            assetSources: ["public/assets/images/"],
-            firstReplacementStep: "Render NewsList from source lists and preserve density.",
-            parityGuard: "Compare against reference.png before deleting NewsRegion.",
+            sourceDomRegions: {
+              count: 12,
+              largestBytes: 44123,
+              highPriorityCount: 3,
+              replacementPlanCount: 2,
+              iterationStateModule: "src/data/sourceDomIterationState.ts",
+              semanticReplacementCount: 1,
+              svgAssetGroupCount: 1,
+              faqGroupCount: 1,
+            },
+            semanticReplacements: {
+              count: 1,
+              iterationStateModule: "src/data/sourceDomIterationState.ts",
+              components: ["ExistingNewsList"],
+            },
+            visualIteration: {
+              referenceImage: "reference.png",
+              comparisonTool: "webpage_evaluate",
+              viewportMatrix: [
+                {
+                  name: "desktop-reference",
+                  width: 1440,
+                  height: 900,
+                  evidenceRole: "primary_reference",
+                  comparison:
+                    "Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement.",
+                },
+              ],
+              rule: "Use desktop-reference before claiming final parity.",
+            },
           },
-        ], null, 2) + " as const",
-        "",
-      ].join("\n"))
+          null,
+          2,
+        ),
+      )
+      await fs.writeFile(
+        path.join(dir, "src", "data", "sourceDomIterationState.ts"),
+        [
+          "export const sourceDomIterationState = " +
+            JSON.stringify(
+              {
+                generatedRegionCount: 12,
+                semanticReplacementCount: 1,
+                remainingRegionCount: 11,
+                nextReplacement: {
+                  regionComponentName: "NewsRegion",
+                  regionFilePath: "src/components/source-dom/NewsRegion.tsx",
+                  priority: "high",
+                  replacementKind: "event_or_news_list_component",
+                  recommendedComponentName: "NewsList",
+                  firstReplacementStep: "Render NewsList from source lists and preserve density.",
+                  parityGuard: "Compare against reference.png before deleting NewsRegion.",
+                },
+              },
+              null,
+              2,
+            ) +
+            " as const",
+          "",
+        ].join("\n"),
+      )
+      await fs.writeFile(
+        path.join(dir, "src", "data", "sourceDomReplacementPlan.ts"),
+        [
+          "export const sourceDomReplacementPlan = " +
+            JSON.stringify(
+              [
+                {
+                  regionComponentName: "NewsRegion",
+                  regionFilePath: "src/components/source-dom/NewsRegion.tsx",
+                  priority: "high",
+                  replacementKind: "event_or_news_list_component",
+                  dataSources: ["src/data/sourceData.ts", "sourceLists"],
+                  assetSources: ["public/assets/images/"],
+                  firstReplacementStep: "Render NewsList from source lists and preserve density.",
+                  parityGuard: "Compare against reference.png before deleting NewsRegion.",
+                },
+              ],
+              null,
+              2,
+            ) +
+            " as const",
+          "",
+        ].join("\n"),
+      )
 
       const summary = await FrontendDesignTestHooks.summarizeHostPreparedSourceProject(dir)
 
@@ -847,43 +1075,65 @@ describe("frontend-design prompt assembly", () => {
       const png = new PNG({ width: 12, height: 12 })
       png.data.fill(255)
       await fs.writeFile(path.join(sourcePackage, "reference.png"), PNG.sync.write(png))
-      await fs.writeFile(path.join(projectRoot, "src", "data", "sourceProjectManifest.json"), JSON.stringify({
-        sourceDomRegions: { count: 1, largestBytes: 65000, highPriorityCount: 1, replacementPlanCount: 1, iterationStateModule: "src/data/sourceDomIterationState.ts" },
-      }))
-      await fs.writeFile(path.join(projectRoot, "src", "data", "sourceDomIterationState.ts"), [
-        "export const sourceDomIterationState = " + JSON.stringify({
-          generatedRegionCount: 1,
-          semanticReplacementCount: 0,
-          remainingRegionCount: 1,
-          nextReplacement: {
-            regionComponentName: "HugeRegion",
-            regionFilePath: "src/components/source-dom/HugeRegion.tsx",
-            priority: "high",
-            replacementKind: "baseline_defer",
-            recommendedComponentName: "HugeRegion",
-            firstReplacementStep: "Keep baseline until parity is proven.",
+      await fs.writeFile(
+        path.join(projectRoot, "src", "data", "sourceProjectManifest.json"),
+        JSON.stringify({
+          sourceDomRegions: {
+            count: 1,
+            largestBytes: 65000,
+            highPriorityCount: 1,
+            replacementPlanCount: 1,
+            iterationStateModule: "src/data/sourceDomIterationState.ts",
           },
-        }) + " as const",
-        "",
-      ].join("\n"))
-      await fs.writeFile(path.join(projectRoot, "src", "data", "sourceDomReplacementPlan.ts"), [
-        "export const sourceDomReplacementPlan = " + JSON.stringify([
-          {
-            regionComponentName: "HugeRegion",
-            regionFilePath: "src/components/source-dom/HugeRegion.tsx",
-            priority: "high",
-            replacementKind: "baseline_defer",
-            firstReplacementStep: "Keep baseline until parity is proven.",
-          },
-        ]) + " as const",
-        "",
-      ].join("\n"))
-      await fs.writeFile(path.join(projectRoot, "src", "data", "sourceData.ts"), [
-        "export const sourceLists = [",
-        ...Array.from({ length: 200 }, (_, index) => `  "HUGE_INLINE_MARKER_${index}",`),
-        "] as const",
-        "",
-      ].join("\n"))
+        }),
+      )
+      await fs.writeFile(
+        path.join(projectRoot, "src", "data", "sourceDomIterationState.ts"),
+        [
+          "export const sourceDomIterationState = " +
+            JSON.stringify({
+              generatedRegionCount: 1,
+              semanticReplacementCount: 0,
+              remainingRegionCount: 1,
+              nextReplacement: {
+                regionComponentName: "HugeRegion",
+                regionFilePath: "src/components/source-dom/HugeRegion.tsx",
+                priority: "high",
+                replacementKind: "baseline_defer",
+                recommendedComponentName: "HugeRegion",
+                firstReplacementStep: "Keep baseline until parity is proven.",
+              },
+            }) +
+            " as const",
+          "",
+        ].join("\n"),
+      )
+      await fs.writeFile(
+        path.join(projectRoot, "src", "data", "sourceDomReplacementPlan.ts"),
+        [
+          "export const sourceDomReplacementPlan = " +
+            JSON.stringify([
+              {
+                regionComponentName: "HugeRegion",
+                regionFilePath: "src/components/source-dom/HugeRegion.tsx",
+                priority: "high",
+                replacementKind: "baseline_defer",
+                firstReplacementStep: "Keep baseline until parity is proven.",
+              },
+            ]) +
+            " as const",
+          "",
+        ].join("\n"),
+      )
+      await fs.writeFile(
+        path.join(projectRoot, "src", "data", "sourceData.ts"),
+        [
+          "export const sourceLists = [",
+          ...Array.from({ length: 200 }, (_, index) => `  "HUGE_INLINE_MARKER_${index}",`),
+          "] as const",
+          "",
+        ].join("\n"),
+      )
 
       const compact = await FrontendDesignTestHooks.readHostPreparedCompactEvidence({ sourcePackage, projectRoot })
 
@@ -984,7 +1234,9 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
   png.data.fill(255)
   const referenceBytes = PNG.sync.write(png)
   await fs.writeFile(path.join(sourcePackage, "reference.png"), referenceBytes)
-  await fs.writeFile(path.join(sourcePackage, "source-skeleton", "index.html"), `
+  await fs.writeFile(
+    path.join(sourcePackage, "source-skeleton", "index.html"),
+    `
     <!doctype html>
     <html>
       <body data-reference-image="../reference.png">
@@ -1003,57 +1255,103 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
         </main>
       </body>
     </html>
-  `)
-  await fs.writeFile(path.join(sourcePackage, "source-skeleton", "critical.css"), `
+  `,
+  )
+  await fs.writeFile(
+    path.join(sourcePackage, "source-skeleton", "critical.css"),
+    `
     .economic-calendar { display: grid; grid-template-columns: 180px 1fr; gap: 16px; color: #111827; }
     table { border-collapse: collapse; width: 100%; }
-  `)
-  await fs.writeFile(path.join(sourcePackage, "source-ir", "component-tree.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-component-tree",
-    components: [
-      { id: "segment-nav", name: "NavigationRegion", textPreview: ["Markets"] },
-      { id: "segment-main", name: "EconomicCalendarSection", textPreview: ["Economic calendar", "08:30", "GDP Growth Rate"] },
-    ],
-  }, null, 2))
-  await fs.writeFile(path.join(sourcePackage, "source-ir", "content-model.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-content-model",
-    tables: [{
-      nodeId: "table-1",
-      headers: ["Time", "Country", "Event", "Actual"],
-      rows: [
-        ["08:30", "US", "GDP Growth Rate", "2.1%"],
-        ["09:45", "US", "Manufacturing PMI", "51.3"],
-      ],
-    }],
-    lists: [],
-    cards: [],
-    controls: [],
-    links: [{ nodeId: "link-1", text: "Markets", href: "/markets" }],
-    media: [],
-    repeatedGroups: [{
-      parentNodeId: "tbody-1",
-      count: 2,
-      sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"],
-    }],
-    stats: {
-      totalTables: 1,
-      totalLists: 0,
-      totalCards: 0,
-      totalRepeatedGroups: 1,
-    },
-  }, null, 2))
+  `,
+  )
+  await fs.writeFile(
+    path.join(sourcePackage, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        purpose: "web-clone-component-tree",
+        components: [
+          { id: "segment-nav", name: "NavigationRegion", textPreview: ["Markets"] },
+          {
+            id: "segment-main",
+            name: "EconomicCalendarSection",
+            textPreview: ["Economic calendar", "08:30", "GDP Growth Rate"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await fs.writeFile(
+    path.join(sourcePackage, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        purpose: "web-clone-content-model",
+        tables: [
+          {
+            nodeId: "table-1",
+            headers: ["Time", "Country", "Event", "Actual"],
+            rows: [
+              ["08:30", "US", "GDP Growth Rate", "2.1%"],
+              ["09:45", "US", "Manufacturing PMI", "51.3"],
+            ],
+          },
+        ],
+        lists: [],
+        cards: [],
+        controls: [],
+        links: [{ nodeId: "link-1", text: "Markets", href: "/markets" }],
+        media: [],
+        repeatedGroups: [
+          {
+            parentNodeId: "tbody-1",
+            count: 2,
+            sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"],
+          },
+        ],
+        stats: {
+          totalTables: 1,
+          totalLists: 0,
+          totalCards: 0,
+          totalRepeatedGroups: 1,
+        },
+      },
+      null,
+      2,
+    ),
+  )
   const referenceSha256 = createHash("sha256").update(referenceBytes).digest("hex")
-  await fs.writeFile(path.join(sourcePackage, "web-clone-source-manifest.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-visible-source-package",
-    provenance: {
-      source: "webpage-evidence",
-      webpageEvidenceDir: sourcePackage,
-      reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: referenceBytes.length },
-    },
-    files: [{ path: "reference.png", sha256: referenceSha256, bytes: referenceBytes.length, source: "webpage-evidence/reference.png" }],
-  }, null, 2))
+  await fs.writeFile(
+    path.join(sourcePackage, "web-clone-source-manifest.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        purpose: "web-clone-visible-source-package",
+        provenance: {
+          source: "webpage-evidence",
+          webpageEvidenceDir: sourcePackage,
+          reference: {
+            path: "reference.png",
+            sha256: referenceSha256,
+            width: 1,
+            height: 1,
+            bytes: referenceBytes.length,
+          },
+        },
+        files: [
+          {
+            path: "reference.png",
+            sha256: referenceSha256,
+            bytes: referenceBytes.length,
+            source: "webpage-evidence/reference.png",
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
   return sourcePackage
 }

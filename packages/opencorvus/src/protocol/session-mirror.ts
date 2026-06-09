@@ -52,8 +52,9 @@ function stampMissionPayload(type: string, props: Record<string, unknown>): Reco
   if (part && typeof part === "object") {
     payload.part = {
       ...(part as Record<string, unknown>),
-      channel: type === "message.part.delta" ? channel : (part as Record<string, unknown>).channel ?? "mission",
-      resolvedRole: type === "message.part.delta" ? resolvedRole : (part as Record<string, unknown>).resolvedRole ?? "mission",
+      channel: type === "message.part.delta" ? channel : ((part as Record<string, unknown>).channel ?? "mission"),
+      resolvedRole:
+        type === "message.part.delta" ? resolvedRole : ((part as Record<string, unknown>).resolvedRole ?? "mission"),
     }
   }
   payload.channel = channel
@@ -68,11 +69,11 @@ export function enrichMissionSessionTranscript(messages: Message.WithParts[]): M
     const resolvedRole = isUser ? "user" : "mission"
     return {
       ...message,
-      info: ({
+      info: {
         ...message.info,
         channel,
         resolvedRole,
-      } as unknown) as Message.Info,
+      } as unknown as Message.Info,
       parts: message.parts.map((part) => ({
         ...part,
         channel,
@@ -122,7 +123,8 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === Message.Event.PartUpdated.type) {
-    const payload = sessionRole(sessionID) === "mission" ? stampMissionPayload("message.part.updated", props) : { ...props }
+    const payload =
+      sessionRole(sessionID) === "mission" ? stampMissionPayload("message.part.updated", props) : { ...props }
     const part = payload.part as Record<string, unknown>
     return {
       type: "message.part.updated",

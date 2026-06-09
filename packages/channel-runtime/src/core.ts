@@ -183,16 +183,18 @@ export class ChannelRuntime {
   async start(): Promise<void> {
     if (this.running) return
     if (this.startPromise) return this.startPromise
-    this.startPromise = this._doStart().catch((err) => {
-      // Roll back the running flag so a failure (createOpencode
-      // throwing, adapter rejection, etc.) doesn't block a
-      // legitimate retry. The throw still propagates to the
-      // caller so the failure is loud (CLAUDE.md §一-7).
-      this.running = false
-      throw err
-    }).finally(() => {
-      this.startPromise = undefined
-    })
+    this.startPromise = this._doStart()
+      .catch((err) => {
+        // Roll back the running flag so a failure (createOpencode
+        // throwing, adapter rejection, etc.) doesn't block a
+        // legitimate retry. The throw still propagates to the
+        // caller so the failure is loud (CLAUDE.md §一-7).
+        this.running = false
+        throw err
+      })
+      .finally(() => {
+        this.startPromise = undefined
+      })
     return this.startPromise
   }
 
@@ -607,15 +609,18 @@ export class ChannelRuntime {
       "- `task_report(status='done', summary='...', artifacts=[...])` — task fully complete",
       "- `task_report(status='failed', summary='...', error='...')` — unrecoverable error",
       "Never end a turn without calling task_report. It is the channel runtime's signal to continue or wait.",
-      ].join("\n")
+    ].join("\n")
   }
 
   private channelProtocol(platform: string): platform is ControlPlatform {
-    return process.env.OPENCORVUS_CHANNEL_PROTOCOL === "1" &&
-      controlPlatforms.includes(platform as ControlPlatform)
+    return process.env.OPENCORVUS_CHANNEL_PROTOCOL === "1" && controlPlatforms.includes(platform as ControlPlatform)
   }
 
-  private async handleChannelMessage(msg: IncomingMessage & { platform: ControlPlatform }, adapter: ChannelAdapter, text: string) {
+  private async handleChannelMessage(
+    msg: IncomingMessage & { platform: ControlPlatform },
+    adapter: ChannelAdapter,
+    text: string,
+  ) {
     const result = await this.client.channel.message({
       platform: msg.platform as ControlPlatform,
       channel: msg.channel,
@@ -926,7 +931,10 @@ export class ChannelRuntime {
               this.jobs.delete(sessionId)
               this.session.stop(sessionId)
               const next = this.session.dequeue(sessionId)
-              if (next.item) this.handleMessage(next.item.msg).catch((err) => console.error("[ChannelRuntime] dequeue handleMessage error:", err))
+              if (next.item)
+                this.handleMessage(next.item.msg).catch((err) =>
+                  console.error("[ChannelRuntime] dequeue handleMessage error:", err),
+                )
             } else {
               this.markPending(sessionId, this.taskId(sessionId))
             }
@@ -937,7 +945,10 @@ export class ChannelRuntime {
             this.jobs.delete(sessionId)
             this.session.stop(sessionId)
             const next = this.session.dequeue(sessionId)
-            if (next.item) this.handleMessage(next.item.msg).catch((err) => console.error("[ChannelRuntime] dequeue handleMessage error:", err))
+            if (next.item)
+              this.handleMessage(next.item.msg).catch((err) =>
+                console.error("[ChannelRuntime] dequeue handleMessage error:", err),
+              )
           })
         return
       }
@@ -961,7 +972,9 @@ export class ChannelRuntime {
     this.releasing.delete(sessionId)
     const next = this.session.dequeue(sessionId)
     if (!next.item) return
-    this.handleMessage(next.item.msg).catch((err) => console.error("[ChannelRuntime] dequeue handleMessage error:", err))
+    this.handleMessage(next.item.msg).catch((err) =>
+      console.error("[ChannelRuntime] dequeue handleMessage error:", err),
+    )
   }
 
   private async pendingStatus(taskId: string) {
@@ -1439,7 +1452,9 @@ export class ChannelRuntime {
           // Mirrors packages/opencorvus/src/session/tool-failure-cause.ts:renderToolFailureCause.
           // channel-runtime only depends on @opencorvus-ai/sdk (generated types,
           // no runtime exports), so we cannot import the renderer directly.
-          const failure = (part.state as { failure?: { kind?: string; name?: string; originSite?: string; message?: string } }).failure
+          const failure = (
+            part.state as { failure?: { kind?: string; name?: string; originSite?: string; message?: string } }
+          ).failure
           const err = failure?.message
             ? `${failure.kind ?? ""}/${failure.name ?? ""} at ${failure.originSite ?? "unknown"}: ${failure.message}`
             : "Unknown tool error"
@@ -1502,7 +1517,7 @@ function imageAttachment(input: ChannelAttachment) {
 }
 
 function sameEntry(left: SessionEntry, right: SessionEntry) {
-  return left.adapter.platform === right.adapter.platform &&
-    left.channel === right.channel &&
-    left.thread === right.thread
+  return (
+    left.adapter.platform === right.adapter.platform && left.channel === right.channel && left.thread === right.thread
+  )
 }

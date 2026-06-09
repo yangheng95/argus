@@ -16,18 +16,18 @@ At [api.slack.com/apps](https://api.slack.com/apps). **Socket Mode is required**
 
 Bot Token Scopes (minimal):
 
-| Scope | Purpose |
-|---|---|
-| `chat:write` | Reply |
-| `chat:write.public` | Reply in non-joined channels (optional) |
-| `files:write` | Upload screenshots/attachments |
-| `im:history` / `channels:history` | Read DMs / channels |
-| `reactions:write` | Ack emoji (optional) |
+| Scope                             | Purpose                                 |
+| --------------------------------- | --------------------------------------- |
+| `chat:write`                      | Reply                                   |
+| `chat:write.public`               | Reply in non-joined channels (optional) |
+| `files:write`                     | Upload screenshots/attachments          |
+| `im:history` / `channels:history` | Read DMs / channels                     |
+| `reactions:write`                 | Ack emoji (optional)                    |
 
 App-Level Token Scope:
 
-| Scope | Purpose |
-|---|---|
+| Scope               | Purpose               |
+| ------------------- | --------------------- |
 | `connections:write` | Socket Mode WebSocket |
 
 ### 3. Event subscriptions
@@ -53,12 +53,15 @@ export SLACK_ALLOWED_USER_IDS=U01234567,U09876543   # optional allowlist
 Pick one:
 
 **A. Via `opencorvus`**
+
 ```bash
 opencorvus slack
 ```
+
 Embedded Slack adapter; shares process with the headless orchestrator.
 
 **B. Via channel-runtime (multi-channel)**
+
 ```bash
 cd packages/channel-runtime
 bun run dev
@@ -66,11 +69,11 @@ bun run dev
 
 ## Token model
 
-| Token | Prefix | Role |
-|---|---|---|
-| Bot Token | `xoxb-` | Bot identity for API calls |
-| App Token | `xapp-` | Socket Mode WebSocket |
-| Signing Secret | none | HTTP webhook signature (unused in Socket Mode) |
+| Token          | Prefix  | Role                                           |
+| -------------- | ------- | ---------------------------------------------- |
+| Bot Token      | `xoxb-` | Bot identity for API calls                     |
+| App Token      | `xapp-` | Socket Mode WebSocket                          |
+| Signing Secret | none    | HTTP webhook signature (unused in Socket Mode) |
 
 ## Message flow
 

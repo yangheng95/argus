@@ -1,6 +1,7 @@
 # 07-panel-reactivity — Overlay 反应式架构重构
 
 > **状态（2026-05-12）**：P0 / P1 / P2 已落地；P3 清理**未完成**。
+>
 > - `agentEvents` / `computeAgentCards` / `toCardTree` / `resolveCardTree` /
 >   `combineConversation` / `AGENT_FLUSH_INTERVAL` 全部 grep 0 hits ✓
 > - `utils/conversation.ts` 与 `components/SessionTokenBadge.tsx` 已删除 ✓
@@ -39,7 +40,7 @@ Solid 细粒度反应式要求"响应式读取直达叶子节点，中间不能�
 
 2. **`computeAgentCards()` 是普通函数而非 memo** (`store/messages.ts:724`)
    —— 里面 `Object.keys(store.messagesBySession)` 追踪对象键集合、`for (const
-   event of store.agentEvents)` 全数组遍历、`boardStore.board?.*` 全字段依赖，
+event of store.agentEvents)` 全数组遍历、`boardStore.board?.*` 全字段依赖，
    任一改动全量重算。
 
 3. **`resolveCardTree` / `toCardTree` 全树重建 + shallow-copy 丢 proxy 身份**
@@ -60,12 +61,12 @@ Solid 细粒度反应式要求"响应式读取直达叶子节点，中间不能�
 ```ts
 // store/card-tree.ts
 const [cardTreeStore, setCardTreeStore] = createStore<{
-  order: string[];              // 顶层卡片 id 有序列表
-  cards: Record<string, CardNode>;  // 所有卡片（含嵌套 children / parts）
+  order: string[] // 顶层卡片 id 有序列表
+  cards: Record<string, CardNode> // 所有卡片（含嵌套 children / parts）
 }>({
   order: [],
   cards: {},
-});
+})
 ```
 
 `CardNode` 结构与旧 `utils/card-tree.ts` 定义一致（字段：`id, kind, stage,
@@ -75,17 +76,17 @@ status, parts[], children[], ...`），类型定义挪到 `store/card-tree.ts`�
 
 不经过任何"先重算再 diff"的中间层，事件直接 mutate 具体路径：
 
-| 事件 | 写入路径 |
-|---|---|
-| `message.updated` | 若新消息 → `produce` 追加到 session 卡片 parts；若存在 → 按 partID 原地更新 |
-| `message.part.updated` | `setStore("cards", sessionID, "parts", partIdx, ...)` |
-| `message.part.delta` (text/reasoning) | `setStore("cards", sid, "parts", idx, "text", t => t + delta)` |
-| `agent.updated` (原 agentEvents) | 与 message.* 合并：作为同一 session 卡片上的 live part；删除独立 agentEvents 概念 |
-| `goal.status` 变化 | `setStore("cards", "goal:"+gid, "status", ...)` |
-| `goal.step.*` | `setStore("cards", "goal:"+gid, "steps", stepIdx, ...)` |
-| `session.status` | 单一通道。按 `e.sessionID` 定位卡片，`setStore("cards", cardID, { status: e.status, terminalReason: e.terminalReason })`。`status ∈ {streaming, idle, terminal}`；session 未 materialize 时缓冲到 `pendingSessionStatus`，`ensureSessionCard` 在收到首个 `message.updated` 时 drain。所有 session（orchestrator 根 / 4 个 spec 阶段 / build / deliver / refine / prosecute / analyze_intent / modify_goal / publish_acceptance / 未来新 phase）走同一条路径，不再有 phase 专属事件。 |
-| `interaction.*` | 写入对应 session 卡片的 parts（不再走 partitionInteractions 后处理） |
-| `task.selected` / `transcript` 全量重载 | `setCardTreeStore("order",[])+("cards",{})` 后按序列写入 |
+| 事件                                    | 写入路径                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `message.updated`                       | 若新消息 → `produce` 追加到 session 卡片 parts；若存在 → 按 partID 原地更新                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `message.part.updated`                  | `setStore("cards", sessionID, "parts", partIdx, ...)`                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `message.part.delta` (text/reasoning)   | `setStore("cards", sid, "parts", idx, "text", t => t + delta)`                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `agent.updated` (原 agentEvents)        | 与 message.\* 合并：作为同一 session 卡片上的 live part；删除独立 agentEvents 概念                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `goal.status` 变化                      | `setStore("cards", "goal:"+gid, "status", ...)`                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `goal.step.*`                           | `setStore("cards", "goal:"+gid, "steps", stepIdx, ...)`                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `session.status`                        | 单一通道。按 `e.sessionID` 定位卡片，`setStore("cards", cardID, { status: e.status, terminalReason: e.terminalReason })`。`status ∈ {streaming, idle, terminal}`；session 未 materialize 时缓冲到 `pendingSessionStatus`，`ensureSessionCard` 在收到首个 `message.updated` 时 drain。所有 session（orchestrator 根 / 4 个 spec 阶段 / build / deliver / refine / prosecute / analyze_intent / modify_goal / publish_acceptance / 未来新 phase）走同一条路径，不再有 phase 专属事件。 |
+| `interaction.*`                         | 写入对应 session 卡片的 parts（不再走 partitionInteractions 后处理）                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `task.selected` / `transcript` 全量重载 | `setCardTreeStore("order",[])+("cards",{})` 后按序列写入                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 **session 终态信号源（单一真源）**
 
@@ -156,6 +157,7 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 ### 去掉的东西（全部，不留兼容层）
 
 **`store/messages.ts`**
+
 - `store.agentEvents` 字段 + 全部读写
 - `appendAgentEvent` / `setAgentEvents` / `agentEventQueue` / `agentFlushTimer` /
   `AGENT_FLUSH_INTERVAL` / `flushAgentEvents`
@@ -174,27 +176,33 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
   CardNode.parts 里，不再保留独立"消息数组"
 
 **`utils/card-tree.ts`**
+
 - `toCardTree` / `agentCardToNode` / `goalToNode` / `messageToNode`
 - （`shouldPromoteTool` / `defaultExpandedForNode` / `collectCardText` /
   `CardNode` 类型移动到 `store/card-tree.ts`，本文件删除）
 
 **`utils/conversation.ts`**
+
 - 整个文件删。逻辑（user 请求气泡、interaction 合并、main channel 过滤）搬到
   `services/tree-writer.ts`
 
 **`components/Conversation.tsx`**
+
 - `createMemo(() => mainMessages())` / `ctx()` / `cards()` / `items()` 四个中间 memo
 - `toCardTree(items())` + `reconcile` + `treeStore` effect
 - `collectAllIDs` + dup banner effect（节点 id 由构造规则保证唯一）
 
 **`components/SessionTokenBadge.tsx`**
+
 - `combineConversation + toCardTree` 全树重建改为 flat walk
   `Object.values(cardTreeStore.cards)` 找 peak
 
 **`components/Board.tsx`**
+
 - 两处 `computeAgentCards()` 直接读 `cardTreeStore.cards`（按 stage 过滤）
 
 **测试**
+
 - `test/card-tree.test.ts`、`test/reconcile-keys.test.ts`、
   `test/duplication-repro*.test.ts`、`test/delta-doubling.test.ts`、
   `test/message-store.test.ts`、`test/ctx-attachment-id.test.ts` —— 全部重写或删除。
@@ -202,20 +210,21 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 
 ## 为什么这样"零技术债"
 
-| 旧架构问题 | 新架构如何消解 |
-|---|---|
-| agentEvents 整体替换 → 所有 memo invalidate | agentEvents 概念删除 |
-| computeAgentCards 全量重建 | 不存在该函数；所有写入都是精细路径 |
-| toCardTree 每 flush 全树重建 | 不存在该函数；cardTreeStore 本身即树 |
-| reconcile 深度 diff 救补 | proxy 身份由 store 保证，不再丢 |
-| FLUSH_INTERVAL 50ms coalesce | 删除；Solid 自己的 batch() 处理单事件 |
-| AGENT_FLUSH_INTERVAL 16ms | 删除；每事件直接写 |
-| 打字机 per-key 32ms 定时器 | 删除；delta 事件直接 append 到 text 字段，Solid 流式渲染 |
-| collectAllIDs dup banner | 删除；id 规则构造即保证唯一 |
+| 旧架构问题                                  | 新架构如何消解                                           |
+| ------------------------------------------- | -------------------------------------------------------- |
+| agentEvents 整体替换 → 所有 memo invalidate | agentEvents 概念删除                                     |
+| computeAgentCards 全量重建                  | 不存在该函数；所有写入都是精细路径                       |
+| toCardTree 每 flush 全树重建                | 不存在该函数；cardTreeStore 本身即树                     |
+| reconcile 深度 diff 救补                    | proxy 身份由 store 保证，不再丢                          |
+| FLUSH_INTERVAL 50ms coalesce                | 删除；Solid 自己的 batch() 处理单事件                    |
+| AGENT_FLUSH_INTERVAL 16ms                   | 删除；每事件直接写                                       |
+| 打字机 per-key 32ms 定时器                  | 删除；delta 事件直接 append 到 text 字段，Solid 流式渲染 |
+| collectAllIDs dup banner                    | 删除；id 规则构造即保证唯一                              |
 
 ## 分阶段执行（每阶段独立 commit + 可验证）
 
 ### P0 — 事件流基线
+
 - 启动 overlay + opencorvus server
 - 通过 mock 或真实运行一个 goal-阶段任务，tee 一份 SSE 事件流 JSONL
 - 手工快照 UI（DOM serialized + cardTree dump）
@@ -224,6 +233,7 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 **验收**：事件流可重放，UI 快照可逐字段比对
 
 ### P1 — 新 store 与 writer 并行落地（双写，无开关）
+
 - 新增 `src/store/card-tree.ts`：`cardTreeStore` + `setCardTreeStore` + CardNode 类型
 - 新增 `src/services/tree-writer.ts`：SSE 事件 → cardTreeStore 精细写入（每类事件一个纯函数 handler）
 - `src/services/events.ts` 里 **同时**调用旧路径（enqueueEvent 等）和 `tree-writer.apply(event)`
@@ -233,6 +243,7 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 **验收**：双写下 UI 仍正常，assertion effect 连续运行 5 分钟无报错
 
 ### P2 — 切主路径（删除中间层消费者）
+
 - Conversation.tsx 改读 `cardTreeStore.order` + `cardTreeStore.cards[id]`
 - 删除 `toCardTree` / `reconcile` / `treeStore` / dup banner / 4 个中间 memo
 - Board.tsx 两处 `computeAgentCards()` 改读 `cardTreeStore.cards`
@@ -243,11 +254,13 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 - `section.ts` live phase 改从 cardTreeStore 推导
 
 **验收**：
+
 1. P0 基线事件流回放，UI DOM 快照逐字节一致
 2. typecheck 通过
 3. 所有旧 test 迁移或明确删除（不留 skip）
 
 ### P3 — 死代码清零
+
 - 删除 `utils/card-tree.ts`（类型已迁出）
 - 删除 `utils/conversation.ts`（整个文件）
 - `store/messages.ts` 砍到只剩 messageIndex / chat request state（若还用到）
@@ -257,6 +270,7 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 - `services/events.ts` 的 P1 双写分支删除，只留 `tree-writer.apply`
 
 **验收**：
+
 1. `grep` 确认以下符号在 `src/` 下零引用：`agentEvents`、`computeAgentCards`、
    `toCardTree`、`resolveCardTree`、`combineConversation`、`agentCardItems`、
    `mainMessages`、`userContextMessages`、`AgentCardData`、`enqueueEvent`、
@@ -266,12 +280,14 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 3. `bun test packages/overlay` 通过（新写的 tree-writer 测试 + 保留的有意义测试）
 
 ### P4 — 性能回归
+
 - P0 事件流回放 + `PerformanceObserver` 打点：每帧渲染耗时、SSE 处理耗时
 - 真实 benchmark 跑一次 `overlay-web-benchmark.ts`，观测 goal 阶段 overlay CPU
   占用 / 帧率（Performance tab）
 - 若仍有 >16ms 帧，**回到 tree-writer 定位单事件写入开销**（不得加 batch 掩盖）
 
 **验收**：
+
 1. 回放期间无 >16ms 帧
 2. 真实 benchmark goal 阶段肉眼流畅
 3. 产出 `memory/feedback_overlay_reactivity_fix.md` 记录最终方案 + 性能数据
@@ -288,13 +304,13 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 
 ## 风险清单
 
-| 风险 | 缓解 |
-|---|---|
-| CardNode shape 里有些字段（contextTokens）依赖跨消息聚合 | 新 store 节点上用 getter 或 derived field，读取时从 parts 聚合 |
-| Interaction 归属逻辑复杂（orphan vs 已知 session） | tree-writer 里依据 sessionID 直接路由；未知 session → 作为 `interaction-card:<messageID>` 留在顶层 order 的 orphan 通道 |
-| chat.ts 的 pending 气泡同步写（optimistic update） | 写入专属 `pending:<requestID>` 卡；真实 session 到达时按 requestID 关联替换 |
-| 测试套件大幅重写 | 测试是为架构服务，不是相反 —— 按新架构重写基线测试 |
-| board.ts 里 interactionMapping 被多个面板消费 | Board.tsx 改成直接读 board.interactions + cardTreeStore（无中间层） |
+| 风险                                                     | 缓解                                                                                                                    |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| CardNode shape 里有些字段（contextTokens）依赖跨消息聚合 | 新 store 节点上用 getter 或 derived field，读取时从 parts 聚合                                                          |
+| Interaction 归属逻辑复杂（orphan vs 已知 session）       | tree-writer 里依据 sessionID 直接路由；未知 session → 作为 `interaction-card:<messageID>` 留在顶层 order 的 orphan 通道 |
+| chat.ts 的 pending 气泡同步写（optimistic update）       | 写入专属 `pending:<requestID>` 卡；真实 session 到达时按 requestID 关联替换                                             |
+| 测试套件大幅重写                                         | 测试是为架构服务，不是相反 —— 按新架构重写基线测试                                                                      |
+| board.ts 里 interactionMapping 被多个面板消费            | Board.tsx 改成直接读 board.interactions + cardTreeStore（无中间层）                                                     |
 
 ## 相关文档
 

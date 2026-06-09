@@ -3,7 +3,8 @@ import { normalizeBrowserPreviewUrl } from "./target"
 import { isLoopbackBrowserPreviewUrl, waitForBrowserPreviewUrlReachable } from "./liveness"
 import { Log } from "@/util/log"
 
-const LOCAL_URL_TOKEN = /(?:^|[\s(<])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/[^\s<>"'`]*)?)/gi
+const LOCAL_URL_TOKEN =
+  /(?:^|[\s(<])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/[^\s<>"'`]*)?)/gi
 const ANSI_ESCAPE = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g
 const MAX_PREVIEW_OUTPUT_SCAN_CHARS = 65_536
 const MAX_EXTRACTED_PREVIEW_URLS = 16
@@ -41,18 +42,22 @@ export function persistBrowserPreviewTargetFromProcessOutput(input: {
   const urls = extractBrowserPreviewUrlsFromText(input.output)
   if (urls.length === 0) return Promise.resolve([])
   const probe = input.probe ?? waitForBrowserPreviewUrlReachable
-  return Promise.all(urls.map(async (url) => {
-    try {
-      if (!(await probe(url))) {
-        log.warn("skipped unreachable browser preview target from process output", { taskID, url })
+  return Promise.all(
+    urls.map(async (url) => {
+      try {
+        if (!(await probe(url))) {
+          log.warn("skipped unreachable browser preview target from process output", { taskID, url })
+          return undefined
+        }
+        return persistBrowserPreviewTarget({ taskID, url })
+      } catch (error) {
+        log.warn("failed to persist browser preview target from process output", { taskID, url, error })
         return undefined
       }
-      return persistBrowserPreviewTarget({ taskID, url })
-    } catch (error) {
-      log.warn("failed to persist browser preview target from process output", { taskID, url, error })
-      return undefined
-    }
-  })).then((targets): PersistedBrowserPreviewTarget[] => targets.filter((target): target is PersistedBrowserPreviewTarget => Boolean(target)))
+    }),
+  ).then((targets): PersistedBrowserPreviewTarget[] =>
+    targets.filter((target): target is PersistedBrowserPreviewTarget => Boolean(target)),
+  )
 }
 
 function trimUrlToken(token: string): string {

@@ -30,11 +30,11 @@ const summary = generateSummary("很长的内容...")
 
 ```typescript
 interface QuickNote {
-  note_id: string      // UUID 格式：nte_xxxxx
-  content: string      // 笔记内容（最多 2000 字符）
-  summary: string      // 自动生成的摘要（最多 100 字符）
-  tags: string[]       // 标签数组
-  status: "draft" | "published" | "archived"  // 笔记状态
+  note_id: string // UUID 格式：nte_xxxxx
+  content: string // 笔记内容（最多 2000 字符）
+  summary: string // 自动生成的摘要（最多 100 字符）
+  tags: string[] // 标签数组
+  status: "draft" | "published" | "archived" // 笔记状态
 }
 ```
 

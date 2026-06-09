@@ -130,7 +130,9 @@ export function findAcceptanceSpecialistReviews(
   return findAcceptanceSpecialistReviewsByTask(input)
 }
 
-export function findAcceptanceSpecialistReviewsByAcceptance(input: { acceptanceID: string }): AcceptanceSpecialistReview[] {
+export function findAcceptanceSpecialistReviewsByAcceptance(input: {
+  acceptanceID: string
+}): AcceptanceSpecialistReview[] {
   const rows = Database.use((db) =>
     db
       .select()
@@ -153,7 +155,10 @@ export function findAcceptanceSpecialistReviewsByTask(input: { taskID: string })
       .select()
       .from(EngineArtifactTable)
       .where(
-        and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, "acceptance_specialist_review")),
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, "acceptance_specialist_review"),
+        ),
       )
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),

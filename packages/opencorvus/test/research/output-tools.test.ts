@@ -61,11 +61,11 @@ async function registerMinimalBrief(kit = createResearchOutputTools()) {
   await callTool(tools, "register_research_bundle_section", {
     title: "Evidence Index",
     evidence_ids: ["ev_1"],
-    points: ["Quoted label: \"Economy overview\"."],
+    points: ['Quoted label: "Economy overview".'],
   })
   await callTool(tools, "register_research_evidence_note", {
     evidence_id: "ev_1",
-    observations: ["The source says \"GDP growth\"."],
+    observations: ['The source says "GDP growth".'],
     artifact_refs: ["source-ir/content-model.json"],
   })
   await callTool(tools, "register_research_citation", {
@@ -182,8 +182,8 @@ describe("research output tools", () => {
     const materialized = researchBundleFromDraft(draft)
 
     expect(materialized.full_markdown).toContain("## Evidence Index")
-    expect(materialized.full_markdown).toContain("\"Economy overview\"")
-    expect(JSON.parse(materialized.evidence_json).evidence_notes[0].observations[0]).toContain("\"GDP growth\"")
+    expect(materialized.full_markdown).toContain('"Economy overview"')
+    expect(JSON.parse(materialized.evidence_json).evidence_notes[0].observations[0]).toContain('"GDP growth"')
     expect(JSON.parse(materialized.citation_map_json).citations[0].claim_id).toBe("fact_1")
     expect(materializeResearchBundle(draft.bundle)).toEqual(materialized)
   })

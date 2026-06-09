@@ -28,9 +28,7 @@ import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { PartTable } from "@/session/session.sql"
-import {
-  updateGoalRun,
-} from "./persist"
+import { updateGoalRun } from "./persist"
 import {
   findGoal,
   findRun,
@@ -125,10 +123,7 @@ export function createRun(input: CreateRunInput): RunRow {
       // Phase-6-f-3: task.active_run_id deleted — new runs are the active
       // one by virtue of being the latest artifact. Keep a time_updated
       // bump so task listings sort newer.
-      db.update(EngineTaskTable)
-        .set({ time_updated: now })
-        .where(eq(EngineTaskTable.id, input.taskID))
-        .run()
+      db.update(EngineTaskTable).set({ time_updated: now }).where(eq(EngineTaskTable.id, input.taskID)).run()
     }
     Database.effect(() =>
       EngineProtocol.emit(
@@ -205,10 +200,7 @@ async function finalizeInterruptedQueueTasks(queueTaskIDs: Array<string | undefi
         time_completed: now,
         time_updated: now,
       })
-      .where(and(
-        inArray(TaskQueueTable.id, ids),
-        inArray(TaskQueueTable.status, ["queued", "retrying", "running"]),
-      ))
+      .where(and(inArray(TaskQueueTable.id, ids), inArray(TaskQueueTable.status, ["queued", "retrying", "running"])))
       .run(),
   )
 }
@@ -224,7 +216,10 @@ export async function abortGoalRuns(rows: GoalRunRow[], options: AbortOptions): 
     })
     if (updated) aborted += 1
   }
-  await finalizeInterruptedQueueTasks(rows.map((row) => goalRunQueueTaskID(row)), options.reason)
+  await finalizeInterruptedQueueTasks(
+    rows.map((row) => goalRunQueueTaskID(row)),
+    options.reason,
+  )
   return aborted
 }
 
@@ -232,14 +227,13 @@ export async function abortGoalRuns(rows: GoalRunRow[], options: AbortOptions): 
 export async function abortRuns(rows: RunRow[], reason: string): Promise<number> {
   let aborted = 0
   for (const row of rows) {
-    await updateRun(
-      row,
-      { status: "aborted", error: reason, blocking_reason: null },
-      reason,
-    )
+    await updateRun(row, { status: "aborted", error: reason, blocking_reason: null }, reason)
     aborted += 1
   }
-  await finalizeInterruptedQueueTasks(rows.map((row) => row.executor_ref?.queue_task_id), reason)
+  await finalizeInterruptedQueueTasks(
+    rows.map((row) => row.executor_ref?.queue_task_id),
+    reason,
+  )
   return aborted
 }
 
@@ -367,11 +361,13 @@ function listActiveTasksForProject(projectID: string): TaskRow[] {
     db
       .select()
       .from(EngineTaskTable)
-      .where(and(
-        eq(EngineTaskTable.project_id, projectID),
-        isNotNull(EngineTaskTable.time_started),
-        isNull(EngineTaskTable.time_completed),
-      ))
+      .where(
+        and(
+          eq(EngineTaskTable.project_id, projectID),
+          isNotNull(EngineTaskTable.time_started),
+          isNull(EngineTaskTable.time_completed),
+        ),
+      )
       .all(),
   )
 }
@@ -400,10 +396,14 @@ export async function abortActiveTasksForProject(input: {
         sessions += 1
       }
     }
-    await updateTask(task, {
-      status: "failed",
-      error: input.reason,
-    }, input.reason)
+    await updateTask(
+      task,
+      {
+        status: "failed",
+        error: input.reason,
+      },
+      input.reason,
+    )
     tasks += 1
   }
   return { tasks, sessions, toolParts }
@@ -492,18 +492,14 @@ export async function abortLiveExecutionForTask(input: {
   includeGoalRuns?: boolean
   includeRuns?: boolean
 }): Promise<AbortLiveResult> {
-  const goalRunRows = input.includeGoalRuns === false
-    ? []
-    : listGoalRunsForTask(input.taskID).filter((row) =>
-        GOAL_RUN_RESETTABLE_STATUSES.includes(row.status),
-      )
-  const runRows = input.includeRuns === false
-    ? []
-    : findRuns(input.taskID).filter((row) => LIVE_RUN_STATUSES.includes(row.status))
+  const goalRunRows =
+    input.includeGoalRuns === false
+      ? []
+      : listGoalRunsForTask(input.taskID).filter((row) => GOAL_RUN_RESETTABLE_STATUSES.includes(row.status))
+  const runRows =
+    input.includeRuns === false ? [] : findRuns(input.taskID).filter((row) => LIVE_RUN_STATUSES.includes(row.status))
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
-  const cleanupGoals = input.cleanupGoalWorkspaces === true
-    ? listGoals(input.taskID).map((goal) => goal.id)
-    : []
+  const cleanupGoals = input.cleanupGoalWorkspaces === true ? listGoals(input.taskID).map((goal) => goal.id) : []
   await cleanupGoalWorkspaces(cleanupGoals)
   const runs = await abortRuns(runRows, input.reason)
   return { goalRuns, runs }
@@ -524,12 +520,12 @@ export async function abortLiveExecutionForProject(input: {
   reason: string
   cleanupGoalWorkspaces?: boolean
 }): Promise<AbortLiveResult> {
-  const goalRunRows = listLiveGoalRunsForProject(input.projectID)
-    .filter((goalRun) => goalRun.status !== "queued")
+  const goalRunRows = listLiveGoalRunsForProject(input.projectID).filter((goalRun) => goalRun.status !== "queued")
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
-  const cleanupGoals = input.cleanupGoalWorkspaces === true
-    ? listGoalWorkspacesForProject(input.projectID).map((entry) => entry.goal.id)
-    : []
+  const cleanupGoals =
+    input.cleanupGoalWorkspaces === true
+      ? listGoalWorkspacesForProject(input.projectID).map((entry) => entry.goal.id)
+      : []
   await cleanupGoalWorkspaces(cleanupGoals)
   return { goalRuns, runs: 0 }
 }

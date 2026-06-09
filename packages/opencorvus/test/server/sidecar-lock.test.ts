@@ -20,7 +20,9 @@ describe("SidecarLock", () => {
   afterEach(() => {
     if (prevHome === undefined) delete process.env.OPENCORVUS_HOME
     else process.env.OPENCORVUS_HOME = prevHome
-    try { fs.rmSync(tempHome, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(tempHome, { recursive: true, force: true })
+    } catch {}
   })
 
   test("detectExisting returns null when no lock file exists", () => {
@@ -92,11 +94,7 @@ describe("SidecarLock", () => {
     }
     const handle = SidecarLock.acquire(info)
     // Simulate ownership change.
-    fs.writeFileSync(
-      handle.file,
-      JSON.stringify({ ...info, pid: process.pid + 1 }),
-      "utf8",
-    )
+    fs.writeFileSync(handle.file, JSON.stringify({ ...info, pid: process.pid + 1 }), "utf8")
     handle.release()
     expect(fs.existsSync(handle.file)).toBe(true)
   })
@@ -228,7 +226,9 @@ describe("SidecarLock", () => {
     // via the malformed-shape branch above.
     expect(fs.existsSync(handle.file)).toBe(true)
     // Cleanup
-    try { fs.unlinkSync(handle.file) } catch {}
+    try {
+      fs.unlinkSync(handle.file)
+    } catch {}
   })
 
   // ── audit-2026-04-29 W2-V8: workspace fingerprint collisions ────

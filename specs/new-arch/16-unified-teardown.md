@@ -91,20 +91,20 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
 
 ## 2. 对照表
 
-| 现状                                                                                                  | 目标                                                                                         | 删除动作                                             |
-| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| 5 张状态表 + ~74 处 `.status === "X"`                                                                 | session + artifact 两张已有表                                                                | 全删                                                 |
-| `recovery.ts` / `recoverOrphanRuns` / `abortRuns`                                                     | 不存在；进程启动只清 OS 级孤儿（worktree 目录、僵尸子进程）                                  | 删整个文件                                           |
-| `AgentRuntime.run()`（stage 专用运行时）                                                              | `SessionPrompt.prompt()` 统一运行时                                                          | 删 `packages/opencorvus/src/agent/runtime/` 整个目录 |
-| `Orchestrator` 基于 trigger 枚举 switch 重入                                                          | Orchestrator = 长跑 SessionLoop；外部"事件"变成给 orchestrator session 发一条 user/tool 消息 | 删 `OrchestratorTrigger` 枚举 + 对应 switch          |
-| 每个 stage agent 的 `finalize_*` 私有工具                                                             | SessionLoop 标配 `StructuredOutput` tool                                                     | 删 `finalize_*`                                      |
-| stage agent 可能继续长独立入口 / 临时 runtime                                                         | orchestrator 是唯一入口 agent；其余 agent 只通过 tool 打开 child session                     | 删独立入口 / 禁新增第二套 agent 基建                 |
-| `engine/queue.ts` / `engine/runtime.ts` / `orchestrator/tools.ts` 直接依赖 `active_run_id`            | queue / runtime / tool gate 全部从 session + artifact / in-flight tool context 推导          | 先拆 gate，再删 `active_run_id`                      |
-| GoalPool 跨进程 dispatch + 持久登记                                                                   | `build(goal, cwd)` = 一个 tool，内部 await 子 session；多 goal 并行 = parallel tool call     | 删 GoalPool 的 dispatch 调度 + 相关表                |
-| `task.active_run_id / active_plan_version_id / workflow_state`                                        | 不存在；orchestrator 读 session + artifact 自知                                              | 删列                                                 |
+| 现状                                                                                                    | 目标                                                                                         | 删除动作                                             |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| 5 张状态表 + ~74 处 `.status === "X"`                                                                   | session + artifact 两张已有表                                                                | 全删                                                 |
+| `recovery.ts` / `recoverOrphanRuns` / `abortRuns`                                                       | 不存在；进程启动只清 OS 级孤儿（worktree 目录、僵尸子进程）                                  | 删整个文件                                           |
+| `AgentRuntime.run()`（stage 专用运行时）                                                                | `SessionPrompt.prompt()` 统一运行时                                                          | 删 `packages/opencorvus/src/agent/runtime/` 整个目录 |
+| `Orchestrator` 基于 trigger 枚举 switch 重入                                                            | Orchestrator = 长跑 SessionLoop；外部"事件"变成给 orchestrator session 发一条 user/tool 消息 | 删 `OrchestratorTrigger` 枚举 + 对应 switch          |
+| 每个 stage agent 的 `finalize_*` 私有工具                                                               | SessionLoop 标配 `StructuredOutput` tool                                                     | 删 `finalize_*`                                      |
+| stage agent 可能继续长独立入口 / 临时 runtime                                                           | orchestrator 是唯一入口 agent；其余 agent 只通过 tool 打开 child session                     | 删独立入口 / 禁新增第二套 agent 基建                 |
+| `engine/queue.ts` / `engine/runtime.ts` / `orchestrator/tools.ts` 直接依赖 `active_run_id`              | queue / runtime / tool gate 全部从 session + artifact / in-flight tool context 推导          | 先拆 gate，再删 `active_run_id`                      |
+| GoalPool 跨进程 dispatch + 持久登记                                                                     | `build(goal, cwd)` = 一个 tool，内部 await 子 session；多 goal 并行 = parallel tool call     | 删 GoalPool 的 dispatch 调度 + 相关表                |
+| `task.active_run_id / active_plan_version_id / workflow_state`                                          | 不存在；orchestrator 读 session + artifact 自知                                              | 删列                                                 |
 | `workbench/board.ts` / overlay / verification 直读 `engine_run / engine_acceptance / engine_evaluation` | 单一 projection 入口，从 session + artifact 现算 UI/API 视图                                 | 先换读路径，再删表                                   |
-| DB 行上反查 worktree / executor 存活性                                                                | worktree ownership marker + child-process registry                                           | 先建 registry，再切纯 OS 清理                        |
-| "batch_complete re-trigger" 这种伪事件                                                                | build tool 返回后 orchestrator 继续下一步，不需要"再被触发一次"                              | 删                                                   |
+| DB 行上反查 worktree / executor 存活性                                                                  | worktree ownership marker + child-process registry                                           | 先建 registry，再切纯 OS 清理                        |
+| "batch_complete re-trigger" 这种伪事件                                                                  | build tool 返回后 orchestrator 继续下一步，不需要"再被触发一次"                              | 删                                                   |
 
 ---
 

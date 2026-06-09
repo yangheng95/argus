@@ -28,27 +28,48 @@ describe("live webpage evidence pipeline", () => {
 
     const evidenceDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).webpageEvidenceAbsolute
     expect(result.status).toBe("generated")
-    expect(calls).toEqual(["extract:https://example.com/markets", "compile", "analyze", "captureRuntimeState:https://example.com/markets"])
+    expect(calls).toEqual([
+      "extract:https://example.com/markets",
+      "compile",
+      "analyze",
+      "captureRuntimeState:https://example.com/markets",
+    ])
     expect(await hasCompletePrimaryEvidence(evidenceDir, "https://example.com/markets")).toBe(true)
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/index.html"))
     expect(result.artifacts).not.toContain(path.posix.join(paths.webpageEvidenceRelative, "singlefile.html"))
-    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/used-selectors.json"))
-    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/skeleton-manifest.json"))
+    expect(result.artifacts).toContain(
+      path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/used-selectors.json"),
+    )
+    expect(result.artifacts).toContain(
+      path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/skeleton-manifest.json"),
+    )
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-ir/component-tree.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-ir/style-profile.json"))
-    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-ir/interaction-state-snapshots.json"))
-    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "interaction-states/scroll-50.png"))
+    expect(result.artifacts).toContain(
+      path.posix.join(paths.webpageEvidenceRelative, "source-ir/interaction-state-snapshots.json"),
+    )
+    expect(result.artifacts).toContain(
+      path.posix.join(paths.webpageEvidenceRelative, "interaction-states/scroll-50.png"),
+    )
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "visual-surface-candidates.json"))
-    expect(result.artifacts).not.toContain(path.posix.join(paths.webpageEvidenceRelative, "visual-surface-scaffold.json"))
+    expect(result.artifacts).not.toContain(
+      path.posix.join(paths.webpageEvidenceRelative, "visual-surface-scaffold.json"),
+    )
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "README.md"))
     expect(result.artifacts).not.toContain(path.posix.join(paths.sourcePackageRelative, "singlefile.html"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "implementation-blueprint.md"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "source-skeleton/critical.css"))
-    expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "source-ir/interaction-state-snapshots.json"))
+    expect(result.artifacts).toContain(
+      path.posix.join(paths.sourcePackageRelative, "source-ir/interaction-state-snapshots.json"),
+    )
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "interaction-states/scroll-50.png"))
-    expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "source-skeleton/used-selectors.json"))
-    expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "source-skeleton/skeleton-manifest.json"))
+    expect(result.artifacts).toContain(
+      path.posix.join(paths.sourcePackageRelative, "source-skeleton/used-selectors.json"),
+    )
+    expect(result.artifacts).toContain(
+      path.posix.join(paths.sourcePackageRelative, "source-skeleton/skeleton-manifest.json"),
+    )
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "visual-surface-candidates.json"))
     expect(result.artifacts).not.toContain(path.posix.join(paths.sourcePackageRelative, "visual-surface-scaffold.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "assets/manifest.json"))
@@ -57,7 +78,9 @@ describe("live webpage evidence pipeline", () => {
     expect(await fileExists(path.join(paths.sourcePackageAbsolute, "implementation-blueprint.md"))).toBe(true)
     expect(await fileExists(path.join(paths.sourcePackageAbsolute, "singlefile.html"))).toBe(false)
     expect(await fileExists(path.join(paths.sourcePackageAbsolute, "visual-surface-scaffold.json"))).toBe(false)
-    expect(await fileExists(path.join(paths.sourcePackageAbsolute, "source-ir", "interaction-state-snapshots.json"))).toBe(true)
+    expect(
+      await fileExists(path.join(paths.sourcePackageAbsolute, "source-ir", "interaction-state-snapshots.json")),
+    ).toBe(true)
   })
 
   test("reuses complete webpage evidence for the same URL", async () => {
@@ -109,7 +132,12 @@ describe("live webpage evidence pipeline", () => {
 
     const secondPaths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, "tsk_webpage_evidence_second")
     expect(result.status).toBe("generated")
-    expect(secondCalls).toEqual(["extract:https://example.com/second", "compile", "analyze", "captureRuntimeState:https://example.com/second"])
+    expect(secondCalls).toEqual([
+      "extract:https://example.com/second",
+      "compile",
+      "analyze",
+      "captureRuntimeState:https://example.com/second",
+    ])
     expect(await fileExists(path.join(tmp.path, "webpage-evidence", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(tmp.path, "web-clone-source", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(secondPaths.webpageEvidenceAbsolute, "reference.png"))).toBe(true)
@@ -131,21 +159,23 @@ describe("live webpage evidence pipeline", () => {
   test("rejects a pipeline run that does not produce the source skeleton and IR", async () => {
     await using tmp = await tmpdir()
 
-    await expect(ensureLiveWebpageEvidence({
-      projectDir: tmp.path,
-      worktreeDir: tmp.path,
-      taskID: "tsk_webpage_evidence_incomplete",
-      urls: ["https://example.com/markets"],
-      pipeline: {
-        extract: async ({ outputDir, url }) => {
-          await fs.mkdir(outputDir, { recursive: true })
-          await fs.writeFile(path.join(outputDir, "extracted-page.json"), JSON.stringify({ url }), "utf8")
+    await expect(
+      ensureLiveWebpageEvidence({
+        projectDir: tmp.path,
+        worktreeDir: tmp.path,
+        taskID: "tsk_webpage_evidence_incomplete",
+        urls: ["https://example.com/markets"],
+        pipeline: {
+          extract: async ({ outputDir, url }) => {
+            await fs.mkdir(outputDir, { recursive: true })
+            await fs.writeFile(path.join(outputDir, "extracted-page.json"), JSON.stringify({ url }), "utf8")
+          },
+          compile: async () => {},
+          analyze: async () => {},
+          captureRuntimeState: async () => {},
         },
-        compile: async () => {},
-        analyze: async () => {},
-        captureRuntimeState: async () => {},
-      },
-    })).rejects.toThrow("did not produce the complete primary webpage evidence artifact set")
+      }),
+    ).rejects.toThrow("did not produce the complete primary webpage evidence artifact set")
   })
 })
 
@@ -197,7 +227,8 @@ async function writeCompleteEvidence(evidenceDir: string, url: string): Promise<
     const content =
       relative === "extracted-page.json"
         ? JSON.stringify({ url })
-        : relative === "source-skeleton/source-skeleton-audit.json" || relative === "source-ir/source-quality-audit.json"
+        : relative === "source-skeleton/source-skeleton-audit.json" ||
+            relative === "source-ir/source-quality-audit.json"
           ? JSON.stringify({ passed: true })
           : relative.endsWith(".json")
             ? JSON.stringify({ version: 1 })
@@ -212,35 +243,34 @@ async function writeRuntimeStateEvidence(evidenceDir: string, url: string): Prom
   for (const name of ["initial.png", "scroll-25.png", "scroll-50.png", "scroll-75.png"]) {
     await fs.writeFile(path.join(evidenceDir, "interaction-states", name), minimalPngBytes())
   }
-  await fs.writeFile(path.join(evidenceDir, "source-ir", "interaction-state-snapshots.json"), JSON.stringify({
-    version: 1,
-    purpose: "webpage-runtime-interaction-state-evidence",
-    source: { url, viewport: { width: 1440, height: 900 }, captureEngine: "playwright" },
-    artifacts: { screenshotsDir: "interaction-states" },
-    snapshots: [
-      { id: "initial", scrollY: 0, navigationClusters: [] },
-      { id: "scroll-50", scrollY: 600, navigationClusters: [] },
-    ],
-    observations: [
-      {
-        kind: "persistent-viewport-position",
-        description: "Element text and viewport Y remain stable while document scroll position changes.",
-        elementKey: "tab:overview countries ideas",
-      },
-    ],
-  }), "utf8")
+  await fs.writeFile(
+    path.join(evidenceDir, "source-ir", "interaction-state-snapshots.json"),
+    JSON.stringify({
+      version: 1,
+      purpose: "webpage-runtime-interaction-state-evidence",
+      source: { url, viewport: { width: 1440, height: 900 }, captureEngine: "playwright" },
+      artifacts: { screenshotsDir: "interaction-states" },
+      snapshots: [
+        { id: "initial", scrollY: 0, navigationClusters: [] },
+        { id: "scroll-50", scrollY: 600, navigationClusters: [] },
+      ],
+      observations: [
+        {
+          kind: "persistent-viewport-position",
+          description: "Element text and viewport Y remain stable while document scroll position changes.",
+          elementKey: "tab:overview countries ideas",
+        },
+      ],
+    }),
+    "utf8",
+  )
 }
 
 function minimalPngBytes(): Uint8Array {
   return Uint8Array.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-    0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49,
+    0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00,
+    0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
   ])
 }

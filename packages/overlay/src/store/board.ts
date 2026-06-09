@@ -2,14 +2,14 @@
 // Solid reactive store for board + task list data.
 // Replaces direct reads of state.board / state.tasks.
 
-import { createStore } from "solid-js/store";
-import { batch } from "solid-js";
-import { apiJson, apiRequest } from "../services/api";
-import { t } from "../utils/i18n";
+import { createStore } from "solid-js/store"
+import { batch } from "solid-js"
+import { apiJson, apiRequest } from "../services/api"
+import { t } from "../utils/i18n"
 
 // ── Store ──
 
-export type BoardSource = { kind: "task" | "session"; id: string };
+export type BoardSource = { kind: "task" | "session"; id: string }
 
 export const [boardStore, setBoardStore] = createStore({
   board: null as any,
@@ -26,12 +26,12 @@ export const [boardStore, setBoardStore] = createStore({
    *  (applyDirectory + loadBoard + syncTask + startSSE). Drives the top-of-
    *  pane progress bar so cross-project task switches feel non-blocking. */
   taskSwitching: false,
- // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
+  // ── Task list internals (mirrors state.pendingTasks / state.tasksSeq) ──
   /** Tasks that have been created locally but not yet confirmed by the server */
   pendingTasks: [] as any[],
   /** Monotonic counter incremented on each tasks-list refresh */
   tasksSeq: 0,
- // ── Board sync internals (mirrors state.boardEtag / state.boardQueued / etc.) ──
+  // ── Board sync internals (mirrors state.boardEtag / state.boardQueued / etc.) ──
   /** ETag of the last board response, used for conditional fetches */
   boardEtag: "" as string,
   /** Whether a board reload is currently queued (debounce guard) */
@@ -44,15 +44,15 @@ export const [boardStore, setBoardStore] = createStore({
   boardUpdatedAt: 0,
   /** Snapshot version string returned by the server with the board payload */
   snapshotVersion: "" as string,
- // ── VCS state (mirrors state.path / state.vcs) ──
+  // ── VCS state (mirrors state.path / state.vcs) ──
   /** Git path info object for the active working directory */
   path: null as any,
   /** Git / VCS status object for the active task */
   vcs: null as any,
- // ── File changes (mirrors state.changes) ──
+  // ── File changes (mirrors state.changes) ──
   /** File change entries for the current task's working tree */
   changes: [] as any[],
- // ── Streaming previews ──
+  // ── Streaming previews ──
   /** Streaming preview text for the plan section */
   planPreview: "" as string,
   /** Streaming preview text for the spec section */
@@ -68,62 +68,56 @@ export const [boardStore, setBoardStore] = createStore({
    *  (empty-hint copy). Stays true for the lifetime of the overlay
    *  unless tasksError is set. */
   tasksLoaded: false as boolean,
-});
+})
 
 // ── Loaders ──
 
 export interface LoadBoardOptions {
-  sync?: boolean;
+  sync?: boolean
 }
 
 // Module-level runtime state (replaces .state proxy fields).
-let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null;
-let _boardLoading: Promise<void> | null = null;
-let _boardQueued = false;
-let _tasksLoading: Promise<void> | null = null;
+let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null
+let _boardLoading: Promise<void> | null = null
+let _boardQueued = false
+let _tasksLoading: Promise<void> | null = null
 
 // Invariant handler: fires when the current task source no longer refers
 // to any task in the merged (tasks + pendingTasks) list. Registered by
 // services/task.ts so that board.ts doesn't need to import selectTask (which
 // would create a cycle). If not registered, the invariant silently degrades —
 // that's a setup bug the app owner is expected to catch in init.
-let _orphanedSelectionHandler: (() => void) | null = null;
+let _orphanedSelectionHandler: (() => void) | null = null
 // Board-derived overlays (goal step cards, interaction cards, request bubble)
 // are projected by services/tree-writer.ts. Register a callback here so the
 // projection runs exactly once after each applied board delta instead of
 // relying on a shallow reactive read of `boardStore.board`.
-let _boardProjectionHandler: (() => void) | null = null;
-let _taskListProjectionHandler: ((tasks: any[]) => void) | null = null;
+let _boardProjectionHandler: (() => void) | null = null
+let _taskListProjectionHandler: ((tasks: any[]) => void) | null = null
 
-export function setOrphanedSelectionHandler(
-  handler: (() => void) | null,
-): void {
-  _orphanedSelectionHandler = handler;
+export function setOrphanedSelectionHandler(handler: (() => void) | null): void {
+  _orphanedSelectionHandler = handler
 }
 
-export function setBoardProjectionHandler(
-  handler: (() => void) | null,
-): void {
-  _boardProjectionHandler = handler;
+export function setBoardProjectionHandler(handler: (() => void) | null): void {
+  _boardProjectionHandler = handler
 }
 
 function notifyBoardProjection(): void {
-  _boardProjectionHandler?.();
+  _boardProjectionHandler?.()
 }
 
-export function setTaskListProjectionHandler(
-  handler: ((tasks: any[]) => void) | null,
-): void {
-  _taskListProjectionHandler = handler;
+export function setTaskListProjectionHandler(handler: ((tasks: any[]) => void) | null): void {
+  _taskListProjectionHandler = handler
 }
 
 function notifyTaskListProjection(tasks: any[]): void {
-  _taskListProjectionHandler?.(tasks);
+  _taskListProjectionHandler?.(tasks)
 }
 
 function selectionIsOrphaned(tasks: any[], pending: any[]): boolean {
-  const id = activeTaskID();
-  if (!id) return false;
+  const id = activeTaskID()
+  if (!id) return false
   // Stable-state guard: during selectTask()'s async phase a concurrent
   // loadTasks() response may not yet include the freshly-created task, and
   // firing the handler then would incorrectly reset a selection that is in
@@ -131,24 +125,22 @@ function selectionIsOrphaned(tasks: any[], pending: any[]): boolean {
   // tasks/pending lists are the source of truth for whether the selection
   // still exists; requiring a loaded board snapshot lets an invalid task ID
   // survive forever after a failed task switch or cross-project mismatch.
-  if (boardStore.taskSwitching) return false;
-  const inTasks = Array.isArray(tasks)
-    && tasks.some((item: any) => item?.task?.id === id);
-  if (inTasks) return false;
-  const inPending = Array.isArray(pending)
-    && pending.some((item: any) => item?.task?.id === id || item?.id === id);
-  return !inPending;
+  if (boardStore.taskSwitching) return false
+  const inTasks = Array.isArray(tasks) && tasks.some((item: any) => item?.task?.id === id)
+  if (inTasks) return false
+  const inPending = Array.isArray(pending) && pending.some((item: any) => item?.task?.id === id || item?.id === id)
+  return !inPending
 }
 
 function requireBoardSnapshotVersion(board: any): string {
   if (board == null || typeof board !== "object") {
-    throw new Error("board payload must include snapshotVersion");
+    throw new Error("board payload must include snapshotVersion")
   }
-  const version = board?.snapshotVersion;
+  const version = board?.snapshotVersion
   if (typeof version !== "string" || version.length === 0) {
-    throw new Error("board.snapshotVersion must be a non-empty string");
+    throw new Error("board.snapshotVersion must be a non-empty string")
   }
-  return version;
+  return version
 }
 
 // ── Fine-grained board update ──
@@ -169,9 +161,9 @@ function requireBoardSnapshotVersion(board: any): string {
 // — downstream memos cost tens of ms vs sub-ms per-field stringify.
 
 function fieldChanged(a: unknown, b: unknown): boolean {
-  if (Object.is(a, b)) return false;
-  if (a === undefined || b === undefined) return true;
-  return JSON.stringify(a) !== JSON.stringify(b);
+  if (Object.is(a, b)) return false
+  if (a === undefined || b === undefined) return true
+  return JSON.stringify(a) !== JSON.stringify(b)
 }
 
 // ── Boundary invariants ──
@@ -184,33 +176,29 @@ function fieldChanged(a: unknown, b: unknown): boolean {
 // and console.error makes the corruption visible.
 function assertBoardInvariants(data: any): void {
   if (data == null || typeof data !== "object") {
-    throw new Error(`board payload must be object, got ${data === null ? "null" : typeof data}`);
+    throw new Error(`board payload must be object, got ${data === null ? "null" : typeof data}`)
   }
-  requireBoardSnapshotVersion(data);
-  const task = (data as any).task;
+  requireBoardSnapshotVersion(data)
+  const task = (data as any).task
   if (task) {
-    const created = task?.time?.created;
+    const created = task?.time?.created
     if (!Number.isFinite(created) || created <= 0) {
-      throw new Error(
-        `board.task.time.created invalid: ${JSON.stringify(task?.time)}`,
-      );
+      throw new Error(`board.task.time.created invalid: ${JSON.stringify(task?.time)}`)
     }
   }
-  const interactions = (data as any).interactions;
+  const interactions = (data as any).interactions
   if (Array.isArray(interactions)) {
     for (const it of interactions) {
-      const created = it?.time?.created;
+      const created = it?.time?.created
       if (!Number.isFinite(created) || created <= 0) {
-        throw new Error(
-          `board.interactions[id=${it?.id}].time.created invalid: ${JSON.stringify(it?.time)}`,
-        );
+        throw new Error(`board.interactions[id=${it?.id}].time.created invalid: ${JSON.stringify(it?.time)}`)
       }
       if (it?.status === "answered" || it?.status === "rejected") {
-        const resolved = it?.time?.resolved;
+        const resolved = it?.time?.resolved
         if (!Number.isFinite(resolved) || resolved <= 0) {
           throw new Error(
             `board.interactions[id=${it?.id}] resolved/rejected without valid time.resolved: ${JSON.stringify(it?.time)}`,
-          );
+          )
         }
       }
     }
@@ -220,137 +208,135 @@ function assertBoardInvariants(data: any): void {
 function applyBoardDelta(data: any): boolean {
   if (data == null || typeof data !== "object") {
     if (boardStore.board !== null) {
-      setBoardStore("board", null);
-      return true;
+      setBoardStore("board", null)
+      return true
     }
-    return false;
+    return false
   }
-  const old = boardStore.board;
+  const old = boardStore.board
   if (!old || typeof old !== "object") {
-    setBoardStore("board", data);
-    return true;
+    setBoardStore("board", data)
+    return true
   }
   // Update keys present in the new payload, only when their content changed.
-  const seenKeys = new Set<string>();
-  let changed = false;
+  const seenKeys = new Set<string>()
+  let changed = false
   for (const key of Object.keys(data)) {
-    seenKeys.add(key);
+    seenKeys.add(key)
     if (fieldChanged((old as any)[key], data[key])) {
-      setBoardStore("board", key as any, data[key]);
-      changed = true;
+      setBoardStore("board", key as any, data[key])
+      changed = true
     }
   }
   // Drop keys the server no longer reports — set to undefined so reactive
   // readers see the field disappear instead of holding a stale value.
   for (const key of Object.keys(old)) {
-    if (seenKeys.has(key)) continue;
-    setBoardStore("board", key as any, undefined);
-    changed = true;
+    if (seenKeys.has(key)) continue
+    setBoardStore("board", key as any, undefined)
+    changed = true
   }
-  return changed;
+  return changed
 }
 
 function clearBoardRetry(): void {
   if (_boardRetryTimer) {
-    clearTimeout(_boardRetryTimer);
-    _boardRetryTimer = null;
+    clearTimeout(_boardRetryTimer)
+    _boardRetryTimer = null
   }
-  setBoardRetryCount(0);
+  setBoardRetryCount(0)
 }
 
 function retryBoard(sync: boolean): void {
-  if (!activeTaskID() || _boardRetryTimer) return;
-  if (sync) setBoardSyncPending(true);
-  const delay = Math.min(1000 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15000);
-  setBoardRetryCount(boardStore.boardRetryCount + 1);
+  if (!activeTaskID() || _boardRetryTimer) return
+  if (sync) setBoardSyncPending(true)
+  const delay = Math.min(1000 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15000)
+  setBoardRetryCount(boardStore.boardRetryCount + 1)
   _boardRetryTimer = setTimeout(() => {
-    _boardRetryTimer = null;
-    void loadBoard({ sync: boardStore.boardSyncPending });
-  }, delay);
+    _boardRetryTimer = null
+    void loadBoard({ sync: boardStore.boardSyncPending })
+  }, delay)
 }
 
 export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
-  const taskID = activeTaskID();
+  const taskID = activeTaskID()
   if (!taskID) {
-    setBoardStore("board", null);
-    setSnapshotVersion("");
-    return;
+    setBoardStore("board", null)
+    setSnapshotVersion("")
+    return
   }
-  if (options.sync) setBoardSyncPending(true);
+  if (options.sync) setBoardSyncPending(true)
   if (_boardLoading) {
-    _boardQueued = true;
-    if (options.sync) setBoardSyncPending(true);
-    return _boardLoading;
+    _boardQueued = true
+    if (options.sync) setBoardSyncPending(true)
+    return _boardLoading
   }
-  const sync = options.sync === true || boardStore.boardSyncPending;
-  if (sync) setBoardSyncPending(true);
+  const sync = options.sync === true || boardStore.boardSyncPending
+  if (sync) setBoardSyncPending(true)
   const loading = (async () => {
-    let failed = false;
+    let failed = false
     try {
-      const headers: Record<string, string> = {};
-      if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag;
-      const res = await apiRequest<any>(
-        `task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`,
-        {
-          headers,
-          signal: AbortSignal.timeout(10000),
-        },
-      );
-      if (taskID !== activeTaskID()) return;
-      setBoardSyncPending(false);
+      const headers: Record<string, string> = {}
+      if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag
+      const res = await apiRequest<any>(`task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      })
+      if (taskID !== activeTaskID()) return
+      setBoardSyncPending(false)
       if (res.status === 304) {
-        clearBoardRetry();
-        setBoardUpdatedAt(Date.now());
-        return;
+        clearBoardRetry()
+        setBoardUpdatedAt(Date.now())
+        return
       }
-      if (!res.ok) throw new Error(`API ${res.status}`);
-      const etag = res.headers["etag"] || res.headers["ETag"];
-      if (etag) setBoardEtag(etag);
-      const data = res.body;
-      const lastSequence = Number(data?.lastSequence || 0);
+      if (!res.ok) throw new Error(`API ${res.status}`)
+      const etag = res.headers["etag"] || res.headers["ETag"]
+      if (etag) setBoardEtag(etag)
+      const data = res.body
+      const lastSequence = Number(data?.lastSequence || 0)
       // Monotonic guard: discard stale responses whose sequence is lower
       // than what we already have. This prevents flickering when a slower
       // response arrives after a newer one.
       if (
-        Number.isFinite(lastSequence) && lastSequence > 0 &&
+        Number.isFinite(lastSequence) &&
+        lastSequence > 0 &&
         boardStore.taskSequence > 0 &&
         lastSequence < boardStore.taskSequence
       ) {
-        clearBoardRetry();
-        return;
+        clearBoardRetry()
+        return
       }
-      assertBoardInvariants(data);
-      const snapshotVersion = requireBoardSnapshotVersion(data);
-      let boardChanged = false;
+      assertBoardInvariants(data)
+      const snapshotVersion = requireBoardSnapshotVersion(data)
+      let boardChanged = false
       batch(() => {
-        boardChanged = applyBoardDelta(data);
-        setSnapshotVersion(snapshotVersion);
-      });
-      if (boardChanged) notifyBoardProjection();
-      clearBoardRetry();
-      setBoardUpdatedAt(Date.now());
+        boardChanged = applyBoardDelta(data)
+        setSnapshotVersion(snapshotVersion)
+      })
+      if (boardChanged) notifyBoardProjection()
+      clearBoardRetry()
+      setBoardUpdatedAt(Date.now())
       // Agent cards are derived reactively from boardStore — no manual rebuild needed.
     } catch (e) {
-      failed = true;
-      console.error("loadBoard failed", e);
-      if (taskID === activeTaskID()) retryBoard(sync);
+      failed = true
+      console.error("loadBoard failed", e)
+      if (taskID === activeTaskID()) retryBoard(sync)
     } finally {
-      _boardLoading = null;
-      setBoardStore("loading", false);
+      _boardLoading = null
+      setBoardStore("loading", false)
       if (_boardQueued || boardStore.boardQueued) {
-        _boardQueued = false;
-        setBoardQueued(false);
+        _boardQueued = false
+        setBoardQueued(false)
         if (!failed && !_boardRetryTimer) {
           queueMicrotask(() => {
-            void loadBoard({ sync: boardStore.boardSyncPending });
-          });
+            void loadBoard({ sync: boardStore.boardSyncPending })
+          })
         }
       }
     }
-  })();
-  _boardLoading = loading;
-  setBoardStore("loading", true);
-  return loading;
+  })()
+  _boardLoading = loading
+  setBoardStore("loading", true)
+  return loading
 }
 
 /**
@@ -367,82 +353,76 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
  * in atomically — the orphan check then considers the post-update state.
  * Omit to keep the current `pendingTasks`.
  */
-export function applyTasks(
-  tasks: any[],
-  nextPending?: any[],
-): void {
-  const list = reconcileTaskItems(Array.isArray(tasks) ? tasks : [], boardStore.tasks);
+export function applyTasks(tasks: any[], nextPending?: any[]): void {
+  const list = reconcileTaskItems(Array.isArray(tasks) ? tasks : [], boardStore.tasks)
   const pending = Array.isArray(nextPending)
     ? reconcileTaskItems(nextPending, boardStore.pendingTasks)
-    : boardStore.pendingTasks;
+    : boardStore.pendingTasks
   // batch coalesces both setBoardStore writes when both fire — without it,
   // every consumer of either `tasks` or `pendingTasks` reruns twice on
   // applyTasks(list, pending) (the common path in loadTasks).
   batch(() => {
-    if (list !== boardStore.tasks) setBoardStore("tasks", list);
+    if (list !== boardStore.tasks) setBoardStore("tasks", list)
     if (Array.isArray(nextPending) && pending !== boardStore.pendingTasks) {
-      setBoardStore("pendingTasks", pending);
+      setBoardStore("pendingTasks", pending)
     }
-  });
+  })
   if (selectionIsOrphaned(list, pending) && _orphanedSelectionHandler) {
-    _orphanedSelectionHandler();
+    _orphanedSelectionHandler()
   }
-  notifyTaskListProjection(list);
+  notifyTaskListProjection(list)
 }
 
 function taskStableKey(item: any): string {
-  const task = item?.task ?? item;
-  const key = task?.id || task?.requestID || item?.requestID;
-  if (typeof key === "string" && key.trim()) return key;
-  throw new Error("task list item is missing stable id/requestID");
+  const task = item?.task ?? item
+  const key = task?.id || task?.requestID || item?.requestID
+  if (typeof key === "string" && key.trim()) return key
+  throw new Error("task list item is missing stable id/requestID")
 }
 
 function taskContentSignature(item: any): string {
-  const signature = JSON.stringify(item);
-  if (typeof signature === "string") return signature;
-  throw new Error(`task list item ${taskStableKey(item)} is not JSON serializable`);
+  const signature = JSON.stringify(item)
+  if (typeof signature === "string") return signature
+  throw new Error(`task list item ${taskStableKey(item)} is not JSON serializable`)
 }
 
 function reconcileTaskItems(next: any[], previous: any[]): any[] {
-  const previousByKey = new Map<string, { item: any; signature: string }>();
+  const previousByKey = new Map<string, { item: any; signature: string }>()
   for (const item of previous) {
-    const key = taskStableKey(item);
-    if (previousByKey.has(key)) throw new Error(`duplicate task list item id/requestID: ${key}`);
-    previousByKey.set(key, { item, signature: taskContentSignature(item) });
+    const key = taskStableKey(item)
+    if (previousByKey.has(key)) throw new Error(`duplicate task list item id/requestID: ${key}`)
+    previousByKey.set(key, { item, signature: taskContentSignature(item) })
   }
 
-  const seen = new Set<string>();
+  const seen = new Set<string>()
   const reconciled = next.map((item) => {
-    const key = taskStableKey(item);
-    if (seen.has(key)) throw new Error(`duplicate task list item id/requestID: ${key}`);
-    seen.add(key);
-    const previousItem = previousByKey.get(key);
-    if (previousItem?.signature === taskContentSignature(item)) return previousItem.item;
-    return item;
-  });
+    const key = taskStableKey(item)
+    if (seen.has(key)) throw new Error(`duplicate task list item id/requestID: ${key}`)
+    seen.add(key)
+    const previousItem = previousByKey.get(key)
+    if (previousItem?.signature === taskContentSignature(item)) return previousItem.item
+    return item
+  })
 
-  if (
-    reconciled.length === previous.length &&
-    reconciled.every((item, index) => item === previous[index])
-  ) {
-    return previous;
+  if (reconciled.length === previous.length && reconciled.every((item, index) => item === previous[index])) {
+    return previous
   }
-  return reconciled;
+  return reconciled
 }
 
 export function clearTasksForMissingDirectory(): void {
-  applyTasks([], []);
-  setBoardStore("tasksError", "");
-  setBoardStore("tasksLoaded", true);
+  applyTasks([], [])
+  setBoardStore("tasksError", "")
+  setBoardStore("tasksLoaded", true)
 }
 
 export async function loadTasks(): Promise<void> {
-  if (_tasksLoading) return _tasksLoading;
-  _tasksLoading = loadTasksOnce();
+  if (_tasksLoading) return _tasksLoading
+  _tasksLoading = loadTasksOnce()
   try {
-    await _tasksLoading;
+    await _tasksLoading
   } finally {
-    _tasksLoading = null;
+    _tasksLoading = null
   }
 }
 
@@ -451,22 +431,16 @@ async function loadTasksOnce(): Promise<void> {
   // UI surfaces the failure explicitly. The previous silent catch left the UI
   // stuck on an empty list with no indication that the backend was unreachable.
   try {
-    const data = await apiJson("global/tasks");
-    const tasks = sortedTasks(data);
-    const seen = new Set(
-      tasks
-        .map((item: any) => item?.task?.requestID)
-        .filter(Boolean),
-    );
-    const nextPending = boardStore.pendingTasks.filter(
-      (item: any) => !seen.has(item?.requestID),
-    );
-    applyTasks(tasks, nextPending);
-    setBoardStore("tasksError", "");
-    setBoardStore("tasksLoaded", true);
+    const data = await apiJson("global/tasks")
+    const tasks = sortedTasks(data)
+    const seen = new Set(tasks.map((item: any) => item?.task?.requestID).filter(Boolean))
+    const nextPending = boardStore.pendingTasks.filter((item: any) => !seen.has(item?.requestID))
+    applyTasks(tasks, nextPending)
+    setBoardStore("tasksError", "")
+    setBoardStore("tasksLoaded", true)
   } catch (e) {
-    setBoardStore("tasksError", e instanceof Error ? e.message : String(e));
-    throw e;
+    setBoardStore("tasksError", e instanceof Error ? e.message : String(e))
+    throw e
   }
 }
 
@@ -479,13 +453,13 @@ async function loadTasksOnce(): Promise<void> {
  * the next loadBoard() call starts from a clean slate.
  */
 export function clearBoard(): void {
-  clearBoardRetry();
+  clearBoardRetry()
   if (boardLoadTimer) {
-    clearTimeout(boardLoadTimer);
-    boardLoadTimer = null;
+    clearTimeout(boardLoadTimer)
+    boardLoadTimer = null
   }
-  boardLoadDeadline = 0;
-  _boardQueued = false;
+  boardLoadDeadline = 0
+  _boardQueued = false
   setBoardStore({
     board: null,
     taskSequence: 0,
@@ -497,32 +471,32 @@ export function clearBoard(): void {
     path: null,
     vcs: null,
     changes: [],
-  });
-  notifyBoardProjection();
+  })
+  notifyBoardProjection()
 }
 
 // ── Direct setters (used by / SSE handlers) ──
 
 export function setBoardData(data: any): void {
-  assertBoardInvariants(data);
-  const snapshotVersion = requireBoardSnapshotVersion(data);
-  let boardChanged = false;
+  assertBoardInvariants(data)
+  const snapshotVersion = requireBoardSnapshotVersion(data)
+  let boardChanged = false
   batch(() => {
-    boardChanged = applyBoardDelta(data);
-    setSnapshotVersion(snapshotVersion);
-  });
-  if (boardChanged) notifyBoardProjection();
+    boardChanged = applyBoardDelta(data)
+    setSnapshotVersion(snapshotVersion)
+  })
+  if (boardChanged) notifyBoardProjection()
 }
 
 export function setTasksData(tasks: any[]): void {
-  applyTasks(tasks);
+  applyTasks(tasks)
 }
 
 // ── Scheduled board reload ──
 
-let boardLoadTimer: any = null;
-let boardLoadDeadline = 0;
-const BOARD_MAX_DELAY_MS = 2000;
+let boardLoadTimer: any = null
+let boardLoadDeadline = 0
+const BOARD_MAX_DELAY_MS = 2000
 
 /**
  * Schedule a board reload after an optional delay.
@@ -535,26 +509,26 @@ const BOARD_MAX_DELAY_MS = 2000;
  * @param delay Delay in milliseconds before calling loadBoard. Defaults to 0.
  */
 export function scheduleBoard(delay = 0): void {
-  setBoardSyncPending(true);
-  clearBoardRetry();
-  const now = Date.now();
+  setBoardSyncPending(true)
+  clearBoardRetry()
+  const now = Date.now()
   // First scheduling in a burst: set deadline
   if (!boardLoadTimer || boardLoadDeadline === 0) {
-    boardLoadDeadline = now + BOARD_MAX_DELAY_MS;
+    boardLoadDeadline = now + BOARD_MAX_DELAY_MS
   }
   if (boardLoadTimer) {
-    clearTimeout(boardLoadTimer);
-    boardLoadTimer = null;
+    clearTimeout(boardLoadTimer)
+    boardLoadTimer = null
   }
   // Effective delay is min(requested, remaining-until-deadline).
   // When remaining is negative (deadline passed), fire immediately.
-  const remaining = Math.max(0, boardLoadDeadline - now);
-  const effectiveDelay = Math.min(delay, remaining);
+  const remaining = Math.max(0, boardLoadDeadline - now)
+  const effectiveDelay = Math.min(delay, remaining)
   boardLoadTimer = setTimeout(() => {
-    boardLoadTimer = null;
-    boardLoadDeadline = 0;
-    void loadBoard({ sync: true });
-  }, effectiveDelay);
+    boardLoadTimer = null
+    boardLoadDeadline = 0
+    void loadBoard({ sync: true })
+  }, effectiveDelay)
 }
 
 // ── Derived accessors ──
@@ -571,12 +545,12 @@ export function scheduleBoard(delay = 0): void {
  * "do not write /config" (never silently fall back to the project config).
  */
 export function rootTaskSessionID(): string {
-  const boardSession = boardStore.board?.task?.sessionID;
-  if (typeof boardSession === "string" && boardSession) return boardSession;
-  const taskID = activeTaskID();
-  if (!taskID) return "";
-  const entry = boardStore.tasks.find((item: any) => item?.task?.id === taskID);
-  return typeof entry?.task?.sessionID === "string" ? entry.task.sessionID : "";
+  const boardSession = boardStore.board?.task?.sessionID
+  if (typeof boardSession === "string" && boardSession) return boardSession
+  const taskID = activeTaskID()
+  if (!taskID) return ""
+  const entry = boardStore.tasks.find((item: any) => item?.task?.id === taskID)
+  return typeof entry?.task?.sessionID === "string" ? entry.task.sessionID : ""
 }
 
 /**
@@ -586,10 +560,8 @@ export function rootTaskSessionID(): string {
  * (R5.1 item 9). When false, the picker is in project scope.
  */
 export function hasSelectedTask(): boolean {
-  return !!activeTaskID();
+  return !!activeTaskID()
 }
-
-
 
 /** Returns the **selected task's** frozen working directory (the directory
  *  the task was created in, carried on `board.task.directory`).
@@ -602,91 +574,91 @@ export function hasSelectedTask(): boolean {
  *  the user switched workspaces. Callers should pick the semantic they
  *  actually want. */
 export function selectedTaskDirectory(): string {
-  return boardStore.board?.task?.directory ?? "";
+  return boardStore.board?.task?.directory ?? ""
 }
 
 export function activeTaskID(): string {
-  const source = boardStore.selectedSource;
-  return source?.kind === "task" ? source.id : "";
+  const source = boardStore.selectedSource
+  return source?.kind === "task" ? source.id : ""
 }
 
 export function activeSessionID(): string {
-  const source = boardStore.selectedSource;
-  return source?.kind === "session" ? source.id : "";
+  const source = boardStore.selectedSource
+  return source?.kind === "session" ? source.id : ""
 }
 
 // ── VCS setters ──
 
 export function setPath(path: any): void {
-  setBoardStore("path", path ?? null);
+  setBoardStore("path", path ?? null)
 }
 
 export function setVcs(vcs: any): void {
-  setBoardStore("vcs", vcs ?? null);
+  setBoardStore("vcs", vcs ?? null)
 }
 
 // ── Changes setter ──
 
 export function setChanges(changes: any[]): void {
-  setBoardStore("changes", Array.isArray(changes) ? changes : []);
+  setBoardStore("changes", Array.isArray(changes) ? changes : [])
 }
 
 // ── Board sync state setters ──
 
 export function setBoardEtag(etag: string): void {
-  setBoardStore("boardEtag", typeof etag === "string" ? etag : "");
+  setBoardStore("boardEtag", typeof etag === "string" ? etag : "")
 }
 
 export function setBoardQueued(queued: boolean): void {
-  setBoardStore("boardQueued", queued);
+  setBoardStore("boardQueued", queued)
 }
 
 export function setBoardRetryCount(count: number): void {
-  setBoardStore("boardRetryCount", typeof count === "number" ? count : 0);
+  setBoardStore("boardRetryCount", typeof count === "number" ? count : 0)
 }
 
 export function setBoardSyncPending(pending: boolean): void {
-  setBoardStore("boardSyncPending", pending);
+  setBoardStore("boardSyncPending", pending)
 }
 
 export function setBoardUpdatedAt(ms: number): void {
-  setBoardStore("boardUpdatedAt", typeof ms === "number" ? ms : 0);
+  setBoardStore("boardUpdatedAt", typeof ms === "number" ? ms : 0)
 }
 
 export function setSnapshotVersion(version: string): void {
-  const next = typeof version === "string" ? version : "";
-  const board = boardStore.board;
+  const next = typeof version === "string" ? version : ""
+  const board = boardStore.board
   if (board && typeof board === "object") {
-    const boardVersion = (board as any).snapshotVersion;
+    const boardVersion = (board as any).snapshotVersion
     if (typeof boardVersion !== "string" || boardVersion.length === 0) {
-      throw new Error("loaded board must include snapshotVersion");
+      throw new Error("loaded board must include snapshotVersion")
     }
     if (next !== boardVersion) {
-      throw new Error("boardStore.snapshotVersion must match board.snapshotVersion");
+      throw new Error("boardStore.snapshotVersion must match board.snapshotVersion")
     }
   }
-  setBoardStore("snapshotVersion", next);
+  setBoardStore("snapshotVersion", next)
 }
 
 export function setTaskSequence(sequence: number): void {
-  setBoardStore("taskSequence", typeof sequence === "number" ? sequence : 0);
+  setBoardStore("taskSequence", typeof sequence === "number" ? sequence : 0)
 }
 
 // ── Pending tasks setters ──
 
 export function setPendingTasks(tasks: any[]): void {
-  setBoardStore("pendingTasks", Array.isArray(tasks) ? tasks : []);
+  setBoardStore("pendingTasks", Array.isArray(tasks) ? tasks : [])
 }
 
 export function bumpTasksSeq(): void {
-  setBoardStore("tasksSeq", (n) => n + 1);
+  setBoardStore("tasksSeq", (n) => n + 1)
 }
 
 // ── Task list derived utilities ──
 
 function finitePositiveNumber(value: unknown): number | undefined {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : undefined;
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : undefined
 }
 
 /**
@@ -695,10 +667,10 @@ function finitePositiveNumber(value: unknown): number | undefined {
  * not move a row after status changes.
  */
 export function taskCreatedAt(item: any): number {
-  const task = item?.task ?? item;
-  const created = finitePositiveNumber(task?.time?.created);
-  if (created !== undefined) return created;
-  throw new Error(`task list item ${task?.id || "<unknown>"} is missing task.time.created`);
+  const task = item?.task ?? item
+  const created = finitePositiveNumber(task?.time?.created)
+  if (created !== undefined) return created
+  throw new Error(`task list item ${task?.id || "<unknown>"} is missing task.time.created`)
 }
 
 /**
@@ -707,28 +679,23 @@ export function taskCreatedAt(item: any): number {
  * `updated_at` / `task.time.updated`.
  */
 export function sortedTasks(data: { tasks?: any[] } | null | undefined): any[] {
-  return [...(Array.isArray(data?.tasks) ? data!.tasks : [])].sort(
-    (a, b) => taskCreatedAt(b) - taskCreatedAt(a),
-  );
+  return [...(Array.isArray(data?.tasks) ? data!.tasks : [])].sort((a, b) => taskCreatedAt(b) - taskCreatedAt(a))
 }
 
 /**
  * Find a task item in boardStore.tasks by task ID.
  */
 export function taskByID(taskID: string | null | undefined): any | null {
-  if (!taskID) return null;
-  return visibleTaskIndex().get(taskID) ?? null;
+  if (!taskID) return null
+  return visibleTaskIndex().get(taskID) ?? null
 }
 
 /**
  * Find a task item by its requestID within a given list (defaults to boardStore.tasks).
  */
-export function taskByRequestID(
-  requestID: string | null | undefined,
-  list: any[] = boardStore.tasks,
-): any | null {
-  if (!requestID || !Array.isArray(list)) return null;
-  return list.find((item: any) => item?.task?.requestID === requestID) ?? null;
+export function taskByRequestID(requestID: string | null | undefined, list: any[] = boardStore.tasks): any | null {
+  if (!requestID || !Array.isArray(list)) return null
+  return list.find((item: any) => item?.task?.requestID === requestID) ?? null
 }
 
 /**
@@ -736,55 +703,48 @@ export function taskByRequestID(
  * plus the confirmed task list, sorted by creation time descending.
  */
 export function visibleTasks(): any[] {
-  return visibleTaskProjection().items;
+  return visibleTaskProjection().items
 }
 
 let visibleTaskProjectionCache: {
-  tasks: any[];
-  pendingTasks: any[];
-  items: any[];
-  byID: Map<string, any>;
-} | null = null;
+  tasks: any[]
+  pendingTasks: any[]
+  items: any[]
+  byID: Map<string, any>
+} | null = null
 
 function visibleTaskProjection(): { items: any[]; byID: Map<string, any> } {
-  const tasks = boardStore.tasks;
-  const pendingTasks = boardStore.pendingTasks;
+  const tasks = boardStore.tasks
+  const pendingTasks = boardStore.pendingTasks
   if (
     visibleTaskProjectionCache &&
     visibleTaskProjectionCache.tasks === tasks &&
     visibleTaskProjectionCache.pendingTasks === pendingTasks
   ) {
-    return visibleTaskProjectionCache;
+    return visibleTaskProjectionCache
   }
-  const seen = new Set(
-    tasks
-      .map((item: any) => item?.task?.requestID || item?.task?.id)
-      .filter(Boolean),
-  );
-  const items = [
-    ...pendingTasks.filter(
-      (item: any) => !seen.has(item?.requestID || item?.task?.id),
-    ),
-    ...tasks,
-  ].sort((a, b) => taskCreatedAt(b) - taskCreatedAt(a));
-  const byID = new Map<string, any>();
+  const seen = new Set(tasks.map((item: any) => item?.task?.requestID || item?.task?.id).filter(Boolean))
+  const items = [...pendingTasks.filter((item: any) => !seen.has(item?.requestID || item?.task?.id)), ...tasks].sort(
+    (a, b) => taskCreatedAt(b) - taskCreatedAt(a),
+  )
+  const byID = new Map<string, any>()
   for (const item of items) {
-    const id = item?.task?.id;
-    if (typeof id === "string" && id) byID.set(id, item);
+    const id = item?.task?.id
+    if (typeof id === "string" && id) byID.set(id, item)
   }
-  visibleTaskProjectionCache = { tasks, pendingTasks, items, byID };
-  return visibleTaskProjectionCache;
+  visibleTaskProjectionCache = { tasks, pendingTasks, items, byID }
+  return visibleTaskProjectionCache
 }
 
 function visibleTaskIndex(): Map<string, any> {
-  return visibleTaskProjection().byID;
+  return visibleTaskProjection().byID
 }
 
 // ── Task state classifiers ──
 
-const INTERRUPTABLE_STATUSES = new Set(["queued", "active"]);
+const INTERRUPTABLE_STATUSES = new Set(["queued", "active"])
 
-const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"])
 
 /**
  * Returns true when the currently selected task can be interrupted (stopped).
@@ -792,14 +752,14 @@ const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
  * the stop button's availability.
  */
 export function isTaskInterruptable(): boolean {
-  const status = boardStore.board?.task?.status;
-  return !!status && INTERRUPTABLE_STATUSES.has(status);
+  const status = boardStore.board?.task?.status
+  return !!status && INTERRUPTABLE_STATUSES.has(status)
 }
 
 /**
  * Returns true when the currently selected task is in a terminal state.
  */
 export function isTaskTerminal(): boolean {
-  const status = boardStore.board?.task?.status;
-  return !!status && TERMINAL_STATUSES.has(status);
+  const status = boardStore.board?.task?.status
+  return !!status && TERMINAL_STATUSES.has(status)
 }

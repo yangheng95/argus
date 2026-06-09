@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { advanceQueue, directoryQueueSnapshot, dispatchTaskLoop, reorderQueuedTasksForCwd, taskCwd } from "../../src/engine/queue"
+import {
+  advanceQueue,
+  directoryQueueSnapshot,
+  dispatchTaskLoop,
+  reorderQueuedTasksForCwd,
+  taskCwd,
+} from "../../src/engine/queue"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { beginBuildAttempt } from "../../src/engine/persist"
 import { findGoalRun, findTask } from "../../src/engine/store"
@@ -57,16 +63,19 @@ describe("engine queue", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "queued created task",
-            request: "dispatch through queue",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "queued created task",
+              request: "dispatch through queue",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         await dispatchTaskLoop({ taskID, event: { note: "caller-supplied note" } })
@@ -106,47 +115,54 @@ describe("engine queue", () => {
     })
   })
 
-  test("createTask with queue=false bypasses an active task in the same cwd", async () => {
-    await using tmp = await tmpdir({ git: true })
+  test(
+    "createTask with queue=false bypasses an active task in the same cwd",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
-        const now = Date.now()
-        const activeID = `task_queue_existing_${now}`
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+          const now = Date.now()
+          const activeID = `task_queue_existing_${now}`
 
-        Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: activeID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "existing active task",
-            request: "already owns the old serial queue slot",
-            priority: "normal",
-            time_started: now,
-            time_created: now,
-            time_updated: now,
-          }).run(),
-        )
+          Database.use((db) =>
+            db
+              .insert(EngineTaskTable)
+              .values({
+                id: activeID,
+                project_id: Instance.project.id,
+                source: "test",
+                title: "existing active task",
+                request: "already owns the old serial queue slot",
+                priority: "normal",
+                time_started: now,
+                time_created: now,
+                time_updated: now,
+              })
+              .run(),
+          )
 
-        const taskID = await EngineService.createTask({
-          request: "start beside the active cwd sibling",
-          title: "direct-start beside active task",
-          executor: "opencorvus",
-          queue: false,
-        })
-        await waitForTaskStatus(taskID, "active")
-        await waitForMockCalls(runTaskLoop, 1)
+          const taskID = await EngineService.createTask({
+            request: "start beside the active cwd sibling",
+            title: "direct-start beside active task",
+            executor: "opencorvus",
+            queue: false,
+          })
+          await waitForTaskStatus(taskID, "active")
+          await waitForMockCalls(runTaskLoop, 1)
 
-        expect(taskStatus(activeID)).toBe("active")
-        expect(taskStatus(taskID)).toBe("active")
-        expect(directoryQueueSnapshot(tmp.path).queuedTaskIDs).not.toContain(taskID)
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
-      },
-    })
-  }, { timeout: 10_000 })
+          expect(taskStatus(activeID)).toBe("active")
+          expect(taskStatus(taskID)).toBe("active")
+          expect(directoryQueueSnapshot(tmp.path).queuedTaskIDs).not.toContain(taskID)
+          expect(runTaskLoop).toHaveBeenCalledTimes(1)
+          expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
+        },
+      })
+    },
+    { timeout: 10_000 },
+  )
 
   test("createTask with queue=true waits behind an active task in the same cwd", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -159,17 +175,20 @@ describe("engine queue", () => {
         const activeID = `task_queue_existing_${now}`
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: activeID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "existing active task",
-            request: "holds the explicit queue slot",
-            priority: "normal",
-            time_started: now,
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: activeID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "existing active task",
+              request: "holds the explicit queue slot",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         const taskID = await EngineService.createTask({
@@ -197,19 +216,22 @@ describe("engine queue", () => {
         const terminalID = `task_queue_terminal_internal_${now}`
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: terminalID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "failed task",
-            request: "must stay failed",
-            priority: "normal",
-            time_started: now - 10_000,
-            time_completed: now - 1_000,
-            error: "terminal failure",
-            time_created: now - 10_000,
-            time_updated: now - 1_000,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: terminalID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "failed task",
+              request: "must stay failed",
+              priority: "normal",
+              time_started: now - 10_000,
+              time_completed: now - 1_000,
+              error: "terminal failure",
+              time_created: now - 10_000,
+              time_updated: now - 1_000,
+            })
+            .run(),
         )
 
         await dispatchTaskLoop({ taskID: terminalID, event: { note: "internal batch settled" } })
@@ -224,59 +246,67 @@ describe("engine queue", () => {
     })
   })
 
-  test("operator message wake to a terminal task is ignored even with an active same-cwd task", async () => {
-    await using tmp = await tmpdir({ git: true })
+  test(
+    "operator message wake to a terminal task is ignored even with an active same-cwd task",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
-        const now = Date.now()
-        const activeID = `task_queue_active_${now}`
-        const terminalID = `task_queue_terminal_${now}`
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+          const now = Date.now()
+          const activeID = `task_queue_active_${now}`
+          const terminalID = `task_queue_terminal_${now}`
 
-        Database.transaction((db) => {
-          db.insert(EngineTaskTable).values({
-            id: activeID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "active task",
-            request: "holds the cwd gate",
-            priority: "normal",
-            time_started: now,
-            time_created: now,
-            time_updated: now,
-          }).run()
-          db.insert(EngineTaskTable).values({
-            id: terminalID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "terminal task",
-            request: "must stay completed",
-            priority: "normal",
-            time_started: now - 10_000,
-            time_completed: now - 1_000,
-            time_created: now - 10_000,
-            time_updated: now - 1_000,
-          }).run()
-        })
+          Database.transaction((db) => {
+            db.insert(EngineTaskTable)
+              .values({
+                id: activeID,
+                project_id: Instance.project.id,
+                source: "test",
+                title: "active task",
+                request: "holds the cwd gate",
+                priority: "normal",
+                time_started: now,
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+            db.insert(EngineTaskTable)
+              .values({
+                id: terminalID,
+                project_id: Instance.project.id,
+                source: "test",
+                title: "terminal task",
+                request: "must stay completed",
+                priority: "normal",
+                time_started: now - 10_000,
+                time_completed: now - 1_000,
+                time_created: now - 10_000,
+                time_updated: now - 1_000,
+              })
+              .run()
+          })
 
-        await dispatchTaskLoop({
-          taskID: terminalID,
-          event: {
-            note: "operator follow-up",
-            operatorMessage: { text: "continue after failure" },
-          },
-        })
-        await new Promise((resolve) => setTimeout(resolve, 0))
+          await dispatchTaskLoop({
+            taskID: terminalID,
+            event: {
+              note: "operator follow-up",
+              operatorMessage: { text: "continue after failure" },
+            },
+          })
+          await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(taskStatus(activeID)).toBe("active")
-        expect(taskStatus(terminalID)).toBe("completed")
-        expect(findTask(terminalID)?.time_completed).not.toBeNull()
-        expect(runTaskLoop).not.toHaveBeenCalled()
-      },
-    })
-  }, { timeout: 10_000 })
+          expect(taskStatus(activeID)).toBe("active")
+          expect(taskStatus(terminalID)).toBe("completed")
+          expect(findTask(terminalID)?.time_completed).not.toBeNull()
+          expect(runTaskLoop).not.toHaveBeenCalled()
+        },
+      })
+    },
+    { timeout: 10_000 },
+  )
 
   test("runTaskLoop ignores terminal tasks before orchestrator processing", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -289,19 +319,22 @@ describe("engine queue", () => {
         const taskID = `task_loop_terminal_${now}`
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "failed task",
-            request: "must not run",
-            priority: "normal",
-            time_started: now - 10_000,
-            time_completed: now - 1_000,
-            error: "terminal failure",
-            time_created: now - 10_000,
-            time_updated: now - 1_000,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "failed task",
+              request: "must not run",
+              priority: "normal",
+              time_started: now - 10_000,
+              time_completed: now - 1_000,
+              error: "terminal failure",
+              time_created: now - 10_000,
+              time_updated: now - 1_000,
+            })
+            .run(),
         )
 
         await TaskLoop.runTaskLoop({
@@ -336,37 +369,43 @@ describe("engine queue", () => {
         const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop")
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "live owned task",
-            request: "operator must be able to interrupt a running child agent",
-            priority: "normal",
-            time_started: now,
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "live owned task",
+              request: "operator must be able to interrupt a running child agent",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
         const goalID = `goal_queue_live_interrupt_${now}`
         Database.use((db) =>
-          db.insert(EngineGoalTable).values({
-            id: goalID,
-            task_id: taskID,
-            title: "Interrupt live goal",
-            slug: "interrupt-live-goal",
-            objective: "Prove operator interrupt closes the running goal.",
-            acceptance_specs: [],
-            owned_paths: [],
-            depends_on: [],
-            kind: "feature",
-            requirement_ids: [],
-            priority: "blocking",
-            source: "test",
-            order_index: 0,
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "Interrupt live goal",
+              slug: "interrupt-live-goal",
+              objective: "Prove operator interrupt closes the running goal.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
         const childSessionID = `ses_build_${now}`
         const goalRunID = beginBuildAttempt({
@@ -454,42 +493,44 @@ describe("engine queue", () => {
         const holdLoop = new Promise<void>((resolve) => {
           release = resolve
         })
-        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(
-          async (arg: { taskID: string }) => {
-            if (arg.taskID === activeID) {
-              await holdLoop
-              Database.use((db) =>
-                db
-                  .update(EngineTaskTable)
-                  .set({ time_completed: Date.now() })
-                  .where(eq(EngineTaskTable.id, activeID))
-                  .run(),
-              )
-            }
-          },
-        )
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async (arg: { taskID: string }) => {
+          if (arg.taskID === activeID) {
+            await holdLoop
+            Database.use((db) =>
+              db
+                .update(EngineTaskTable)
+                .set({ time_completed: Date.now() })
+                .where(eq(EngineTaskTable.id, activeID))
+                .run(),
+            )
+          }
+        })
 
         Database.transaction((db) => {
-          db.insert(EngineTaskTable).values({
-            id: activeID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "active task",
-            request: "holds the cwd lock until loop exits",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-          }).run()
-          db.insert(EngineTaskTable).values({
-            id: siblingID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "queued sibling",
-            request: "must flip to active after the leader's loop exits",
-            priority: "normal",
-            time_created: now + 1,
-            time_updated: now + 1,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: activeID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "active task",
+              request: "holds the cwd lock until loop exits",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: siblingID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "queued sibling",
+              request: "must flip to active after the leader's loop exits",
+              priority: "normal",
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
         })
 
         await dispatchTaskLoop({ taskID: activeID })
@@ -532,40 +573,44 @@ describe("engine queue", () => {
         const now = Date.now()
 
         Database.transaction((db) => {
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "queued retry task",
-            request: "advanceQueue must forward without deriving a trigger from the latest run",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "queued retry task",
+              request: "advanceQueue must forward without deriving a trigger from the latest run",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
           // Phase-6-e: run rows live in engine_artifact (kind="run").
-          db.insert(EngineArtifactTable).values({
-            id: runID,
-            task_id: taskID,
-            run_id: runID,
-            kind: "run",
-            label: "run-failed",
-            payload: {
-              plan_version_id: null,
-              session_id: null,
-              executor: "opencorvus",
-              status: "failed",
-              phase: "dispatch",
-              blocking_reason: null,
-              error: null,
-              retry_count: 0,
-              executor_ref: null,
-              metadata: null,
-              time_started: null,
-              time_completed: now,
-            },
-            time_created: now,
-            time_updated: now,
-          }).run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-failed",
+              payload: {
+                plan_version_id: null,
+                session_id: null,
+                executor: "opencorvus",
+                status: "failed",
+                phase: "dispatch",
+                blocking_reason: null,
+                error: null,
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: null,
+                time_completed: now,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
         })
 
         await advanceQueue(taskCwd(taskID))
@@ -596,17 +641,19 @@ describe("engine queue", () => {
 
         Database.transaction((db) => {
           for (const [index, id] of [firstID, secondID, thirdID].entries()) {
-            db.insert(EngineTaskTable).values({
-              id,
-              project_id: Instance.project.id,
-              source: "test",
-              title: `queued task ${index}`,
-              request: "claim by user queue order",
-              priority: "normal",
-              queue_order: index,
-              time_created: now + index,
-              time_updated: now + index,
-            }).run()
+            db.insert(EngineTaskTable)
+              .values({
+                id,
+                project_id: Instance.project.id,
+                source: "test",
+                title: `queued task ${index}`,
+                request: "claim by user queue order",
+                priority: "normal",
+                queue_order: index,
+                time_created: now + index,
+                time_updated: now + index,
+              })
+              .run()
           }
         })
 
@@ -643,17 +690,19 @@ describe("engine queue", () => {
 
         Database.transaction((db) => {
           for (const [index, id] of [firstID, secondID].entries()) {
-            db.insert(EngineTaskTable).values({
-              id,
-              project_id: Instance.project.id,
-              source: "test",
-              title: `queued task ${index}`,
-              request: "start queued task now",
-              priority: "normal",
-              queue_order: index,
-              time_created: now + index,
-              time_updated: now + index,
-            }).run()
+            db.insert(EngineTaskTable)
+              .values({
+                id,
+                project_id: Instance.project.id,
+                source: "test",
+                title: `queued task ${index}`,
+                request: "start queued task now",
+                priority: "normal",
+                queue_order: index,
+                time_created: now + index,
+                time_updated: now + index,
+              })
+              .run()
           }
         })
 
@@ -682,28 +731,32 @@ describe("engine queue", () => {
         const normalID = `task_queue_normal_${now}`
 
         Database.transaction((db) => {
-          db.insert(EngineTaskTable).values({
-            id: criticalID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "critical queued task",
-            request: "would normally win priority ordering",
-            priority: "critical",
-            queue_order: 0,
-            time_created: now,
-            time_updated: now,
-          }).run()
-          db.insert(EngineTaskTable).values({
-            id: normalID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "normal queued task",
-            request: "explicit operator start",
-            priority: "normal",
-            queue_order: 1,
-            time_created: now + 1,
-            time_updated: now + 1,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: criticalID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "critical queued task",
+              request: "would normally win priority ordering",
+              priority: "critical",
+              queue_order: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: normalID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "normal queued task",
+              request: "explicit operator start",
+              priority: "normal",
+              queue_order: 1,
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
         })
 
         const result = await EngineService.startQueuedTaskNow(normalID)
@@ -731,29 +784,33 @@ describe("engine queue", () => {
         const secondID = `task_queue_second_${now}`
 
         Database.transaction((db) => {
-          db.insert(EngineTaskTable).values({
-            id: activeID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "active task",
-            request: "holds the directory gate",
-            priority: "normal",
-            time_started: now,
-            time_created: now,
-            time_updated: now,
-          }).run()
-          for (const [index, id] of [firstID, secondID].entries()) {
-            db.insert(EngineTaskTable).values({
-              id,
+          db.insert(EngineTaskTable)
+            .values({
+              id: activeID,
               project_id: Instance.project.id,
               source: "test",
-              title: `queued task ${index}`,
-              request: "explicit operator start while another task is active",
+              title: "active task",
+              request: "holds the directory gate",
               priority: "normal",
-              queue_order: index,
-              time_created: now + index + 1,
-              time_updated: now + index + 1,
-            }).run()
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          for (const [index, id] of [firstID, secondID].entries()) {
+            db.insert(EngineTaskTable)
+              .values({
+                id,
+                project_id: Instance.project.id,
+                source: "test",
+                title: `queued task ${index}`,
+                request: "explicit operator start while another task is active",
+                priority: "normal",
+                queue_order: index,
+                time_created: now + index + 1,
+                time_updated: now + index + 1,
+              })
+              .run()
           }
         })
 
@@ -783,35 +840,41 @@ describe("engine queue", () => {
         const queuedID = `task_queue_waiting_${now}`
 
         Database.transaction((db) => {
-          db.insert(EngineTaskTable).values({
-            id: activeID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "active locked task",
-            request: "must not be draggable",
-            priority: "normal",
-            queue_order: 0,
-            time_started: now,
-            time_created: now,
-            time_updated: now,
-          }).run()
-          db.insert(EngineTaskTable).values({
-            id: queuedID,
-            project_id: Instance.project.id,
-            source: "test",
-            title: "queued task",
-            request: "only queued tasks may be reordered",
-            priority: "normal",
-            queue_order: 1,
-            time_created: now + 1,
-            time_updated: now + 1,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: activeID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "active locked task",
+              request: "must not be draggable",
+              priority: "normal",
+              queue_order: 0,
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: queuedID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "queued task",
+              request: "only queued tasks may be reordered",
+              priority: "normal",
+              queue_order: 1,
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
         })
 
-        expect(() => reorderQueuedTasksForCwd({
-          cwd: taskCwd(activeID),
-          orderedTaskIDs: [activeID, queuedID],
-        })).toThrow("orderedTaskIDs must contain every queued task")
+        expect(() =>
+          reorderQueuedTasksForCwd({
+            cwd: taskCwd(activeID),
+            orderedTaskIDs: [activeID, queuedID],
+          }),
+        ).toThrow("orderedTaskIDs must contain every queued task")
       },
     })
   })

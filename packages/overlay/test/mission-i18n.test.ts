@@ -50,6 +50,7 @@ const REQUIRED_KEYS = [
   "mission.error.channel_runtime_failed",
   "mission.error.channels_failed",
   "mission.error.restart_failed",
+  "mission.error.action.delete",
 ] as const
 
 for (const key of REQUIRED_KEYS) {
@@ -66,8 +67,12 @@ for (const key of REQUIRED_KEYS) {
 }
 
 test("zh-CN and en-US mission.* coverage matches", () => {
-  const zhKeys = Object.keys(ZH).filter((k) => k.startsWith("mission.")).sort()
-  const enKeys = Object.keys(EN).filter((k) => k.startsWith("mission.")).sort()
+  const zhKeys = Object.keys(ZH)
+    .filter((k) => k.startsWith("mission."))
+    .sort()
+  const enKeys = Object.keys(EN)
+    .filter((k) => k.startsWith("mission."))
+    .sort()
   expect(zhKeys).toEqual(enKeys)
 })
 
@@ -80,4 +85,9 @@ test("no legacy gateway.* product control keys leak through", () => {
     const stragglers = Object.keys(map).filter((k) => k.startsWith("gateway."))
     expect(stragglers).toEqual([])
   }
+})
+
+test("mission delete action label does not use task wording", () => {
+  expect(EN["mission.error.action.delete"]).toBe("Delete mission")
+  expect(ZH["mission.error.action.delete"]).toBe("删除 Mission")
 })

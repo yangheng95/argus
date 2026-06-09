@@ -78,21 +78,20 @@ export namespace Plugin {
     serviceID: z.string().min(1),
     backendExport: z.string().min(1),
     overlayExport: z.string().min(1),
-    resources: z
-      .array(
-        z.object({
-          id: z.string().min(1),
-          kind: z.enum(["worker", "asset", "runtime"]),
-          path: z.string().min(1).optional(),
-          paths: z
-            .object({
-              win32: z.string().min(1).optional(),
-              linux: z.string().min(1).optional(),
-              darwin: z.string().min(1).optional(),
-            })
-            .optional(),
-        }),
-      ),
+    resources: z.array(
+      z.object({
+        id: z.string().min(1),
+        kind: z.enum(["worker", "asset", "runtime"]),
+        path: z.string().min(1).optional(),
+        paths: z
+          .object({
+            win32: z.string().min(1).optional(),
+            linux: z.string().min(1).optional(),
+            darwin: z.string().min(1).optional(),
+          })
+          .optional(),
+      }),
+    ),
   })
 
   // Built-in plugins that are directly imported (not installed from npm)
@@ -147,7 +146,10 @@ export namespace Plugin {
       },
       async latest(input: PluginTaskArtifactLookupInput): Promise<PluginTaskArtifact | undefined> {
         requireTask(input.taskID)
-        const clauses = [eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, input.kind as EngineArtifactKind)]
+        const clauses = [
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, input.kind as EngineArtifactKind),
+        ]
         if (input.label) clauses.push(eq(EngineArtifactTable.label, input.label))
         const row = Database.use((db) =>
           db
@@ -278,7 +280,12 @@ export namespace Plugin {
       return manifest.backendExport
     }
 
-    async function loadPluginModule(plugin: string, diagnosticSpecifier = plugin, serviceID?: string, resources = emptyResources()) {
+    async function loadPluginModule(
+      plugin: string,
+      diagnosticSpecifier = plugin,
+      serviceID?: string,
+      resources = emptyResources(),
+    ) {
       await import(plugin)
         .then(async (mod) => {
           const seen = new Set<PluginInstance>()
@@ -362,10 +369,12 @@ export namespace Plugin {
       hooks,
       input: pluginInput(),
       diagnostics,
-      services: undefined as Promise<{
-        services: Map<string, PluginServiceInfo>
-        diagnostics: PluginLoadDiagnostic[]
-      }> | undefined,
+      services: undefined as
+        | Promise<{
+            services: Map<string, PluginServiceInfo>
+            diagnostics: PluginLoadDiagnostic[]
+          }>
+        | undefined,
     }
   })
 

@@ -23,10 +23,7 @@ test("orchestrator wake without caller note reuses the original task request", (
 })
 
 test("orchestrator wake with caller note preserves the caller-authored note", () => {
-  const text = orchestratorUserText(
-    { request: "original task" },
-    { note: "operator provided this exact follow-up" },
-  )
+  const text = orchestratorUserText({ request: "original task" }, { note: "operator provided this exact follow-up" })
 
   expect(text).toBe("operator provided this exact follow-up")
 })

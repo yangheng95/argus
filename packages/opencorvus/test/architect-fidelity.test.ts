@@ -57,13 +57,7 @@ describe("architectFidelityIssues — sourceCoverage container path semantics", 
       goals: [
         {
           id: "goal_bootstrap",
-          owned_paths: [
-            "package.json",
-            "vite.config.ts",
-            "src/main.tsx",
-            "src/App.tsx",
-            "tests/setup.ts",
-          ],
+          owned_paths: ["package.json", "vite.config.ts", "src/main.tsx", "src/App.tsx", "tests/setup.ts"],
         },
       ],
       fidelity: {
@@ -77,9 +71,7 @@ describe("architectFidelityIssues — sourceCoverage container path semantics", 
           },
         ],
         referenceCoverage: [],
-        assemblyOwners: [
-          { surface: "app-entry", goal_id: "goal_bootstrap", rationale: "owns scaffold" },
-        ],
+        assemblyOwners: [{ surface: "app-entry", goal_id: "goal_bootstrap", rationale: "owns scaffold" }],
       },
       designSpecs: [],
       // workDir undefined → existingOwnedPaths is [] → vacuous pass. Drive the
@@ -137,7 +129,7 @@ describe("architectFidelityIssues — sourceCoverage container path semantics", 
     }
   })
 
-  test("project root coverage (paths=[\".\"]) covers all leaves", async () => {
+  test('project root coverage (paths=["."]) covers all leaves', async () => {
     const fsPromises = await import("node:fs/promises")
     const pathMod = await import("node:path")
     const osMod = await import("node:os")

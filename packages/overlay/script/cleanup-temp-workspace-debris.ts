@@ -80,7 +80,9 @@ async function listOrphanDirs(): Promise<string[]> {
     try {
       const s = await stat(full)
       if (s.isDirectory()) out.push(full)
-    } catch { /* raced unlink is fine */ }
+    } catch {
+      /* raced unlink is fine */
+    }
   }
   return out
 }

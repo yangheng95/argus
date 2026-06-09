@@ -120,10 +120,7 @@ export namespace ProviderError {
 
     const messages = [
       input.message,
-      ...sources.flatMap((source) => [
-        stringValue(source.message),
-        stringValue(source.error),
-      ]),
+      ...sources.flatMap((source) => [stringValue(source.message), stringValue(source.error)]),
     ].filter((value): value is string => !!value)
     const matched = messages.find((value) => QUOTA_EXHAUSTED_PATTERNS.some((pattern) => pattern.test(value)))
     return matched
@@ -276,9 +273,9 @@ export namespace ProviderError {
       statusCode: input.error.statusCode,
       isRetryable: quota
         ? false
-        : (input.providerID.startsWith("openai")
-            ? isOpenAiErrorRetryable(input.error)
-            : input.error.isRetryable),
+        : input.providerID.startsWith("openai")
+          ? isOpenAiErrorRetryable(input.error)
+          : input.error.isRetryable,
       responseHeaders: input.error.responseHeaders,
       responseBody: input.error.responseBody,
       metadata,

@@ -160,7 +160,7 @@ Use this skill.
 
           expect(buildResult.output).not.toContain("<name>webpage-generate</name>")
           expect(frontendDesignResult.output).not.toContain("<name>webpage-generate</name>")
-          expect(ainvestResult.output).toContain("<skill_content name=\"ainvest-design-system\">")
+          expect(ainvestResult.output).toContain('<skill_content name="ainvest-design-system">')
           expect(ainvestResult.output).toContain("Closed-System Rule")
           expect(ainvestResult.output).toContain("Base directory for this skill:")
           expect(ainvestResult.output).toContain("assets/tokens/color.json")
@@ -251,5 +251,4 @@ Collect source webpage evidence.
       process.env.OPENCORVUS_TEST_HOME = home
     }
   })
-
 })

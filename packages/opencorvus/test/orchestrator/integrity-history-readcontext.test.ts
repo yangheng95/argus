@@ -54,7 +54,11 @@ function seedTask(input: { projectID: string; taskID: string; specIDs: string[];
   })
 }
 
-function lineage(taskID: string, activeSpecSnapshotID: string, inheritedSpecSnapshotIDs: string[] = []): SpecSnapshotLineage {
+function lineage(
+  taskID: string,
+  activeSpecSnapshotID: string,
+  inheritedSpecSnapshotIDs: string[] = [],
+): SpecSnapshotLineage {
   return {
     taskID,
     activeSpecSnapshotID,

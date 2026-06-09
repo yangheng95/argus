@@ -1,55 +1,51 @@
-import { defineConfig, type Plugin } from "vite";
-import solidPlugin from "vite-plugin-solid";
-import path from "path";
-import fs from "fs";
+import { defineConfig, type Plugin } from "vite"
+import solidPlugin from "vite-plugin-solid"
+import path from "path"
+import fs from "fs"
 
-const overlayPackage = JSON.parse(
-  fs.readFileSync(path.resolve(__dirname, "package.json"), "utf8"),
-) as { version: string };
-const overlayVersion = overlayPackage.version;
+const overlayPackage = JSON.parse(fs.readFileSync(path.resolve(__dirname, "package.json"), "utf8")) as {
+  version: string
+}
+const overlayVersion = overlayPackage.version
 
 function copyStaticAssets(entries: string[]): Plugin {
   function copyRecursive(src: string, dest: string) {
     if (fs.statSync(src).isDirectory()) {
-      fs.mkdirSync(dest, { recursive: true });
+      fs.mkdirSync(dest, { recursive: true })
       for (const child of fs.readdirSync(src)) {
-        copyRecursive(path.join(src, child), path.join(dest, child));
+        copyRecursive(path.join(src, child), path.join(dest, child))
       }
     } else {
-      fs.copyFileSync(src, dest);
+      fs.copyFileSync(src, dest)
     }
   }
 
   return {
     name: "copy-static-assets",
     writeBundle(options) {
-      const outDir = options.dir ?? path.resolve(__dirname, "dist-vite");
+      const outDir = options.dir ?? path.resolve(__dirname, "dist-vite")
       for (const entry of entries) {
-        const src = path.resolve(__dirname, "src", entry);
-        const dest = path.resolve(outDir, entry);
+        const src = path.resolve(__dirname, "src", entry)
+        const dest = path.resolve(outDir, entry)
         if (fs.existsSync(src)) {
-          copyRecursive(src, dest);
+          copyRecursive(src, dest)
         }
       }
     },
-  };
+  }
 }
 
 function injectOverlayVersion(): Plugin {
   return {
     name: "inject-overlay-version",
     transformIndexHtml(html) {
-      return html.replaceAll("%OPENCORVUS_OVERLAY_VERSION%", overlayVersion);
+      return html.replaceAll("%OPENCORVUS_OVERLAY_VERSION%", overlayVersion)
     },
-  };
+  }
 }
 
 export default defineConfig({
-  plugins: [
-    solidPlugin(),
-    injectOverlayVersion(),
-    copyStaticAssets(["i18n"]),
-  ],
+  plugins: [solidPlugin(), injectOverlayVersion(), copyStaticAssets(["i18n"])],
   define: {
     __OPENCORVUS_OVERLAY_VERSION__: JSON.stringify(overlayVersion),
   },
@@ -67,8 +63,6 @@ export default defineConfig({
     target: "esnext",
   },
   resolve: {
-    alias: [
-      { find: "@", replacement: path.resolve(__dirname, "src") },
-    ],
+    alias: [{ find: "@", replacement: path.resolve(__dirname, "src") }],
   },
-});
+})

@@ -1,91 +1,95 @@
-import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { appStore } from "../../store/app";
-import { boardStore } from "../../store/board";
-import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings";
-import { patchConfig, reloadProjectScope, syncAgentPromptLocale } from "../../services/config";
-import { openConfigDialog } from "../../services/dialog";
-import { CONFIG_SECTIONS } from "../../store/dialog";
-import { applyOpacity, applyTheme, applyZoom, sanitizeOpacity, sanitizeZoom, toggleDevtools } from "../../services/theme";
-import { themeOptionsForCurrentHost } from "../../services/theme-registry";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { appStore } from "../../store/app"
+import { boardStore } from "../../store/board"
+import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings"
+import { patchConfig, syncAgentPromptLocale } from "../../services/config"
+import { openDocumentationEntry } from "../../services/documentation"
+import { openConfigDialog } from "../../services/dialog"
+import { CONFIG_SECTIONS } from "../../store/dialog"
+import {
+  applyOpacity,
+  applyTheme,
+  applyZoom,
+  sanitizeOpacity,
+  sanitizeZoom,
+  toggleDevtools,
+} from "../../services/theme"
+import { themeOptionsForCurrentHost } from "../../services/theme-registry"
 import {
   browseDirectory,
   closeProject,
-  createDirectory,
   loadRecentDirectories,
   openDirectory,
   setDirectory,
-} from "../../services/workspace";
-import { t } from "../../utils/i18n";
-import { Button } from "../ui/Button";
+} from "../../services/workspace"
+import { t } from "../../utils/i18n"
+import { Button } from "../ui/Button"
 
-type MenuID = "workspace" | "provider" | "run" | "tools" | "skill" | "mcp" | "memory" | "settings" | "view" | "help";
+type MenuID = "workspace" | "provider" | "run" | "tools" | "settings" | "view" | "help"
 
 type MenuDef = {
-  id: MenuID;
-  label: string;
-  compact: string;
-  accessKey: string;
-};
+  id: MenuID
+  label: string
+  compact: string
+  accessKey: string
+}
 
-type TitlebarMenubarProps = {
-  onOpenLog: () => void;
-};
-
-const MENU_IDS: MenuID[] = ["workspace", "provider", "run", "tools", "skill", "mcp", "memory", "settings", "view", "help"];
+const MENU_IDS: MenuID[] = ["workspace", "provider", "run", "tools", "settings", "view", "help"]
 const MENU_ACCESS_KEYS: Record<MenuID, string> = {
   workspace: "p",
   provider: "a",
   run: "r",
   tools: "t",
-  skill: "s",
-  mcp: "c",
-  memory: "y",
   settings: "g",
   view: "v",
   help: "h",
-};
+}
 
 function menuIDForAccessKey(key: string): MenuID | null {
-  const normalized = key.toLowerCase();
-  return MENU_IDS.find((id) => MENU_ACCESS_KEYS[id] === normalized) ?? null;
+  const normalized = key.toLowerCase()
+  return MENU_IDS.find((id) => MENU_ACCESS_KEYS[id] === normalized) ?? null
 }
 
 function clampInt(value: unknown, min: number, max: number): number | null {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return null;
-  return Math.min(max, Math.max(min, Math.round(n)));
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return Math.min(max, Math.max(min, Math.round(n)))
 }
 
 function configNumber(path: "max_executor_groups"): number | null {
-  const raw = (appStore.config as any)?.assistant?.max_executor_groups;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  const raw = (appStore.config as any)?.assistant?.max_executor_groups
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : null
 }
 
 function projectModel(): string {
-  const model = (appStore.config as any)?.model;
-  return typeof model === "string" ? model : "";
+  const model = (appStore.config as any)?.model
+  return typeof model === "string" ? model : ""
 }
 
 function providerLabel(): string {
-  const model = projectModel();
-  if (!model.includes("/")) return t("agent_models.option_not_set");
-  return model;
+  const model = projectModel()
+  if (!model.includes("/")) return t("agent_models.option_not_set")
+  return model
 }
 
 function activeTaskLabel(): string {
-  const task = (boardStore.board as any)?.task;
-  const status = String(task?.status || "").trim();
-  return status || t("task.status.idle");
+  const task = (boardStore.board as any)?.task
+  const status = String(task?.status || "").trim()
+  return status || t("task.status.idle")
 }
 
 function MenuItem(props: {
-  children: any;
-  onClick: () => void | Promise<void>;
-  meta?: string;
-  disabled?: boolean;
-  testid?: string;
+  children: any
+  onClick: () => void | Promise<void>
+  meta?: string
+  title?: string
+  ariaLabel?: string
+  disabled?: boolean
+  testid?: string
 }) {
+  const fallbackTitle = () => (typeof props.children === "string" ? props.children : undefined)
+  const tooltip = () => props.title || props.meta || fallbackTitle()
   return (
     <button
       type="button"
@@ -93,6 +97,8 @@ function MenuItem(props: {
       class="titlebar-menubar-item"
       disabled={props.disabled}
       data-testid={props.testid}
+      title={tooltip()}
+      aria-label={props.ariaLabel || tooltip()}
       onClick={() => void props.onClick()}
     >
       <span class="titlebar-menubar-item-title">{props.children}</span>
@@ -100,7 +106,7 @@ function MenuItem(props: {
         <span class="titlebar-menubar-item-meta">{props.meta}</span>
       </Show>
     </button>
-  );
+  )
 }
 
 function MenuGroup(props: { title: string; children: any }) {
@@ -109,17 +115,14 @@ function MenuGroup(props: { title: string; children: any }) {
       <div class="titlebar-menubar-group-title">{props.title}</div>
       {props.children}
     </div>
-  );
+  )
 }
 
 function directoryLeaf(dir: string): string {
-  return dir.split(/[\\/]/).filter(Boolean).at(-1) || dir;
+  return dir.split(/[\\/]/).filter(Boolean).at(-1) || dir
 }
 
-function RecentDirectoryMenuItem(props: {
-  dir: string;
-  onClick: () => void | Promise<void>;
-}) {
+function RecentDirectoryMenuItem(props: { dir: string; onClick: () => void | Promise<void> }) {
   return (
     <button
       type="button"
@@ -131,23 +134,23 @@ function RecentDirectoryMenuItem(props: {
       <span class="titlebar-menubar-recent-name">{directoryLeaf(props.dir)}</span>
       <span class="titlebar-menubar-recent-path">{props.dir}</span>
     </button>
-  );
+  )
 }
 
 function MenuRange(props: {
-  label: string;
-  description: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit?: string;
-  disabled?: boolean;
-  testid?: string;
-  onChange: (value: number) => void | Promise<void>;
+  label: string
+  description: string
+  value: number
+  min: number
+  max: number
+  step: number
+  unit?: string
+  disabled?: boolean
+  testid?: string
+  onChange: (value: number) => void | Promise<void>
 }) {
   function commit(event: Event) {
-    void props.onChange(Number((event.target as HTMLInputElement).value));
+    void props.onChange(Number((event.target as HTMLInputElement).value))
   }
 
   return (
@@ -170,100 +173,102 @@ function MenuRange(props: {
           onChange={commit}
         />
         <span class="titlebar-menubar-range-value" aria-hidden="true">
-          {props.value}{props.unit || ""}
+          {props.value}
+          {props.unit || ""}
         </span>
       </span>
     </label>
-  );
+  )
 }
 
-export function TitlebarMenubar(props: TitlebarMenubarProps) {
-  const [openMenu, setOpenMenu] = createSignal<MenuID | null>(null);
-  const [recentDirs, setRecentDirs] = createSignal<string[]>([]);
-  let rootRef: HTMLDivElement | undefined;
-  let altPressedOnly = false;
+export function TitlebarMenubar() {
+  const [openMenu, setOpenMenu] = createSignal<MenuID | null>(null)
+  const [recentDirs, setRecentDirs] = createSignal<string[]>([])
+  let rootRef: HTMLDivElement | undefined
+  let altPressedOnly = false
 
   const menus = createMemo<MenuDef[]>(() => [
     { id: "workspace", label: t("titlebar.menu.workspace"), compact: "P", accessKey: MENU_ACCESS_KEYS.workspace },
     { id: "provider", label: t("titlebar.menu.provider"), compact: "Pr", accessKey: MENU_ACCESS_KEYS.provider },
     { id: "run", label: t("titlebar.menu.run"), compact: "R", accessKey: MENU_ACCESS_KEYS.run },
     { id: "tools", label: t("titlebar.menu.tools"), compact: "T", accessKey: MENU_ACCESS_KEYS.tools },
-    { id: "skill", label: t("titlebar.menu.skill"), compact: "S", accessKey: MENU_ACCESS_KEYS.skill },
-    { id: "mcp", label: t("titlebar.menu.mcp"), compact: "C", accessKey: MENU_ACCESS_KEYS.mcp },
-    { id: "memory", label: t("titlebar.menu.memory"), compact: "Y", accessKey: MENU_ACCESS_KEYS.memory },
     { id: "settings", label: t("titlebar.menu.settings"), compact: "Se", accessKey: MENU_ACCESS_KEYS.settings },
     { id: "view", label: t("titlebar.menu.view"), compact: "V", accessKey: MENU_ACCESS_KEYS.view },
     { id: "help", label: t("titlebar.menu.help"), compact: "?", accessKey: MENU_ACCESS_KEYS.help },
-  ]);
+  ])
 
   function closeMenu() {
-    setOpenMenu(null);
+    setOpenMenu(null)
   }
 
   function open(id: MenuID) {
-    setRecentDirs(loadRecentDirectories());
-    setOpenMenu((current) => current === id ? null : id);
+    setRecentDirs(loadRecentDirectories())
+    setOpenMenu((current) => (current === id ? null : id))
   }
 
   function focusTrigger(id: MenuID) {
-    document.querySelector<HTMLButtonElement>(`[data-menu-trigger="${id}"]`)?.focus();
+    document.querySelector<HTMLButtonElement>(`[data-menu-trigger="${id}"]`)?.focus()
   }
 
   function focusFirstMenuItem(id: MenuID) {
     queueMicrotask(() => {
-      document.querySelector<HTMLElement>(`#titlebar-menu-${id} [role="menuitem"]:not([disabled])`)?.focus();
-    });
+      document.querySelector<HTMLElement>(`#titlebar-menu-${id} [role="menuitem"]:not([disabled])`)?.focus()
+    })
   }
 
   function openFromKeyboard(id: MenuID) {
-    setRecentDirs(loadRecentDirectories());
-    setOpenMenu(id);
-    focusFirstMenuItem(id);
+    setRecentDirs(loadRecentDirectories())
+    setOpenMenu(id)
+    focusFirstMenuItem(id)
   }
 
   function openConfig(section: string) {
-    openConfigDialog(section);
-    closeMenu();
+    openConfigDialog(section)
+    closeMenu()
+  }
+
+  function openDocumentation(id: "quickstart" | "sdk") {
+    void openDocumentationEntry(id, settingsStore.locale).finally(closeMenu)
   }
 
   async function handlePatchGoalParallelism(value: number) {
-    await patchConfig({ assistant: { max_executor_groups: value } });
+    await patchConfig({ assistant: { max_executor_groups: value } })
   }
 
   async function handlePatchCompactionThreshold(percent: number) {
-    const clamped = Math.min(100, Math.max(10, Math.round(percent)));
-    const ratio = Math.round(clamped) / 100;
-    await patchConfig({ compaction: { threshold: ratio } });
+    const clamped = Math.min(100, Math.max(10, Math.round(percent)))
+    const ratio = Math.round(clamped) / 100
+    await patchConfig({ compaction: { threshold: ratio } })
   }
 
   async function handlePatchProposedTaskConfirmation(enabled: boolean) {
-    await patchConfig({ experimental: { confirm_proposed_tasks: enabled } });
+    await patchConfig({ experimental: { confirm_proposed_tasks: enabled } })
   }
 
   function setTheme(value: string) {
-    setSettingsStore("theme", value);
-    applyTheme(value);
-    saveSettings();
+    setSettingsStore("theme", value)
+    applyTheme(value)
+    saveSettings()
   }
 
   function setLocale(value: string) {
-    setSettingsStore("locale", value);
-    void syncAgentPromptLocale(value);
-    saveSettings();
+    setSettingsStore("locale", value)
+    void syncAgentPromptLocale(value)
+    saveSettings()
   }
 
   function setOpacityPercent(value: number) {
-    const next = sanitizeOpacity(value / 100);
-    setSettingsStore("opacity", next);
-    applyOpacity(next);
-    saveSettings();
+    const next = sanitizeOpacity(value / 100)
+    setSettingsStore("opacity", next)
+    applyOpacity(next)
+    saveSettings()
   }
 
   function setZoomPercent(value: number) {
-    const next = sanitizeZoom(value / 100);
-    setSettingsStore("zoom", next);
-    applyZoom(next);
-    saveSettings();
+    const next = sanitizeZoom(value / 100)
+    setSettingsStore("zoom", next)
+    applyZoom(next)
+    saveSettings()
   }
 
   function resetLayout() {
@@ -272,99 +277,105 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
       sectionsWidth: null,
       sidebarCollapsed: false,
       rightPanelCollapsed: false,
-    });
-    saveSettings();
-    closeMenu();
+    })
+    saveSettings()
+    closeMenu()
   }
 
   function focusExecutorSelector() {
-    closeMenu();
-    const activeExecutor = settingsStore.executor === "opencorvus" ? "mirror" : "external";
-    const button = document.querySelector<HTMLButtonElement>(`[data-ui="executor-chip-${activeExecutor}"]`);
-    button?.focus();
+    closeMenu()
+    const activeExecutor = settingsStore.executor === "opencorvus" ? "mirror" : "external"
+    const button = document.querySelector<HTMLButtonElement>(`[data-ui="executor-chip-${activeExecutor}"]`)
+    button?.focus()
   }
 
   onMount(() => {
     const onPointerDown = (event: PointerEvent) => {
-      if (!openMenu()) return;
-      const target = event.target as Node | null;
-      if (rootRef && target && rootRef.contains(target)) return;
-      closeMenu();
-    };
+      if (!openMenu()) return
+      const target = event.target as Node | null
+      if (rootRef && target && rootRef.contains(target)) return
+      closeMenu()
+    }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing) return;
+      if (event.defaultPrevented || event.isComposing) return
       if (event.key === "Alt" && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-        altPressedOnly = true;
-        event.preventDefault();
-        return;
+        altPressedOnly = true
+        event.preventDefault()
+        return
       }
       if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-        const id = menuIDForAccessKey(event.key);
-        altPressedOnly = false;
+        const id = menuIDForAccessKey(event.key)
+        altPressedOnly = false
         if (id) {
-          event.preventDefault();
-          openFromKeyboard(id);
-          return;
+          event.preventDefault()
+          openFromKeyboard(id)
+          return
         }
       } else if (event.key !== "Alt") {
-        altPressedOnly = false;
+        altPressedOnly = false
       }
-      if (!openMenu()) return;
+      if (!openMenu()) return
       if (event.key === "Escape" || event.key === "Tab") {
-        closeMenu();
+        closeMenu()
       }
-    };
+    }
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key !== "Alt" || !altPressedOnly) return;
-      altPressedOnly = false;
-      event.preventDefault();
-      const current = openMenu();
+      if (event.key !== "Alt" || !altPressedOnly) return
+      altPressedOnly = false
+      event.preventDefault()
+      const current = openMenu()
       if (current) {
-        closeMenu();
-        focusTrigger(current);
+        closeMenu()
+        focusTrigger(current)
       } else {
-        focusTrigger("workspace");
+        focusTrigger("workspace")
       }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("keyup", onKeyUp);
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    document.addEventListener("keydown", onKeyDown)
+    document.addEventListener("keyup", onKeyUp)
     onCleanup(() => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("keyup", onKeyUp);
-    });
-  });
+      document.removeEventListener("pointerdown", onPointerDown)
+      document.removeEventListener("keydown", onKeyDown)
+      document.removeEventListener("keyup", onKeyUp)
+    })
+  })
 
   function triggerKey(event: KeyboardEvent, id: MenuID) {
-    const index = MENU_IDS.indexOf(id);
+    const index = MENU_IDS.indexOf(id)
     if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      setOpenMenu(id);
-      focusFirstMenuItem(id);
-      return;
+      event.preventDefault()
+      setOpenMenu(id)
+      focusFirstMenuItem(id)
+      return
     }
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    const delta = event.key === "ArrowRight" ? 1 : -1;
-    const next = MENU_IDS[(index + delta + MENU_IDS.length) % MENU_IDS.length];
-    document.querySelector<HTMLButtonElement>(`[data-menu-trigger="${next}"]`)?.focus();
-    if (openMenu()) setOpenMenu(next);
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
+    event.preventDefault()
+    const delta = event.key === "ArrowRight" ? 1 : -1
+    const next = MENU_IDS[(index + delta + MENU_IDS.length) % MENU_IDS.length]
+    document.querySelector<HTMLButtonElement>(`[data-menu-trigger="${next}"]`)?.focus()
+    if (openMenu()) setOpenMenu(next)
   }
 
-  const maxGroups = createMemo(() => clampInt(configNumber("max_executor_groups"), 1, 10));
+  const maxGroups = createMemo(() => clampInt(configNumber("max_executor_groups"), 1, 10))
   const compactionThresholdPercent = createMemo(() => {
-    const raw = Number((appStore.config as any)?.compaction?.threshold);
-    const ratio = Number.isFinite(raw) && raw > 0 ? raw : 0.9;
-    return Math.round(ratio * 100);
-  });
-  const opacityPercent = createMemo(() => Math.round(settingsStore.opacity * 100));
-  const zoomPercent = createMemo(() => Math.round(settingsStore.zoom * 100));
-  const themeOptions = themeOptionsForCurrentHost();
+    const raw = Number((appStore.config as any)?.compaction?.threshold)
+    const ratio = Number.isFinite(raw) && raw > 0 ? raw : 0.9
+    return Math.round(ratio * 100)
+  })
+  const opacityPercent = createMemo(() => Math.round(settingsStore.opacity * 100))
+  const zoomPercent = createMemo(() => Math.round(settingsStore.zoom * 100))
+  const themeOptions = themeOptionsForCurrentHost()
 
   return (
     /* OpenCorvus is the product brand name, so this menubar landmark keeps the literal brand label. */
-    <div class="titlebar-menubar" role="menubar" aria-label="OpenCorvus" data-no-drag="true" ref={(el) => (rootRef = el)}>
+    <div
+      class="titlebar-menubar"
+      role="menubar"
+      aria-label="OpenCorvus"
+      data-no-drag="true"
+      ref={(el) => (rootRef = el)}
+    >
       <For each={menus()}>
         {(menu) => (
           <div class="titlebar-menubar-slot">
@@ -389,7 +400,9 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
               onKeyDown={(event) => triggerKey(event, menu.id)}
             >
               <span class="titlebar-menu-trigger-label">{menu.label}</span>
-              <span class="titlebar-menu-trigger-compact" aria-hidden="true">{menu.compact}</span>
+              <span class="titlebar-menu-trigger-compact" aria-hidden="true">
+                {menu.compact}
+              </span>
             </Button>
             <Show when={openMenu() === menu.id}>
               <div
@@ -405,9 +418,20 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                       {settingsStore.directory || t("workspace.no_directory")}
                     </div>
                     <MenuItem onClick={() => void browseDirectory().finally(closeMenu)}>{t("cwd.browse")}</MenuItem>
-                    <MenuItem onClick={() => void createDirectory().finally(closeMenu)}>{t("cwd.create")}</MenuItem>
-                    <MenuItem onClick={() => void openDirectory().finally(closeMenu)} disabled={!settingsStore.directory}>{t("cwd.open")}</MenuItem>
-                    <MenuItem onClick={() => { closeProject(); closeMenu(); }} disabled={!settingsStore.directory} testid="titlebar-close-project">
+                    <MenuItem
+                      onClick={() => void openDirectory().finally(closeMenu)}
+                      disabled={!settingsStore.directory}
+                    >
+                      {t("cwd.open")}
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        closeProject()
+                        closeMenu()
+                      }}
+                      disabled={!settingsStore.directory}
+                      testid="titlebar-close-project"
+                    >
                       {t("project.close")}
                     </MenuItem>
                   </MenuGroup>
@@ -428,15 +452,23 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                 <Show when={menu.id === "provider"}>
                   <MenuGroup title={t("titlebar.menu.provider")}>
                     <div class="titlebar-menubar-note">{providerLabel()}</div>
-                    <MenuItem onClick={() => openConfig("providers")} testid="titlebar-open-providers">{t("cmdk.settings.providers")}</MenuItem>
-                    <MenuItem onClick={() => openConfig("agent-models")} testid="titlebar-open-agent-models">{t("cmdk.settings.agent_models")}</MenuItem>
+                    <MenuItem onClick={() => openConfig("providers")} testid="titlebar-open-providers">
+                      {t("cmdk.settings.providers")}
+                    </MenuItem>
+                    <MenuItem onClick={() => openConfig("agent-models")} testid="titlebar-open-agent-models">
+                      {t("cmdk.settings.agent_models")}
+                    </MenuItem>
                   </MenuGroup>
                 </Show>
 
                 <Show when={menu.id === "run"}>
                   <MenuGroup title={t("titlebar.menu.run")}>
-                    <MenuItem onClick={focusExecutorSelector} meta={settingsStore.executor}>{t("executor.group")}</MenuItem>
-                    <MenuItem onClick={() => undefined} meta={activeTaskLabel()} disabled>{t("task.status.running")}</MenuItem>
+                    <MenuItem onClick={focusExecutorSelector} meta={settingsStore.executor}>
+                      {t("executor.group")}
+                    </MenuItem>
+                    <MenuItem onClick={() => undefined} meta={activeTaskLabel()} disabled>
+                      {t("task.status.running")}
+                    </MenuItem>
                     <label class="titlebar-menubar-toggle">
                       <span>
                         <span class="titlebar-menubar-item-title">{t("titlebar.auto_question")}</span>
@@ -446,7 +478,11 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                         type="checkbox"
                         checked={(appStore.config as any)?.experimental?.auto_question === true}
                         aria-label={t("titlebar.auto_question")}
-                        onChange={(event) => void patchConfig({ experimental: { auto_question: (event.currentTarget as HTMLInputElement).checked } })}
+                        onChange={(event) =>
+                          void patchConfig({
+                            experimental: { auto_question: (event.currentTarget as HTMLInputElement).checked },
+                          })
+                        }
                       />
                     </label>
                     <label class="titlebar-menubar-toggle">
@@ -459,7 +495,9 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                         checked={(appStore.config as any)?.experimental?.confirm_proposed_tasks === true}
                         aria-label={t("titlebar.confirm_proposed_tasks")}
                         data-testid="titlebar-confirm-proposed-tasks"
-                        onChange={(event) => void handlePatchProposedTaskConfirmation((event.currentTarget as HTMLInputElement).checked)}
+                        onChange={(event) =>
+                          void handlePatchProposedTaskConfirmation((event.currentTarget as HTMLInputElement).checked)
+                        }
                       />
                     </label>
                     <MenuRange
@@ -494,33 +532,11 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                   </MenuGroup>
                 </Show>
 
-                <Show when={menu.id === "skill"}>
-                  <MenuGroup title={t("titlebar.menu.skill")}>
-                    <MenuItem onClick={() => openConfig("skill")} testid="titlebar-open-skills">{t("skill.title")}</MenuItem>
-                    <MenuItem onClick={() => openConfig("skill-market")} testid="titlebar-open-skill-market">{t("skill.market.title")}</MenuItem>
-                  </MenuGroup>
-                </Show>
-
-                <Show when={menu.id === "mcp"}>
-                  <MenuGroup title={t("titlebar.menu.mcp")}>
-                    <MenuItem onClick={() => openConfig("mcp")} testid="titlebar-open-mcp">{t("mcp.title")}</MenuItem>
-                  </MenuGroup>
-                </Show>
-
-                <Show when={menu.id === "memory"}>
-                  <MenuGroup title={t("titlebar.menu.memory")}>
-                    <MenuItem onClick={() => openConfig("memory")} testid="titlebar-open-memory">{t("memory.title")}</MenuItem>
-                  </MenuGroup>
-                </Show>
-
                 <Show when={menu.id === "settings"}>
                   <MenuGroup title={t("config.title")}>
                     <For each={CONFIG_SECTIONS}>
                       {(section) => (
-                        <MenuItem
-                          onClick={() => openConfig(section.id)}
-                          testid={`titlebar-settings-${section.id}`}
-                        >
+                        <MenuItem onClick={() => openConfig(section.id)} testid={`titlebar-settings-${section.id}`}>
                           {t(section.labelKey)}
                         </MenuItem>
                       )}
@@ -530,7 +546,11 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
 
                 <Show when={menu.id === "view"}>
                   <MenuGroup title={t("titlebar.menu.view")}>
-                    <div class="titlebar-theme-options titlebar-theme-options-menubar" role="radiogroup" aria-label={t("settings.theme.label")}>
+                    <div
+                      class="titlebar-theme-options titlebar-theme-options-menubar"
+                      role="radiogroup"
+                      aria-label={t("settings.theme.label")}
+                    >
                       <For each={themeOptions}>
                         {(item) => (
                           <button
@@ -548,7 +568,11 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                         )}
                       </For>
                     </div>
-                    <MenuItem onClick={() => setLocale(settingsStore.locale === "zh-CN" ? "en-US" : "zh-CN")} meta={settingsStore.locale} testid="titlebar-toggle-locale">
+                    <MenuItem
+                      onClick={() => setLocale(settingsStore.locale === "zh-CN" ? "en-US" : "zh-CN")}
+                      meta={settingsStore.locale}
+                      testid="titlebar-toggle-locale"
+                    >
                       {t("settings.language")}
                     </MenuItem>
                     <MenuRange
@@ -579,12 +603,36 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
 
                 <Show when={menu.id === "help"}>
                   <MenuGroup title={t("titlebar.menu.help")}>
-                    <MenuItem onClick={() => void reloadProjectScope().finally(closeMenu)}>{t("common.refresh")}</MenuItem>
-                    <MenuItem onClick={() => { toggleDevtools(); closeMenu(); }}>{t("titlebar.devtools")}</MenuItem>
-                    <MenuItem onClick={() => { props.onOpenLog(); closeMenu(); }} testid="titlebar-help-logs">{t("titlebar.logs")}</MenuItem>
-                    <MenuItem onClick={() => openConfig("about")}>{t("about.title")}</MenuItem>
-                    <MenuItem onClick={() => openConfig("about")} testid="titlebar-connection-diagnostics">
-                      {t("titlebar.connection_diagnostics")}
+                    <MenuItem
+                      onClick={() => openDocumentation("quickstart")}
+                      meta={t("titlebar.docs_hint")}
+                      testid="titlebar-help-docs"
+                    >
+                      {t("titlebar.docs")}
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => openDocumentation("sdk")}
+                      meta={t("titlebar.sdk_hint")}
+                      testid="titlebar-help-sdk"
+                    >
+                      {t("titlebar.sdk")}
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        toggleDevtools()
+                        closeMenu()
+                      }}
+                      meta={t("titlebar.devtools_hint")}
+                      testid="titlebar-help-devtools"
+                    >
+                      {t("titlebar.devtools")}
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => openConfig("about")}
+                      meta={t("titlebar.about_hint")}
+                      testid="titlebar-help-about"
+                    >
+                      {t("about.title")}
                     </MenuItem>
                   </MenuGroup>
                 </Show>
@@ -594,5 +642,5 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
         )}
       </For>
     </div>
-  );
+  )
 }

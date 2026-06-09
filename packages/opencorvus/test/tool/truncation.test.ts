@@ -115,9 +115,7 @@ describe("Truncate", () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
       // No agent passed → cannot recover the saved copy. Silent truncation
       // here would be a CLAUDE.md rule #1 fallback. Surface the failure.
-      await expect(Truncate.output(lines, { maxLines: 10 })).rejects.toThrow(
-        /silently lose data/,
-      )
+      await expect(Truncate.output(lines, { maxLines: 10 })).rejects.toThrow(/silently lose data/)
     })
 
     test("throws when agent explicitly denies all recovery tools", async () => {
@@ -131,9 +129,7 @@ describe("Truncate", () => {
           { permission: "search_code", pattern: "*", action: "deny" as const },
         ],
       } as any
-      await expect(Truncate.output(lines, { maxLines: 10 }, denyAll)).rejects.toThrow(
-        /silently lose data/,
-      )
+      await expect(Truncate.output(lines, { maxLines: 10 }, denyAll)).rejects.toThrow(/silently lose data/)
     })
 
     test("throws when no agent context is supplied at all", async () => {
@@ -141,9 +137,7 @@ describe("Truncate", () => {
       // No agent → no permission ruleset → cannot prove recovery path exists.
       // Per CLAUDE.md rule #1 we surface the failure rather than silently
       // dropping the tail of the output.
-      await expect(Truncate.output(lines, { maxLines: 10 })).rejects.toThrow(
-        /silently lose data/,
-      )
+      await expect(Truncate.output(lines, { maxLines: 10 })).rejects.toThrow(/silently lose data/)
     })
 
     test("permits truncation when agent has read AND search_code but task is denied", async () => {

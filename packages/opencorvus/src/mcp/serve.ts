@@ -225,7 +225,7 @@ export namespace MCPServe {
           const local = byName.get(request.params.name)
           if (local) return executeLocal(server, local, session.id, approved, args)
           const proxy = await MCP.serverTools().then((items) =>
-            filterExecutorProxiedTools(items).find((item) => item.key === request.params.name)
+            filterExecutorProxiedTools(items).find((item) => item.key === request.params.name),
           )
           if (proxy) return MCP.callTool({ key: proxy.key, args }) as any
           throw new McpError(ErrorCode.InvalidParams, `Tool ${request.params.name} not found`)
@@ -321,7 +321,10 @@ function isExecutorDeniedProxiedTool(tool: { key: string; name: string }): boole
 }
 
 function isBunRuntime(execPath: string) {
-  const executable = path.basename(execPath).toLowerCase().replace(/\.exe$/, "")
+  const executable = path
+    .basename(execPath)
+    .toLowerCase()
+    .replace(/\.exe$/, "")
   return executable === "bun"
 }
 

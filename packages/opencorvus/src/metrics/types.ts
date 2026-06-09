@@ -22,10 +22,10 @@ export const MetricGateClass = z.enum(["blocking", "diagnostic", "efficiency"])
 export type MetricGateClass = z.infer<typeof MetricGateClass>
 
 export const MetricEvaluatorKind = z.enum([
-  "shell",       // invoke a shell command, map exit/stdout to raw_value
-  "judge",       // LLM-judge with rubric → ordinal level → normalized value
-  "query",       // SQL query over engine_* tables
-  "aggregator",  // composes other metric_result rows by op (mean/min/max/sum)
+  "shell", // invoke a shell command, map exit/stdout to raw_value
+  "judge", // LLM-judge with rubric → ordinal level → normalized value
+  "query", // SQL query over engine_* tables
+  "aggregator", // composes other metric_result rows by op (mean/min/max/sum)
 ])
 export type MetricEvaluatorKind = z.infer<typeof MetricEvaluatorKind>
 
@@ -48,7 +48,7 @@ export const MetricSpec = z.object({
   goal_id: z.string().nullable(),
   name: z.string().min(1),
   description: z.string().min(1),
-  unit: z.string().min(1),                 // 'ratio'|'count'|'latency_ms'|...
+  unit: z.string().min(1), // 'ratio'|'count'|'latency_ms'|...
   direction: MetricDirection,
   target: z.number(),
   floor: z.number(),
@@ -118,10 +118,10 @@ export const Counterexample = z.object({
 export type Counterexample = z.infer<typeof Counterexample>
 
 export const ArbiterVerdict = z.enum([
-  "continue",  // next driver reads trajectory + counterexamples and decides what to do
-  "accept",    // terminal success
-  "stalled",   // no progress for N iterations, terminal but not failure
-  "abort",     // hard failure (regression cascade / iteration ceiling)
+  "continue", // next driver reads trajectory + counterexamples and decides what to do
+  "accept", // terminal success
+  "stalled", // no progress for N iterations, terminal but not failure
+  "abort", // hard failure (regression cascade / iteration ceiling)
 ])
 export type ArbiterVerdict = z.infer<typeof ArbiterVerdict>
 

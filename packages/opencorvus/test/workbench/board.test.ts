@@ -48,9 +48,7 @@ test("latestDeliveredGoalRunFromRows skips a fresh pending tip whose run has no 
     { id: "run_old_failed" },
   ]
   const deliveries = new Set(["run_passed_then_superseded"])
-  expect(latestDeliveredGoalRunFromRows(rows, (id) => deliveries.has(id))?.id).toBe(
-    "run_passed_then_superseded",
-  )
+  expect(latestDeliveredGoalRunFromRows(rows, (id) => deliveries.has(id))?.id).toBe("run_passed_then_superseded")
 })
 
 test("latestDeliveredGoalRunFromRows returns undefined when no run in the chain has shipped a acceptance", () => {
@@ -65,9 +63,7 @@ test("latestDeliveredGoalRunFromRows prefers a newer delivered run over an older
     { id: "run_v1_failed" },
   ]
   const deliveries = new Set(["run_v3_passed", "run_v2_passed"])
-  expect(latestDeliveredGoalRunFromRows(rows, (id) => deliveries.has(id))?.id).toBe(
-    "run_v3_passed",
-  )
+  expect(latestDeliveredGoalRunFromRows(rows, (id) => deliveries.has(id))?.id).toBe("run_v3_passed")
 })
 
 test("compileBoard does not retain a mutable process board between hydrations", async () => {
@@ -78,24 +74,28 @@ test("compileBoard does not retain a mutable process board between hydrations", 
   const taskID = `tsk_${now.toString(16)}BoardNoCache`
 
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: tmp.path,
-      name: "Board no process cache",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "Board no process cache",
-      request: "initial request",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board no process cache",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Board no process cache",
+        request: "initial request",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
   })
 
   await Instance.provide({
@@ -124,26 +124,32 @@ test("board snapshot tag and task-scope status include workflow step protocol ev
   const taskID = `tsk_${now.toString(16)}BoardProtocol`
 
   Database.use((db) =>
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: tmp.path,
-      name: "Board protocol projection",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board protocol projection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "Board protocol projection",
-      request: "Show running task-scope steps from protocol events",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Board protocol projection",
+        request: "Show running task-scope steps from protocol events",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
 
   await Instance.provide({
@@ -155,12 +161,16 @@ test("board snapshot tag and task-scope status include workflow step protocol ev
       expect(before.snapshotVersion).toBe(beforeTag)
       expect(before.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("pending")
 
-      await EngineProtocol.emit(Event.WorkflowStepUpdated, {
-        taskID,
-        stepID: "architect",
-        status: "running",
-        summary: "Step \"Architect\" started",
-      }, { source: "test.board" })
+      await EngineProtocol.emit(
+        Event.WorkflowStepUpdated,
+        {
+          taskID,
+          stepID: "architect",
+          status: "running",
+          summary: 'Step "Architect" started',
+        },
+        { source: "test.board" },
+      )
 
       const after = compileBoard({ taskID })
       const afterTag = boardTag({ taskID })
@@ -180,24 +190,28 @@ test("board snapshot tag ignores stream noise while lastSequence stays current",
   const taskID = `tsk_${now.toString(16)}BoardNoise`
 
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: tmp.path,
-      name: "Board protocol noise",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "Board protocol noise",
-      request: "Ignore stream noise in board tag",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board protocol noise",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Board protocol noise",
+        request: "Ignore stream noise in board tag",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
   })
 
   await Instance.provide({
@@ -210,20 +224,22 @@ test("board snapshot tag ignores stream noise while lastSequence stays current",
       Database.use((db) => {
         for (const [index, type] of ["session.status", "review.stream.chunk"].entries()) {
           const seq = index + 1
-          db.insert(ProtocolEventTable).values({
-            id: Identifier.ascending("protocol_event"),
-            kind: "event",
-            type,
-            aggregate_type: "task",
-            aggregate_id: taskID,
-            task_id: taskID,
-            source: "test.board-noise",
-            seq,
-            emitted_at: now + seq,
-            payload: { taskID, status: { type: "streaming" }, delta: "noise" },
-            time_created: now + seq,
-            time_updated: now + seq,
-          }).run()
+          db.insert(ProtocolEventTable)
+            .values({
+              id: Identifier.ascending("protocol_event"),
+              kind: "event",
+              type,
+              aggregate_type: "task",
+              aggregate_id: taskID,
+              task_id: taskID,
+              source: "test.board-noise",
+              seq,
+              emitted_at: now + seq,
+              payload: { taskID, status: { type: "streaming" }, delta: "noise" },
+              time_created: now + seq,
+              time_updated: now + seq,
+            })
+            .run()
         }
       })
 
@@ -232,12 +248,16 @@ test("board snapshot tag ignores stream noise while lastSequence stays current",
       expect(afterNoise.snapshotVersion).toBe(before.snapshotVersion)
       expect(afterNoise.lastSequence).toBe(2)
 
-      await EngineProtocol.emit(Event.WorkflowStepUpdated, {
-        taskID,
-        stepID: "architect",
-        status: "running",
-        summary: "Step \"Architect\" started",
-      }, { source: "test.board-visible" })
+      await EngineProtocol.emit(
+        Event.WorkflowStepUpdated,
+        {
+          taskID,
+          stepID: "architect",
+          status: "running",
+          summary: 'Step "Architect" started',
+        },
+        { source: "test.board-visible" },
+      )
 
       const afterVisible = compileBoard({ taskID })
       expect(afterVisible.lastSequence).toBe(3)
@@ -255,29 +275,33 @@ test("cancelled terminal task without a run exposes task-level retry", async () 
   const taskID = `tsk_board_retry_${now.toString(16)}`
 
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: tmp.path,
-      name: "Board runless retry projection",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "Runless cancelled task",
-      request: "retry after provider failure",
-      kind: "workflow",
-      priority: "normal",
-      time_created: now - 10_000,
-      time_updated: now,
-      time_started: now - 10_000,
-      time_completed: now,
-      error: "task cancelled",
-      metadata: { cancelled: true },
-    } as any).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board runless retry projection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Runless cancelled task",
+        request: "retry after provider failure",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now - 10_000,
+        time_updated: now,
+        time_started: now - 10_000,
+        time_completed: now,
+        error: "task cancelled",
+        metadata: { cancelled: true },
+      } as any)
+      .run()
   })
 
   await Instance.provide({
@@ -305,68 +329,76 @@ test("cancelled terminal task does not project partially completed goal workflow
   const completedGoalRunID = `glr_board_done_${stamp}`
 
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: tmp.path,
-      name: "Board cancelled workflow projection",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "Cancelled partial workflow",
-      request: "cancel after some goals finish",
-      kind: "workflow",
-      priority: "normal",
-      time_created: now - 10_000,
-      time_updated: now,
-      time_started: now - 10_000,
-      time_completed: now,
-      error: "operator cancelled",
-      metadata: { cancelled: true },
-    } as any).run()
-    db.insert(EngineGoalTable).values([
-      {
-        id: completedGoalID,
-        task_id: taskID,
-        title: "Finished goal",
-        slug: "finished-goal",
-        objective: "Finish one goal before cancellation.",
-        order_index: 0,
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board cancelled workflow projection",
+        sandboxes: "[]",
         time_created: now,
         time_updated: now,
-      },
-      {
-        id: pendingGoalID,
-        task_id: taskID,
-        title: "Pending goal",
-        slug: "pending-goal",
-        objective: "Remain pending after cancellation.",
-        order_index: 1,
-        time_created: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Cancelled partial workflow",
+        request: "cancel after some goals finish",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now - 10_000,
         time_updated: now,
-      },
-    ] as any).run()
-    db.insert(EngineArtifactTable).values({
-      id: completedGoalRunID,
-      task_id: taskID,
-      run_id: runID,
-      goal_run_id: completedGoalRunID,
-      kind: "goal_run_attempt",
-      label: "completed-before-cancel",
-      payload: {
-        goal_id: completedGoalID,
-        status: "completed",
-        retry_count: 0,
-        time_started: now - 5_000,
-        time_completed: now - 1_000,
-      },
-      time_created: now - 1_000,
-      time_updated: now - 1_000,
-    }).run()
+        time_started: now - 10_000,
+        time_completed: now,
+        error: "operator cancelled",
+        metadata: { cancelled: true },
+      } as any)
+      .run()
+    db.insert(EngineGoalTable)
+      .values([
+        {
+          id: completedGoalID,
+          task_id: taskID,
+          title: "Finished goal",
+          slug: "finished-goal",
+          objective: "Finish one goal before cancellation.",
+          order_index: 0,
+          time_created: now,
+          time_updated: now,
+        },
+        {
+          id: pendingGoalID,
+          task_id: taskID,
+          title: "Pending goal",
+          slug: "pending-goal",
+          objective: "Remain pending after cancellation.",
+          order_index: 1,
+          time_created: now,
+          time_updated: now,
+        },
+      ] as any)
+      .run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: completedGoalRunID,
+        task_id: taskID,
+        run_id: runID,
+        goal_run_id: completedGoalRunID,
+        kind: "goal_run_attempt",
+        label: "completed-before-cancel",
+        payload: {
+          goal_id: completedGoalID,
+          status: "completed",
+          retry_count: 0,
+          time_started: now - 5_000,
+          time_completed: now - 1_000,
+        },
+        time_created: now - 1_000,
+        time_updated: now - 1_000,
+      })
+      .run()
   })
 
   await Instance.provide({
@@ -390,25 +422,29 @@ test("queued task without a run exposes cancel but not retry", async () => {
   const taskID = `tsk_board_cancel_${now.toString(16)}`
 
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: tmp.path,
-      name: "Board runless cancel projection",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "Runless queued task",
-      request: "queued task",
-      kind: "workflow",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-    } as any).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board runless cancel projection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Runless queued task",
+        request: "queued task",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run()
   })
 
   await Instance.provide({

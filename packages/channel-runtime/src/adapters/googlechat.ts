@@ -98,22 +98,26 @@ export class GoogleChatAdapter implements ChannelAdapter {
     await this.send(channel, {
       text: title ?? filename,
       thread: thread ? { name: thread } : undefined,
-      cardsV2: [{
-        cardId: "screenshot",
-        card: {
-          sections: [{
-            widgets: [
-              ...(title ? [{ textParagraph: { text: title } }] : []),
+      cardsV2: [
+        {
+          cardId: "screenshot",
+          card: {
+            sections: [
               {
-                image: {
-                  imageUrl: url,
-                  altText: filename,
-                },
+                widgets: [
+                  ...(title ? [{ textParagraph: { text: title } }] : []),
+                  {
+                    image: {
+                      imageUrl: url,
+                      altText: filename,
+                    },
+                  },
+                ],
               },
             ],
-          }],
+          },
         },
-      }],
+      ],
     })
   }
 

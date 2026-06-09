@@ -30,15 +30,11 @@ type RightSidebarCodingAssistantMetadata = {
   executor?: string | null
 }
 
-export function isRightSidebarCodingAssistantSession(
-  session: Pick<Session.Info, "kind" | "metadata">,
-): boolean {
+export function isRightSidebarCodingAssistantSession(session: Pick<Session.Info, "kind" | "metadata">): boolean {
   if (session.kind !== "assistant") return false
   const metadata = session.metadata
   const codingAssistant =
-    metadata && typeof metadata === "object"
-      ? (metadata as Record<string, unknown>).codingAssistant
-      : undefined
+    metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>).codingAssistant : undefined
   if (!codingAssistant || typeof codingAssistant !== "object") return false
   return (codingAssistant as Record<string, unknown>).surface === "right-sidebar"
 }
@@ -47,9 +43,7 @@ export function applyRightSidebarCodingAssistantPromptOverlay<T extends Omit<Ses
   prompt: T,
 ): T {
   const { system: _system, systemMode: _systemMode, tools, ...rest } = prompt
-  const forcedTools = Object.fromEntries(
-    RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS.map((tool) => [tool, true]),
-  )
+  const forcedTools = Object.fromEntries(RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS.map((tool) => [tool, true]))
   return {
     ...rest,
     agent: "coding-assistant",
@@ -84,10 +78,7 @@ export async function setRightSidebarCodingAssistantSelectedTask(input: {
   })
 }
 
-export function listRightSidebarCodingAssistantSessions(input: {
-  directory?: string
-  limit: number
-}): Session.Info[] {
+export function listRightSidebarCodingAssistantSessions(input: { directory?: string; limit: number }): Session.Info[] {
   const rows = Database.use((db) =>
     db
       .select()

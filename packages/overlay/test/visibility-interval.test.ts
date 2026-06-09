@@ -65,13 +65,17 @@ test("createVisibilityInterval clears the timer while hidden, restarts when visi
   let calls = 0
   let visibleCalls = 0
 
-  const interval = createVisibilityInterval(() => {
-    calls += 1
-  }, 4000, {
-    onVisible: () => {
-      visibleCalls += 1
+  const interval = createVisibilityInterval(
+    () => {
+      calls += 1
     },
-  })
+    4000,
+    {
+      onVisible: () => {
+        visibleCalls += 1
+      },
+    },
+  )
 
   interval.start()
   expect(activeTimers.size).toBe(1)

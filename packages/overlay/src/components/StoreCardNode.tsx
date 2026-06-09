@@ -11,10 +11,6 @@ export function storeCardNode(id: string, ownerID?: string): CardNode {
   return node
 }
 
-export function StoreCardNode(props: {
-  id: string
-  ownerID?: string
-  children: (node: CardNode) => JSX.Element
-}) {
+export function StoreCardNode(props: { id: string; ownerID?: string; children: (node: CardNode) => JSX.Element }) {
   return <>{props.children(storeCardNode(props.id, props.ownerID))}</>
 }

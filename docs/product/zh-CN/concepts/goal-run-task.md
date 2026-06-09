@@ -85,16 +85,16 @@ orchestrator-stream-error
 
 **常见 kind 含义**：
 
-| kind                                                                    | 含义                                                                            |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `run`                                                                   | 一次 Task 执行尝试的根节点（取代旧 `engine_run` 表）                            |
-| `goal_run_attempt`                                                      | 单个 Goal 的一次 worktree 尝试，`payload.workspace_*` 为单源 worktree 信息      |
-| `acceptance`                                                              | 一次交付候选（取代旧 `engine_acceptance` 表）                                     |
-| `evaluation` / `verdict`                                                | 评估判决（`accepted / rejected / inconclusive`；取代旧 `engine_evaluation` 表） |
-| `verification-evidence`                                                 | acceptance 检查证据（含 scope = `goal_run` / `acceptance`）                         |
-| `patch` / `changed_file` / `diff`                                       | 代码变更产物                                                                    |
-| `acceptance_evidence_manifest` / `surface_manifest` / `specialist_review` | acceptance 阶段产物                                                               |
-| `integrity_attempt` / `prosecutor_attempt`                              | integrity / prosecutor agent 输出                                               |
+| kind                                                                      | 含义                                                                            |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `run`                                                                     | 一次 Task 执行尝试的根节点（取代旧 `engine_run` 表）                            |
+| `goal_run_attempt`                                                        | 单个 Goal 的一次 worktree 尝试，`payload.workspace_*` 为单源 worktree 信息      |
+| `acceptance`                                                              | 一次交付候选（取代旧 `engine_acceptance` 表）                                   |
+| `evaluation` / `verdict`                                                  | 评估判决（`accepted / rejected / inconclusive`；取代旧 `engine_evaluation` 表） |
+| `verification-evidence`                                                   | acceptance 检查证据（含 scope = `goal_run` / `acceptance`）                     |
+| `patch` / `changed_file` / `diff`                                         | 代码变更产物                                                                    |
+| `acceptance_evidence_manifest` / `surface_manifest` / `specialist_review` | acceptance 阶段产物                                                             |
+| `integrity_attempt` / `prosecutor_attempt`                                | integrity / prosecutor agent 输出                                               |
 
 `inconclusive` verdict 语义为"无法判决"——不是通过也不是失败，触发 replan 而非 retry。
 

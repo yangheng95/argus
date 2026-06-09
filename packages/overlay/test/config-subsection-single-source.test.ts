@@ -56,7 +56,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function countSoloTopLevelRules(selector: string): number {
@@ -115,12 +117,8 @@ describe(".config-subsection base rule is a single source", () => {
     // iter28 dropped `.config-subsection` from those lists,
     // those exact line patterns must not appear anywhere
     // in styles.css.
-    expect(STYLES).not.toMatch(
-      /\.config-section,[\s\n]*\.config-subsection\s*\{[^}]*!important/,
-    )
-    expect(STYLES).not.toMatch(
-      /\.detail-card,[\s\n]*\.config-subsection\s*\{[^}]*!important/,
-    )
+    expect(STYLES).not.toMatch(/\.config-section,[\s\n]*\.config-subsection\s*\{[^}]*!important/)
+    expect(STYLES).not.toMatch(/\.detail-card,[\s\n]*\.config-subsection\s*\{[^}]*!important/)
   })
 
   test("theme selectors cannot own `.config-subsection` chrome", () => {
@@ -128,8 +126,7 @@ describe(".config-subsection base rule is a single source", () => {
       const openIdx = chunk.indexOf("{")
       if (openIdx < 0) continue
       const selector = chunk.slice(0, openIdx).trim()
-      const isThemeSelector =
-        /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector) continue
 
       expect(selector).not.toMatch(/(?:^|\s|:is\([^)]*)\.config-subsection(?:\b|[:.[#])/)

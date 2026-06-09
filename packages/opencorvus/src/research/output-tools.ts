@@ -52,10 +52,12 @@ import {
   type ResearchWebpageVisualLayout,
 } from "./schema"
 
-export const ResearchFinalizeSchema = z.object({
-  final: z.literal(true).describe("Explicit confirmation that all research registrations are complete."),
-  fact_check_items: FactCheckItemListSchema.default([]),
-}).strict()
+export const ResearchFinalizeSchema = z
+  .object({
+    final: z.literal(true).describe("Explicit confirmation that all research registrations are complete."),
+    fact_check_items: FactCheckItemListSchema.default([]),
+  })
+  .strict()
 
 const WebpageContractSourceInputSchema = z.object({
   source_url: z.string().min(1),
@@ -190,10 +192,12 @@ function validateResearchBundleInputSemantics(bundle: ResearchBundleInput, brief
   const claimIDs = knownResearchClaimIDs(brief)
   for (const section of bundle.full_markdown_sections) {
     const missing = section.evidence_ids.filter((id) => !evidenceIDs.has(id))
-    if (missing.length > 0) return `bundle.full_markdown_sections "${section.title}" references unknown evidence id(s): ${missing.join(", ")}.`
+    if (missing.length > 0)
+      return `bundle.full_markdown_sections "${section.title}" references unknown evidence id(s): ${missing.join(", ")}.`
   }
   for (const note of bundle.evidence_notes) {
-    if (!evidenceIDs.has(note.evidence_id)) return `bundle.evidence_notes references unknown evidence id: ${note.evidence_id}.`
+    if (!evidenceIDs.has(note.evidence_id))
+      return `bundle.evidence_notes references unknown evidence id: ${note.evidence_id}.`
   }
   for (const entry of bundle.citation_map) {
     const missingEvidence = entry.evidence_ids.filter((id) => !evidenceIDs.has(id))
@@ -292,7 +296,10 @@ function upsertByID<T extends { id: string }>(items: T[], item: T): "registered"
   return "registered"
 }
 
-function upsertBundleSection(collector: ResearchCollector, section: z.infer<typeof ResearchBundleMarkdownSectionSchema>): string {
+function upsertBundleSection(
+  collector: ResearchCollector,
+  section: z.infer<typeof ResearchBundleMarkdownSectionSchema>,
+): string {
   const idx = collector.bundle.full_markdown_sections.findIndex((existing) => existing.title === section.title)
   if (idx >= 0) {
     collector.bundle.full_markdown_sections[idx] = section
@@ -323,13 +330,13 @@ export function buildResearchReport(collector: ResearchCollector) {
       `## Problem Statements\n${markdownList(draft.problem_statements.map((item) => `${item.id}: ${item.statement}`))}`,
       webpageContract
         ? `## Webpage Contract\n${markdownList([
-          `source_url: ${webpageContract.source_url}`,
-          `functional_surfaces=${webpageContract.functional_surfaces.length}`,
-          `visual_layout=${webpageContract.visual_layout.length}`,
-          `style_requirements=${webpageContract.style_requirements.length}`,
-          `fidelity_acceptance=${webpageContract.fidelity_acceptance.length}`,
-          `fidelity_risks=${webpageContract.fidelity_risks.length}`,
-        ])}`
+            `source_url: ${webpageContract.source_url}`,
+            `functional_surfaces=${webpageContract.functional_surfaces.length}`,
+            `visual_layout=${webpageContract.visual_layout.length}`,
+            `style_requirements=${webpageContract.style_requirements.length}`,
+            `fidelity_acceptance=${webpageContract.fidelity_acceptance.length}`,
+            `fidelity_risks=${webpageContract.fidelity_risks.length}`,
+          ])}`
         : "## Webpage Contract\n- none",
       subpageTasks.length > 0
         ? `## Subpage Research Tasks\n${markdownList(subpageTasks.map((item) => `${item.id}: ${item.url} - ${item.suggested_focus}`))}`
@@ -618,7 +625,8 @@ export function createResearchOutputTools() {
         "Finalize research after all register_* calls are complete. Call with final=true; include fact_check_items only for unverified factual claims.",
       inputSchema: ResearchFinalizeSchema,
       execute: async (rawInput) => {
-        if (collector.finalized) return "Error: research brief already finalized; duplicate submit_research_brief ignored."
+        if (collector.finalized)
+          return "Error: research brief already finalized; duplicate submit_research_brief ignored."
         const { fact_check_items } = ResearchFinalizeSchema.parse(rawInput)
         let draft: ResearchDraft
         try {

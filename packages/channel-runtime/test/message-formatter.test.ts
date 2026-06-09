@@ -22,4 +22,3 @@ describe("message formatter", () => {
     expect(toolInputDebug({ OPENCORVUS_CHANNEL_DEBUG_TOOL_INPUT: "false" })).toBe(false)
   })
 })
-

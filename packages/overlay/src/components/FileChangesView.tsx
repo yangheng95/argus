@@ -1,13 +1,13 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import {
   Virtualizer,
   type CustomContainerComponentProps,
   type CustomItemComponentProps,
   type VirtualizerHandle,
 } from "virtua/solid"
-import type { ChangeGroup } from "../services/diff"
+import { isKnownTextDiff, resolveDiff, type ChangeGroup, type DiffTarget } from "../services/diff"
 import { t, tc } from "../utils/i18n"
-import { changeStatusLabel, type FileChange } from "./DiffView"
+import { changeStatusLabel, DiffView, type FileChange } from "./DiffView"
 import { Icon } from "./Icon"
 
 export interface FileChangesViewProps {
@@ -102,49 +102,89 @@ function ChangeRowContent(props: { row: ChangeRowModel; showScope: boolean }) {
 function ChangeRow(props: {
   row: ChangeRowModel
   selected: boolean
+  expanded: boolean
   showScope: boolean
   onSelect: (key: string) => void
+  onToggleDiff: (row: ChangeRowModel) => void
+  onRowClick?: (group: ChangeGroup, item: FileChange) => void
+}) {
+  const open = () => {
+    props.onSelect(props.row.key)
+    props.onToggleDiff(props.row)
+    props.onRowClick?.(props.row.group, props.row.item)
+  }
+
+  return (
+    <button
+      type="button"
+      class="change-row"
+      data-clickable="true"
+      data-change-index={props.row.index}
+      data-selected={props.selected ? "true" : "false"}
+      aria-current={props.selected ? "true" : undefined}
+      title={props.row.item.file}
+      id={`change-row-${props.row.index}`}
+      role="option"
+      aria-selected={props.selected}
+      aria-expanded={props.expanded}
+      onClick={open}
+    >
+      <ChangeRowContent row={props.row} showScope={props.showScope} />
+    </button>
+  )
+}
+
+function diffTargetFromRow(row: ChangeRowModel): DiffTarget {
+  return {
+    filePath: row.item.file,
+    ...(row.group.goalRunID ? { goalRunID: row.group.goalRunID } : {}),
+    ...(row.group.goalLabel ? { goalLabel: row.group.goalLabel } : {}),
+  }
+}
+
+function InlineDiffPanel(props: { row: ChangeRowModel }) {
+  const [change] = createResource(
+    () => `${props.row.group.goalRunID || props.row.group.runID || props.row.group.id}:${props.row.item.file}`,
+    async () => resolveDiff(diffTargetFromRow(props.row)),
+  )
+  const item = createMemo(() => change() || props.row.item)
+  const isText = createMemo(() => isKnownTextDiff(item()))
+
+  return (
+    <div class="change-inline-diff" data-text={isText() ? "true" : "false"}>
+      <Show when={!change.loading} fallback={<p class="empty-hint change-inline-diff__hint">{t("diff.loading")}</p>}>
+        <Show when={isText()} fallback={<p class="empty-hint change-inline-diff__hint">{t("diff.non_text")}</p>}>
+          <DiffView item={item()} />
+        </Show>
+      </Show>
+    </div>
+  )
+}
+
+function ChangeRowWithInlineDiff(props: {
+  row: ChangeRowModel
+  selected: boolean
+  expanded: boolean
+  showScope: boolean
+  onSelect: (key: string) => void
+  onToggleDiff: (row: ChangeRowModel) => void
   onRowClick?: (group: ChangeGroup, item: FileChange) => void
 }) {
   return (
-    <Show
-      when={props.onRowClick}
-      fallback={
-        <div
-          class="change-row"
-          data-clickable="false"
-          data-change-index={props.row.index}
-          data-selected={props.selected ? "true" : "false"}
-          title={props.row.item.file}
-          id={`change-row-${props.row.index}`}
-          role="option"
-          aria-selected={props.selected}
-        >
-          <ChangeRowContent row={props.row} showScope={props.showScope} />
-        </div>
-      }
-    >
-      {(onRowClick) => (
-        <button
-          type="button"
-          class="change-row"
-          data-clickable="true"
-          data-change-index={props.row.index}
-          data-selected={props.selected ? "true" : "false"}
-          aria-current={props.selected ? "true" : undefined}
-          title={props.row.item.file}
-          id={`change-row-${props.row.index}`}
-          role="option"
-          aria-selected={props.selected}
-          onClick={() => {
-            props.onSelect(props.row.key)
-            onRowClick()(props.row.group, props.row.item)
-          }}
-        >
-          <ChangeRowContent row={props.row} showScope={props.showScope} />
-        </button>
-      )}
-    </Show>
+    <div class="change-row-shell" data-expanded={props.expanded ? "true" : "false"}>
+      <ChangeRow
+        row={props.row}
+        selected={props.selected}
+        expanded={props.expanded}
+        showScope={props.showScope}
+        onSelect={props.onSelect}
+        onToggleDiff={props.onToggleDiff}
+        onRowClick={props.onRowClick}
+      />
+      <Show when={props.expanded}>
+        <InlineDiffPanel row={props.row} />
+      </Show>
+    </div>
   )
 }
 
@@ -175,20 +215,26 @@ export function FileChangesView(props: FileChangesViewProps) {
   let filterInputEl: HTMLInputElement | undefined
   let listEl: HTMLDivElement | undefined
   const [selectedRowKey, setSelectedRowKey] = createSignal("")
+  const [expandedRowKey, setExpandedRowKey] = createSignal("")
   const [filterQuery, setFilterQuery] = createSignal("")
   const [statusFilter, setStatusFilter] = createSignal<ChangeStatusFilter>("all")
+  const [hideNonTextFiles, setHideNonTextFiles] = createSignal(false)
 
   const groups = createMemo<ChangeGroup[]>(() => props.groups.filter((group) => group.changes.length > 0))
   const files = createMemo<FileChange[]>(() => groups().flatMap((group) => group.changes))
-  const hasGroupLabels = createMemo(() => groups().length > 1 || groups().some((group) => !!group.goalLabel || !!group.goalTitle))
-  const totalAdditions = createMemo(() =>
-    files().reduce((sum, item) => sum + (item.additions ?? 0), 0),
+  const hasGroupLabels = createMemo(
+    () => groups().length > 1 || groups().some((group) => !!group.goalLabel || !!group.goalTitle),
   )
-  const totalDeletions = createMemo(() =>
-    files().reduce((sum, item) => sum + (item.deletions ?? 0), 0),
-  )
+  const totalAdditions = createMemo(() => files().reduce((sum, item) => sum + (item.additions ?? 0), 0))
+  const totalDeletions = createMemo(() => files().reduce((sum, item) => sum + (item.deletions ?? 0), 0))
   const summaryCommitRef = createMemo(() => {
-    const refs = [...new Set(groups().map((group) => group.commitRef).filter((ref): ref is string => !!ref))]
+    const refs = [
+      ...new Set(
+        groups()
+          .map((group) => group.commitRef)
+          .filter((ref): ref is string => !!ref),
+      ),
+    ]
     return refs.length === 1 ? refs[0] : ""
   })
   const allRows = createMemo<ChangeRowModel[]>(() => {
@@ -220,6 +266,7 @@ export function FileChangesView(props: FileChangesViewProps) {
     const status = statusFilter()
     return allRows().filter((row) => {
       if (status !== "all" && row.item.status !== status) return false
+      if (hideNonTextFiles() && !isKnownTextDiff(row.item)) return false
       if (query && !row.searchText.includes(query)) return false
       return true
     })
@@ -252,9 +299,7 @@ export function FileChangesView(props: FileChangesViewProps) {
   })
   const shouldShowFilter = createMemo(() => allRows().length > 8)
   const shouldVirtualizeRows = createMemo(() => filteredRows().length > VIRTUAL_CHANGE_ROW_THRESHOLD)
-  const selectedRowPosition = createMemo(() =>
-    filteredRows().findIndex((row) => row.key === selectedRowKey()),
-  )
+  const selectedRowPosition = createMemo(() => filteredRows().findIndex((row) => row.key === selectedRowKey()))
   const selectedRowID = createMemo(() => {
     const row = filteredRows()[selectedRowPosition()]
     return row ? `change-row-${row.index}` : undefined
@@ -282,11 +327,15 @@ export function FileChangesView(props: FileChangesViewProps) {
   }
 
   const openSelectedRow = () => {
-    if (!props.onRowClick) return
     const row = filteredRows()[Math.max(0, selectedRowPosition())]
     if (!row) return
     setSelectedRowKey(row.key)
-    props.onRowClick(row.group, row.item)
+    toggleInlineDiff(row)
+    props.onRowClick?.(row.group, row.item)
+  }
+
+  const toggleInlineDiff = (row: ChangeRowModel) => {
+    setExpandedRowKey((current) => (current === row.key ? "" : row.key))
   }
 
   const focusFilterInput = () => {
@@ -420,11 +469,21 @@ export function FileChangesView(props: FileChangesViewProps) {
                     onClick={() => setStatusFilter(status)}
                   >
                     <span class="changes-status-chip-label">{statusFilterLabel(status)}</span>
-                    <span class="changes-status-chip-count" aria-hidden="true">{count()}</span>
+                    <span class="changes-status-chip-count" aria-hidden="true">
+                      {count()}
+                    </span>
                   </button>
                 )
               }}
             </For>
+            <label class="changes-non-text-filter">
+              <input
+                type="checkbox"
+                checked={hideNonTextFiles()}
+                onChange={(event) => setHideNonTextFiles(event.currentTarget.checked)}
+              />
+              <span>{t("files.hide_non_text")}</span>
+            </label>
           </div>
         </Show>
 
@@ -439,7 +498,10 @@ export function FileChangesView(props: FileChangesViewProps) {
           tabIndex={0}
           onKeyDown={onListKeyDown}
         >
-          <Show when={filteredRows().length > 0} fallback={<p class="empty-hint changes-empty-hint">{t("files.no_matches")}</p>}>
+          <Show
+            when={filteredRows().length > 0}
+            fallback={<p class="empty-hint changes-empty-hint">{t("files.no_matches")}</p>}
+          >
             <Show
               when={shouldVirtualizeRows()}
               fallback={
@@ -460,11 +522,13 @@ export function FileChangesView(props: FileChangesViewProps) {
                       <div class="changes-list-chunk" data-group-id={entry.group.id} data-active="true">
                         <For each={entry.rows}>
                           {(row) => (
-                            <ChangeRow
+                            <ChangeRowWithInlineDiff
                               row={row}
                               selected={selectedRowKey() === row.key}
+                              expanded={expandedRowKey() === row.key}
                               showScope={false}
                               onSelect={setSelectedRowKey}
+                              onToggleDiff={toggleInlineDiff}
                               onRowClick={props.onRowClick}
                             />
                           )}
@@ -476,7 +540,9 @@ export function FileChangesView(props: FileChangesViewProps) {
               }
             >
               <Virtualizer
-                ref={(handle) => { rowVirtualizer = handle }}
+                ref={(handle) => {
+                  rowVirtualizer = handle
+                }}
                 data={filteredRows()}
                 overscan={VIRTUAL_CHANGE_ROW_OVERSCAN}
                 itemSize={ESTIMATED_CHANGE_ROW_HEIGHT}
@@ -484,11 +550,13 @@ export function FileChangesView(props: FileChangesViewProps) {
                 item={ChangesVirtualItem}
               >
                 {(row) => (
-                  <ChangeRow
+                  <ChangeRowWithInlineDiff
                     row={row}
                     selected={selectedRowKey() === row.key}
+                    expanded={expandedRowKey() === row.key}
                     showScope={hasGroupLabels()}
                     onSelect={setSelectedRowKey}
+                    onToggleDiff={toggleInlineDiff}
                     onRowClick={props.onRowClick}
                   />
                 )}

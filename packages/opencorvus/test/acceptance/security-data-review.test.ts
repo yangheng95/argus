@@ -132,13 +132,16 @@ function manifest(
     acceptanceId: "dlv_surface_security",
     projectRoot: process.cwd(),
     surfaces,
-    evidence: surfaces.includes("security_data") && (options.fileEvidence ?? true)
-      ? [{
-          surface: "security_data",
-          reason: "security or data access files detected",
-          refs: [{ kind: "file", ref: options.file ?? "src/auth/session.ts" }],
-        }]
-      : [],
+    evidence:
+      surfaces.includes("security_data") && (options.fileEvidence ?? true)
+        ? [
+            {
+              surface: "security_data",
+              reason: "security or data access files detected",
+              refs: [{ kind: "file", ref: options.file ?? "src/auth/session.ts" }],
+            },
+          ]
+        : [],
     timeCreated: 1,
   }
 }

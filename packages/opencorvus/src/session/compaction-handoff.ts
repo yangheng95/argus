@@ -265,7 +265,9 @@ export namespace CompactionHandoff {
       missing.push("currentState.sourceUserMessage.id")
     }
     if (requirements.userMessages && handoff.userMessages.length === 0) missing.push("userMessages")
-    const reportedInstructionPaths = new Set(handoff.durableInstructionSources.map((item) => instructionPathKey(item.path)))
+    const reportedInstructionPaths = new Set(
+      handoff.durableInstructionSources.map((item) => instructionPathKey(item.path)),
+    )
     const omittedInstructionPaths = requirements.instructionPaths.filter(
       (item) => !reportedInstructionPaths.has(instructionPathKey(item)),
     )
@@ -497,16 +499,18 @@ export namespace CompactionHandoff {
       list(normalized.workingContext),
       "",
       "## Chronology",
-      section(
-        normalized.chronology,
-        (item) => `- ${item.event}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
-      ).replaceAll("\n   - ", "\n- ").replace(/^   - /, "- "),
+      section(normalized.chronology, (item) => `- ${item.event}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`)
+        .replaceAll("\n   - ", "\n- ")
+        .replace(/^   - /, "- "),
       "",
       "## Decisions",
       section(
         normalized.decisions,
-        (item) => `- ${item.decision} Rationale: ${item.rationale}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
-      ).replaceAll("\n   - ", "\n- ").replace(/^   - /, "- "),
+        (item) =>
+          `- ${item.decision} Rationale: ${item.rationale}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
+      )
+        .replaceAll("\n   - ", "\n- ")
+        .replace(/^   - /, "- "),
       "",
       "## Files",
       section(normalized.files, (item) => `- [${item.status}] ${item.path}: ${item.detail}`)

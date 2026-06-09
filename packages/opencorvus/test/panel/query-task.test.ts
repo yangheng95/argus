@@ -70,14 +70,17 @@ describe("panel.query_task execution", () => {
   }
 
   test("returns structured JSON with 1:1 row alignment to input taskIDs", async () => {
-    const getBoardSpy = spyOn(EngineService, "getBoard").mockImplementation(async (taskID: string) => ({
-      task: {
-        id: taskID,
-        title: `Title for ${taskID}`,
-        status: "active" as const,
-        time: { created: 100, updated: 200, started: 150 },
-      },
-    }) as any)
+    const getBoardSpy = spyOn(EngineService, "getBoard").mockImplementation(
+      async (taskID: string) =>
+        ({
+          task: {
+            id: taskID,
+            title: `Title for ${taskID}`,
+            status: "active" as const,
+            time: { created: 100, updated: 200, started: 150 },
+          },
+        }) as any,
+    )
     const out = await runQuery({ taskIDs: ["task_1", "task_2"] })
     expect(out.tasks).toHaveLength(2)
     expect(out.tasks[0]?.taskID).toBe("task_1")
@@ -110,11 +113,19 @@ describe("panel.query_task execution", () => {
   })
 
   test("includes evaluation + acceptance when present on board", async () => {
-    spyOn(EngineService, "getBoard").mockImplementation(async (taskID: string) => ({
-      task: { id: taskID, title: "t", status: "completed" as const, time: { created: 1, updated: 2, completed: 5 } },
-      evaluation: { verdict: "accepted", summary: "all checks passed" },
-      acceptance: { summary: "delivered v1" },
-    }) as any)
+    spyOn(EngineService, "getBoard").mockImplementation(
+      async (taskID: string) =>
+        ({
+          task: {
+            id: taskID,
+            title: "t",
+            status: "completed" as const,
+            time: { created: 1, updated: 2, completed: 5 },
+          },
+          evaluation: { verdict: "accepted", summary: "all checks passed" },
+          acceptance: { summary: "delivered v1" },
+        }) as any,
+    )
     const out = await runQuery({ taskIDs: ["task_done"] })
     expect(out.tasks[0]?.result).toMatchObject({
       status: "completed",
@@ -126,19 +137,22 @@ describe("panel.query_task execution", () => {
   })
 
   test("failed task result carries task error and failure object", async () => {
-    spyOn(EngineService, "getBoard").mockImplementation(async (taskID: string) => ({
-      task: {
-        id: taskID,
-        title: "t",
-        status: "failed" as const,
-        error: "acceptance publish failed",
-        time: { created: 1, updated: 2, completed: 5 },
-      },
-      overview: {
-        summary: "overview failure",
-        currentFailure: { source: "run", title: "Run failed", summary: "run failed" },
-      },
-    }) as any)
+    spyOn(EngineService, "getBoard").mockImplementation(
+      async (taskID: string) =>
+        ({
+          task: {
+            id: taskID,
+            title: "t",
+            status: "failed" as const,
+            error: "acceptance publish failed",
+            time: { created: 1, updated: 2, completed: 5 },
+          },
+          overview: {
+            summary: "overview failure",
+            currentFailure: { source: "run", title: "Run failed", summary: "run failed" },
+          },
+        }) as any,
+    )
     const out = await runQuery({ taskIDs: ["task_failed"] })
     expect(out.tasks[0]?.error).toBe("acceptance publish failed")
     expect(out.tasks[0]?.result).toEqual({
@@ -153,15 +167,18 @@ describe("panel.query_task execution", () => {
   })
 
   test("cancelled task result is terminal without inventing acceptance", async () => {
-    spyOn(EngineService, "getBoard").mockImplementation(async (taskID: string) => ({
-      task: {
-        id: taskID,
-        title: "t",
-        status: "cancelled" as const,
-        time: { created: 1, updated: 2, completed: 5 },
-      },
-      overview: { summary: "Task was cancelled by operator." },
-    }) as any)
+    spyOn(EngineService, "getBoard").mockImplementation(
+      async (taskID: string) =>
+        ({
+          task: {
+            id: taskID,
+            title: "t",
+            status: "cancelled" as const,
+            time: { created: 1, updated: 2, completed: 5 },
+          },
+          overview: { summary: "Task was cancelled by operator." },
+        }) as any,
+    )
     const out = await runQuery({ taskIDs: ["task_cancelled"] })
     expect(out.tasks[0]?.result).toEqual({
       status: "cancelled",
@@ -170,16 +187,19 @@ describe("panel.query_task execution", () => {
   })
 
   test("includeChildren=true populates child task summaries via findChildrenOfTask", async () => {
-    spyOn(EngineService, "getBoard").mockImplementation(async (taskID: string) => ({
-      task: {
-        id: taskID,
-        title: taskID === "task_parent" ? "p" : `child ${taskID}`,
-        status: taskID === "child_2" ? "failed" as const : "completed" as const,
-        error: taskID === "child_2" ? "child failed" : undefined,
-        time: { created: 1, updated: 2, completed: 3 },
-      },
-      overview: { summary: `${taskID} overview` },
-    }) as any)
+    spyOn(EngineService, "getBoard").mockImplementation(
+      async (taskID: string) =>
+        ({
+          task: {
+            id: taskID,
+            title: taskID === "task_parent" ? "p" : `child ${taskID}`,
+            status: taskID === "child_2" ? ("failed" as const) : ("completed" as const),
+            error: taskID === "child_2" ? "child failed" : undefined,
+            time: { created: 1, updated: 2, completed: 3 },
+          },
+          overview: { summary: `${taskID} overview` },
+        }) as any,
+    )
     spyOn(engine, "findChildrenOfTask").mockReturnValue(["child_1", "child_2"])
     const out = await runQuery({ taskIDs: ["task_parent"], includeChildren: true })
     expect(out.tasks[0]?.children).toEqual([
@@ -208,22 +228,28 @@ describe("panel.query_task execution", () => {
   })
 
   test("includeChildren omitted means no children field on output", async () => {
-    spyOn(EngineService, "getBoard").mockImplementation(async (taskID: string) => ({
-      task: { id: taskID, title: "p", status: "completed" as const, time: { created: 1, updated: 2 } },
-    }) as any)
+    spyOn(EngineService, "getBoard").mockImplementation(
+      async (taskID: string) =>
+        ({
+          task: { id: taskID, title: "p", status: "completed" as const, time: { created: 1, updated: 2 } },
+        }) as any,
+    )
     const out = await runQuery({ taskIDs: ["task_parent"] })
     expect(out.tasks[0]?.children).toBeUndefined()
   })
 
   test("includeInteractions counts pending interactions only", async () => {
-    spyOn(EngineService, "getBoard").mockImplementation(async (taskID: string) => ({
-      task: { id: taskID, title: "t", status: "active" as const, time: { created: 1, updated: 2 } },
-      interactions: [
-        { id: "i_1", status: "pending" },
-        { id: "i_2", status: "answered" },
-        { id: "i_3", status: "pending" },
-      ],
-    }) as any)
+    spyOn(EngineService, "getBoard").mockImplementation(
+      async (taskID: string) =>
+        ({
+          task: { id: taskID, title: "t", status: "active" as const, time: { created: 1, updated: 2 } },
+          interactions: [
+            { id: "i_1", status: "pending" },
+            { id: "i_2", status: "answered" },
+            { id: "i_3", status: "pending" },
+          ],
+        }) as any,
+    )
     const out = await runQuery({ taskIDs: ["task_with_q"], includeInteractions: true })
     expect(out.tasks[0]?.pendingInteractions).toBe(2)
   })

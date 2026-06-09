@@ -6,9 +6,7 @@ describe("formatHitRatio", () => {
   // cache.read from inputTokens, so `input` = uncached billable input.
   test("openai-style: input excludes cached", () => {
     // 4096 cached + 184 uncached => 4280 billable, 95.7% hit
-    expect(formatHitRatio({ input: 184, cache: { read: 4096, write: 0 } })).toBe(
-      "95.7%  (4.1K / 4.3K)",
-    )
+    expect(formatHitRatio({ input: 184, cache: { read: 4096, write: 0 } })).toBe("95.7%  (4.1K / 4.3K)")
   })
 
   // Anthropic-style usage. Session.getUsage() leaves input untouched
@@ -26,16 +24,12 @@ describe("formatHitRatio", () => {
 
   test("cold start with no cache hits", () => {
     // 1000 uncached, 0 cached => 0% hit
-    expect(formatHitRatio({ input: 1000, cache: { read: 0, write: 0 } })).toBe(
-      "0.0%  (0 / 1.0K)",
-    )
+    expect(formatHitRatio({ input: 1000, cache: { read: 0, write: 0 } })).toBe("0.0%  (0 / 1.0K)")
   })
 
   test("perfect cache hit (read-only replay)", () => {
     // 0 uncached, 4096 cached => 100% hit
-    expect(formatHitRatio({ input: 0, cache: { read: 4096, write: 0 } })).toBe(
-      "100.0%  (4.1K / 4.1K)",
-    )
+    expect(formatHitRatio({ input: 0, cache: { read: 4096, write: 0 } })).toBe("100.0%  (4.1K / 4.1K)")
   })
 
   test("monotone: more cache.read raises ratio strictly", () => {

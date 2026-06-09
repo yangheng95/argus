@@ -379,19 +379,19 @@ Change:
   restart-durable continuation record is deferred until it is descriptor-backed
   end to end.
 - Control records must never be written as `role: "user"`, `role:
-  "assistant"`, `CompactionPart`, or `SubtaskPart`.
+"assistant"`, `CompactionPart`, or `SubtaskPart`.
 - Control records must never enter provider replay directly. The loop converts
   a consumed control record into a normal prompt envelope only when that control
   kind requires a model turn.
 - Every control kind must define owner, consume-once behavior, model replay
   behavior, UI visibility, and restart behavior:
 
-| Control kind | Owner | Consume once | Provider replay | UI projection |
-| --- | --- | --- | --- | --- |
-| `manual_summarize` | session route | yes | summary-mode maintenance turn only | maintenance card |
-| `compaction_request` | session loop | yes | summary-mode maintenance turn only | maintenance card |
-| `subtask_request` | session loop | yes | only via owning prompt envelope | control card |
-| `wake_reason` | scheduler/orchestrator | yes | only via owning runtime | control card |
+| Control kind         | Owner                  | Consume once | Provider replay                    | UI projection    |
+| -------------------- | ---------------------- | ------------ | ---------------------------------- | ---------------- |
+| `manual_summarize`   | session route          | yes          | summary-mode maintenance turn only | maintenance card |
+| `compaction_request` | session loop           | yes          | summary-mode maintenance turn only | maintenance card |
+| `subtask_request`    | session loop           | yes          | only via owning prompt envelope    | control card     |
+| `wake_reason`        | scheduler/orchestrator | yes          | only via owning runtime            | control card     |
 
 Acceptance:
 

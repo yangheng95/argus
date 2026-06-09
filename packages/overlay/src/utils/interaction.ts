@@ -11,11 +11,7 @@
 // is "claimed" by that card; interactions without sessionID (or whose
 // session has no card yet) are "unclaimed" and surfaced separately.
 
-import {
-  interactionRequestText,
-  interactionResponseText,
-  hashText,
-} from "./transcript";
+import { interactionRequestText, interactionResponseText, hashText } from "./transcript"
 
 export interface InteractionCardSeed {
   info: {
@@ -27,8 +23,8 @@ export interface InteractionCardSeed {
 }
 
 function textSeed(role: string, time: number, text: string): InteractionCardSeed | null {
-  if (typeof text !== "string" || !text.trim()) return null;
-  const created = Number.isFinite(time) ? time : Date.now();
+  if (typeof text !== "string" || !text.trim()) return null
+  const created = Number.isFinite(time) ? time : Date.now()
   return {
     info: {
       id: `interaction-text:${role}:${created}:${hashText(text)}`,
@@ -36,7 +32,7 @@ function textSeed(role: string, time: number, text: string): InteractionCardSeed
       time: { created },
     },
     parts: [{ type: "text", text }],
-  };
+  }
 }
 
 /** Convert one interaction into the card seed(s) that render it.
@@ -49,8 +45,8 @@ function textSeed(role: string, time: number, text: string): InteractionCardSeed
  *
  *  Returns [] when the interaction produces no visible seed. */
 export function interactionToCardSeeds(interaction: any): InteractionCardSeed[] {
-  const role = "system";
-  const requestTime = Number(interaction?.time?.created);
+  const role = "system"
+  const requestTime = Number(interaction?.time?.created)
 
   if (interaction?.status === "pending") {
     const partType =
@@ -58,7 +54,7 @@ export function interactionToCardSeeds(interaction: any): InteractionCardSeed[] 
         ? "interaction-question"
         : interaction.type === "permission"
           ? "interaction-permission"
-          : null;
+          : null
     if (partType) {
       return [
         {
@@ -69,19 +65,19 @@ export function interactionToCardSeeds(interaction: any): InteractionCardSeed[] 
           },
           parts: [{ type: partType, interaction }],
         },
-      ];
+      ]
     }
   }
 
-  const seeds: InteractionCardSeed[] = [];
-  const request = textSeed(role, requestTime, interactionRequestText(interaction));
-  if (request) seeds.push(request);
+  const seeds: InteractionCardSeed[] = []
+  const request = textSeed(role, requestTime, interactionRequestText(interaction))
+  if (request) seeds.push(request)
   if (interaction?.status === "answered" || interaction?.status === "rejected") {
-    const resolvedTime = Number(interaction.time?.resolved);
-    const response = textSeed(role, resolvedTime, interactionResponseText(interaction));
-    if (response) seeds.push(response);
+    const resolvedTime = Number(interaction.time?.resolved)
+    const response = textSeed(role, resolvedTime, interactionResponseText(interaction))
+    if (response) seeds.push(response)
   }
-  return seeds;
+  return seeds
 }
 
 /** Split a list of interactions into per-session buckets (for interactions
@@ -91,18 +87,18 @@ export function partitionInteractions(
   interactions: any[] | null | undefined,
   knownSessionIDs: ReadonlySet<string>,
 ): { bySession: Map<string, any[]>; orphan: any[] } {
-  const bySession = new Map<string, any[]>();
-  const orphan: any[] = [];
-  if (!Array.isArray(interactions)) return { bySession, orphan };
+  const bySession = new Map<string, any[]>()
+  const orphan: any[] = []
+  if (!Array.isArray(interactions)) return { bySession, orphan }
   for (const it of interactions) {
-    const sid = typeof it?.sessionID === "string" ? it.sessionID : "";
+    const sid = typeof it?.sessionID === "string" ? it.sessionID : ""
     if (sid && knownSessionIDs.has(sid)) {
-      const list = bySession.get(sid);
-      if (list) list.push(it);
-      else bySession.set(sid, [it]);
+      const list = bySession.get(sid)
+      if (list) list.push(it)
+      else bySession.set(sid, [it])
     } else {
-      orphan.push(it);
+      orphan.push(it)
     }
   }
-  return { bySession, orphan };
+  return { bySession, orphan }
 }

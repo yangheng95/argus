@@ -80,9 +80,7 @@ describe("panel.send_task_message attachment forwarding", () => {
             async ask() {},
             extra: {
               surface: "panel",
-              attachments: [
-                { mime: "image/png", url: dataUrl, filename: "follow-up.png" },
-              ],
+              attachments: [{ mime: "image/png", url: dataUrl, filename: "follow-up.png" }],
             },
           },
         )
@@ -154,9 +152,7 @@ describe("panel.send_task_message attachment forwarding", () => {
               async ask() {},
               extra: {
                 surface: "panel",
-                attachments: [
-                  { mime: "image/png", url: "/attachment/proj/abc.png", filename: "bad.png" },
-                ],
+                attachments: [{ mime: "image/png", url: "/attachment/proj/abc.png", filename: "bad.png" }],
               },
             },
           )

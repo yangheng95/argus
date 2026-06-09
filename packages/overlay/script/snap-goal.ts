@@ -45,32 +45,42 @@ try {
   }, theme)
   await new Promise((r) => setTimeout(r, 800))
 
-  await page.waitForFunction(() => Boolean((window as any).__OC_DEV__?.openGoalDialog), {
-    timeout: 8000,
-  }).catch(() => console.error("__OC_DEV__ never appeared"))
+  await page
+    .waitForFunction(() => Boolean((window as any).__OC_DEV__?.openGoalDialog), {
+      timeout: 8000,
+    })
+    .catch(() => console.error("__OC_DEV__ never appeared"))
 
-  const opened = await page.evaluate((args) => {
-    try {
-      const dev = (window as any).__OC_DEV__
-      dev.ensureGoalHost()
-      dev.openGoalDialog("goal_demo_01", args.title, args.acceptance)
-      return "ok"
-    } catch (e: any) {
-      return "fail:" + (e?.message ?? String(e))
-    }
-  }, { title: LONG_TITLE, acceptance: LONG_ACCEPTANCE })
+  const opened = await page.evaluate(
+    (args) => {
+      try {
+        const dev = (window as any).__OC_DEV__
+        dev.ensureGoalHost()
+        dev.openGoalDialog("goal_demo_01", args.title, args.acceptance)
+        return "ok"
+      } catch (e: any) {
+        return "fail:" + (e?.message ?? String(e))
+      }
+    },
+    { title: LONG_TITLE, acceptance: LONG_ACCEPTANCE },
+  )
   console.log(`open path: ${opened}`)
 
-  await page.waitForFunction(() => {
-    const dlg = document.getElementById("goalDialog") as HTMLDialogElement | null
-    return dlg?.open === true
-  }, { timeout: 4000 }).catch(async () => {
-    const diag = await page.evaluate(() => {
-      const dlg = document.getElementById("goalDialog") as HTMLDialogElement | null
-      return { present: Boolean(dlg), open: dlg?.open ?? null }
+  await page
+    .waitForFunction(
+      () => {
+        const dlg = document.getElementById("goalDialog") as HTMLDialogElement | null
+        return dlg?.open === true
+      },
+      { timeout: 4000 },
+    )
+    .catch(async () => {
+      const diag = await page.evaluate(() => {
+        const dlg = document.getElementById("goalDialog") as HTMLDialogElement | null
+        return { present: Boolean(dlg), open: dlg?.open ?? null }
+      })
+      console.error("dialog did not open:", diag)
     })
-    console.error("dialog did not open:", diag)
-  })
   await new Promise((r) => setTimeout(r, 500))
 
   const measure = await page.evaluate(() => {

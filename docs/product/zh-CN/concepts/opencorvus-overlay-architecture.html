@@ -1,1181 +1,1659 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OpenCorvus 调度架构图</title>
-<style>
-  :root {
-    color-scheme: light;
-    --page: #f5f6f3;
-    --surface: #ffffff;
-    --surface-2: #fafbf8;
-    --surface-muted: #eef0ea;
-    --line: #d6dbd2;
-    --line-soft: #e6eae0;
-    --line-strong: #b9c2b3;
-    --text: #14201a;
-    --text-2: #3b4a41;
-    --text-3: #6a7770;
-    --text-4: #8f9b93;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenCorvus 调度架构图</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f5f6f3;
+        --surface: #ffffff;
+        --surface-2: #fafbf8;
+        --surface-muted: #eef0ea;
+        --line: #d6dbd2;
+        --line-soft: #e6eae0;
+        --line-strong: #b9c2b3;
+        --text: #14201a;
+        --text-2: #3b4a41;
+        --text-3: #6a7770;
+        --text-4: #8f9b93;
 
-    --accent: #1a5f78;
-    --accent-2: #134c61;
-    --accent-soft: #e4eef3;
-    --accent-soft-2: #d3e3eb;
+        --accent: #1a5f78;
+        --accent-2: #134c61;
+        --accent-soft: #e4eef3;
+        --accent-soft-2: #d3e3eb;
 
-    --green: #2c6b50;
-    --green-soft: #e2efe6;
-    --green-line: #bcd4c1;
+        --green: #2c6b50;
+        --green-soft: #e2efe6;
+        --green-line: #bcd4c1;
 
-    --amber: #8a5a12;
-    --amber-soft: #f5ecd6;
-    --amber-line: #dec99a;
+        --amber: #8a5a12;
+        --amber-soft: #f5ecd6;
+        --amber-line: #dec99a;
 
-    --violet: #5a5187;
-    --violet-soft: #ecebf7;
-    --violet-line: #c8c4e2;
+        --violet: #5a5187;
+        --violet-soft: #ecebf7;
+        --violet-line: #c8c4e2;
 
-    --red: #93312f;
+        --red: #93312f;
 
-    --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    --sans: "Inter", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+        --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        --sans: "Inter", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
 
-    --radius-sm: 6px;
-    --radius: 10px;
-    --radius-lg: 14px;
-    --shadow-sm: 0 1px 2px rgba(20, 32, 26, 0.04);
-    --shadow: 0 1px 3px rgba(20, 32, 26, 0.05), 0 4px 18px -8px rgba(20, 32, 26, 0.08);
-  }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    margin: 0;
-    background: var(--page);
-    background-image:
-      radial-gradient(1200px 600px at 12% -10%, rgba(26, 95, 120, 0.05), transparent 60%),
-      radial-gradient(900px 500px at 90% -8%, rgba(44, 107, 80, 0.04), transparent 60%);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 15.5px;
-    line-height: 1.72;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-  a {
-    color: var(--accent);
-    text-decoration: none;
-    border-bottom: 1px solid rgba(26, 95, 120, 0.32);
-    transition: color 0.15s ease, border-color 0.15s ease;
-  }
-  a:hover { color: var(--accent-2); border-bottom-color: var(--accent-2); }
+        --radius-sm: 6px;
+        --radius: 10px;
+        --radius-lg: 14px;
+        --shadow-sm: 0 1px 2px rgba(20, 32, 26, 0.04);
+        --shadow: 0 1px 3px rgba(20, 32, 26, 0.05), 0 4px 18px -8px rgba(20, 32, 26, 0.08);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        background-image:
+          radial-gradient(1200px 600px at 12% -10%, rgba(26, 95, 120, 0.05), transparent 60%),
+          radial-gradient(900px 500px at 90% -8%, rgba(44, 107, 80, 0.04), transparent 60%);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15.5px;
+        line-height: 1.72;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+        border-bottom: 1px solid rgba(26, 95, 120, 0.32);
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease;
+      }
+      a:hover {
+        color: var(--accent-2);
+        border-bottom-color: var(--accent-2);
+      }
 
-  code {
-    font-family: var(--mono);
-    font-size: 0.86em;
-    background: var(--surface-muted);
-    border: 1px solid var(--line-soft);
-    border-radius: 5px;
-    padding: 1px 6px;
-    color: var(--text);
-  }
+      code {
+        font-family: var(--mono);
+        font-size: 0.86em;
+        background: var(--surface-muted);
+        border: 1px solid var(--line-soft);
+        border-radius: 5px;
+        padding: 1px 6px;
+        color: var(--text);
+      }
 
-  .shell {
-    display: grid;
-    grid-template-columns: 264px minmax(0, 1fr);
-    min-height: 100vh;
-  }
+      .shell {
+        display: grid;
+        grid-template-columns: 264px minmax(0, 1fr);
+        min-height: 100vh;
+      }
 
-  /* ───── Side Navigation ───── */
-  nav {
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    overflow: auto;
-    padding: 32px 24px;
-    background: linear-gradient(180deg, #edf0ea 0%, #e8ebe5 100%);
-    border-right: 1px solid var(--line);
-  }
-  .brand {
-    font-size: 19px;
-    font-weight: 740;
-    line-height: 1.2;
-    margin-bottom: 6px;
-    letter-spacing: -0.01em;
-  }
-  .brand .brand-sub {
-    display: block;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-3);
-    margin-top: 4px;
-    letter-spacing: 0;
-  }
-  .nav-meta {
-    color: var(--text-3);
-    font-size: 12px;
-    line-height: 1.6;
-    padding-bottom: 20px;
-    margin: 18px 0 14px;
-    border-bottom: 1px solid var(--line);
-  }
-  nav a {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    border: 0;
-    padding: 7px 10px;
-    margin: 0 -10px;
-    border-radius: 6px;
-    color: var(--text-2);
-    font-size: 13px;
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-  nav a:hover { background: rgba(20, 32, 26, 0.05); color: var(--text); }
-  nav a .num {
-    width: 26px;
-    flex-shrink: 0;
-    color: var(--text-4);
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.04em;
-  }
+      /* ───── Side Navigation ───── */
+      nav {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow: auto;
+        padding: 32px 24px;
+        background: linear-gradient(180deg, #edf0ea 0%, #e8ebe5 100%);
+        border-right: 1px solid var(--line);
+      }
+      .brand {
+        font-size: 19px;
+        font-weight: 740;
+        line-height: 1.2;
+        margin-bottom: 6px;
+        letter-spacing: -0.01em;
+      }
+      .brand .brand-sub {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-3);
+        margin-top: 4px;
+        letter-spacing: 0;
+      }
+      .nav-meta {
+        color: var(--text-3);
+        font-size: 12px;
+        line-height: 1.6;
+        padding-bottom: 20px;
+        margin: 18px 0 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      nav a {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        border: 0;
+        padding: 7px 10px;
+        margin: 0 -10px;
+        border-radius: 6px;
+        color: var(--text-2);
+        font-size: 13px;
+        transition:
+          background 0.15s ease,
+          color 0.15s ease;
+      }
+      nav a:hover {
+        background: rgba(20, 32, 26, 0.05);
+        color: var(--text);
+      }
+      nav a .num {
+        width: 26px;
+        flex-shrink: 0;
+        color: var(--text-4);
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+      }
 
-  /* ───── Main column ───── */
-  main {
-    width: min(1200px, 100%);
-    margin: 0 auto;
-    padding: 56px 52px 96px;
-  }
+      /* ───── Main column ───── */
+      main {
+        width: min(1200px, 100%);
+        margin: 0 auto;
+        padding: 56px 52px 96px;
+      }
 
-  header {
-    margin-bottom: 44px;
-    padding-bottom: 30px;
-    border-bottom: 1px solid var(--line);
-  }
-  .eyebrow {
-    display: inline-block;
-    color: var(--accent);
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-bottom: 14px;
-  }
-  h1 {
-    margin: 0 0 16px;
-    font-size: 40px;
-    line-height: 1.14;
-    letter-spacing: -0.02em;
-    font-weight: 740;
-  }
-  .subtitle {
-    max-width: 880px;
-    margin: 0;
-    color: var(--text-2);
-    font-size: 17px;
-    line-height: 1.7;
-  }
-  .meta {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 26px;
-  }
-  .meta-card {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    padding: 13px 15px;
-    box-shadow: var(--shadow-sm);
-  }
-  .meta-card b {
-    display: block;
-    color: var(--text-3);
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 5px;
-    font-weight: 640;
-  }
-  .meta-card span {
-    color: var(--text);
-    font-size: 13px;
-  }
+      header {
+        margin-bottom: 44px;
+        padding-bottom: 30px;
+        border-bottom: 1px solid var(--line);
+      }
+      .eyebrow {
+        display: inline-block;
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 14px;
+      }
+      h1 {
+        margin: 0 0 16px;
+        font-size: 40px;
+        line-height: 1.14;
+        letter-spacing: -0.02em;
+        font-weight: 740;
+      }
+      .subtitle {
+        max-width: 880px;
+        margin: 0;
+        color: var(--text-2);
+        font-size: 17px;
+        line-height: 1.7;
+      }
+      .meta {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 26px;
+      }
+      .meta-card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 13px 15px;
+        box-shadow: var(--shadow-sm);
+      }
+      .meta-card b {
+        display: block;
+        color: var(--text-3);
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 5px;
+        font-weight: 640;
+      }
+      .meta-card span {
+        color: var(--text);
+        font-size: 13px;
+      }
 
-  section { margin: 0 0 56px; }
-  h2 {
-    display: flex;
-    align-items: baseline;
-    gap: 14px;
-    margin: 0 0 22px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--line);
-    font-size: 26px;
-    line-height: 1.3;
-    letter-spacing: -0.015em;
-    font-weight: 720;
-  }
-  h2 .h2-num {
-    color: var(--text-4);
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    padding-top: 4px;
-  }
-  h3 {
-    margin: 0 0 12px;
-    font-size: 16px;
-    line-height: 1.42;
-    font-weight: 680;
-    letter-spacing: -0.005em;
-  }
-  p { margin: 10px 0; color: var(--text-2); }
-  ul { margin: 10px 0; padding-left: 22px; color: var(--text-2); }
-  li { margin: 6px 0; }
-  strong { color: var(--text); font-weight: 660; }
+      section {
+        margin: 0 0 56px;
+      }
+      h2 {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        margin: 0 0 22px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--line);
+        font-size: 26px;
+        line-height: 1.3;
+        letter-spacing: -0.015em;
+        font-weight: 720;
+      }
+      h2 .h2-num {
+        color: var(--text-4);
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        padding-top: 4px;
+      }
+      h3 {
+        margin: 0 0 12px;
+        font-size: 16px;
+        line-height: 1.42;
+        font-weight: 680;
+        letter-spacing: -0.005em;
+      }
+      p {
+        margin: 10px 0;
+        color: var(--text-2);
+      }
+      ul {
+        margin: 10px 0;
+        padding-left: 22px;
+        color: var(--text-2);
+      }
+      li {
+        margin: 6px 0;
+      }
+      strong {
+        color: var(--text);
+        font-weight: 660;
+      }
 
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 18px 20px;
-    box-shadow: var(--shadow-sm);
-  }
-  .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-  .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        box-shadow: var(--shadow-sm);
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
 
-  .lead {
-    background:
-      linear-gradient(180deg, #ffffff 0%, #f7faf6 100%);
-    border-left: 3px solid var(--accent);
-    padding: 20px 22px 18px;
-  }
-  .lead h3 { color: var(--accent-2); margin-bottom: 12px; }
+      .lead {
+        background: linear-gradient(180deg, #ffffff 0%, #f7faf6 100%);
+        border-left: 3px solid var(--accent);
+        padding: 20px 22px 18px;
+      }
+      .lead h3 {
+        color: var(--accent-2);
+        margin-bottom: 12px;
+      }
 
-  .chip-row {
-    list-style: none;
-    padding: 0;
-    margin: 18px 0 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .chip-row li {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 5px 11px;
-    font-size: 12px;
-    color: var(--text-2);
-    box-shadow: var(--shadow-sm);
-  }
-  .chip-row li code {
-    background: transparent;
-    border: 0;
-    padding: 0;
-    font-size: 0.95em;
-    color: var(--text);
-  }
+      .chip-row {
+        list-style: none;
+        padding: 0;
+        margin: 18px 0 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .chip-row li {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 5px 11px;
+        font-size: 12px;
+        color: var(--text-2);
+        box-shadow: var(--shadow-sm);
+      }
+      .chip-row li code {
+        background: transparent;
+        border: 0;
+        padding: 0;
+        font-size: 0.95em;
+        color: var(--text);
+      }
 
-  .note {
-    border-left: 3px solid var(--accent);
-    background: var(--accent-soft);
-    border-radius: var(--radius-sm);
-    padding: 14px 16px;
-    color: var(--text-2);
-    font-size: 14px;
-    margin-top: 32px;
-  }
-  .note strong { color: var(--accent-2); }
+      .note {
+        border-left: 3px solid var(--accent);
+        background: var(--accent-soft);
+        border-radius: var(--radius-sm);
+        padding: 14px 16px;
+        color: var(--text-2);
+        font-size: 14px;
+        margin-top: 32px;
+      }
+      .note strong {
+        color: var(--accent-2);
+      }
 
-  .callout-warn {
-    border-left: 3px solid var(--amber);
-    background: var(--amber-soft);
-    border-radius: var(--radius-sm);
-    padding: 12px 14px;
-    color: var(--text-2);
-    font-size: 13.5px;
-    margin: 14px 0 0;
-  }
-  .callout-warn strong { color: var(--amber); }
+      .callout-warn {
+        border-left: 3px solid var(--amber);
+        background: var(--amber-soft);
+        border-radius: var(--radius-sm);
+        padding: 12px 14px;
+        color: var(--text-2);
+        font-size: 13.5px;
+        margin: 14px 0 0;
+      }
+      .callout-warn strong {
+        color: var(--amber);
+      }
 
-  /* ───── Diagram ───── */
-  .diagram-wrap {
-    position: relative;
-    padding: 18px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    overflow: auto;
-  }
-  svg { display: block; width: 100%; height: auto; }
-  .caption {
-    margin-top: 12px;
-    color: var(--text-3);
-    font-size: 13px;
-    line-height: 1.6;
-    padding-left: 12px;
-    border-left: 2px solid var(--line);
-  }
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px 22px;
-    margin-top: 16px;
-    padding: 12px 16px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    color: var(--text-2);
-  }
-  .legend .group { display: flex; align-items: center; gap: 8px; }
-  .legend .swatch {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
-    border: 1px solid var(--line);
-  }
-  .legend .arr {
-    display: inline-block;
-    width: 28px;
-    height: 0;
-    border-top: 2px solid var(--text-2);
-    position: relative;
-  }
-  .legend .arr.dashed { border-top-style: dashed; }
-  .legend .arr.amber { border-top-color: #8a5a12; }
-  .legend .arr.double { border-top: 3px double #8a5a12; }
-  .chains {
-    margin-top: 18px;
-    padding: 14px 18px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    font-size: 13.5px;
-    color: var(--text-2);
-  }
-  .chains h4 {
-    margin: 0 0 10px;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .chains ol {
-    margin: 0;
-    padding-left: 22px;
-  }
-  .chains li { margin: 4px 0; }
-  .chains code { font-size: 0.9em; }
+      /* ───── Diagram ───── */
+      .diagram-wrap {
+        position: relative;
+        padding: 18px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: auto;
+      }
+      svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .caption {
+        margin-top: 12px;
+        color: var(--text-3);
+        font-size: 13px;
+        line-height: 1.6;
+        padding-left: 12px;
+        border-left: 2px solid var(--line);
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 22px;
+        margin-top: 16px;
+        padding: 12px 16px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        color: var(--text-2);
+      }
+      .legend .group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .legend .swatch {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid var(--line);
+      }
+      .legend .arr {
+        display: inline-block;
+        width: 28px;
+        height: 0;
+        border-top: 2px solid var(--text-2);
+        position: relative;
+      }
+      .legend .arr.dashed {
+        border-top-style: dashed;
+      }
+      .legend .arr.amber {
+        border-top-color: #8a5a12;
+      }
+      .legend .arr.double {
+        border-top: 3px double #8a5a12;
+      }
+      .chains {
+        margin-top: 18px;
+        padding: 14px 18px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        font-size: 13.5px;
+        color: var(--text-2);
+      }
+      .chains h4 {
+        margin: 0 0 10px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .chains ol {
+        margin: 0;
+        padding-left: 22px;
+      }
+      .chains li {
+        margin: 4px 0;
+      }
+      .chains code {
+        font-size: 0.9em;
+      }
 
-  /* ───── Table ───── */
-  .table-wrap {
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    overflow: hidden;
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-    font-size: 13.5px;
-  }
-  th, td {
-    text-align: left;
-    vertical-align: top;
-    padding: 13px 14px;
-    border-bottom: 1px solid var(--line-soft);
-    color: var(--text-2);
-    overflow-wrap: anywhere;
-  }
-  th {
-    background: var(--surface-muted);
-    color: var(--text);
-    font-weight: 680;
-    font-size: 12.5px;
-    letter-spacing: 0.01em;
-  }
-  tr:last-child td { border-bottom: 0; }
-  tr:hover td { background: #fafcf9; }
+      /* ───── Table ───── */
+      .table-wrap {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 13.5px;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 13px 14px;
+        border-bottom: 1px solid var(--line-soft);
+        color: var(--text-2);
+        overflow-wrap: anywhere;
+      }
+      th {
+        background: var(--surface-muted);
+        color: var(--text);
+        font-weight: 680;
+        font-size: 12.5px;
+        letter-spacing: 0.01em;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      tr:hover td {
+        background: #fafcf9;
+      }
 
-  .foot {
-    margin-top: 36px;
-    padding-top: 20px;
-    border-top: 1px solid var(--line);
-    color: var(--text-3);
-    font-size: 13px;
-  }
+      .foot {
+        margin-top: 36px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+        color: var(--text-3);
+        font-size: 13px;
+      }
 
-  /* ───── Responsive ───── */
-  @media (max-width: 1080px) {
-    .shell { grid-template-columns: 1fr; }
-    nav {
-      position: static;
-      height: auto;
-      border-right: 0;
-      border-bottom: 1px solid var(--line);
-    }
-    main { padding: 32px 20px 72px; }
-    .meta, .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
-    h1 { font-size: 30px; }
-    h2 { font-size: 22px; }
-  }
-</style>
-</head>
-<body>
-  <div class="shell">
-    <nav>
-      <div class="brand">
-        OpenCorvus
-        <span class="brand-sub">Scheduling Architecture</span>
-      </div>
-      <div class="nav-meta">
-        本页主题只保留三件事：<br>
-        agent 调度系统、调度流程、skill / MCP / plugin / executor 基建。
-      </div>
-      <a href="#overview"><span class="num">01</span>总览</a>
-      <a href="#scheduler"><span class="num">02</span>Agent 全集</a>
-      <a href="#flow"><span class="num">03</span>调度流程</a>
-      <a href="#infra"><span class="num">04</span>基建接入</a>
-      <a href="#matrix"><span class="num">05</span>职责矩阵</a>
-      <a href="#mapping"><span class="num">06</span>代码映射</a>
-    </nav>
-
-    <main>
-      <header id="overview">
-        <span class="eyebrow">Concepts · Architecture</span>
-        <h1>OpenCorvus 调度架构图</h1>
-        <p class="subtitle">
-          这页不是全系统总览，而是专门讲清楚 OpenCorvus 的任务调度骨架：
-          谁创建任务、谁做生命周期决策、sub-agent 如何被调度、build 如何落到 executor，
-          以及 skill / MCP / plugin / ACP 这些基础设施分别接到哪一层。
-        </p>
-        <div class="meta">
-          <div class="meta-card">
-            <b>当前现状</b>
-            <span>以 <code>packages/opencorvus/src</code> 当前实现为准</span>
-          </div>
-          <div class="meta-card">
-            <b>唯一调度者</b>
-            <span><code>runTaskLoop</code> 中的 Orchestrator</span>
-          </div>
-          <div class="meta-card">
-            <b>外部执行</b>
-            <span>代码修改落在 worktree + executor</span>
-          </div>
-          <div class="meta-card">
-            <b>讨论重点</b>
-            <span>调度链，不讲 Overlay 卡片细节</span>
-          </div>
+      /* ───── Responsive ───── */
+      @media (max-width: 1080px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+        nav {
+          position: static;
+          height: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        main {
+          padding: 32px 20px 72px;
+        }
+        .meta,
+        .grid-2,
+        .grid-3,
+        .grid-4 {
+          grid-template-columns: 1fr;
+        }
+        h1 {
+          font-size: 30px;
+        }
+        h2 {
+          font-size: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <nav>
+        <div class="brand">
+          OpenCorvus
+          <span class="brand-sub">Scheduling Architecture</span>
         </div>
-      </header>
+        <div class="nav-meta">
+          本页主题只保留三件事：<br />
+          agent 调度系统、调度流程、skill / MCP / plugin / executor 基建。
+        </div>
+        <a href="#overview"><span class="num">01</span>总览</a>
+        <a href="#scheduler"><span class="num">02</span>Agent 全集</a>
+        <a href="#flow"><span class="num">03</span>调度流程</a>
+        <a href="#infra"><span class="num">04</span>基建接入</a>
+        <a href="#matrix"><span class="num">05</span>职责矩阵</a>
+        <a href="#mapping"><span class="num">06</span>代码映射</a>
+      </nav>
 
-      <section>
-        <div class="panel lead">
-          <h3>四条先验约束</h3>
-          <ul>
-            <li><strong>Orchestrator 是唯一任务生命周期决策者</strong>，sub-agent 不直接完成 engine task 的 cancel / fail / retry / propose。</li>
-            <li><strong>Agent 是 agent，Infrastructure 是 infrastructure。</strong>skill、plugin、MCP、executor 都不应该被画成"另一个 planner"。</li>
-            <li><strong>调度分两层：</strong>外层是 task control loop，内层是每个 agent / executor session 自己的 tool loop。</li>
-            <li><strong>执行与回流分离：</strong>代码变更、证据、日志先沉到 <code>engine_*</code> / <code>session</code> / <code>trace</code>，再回流给界面和后续决策。</li>
+      <main>
+        <header id="overview">
+          <span class="eyebrow">Concepts · Architecture</span>
+          <h1>OpenCorvus 调度架构图</h1>
+          <p class="subtitle">
+            这页不是全系统总览，而是专门讲清楚 OpenCorvus 的任务调度骨架： 谁创建任务、谁做生命周期决策、sub-agent
+            如何被调度、build 如何落到 executor， 以及 skill / MCP / plugin / ACP 这些基础设施分别接到哪一层。
+          </p>
+          <div class="meta">
+            <div class="meta-card">
+              <b>当前现状</b>
+              <span>以 <code>packages/opencorvus/src</code> 当前实现为准</span>
+            </div>
+            <div class="meta-card">
+              <b>唯一调度者</b>
+              <span><code>runTaskLoop</code> 中的 Orchestrator</span>
+            </div>
+            <div class="meta-card">
+              <b>外部执行</b>
+              <span>代码修改落在 worktree + executor</span>
+            </div>
+            <div class="meta-card">
+              <b>讨论重点</b>
+              <span>调度链，不讲 Overlay 卡片细节</span>
+            </div>
+          </div>
+        </header>
+
+        <section>
+          <div class="panel lead">
+            <h3>四条先验约束</h3>
+            <ul>
+              <li>
+                <strong>Orchestrator 是唯一任务生命周期决策者</strong>，sub-agent 不直接完成 engine task 的 cancel /
+                fail / retry / propose。
+              </li>
+              <li>
+                <strong>Agent 是 agent，Infrastructure 是 infrastructure。</strong>skill、plugin、MCP、executor
+                都不应该被画成"另一个 planner"。
+              </li>
+              <li>
+                <strong>调度分两层：</strong>外层是 task control loop，内层是每个 agent / executor session 自己的 tool
+                loop。
+              </li>
+              <li>
+                <strong>执行与回流分离：</strong>代码变更、证据、日志先沉到 <code>engine_*</code> /
+                <code>session</code> / <code>trace</code>，再回流给界面和后续决策。
+              </li>
+            </ul>
+          </div>
+          <ul class="chip-row">
+            <li><code>EngineService.createTask</code></li>
+            <li><code>orchestrator/loop.ts</code></li>
+            <li><code>orchestrator/tools.ts</code></li>
+            <li><code>engine/workflow.ts</code></li>
+            <li><code>build/agent.ts</code></li>
+            <li><code>executor/registry.ts</code></li>
+            <li><code>session/loop.ts</code></li>
+            <li><code>skill/manager.ts</code></li>
+            <li><code>mcp/index.ts</code></li>
+            <li><code>plugin/index.ts</code></li>
           </ul>
-        </div>
-        <ul class="chip-row">
-          <li><code>EngineService.createTask</code></li>
-          <li><code>orchestrator/loop.ts</code></li>
-          <li><code>orchestrator/tools.ts</code></li>
-          <li><code>engine/workflow.ts</code></li>
-          <li><code>build/agent.ts</code></li>
-          <li><code>executor/registry.ts</code></li>
-          <li><code>session/loop.ts</code></li>
-          <li><code>skill/manager.ts</code></li>
-          <li><code>mcp/index.ts</code></li>
-          <li><code>plugin/index.ts</code></li>
-        </ul>
-      </section>
-
-      <section id="scheduler">
-        <h2><span class="h2-num">02</span>Agent 全集 · 15 个 native agent</h2>
-        <p>
-          截至 2026-05-21，<code>packages/opencorvus/src/agent/agent.ts</code> 注册 <strong>15 个 native agent</strong>，
-          <code>agent/role-contract.ts</code> 给出官方一句话职责。下图按"在 task workflow 中的位置"分组：
-          control 与 orchestrator 是控制平面；中间 8 个由 Orchestrator 通过 <code>orchestrator/tools.ts</code>
-          的显式 dispatch tool 调用；顶 / 底两条带是<strong>不在 task 调度链</strong>中的 agent。
-        </p>
-        <div class="diagram-wrap">
-          <svg viewBox="0 0 1480 1020" role="img" aria-label="OpenCorvus 15 个 native agent 与调度链路图">
-            <defs>
-              <marker id="ag-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-                <path d="M0,0 L10,5 L0,10 z" fill="#5b6962"></path>
-              </marker>
-              <marker id="ag-arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-                <path d="M0,0 L10,5 L0,10 z" fill="#8a5a12"></path>
-              </marker>
-              <marker id="ag-arrow-strong" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
-                <path d="M0,1 L12,6 L0,11 z" fill="#a4671a"></path>
-              </marker>
-              <linearGradient id="ag-grad-bg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#fbfcfa"/>
-                <stop offset="100%" stop-color="#f4f6f1"/>
-              </linearGradient>
-              <linearGradient id="ag-grad-outside" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#f4f3ef"/>
-                <stop offset="100%" stop-color="#eceae2"/>
-              </linearGradient>
-              <linearGradient id="ag-grad-control" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#eef4f8"/>
-                <stop offset="100%" stop-color="#e1ecf2"/>
-              </linearGradient>
-              <linearGradient id="ag-grad-orch" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#edf6f0"/>
-                <stop offset="100%" stop-color="#dde9d5"/>
-              </linearGradient>
-              <linearGradient id="ag-grad-exec" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#fbf6e9"/>
-                <stop offset="100%" stop-color="#f3ecd6"/>
-              </linearGradient>
-            </defs>
-
-            <rect x="14" y="14" width="1452" height="992" rx="14" fill="url(#ag-grad-bg)" stroke="#e2e6dd" stroke-width="1.4"/>
-
-            <!-- Top band: Workflow 外 -->
-            <rect x="600" y="30" width="740" height="100" rx="10" fill="url(#ag-grad-outside)" stroke="#cdcabd" stroke-width="1.3"/>
-            <text x="620" y="56" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">WORKFLOW 外 · 不进入 task 调度链</text>
-            <rect x="620" y="70" width="350" height="50" rx="8" fill="#ffffff" stroke="#c8c4b3"/>
-            <circle cx="640" cy="86" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3"/>
-            <text x="640" y="90" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">11</text>
-            <text x="660" y="89" font-size="14.5" font-weight="700" fill="#14201a">coding</text>
-            <text x="725" y="89" font-size="10.5" fill="#7a8278" font-style="italic">primary</text>
-            <text x="660" y="108" font-size="11.5" fill="#425047">workspace 内 ad-hoc 编辑助手（不入 orchestrator）</text>
-
-            <rect x="990" y="70" width="350" height="50" rx="8" fill="#ffffff" stroke="#c8c4b3"/>
-            <circle cx="1010" cy="86" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3"/>
-            <text x="1010" y="90" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">12</text>
-            <text x="1030" y="89" font-size="14.5" font-weight="700" fill="#14201a">general</text>
-            <text x="1095" y="89" font-size="10.5" fill="#7a8278" font-style="italic">subagent</text>
-            <text x="1030" y="108" font-size="11.5" fill="#425047">通用多步研究 / 并行 sub-agent，由其他 agent 派生</text>
-
-            <!-- Column labels -->
-            <text x="40" y="160" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">入站</text>
-            <text x="270" y="160" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">编排者</text>
-            <text x="620" y="160" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">ORCHESTRATOR 显式 DISPATCH（按推荐 pipeline 顺序）</text>
-            <text x="1060" y="160" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">外部执行后端</text>
-
-            <!-- 1 control -->
-            <rect x="40" y="380" width="200" height="80" rx="10" fill="url(#ag-grad-control)" stroke="#9bb6c4" stroke-width="1.4"/>
-            <circle cx="60" cy="400" r="13" fill="#ffffff" stroke="#1a5f78" stroke-width="1.4"/>
-            <text x="60" y="404" font-size="12" font-weight="700" text-anchor="middle" fill="#1a5f78">1</text>
-            <text x="80" y="404" font-size="16" font-weight="720" fill="#14201a">control</text>
-            <text x="148" y="404" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
-            <text x="56" y="428" font-size="11.5" fill="#3b4a41">控制平面 NL 入口</text>
-            <text x="56" y="446" font-size="11.5" fill="#3b4a41">仅暴露 panel 白名单动作</text>
-
-            <!-- 2 orchestrator -->
-            <rect x="270" y="335" width="270" height="170" rx="10" fill="url(#ag-grad-orch)" stroke="#7faa8a" stroke-width="1.6"/>
-            <circle cx="292" cy="358" r="14" fill="#ffffff" stroke="#2c6b50" stroke-width="1.5"/>
-            <text x="292" y="362" font-size="13" font-weight="700" text-anchor="middle" fill="#2c6b50">2</text>
-            <text x="316" y="364" font-size="20" font-weight="720" fill="#14201a">orchestrator</text>
-            <text x="290" y="395" font-size="11" fill="#3a4d42" font-style="italic">primary · hidden · steps=1000</text>
-            <text x="290" y="420" font-size="12.5" fill="#3a4d42">任务生命周期唯一 owner</text>
-            <text x="290" y="438" font-size="12.5" fill="#3a4d42">通过 24 个 tool 调度，自己不写代码</text>
-            <text x="290" y="464" font-size="11" fill="#5b6962">独占 fail / cancel / retry / propose 决策</text>
-            <text x="290" y="488" font-size="11" fill="#5b6962">prompt = ORCHESTRATOR_RUNTIME_PROMPT</text>
-
-            <line x1="240" y1="420" x2="266" y2="420" stroke="#5b6962" stroke-width="2.4" marker-end="url(#ag-arrow)"/>
-            <text x="226" y="412" font-size="10.5" fill="#5b6962" text-anchor="end">panel → EngineService</text>
-
-            <!-- Stage agent cards -->
-            <rect x="620" y="170" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3"/>
-            <circle cx="640" cy="190" r="12" fill="#ffffff" stroke="#1a5f78" stroke-width="1.3"/>
-            <text x="640" y="194" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1a5f78">3</text>
-            <text x="660" y="194" font-size="15.5" font-weight="700" fill="#14201a">intent-analysis</text>
-            <text x="780" y="194" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
-            <text x="660" y="216" font-size="11.5" fill="#3b4a41">意图分类 / 复杂度 / 缺槽位 / 阻断澄清</text>
-            <text x="660" y="231" font-size="11" fill="#5b6962">request 模糊或 scope 不清时由 orchestrator 调起</text>
-
-            <rect x="620" y="246" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3"/>
-            <circle cx="640" cy="266" r="12" fill="#ffffff" stroke="#1a5f78" stroke-width="1.3"/>
-            <text x="640" y="270" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1a5f78">4</text>
-            <text x="660" y="270" font-size="15.5" font-weight="700" fill="#14201a">requirements</text>
-            <text x="780" y="270" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
-            <text x="660" y="292" font-size="11.5" fill="#3b4a41">抽 REQ-N + 基础技术决策</text>
-            <text x="660" y="307" font-size="11" fill="#5b6962">不产生 goal；多文件 / 显式验收时调</text>
-
-            <rect x="620" y="322" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3"/>
-            <circle cx="640" cy="342" r="12" fill="#ffffff" stroke="#1a5f78" stroke-width="1.3"/>
-            <text x="640" y="346" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1a5f78">5</text>
-            <text x="660" y="346" font-size="15.5" font-weight="700" fill="#14201a">frontend-design</text>
-            <text x="780" y="346" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
-            <text x="660" y="368" font-size="11.5" fill="#3b4a41">视觉 / 参考 → frontend template + visual_consistency_contract</text>
-            <text x="660" y="383" font-size="11" fill="#5b6962">独占网页证据工具；下游消费 SPEC</text>
-
-            <rect x="620" y="398" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3"/>
-            <circle cx="640" cy="418" r="12" fill="#ffffff" stroke="#1a5f78" stroke-width="1.3"/>
-            <text x="640" y="422" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1a5f78">6</text>
-            <text x="660" y="422" font-size="15.5" font-weight="700" fill="#14201a">architect</text>
-            <text x="780" y="422" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
-            <text x="660" y="444" font-size="11.5" fill="#3b4a41">goal graph / acceptance_specs / 跨 goal 契约</text>
-            <text x="660" y="459" font-size="11" fill="#5b6962">权威分解者；trivial 单文件改动可跳过</text>
-
-            <rect x="620" y="474" width="400" height="68" rx="9" fill="#ffffff" stroke="#b5afd8" stroke-width="1.3"/>
-            <circle cx="640" cy="494" r="12" fill="#ffffff" stroke="#5a5187" stroke-width="1.3"/>
-            <text x="640" y="498" font-size="11.5" font-weight="700" text-anchor="middle" fill="#5a5187">7</text>
-            <text x="660" y="498" font-size="15.5" font-weight="700" fill="#14201a">explore</text>
-            <text x="780" y="498" font-size="10.5" fill="#5d6f78" font-style="italic">subagent · 只读</text>
-            <text x="660" y="520" font-size="11.5" fill="#3b4a41">只读仓库调查（文件 / 符号 / 架构 / 依赖）</text>
-            <text x="660" y="535" font-size="11" fill="#5b6962">任何阶段按需，不实施代码改动</text>
-
-            <rect x="620" y="550" width="400" height="68" rx="9" fill="url(#ag-grad-exec)" stroke="#c2a55e" stroke-width="1.6"/>
-            <circle cx="640" cy="570" r="12" fill="#ffffff" stroke="#a4671a" stroke-width="1.3"/>
-            <text x="640" y="574" font-size="11.5" font-weight="700" text-anchor="middle" fill="#a4671a">8</text>
-            <text x="660" y="574" font-size="15.5" font-weight="700" fill="#14201a">build</text>
-            <text x="780" y="574" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
-            <text x="660" y="596" font-size="11.5" fill="#3b4a41">在隔离 worktree 内实施 scoped goal</text>
-            <text x="660" y="611" font-size="11" fill="#5b6962">通过 ExecutorRegistry 启动外部 executor →</text>
-
-            <rect x="620" y="626" width="400" height="68" rx="9" fill="#ffffff" stroke="#b5afd8" stroke-width="1.3"/>
-            <circle cx="640" cy="646" r="12" fill="#ffffff" stroke="#5a5187" stroke-width="1.3"/>
-            <text x="640" y="650" font-size="11.5" font-weight="700" text-anchor="middle" fill="#5a5187">9</text>
-            <text x="660" y="650" font-size="15.5" font-weight="700" fill="#14201a">integrity</text>
-            <text x="780" y="650" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
-            <text x="660" y="672" font-size="11.5" fill="#3b4a41">Pipeline 最终 session-bound 验收 gate</text>
-            <text x="660" y="687" font-size="11" fill="#5b6962">requirement / contract / system 完整性 → verdict</text>
-
-            <rect x="620" y="702" width="400" height="68" rx="9" fill="#ffffff" stroke="#b5afd8" stroke-width="1.3"/>
-            <circle cx="640" cy="722" r="12" fill="#ffffff" stroke="#5a5187" stroke-width="1.3"/>
-            <text x="640" y="726" font-size="11.5" font-weight="700" text-anchor="middle" fill="#5a5187">10</text>
-            <text x="660" y="726" font-size="15.5" font-weight="700" fill="#14201a">prosecutor</text>
-            <text x="780" y="726" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
-            <text x="660" y="748" font-size="11.5" fill="#3b4a41">反例 + diagnostic challenge metrics</text>
-            <text x="660" y="763" font-size="11" fill="#5b6962">无 accept / reject 权，只能记录 counterexample</text>
-
-            <!-- Trunk + branches -->
-            <line x1="540" y1="420" x2="592" y2="420" stroke="#2c6b50" stroke-width="2.4" marker-end="url(#ag-arrow)"/>
-            <line x1="592" y1="204" x2="592" y2="736" stroke="#7faa8a" stroke-width="2"/>
-            <line x1="592" y1="204" x2="616" y2="204" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)"/>
-            <line x1="592" y1="280" x2="616" y2="280" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)"/>
-            <line x1="592" y1="356" x2="616" y2="356" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)"/>
-            <line x1="592" y1="432" x2="616" y2="432" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)"/>
-            <line x1="592" y1="508" x2="616" y2="508" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)"/>
-            <line x1="592" y1="584" x2="616" y2="584" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)"/>
-            <line x1="592" y1="660" x2="616" y2="660" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)"/>
-            <line x1="592" y1="736" x2="616" y2="736" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)"/>
-
-            <!-- External Executors -->
-            <rect x="1060" y="550" width="290" height="68" rx="9" fill="url(#ag-grad-exec)" stroke="#a4671a" stroke-width="1.6"/>
-            <text x="1075" y="574" font-size="15.5" font-weight="720" fill="#14201a">External Executors</text>
-            <text x="1075" y="596" font-size="11.5" fill="#3b4a41">codex / claude-code / opencode</text>
-            <text x="1075" y="611" font-size="11" fill="#5b6962">在 worktree 内跑真实 LLM + tool loop</text>
-
-            <line x1="1020" y1="584" x2="1056" y2="584" stroke="#a4671a" stroke-width="3" marker-end="url(#ag-arrow-strong)"/>
-            <text x="1024" y="576" font-size="10" fill="#a4671a" font-style="italic">cross-process</text>
-
-            <!-- Verdict feedback -->
-            <path d="M 620 660 C 540 660 470 540 540 480" fill="none" stroke="#8a5a12" stroke-width="2" marker-end="url(#ag-arrow-amber)"/>
-            <path d="M 620 736 C 530 736 460 580 540 495" fill="none" stroke="#8a5a12" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#ag-arrow-amber)"/>
-            <text x="430" y="612" font-size="11" fill="#8a5a12" font-style="italic">verdict /</text>
-            <text x="430" y="626" font-size="11" fill="#8a5a12" font-style="italic">counterexample</text>
-            <text x="430" y="640" font-size="11" fill="#8a5a12" font-style="italic">→ engine_artifact</text>
-
-            <!-- Bottom band -->
-            <rect x="600" y="800" width="740" height="140" rx="10" fill="url(#ag-grad-outside)" stroke="#cdcabd" stroke-width="1.3"/>
-            <text x="620" y="824" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">SESSION 框架自动调用 · 不被 ORCHESTRATOR 显式 DISPATCH</text>
-
-            <rect x="620" y="840" width="232" height="86" rx="8" fill="#ffffff" stroke="#c8c4b3"/>
-            <circle cx="640" cy="858" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3"/>
-            <text x="640" y="862" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">13</text>
-            <text x="660" y="862" font-size="14" font-weight="700" fill="#14201a">compaction</text>
-            <text x="745" y="862" font-size="10" fill="#7a8278" font-style="italic">primary · hidden</text>
-            <text x="634" y="884" font-size="11" fill="#425047">transcript checkpoint 压缩</text>
-            <text x="634" y="900" font-size="10.5" fill="#5b6962">session 框架按 budget 自动触发</text>
-            <text x="634" y="916" font-size="10.5" fill="#5b6962">prompt = PROMPT_COMPACTION</text>
-
-            <rect x="864" y="840" width="232" height="86" rx="8" fill="#ffffff" stroke="#c8c4b3"/>
-            <circle cx="884" cy="858" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3"/>
-            <text x="884" y="862" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">14</text>
-            <text x="904" y="862" font-size="14" font-weight="700" fill="#14201a">title</text>
-            <text x="945" y="862" font-size="10" fill="#7a8278" font-style="italic">primary · hidden</text>
-            <text x="878" y="884" font-size="11" fill="#425047">生成 session 标题</text>
-            <text x="878" y="900" font-size="10.5" fill="#5b6962">session 创建后自动触发</text>
-            <text x="878" y="916" font-size="10.5" fill="#5b6962">temperature=0.5</text>
-
-            <rect x="1108" y="840" width="232" height="86" rx="8" fill="#ffffff" stroke="#c8c4b3"/>
-            <circle cx="1128" cy="858" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3"/>
-            <text x="1128" y="862" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">15</text>
-            <text x="1148" y="862" font-size="14" font-weight="700" fill="#14201a">summary</text>
-            <text x="1205" y="862" font-size="10" fill="#7a8278" font-style="italic">primary · hidden</text>
-            <text x="1122" y="884" font-size="11" fill="#425047">follow-up summary 的 model-routing slot</text>
-            <text x="1122" y="900" font-size="10.5" fill="#5b6962">无静态 prompt</text>
-            <text x="1122" y="916" font-size="10.5" fill="#5b6962">由 generateFollowup 内联构造</text>
-
-            <text x="40" y="970" font-size="11" fill="#5b6962" font-style="italic">注：coding / general 由 panel 或 SubAgent.task 直接进入对应 session，不经过 orchestrator.runTaskLoop。</text>
-            <text x="40" y="990" font-size="11" fill="#5b6962" font-style="italic">注：compaction / title / summary 在每个 session 内由 session 框架按需触发，与 task workflow 调度链无关。</text>
-          </svg>
-        </div>
-
-        <div class="legend">
-          <div class="group"><span class="swatch" style="background:#eef4f8;border-color:#9bb6c4"></span>控制平面 / 分析 (control, intent-analysis, requirements, frontend-design, architect)</div>
-          <div class="group"><span class="swatch" style="background:#edf6f0;border-color:#7faa8a"></span>编排者 (orchestrator)</div>
-          <div class="group"><span class="swatch" style="background:#f4f0fa;border-color:#b5afd8"></span>read-only / 验收 (explore, integrity, prosecutor)</div>
-          <div class="group"><span class="swatch" style="background:#fbf6e9;border-color:#c2a55e"></span>执行 + 外部执行后端 (build, External Executors)</div>
-          <div class="group"><span class="swatch" style="background:#f4f3ef;border-color:#cdcabd"></span>不入 task workflow 调度链 (coding, general, compaction, title, summary)</div>
-          <div class="group"><span class="arr"></span>orchestrator 显式 dispatch</div>
-          <div class="group"><span class="arr double"></span>cross-process 启动 (build → executor)</div>
-          <div class="group"><span class="arr amber"></span>verdict 回流 (integrity → orchestrator)</div>
-          <div class="group"><span class="arr amber dashed"></span>counterexample 回流 (prosecutor → orchestrator)</div>
-        </div>
-
-        <div class="chains">
-          <h4>典型调度链路（皆由 orchestrator 选择，非硬编码）</h4>
-          <ol>
-            <li><strong>Direct build</strong>（<code>task.kind = "build"</code> / 单文件改动）：<code>control</code> → <code>orchestrator</code> → <code>build</code> → External Executor。不展开 requirements / architect / integrity。</li>
-            <li><strong>Standard pipeline</strong>（多文件 / 跨模块）：<code>control</code> → <code>orchestrator</code> → <code>intent-analysis</code> → <code>requirements</code> → <code>architect</code> → per-goal <code>build</code> → External Executor → <code>integrity</code> → verdict 回流 → <code>orchestrator</code> 决策（modify_goal / build / architect / deliver / fail_task）。</li>
-            <li><strong>Visual / reference pipeline</strong>（UI 复刻 / 视觉参考）：<code>control</code> → <code>orchestrator</code> → <code>frontend-design</code>（独占网页证据）→ <code>intent-analysis</code> → <code>requirements</code> → <code>architect</code> → per-goal <code>build</code> → <code>integrity</code> → 回流。</li>
-            <li><strong>Adversarial review</strong>（怀疑 verdict 不够严）：在 integrity pass 之后，<code>orchestrator</code> → <code>prosecutor</code>，产出 counterexample 触发再次 <code>build</code> / <code>architect</code>。</li>
-            <li><strong>Investigation</strong>（任意时刻需要事实）：<code>orchestrator</code> → <code>explore</code>（read-only），结果回填 decision_log，不进入实施链。</li>
-          </ol>
-        </div>
-      </section>
-
-      <section id="flow">
-        <h2><span class="h2-num">03</span>任务调度流程</h2>
-        <div class="diagram-wrap">
-          <svg viewBox="0 0 1480 760" role="img" aria-label="OpenCorvus 任务调度流程图">
-            <defs>
-              <marker id="arrow-flow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-                <path d="M0,0 L10,5 L0,10 z" fill="#5b6962"></path>
-              </marker>
-              <marker id="arrow-flow-amber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-                <path d="M0,0 L10,5 L0,10 z" fill="#8a5a12"></path>
-              </marker>
-              <linearGradient id="grad-flow-ingress" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#eef4f8"/>
-                <stop offset="100%" stop-color="#e3edf2"/>
-              </linearGradient>
-              <linearGradient id="grad-flow-engine" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#eef4f8"/>
-                <stop offset="100%" stop-color="#e3edf2"/>
-              </linearGradient>
-              <linearGradient id="grad-flow-orch" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#edf6f0"/>
-                <stop offset="100%" stop-color="#dde9d5"/>
-              </linearGradient>
-              <linearGradient id="grad-flow-sub" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#fbf6e9"/>
-                <stop offset="100%" stop-color="#f3ecd6"/>
-              </linearGradient>
-              <linearGradient id="grad-flow-exec" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#fbf6e9"/>
-                <stop offset="100%" stop-color="#f3ecd6"/>
-              </linearGradient>
-            </defs>
-
-            <rect x="24" y="28" width="1432" height="704" rx="18" fill="#ffffff" stroke="#d8ddd6" stroke-width="1.5"></rect>
-
-            <rect x="48" y="72" width="164" height="580" rx="14" fill="url(#grad-flow-ingress)" stroke="#c0d2dc" stroke-width="1.4"></rect>
-            <text x="74" y="108" font-size="19" font-weight="720" fill="#14201a">入口</text>
-            <text x="74" y="132" font-size="12.5" fill="#425047">Channel / Panel / ACP</text>
-
-            <rect x="246" y="72" width="176" height="580" rx="14" fill="url(#grad-flow-engine)" stroke="#c0d2dc" stroke-width="1.4"></rect>
-            <text x="272" y="108" font-size="19" font-weight="720" fill="#14201a">Engine</text>
-            <text x="272" y="132" font-size="12.5" fill="#425047">task API + persistence</text>
-
-            <rect x="456" y="72" width="256" height="580" rx="14" fill="url(#grad-flow-orch)" stroke="#a8c8b0" stroke-width="1.4"></rect>
-            <text x="482" y="108" font-size="19" font-weight="720" fill="#14201a">Orchestrator</text>
-            <text x="482" y="132" font-size="12.5" fill="#425047">outer task loop</text>
-
-            <rect x="746" y="72" width="318" height="580" rx="14" fill="url(#grad-flow-sub)" stroke="#d8c9a3" stroke-width="1.4"></rect>
-            <text x="772" y="108" font-size="19" font-weight="720" fill="#14201a">Sub-agents / Build</text>
-            <text x="772" y="132" font-size="12.5" fill="#425047">analysis + code execution bridge</text>
-
-            <rect x="1098" y="72" width="332" height="580" rx="14" fill="url(#grad-flow-exec)" stroke="#d8c9a3" stroke-width="1.4"></rect>
-            <text x="1124" y="108" font-size="19" font-weight="720" fill="#14201a">Executor / Integrity</text>
-            <text x="1124" y="132" font-size="12.5" fill="#425047">inner loop + final gate</text>
-
-            <!-- Numbered step bullets -->
-            <circle cx="130" cy="207" r="22" fill="#ffffff" stroke="#c0d2dc" stroke-width="1.4"></circle>
-            <text x="130" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">1</text>
-            <text x="74" y="256" font-size="12.5" fill="#425047">用户消息进入</text>
-            <text x="74" y="274" font-size="12.5" fill="#425047">先区分确定性路由</text>
-            <text x="74" y="292" font-size="12.5" fill="#425047">还是 control LLM</text>
-
-            <circle cx="334" cy="207" r="22" fill="#ffffff" stroke="#c0d2dc" stroke-width="1.4"></circle>
-            <text x="334" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">2</text>
-            <text x="272" y="256" font-size="12.5" fill="#425047">createTask /</text>
-            <text x="272" y="274" font-size="12.5" fill="#425047">handleTaskMessage</text>
-            <text x="272" y="292" font-size="12.5" fill="#425047">写 engine_task</text>
-
-            <circle cx="584" cy="207" r="22" fill="#ffffff" stroke="#a8c8b0" stroke-width="1.4"></circle>
-            <text x="584" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">3</text>
-            <text x="482" y="256" font-size="12.5" fill="#425047">runTaskLoop 醒来</text>
-            <text x="482" y="274" font-size="12.5" fill="#425047">读全量上下文</text>
-            <text x="482" y="292" font-size="12.5" fill="#425047">选择 direct / pipeline</text>
-
-            <circle cx="584" cy="355" r="22" fill="#ffffff" stroke="#a8c8b0" stroke-width="1.4"></circle>
-            <text x="584" y="362" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">4</text>
-            <text x="482" y="404" font-size="12.5" fill="#425047">若是 pipeline</text>
-            <text x="482" y="422" font-size="12.5" fill="#425047">按需调用 analyze_intent /</text>
-            <text x="482" y="440" font-size="12.5" fill="#425047">requirements / architect</text>
-
-            <circle cx="904" cy="207" r="22" fill="#ffffff" stroke="#d8c9a3" stroke-width="1.4"></circle>
-            <text x="904" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">5</text>
-            <text x="772" y="256" font-size="12.5" fill="#425047">analysis agent 产出</text>
-            <text x="772" y="274" font-size="12.5" fill="#425047">requirement / contract / goal</text>
-            <text x="772" y="292" font-size="12.5" fill="#425047">写回 decision_log / artifact</text>
-
-            <circle cx="904" cy="355" r="22" fill="#ffffff" stroke="#d8c9a3" stroke-width="1.4"></circle>
-            <text x="904" y="362" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">6</text>
-            <text x="772" y="404" font-size="12.5" fill="#425047">Orchestrator 调 build</text>
-            <text x="772" y="422" font-size="12.5" fill="#425047">build/agent 选 executor</text>
-            <text x="772" y="440" font-size="12.5" fill="#425047">准备隔离 worktree</text>
-
-            <circle cx="1264" cy="207" r="22" fill="#ffffff" stroke="#d8c9a3" stroke-width="1.4"></circle>
-            <text x="1264" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">7</text>
-            <text x="1124" y="256" font-size="12.5" fill="#425047">executor session 内部</text>
-            <text x="1124" y="274" font-size="12.5" fill="#425047">继续跑 LLM → tool loop</text>
-            <text x="1124" y="292" font-size="12.5" fill="#425047">真实写代码 / 测试 / 产出 diff</text>
-
-            <circle cx="1264" cy="355" r="22" fill="#ffffff" stroke="#d8c9a3" stroke-width="1.4"></circle>
-            <text x="1264" y="362" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">8</text>
-            <text x="1124" y="404" font-size="12.5" fill="#425047">integrity 在自己的 session 内审查</text>
-            <text x="1124" y="422" font-size="12.5" fill="#425047">requirement / contract / system</text>
-            <text x="1124" y="440" font-size="12.5" fill="#425047">verdict + evidence 写回 artifact</text>
-
-            <circle cx="584" cy="519" r="22" fill="#ffffff" stroke="#a8c8b0" stroke-width="1.4"></circle>
-            <text x="584" y="526" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">9</text>
-            <text x="482" y="566" font-size="12.5" fill="#425047">Orchestrator 再醒来</text>
-            <text x="482" y="584" font-size="12.5" fill="#425047">基于 verdict 决定下一步：</text>
-            <text x="482" y="602" font-size="12.5" fill="#425047">modify_goal / build / architect</text>
-            <text x="482" y="620" font-size="12.5" fill="#425047">/ deliver / fail_task</text>
-
-            <!-- Horizontal flow -->
-            <line x1="152" y1="207" x2="312" y2="207" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-flow)"></line>
-            <line x1="356" y1="207" x2="562" y2="207" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-flow)"></line>
-            <line x1="606" y1="207" x2="882" y2="207" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-flow)"></line>
-            <line x1="926" y1="207" x2="1242" y2="207" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-flow)"></line>
-
-            <!-- Vertical step bumps -->
-            <line x1="584" y1="229" x2="584" y2="333" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-flow)"></line>
-            <line x1="904" y1="229" x2="904" y2="333" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-flow)"></line>
-            <line x1="1264" y1="229" x2="1264" y2="333" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-flow)"></line>
-
-            <!-- verdict feedback loop -->
-            <line x1="1264" y1="377" x2="606" y2="519" stroke="#8a5a12" stroke-width="2.4" marker-end="url(#arrow-flow-amber)"></line>
-            <text x="894" y="488" font-size="12.5" fill="#8a5a12">verdict / evidence 回到外层 loop</text>
-
-            <line x1="584" y1="541" x2="584" y2="616" stroke="#5b6962" stroke-width="2.4"></line>
-            <line x1="606" y1="519" x2="882" y2="519" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-flow)"></line>
-            <text x="684" y="506" font-size="12.5" fill="#425047">需要回修时再次 build</text>
-
-            <rect x="770" y="520" width="628" height="102" rx="10" fill="#f0f2ed" stroke="#d8ddd6"></rect>
-            <text x="792" y="548" font-size="16" font-weight="700" fill="#14201a">build fast path</text>
-            <text x="792" y="572" font-size="12.5" fill="#425047">如果 <tspan font-family="monospace" font-size="12">engine_task.kind = "build"</tspan>，外层 loop 走 <tspan font-family="monospace" font-size="12">direct</tspan> 模板，</text>
-            <text x="792" y="590" font-size="12.5" fill="#425047">直接调用 build，不展开 requirements / architect / integrity，但仍保留统一的任务生命周期与取消能力。</text>
-          </svg>
-        </div>
-        <p class="caption">
-          核心不是"固定九步"，而是外层 loop 每次醒来都重新读事实再决策。流程图只是把最常见路径压平，不代表硬编码状态机。
-        </p>
-      </section>
-
-      <section id="infra">
-        <h2><span class="h2-num">04</span>Skill / MCP / Plugin / Executor 基建接入层</h2>
-        <div class="diagram-wrap">
-          <svg viewBox="0 0 1480 920" role="img" aria-label="OpenCorvus 基建接入层图">
-            <defs>
-              <marker id="arrow-infra" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-                <path d="M0,0 L10,5 L0,10 z" fill="#5b6962"></path>
-              </marker>
-              <linearGradient id="grad-skill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#edf6f0"/>
-                <stop offset="100%" stop-color="#dde9d5"/>
-              </linearGradient>
-              <linearGradient id="grad-mcp" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#eef4f8"/>
-                <stop offset="100%" stop-color="#dde9ef"/>
-              </linearGradient>
-              <linearGradient id="grad-plugin" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#f4f0fa"/>
-                <stop offset="100%" stop-color="#e7e1f3"/>
-              </linearGradient>
-              <linearGradient id="grad-executor" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#fbf6e9"/>
-                <stop offset="100%" stop-color="#f3ecd6"/>
-              </linearGradient>
-            </defs>
-
-            <rect x="24" y="24" width="1432" height="872" rx="18" fill="#ffffff" stroke="#d8ddd6" stroke-width="1.5"></rect>
-
-            <!-- Skill column -->
-            <rect x="54" y="56" width="310" height="800" rx="16" fill="url(#grad-skill)" stroke="#a8c8b0" stroke-width="1.5"></rect>
-            <text x="80" y="90" font-size="22" font-weight="720" fill="#14201a" letter-spacing="-0.4">Skill 层</text>
-            <text x="80" y="114" font-size="13" fill="#5f6d65">最轻量：注入规则，不直接执行</text>
-
-            <rect x="82" y="158" width="254" height="116" rx="10" fill="#ffffff" stroke="#cadacb"></rect>
-            <text x="100" y="188" font-size="16" font-weight="700" fill="#14201a">SKILL.md + frontmatter</text>
-            <text x="100" y="212" font-size="12.5" fill="#425047">name / description / auto_detect</text>
-            <text x="100" y="230" font-size="12.5" fill="#425047">required_tools / priority</text>
-            <text x="100" y="248" font-size="12.5" fill="#425047">本质上是 prompt 规则包</text>
-
-            <rect x="82" y="318" width="254" height="116" rx="10" fill="#ffffff" stroke="#cadacb"></rect>
-            <text x="100" y="348" font-size="16" font-weight="700" fill="#14201a">SkillManager</text>
-            <text x="100" y="372" font-size="12.5" fill="#425047">扫描 builtin / path / url / git</text>
-            <text x="100" y="390" font-size="12.5" fill="#425047">按 auto_detect 与 permission 决定是否启用</text>
-            <text x="100" y="408" font-size="12.5" fill="#425047">required_tools 仅作为工具提示</text>
-
-            <rect x="82" y="478" width="254" height="132" rx="10" fill="#ffffff" stroke="#cadacb"></rect>
-            <text x="100" y="508" font-size="16" font-weight="700" fill="#14201a">接入位置</text>
-            <text x="100" y="534" font-size="12.5" fill="#425047">agent 通过 skill 工具显式加载</text>
-            <text x="100" y="552" font-size="12.5" fill="#425047">影响 agent 行为、阶段上下文与 required_tools</text>
-            <text x="100" y="570" font-size="12.5" fill="#425047">不能直接替 Orchestrator 做流程判断</text>
-
-            <!-- MCP column -->
-            <rect x="400" y="56" width="344" height="800" rx="16" fill="url(#grad-mcp)" stroke="#c0d2dc" stroke-width="1.5"></rect>
-            <text x="426" y="90" font-size="22" font-weight="720" fill="#14201a" letter-spacing="-0.4">MCP / Tool 层</text>
-            <text x="426" y="114" font-size="13" fill="#5f6d65">远程或本地工具表面，不是调度器</text>
-
-            <rect x="430" y="158" width="284" height="116" rx="10" fill="#ffffff" stroke="#c8d8e1"></rect>
-            <text x="450" y="188" font-size="16" font-weight="700" fill="#14201a">MCP Client</text>
-            <text x="450" y="212" font-size="12.5" fill="#425047">stdio / Streamable HTTP / SSE</text>
-            <text x="450" y="230" font-size="12.5" fill="#425047">listTools / listPrompts / listResources</text>
-            <text x="450" y="248" font-size="12.5" fill="#425047">远端 server 提供能力，OpenCorvus 负责接入</text>
-
-            <rect x="430" y="318" width="284" height="116" rx="10" fill="#ffffff" stroke="#c8d8e1"></rect>
-            <text x="450" y="348" font-size="16" font-weight="700" fill="#14201a">Tool materialization</text>
-            <text x="450" y="372" font-size="12.5" fill="#425047">sanitize 名称后注册到工具表面</text>
-            <text x="450" y="390" font-size="12.5" fill="#425047">结果经 materialize 转成文本 / 附件 / metadata</text>
-            <text x="450" y="408" font-size="12.5" fill="#425047">然后进入 SessionLoop 的 resolveTools</text>
-
-            <rect x="430" y="478" width="284" height="132" rx="10" fill="#ffffff" stroke="#c8d8e1"></rect>
-            <text x="450" y="508" font-size="16" font-weight="700" fill="#14201a">OpenCorvus 作为 MCP Server</text>
-            <text x="450" y="534" font-size="12.5" fill="#425047"><tspan font-family="monospace" font-size="12">mcp/serve.ts</tspan> · <tspan font-family="monospace" font-size="12">/mcp/transport</tspan></text>
-            <text x="450" y="552" font-size="12.5" fill="#425047">把 memory / task_report / webpage / figma 工具</text>
-            <text x="450" y="570" font-size="12.5" fill="#425047">暴露给外部 executor</text>
-            <text x="450" y="588" font-size="12.5" fill="#425047">这是一条工具供给链，不是任务控制链</text>
-
-            <!-- Plugin column -->
-            <rect x="780" y="56" width="310" height="800" rx="16" fill="url(#grad-plugin)" stroke="#c8c4e2" stroke-width="1.5"></rect>
-            <text x="806" y="90" font-size="22" font-weight="720" fill="#14201a" letter-spacing="-0.4">Plugin 层</text>
-            <text x="806" y="114" font-size="13" fill="#5f6d65">全局 hook，修改运行时，不负责排任务</text>
-
-            <rect x="808" y="158" width="254" height="116" rx="10" fill="#ffffff" stroke="#d5cdea"></rect>
-            <text x="826" y="188" font-size="16" font-weight="700" fill="#14201a">Plugin.state()</text>
-            <text x="826" y="212" font-size="12.5" fill="#425047">加载 internal / builtin / config 插件</text>
-            <text x="826" y="230" font-size="12.5" fill="#425047">生成全局 hooks 列表</text>
-            <text x="826" y="248" font-size="12.5" fill="#425047">runHookIsolated 保护主流程</text>
-
-            <rect x="808" y="318" width="254" height="156" rx="10" fill="#ffffff" stroke="#d5cdea"></rect>
-            <text x="826" y="348" font-size="16" font-weight="700" fill="#14201a">Hook 面</text>
-            <text x="826" y="374" font-size="12.5" fill="#425047">chat.params / chat.headers</text>
-            <text x="826" y="392" font-size="12.5" fill="#425047">permission.ask / tool.execute.before / after</text>
-            <text x="826" y="410" font-size="12.5" fill="#425047">evaluation.checks / evaluation.analysis</text>
-            <text x="826" y="428" font-size="12.5" fill="#425047">acceptance.ready / event / config</text>
-            <text x="826" y="446" font-size="12.5" fill="#425047">能改运行时行为，但不拥有调度权</text>
-
-            <rect x="808" y="518" width="254" height="116" rx="10" fill="#ffffff" stroke="#d5cdea"></rect>
-            <text x="826" y="548" font-size="16" font-weight="700" fill="#14201a">典型作用</text>
-            <text x="826" y="572" font-size="12.5" fill="#425047">加工具、改鉴权、注入评估、交付后通知</text>
-            <text x="826" y="590" font-size="12.5" fill="#425047">不是另一个 executor，更不是 planner</text>
-
-            <!-- Executor column -->
-            <rect x="1126" y="56" width="300" height="800" rx="16" fill="url(#grad-executor)" stroke="#d8c9a3" stroke-width="1.5"></rect>
-            <text x="1152" y="90" font-size="22" font-weight="720" fill="#14201a" letter-spacing="-0.4">Executor / ACP 层</text>
-            <text x="1152" y="114" font-size="13" fill="#5f6d65">一个是执行器，一个是外部入口</text>
-
-            <rect x="1154" y="158" width="244" height="116" rx="10" fill="#ffffff" stroke="#dfd1ac"></rect>
-            <text x="1172" y="188" font-size="16" font-weight="700" fill="#14201a">ExecutorRegistry</text>
-            <text x="1172" y="212" font-size="12.5" fill="#425047">opencorvus / codex / claude / opencode</text>
-            <text x="1172" y="230" font-size="12.5" fill="#425047">build 阶段按 executor 选择具体外部实现</text>
-            <text x="1172" y="248" font-size="12.5" fill="#425047">是代码执行后端，不是任务创建入口</text>
-
-            <rect x="1154" y="318" width="244" height="116" rx="10" fill="#ffffff" stroke="#dfd1ac"></rect>
-            <text x="1172" y="348" font-size="16" font-weight="700" fill="#14201a">ACP</text>
-            <text x="1172" y="372" font-size="12.5" fill="#425047">外部编辑器通过 ACP 把请求送进来</text>
-            <text x="1172" y="390" font-size="12.5" fill="#425047">属于入站协议，与 Channel / Control 并列</text>
-            <text x="1172" y="408" font-size="12.5" fill="#425047">不直接参与内部 build loop</text>
-
-            <rect x="1154" y="478" width="244" height="132" rx="10" fill="#ffffff" stroke="#dfd1ac"></rect>
-            <text x="1172" y="508" font-size="16" font-weight="700" fill="#14201a">边界结论</text>
-            <text x="1172" y="534" font-size="12.5" fill="#425047">Skill = 可加载工作流</text>
-            <text x="1172" y="552" font-size="12.5" fill="#425047">MCP = 工具面</text>
-            <text x="1172" y="570" font-size="12.5" fill="#425047">Plugin = 全局 hook</text>
-            <text x="1172" y="588" font-size="12.5" fill="#425047">Executor = 代码执行后端</text>
-
-            <line x1="336" y1="378" x2="430" y2="378" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-infra)"></line>
-            <text x="346" y="364" font-size="12.5" fill="#425047">required_tools / prompt context</text>
-
-            <line x1="714" y1="378" x2="808" y2="378" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-infra)"></line>
-            <text x="722" y="364" font-size="12.5" fill="#425047">tool surface + permission path</text>
-
-            <line x1="1062" y1="216" x2="1154" y2="216" stroke="#5b6962" stroke-width="2.4" marker-end="url(#arrow-infra)"></line>
-            <text x="1070" y="202" font-size="12.5" fill="#425047">runtime modifications feed build sessions</text>
-
-            <rect x="350" y="700" width="758" height="110" rx="12" fill="#f0f2ed" stroke="#d8ddd6"></rect>
-            <text x="374" y="730" font-size="17" font-weight="700" fill="#14201a">它们最终汇入哪里</text>
-            <text x="374" y="756" font-size="12.5" fill="#425047">Skill 影响 prompt 与 required_tools；MCP 影响 tool registry 与 tool results；Plugin 影响 runtime hooks；Executor 影响 build 执行后端。</text>
-            <text x="374" y="774" font-size="12.5" fill="#425047">四者都可以显著改变系统行为，但没有任何一个应该被当作新的 task scheduler。</text>
-          </svg>
-        </div>
-        <p class="caption">
-          这一层最容易被画乱。正确画法是按"接入位置"分层，不按"看起来都能扩展系统"混成一团。
-        </p>
-      </section>
-
-      <section id="matrix">
-        <h2><span class="h2-num">05</span>职责矩阵</h2>
-        <div class="table-wrap">
-          <table>
-            <colgroup>
-              <col style="width: 14%">
-              <col style="width: 26%">
-              <col style="width: 32%">
-              <col style="width: 28%">
-            </colgroup>
-            <thead>
-              <tr>
-                <th>对象</th>
-                <th>接入位置</th>
-                <th>能影响什么</th>
-                <th>不能替代什么</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Orchestrator</strong></td>
-                <td><code>orchestrator/loop.ts</code> + <code>orchestrator/tools.ts</code></td>
-                <td>任务生命周期、stage 调度、build / deliver / retry 决策</td>
-                <td>不能把生命周期权力交给 acceptance、plugin、MCP 或 skill</td>
-              </tr>
-              <tr>
-                <td><strong>Sub-agent</strong></td>
-                <td><code>requirements/</code> · <code>architect/</code> · <code>integrity/</code> 等</td>
-                <td>需求、契约、质检、最终 gate、专项分析</td>
-                <td>不能单独完成 engine task 调度闭环</td>
-              </tr>
-              <tr>
-                <td><strong>Skill</strong></td>
-                <td>agent 显式调用 skill 工具</td>
-                <td>agent 行为规则、可见工作流说明</td>
-                <td>不能直接执行工具，也不能决定下一阶段</td>
-              </tr>
-              <tr>
-                <td><strong>MCP</strong></td>
-                <td>tool surface / prompt / resource surface</td>
-                <td>给 agent 增加外部工具、资源、提示词</td>
-                <td>不能成为新的 Orchestrator</td>
-              </tr>
-              <tr>
-                <td><strong>Plugin</strong></td>
-                <td>全局 runtime hooks</td>
-                <td>改认证、改参数、插入评估、订阅事件、加工具</td>
-                <td>不能替代 executor，也不该替代 task loop</td>
-              </tr>
-              <tr>
-                <td><strong>Executor</strong></td>
-                <td>build 阶段外部执行后端</td>
-                <td>在 worktree 里真实写代码、跑命令、产出 diff</td>
-                <td>不能负责任务规划和全局重试策略</td>
-              </tr>
-              <tr>
-                <td><strong>ACP / Channel / Control</strong></td>
-                <td>入站协议层</td>
-                <td>把外部请求引到 EngineService</td>
-                <td>不能替代内层 build loop</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="mapping">
-        <h2><span class="h2-num">06</span>代码映射</h2>
-        <div class="grid-2">
-          <div class="panel">
-            <h3>任务入口与控制面</h3>
-            <p>
-              <code>packages/opencorvus/src/channel/ingress.ts</code><br>
-              <code>packages/opencorvus/src/control/message.ts</code><br>
-              <code>packages/opencorvus/src/panel/capability.ts</code><br>
-              <code>packages/opencorvus/src/task-api/index.ts</code>
-            </p>
+        </section>
+
+        <section id="scheduler">
+          <h2><span class="h2-num">02</span>Agent 全集 · 15 个 native agent</h2>
+          <p>
+            截至 2026-05-21，<code>packages/opencorvus/src/agent/agent.ts</code> 注册
+            <strong>15 个 native agent</strong>， <code>agent/role-contract.ts</code> 给出官方一句话职责。下图按"在 task
+            workflow 中的位置"分组： control 与 orchestrator 是控制平面；中间 8 个由 Orchestrator 通过
+            <code>orchestrator/tools.ts</code> 的显式 dispatch tool 调用；顶 / 底两条带是<strong
+              >不在 task 调度链</strong
+            >中的 agent。
+          </p>
+          <div class="diagram-wrap">
+            <svg viewBox="0 0 1480 1020" role="img" aria-label="OpenCorvus 15 个 native agent 与调度链路图">
+              <defs>
+                <marker id="ag-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#5b6962"></path>
+                </marker>
+                <marker id="ag-arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#8a5a12"></path>
+                </marker>
+                <marker id="ag-arrow-strong" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
+                  <path d="M0,1 L12,6 L0,11 z" fill="#a4671a"></path>
+                </marker>
+                <linearGradient id="ag-grad-bg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#fbfcfa" />
+                  <stop offset="100%" stop-color="#f4f6f1" />
+                </linearGradient>
+                <linearGradient id="ag-grad-outside" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#f4f3ef" />
+                  <stop offset="100%" stop-color="#eceae2" />
+                </linearGradient>
+                <linearGradient id="ag-grad-control" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#eef4f8" />
+                  <stop offset="100%" stop-color="#e1ecf2" />
+                </linearGradient>
+                <linearGradient id="ag-grad-orch" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#edf6f0" />
+                  <stop offset="100%" stop-color="#dde9d5" />
+                </linearGradient>
+                <linearGradient id="ag-grad-exec" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#fbf6e9" />
+                  <stop offset="100%" stop-color="#f3ecd6" />
+                </linearGradient>
+              </defs>
+
+              <rect
+                x="14"
+                y="14"
+                width="1452"
+                height="992"
+                rx="14"
+                fill="url(#ag-grad-bg)"
+                stroke="#e2e6dd"
+                stroke-width="1.4"
+              />
+
+              <!-- Top band: Workflow 外 -->
+              <rect
+                x="600"
+                y="30"
+                width="740"
+                height="100"
+                rx="10"
+                fill="url(#ag-grad-outside)"
+                stroke="#cdcabd"
+                stroke-width="1.3"
+              />
+              <text x="620" y="56" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">
+                WORKFLOW 外 · 不进入 task 调度链
+              </text>
+              <rect x="620" y="70" width="350" height="50" rx="8" fill="#ffffff" stroke="#c8c4b3" />
+              <circle cx="640" cy="86" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3" />
+              <text x="640" y="90" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">11</text>
+              <text x="660" y="89" font-size="14.5" font-weight="700" fill="#14201a">coding</text>
+              <text x="725" y="89" font-size="10.5" fill="#7a8278" font-style="italic">primary</text>
+              <text x="660" y="108" font-size="11.5" fill="#425047">
+                workspace 内 ad-hoc 编辑助手（不入 orchestrator）
+              </text>
+
+              <rect x="990" y="70" width="350" height="50" rx="8" fill="#ffffff" stroke="#c8c4b3" />
+              <circle cx="1010" cy="86" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3" />
+              <text x="1010" y="90" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">12</text>
+              <text x="1030" y="89" font-size="14.5" font-weight="700" fill="#14201a">general</text>
+              <text x="1095" y="89" font-size="10.5" fill="#7a8278" font-style="italic">subagent</text>
+              <text x="1030" y="108" font-size="11.5" fill="#425047">
+                通用多步研究 / 并行 sub-agent，由其他 agent 派生
+              </text>
+
+              <!-- Column labels -->
+              <text x="40" y="160" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">入站</text>
+              <text x="270" y="160" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">
+                编排者
+              </text>
+              <text x="620" y="160" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">
+                ORCHESTRATOR 显式 DISPATCH（按推荐 pipeline 顺序）
+              </text>
+              <text x="1060" y="160" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">
+                外部执行后端
+              </text>
+
+              <!-- 1 control -->
+              <rect
+                x="40"
+                y="380"
+                width="200"
+                height="80"
+                rx="10"
+                fill="url(#ag-grad-control)"
+                stroke="#9bb6c4"
+                stroke-width="1.4"
+              />
+              <circle cx="60" cy="400" r="13" fill="#ffffff" stroke="#1a5f78" stroke-width="1.4" />
+              <text x="60" y="404" font-size="12" font-weight="700" text-anchor="middle" fill="#1a5f78">1</text>
+              <text x="80" y="404" font-size="16" font-weight="720" fill="#14201a">control</text>
+              <text x="148" y="404" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
+              <text x="56" y="428" font-size="11.5" fill="#3b4a41">控制平面 NL 入口</text>
+              <text x="56" y="446" font-size="11.5" fill="#3b4a41">仅暴露 panel 白名单动作</text>
+
+              <!-- 2 orchestrator -->
+              <rect
+                x="270"
+                y="335"
+                width="270"
+                height="170"
+                rx="10"
+                fill="url(#ag-grad-orch)"
+                stroke="#7faa8a"
+                stroke-width="1.6"
+              />
+              <circle cx="292" cy="358" r="14" fill="#ffffff" stroke="#2c6b50" stroke-width="1.5" />
+              <text x="292" y="362" font-size="13" font-weight="700" text-anchor="middle" fill="#2c6b50">2</text>
+              <text x="316" y="364" font-size="20" font-weight="720" fill="#14201a">orchestrator</text>
+              <text x="290" y="395" font-size="11" fill="#3a4d42" font-style="italic">
+                primary · hidden · steps=1000
+              </text>
+              <text x="290" y="420" font-size="12.5" fill="#3a4d42">任务生命周期唯一 owner</text>
+              <text x="290" y="438" font-size="12.5" fill="#3a4d42">通过 24 个 tool 调度，自己不写代码</text>
+              <text x="290" y="464" font-size="11" fill="#5b6962">独占 fail / cancel / retry / propose 决策</text>
+              <text x="290" y="488" font-size="11" fill="#5b6962">prompt = ORCHESTRATOR_RUNTIME_PROMPT</text>
+
+              <line
+                x1="240"
+                y1="420"
+                x2="266"
+                y2="420"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#ag-arrow)"
+              />
+              <text x="226" y="412" font-size="10.5" fill="#5b6962" text-anchor="end">panel → EngineService</text>
+
+              <!-- Stage agent cards -->
+              <rect x="620" y="170" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3" />
+              <circle cx="640" cy="190" r="12" fill="#ffffff" stroke="#1a5f78" stroke-width="1.3" />
+              <text x="640" y="194" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1a5f78">3</text>
+              <text x="660" y="194" font-size="15.5" font-weight="700" fill="#14201a">intent-analysis</text>
+              <text x="780" y="194" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
+              <text x="660" y="216" font-size="11.5" fill="#3b4a41">意图分类 / 复杂度 / 缺槽位 / 阻断澄清</text>
+              <text x="660" y="231" font-size="11" fill="#5b6962">request 模糊或 scope 不清时由 orchestrator 调起</text>
+
+              <rect x="620" y="246" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3" />
+              <circle cx="640" cy="266" r="12" fill="#ffffff" stroke="#1a5f78" stroke-width="1.3" />
+              <text x="640" y="270" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1a5f78">4</text>
+              <text x="660" y="270" font-size="15.5" font-weight="700" fill="#14201a">requirements</text>
+              <text x="780" y="270" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
+              <text x="660" y="292" font-size="11.5" fill="#3b4a41">抽 REQ-N + 基础技术决策</text>
+              <text x="660" y="307" font-size="11" fill="#5b6962">不产生 goal；多文件 / 显式验收时调</text>
+
+              <rect x="620" y="322" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3" />
+              <circle cx="640" cy="342" r="12" fill="#ffffff" stroke="#1a5f78" stroke-width="1.3" />
+              <text x="640" y="346" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1a5f78">5</text>
+              <text x="660" y="346" font-size="15.5" font-weight="700" fill="#14201a">frontend-design</text>
+              <text x="780" y="346" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
+              <text x="660" y="368" font-size="11.5" fill="#3b4a41">
+                视觉 / 参考 → frontend template + visual_consistency_contract
+              </text>
+              <text x="660" y="383" font-size="11" fill="#5b6962">独占网页证据工具；下游消费 SPEC</text>
+
+              <rect x="620" y="398" width="400" height="68" rx="9" fill="#ffffff" stroke="#9bb6c4" stroke-width="1.3" />
+              <circle cx="640" cy="418" r="12" fill="#ffffff" stroke="#1a5f78" stroke-width="1.3" />
+              <text x="640" y="422" font-size="11.5" font-weight="700" text-anchor="middle" fill="#1a5f78">6</text>
+              <text x="660" y="422" font-size="15.5" font-weight="700" fill="#14201a">architect</text>
+              <text x="780" y="422" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
+              <text x="660" y="444" font-size="11.5" fill="#3b4a41">goal graph / acceptance_specs / 跨 goal 契约</text>
+              <text x="660" y="459" font-size="11" fill="#5b6962">权威分解者；trivial 单文件改动可跳过</text>
+
+              <rect x="620" y="474" width="400" height="68" rx="9" fill="#ffffff" stroke="#b5afd8" stroke-width="1.3" />
+              <circle cx="640" cy="494" r="12" fill="#ffffff" stroke="#5a5187" stroke-width="1.3" />
+              <text x="640" y="498" font-size="11.5" font-weight="700" text-anchor="middle" fill="#5a5187">7</text>
+              <text x="660" y="498" font-size="15.5" font-weight="700" fill="#14201a">explore</text>
+              <text x="780" y="498" font-size="10.5" fill="#5d6f78" font-style="italic">subagent · 只读</text>
+              <text x="660" y="520" font-size="11.5" fill="#3b4a41">只读仓库调查（文件 / 符号 / 架构 / 依赖）</text>
+              <text x="660" y="535" font-size="11" fill="#5b6962">任何阶段按需，不实施代码改动</text>
+
+              <rect
+                x="620"
+                y="550"
+                width="400"
+                height="68"
+                rx="9"
+                fill="url(#ag-grad-exec)"
+                stroke="#c2a55e"
+                stroke-width="1.6"
+              />
+              <circle cx="640" cy="570" r="12" fill="#ffffff" stroke="#a4671a" stroke-width="1.3" />
+              <text x="640" y="574" font-size="11.5" font-weight="700" text-anchor="middle" fill="#a4671a">8</text>
+              <text x="660" y="574" font-size="15.5" font-weight="700" fill="#14201a">build</text>
+              <text x="780" y="574" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
+              <text x="660" y="596" font-size="11.5" fill="#3b4a41">在隔离 worktree 内实施 scoped goal</text>
+              <text x="660" y="611" font-size="11" fill="#5b6962">通过 ExecutorRegistry 启动外部 executor →</text>
+
+              <rect x="620" y="626" width="400" height="68" rx="9" fill="#ffffff" stroke="#b5afd8" stroke-width="1.3" />
+              <circle cx="640" cy="646" r="12" fill="#ffffff" stroke="#5a5187" stroke-width="1.3" />
+              <text x="640" y="650" font-size="11.5" font-weight="700" text-anchor="middle" fill="#5a5187">9</text>
+              <text x="660" y="650" font-size="15.5" font-weight="700" fill="#14201a">integrity</text>
+              <text x="780" y="650" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
+              <text x="660" y="672" font-size="11.5" fill="#3b4a41">Pipeline 最终 session-bound 验收 gate</text>
+              <text x="660" y="687" font-size="11" fill="#5b6962">
+                requirement / contract / system 完整性 → verdict
+              </text>
+
+              <rect x="620" y="702" width="400" height="68" rx="9" fill="#ffffff" stroke="#b5afd8" stroke-width="1.3" />
+              <circle cx="640" cy="722" r="12" fill="#ffffff" stroke="#5a5187" stroke-width="1.3" />
+              <text x="640" y="726" font-size="11.5" font-weight="700" text-anchor="middle" fill="#5a5187">10</text>
+              <text x="660" y="726" font-size="15.5" font-weight="700" fill="#14201a">prosecutor</text>
+              <text x="780" y="726" font-size="10.5" fill="#5d6f78" font-style="italic">primary · hidden</text>
+              <text x="660" y="748" font-size="11.5" fill="#3b4a41">反例 + diagnostic challenge metrics</text>
+              <text x="660" y="763" font-size="11" fill="#5b6962">无 accept / reject 权，只能记录 counterexample</text>
+
+              <!-- Trunk + branches -->
+              <line
+                x1="540"
+                y1="420"
+                x2="592"
+                y2="420"
+                stroke="#2c6b50"
+                stroke-width="2.4"
+                marker-end="url(#ag-arrow)"
+              />
+              <line x1="592" y1="204" x2="592" y2="736" stroke="#7faa8a" stroke-width="2" />
+              <line x1="592" y1="204" x2="616" y2="204" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)" />
+              <line x1="592" y1="280" x2="616" y2="280" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)" />
+              <line x1="592" y1="356" x2="616" y2="356" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)" />
+              <line x1="592" y1="432" x2="616" y2="432" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)" />
+              <line x1="592" y1="508" x2="616" y2="508" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)" />
+              <line x1="592" y1="584" x2="616" y2="584" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)" />
+              <line x1="592" y1="660" x2="616" y2="660" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)" />
+              <line x1="592" y1="736" x2="616" y2="736" stroke="#7faa8a" stroke-width="2" marker-end="url(#ag-arrow)" />
+
+              <!-- External Executors -->
+              <rect
+                x="1060"
+                y="550"
+                width="290"
+                height="68"
+                rx="9"
+                fill="url(#ag-grad-exec)"
+                stroke="#a4671a"
+                stroke-width="1.6"
+              />
+              <text x="1075" y="574" font-size="15.5" font-weight="720" fill="#14201a">External Executors</text>
+              <text x="1075" y="596" font-size="11.5" fill="#3b4a41">codex / claude-code / opencode</text>
+              <text x="1075" y="611" font-size="11" fill="#5b6962">在 worktree 内跑真实 LLM + tool loop</text>
+
+              <line
+                x1="1020"
+                y1="584"
+                x2="1056"
+                y2="584"
+                stroke="#a4671a"
+                stroke-width="3"
+                marker-end="url(#ag-arrow-strong)"
+              />
+              <text x="1024" y="576" font-size="10" fill="#a4671a" font-style="italic">cross-process</text>
+
+              <!-- Verdict feedback -->
+              <path
+                d="M 620 660 C 540 660 470 540 540 480"
+                fill="none"
+                stroke="#8a5a12"
+                stroke-width="2"
+                marker-end="url(#ag-arrow-amber)"
+              />
+              <path
+                d="M 620 736 C 530 736 460 580 540 495"
+                fill="none"
+                stroke="#8a5a12"
+                stroke-width="2"
+                stroke-dasharray="3,3"
+                marker-end="url(#ag-arrow-amber)"
+              />
+              <text x="430" y="612" font-size="11" fill="#8a5a12" font-style="italic">verdict /</text>
+              <text x="430" y="626" font-size="11" fill="#8a5a12" font-style="italic">counterexample</text>
+              <text x="430" y="640" font-size="11" fill="#8a5a12" font-style="italic">→ engine_artifact</text>
+
+              <!-- Bottom band -->
+              <rect
+                x="600"
+                y="800"
+                width="740"
+                height="140"
+                rx="10"
+                fill="url(#ag-grad-outside)"
+                stroke="#cdcabd"
+                stroke-width="1.3"
+              />
+              <text x="620" y="824" font-size="13" font-weight="700" fill="#3b4a41" letter-spacing="0.04em">
+                SESSION 框架自动调用 · 不被 ORCHESTRATOR 显式 DISPATCH
+              </text>
+
+              <rect x="620" y="840" width="232" height="86" rx="8" fill="#ffffff" stroke="#c8c4b3" />
+              <circle cx="640" cy="858" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3" />
+              <text x="640" y="862" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">13</text>
+              <text x="660" y="862" font-size="14" font-weight="700" fill="#14201a">compaction</text>
+              <text x="745" y="862" font-size="10" fill="#7a8278" font-style="italic">primary · hidden</text>
+              <text x="634" y="884" font-size="11" fill="#425047">transcript checkpoint 压缩</text>
+              <text x="634" y="900" font-size="10.5" fill="#5b6962">session 框架按 budget 自动触发</text>
+              <text x="634" y="916" font-size="10.5" fill="#5b6962">prompt = PROMPT_COMPACTION</text>
+
+              <rect x="864" y="840" width="232" height="86" rx="8" fill="#ffffff" stroke="#c8c4b3" />
+              <circle cx="884" cy="858" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3" />
+              <text x="884" y="862" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">14</text>
+              <text x="904" y="862" font-size="14" font-weight="700" fill="#14201a">title</text>
+              <text x="945" y="862" font-size="10" fill="#7a8278" font-style="italic">primary · hidden</text>
+              <text x="878" y="884" font-size="11" fill="#425047">生成 session 标题</text>
+              <text x="878" y="900" font-size="10.5" fill="#5b6962">session 创建后自动触发</text>
+              <text x="878" y="916" font-size="10.5" fill="#5b6962">temperature=0.5</text>
+
+              <rect x="1108" y="840" width="232" height="86" rx="8" fill="#ffffff" stroke="#c8c4b3" />
+              <circle cx="1128" cy="858" r="11" fill="#ffffff" stroke="#8c8a7a" stroke-width="1.3" />
+              <text x="1128" y="862" font-size="11" font-weight="700" text-anchor="middle" fill="#3b4a41">15</text>
+              <text x="1148" y="862" font-size="14" font-weight="700" fill="#14201a">summary</text>
+              <text x="1205" y="862" font-size="10" fill="#7a8278" font-style="italic">primary · hidden</text>
+              <text x="1122" y="884" font-size="11" fill="#425047">follow-up summary 的 model-routing slot</text>
+              <text x="1122" y="900" font-size="10.5" fill="#5b6962">无静态 prompt</text>
+              <text x="1122" y="916" font-size="10.5" fill="#5b6962">由 generateFollowup 内联构造</text>
+
+              <text x="40" y="970" font-size="11" fill="#5b6962" font-style="italic">
+                注：coding / general 由 panel 或 SubAgent.task 直接进入对应 session，不经过 orchestrator.runTaskLoop。
+              </text>
+              <text x="40" y="990" font-size="11" fill="#5b6962" font-style="italic">
+                注：compaction / title / summary 在每个 session 内由 session 框架按需触发，与 task workflow 调度链无关。
+              </text>
+            </svg>
           </div>
-          <div class="panel">
-            <h3>调度核心</h3>
-            <p>
-              <code>packages/opencorvus/src/orchestrator/loop.ts</code><br>
-              <code>packages/opencorvus/src/orchestrator/tools.ts</code><br>
-              <code>packages/opencorvus/src/engine/workflow.ts</code><br>
-              <code>packages/opencorvus/src/agent/agent.ts</code>
-            </p>
+
+          <div class="legend">
+            <div class="group">
+              <span class="swatch" style="background: #eef4f8; border-color: #9bb6c4"></span>控制平面 / 分析 (control,
+              intent-analysis, requirements, frontend-design, architect)
+            </div>
+            <div class="group">
+              <span class="swatch" style="background: #edf6f0; border-color: #7faa8a"></span>编排者 (orchestrator)
+            </div>
+            <div class="group">
+              <span class="swatch" style="background: #f4f0fa; border-color: #b5afd8"></span>read-only / 验收 (explore,
+              integrity, prosecutor)
+            </div>
+            <div class="group">
+              <span class="swatch" style="background: #fbf6e9; border-color: #c2a55e"></span>执行 + 外部执行后端 (build,
+              External Executors)
+            </div>
+            <div class="group">
+              <span class="swatch" style="background: #f4f3ef; border-color: #cdcabd"></span>不入 task workflow 调度链
+              (coding, general, compaction, title, summary)
+            </div>
+            <div class="group"><span class="arr"></span>orchestrator 显式 dispatch</div>
+            <div class="group"><span class="arr double"></span>cross-process 启动 (build → executor)</div>
+            <div class="group"><span class="arr amber"></span>verdict 回流 (integrity → orchestrator)</div>
+            <div class="group">
+              <span class="arr amber dashed"></span>counterexample 回流 (prosecutor → orchestrator)
+            </div>
           </div>
-          <div class="panel">
-            <h3>分析型 sub-agents</h3>
-            <p>
-              <code>packages/opencorvus/src/intent-analysis/</code><br>
-              <code>packages/opencorvus/src/requirements/</code><br>
-              <code>packages/opencorvus/src/architect/</code><br>
-              <code>packages/opencorvus/src/frontend-design/</code><br>
-              <code>packages/opencorvus/src/integrity/</code><br>
-              <code>packages/opencorvus/src/prosecutor/</code><br>
-              <code>packages/opencorvus/src/acceptance/</code>
-            </p>
+
+          <div class="chains">
+            <h4>典型调度链路（皆由 orchestrator 选择，非硬编码）</h4>
+            <ol>
+              <li>
+                <strong>Direct build</strong>（<code>task.kind = "build"</code> / 单文件改动）：<code>control</code> →
+                <code>orchestrator</code> → <code>build</code> → External Executor。不展开 requirements / architect /
+                integrity。
+              </li>
+              <li>
+                <strong>Standard pipeline</strong>（多文件 / 跨模块）：<code>control</code> →
+                <code>orchestrator</code> → <code>intent-analysis</code> → <code>requirements</code> →
+                <code>architect</code> → per-goal <code>build</code> → External Executor → <code>integrity</code> →
+                verdict 回流 → <code>orchestrator</code> 决策（modify_goal / build / architect / deliver / fail_task）。
+              </li>
+              <li>
+                <strong>Visual / reference pipeline</strong>（UI 复刻 / 视觉参考）：<code>control</code> →
+                <code>orchestrator</code> → <code>frontend-design</code>（独占网页证据）→ <code>intent-analysis</code> →
+                <code>requirements</code> → <code>architect</code> → per-goal <code>build</code> →
+                <code>integrity</code> → 回流。
+              </li>
+              <li>
+                <strong>Adversarial review</strong>（怀疑 verdict 不够严）：在 integrity pass 之后，<code
+                  >orchestrator</code
+                >
+                → <code>prosecutor</code>，产出 counterexample 触发再次 <code>build</code> / <code>architect</code>。
+              </li>
+              <li>
+                <strong>Investigation</strong>（任意时刻需要事实）：<code>orchestrator</code> →
+                <code>explore</code>（read-only），结果回填 decision_log，不进入实施链。
+              </li>
+            </ol>
           </div>
-          <div class="panel">
-            <h3>代码执行面</h3>
-            <p>
-              <code>packages/opencorvus/src/build/agent.ts</code><br>
-              <code>packages/opencorvus/src/executor/registry.ts</code><br>
-              <code>packages/opencorvus/src/executor/*</code><br>
-              <code>packages/opencorvus/src/session/loop.ts</code>
-            </p>
+        </section>
+
+        <section id="flow">
+          <h2><span class="h2-num">03</span>任务调度流程</h2>
+          <div class="diagram-wrap">
+            <svg viewBox="0 0 1480 760" role="img" aria-label="OpenCorvus 任务调度流程图">
+              <defs>
+                <marker id="arrow-flow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#5b6962"></path>
+                </marker>
+                <marker id="arrow-flow-amber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#8a5a12"></path>
+                </marker>
+                <linearGradient id="grad-flow-ingress" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#eef4f8" />
+                  <stop offset="100%" stop-color="#e3edf2" />
+                </linearGradient>
+                <linearGradient id="grad-flow-engine" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#eef4f8" />
+                  <stop offset="100%" stop-color="#e3edf2" />
+                </linearGradient>
+                <linearGradient id="grad-flow-orch" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#edf6f0" />
+                  <stop offset="100%" stop-color="#dde9d5" />
+                </linearGradient>
+                <linearGradient id="grad-flow-sub" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#fbf6e9" />
+                  <stop offset="100%" stop-color="#f3ecd6" />
+                </linearGradient>
+                <linearGradient id="grad-flow-exec" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#fbf6e9" />
+                  <stop offset="100%" stop-color="#f3ecd6" />
+                </linearGradient>
+              </defs>
+
+              <rect
+                x="24"
+                y="28"
+                width="1432"
+                height="704"
+                rx="18"
+                fill="#ffffff"
+                stroke="#d8ddd6"
+                stroke-width="1.5"
+              ></rect>
+
+              <rect
+                x="48"
+                y="72"
+                width="164"
+                height="580"
+                rx="14"
+                fill="url(#grad-flow-ingress)"
+                stroke="#c0d2dc"
+                stroke-width="1.4"
+              ></rect>
+              <text x="74" y="108" font-size="19" font-weight="720" fill="#14201a">入口</text>
+              <text x="74" y="132" font-size="12.5" fill="#425047">Channel / Panel / ACP</text>
+
+              <rect
+                x="246"
+                y="72"
+                width="176"
+                height="580"
+                rx="14"
+                fill="url(#grad-flow-engine)"
+                stroke="#c0d2dc"
+                stroke-width="1.4"
+              ></rect>
+              <text x="272" y="108" font-size="19" font-weight="720" fill="#14201a">Engine</text>
+              <text x="272" y="132" font-size="12.5" fill="#425047">task API + persistence</text>
+
+              <rect
+                x="456"
+                y="72"
+                width="256"
+                height="580"
+                rx="14"
+                fill="url(#grad-flow-orch)"
+                stroke="#a8c8b0"
+                stroke-width="1.4"
+              ></rect>
+              <text x="482" y="108" font-size="19" font-weight="720" fill="#14201a">Orchestrator</text>
+              <text x="482" y="132" font-size="12.5" fill="#425047">outer task loop</text>
+
+              <rect
+                x="746"
+                y="72"
+                width="318"
+                height="580"
+                rx="14"
+                fill="url(#grad-flow-sub)"
+                stroke="#d8c9a3"
+                stroke-width="1.4"
+              ></rect>
+              <text x="772" y="108" font-size="19" font-weight="720" fill="#14201a">Sub-agents / Build</text>
+              <text x="772" y="132" font-size="12.5" fill="#425047">analysis + code execution bridge</text>
+
+              <rect
+                x="1098"
+                y="72"
+                width="332"
+                height="580"
+                rx="14"
+                fill="url(#grad-flow-exec)"
+                stroke="#d8c9a3"
+                stroke-width="1.4"
+              ></rect>
+              <text x="1124" y="108" font-size="19" font-weight="720" fill="#14201a">Executor / Integrity</text>
+              <text x="1124" y="132" font-size="12.5" fill="#425047">inner loop + final gate</text>
+
+              <!-- Numbered step bullets -->
+              <circle cx="130" cy="207" r="22" fill="#ffffff" stroke="#c0d2dc" stroke-width="1.4"></circle>
+              <text x="130" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">1</text>
+              <text x="74" y="256" font-size="12.5" fill="#425047">用户消息进入</text>
+              <text x="74" y="274" font-size="12.5" fill="#425047">先区分确定性路由</text>
+              <text x="74" y="292" font-size="12.5" fill="#425047">还是 control LLM</text>
+
+              <circle cx="334" cy="207" r="22" fill="#ffffff" stroke="#c0d2dc" stroke-width="1.4"></circle>
+              <text x="334" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">2</text>
+              <text x="272" y="256" font-size="12.5" fill="#425047">createTask /</text>
+              <text x="272" y="274" font-size="12.5" fill="#425047">handleTaskMessage</text>
+              <text x="272" y="292" font-size="12.5" fill="#425047">写 engine_task</text>
+
+              <circle cx="584" cy="207" r="22" fill="#ffffff" stroke="#a8c8b0" stroke-width="1.4"></circle>
+              <text x="584" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">3</text>
+              <text x="482" y="256" font-size="12.5" fill="#425047">runTaskLoop 醒来</text>
+              <text x="482" y="274" font-size="12.5" fill="#425047">读全量上下文</text>
+              <text x="482" y="292" font-size="12.5" fill="#425047">选择 direct / pipeline</text>
+
+              <circle cx="584" cy="355" r="22" fill="#ffffff" stroke="#a8c8b0" stroke-width="1.4"></circle>
+              <text x="584" y="362" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">4</text>
+              <text x="482" y="404" font-size="12.5" fill="#425047">若是 pipeline</text>
+              <text x="482" y="422" font-size="12.5" fill="#425047">按需调用 analyze_intent /</text>
+              <text x="482" y="440" font-size="12.5" fill="#425047">requirements / architect</text>
+
+              <circle cx="904" cy="207" r="22" fill="#ffffff" stroke="#d8c9a3" stroke-width="1.4"></circle>
+              <text x="904" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">5</text>
+              <text x="772" y="256" font-size="12.5" fill="#425047">analysis agent 产出</text>
+              <text x="772" y="274" font-size="12.5" fill="#425047">requirement / contract / goal</text>
+              <text x="772" y="292" font-size="12.5" fill="#425047">写回 decision_log / artifact</text>
+
+              <circle cx="904" cy="355" r="22" fill="#ffffff" stroke="#d8c9a3" stroke-width="1.4"></circle>
+              <text x="904" y="362" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">6</text>
+              <text x="772" y="404" font-size="12.5" fill="#425047">Orchestrator 调 build</text>
+              <text x="772" y="422" font-size="12.5" fill="#425047">build/agent 选 executor</text>
+              <text x="772" y="440" font-size="12.5" fill="#425047">准备隔离 worktree</text>
+
+              <circle cx="1264" cy="207" r="22" fill="#ffffff" stroke="#d8c9a3" stroke-width="1.4"></circle>
+              <text x="1264" y="214" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">7</text>
+              <text x="1124" y="256" font-size="12.5" fill="#425047">executor session 内部</text>
+              <text x="1124" y="274" font-size="12.5" fill="#425047">继续跑 LLM → tool loop</text>
+              <text x="1124" y="292" font-size="12.5" fill="#425047">真实写代码 / 测试 / 产出 diff</text>
+
+              <circle cx="1264" cy="355" r="22" fill="#ffffff" stroke="#d8c9a3" stroke-width="1.4"></circle>
+              <text x="1264" y="362" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">8</text>
+              <text x="1124" y="404" font-size="12.5" fill="#425047">integrity 在自己的 session 内审查</text>
+              <text x="1124" y="422" font-size="12.5" fill="#425047">requirement / contract / system</text>
+              <text x="1124" y="440" font-size="12.5" fill="#425047">verdict + evidence 写回 artifact</text>
+
+              <circle cx="584" cy="519" r="22" fill="#ffffff" stroke="#a8c8b0" stroke-width="1.4"></circle>
+              <text x="584" y="526" font-size="18" font-weight="720" text-anchor="middle" fill="#14201a">9</text>
+              <text x="482" y="566" font-size="12.5" fill="#425047">Orchestrator 再醒来</text>
+              <text x="482" y="584" font-size="12.5" fill="#425047">基于 verdict 决定下一步：</text>
+              <text x="482" y="602" font-size="12.5" fill="#425047">modify_goal / build / architect</text>
+              <text x="482" y="620" font-size="12.5" fill="#425047">/ deliver / fail_task</text>
+
+              <!-- Horizontal flow -->
+              <line
+                x1="152"
+                y1="207"
+                x2="312"
+                y2="207"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-flow)"
+              ></line>
+              <line
+                x1="356"
+                y1="207"
+                x2="562"
+                y2="207"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-flow)"
+              ></line>
+              <line
+                x1="606"
+                y1="207"
+                x2="882"
+                y2="207"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-flow)"
+              ></line>
+              <line
+                x1="926"
+                y1="207"
+                x2="1242"
+                y2="207"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-flow)"
+              ></line>
+
+              <!-- Vertical step bumps -->
+              <line
+                x1="584"
+                y1="229"
+                x2="584"
+                y2="333"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-flow)"
+              ></line>
+              <line
+                x1="904"
+                y1="229"
+                x2="904"
+                y2="333"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-flow)"
+              ></line>
+              <line
+                x1="1264"
+                y1="229"
+                x2="1264"
+                y2="333"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-flow)"
+              ></line>
+
+              <!-- verdict feedback loop -->
+              <line
+                x1="1264"
+                y1="377"
+                x2="606"
+                y2="519"
+                stroke="#8a5a12"
+                stroke-width="2.4"
+                marker-end="url(#arrow-flow-amber)"
+              ></line>
+              <text x="894" y="488" font-size="12.5" fill="#8a5a12">verdict / evidence 回到外层 loop</text>
+
+              <line x1="584" y1="541" x2="584" y2="616" stroke="#5b6962" stroke-width="2.4"></line>
+              <line
+                x1="606"
+                y1="519"
+                x2="882"
+                y2="519"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-flow)"
+              ></line>
+              <text x="684" y="506" font-size="12.5" fill="#425047">需要回修时再次 build</text>
+
+              <rect x="770" y="520" width="628" height="102" rx="10" fill="#f0f2ed" stroke="#d8ddd6"></rect>
+              <text x="792" y="548" font-size="16" font-weight="700" fill="#14201a">build fast path</text>
+              <text x="792" y="572" font-size="12.5" fill="#425047">
+                如果
+                <tspan font-family="monospace" font-size="12">engine_task.kind = "build"</tspan>
+                ，外层 loop 走
+                <tspan font-family="monospace" font-size="12">direct</tspan>
+                模板，
+              </text>
+              <text x="792" y="590" font-size="12.5" fill="#425047">
+                直接调用 build，不展开 requirements / architect / integrity，但仍保留统一的任务生命周期与取消能力。
+              </text>
+            </svg>
           </div>
-          <div class="panel">
-            <h3>Skill / MCP / Plugin</h3>
-            <p>
-              <code>packages/opencorvus/src/skill/skill.ts</code><br>
-              <code>packages/opencorvus/src/skill/manager.ts</code><br>
-              <code>packages/opencorvus/src/mcp/index.ts</code><br>
-              <code>packages/opencorvus/src/mcp/serve.ts</code><br>
-              <code>packages/opencorvus/src/plugin/index.ts</code>
-            </p>
+          <p class="caption">
+            核心不是"固定九步"，而是外层 loop
+            每次醒来都重新读事实再决策。流程图只是把最常见路径压平，不代表硬编码状态机。
+          </p>
+        </section>
+
+        <section id="infra">
+          <h2><span class="h2-num">04</span>Skill / MCP / Plugin / Executor 基建接入层</h2>
+          <div class="diagram-wrap">
+            <svg viewBox="0 0 1480 920" role="img" aria-label="OpenCorvus 基建接入层图">
+              <defs>
+                <marker id="arrow-infra" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#5b6962"></path>
+                </marker>
+                <linearGradient id="grad-skill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#edf6f0" />
+                  <stop offset="100%" stop-color="#dde9d5" />
+                </linearGradient>
+                <linearGradient id="grad-mcp" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#eef4f8" />
+                  <stop offset="100%" stop-color="#dde9ef" />
+                </linearGradient>
+                <linearGradient id="grad-plugin" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#f4f0fa" />
+                  <stop offset="100%" stop-color="#e7e1f3" />
+                </linearGradient>
+                <linearGradient id="grad-executor" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#fbf6e9" />
+                  <stop offset="100%" stop-color="#f3ecd6" />
+                </linearGradient>
+              </defs>
+
+              <rect
+                x="24"
+                y="24"
+                width="1432"
+                height="872"
+                rx="18"
+                fill="#ffffff"
+                stroke="#d8ddd6"
+                stroke-width="1.5"
+              ></rect>
+
+              <!-- Skill column -->
+              <rect
+                x="54"
+                y="56"
+                width="310"
+                height="800"
+                rx="16"
+                fill="url(#grad-skill)"
+                stroke="#a8c8b0"
+                stroke-width="1.5"
+              ></rect>
+              <text x="80" y="90" font-size="22" font-weight="720" fill="#14201a" letter-spacing="-0.4">Skill 层</text>
+              <text x="80" y="114" font-size="13" fill="#5f6d65">最轻量：注入规则，不直接执行</text>
+
+              <rect x="82" y="158" width="254" height="116" rx="10" fill="#ffffff" stroke="#cadacb"></rect>
+              <text x="100" y="188" font-size="16" font-weight="700" fill="#14201a">SKILL.md + frontmatter</text>
+              <text x="100" y="212" font-size="12.5" fill="#425047">name / description / auto_detect</text>
+              <text x="100" y="230" font-size="12.5" fill="#425047">required_tools / priority</text>
+              <text x="100" y="248" font-size="12.5" fill="#425047">本质上是 prompt 规则包</text>
+
+              <rect x="82" y="318" width="254" height="116" rx="10" fill="#ffffff" stroke="#cadacb"></rect>
+              <text x="100" y="348" font-size="16" font-weight="700" fill="#14201a">SkillManager</text>
+              <text x="100" y="372" font-size="12.5" fill="#425047">扫描 builtin / path / url / git</text>
+              <text x="100" y="390" font-size="12.5" fill="#425047">按 auto_detect 与 permission 决定是否启用</text>
+              <text x="100" y="408" font-size="12.5" fill="#425047">required_tools 仅作为工具提示</text>
+
+              <rect x="82" y="478" width="254" height="132" rx="10" fill="#ffffff" stroke="#cadacb"></rect>
+              <text x="100" y="508" font-size="16" font-weight="700" fill="#14201a">接入位置</text>
+              <text x="100" y="534" font-size="12.5" fill="#425047">agent 通过 skill 工具显式加载</text>
+              <text x="100" y="552" font-size="12.5" fill="#425047">影响 agent 行为、阶段上下文与 required_tools</text>
+              <text x="100" y="570" font-size="12.5" fill="#425047">不能直接替 Orchestrator 做流程判断</text>
+
+              <!-- MCP column -->
+              <rect
+                x="400"
+                y="56"
+                width="344"
+                height="800"
+                rx="16"
+                fill="url(#grad-mcp)"
+                stroke="#c0d2dc"
+                stroke-width="1.5"
+              ></rect>
+              <text x="426" y="90" font-size="22" font-weight="720" fill="#14201a" letter-spacing="-0.4">
+                MCP / Tool 层
+              </text>
+              <text x="426" y="114" font-size="13" fill="#5f6d65">远程或本地工具表面，不是调度器</text>
+
+              <rect x="430" y="158" width="284" height="116" rx="10" fill="#ffffff" stroke="#c8d8e1"></rect>
+              <text x="450" y="188" font-size="16" font-weight="700" fill="#14201a">MCP Client</text>
+              <text x="450" y="212" font-size="12.5" fill="#425047">stdio / Streamable HTTP / SSE</text>
+              <text x="450" y="230" font-size="12.5" fill="#425047">listTools / listPrompts / listResources</text>
+              <text x="450" y="248" font-size="12.5" fill="#425047">远端 server 提供能力，OpenCorvus 负责接入</text>
+
+              <rect x="430" y="318" width="284" height="116" rx="10" fill="#ffffff" stroke="#c8d8e1"></rect>
+              <text x="450" y="348" font-size="16" font-weight="700" fill="#14201a">Tool materialization</text>
+              <text x="450" y="372" font-size="12.5" fill="#425047">sanitize 名称后注册到工具表面</text>
+              <text x="450" y="390" font-size="12.5" fill="#425047">结果经 materialize 转成文本 / 附件 / metadata</text>
+              <text x="450" y="408" font-size="12.5" fill="#425047">然后进入 SessionLoop 的 resolveTools</text>
+
+              <rect x="430" y="478" width="284" height="132" rx="10" fill="#ffffff" stroke="#c8d8e1"></rect>
+              <text x="450" y="508" font-size="16" font-weight="700" fill="#14201a">OpenCorvus 作为 MCP Server</text>
+              <text x="450" y="534" font-size="12.5" fill="#425047">
+                <tspan font-family="monospace" font-size="12">mcp/serve.ts</tspan>
+                ·
+                <tspan font-family="monospace" font-size="12">/mcp/transport</tspan>
+              </text>
+              <text x="450" y="552" font-size="12.5" fill="#425047">
+                把 memory / task_report / webpage / figma 工具
+              </text>
+              <text x="450" y="570" font-size="12.5" fill="#425047">暴露给外部 executor</text>
+              <text x="450" y="588" font-size="12.5" fill="#425047">这是一条工具供给链，不是任务控制链</text>
+
+              <!-- Plugin column -->
+              <rect
+                x="780"
+                y="56"
+                width="310"
+                height="800"
+                rx="16"
+                fill="url(#grad-plugin)"
+                stroke="#c8c4e2"
+                stroke-width="1.5"
+              ></rect>
+              <text x="806" y="90" font-size="22" font-weight="720" fill="#14201a" letter-spacing="-0.4">
+                Plugin 层
+              </text>
+              <text x="806" y="114" font-size="13" fill="#5f6d65">全局 hook，修改运行时，不负责排任务</text>
+
+              <rect x="808" y="158" width="254" height="116" rx="10" fill="#ffffff" stroke="#d5cdea"></rect>
+              <text x="826" y="188" font-size="16" font-weight="700" fill="#14201a">Plugin.state()</text>
+              <text x="826" y="212" font-size="12.5" fill="#425047">加载 internal / builtin / config 插件</text>
+              <text x="826" y="230" font-size="12.5" fill="#425047">生成全局 hooks 列表</text>
+              <text x="826" y="248" font-size="12.5" fill="#425047">runHookIsolated 保护主流程</text>
+
+              <rect x="808" y="318" width="254" height="156" rx="10" fill="#ffffff" stroke="#d5cdea"></rect>
+              <text x="826" y="348" font-size="16" font-weight="700" fill="#14201a">Hook 面</text>
+              <text x="826" y="374" font-size="12.5" fill="#425047">chat.params / chat.headers</text>
+              <text x="826" y="392" font-size="12.5" fill="#425047">permission.ask / tool.execute.before / after</text>
+              <text x="826" y="410" font-size="12.5" fill="#425047">evaluation.checks / evaluation.analysis</text>
+              <text x="826" y="428" font-size="12.5" fill="#425047">acceptance.ready / event / config</text>
+              <text x="826" y="446" font-size="12.5" fill="#425047">能改运行时行为，但不拥有调度权</text>
+
+              <rect x="808" y="518" width="254" height="116" rx="10" fill="#ffffff" stroke="#d5cdea"></rect>
+              <text x="826" y="548" font-size="16" font-weight="700" fill="#14201a">典型作用</text>
+              <text x="826" y="572" font-size="12.5" fill="#425047">加工具、改鉴权、注入评估、交付后通知</text>
+              <text x="826" y="590" font-size="12.5" fill="#425047">不是另一个 executor，更不是 planner</text>
+
+              <!-- Executor column -->
+              <rect
+                x="1126"
+                y="56"
+                width="300"
+                height="800"
+                rx="16"
+                fill="url(#grad-executor)"
+                stroke="#d8c9a3"
+                stroke-width="1.5"
+              ></rect>
+              <text x="1152" y="90" font-size="22" font-weight="720" fill="#14201a" letter-spacing="-0.4">
+                Executor / ACP 层
+              </text>
+              <text x="1152" y="114" font-size="13" fill="#5f6d65">一个是执行器，一个是外部入口</text>
+
+              <rect x="1154" y="158" width="244" height="116" rx="10" fill="#ffffff" stroke="#dfd1ac"></rect>
+              <text x="1172" y="188" font-size="16" font-weight="700" fill="#14201a">ExecutorRegistry</text>
+              <text x="1172" y="212" font-size="12.5" fill="#425047">opencorvus / codex / claude / opencode</text>
+              <text x="1172" y="230" font-size="12.5" fill="#425047">build 阶段按 executor 选择具体外部实现</text>
+              <text x="1172" y="248" font-size="12.5" fill="#425047">是代码执行后端，不是任务创建入口</text>
+
+              <rect x="1154" y="318" width="244" height="116" rx="10" fill="#ffffff" stroke="#dfd1ac"></rect>
+              <text x="1172" y="348" font-size="16" font-weight="700" fill="#14201a">ACP</text>
+              <text x="1172" y="372" font-size="12.5" fill="#425047">外部编辑器通过 ACP 把请求送进来</text>
+              <text x="1172" y="390" font-size="12.5" fill="#425047">属于入站协议，与 Channel / Control 并列</text>
+              <text x="1172" y="408" font-size="12.5" fill="#425047">不直接参与内部 build loop</text>
+
+              <rect x="1154" y="478" width="244" height="132" rx="10" fill="#ffffff" stroke="#dfd1ac"></rect>
+              <text x="1172" y="508" font-size="16" font-weight="700" fill="#14201a">边界结论</text>
+              <text x="1172" y="534" font-size="12.5" fill="#425047">Skill = 可加载工作流</text>
+              <text x="1172" y="552" font-size="12.5" fill="#425047">MCP = 工具面</text>
+              <text x="1172" y="570" font-size="12.5" fill="#425047">Plugin = 全局 hook</text>
+              <text x="1172" y="588" font-size="12.5" fill="#425047">Executor = 代码执行后端</text>
+
+              <line
+                x1="336"
+                y1="378"
+                x2="430"
+                y2="378"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-infra)"
+              ></line>
+              <text x="346" y="364" font-size="12.5" fill="#425047">required_tools / prompt context</text>
+
+              <line
+                x1="714"
+                y1="378"
+                x2="808"
+                y2="378"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-infra)"
+              ></line>
+              <text x="722" y="364" font-size="12.5" fill="#425047">tool surface + permission path</text>
+
+              <line
+                x1="1062"
+                y1="216"
+                x2="1154"
+                y2="216"
+                stroke="#5b6962"
+                stroke-width="2.4"
+                marker-end="url(#arrow-infra)"
+              ></line>
+              <text x="1070" y="202" font-size="12.5" fill="#425047">runtime modifications feed build sessions</text>
+
+              <rect x="350" y="700" width="758" height="110" rx="12" fill="#f0f2ed" stroke="#d8ddd6"></rect>
+              <text x="374" y="730" font-size="17" font-weight="700" fill="#14201a">它们最终汇入哪里</text>
+              <text x="374" y="756" font-size="12.5" fill="#425047">
+                Skill 影响 prompt 与 required_tools；MCP 影响 tool registry 与 tool results；Plugin 影响 runtime
+                hooks；Executor 影响 build 执行后端。
+              </text>
+              <text x="374" y="774" font-size="12.5" fill="#425047">
+                四者都可以显著改变系统行为，但没有任何一个应该被当作新的 task scheduler。
+              </text>
+            </svg>
           </div>
-          <div class="panel">
-            <h3>数据与回流</h3>
-            <p>
-              <code>packages/opencorvus/src/engine/engine.sql.ts</code><br>
-              <code>packages/opencorvus/src/decision-log/</code><br>
-              <code>packages/opencorvus/src/trace/</code><br>
-              <code>packages/opencorvus/src/bus/</code><br>
-              <code>packages/opencorvus/src/workbench/</code>
-            </p>
+          <p class="caption">这一层最容易被画乱。正确画法是按"接入位置"分层，不按"看起来都能扩展系统"混成一团。</p>
+        </section>
+
+        <section id="matrix">
+          <h2><span class="h2-num">05</span>职责矩阵</h2>
+          <div class="table-wrap">
+            <table>
+              <colgroup>
+                <col style="width: 14%" />
+                <col style="width: 26%" />
+                <col style="width: 32%" />
+                <col style="width: 28%" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>对象</th>
+                  <th>接入位置</th>
+                  <th>能影响什么</th>
+                  <th>不能替代什么</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Orchestrator</strong></td>
+                  <td><code>orchestrator/loop.ts</code> + <code>orchestrator/tools.ts</code></td>
+                  <td>任务生命周期、stage 调度、build / deliver / retry 决策</td>
+                  <td>不能把生命周期权力交给 acceptance、plugin、MCP 或 skill</td>
+                </tr>
+                <tr>
+                  <td><strong>Sub-agent</strong></td>
+                  <td><code>requirements/</code> · <code>architect/</code> · <code>integrity/</code> 等</td>
+                  <td>需求、契约、质检、最终 gate、专项分析</td>
+                  <td>不能单独完成 engine task 调度闭环</td>
+                </tr>
+                <tr>
+                  <td><strong>Skill</strong></td>
+                  <td>agent 显式调用 skill 工具</td>
+                  <td>agent 行为规则、可见工作流说明</td>
+                  <td>不能直接执行工具，也不能决定下一阶段</td>
+                </tr>
+                <tr>
+                  <td><strong>MCP</strong></td>
+                  <td>tool surface / prompt / resource surface</td>
+                  <td>给 agent 增加外部工具、资源、提示词</td>
+                  <td>不能成为新的 Orchestrator</td>
+                </tr>
+                <tr>
+                  <td><strong>Plugin</strong></td>
+                  <td>全局 runtime hooks</td>
+                  <td>改认证、改参数、插入评估、订阅事件、加工具</td>
+                  <td>不能替代 executor，也不该替代 task loop</td>
+                </tr>
+                <tr>
+                  <td><strong>Executor</strong></td>
+                  <td>build 阶段外部执行后端</td>
+                  <td>在 worktree 里真实写代码、跑命令、产出 diff</td>
+                  <td>不能负责任务规划和全局重试策略</td>
+                </tr>
+                <tr>
+                  <td><strong>ACP / Channel / Control</strong></td>
+                  <td>入站协议层</td>
+                  <td>把外部请求引到 EngineService</td>
+                  <td>不能替代内层 build loop</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+        </section>
+
+        <section id="mapping">
+          <h2><span class="h2-num">06</span>代码映射</h2>
+          <div class="grid-2">
+            <div class="panel">
+              <h3>任务入口与控制面</h3>
+              <p>
+                <code>packages/opencorvus/src/channel/ingress.ts</code><br />
+                <code>packages/opencorvus/src/control/message.ts</code><br />
+                <code>packages/opencorvus/src/panel/capability.ts</code><br />
+                <code>packages/opencorvus/src/task-api/index.ts</code>
+              </p>
+            </div>
+            <div class="panel">
+              <h3>调度核心</h3>
+              <p>
+                <code>packages/opencorvus/src/orchestrator/loop.ts</code><br />
+                <code>packages/opencorvus/src/orchestrator/tools.ts</code><br />
+                <code>packages/opencorvus/src/engine/workflow.ts</code><br />
+                <code>packages/opencorvus/src/agent/agent.ts</code>
+              </p>
+            </div>
+            <div class="panel">
+              <h3>分析型 sub-agents</h3>
+              <p>
+                <code>packages/opencorvus/src/intent-analysis/</code><br />
+                <code>packages/opencorvus/src/requirements/</code><br />
+                <code>packages/opencorvus/src/architect/</code><br />
+                <code>packages/opencorvus/src/frontend-design/</code><br />
+                <code>packages/opencorvus/src/integrity/</code><br />
+                <code>packages/opencorvus/src/prosecutor/</code><br />
+                <code>packages/opencorvus/src/acceptance/</code>
+              </p>
+            </div>
+            <div class="panel">
+              <h3>代码执行面</h3>
+              <p>
+                <code>packages/opencorvus/src/build/agent.ts</code><br />
+                <code>packages/opencorvus/src/executor/registry.ts</code><br />
+                <code>packages/opencorvus/src/executor/*</code><br />
+                <code>packages/opencorvus/src/session/loop.ts</code>
+              </p>
+            </div>
+            <div class="panel">
+              <h3>Skill / MCP / Plugin</h3>
+              <p>
+                <code>packages/opencorvus/src/skill/skill.ts</code><br />
+                <code>packages/opencorvus/src/skill/manager.ts</code><br />
+                <code>packages/opencorvus/src/mcp/index.ts</code><br />
+                <code>packages/opencorvus/src/mcp/serve.ts</code><br />
+                <code>packages/opencorvus/src/plugin/index.ts</code>
+              </p>
+            </div>
+            <div class="panel">
+              <h3>数据与回流</h3>
+              <p>
+                <code>packages/opencorvus/src/engine/engine.sql.ts</code><br />
+                <code>packages/opencorvus/src/decision-log/</code><br />
+                <code>packages/opencorvus/src/trace/</code><br />
+                <code>packages/opencorvus/src/bus/</code><br />
+                <code>packages/opencorvus/src/workbench/</code>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <div class="note">
+          <strong>下一步如果还要再收紧</strong>，建议把本页拆成三页：<code>orchestrator-task-loop.html</code>、
+          <code>executor-build-path.html</code>、<code>skill-mcp-plugin-infra.html</code>。
+          这个主题已经足够大，再往一页里塞 Overlay UI 细枝末节只会继续变脏。
         </div>
-      </section>
 
-      <div class="note">
-        <strong>下一步如果还要再收紧</strong>，建议把本页拆成三页：<code>orchestrator-task-loop.html</code>、
-        <code>executor-build-path.html</code>、<code>skill-mcp-plugin-infra.html</code>。
-        这个主题已经足够大，再往一页里塞 Overlay UI 细枝末节只会继续变脏。
-      </div>
-
-      <div class="foot">
-        页面为纯静态 HTML，可直接本地打开。内容基于
-        <code>specs/new-arch/01-agents.md</code>、
-        <code>specs/new-arch/04-extensions.md</code>、
-        <code>docs/product/zh-CN/concepts/agent-loop.md</code>
-        以及 <code>packages/opencorvus/src/{orchestrator,engine,build,executor,session,skill,mcp,plugin,panel,control,channel,task-api}</code>
-        实际实现校对（截至 2026-05-21）。
-      </div>
-    </main>
-  </div>
-</body>
+        <div class="foot">
+          页面为纯静态 HTML，可直接本地打开。内容基于
+          <code>specs/new-arch/01-agents.md</code>、 <code>specs/new-arch/04-extensions.md</code>、
+          <code>docs/product/zh-CN/concepts/agent-loop.md</code>
+          以及
+          <code
+            >packages/opencorvus/src/{orchestrator,engine,build,executor,session,skill,mcp,plugin,panel,control,channel,task-api}</code
+          >
+          实际实现校对（截至 2026-05-21）。
+        </div>
+      </main>
+    </div>
+  </body>
 </html>

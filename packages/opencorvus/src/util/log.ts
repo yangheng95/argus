@@ -147,7 +147,10 @@ export namespace Log {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return ""
       throw error
     })
-    const lines = content.split("\n").filter((line) => line.length > 0).slice(-input.lines)
+    const lines = content
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .slice(-input.lines)
     return {
       directory: dir,
       path: pathname,

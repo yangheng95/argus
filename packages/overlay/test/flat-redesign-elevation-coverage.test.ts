@@ -53,10 +53,7 @@ describe("flat-redesign Step 8a — elevation token coverage", () => {
   })
 
   test("token source declares the canonical elevation token set", () => {
-    const dl = readFileSync(
-      join(STYLES_ROOT, "tokens", "design-language.css"),
-      "utf8",
-    )
+    const dl = readFileSync(join(STYLES_ROOT, "tokens", "design-language.css"), "utf8")
     const REQUIRED = [
       "--ui-z-below",
       "--ui-z-base",

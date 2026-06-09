@@ -2,12 +2,12 @@
 
 ## 前置依赖
 
-| 依赖 | 版本 | 说明 |
-|---|---|---|
-| Bun | ≥ 1.3.13 | `package.json:7` 声明为 `packageManager` |
-| Node.js | ≥ 22 | `@tsconfig/node22` 目标 |
-| Git | 任意 | 用于 worktree 并行执行 |
-| Python | ≥ 3.9（可选） | 代码执行与部分 skill 使用 |
+| 依赖    | 版本          | 说明                                     |
+| ------- | ------------- | ---------------------------------------- |
+| Bun     | ≥ 1.3.13      | `package.json:7` 声明为 `packageManager` |
+| Node.js | ≥ 22          | `@tsconfig/node22` 目标                  |
+| Git     | 任意          | 用于 worktree 并行执行                   |
+| Python  | ≥ 3.9（可选） | 代码执行与部分 skill 使用                |
 
 Windows 用户：请用 `python`，**不要用 `python3`**（Store stub 会拦截）。
 
@@ -54,7 +54,7 @@ opencorvus doctor
 
 ```jsonc
 {
-  "model": "alibaba-cn/qwen3.5-plus"
+  "model": "alibaba-cn/qwen3.5-plus",
 }
 ```
 

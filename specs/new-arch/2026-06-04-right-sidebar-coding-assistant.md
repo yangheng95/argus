@@ -40,37 +40,37 @@ Upstream opencode latest investigated on 2026-06-04:
 - Upstream catalog pins `@opentui/core`, `@opentui/keymap`, and `@opentui/solid` to `0.3.1`, and has a `fix-node-pty` postinstall plus `@lydell/node-pty`.
 - TUI source imports OpenTUI renderer/keymap APIs and owns terminal lifecycle, keymap, plugin runtime, and renderer destruction.
 
-| Evidence | Source | Meaning for OpenCorvus |
-| --- | --- | --- |
-| TUI + server split | `https://dev.opencode.ai/docs/server/` | The terminal TUI is a client over a server/OpenAPI surface. |
-| Terminal attach | `https://dev.opencode.ai/docs/web/#attaching-a-terminal` | A terminal TUI can attach to a running server and share state. |
-| TUI surface docs | `https://dev.opencode.ai/docs/tui/` | TUI-specific UX is terminal oriented. |
-| Plugin docs | `https://dev.opencode.ai/docs/plugins/` | Backend plugins and TUI plugin runtime are distinct concerns. |
-| TUI app source | `https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/cli/cmd/tui/app.tsx` | OpenTUI renderer/keymap/plugin APIs are process/terminal specific. |
-| Root catalog | `https://github.com/anomalyco/opencode/blob/dev/package.json` | OpenTUI is pre-1.0 and the repo includes native PTY dependencies. |
+| Evidence           | Source                                                                                     | Meaning for OpenCorvus                                             |
+| ------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| TUI + server split | `https://dev.opencode.ai/docs/server/`                                                     | The terminal TUI is a client over a server/OpenAPI surface.        |
+| Terminal attach    | `https://dev.opencode.ai/docs/web/#attaching-a-terminal`                                   | A terminal TUI can attach to a running server and share state.     |
+| TUI surface docs   | `https://dev.opencode.ai/docs/tui/`                                                        | TUI-specific UX is terminal oriented.                              |
+| Plugin docs        | `https://dev.opencode.ai/docs/plugins/`                                                    | Backend plugins and TUI plugin runtime are distinct concerns.      |
+| TUI app source     | `https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/cli/cmd/tui/app.tsx` | OpenTUI renderer/keymap/plugin APIs are process/terminal specific. |
+| Root catalog       | `https://github.com/anomalyco/opencode/blob/dev/package.json`                              | OpenTUI is pre-1.0 and the repo includes native PTY dependencies.  |
 
 The useful pattern to copy is backend/session/event separation. The wrong pattern is embedding a terminal renderer in a DOM/Solid right panel.
 
 ## Local Call Points
 
-| Area | Existing source | Decision |
-| --- | --- | --- |
-| Right panel top tabs | `packages/overlay/src/components/RightPanelTabs.tsx` | Extend `RightPanelTab` with `assistant`. |
-| Right panel DOM bodies | `packages/overlay/src/index.html` | Add `rightPanelAssistant` and `solidRightAssistantMount` beside Explorer/Files/Inspector. |
-| Right panel activation | `packages/overlay/src/main.tsx` | Mount the assistant panel and include it in the same `rightPanelTab()` effect. |
-| Right panel labels | `packages/overlay/src/i18n/en-US.json`, `packages/overlay/src/i18n/zh-CN.json` | Add Assistant labels in both locales. |
-| Existing right-panel tests | `packages/overlay/test/acceptance-panel-mount.test.ts`, `file-explorer-editor.test.ts`, `right-panel-tabs-flat.test.ts` | Update structural tab/body assertions. |
-| Existing file workbench | `packages/overlay/src/components/RightFilesPanel.tsx` | Leave it as Files-internal Changes/Diff; do not put assistant here. |
-| Main conversation tree | `packages/overlay/src/services/conversation.ts`, `services/sse.ts`, `services/events.ts`, `store/card-tree.ts` | Do not use this pipeline for the side assistant. |
-| Session identity | `packages/opencorvus/src/session/session.sql.ts` | Reuse `assistant`; comments already define it for externally-driven sessions. |
-| Session persistence | `packages/opencorvus/src/storage/ddl.ts` + `session.sql.ts` | No new tables. |
-| Project/task capability source | `packages/opencorvus/src/panel/capability.ts`, `packages/opencorvus/src/tool/panel.ts` | Reuse `PanelCapabilityRegistry`; do not invent a parallel task/team action schema. |
-| Current coding tools | `packages/opencorvus/src/agent/agent.ts` | The default `coding` agent excludes `panel`; the right-sidebar assistant needs an explicit session tool overlay. |
-| Agent team execution | `packages/opencorvus/src/task-api/index.ts`, `packages/opencorvus/src/engine/store.ts` | Operate agent teams through engine tasks and panel capabilities, not direct orchestrator stage tools. |
-| Prompt execution | `packages/opencorvus/src/server/routes/session.ts` | Reuse `POST /session/:sessionID/prompt_async`; no `/coding` prompt wrapper. |
-| Session stream | `packages/opencorvus/src/server/routes/session.ts`, `packages/opencorvus/src/protocol/session-mirror.ts` | Generalize session mirror before relying on `GET /session/:sessionID/events`. |
-| Current coding routes | `packages/opencorvus/src/server/routes/coding.ts` | Keep CLI launcher routes; retire `message/stream` and `session/:id/messages` after canonical session path is verified. |
-| Overlay transport | `packages/overlay/src/services/api.ts`, `services/host-transport.ts` | Reuse `HostTransport.openStream` / `apiJson`; do not introduce raw `fetch` / raw `EventSource` bypasses. |
+| Area                           | Existing source                                                                                                         | Decision                                                                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Right panel top tabs           | `packages/overlay/src/components/RightPanelTabs.tsx`                                                                    | Extend `RightPanelTab` with `assistant`.                                                                               |
+| Right panel DOM bodies         | `packages/overlay/src/index.html`                                                                                       | Add `rightPanelAssistant` and `solidRightAssistantMount` beside Explorer/Files/Inspector.                              |
+| Right panel activation         | `packages/overlay/src/main.tsx`                                                                                         | Mount the assistant panel and include it in the same `rightPanelTab()` effect.                                         |
+| Right panel labels             | `packages/overlay/src/i18n/en-US.json`, `packages/overlay/src/i18n/zh-CN.json`                                          | Add Assistant labels in both locales.                                                                                  |
+| Existing right-panel tests     | `packages/overlay/test/acceptance-panel-mount.test.ts`, `file-explorer-editor.test.ts`, `right-panel-tabs-flat.test.ts` | Update structural tab/body assertions.                                                                                 |
+| Existing file workbench        | `packages/overlay/src/components/RightFilesPanel.tsx`                                                                   | Leave it as Files-internal Changes/Diff; do not put assistant here.                                                    |
+| Main conversation tree         | `packages/overlay/src/services/conversation.ts`, `services/sse.ts`, `services/events.ts`, `store/card-tree.ts`          | Do not use this pipeline for the side assistant.                                                                       |
+| Session identity               | `packages/opencorvus/src/session/session.sql.ts`                                                                        | Reuse `assistant`; comments already define it for externally-driven sessions.                                          |
+| Session persistence            | `packages/opencorvus/src/storage/ddl.ts` + `session.sql.ts`                                                             | No new tables.                                                                                                         |
+| Project/task capability source | `packages/opencorvus/src/panel/capability.ts`, `packages/opencorvus/src/tool/panel.ts`                                  | Reuse `PanelCapabilityRegistry`; do not invent a parallel task/team action schema.                                     |
+| Current coding tools           | `packages/opencorvus/src/agent/agent.ts`                                                                                | The default `coding` agent excludes `panel`; the right-sidebar assistant needs an explicit session tool overlay.       |
+| Agent team execution           | `packages/opencorvus/src/task-api/index.ts`, `packages/opencorvus/src/engine/store.ts`                                  | Operate agent teams through engine tasks and panel capabilities, not direct orchestrator stage tools.                  |
+| Prompt execution               | `packages/opencorvus/src/server/routes/session.ts`                                                                      | Reuse `POST /session/:sessionID/prompt_async`; no `/coding` prompt wrapper.                                            |
+| Session stream                 | `packages/opencorvus/src/server/routes/session.ts`, `packages/opencorvus/src/protocol/session-mirror.ts`                | Generalize session mirror before relying on `GET /session/:sessionID/events`.                                          |
+| Current coding routes          | `packages/opencorvus/src/server/routes/coding.ts`                                                                       | Keep CLI launcher routes; retire `message/stream` and `session/:id/messages` after canonical session path is verified. |
+| Overlay transport              | `packages/overlay/src/services/api.ts`, `services/host-transport.ts`                                                    | Reuse `HostTransport.openStream` / `apiJson`; do not introduce raw `fetch` / raw `EventSource` bypasses.               |
 
 ## Database Plan
 
@@ -142,34 +142,34 @@ The implementation may expose this as the existing `panel` tool, or as a thin `p
 
 Required tool capability set:
 
-| Capability | Existing action/source | Kind | Purpose |
-| --- | --- | --- | --- |
-| Project task list | `panel.view_tasks` | query | List recent tasks in the current project. |
-| Task board | `panel.view_board` | query | Inspect one task board, status, acceptance, evaluation, and summary. |
-| Task plan | `panel.view_plan` | query | Inspect goals/plan for one task. |
-| Structured task query | `panel.query_task` | query | Batch reconcile task IDs, include children and pending interactions. |
-| Create agent team task | `panel.create_task` | mutation | Dispatch a new orchestrator-led task/team for the current project. |
-| Send task follow-up | `panel.send_task_message` | mutation | Steer an existing task/team with an operator message. |
-| Cancel task/team | `panel.cancel_task` | mutation | Stop active work. |
-| Retry task/team | `panel.retry_task` | mutation | Queue a retry for failed or terminal work when operator intent is clear. |
-| Replan task/team | `panel.replan_task` | mutation | Queue a replan through existing task retry/replan semantics. |
-| Reply interaction | `panel.reply_interaction` | mutation | Answer pending permissions/questions for a task. |
-| Reject interaction | `panel.reject_interaction` | mutation | Reject pending permissions/questions for a task. |
-| Update checks | `panel.update_checks` | mutation | Adjust verification checks before or during task execution. |
-| Update goal | `panel.update_goal` | mutation | Edit a goal description/acceptance spec when the operator explicitly requests it. |
-| Delete goal | `panel.delete_goal` | mutation | Delete a goal when the operator explicitly requests it. |
-| Focus task | `panel.select_task` | local mutation | Switch the desktop panel to a task. |
-| Focus session | `panel.select_session` | local mutation | Switch the desktop panel to a session. |
-| Set executor | `panel.set_executor` | local mutation | Select default executor for new desktop panel tasks. |
-| Screenshot overlay | `panel.capture_overlay_screenshot` | query | Capture current OpenCorvus GUI for visual debugging. |
+| Capability             | Existing action/source             | Kind           | Purpose                                                                           |
+| ---------------------- | ---------------------------------- | -------------- | --------------------------------------------------------------------------------- |
+| Project task list      | `panel.view_tasks`                 | query          | List recent tasks in the current project.                                         |
+| Task board             | `panel.view_board`                 | query          | Inspect one task board, status, acceptance, evaluation, and summary.              |
+| Task plan              | `panel.view_plan`                  | query          | Inspect goals/plan for one task.                                                  |
+| Structured task query  | `panel.query_task`                 | query          | Batch reconcile task IDs, include children and pending interactions.              |
+| Create agent team task | `panel.create_task`                | mutation       | Dispatch a new orchestrator-led task/team for the current project.                |
+| Send task follow-up    | `panel.send_task_message`          | mutation       | Steer an existing task/team with an operator message.                             |
+| Cancel task/team       | `panel.cancel_task`                | mutation       | Stop active work.                                                                 |
+| Retry task/team        | `panel.retry_task`                 | mutation       | Queue a retry for failed or terminal work when operator intent is clear.          |
+| Replan task/team       | `panel.replan_task`                | mutation       | Queue a replan through existing task retry/replan semantics.                      |
+| Reply interaction      | `panel.reply_interaction`          | mutation       | Answer pending permissions/questions for a task.                                  |
+| Reject interaction     | `panel.reject_interaction`         | mutation       | Reject pending permissions/questions for a task.                                  |
+| Update checks          | `panel.update_checks`              | mutation       | Adjust verification checks before or during task execution.                       |
+| Update goal            | `panel.update_goal`                | mutation       | Edit a goal description/acceptance spec when the operator explicitly requests it. |
+| Delete goal            | `panel.delete_goal`                | mutation       | Delete a goal when the operator explicitly requests it.                           |
+| Focus task             | `panel.select_task`                | local mutation | Switch the desktop panel to a task.                                               |
+| Focus session          | `panel.select_session`             | local mutation | Switch the desktop panel to a session.                                            |
+| Set executor           | `panel.set_executor`               | local mutation | Select default executor for new desktop panel tasks.                              |
+| Screenshot overlay     | `panel.capture_overlay_screenshot` | query          | Capture current OpenCorvus GUI for visual debugging.                              |
 
 Optional project-bound knowledge tools:
 
-| Capability | Existing source | Kind | Purpose |
-| --- | --- | --- | --- |
-| Project memories | `GET /panel/knowledge/memory` | query | List memories scoped to current project/session/task. |
-| Memory search | `POST /panel/knowledge/memory/search` | query | Search durable project/task memory. |
-| Active executors/models | `GET/PATCH /executor/*` | query/mutation | Inspect or set executor model only if exposed through a registry-derived capability. |
+| Capability              | Existing source                       | Kind           | Purpose                                                                              |
+| ----------------------- | ------------------------------------- | -------------- | ------------------------------------------------------------------------------------ |
+| Project memories        | `GET /panel/knowledge/memory`         | query          | List memories scoped to current project/session/task.                                |
+| Memory search           | `POST /panel/knowledge/memory/search` | query          | Search durable project/task memory.                                                  |
+| Active executors/models | `GET/PATCH /executor/*`               | query/mutation | Inspect or set executor model only if exposed through a registry-derived capability. |
 
 Do not expose these directly to the right-sidebar assistant:
 
@@ -244,14 +244,14 @@ Hard constraints:
 
 OpenTUI is compatible as a terminal TUI dependency, but it is the wrong primitive for an Overlay right sidebar. Embedding it would require a PTY-like terminal surface inside a web panel and would import terminal-specific lifecycle problems into a DOM panel.
 
-| Risk | Decision |
-| --- | --- |
-| OpenTUI pre-1.0 runtime API | Right sidebar does not depend on OpenTUI APIs. |
-| Native PTY / ConPTY / WSL lifecycle | No PTY is created for the right-sidebar assistant. |
-| Terminal resize, signals, scrollback | Use DOM/Solid panel layout and existing Overlay scroll behavior. |
-| Global terminal keymap | Use focus-scoped DOM key handling only. |
-| OpenCode TUI plugin runtime | Do not depend on TUI plugin slots/keymap/renderer APIs. Future side-panel extensions need OpenCorvus-owned slots/actions. |
-| Backend plugin hooks | Continue to consume OpenCorvus session parts/events/permission contracts. |
+| Risk                                 | Decision                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| OpenTUI pre-1.0 runtime API          | Right sidebar does not depend on OpenTUI APIs.                                                                            |
+| Native PTY / ConPTY / WSL lifecycle  | No PTY is created for the right-sidebar assistant.                                                                        |
+| Terminal resize, signals, scrollback | Use DOM/Solid panel layout and existing Overlay scroll behavior.                                                          |
+| Global terminal keymap               | Use focus-scoped DOM key handling only.                                                                                   |
+| OpenCode TUI plugin runtime          | Do not depend on TUI plugin slots/keymap/renderer APIs. Future side-panel extensions need OpenCorvus-owned slots/actions. |
+| Backend plugin hooks                 | Continue to consume OpenCorvus session parts/events/permission contracts.                                                 |
 
 OpenCorvus already has the backend split through `Session`, `SessionPrompt`, and protocol events, so the right solution is a native Overlay panel, not a nested terminal TUI.
 

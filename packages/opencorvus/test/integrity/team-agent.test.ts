@@ -703,7 +703,9 @@ describe("integrity team-agent replay attempts", () => {
       expect(prompt).toContain("Adversarial investigation discipline:")
       expect(prompt).toContain("failure hypotheses")
       expect(prompt).toContain("not proof")
-      expect(prompt).toContain("A pass reviewer report still needs `investigationPlan`, `drilldowns[]`, `coverage[]`, and `evidence[]`")
+      expect(prompt).toContain(
+        "A pass reviewer report still needs `investigationPlan`, `drilldowns[]`, `coverage[]`, and `evidence[]`",
+      )
       expect(prompt).toContain("Do not write congratulatory or effort-focused summaries")
     }
 

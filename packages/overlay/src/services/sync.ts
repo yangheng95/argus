@@ -1,9 +1,17 @@
 // ── Sync Service ──
 // Coordinates loading board, tasks, and transcript in one shot.
 
-import { loadBoard, loadTasks, setBoardStore, boardStore, setBoardRetryCount, setBoardSyncPending, activeTaskID } from "../store/board";
-import { stopSSE } from "./sse";
-import { recoverSelectedTaskConversation } from "./selected-task-recovery";
+import {
+  loadBoard,
+  loadTasks,
+  setBoardStore,
+  boardStore,
+  setBoardRetryCount,
+  setBoardSyncPending,
+  activeTaskID,
+} from "../store/board"
+import { stopSSE } from "./sse"
+import { recoverSelectedTaskConversation } from "./selected-task-recovery"
 
 /**
  * Sync board data, task list, and (optionally) a specific task's transcript.
@@ -11,27 +19,27 @@ import { recoverSelectedTaskConversation } from "./selected-task-recovery";
  * updates selectedSource in the board store.
  */
 export async function syncBoardAndTasks(taskID?: string): Promise<void> {
-  await Promise.all([loadBoard(), loadTasks()]);
+  await Promise.all([loadBoard(), loadTasks()])
   if (taskID) {
-    setBoardStore("selectedSource", { kind: "task", id: taskID });
-    await recoverSelectedTaskConversation("sync board and selected task", taskID);
+    setBoardStore("selectedSource", { kind: "task", id: taskID })
+    await recoverSelectedTaskConversation("sync board and selected task", taskID)
   }
 }
 
 // ── Board Retry Utilities ──
 // boardSnapshot ported
 
-let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
  * Cancel any pending board retry timer and reset the retry counter.
  */
 export function clearBoardRetry(): void {
   if (_boardRetryTimer !== null) {
-    clearTimeout(_boardRetryTimer);
-    _boardRetryTimer = null;
+    clearTimeout(_boardRetryTimer)
+    _boardRetryTimer = null
   }
-  setBoardRetryCount(0);
+  setBoardRetryCount(0)
 }
 
 /**
@@ -40,14 +48,14 @@ export function clearBoardRetry(): void {
  * When `sync` is true the reload will request a server-side sync.
  */
 export function retryBoard(sync?: boolean): void {
-  if (!activeTaskID() || _boardRetryTimer !== null) return;
-  if (sync) setBoardSyncPending(true);
-  const delay = Math.min(1000 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15000);
-  setBoardRetryCount(boardStore.boardRetryCount + 1);
+  if (!activeTaskID() || _boardRetryTimer !== null) return
+  if (sync) setBoardSyncPending(true)
+  const delay = Math.min(1000 * Math.pow(2, Math.min(boardStore.boardRetryCount, 4)), 15000)
+  setBoardRetryCount(boardStore.boardRetryCount + 1)
   _boardRetryTimer = setTimeout(() => {
-    _boardRetryTimer = null;
-    loadBoard().catch(console.error);
-  }, delay);
+    _boardRetryTimer = null
+    loadBoard().catch(console.error)
+  }, delay)
 }
 
 /**
@@ -55,8 +63,8 @@ export function retryBoard(sync?: boolean): void {
  * Board payloads without a canonical snapshot version are invalid.
  */
 export function boardSnapshot(board: any): string {
-  if (typeof board?.snapshotVersion === "string" && board.snapshotVersion.length > 0) return board.snapshotVersion;
-  throw new Error("board.snapshotVersion must be a non-empty string");
+  if (typeof board?.snapshotVersion === "string" && board.snapshotVersion.length > 0) return board.snapshotVersion
+  throw new Error("board.snapshotVersion must be a non-empty string")
 }
 
 // ── stopTimers ──
@@ -64,6 +72,6 @@ export function boardSnapshot(board: any): string {
 // -side timers (elapsedTimer, tasksKick) remain.
 
 export function stopTimers(): void {
-  clearBoardRetry();
-  stopSSE();
+  clearBoardRetry()
+  stopSSE()
 }

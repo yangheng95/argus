@@ -34,47 +34,54 @@ describe("engine writer goal workspace cleanup", () => {
         const goalID = `goal_writer_${now}`
 
         Database.transaction((db) => {
-          db.insert(ProjectTable).values({
-            id: projectID,
-            worktree: tmp.path,
-            name: "Writer Test",
-            sandboxes: [],
-            time_created: now,
-            time_updated: now,
-          }).onConflictDoNothing().run()
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Writer Test",
+              sandboxes: [],
+              time_created: now,
+              time_updated: now,
+            })
+            .onConflictDoNothing()
+            .run()
 
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: projectID,
-            source: "test",
-            title: "writer cleanup task",
-            request: "cleanup workspace",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              source: "test",
+              title: "writer cleanup task",
+              request: "cleanup workspace",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
 
-          db.insert(EngineGoalTable).values({
-            id: goalID,
-            task_id: taskID,
-            title: "cleanup goal",
-            slug: "cleanup-goal",
-            objective: "verify terminal cleanup",
-            acceptance_specs: [],
-            owned_paths: [],
-            depends_on: [],
-            exports: [],
-            imports: [],
-            kind: "feature",
-            requirement_ids: [],
-            priority: "blocking",
-            source: "test",
-            status: "completed",
-            order_index: 0,
-            time_created: now,
-            time_updated: now,
-          }).run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "cleanup goal",
+              slug: "cleanup-goal",
+              objective: "verify terminal cleanup",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              exports: [],
+              imports: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              status: "completed",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
         })
 
         const worktree = await Worktree.create({ name: `writer-cleanup-${now.toString(36)}` })
@@ -110,47 +117,54 @@ describe("engine writer goal workspace cleanup", () => {
         const goalID = `goal_writer_preserve_${now}`
 
         Database.transaction((db) => {
-          db.insert(ProjectTable).values({
-            id: projectID,
-            worktree: tmp.path,
-            name: "Writer Test",
-            sandboxes: [],
-            time_created: now,
-            time_updated: now,
-          }).onConflictDoNothing().run()
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Writer Test",
+              sandboxes: [],
+              time_created: now,
+              time_updated: now,
+            })
+            .onConflictDoNothing()
+            .run()
 
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: projectID,
-            source: "test",
-            title: "writer cleanup preserve task",
-            request: "cleanup workspace",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              source: "test",
+              title: "writer cleanup preserve task",
+              request: "cleanup workspace",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
 
-          db.insert(EngineGoalTable).values({
-            id: goalID,
-            task_id: taskID,
-            title: "cleanup preserve goal",
-            slug: "cleanup-preserve-goal",
-            objective: "verify non-completed cleanup keeps workspace pointer",
-            acceptance_specs: [],
-            owned_paths: [],
-            depends_on: [],
-            exports: [],
-            imports: [],
-            kind: "feature",
-            requirement_ids: [],
-            priority: "blocking",
-            source: "test",
-            status: "running",
-            order_index: 0,
-            time_created: now,
-            time_updated: now,
-          }).run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "cleanup preserve goal",
+              slug: "cleanup-preserve-goal",
+              objective: "verify non-completed cleanup keeps workspace pointer",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              exports: [],
+              imports: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              status: "running",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
         })
 
         const worktree = await Worktree.create({ name: `writer-preserve-${now.toString(36)}` })
@@ -183,47 +197,54 @@ describe("engine writer goal workspace cleanup", () => {
         const goalID = `goal_writer_refuse_${now}`
 
         Database.transaction((db) => {
-          db.insert(ProjectTable).values({
-            id: projectID,
-            worktree: tmp.path,
-            name: "Writer Test",
-            sandboxes: [],
-            time_created: now,
-            time_updated: now,
-          }).onConflictDoNothing().run()
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Writer Test",
+              sandboxes: [],
+              time_created: now,
+              time_updated: now,
+            })
+            .onConflictDoNothing()
+            .run()
 
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: projectID,
-            source: "test",
-            title: "writer cleanup refusal task",
-            request: "cleanup workspace",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              source: "test",
+              title: "writer cleanup refusal task",
+              request: "cleanup workspace",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
 
-          db.insert(EngineGoalTable).values({
-            id: goalID,
-            task_id: taskID,
-            title: "cleanup refusal goal",
-            slug: "cleanup-refusal-goal",
-            objective: "verify failed cleanup keeps workspace pointer",
-            acceptance_specs: [],
-            owned_paths: [],
-            depends_on: [],
-            exports: [],
-            imports: [],
-            kind: "feature",
-            requirement_ids: [],
-            priority: "blocking",
-            source: "test",
-            status: "completed",
-            order_index: 0,
-            time_created: now,
-            time_updated: now,
-          }).run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "cleanup refusal goal",
+              slug: "cleanup-refusal-goal",
+              objective: "verify failed cleanup keeps workspace pointer",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              exports: [],
+              imports: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              status: "completed",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
         })
 
         seedGoalRunAttemptWithWorkspace({

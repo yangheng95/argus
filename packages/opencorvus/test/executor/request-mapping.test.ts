@@ -50,9 +50,12 @@ describe("executor request mapping", () => {
           return feed([
             { type: "response.created", response: { id: "resp_1" } },
             { type: "response.output_text.delta", delta: "Hel" },
-            { type: "response.output_item.added", item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "read_file" } },
-            { type: "response.function_call_arguments.delta", item_id: "fc_1", delta: "{\"path\":\"README.md\"" },
-            { type: "response.function_call_arguments.done", item_id: "fc_1", arguments: "{\"path\":\"README.md\"}" },
+            {
+              type: "response.output_item.added",
+              item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "read_file" },
+            },
+            { type: "response.function_call_arguments.delta", item_id: "fc_1", delta: '{"path":"README.md"' },
+            { type: "response.function_call_arguments.done", item_id: "fc_1", arguments: '{"path":"README.md"}' },
             { type: "response.completed", response: { id: "resp_1", output_text: "Hello" } },
           ])
         },
@@ -74,8 +77,8 @@ describe("executor request mapping", () => {
     })
     expect(out).toEqual([
       { type: "text_delta", text: "Hel" },
-      { type: "tool_delta", id: "call_1", name: "read_file", delta: "{\"path\":\"README.md\"" },
-      { type: "tool_call", id: "call_1", name: "read_file", input: "{\"path\":\"README.md\"}" },
+      { type: "tool_delta", id: "call_1", name: "read_file", delta: '{"path":"README.md"' },
+      { type: "tool_call", id: "call_1", name: "read_file", input: '{"path":"README.md"}' },
       { type: "done", sessionID: "resp_1", output: "Hello", meta: { id: "resp_1", output_text: "Hello" } },
     ])
   })
@@ -128,7 +131,11 @@ describe("executor request mapping", () => {
     const provider = ClaudeCodeExecutor.create(() =>
       feed([
         { type: "system", subtype: "init", session_id: "sess_a", tools: ["Bash"] },
-        { type: "stream_event", uuid: "msg_1", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Hel" } } },
+        {
+          type: "stream_event",
+          uuid: "msg_1",
+          event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Hel" } },
+        },
         {
           type: "stream_event",
           uuid: "msg_1",
@@ -151,7 +158,7 @@ describe("executor request mapping", () => {
             index: 1,
             delta: {
               type: "input_json_delta",
-              partial_json: "{\"file\":\"README.md\"}",
+              partial_json: '{"file":"README.md"}',
             },
           },
         },
@@ -169,9 +176,7 @@ describe("executor request mapping", () => {
         {
           type: "user",
           message: {
-            content: [
-              { type: "tool_result", tool_use_id: "toolu_1", content: "README body" },
-            ],
+            content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "README body" }],
           },
         },
         {
@@ -206,7 +211,7 @@ describe("executor request mapping", () => {
         meta: { type: "system", subtype: "init", session_id: "sess_a", tools: ["Bash"] },
       },
       { type: "text_delta", text: "Hel" },
-      { type: "tool_call", id: "toolu_1", name: "Read", input: "{\"file\":\"README.md\"}" },
+      { type: "tool_call", id: "toolu_1", name: "Read", input: '{"file":"README.md"}' },
       { type: "tool_result", id: "toolu_1", output: "README body" },
       {
         type: "done",

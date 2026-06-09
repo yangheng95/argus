@@ -30,11 +30,11 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
     fs.writeFileSync(
       path.join(tempDir, "index.html"),
       `<!doctype html><html><head>` +
-      `<link rel="stylesheet" href="/assets/main.css">` +
-      `<script src="/assets/app.js"></script>` +
-      `<script src="/i18n/zh-CN.json"></script>` +
-      `<script src="https://cdn.example.com/keep.js"></script>` +
-      `</head><body><div id="root"></div></body></html>`,
+        `<link rel="stylesheet" href="/assets/main.css">` +
+        `<script src="/assets/app.js"></script>` +
+        `<script src="/i18n/zh-CN.json"></script>` +
+        `<script src="https://cdn.example.com/keep.js"></script>` +
+        `</head><body><div id="root"></div></body></html>`,
     )
     fs.mkdirSync(path.join(tempDir, "assets"))
     fs.writeFileSync(path.join(tempDir, "assets", "app.js"), `console.log("hi")`)
@@ -44,7 +44,9 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
   })
 
   afterEach(() => {
-    try { fs.rmSync(tempDir, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    } catch {}
   })
 
   test("GET /ui/ rewrites absolute asset paths to /ui/<asset>", async () => {
@@ -113,7 +115,9 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
         expect(body).not.toContain("TOPSECRET-MUST-NOT-LEAK")
       }
     } finally {
-      try { fs.unlinkSync(outsideSecret) } catch {}
+      try {
+        fs.unlinkSync(outsideSecret)
+      } catch {}
     }
   })
 })

@@ -4,6 +4,7 @@
 >
 > **2026-04-27 状态核查**：5 张过程状态表已在 Phase 6 合并为 `engine_artifact`（见 [02-data.md](02-data.md)），
 > 但代码侧仍存在以下 FSM-shaped 残留（需在新 ticket 单独清零）：
+>
 > - `engine/runtime.ts:123-132` 仍用 `run.status === "completed" / "failed" / "aborted"` 分支轮询，
 >   未替换为 `time_completed != null` 派生
 > - `engine/goal-status.ts:40-62` `mapRunStatus` 仍是 switch/case，与"事实派生"原则不一致
@@ -19,17 +20,18 @@
 
 opencorvus 核心有 5 张"状态机表"互相信任但不对齐：
 
-| 表 | 状态字段 |
-|---|---|
-| `engine_task` | `status`, `blocking_reason` |
-| `engine_run` | `status`, `phase`, `blocking_reason` |
-| `engine_goal_run` | `status`, `blocking_reason`, `superseded_reason` |
-| `engine_acceptance` | `status`（candidate / accepted / rejected…） |
-| `engine_evaluation` | `status`, `verdict` |
+| 表                  | 状态字段                                         |
+| ------------------- | ------------------------------------------------ |
+| `engine_task`       | `status`, `blocking_reason`                      |
+| `engine_run`        | `status`, `phase`, `blocking_reason`             |
+| `engine_goal_run`   | `status`, `blocking_reason`, `superseded_reason` |
+| `engine_acceptance` | `status`（candidate / accepted / rejected…）     |
+| `engine_evaluation` | `status`, `verdict`                              |
 
 代码里 ~30 个文件、~74 处 `if (x.status === "Y")` / switch 分支消费这些字段。以前几轮删掉的是*场景化*状态机（某个具体流程的 FSM），但这 5 张表本身是根 FSM，每删一处代码都会被 loop / workflow / recovery 的隐式协议拖回去。
 
 **典型症状链**：
+
 1. goal 1~3 acceptance=candidate（未 accept）；
 2. task 级聚合评估 `acceptance_verdict=failed`；
 3. 引擎重启；
@@ -63,13 +65,13 @@ task_failed(t)          = task_done(t) && t.error != null
 
 ## 3. Schema 最终形态
 
-| 表 | 删除列 | 保留 |
-|---|---|---|
-| `engine_task` | `status`, `blocking_reason` | `time_completed`, `error`, `active_plan_version_id`, `active_run_id` |
-| `engine_run` | `status`, `phase`, `blocking_reason` | `time_started`, `time_completed`, `error`, `executor_ref`, `session_id`, `plan_version_id` |
-| `engine_goal_run` | `status`, `blocking_reason`, `superseded_reason` | `time_started`, `time_completed`, `error`, `supersede_of`, `lease_until`, `last_progress_at`, `commit_ref` |
-| `engine_acceptance` | `status` | `result`（JSON 含 verdict/summary/artifacts）, `run_id`, `goal_run_id` |
-| `engine_evaluation` | `status`, `verdict` | `summary`, `artifacts` |
+| 表                  | 删除列                                           | 保留                                                                                                       |
+| ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `engine_task`       | `status`, `blocking_reason`                      | `time_completed`, `error`, `active_plan_version_id`, `active_run_id`                                       |
+| `engine_run`        | `status`, `phase`, `blocking_reason`             | `time_started`, `time_completed`, `error`, `executor_ref`, `session_id`, `plan_version_id`                 |
+| `engine_goal_run`   | `status`, `blocking_reason`, `superseded_reason` | `time_started`, `time_completed`, `error`, `supersede_of`, `lease_until`, `last_progress_at`, `commit_ref` |
+| `engine_acceptance` | `status`                                         | `result`（JSON 含 verdict/summary/artifacts）, `run_id`, `goal_run_id`                                     |
+| `engine_evaluation` | `status`, `verdict`                              | `summary`, `artifacts`                                                                                     |
 
 > acceptance / evaluation 的 `verdict / status` 原本已经在 artifact payload 里，当前列是冗余，删之无痛。
 
@@ -89,6 +91,7 @@ loop:
 ```
 
 Orchestrator 看 snapshot 自行选择工具：
+
 - 起新 plan / architect
 - `dispatch_goal` / `restart_from_stage`
 - `wait_for_executor`（带 inactivity 阈值，由 LLM 给）
@@ -96,6 +99,7 @@ Orchestrator 看 snapshot 自行选择工具：
 - `fail_task`（写 `time_completed` + error）
 
 **彻底消失的代码模式**：
+
 - `if (run.status === "blocked")` → pending interaction 是事实，LLM 自判。
 - `if (queue.status === "running")` → executor 报文是事实，不写回 run.status。
 - `recoverOrphanRuns(abortRuns)` → recovery 只做物理清理（杀死已 detach 的 executor_session），**不改 run**；LLM 下一次 decide 时从 `run_orphan=true` 自行判断。

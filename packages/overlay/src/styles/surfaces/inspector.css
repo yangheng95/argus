@@ -118,16 +118,82 @@
   font-size: var(--ui-font-control);
 }
 
-.browser-preview-viewport-tabs {
-  flex: 0 0 auto;
+.browser-preview-candidate-select {
+  min-width: 0;
+  min-height: calc(30px * var(--ui-scale));
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
 }
 
-.browser-preview-viewport-tabs .oc-tabs {
-  width: 100%;
+.browser-preview-candidate-select:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
 }
 
-.browser-preview-viewport-tabs [data-ui="browser-preview-viewport"] {
+.browser-preview-candidate-select select {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--ui-font-control);
+}
+
+.browser-preview-candidate-select select:disabled {
+  color: var(--text-soft);
+  opacity: 1;
+}
+
+.browser-preview-viewport-layout {
   flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(calc(84px * var(--ui-scale)), calc(108px * var(--ui-scale))) minmax(0, 1fr);
+  gap: calc(6px * var(--ui-scale));
+}
+
+.browser-preview-viewport-layout .oc-tabs {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  align-self: start;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(3px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale));
+  background: var(--surface-inset);
+}
+
+.browser-preview-viewport-tab-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.browser-preview-viewport-tab-row[data-visible="false"] {
+  opacity: 0.46;
+}
+
+.browser-preview-viewport-tab-row [data-ui="browser-preview-viewport"] {
+  min-width: 0;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.browser-preview-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
 }
 
 .browser-preview-status {
@@ -167,20 +233,49 @@
   background-size: calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale));
 }
 
+.browser-preview-frame-stack {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale));
+}
+
 .browser-preview-frame-shell {
   width: min(100%, var(--browser-preview-width));
-  min-width: min(100%, var(--browser-preview-width));
-  height: min(100%, var(--browser-preview-height));
-  min-height: min(100%, var(--browser-preview-height));
-  margin: auto;
+  min-width: min(calc(180px * var(--ui-scale)), 100%);
+  min-height: calc(180px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
   border: var(--oc-border-width) solid var(--border-strong);
   background: var(--surface);
   box-shadow: 0 calc(12px * var(--ui-scale)) calc(24px * var(--ui-scale)) var(--ui-shadow-tone);
 }
 
+.browser-preview-frame-shell[data-active="true"] {
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--border-strong));
+}
+
+.browser-preview-frame-header {
+  flex: 0 0 auto;
+  min-height: calc(24px * var(--ui-scale));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  color: var(--text-soft);
+  font-size: var(--ui-font-meta);
+}
+
 .browser-preview-frame {
   width: 100%;
-  height: 100%;
+  height: auto;
+  min-height: calc(180px * var(--ui-scale));
+  aspect-ratio: var(--browser-preview-width) / var(--browser-preview-height);
   display: block;
   border: 0;
   background: white;
@@ -313,11 +408,7 @@
   grid-template-columns: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale)) minmax(0, 1fr) auto;
   align-items: center;
   gap: calc(4px * var(--ui-scale));
-  padding:
-    0
-    calc(7px * var(--ui-scale))
-    0
-    calc(3px * var(--ui-scale));
+  padding: 0 calc(7px * var(--ui-scale)) 0 calc(3px * var(--ui-scale));
   border: 0;
   background: transparent;
   color: var(--text-soft);

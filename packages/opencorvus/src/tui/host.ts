@@ -129,7 +129,8 @@ function appendBuffer(session: HostSession, chunk: string) {
 function readOutput(session: HostSession | null, cursor?: number) {
   const end = session?.cursor ?? 0
   const start = session?.bufferCursor ?? 0
-  const from = cursor === -1 ? end : typeof cursor === "number" && Number.isSafeInteger(cursor) ? Math.max(0, cursor) : 0
+  const from =
+    cursor === -1 ? end : typeof cursor === "number" && Number.isSafeInteger(cursor) ? Math.max(0, cursor) : 0
   const data = (() => {
     if (!session?.buffer || from >= end) return ""
     const offset = Math.max(0, from - start)
@@ -207,7 +208,12 @@ function assertSize(cols: number, rows: number) {
   if (!Number.isInteger(rows) || rows < 1 || rows > 200) throw new Error("rows must be an integer from 1 to 200")
 }
 
-function directPtyProcess(input: { command: Tui.EmbeddedCommand; cols: number; rows: number; env: Record<string, string> }): HostProcess {
+function directPtyProcess(input: {
+  command: Tui.EmbeddedCommand
+  cols: number
+  rows: number
+  env: Record<string, string>
+}): HostProcess {
   const nodePty = requireRuntimePackage<typeof import("@lydell/node-pty")>("@lydell/node-pty")
   const proc = nodePty.spawn(input.command.command, input.command.args, {
     name: "xterm-256color",
@@ -251,7 +257,9 @@ async function resolvePtyNodeRuntime() {
       nodePtyRequirePath: runtimePackageRequire().resolve("@lydell/node-pty"),
     }
   }
-  throw new Error(`TUI PTY Node runtime is missing. Expected ${packaged.nodeExecutable} beside the opencorvus executable.`)
+  throw new Error(
+    `TUI PTY Node runtime is missing. Expected ${packaged.nodeExecutable} beside the opencorvus executable.`,
+  )
 }
 
 function bridgeMessage(child: ChildProcess, message: unknown) {
@@ -263,7 +271,12 @@ function bridgeMessage(child: ChildProcess, message: unknown) {
   }
 }
 
-async function nodeBridgePtyProcess(input: { command: Tui.EmbeddedCommand; cols: number; rows: number; env: Record<string, string> }): Promise<HostProcess> {
+async function nodeBridgePtyProcess(input: {
+  command: Tui.EmbeddedCommand
+  cols: number
+  rows: number
+  env: Record<string, string>
+}): Promise<HostProcess> {
   const runtime = await resolvePtyNodeRuntime()
   const payload = Buffer.from(
     JSON.stringify({
@@ -354,7 +367,12 @@ async function nodeBridgePtyProcess(input: { command: Tui.EmbeddedCommand; cols:
   }
 }
 
-async function hostProcess(input: { command: Tui.EmbeddedCommand; cols: number; rows: number; env: Record<string, string> }) {
+async function hostProcess(input: {
+  command: Tui.EmbeddedCommand
+  cols: number
+  rows: number
+  env: Record<string, string>
+}) {
   if (process.platform === "win32" && isBunExecutable(process.execPath)) {
     return nodeBridgePtyProcess(input)
   }
@@ -459,7 +477,12 @@ export namespace TuiHost {
     })
   }
 
-  export async function startPrepared(input: { command: Tui.EmbeddedCommand; cols?: number; rows?: number; title?: string }) {
+  export async function startPrepared(input: {
+    command: Tui.EmbeddedCommand
+    cols?: number
+    rows?: number
+    title?: string
+  }) {
     const s = state()
     const session = await spawnPrepared({
       command: input.command,

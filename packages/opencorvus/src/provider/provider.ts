@@ -958,7 +958,7 @@ export namespace Provider {
     if (!info && providerID === "hexin") {
       try {
         const { refreshHexinCache } = await import("./hexin-discovery")
-        const cfg = opts?.config ?? await Config.get()
+        const cfg = opts?.config ?? (await Config.get())
         const apiKey = await hexinApiKey(cfg)
         refreshedModels = await refreshHexinCache(apiKey)
         reset()
@@ -987,7 +987,10 @@ export namespace Provider {
     const canonical = provider?.models[model.id]
     if (!provider || !canonical) {
       const availableModels = provider ? Object.keys(provider.models) : Object.keys(s.providers)
-      const matches = fuzzysort.go(provider ? model.id : model.providerID, availableModels, { limit: 3, threshold: -10000 })
+      const matches = fuzzysort.go(provider ? model.id : model.providerID, availableModels, {
+        limit: 3,
+        threshold: -10000,
+      })
       const suggestions = matches.map((m) => m.target)
       throw new ModelNotFoundError({ providerID: model.providerID, modelID: model.id, suggestions })
     }

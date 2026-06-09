@@ -26,10 +26,7 @@ export interface GoalWorkloadCollector {
 }
 
 const WorkloadBriefSchema = z.object({
-  goal_id: z
-    .string()
-    .min(1)
-    .describe("Architect goal id (llmID) this brief covers, e.g. 'goal_visual_shell'."),
+  goal_id: z.string().min(1).describe("Architect goal id (llmID) this brief covers, e.g. 'goal_visual_shell'."),
   decomposition_concern: z
     .string()
     .min(1)
@@ -133,9 +130,7 @@ export function createGoalWorkloadOutputTools(input: { knownGoalIDs: string[]; k
           )
         }
         const unknownContracts =
-          knownContracts.size > 0
-            ? brief.references.contract_ids.filter((id) => !knownContracts.has(id))
-            : []
+          knownContracts.size > 0 ? brief.references.contract_ids.filter((id) => !knownContracts.has(id)) : []
         const warn =
           unknownContracts.length > 0
             ? `\nWarning: referenced contract id(s) not in the contract graph: ${unknownContracts.join(", ")}.`
@@ -177,7 +172,9 @@ export function createGoalWorkloadOutputTools(input: { knownGoalIDs: string[]; k
         return [
           "PASS: workload analysis finalized.",
           `  ${collector.briefs.length} goal brief(s); ${flagged.length} flagged with decomposition_concern.`,
-          flagged.length > 0 ? `  Flagged (consider Architect re-sizing): ${flagged.map((b) => b.goal_id).join(", ")}` : "",
+          flagged.length > 0
+            ? `  Flagged (consider Architect re-sizing): ${flagged.map((b) => b.goal_id).join(", ")}`
+            : "",
           uncovered.length > 0 ? `  Note: ${uncovered.length} goal(s) without a brief: ${uncovered.join(", ")}` : "",
         ]
           .filter(Boolean)

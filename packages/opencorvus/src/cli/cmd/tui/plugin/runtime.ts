@@ -134,10 +134,7 @@ function createScopedKeymap(keymap: TuiPluginApi["keymap"], scope: PluginScope):
   })
 }
 
-function createScopedAttention(
-  attention: TuiPluginApi["attention"],
-  scope: PluginScope,
-): TuiPluginApi["attention"] {
+function createScopedAttention(attention: TuiPluginApi["attention"], scope: PluginScope): TuiPluginApi["attention"] {
   return {
     notify(input) {
       return attention.notify(input)

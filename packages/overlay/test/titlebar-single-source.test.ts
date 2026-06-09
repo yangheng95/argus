@@ -37,16 +37,15 @@ function walkCss(dir: string): string[] {
 // styles.css was dissolved 2026-05-04 into cascade + surface files. The
 // "no .titlebar in styles.css" guard is now "no .titlebar in cascade layer"
 // (cascade owns cross-cutting rules; surface-specific chrome lives in titlebar.css).
-const CASCADE_CSS = walkCss(CASCADE_DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+const CASCADE_CSS = walkCss(CASCADE_DIR)
+  .map((f) => readFileSync(f, "utf8"))
+  .join("\n")
 
 const TITLEBAR_SURFACE = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "titlebar.css"),
   "utf8",
 )
-const HTML = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "index.html"),
-  "utf8",
-)
+const HTML = readFileSync(path.resolve(import.meta.dir, "..", "src", "index.html"), "utf8")
 
 function countRulesStartingWith(text: string, selector: string): number {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -83,7 +82,7 @@ describe(".titlebar is defined exactly once", () => {
 })
 
 describe(".brand-name is dead CSS after iter6 and removed", () => {
-  test("`<span class=\"brand-name\">` is gone from index.html (iter6 contract still holds)", () => {
+  test('`<span class="brand-name">` is gone from index.html (iter6 contract still holds)', () => {
     expect(HTML).not.toMatch(/class=["']brand-name["']/)
   })
 

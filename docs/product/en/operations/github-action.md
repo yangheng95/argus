@@ -14,21 +14,22 @@ Published as a **composite action**. Runtime sequence:
 4. Writes the reply back via Octokit; on dirty working tree, commits, pushes, and opens a PR
 
 Supported triggers (`github/index.ts:127-128`):
+
 - `issue_comment` — Issue & PR comments (distinguished by `issue.pull_request`)
 - `pull_request_review_comment` — line-level review comments
 
 ## Inputs
 
-| Parameter | Required | Default | Description |
-|---|---|---|---|
-| `model` | ✓ | — | `provider/model`, e.g. `anthropic/claude-sonnet-4-20250514` |
-| `agent` | — | config `default_agent` | Primary agent; subagents rejected |
-| `share` | — | `true` (public repos) | Share at `opencorvus.ai/s/<id>` |
-| `prompt` | — | — | Custom prompt overriding default |
-| `use_github_token` | — | `false` | Use `GITHUB_TOKEN` directly; skip OIDC & permission check |
-| `mentions` | — | `/opencorvus,/oc` | Comma-separated trigger phrases |
-| `variant` | — | — | Provider reasoning variant (`high`, `max`, `minimal`) |
-| `oidc_base_url` | — | `https://api.opencorvus.ai` | OIDC exchange URL for custom App installs |
+| Parameter          | Required | Default                     | Description                                                 |
+| ------------------ | -------- | --------------------------- | ----------------------------------------------------------- |
+| `model`            | ✓        | —                           | `provider/model`, e.g. `anthropic/claude-sonnet-4-20250514` |
+| `agent`            | —        | config `default_agent`      | Primary agent; subagents rejected                           |
+| `share`            | —        | `true` (public repos)       | Share at `opencorvus.ai/s/<id>`                             |
+| `prompt`           | —        | —                           | Custom prompt overriding default                            |
+| `use_github_token` | —        | `false`                     | Use `GITHUB_TOKEN` directly; skip OIDC & permission check   |
+| `mentions`         | —        | `/opencorvus,/oc`           | Comma-separated trigger phrases                             |
+| `variant`          | —        | —                           | Provider reasoning variant (`high`, `max`, `minimal`)       |
+| `oidc_base_url`    | —        | `https://api.opencorvus.ai` | OIDC exchange URL for custom App installs                   |
 
 (`github/action.yml:7-39`)
 
@@ -70,10 +71,10 @@ Skips OIDC and the permission check (`github/index.ts:762-764`).
 
 ```yaml
 permissions:
-  id-token: write        # OIDC (Option A)
-  contents: write        # git push / branches
-  pull-requests: write   # open PRs / comment
-  issues: write          # create/update Issue comments
+  id-token: write # OIDC (Option A)
+  contents: write # git push / branches
+  pull-requests: write # open PRs / comment
+  issues: write # create/update Issue comments
 ```
 
 This repo's own `.github/workflows/opencorvus.yml` declares `read`-only because write capability is carried by the App token (Option A). For Option B, declare write explicitly.
@@ -142,11 +143,11 @@ jobs:
 
 ## Comment triggers
 
-| Comment | Effect |
-|---|---|
-| `/opencorvus explain this issue` | Reads thread and replies |
-| `/opencorvus fix this` | New branch, implementation, PR |
-| `/oc` (on PR) | Reviews the PR |
+| Comment                                     | Effect                           |
+| ------------------------------------------- | -------------------------------- |
+| `/opencorvus explain this issue`            | Reads thread and replies         |
+| `/opencorvus fix this`                      | New branch, implementation, PR   |
+| `/oc` (on PR)                               | Reviews the PR                   |
 | `/oc add error handling here` (line review) | Edits at specified line, commits |
 
 ## Code flow

@@ -3,10 +3,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import {
-  runBrowserNodeSidecar,
-  type BrowserNodeSidecarRunResult,
-} from "../../src/browser/runtime/node-executor"
+import { runBrowserNodeSidecar, type BrowserNodeSidecarRunResult } from "../../src/browser/runtime/node-executor"
 import type { BrowserNodeSidecarRuntime } from "../../src/browser/runtime/node-sidecar"
 
 const RUNTIME: BrowserNodeSidecarRuntime = {
@@ -24,10 +21,13 @@ afterEach(() => {
 
 describe("browser Node sidecar executor", () => {
   test("returns parsed JSON with exit metadata", async () => {
-    const run = await execute<{ value: number }>(`
+    const run = await execute<{ value: number }>(
+      `
       const input = JSON.parse(Buffer.from(process.env.TEST_PAYLOAD || "", "base64").toString("utf8"));
       process.stdout.write(JSON.stringify({ value: input.value + 1 }));
-    `, { value: 41 })
+    `,
+      { value: 41 },
+    )
 
     expect(run.result).toEqual({ value: 42 })
     expect(run.exitCode).toBe(0)
@@ -35,26 +35,40 @@ describe("browser Node sidecar executor", () => {
   })
 
   test("returns non-zero exit metadata when stdout is valid JSON", async () => {
-    const run = await execute<{ ok: false }>(`
+    const run = await execute<{ ok: false }>(
+      `
       process.stdout.write(JSON.stringify({ ok: false }));
       process.exitCode = 7;
-    `, {})
+    `,
+      {},
+    )
 
     expect(run.result).toEqual({ ok: false })
     expect(run.exitCode).toBe(7)
   })
 
   test("includes stderr when stdout is not valid JSON", async () => {
-    await expect(execute(`
+    await expect(
+      execute(
+        `
       process.stderr.write("diagnostic detail");
       process.stdout.write("not-json");
-    `, {})).rejects.toThrow("diagnostic detail")
+    `,
+        {},
+      ),
+    ).rejects.toThrow("diagnostic detail")
   })
 
   test("kills a sidecar that exceeds the hard timeout", async () => {
-    await expect(execute(`
+    await expect(
+      execute(
+        `
       setTimeout(() => {}, 10_000);
-    `, {}, { hardTimeoutMs: 25 })).rejects.toThrow("timed out after 25ms")
+    `,
+        {},
+        { hardTimeoutMs: 25 },
+      ),
+    ).rejects.toThrow("timed out after 25ms")
   })
 
   test("kills child processes when a sidecar exceeds the hard timeout", async () => {
@@ -62,7 +76,9 @@ describe("browser Node sidecar executor", () => {
     tempDirs.push(dir)
     const childPidFile = path.join(dir, "child.pid")
 
-    await expect(execute(`
+    await expect(
+      execute(
+        `
       const { spawn } = require("node:child_process");
       const fs = require("node:fs");
       const input = JSON.parse(Buffer.from(process.env.TEST_PAYLOAD || "", "base64").toString("utf8"));
@@ -72,7 +88,11 @@ describe("browser Node sidecar executor", () => {
       });
       fs.writeFileSync(input.childPidFile, String(child.pid));
       setInterval(() => {}, 10_000);
-    `, { childPidFile }, { hardTimeoutMs: 100 })).rejects.toThrow("timed out after 100ms")
+    `,
+        { childPidFile },
+        { hardTimeoutMs: 100 },
+      ),
+    ).rejects.toThrow("timed out after 100ms")
 
     const childPid = Number(fs.readFileSync(childPidFile, "utf8"))
     expect(Number.isFinite(childPid) && childPid > 0).toBe(true)
@@ -83,9 +103,15 @@ describe("browser Node sidecar executor", () => {
     const controller = new AbortController()
     setTimeout(() => controller.abort(new Error("executor aborted by test")), 25)
 
-    await expect(execute(`
+    await expect(
+      execute(
+        `
       setTimeout(() => {}, 10_000);
-    `, {}, { signal: controller.signal, hardTimeoutMs: 5_000 })).rejects.toThrow("executor aborted by test")
+    `,
+        {},
+        { signal: controller.signal, hardTimeoutMs: 5_000 },
+      ),
+    ).rejects.toThrow("executor aborted by test")
   })
 })
 

@@ -23,7 +23,9 @@ describe("scan", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "secret-scan-"))
   })
   afterEach(() => {
-    try { fs.rmSync(root, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(root, { recursive: true, force: true })
+    } catch {}
   })
 
   function write(rel: string, body: string) {
@@ -83,10 +85,7 @@ describe("scan", () => {
   })
 
   test("`secret-scan: ignore` directive suppresses the line", () => {
-    write(
-      "src/test-fixture.ts",
-      `const fakeKey = "sk-AAAAAAAAAAAAAAAAAAAAAA" // secret-scan: ignore`,
-    )
+    write("src/test-fixture.ts", `const fakeKey = "sk-AAAAAAAAAAAAAAAAAAAAAA" // secret-scan: ignore`)
     const hits = scan({ repoRoot: root, files: ["src/test-fixture.ts"] })
     expect(hits).toHaveLength(0)
   })

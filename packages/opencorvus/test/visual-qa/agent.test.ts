@@ -28,7 +28,7 @@ describe("visual-qa agent", () => {
     })
   }, 30_000)
 
-  test("prompt names UI/UX expansion and frontend_design evidence source", () => {
+  test("prompt names focused GUI fidelity and frontend_design evidence source", () => {
     const prompt = VisualQaTestHooks.buildVisualQaUserPrompt({
       taskTitle: "Clone page",
       taskRequest: "Replicate the visual page.",
@@ -37,9 +37,11 @@ describe("visual-qa agent", () => {
       buildEvidence: "Build report",
       previewCommand: "npm run dev",
     })
-    expect(prompt).toContain("UI means User Interface")
-    expect(prompt).toContain("UX means User Experience")
-    expect(prompt).toContain("Frontend Design Evidence")
+    expect(prompt).toContain("visual GUI fidelity and functional testing")
+    expect(prompt).toContain("GUI means Graphical User Interface")
+    expect(prompt).not.toContain("UX means User Experience")
+    expect(prompt).toContain("Frontend Design Context")
+    expect(prompt).not.toContain("Frontend Research Work Packets")
     expect(prompt).toContain("Use Node for Playwright")
   })
 })

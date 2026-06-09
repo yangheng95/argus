@@ -11,7 +11,11 @@ const baseGoal = {
 }
 
 function buildCollector(
-  goals: Array<{ id: string; owned_paths: string[]; kind?: "bootstrap" | "feature" | "verification" | "integration" | "system" }>,
+  goals: Array<{
+    id: string
+    owned_paths: string[]
+    kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
+  }>,
 ): ArchitectCollector {
   return {
     goals: goals.map((g) => ({

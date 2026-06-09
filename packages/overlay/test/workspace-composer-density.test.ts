@@ -6,10 +6,7 @@ const WORKSPACE = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "workspace.css"),
   "utf8",
 )
-const COMPOSER = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "composer.css"),
-  "utf8",
-)
+const COMPOSER = readFileSync(path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "composer.css"), "utf8")
 const CONVERSATION = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "conversation.css"),
   "utf8",
@@ -44,18 +41,12 @@ describe("composer shell stays tighter than the surrounding canvas", () => {
     // route through the variable rather than re-declaring 56px or
     // any other floor.
     expect(COMPOSER).toContain("--chat-textarea-height: calc(56px * var(--ui-scale));")
-    expect(COMPOSER).toMatch(
-      /\.chat-textarea\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/,
-    )
-    expect(COMPOSER).toMatch(
-      /\.chat-textarea-wrap\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/,
-    )
+    expect(COMPOSER).toMatch(/\.chat-textarea\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/)
+    expect(COMPOSER).toMatch(/\.chat-textarea-wrap\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/)
   })
 
   test("send button shares the textarea height contract", () => {
-    expect(COMPOSER).toMatch(
-      /\.chat-send\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/,
-    )
+    expect(COMPOSER).toMatch(/\.chat-send\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/)
   })
 })
 

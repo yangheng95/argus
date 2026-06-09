@@ -57,13 +57,13 @@ describe("project-scope middleware: directory required", () => {
 
     const read = await app.request("/log", { method: "GET" })
     expect(read.status).toBe(200)
-    const readBody = await read.json() as { directory: string; lines: string[] }
+    const readBody = (await read.json()) as { directory: string; lines: string[] }
     expect(readBody.directory).toBe(Log.directory())
     expect(Array.isArray(readBody.lines)).toBe(true)
 
     const files = await app.request("/log/files", { method: "GET" })
     expect(files.status).toBe(200)
-    const filesBody = await files.json() as { directory: string; files: unknown[] }
+    const filesBody = (await files.json()) as { directory: string; files: unknown[] }
     expect(filesBody.directory).toBe(Log.directory())
     expect(Array.isArray(filesBody.files)).toBe(true)
   })
@@ -79,14 +79,46 @@ describe("project-scope middleware: directory required", () => {
   test("cross-project GET /global/tasks works without ?directory=", async () => {
     const now = Date.now()
     Database.use((db) => {
-      db.insert(ProjectTable).values([
-        { id: "project-alpha", name: "Alpha", worktree: "C:/work/alpha", sandboxes: [], time_created: now, time_updated: now },
-        { id: "project-beta", name: "Beta", worktree: "C:/work/beta", sandboxes: [], time_created: now, time_updated: now },
-      ]).run()
-      db.insert(EngineTaskTable).values([
-        { id: "task-alpha", project_id: "project-alpha", title: "Alpha task", request: "alpha", time_created: now - 2, time_updated: now - 2 },
-        { id: "task-beta", project_id: "project-beta", title: "Beta task", request: "beta", time_created: now - 1, time_updated: now - 1 },
-      ]).run()
+      db.insert(ProjectTable)
+        .values([
+          {
+            id: "project-alpha",
+            name: "Alpha",
+            worktree: "C:/work/alpha",
+            sandboxes: [],
+            time_created: now,
+            time_updated: now,
+          },
+          {
+            id: "project-beta",
+            name: "Beta",
+            worktree: "C:/work/beta",
+            sandboxes: [],
+            time_created: now,
+            time_updated: now,
+          },
+        ])
+        .run()
+      db.insert(EngineTaskTable)
+        .values([
+          {
+            id: "task-alpha",
+            project_id: "project-alpha",
+            title: "Alpha task",
+            request: "alpha",
+            time_created: now - 2,
+            time_updated: now - 2,
+          },
+          {
+            id: "task-beta",
+            project_id: "project-beta",
+            title: "Beta task",
+            request: "beta",
+            time_created: now - 1,
+            time_updated: now - 1,
+          },
+        ])
+        .run()
     })
 
     const app = Server.App()

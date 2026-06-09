@@ -23,12 +23,12 @@ Discord 的 **Thread**（公开/私有分支）直接映射为 OpenCorvus 的 th
 
 ## 消息类型支持
 
-| 类型 | 支持情况 |
-|---|---|
-| 文本 | ✅（Markdown 子集） |
-| 图片 / 附件 | ✅ |
-| 语音（voice message） | ✅ 走 STT |
-| Slash command | ⚠️ 暂不支持，走普通消息 |
+| 类型                  | 支持情况                |
+| --------------------- | ----------------------- |
+| 文本                  | ✅（Markdown 子集）     |
+| 图片 / 附件           | ✅                      |
+| 语音（voice message） | ✅ 走 STT               |
+| Slash command         | ⚠️ 暂不支持，走普通消息 |
 
 ## Troubleshooting
 

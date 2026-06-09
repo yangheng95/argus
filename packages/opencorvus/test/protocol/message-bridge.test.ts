@@ -6,10 +6,7 @@ const bridgeSource = readFileSync(
   join(__dirname, "..", "..", "src", "orchestrator", "protocol", "message-bridge.ts"),
   "utf8",
 )
-const protocolStoreSource = readFileSync(
-  join(__dirname, "..", "..", "src", "protocol", "store.ts"),
-  "utf8",
-)
+const protocolStoreSource = readFileSync(join(__dirname, "..", "..", "src", "protocol", "store.ts"), "utf8")
 
 describe("message-bridge persistence guard", () => {
   // Regression: protocol_event used to grow to 300+ MB because every bus

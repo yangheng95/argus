@@ -29,10 +29,7 @@ import { join } from "node:path"
 const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles")
 
 function readSurface(name: string): string {
-  return readFileSync(join(STYLES_ROOT, "surfaces", name), "utf8").replace(
-    /\/\*[\s\S]*?\*\//g,
-    "",
-  )
+  return readFileSync(join(STYLES_ROOT, "surfaces", name), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
 /** Extract the body of the *first* solo rule whose selector head matches. */
@@ -85,10 +82,7 @@ describe("flat-redesign Rule A — surface containers have no resting self-borde
   })
 
   test("executor chip resting state has no border", () => {
-    const body = ruleBody(
-      composer,
-      '.executor-chip-slot .oc-button[data-ui^="executor-chip-"]',
-    )
+    const body = ruleBody(composer, '.executor-chip-slot .oc-button[data-ui^="executor-chip-"]')
     expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b/)
     expect(body).toMatch(/--oc-button-border:\s*0 solid transparent/)
   })
@@ -147,12 +141,12 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
 
   test(".titlebar-menubar-trigger:hover doesn't flip border-color", () => {
     const combinedHead =
-      ".titlebar-menubar-trigger:hover,\n.titlebar-menubar-trigger:focus-visible,\n.titlebar-menubar-trigger[data-active=\"true\"]"
+      '.titlebar-menubar-trigger:hover,\n.titlebar-menubar-trigger:focus-visible,\n.titlebar-menubar-trigger[data-active="true"]'
     const body = ruleBody(titlebar, combinedHead)
     expect(body).not.toMatch(/border-color\s*:/)
   })
 
-  test(".oc-section[data-phase-state=\"active\"] uses bg-tint only, not border-color or rails", () => {
+  test('.oc-section[data-phase-state="active"] uses bg-tint only, not border-color or rails', () => {
     const body = ruleBody(inspector, '.oc-section[data-phase-state="active"]')
     expect(body).not.toMatch(/border-color\s*:/)
     // Outer drop-shadow chrome was the other half of the active state — also retired.
@@ -162,10 +156,7 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
   })
 
   test("open executor chip uses bg-tint, not border-color", () => {
-    const body = ruleBody(
-      composer,
-      '.executor-chip-slot[data-open="true"] .oc-button[data-ui^="executor-chip-"]',
-    )
+    const body = ruleBody(composer, '.executor-chip-slot[data-open="true"] .oc-button[data-ui^="executor-chip-"]')
     expect(body).not.toMatch(/border-color\s*:/)
     expect(body).toMatch(/--oc-button-bg\s*:/)
   })

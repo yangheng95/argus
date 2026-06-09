@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { guessMime } from "../src/commands/attach-file-helpers"
-import {
-  PROTOCOL_VERSION,
-  isExtensionMessage,
-  type ExtensionUiCommandMessage,
-} from "@opencorvus-ai/transport-protocol"
+import { PROTOCOL_VERSION, isExtensionMessage, type ExtensionUiCommandMessage } from "@opencorvus-ai/transport-protocol"
 
 describe("guessMime", () => {
   test("recognises bundled image types", () => {

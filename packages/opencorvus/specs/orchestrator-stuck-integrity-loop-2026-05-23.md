@@ -12,9 +12,9 @@ This spec follows `CLAUDE.md` rules that matter for this change:
   limited to **fact assembly** (shared root-history helper rendered in
   `read_context`). Lane choice stays prompt-driven (rule 6.1, rule 13).
 - **rule 8** (no double source): the existing `integrity_attempt` artifact
-  + `decision_log phase=review` rows already store the cross-round signal.
-  Do not add a parallel "stuck loop counter" or "loop-detection" service.
-  Diff the existing rows in `read_context` only.
+  - `decision_log phase=review` rows already store the cross-round signal.
+    Do not add a parallel "stuck loop counter" or "loop-detection" service.
+    Diff the existing rows in `read_context` only.
 - **rule 11** (reject anti-OOP designs from yourself): the seductive
   fix is "in code, if same blocking finding ID repeats N times, force
   fail". Reject — that is rule 13 state-machine territory.
@@ -28,14 +28,14 @@ This spec follows `CLAUDE.md` rules that matter for this change:
 
 ## Abbreviations
 
-| Term | Meaning |
-| ---- | ------- |
-| DB | Database: SQLite persistent storage. |
-| LLM | Large Language Model. |
-| BF / AF | Blocking Finding / Advisory Finding (integrity team report). |
-| R1..R8 | Integrity review rounds 1..8 in the analysed task. |
-| read_context | Orchestrator's read-only context refresh tool. |
-| integrity_attempt | `engine_artifact.kind='integrity_attempt'` row. |
+| Term              | Meaning                                                      |
+| ----------------- | ------------------------------------------------------------ |
+| DB                | Database: SQLite persistent storage.                         |
+| LLM               | Large Language Model.                                        |
+| BF / AF           | Blocking Finding / Advisory Finding (integrity team report). |
+| R1..R8            | Integrity review rounds 1..8 in the analysed task.           |
+| read_context      | Orchestrator's read-only context refresh tool.               |
+| integrity_attempt | `engine_artifact.kind='integrity_attempt'` row.              |
 
 ## TL;DR
 
@@ -68,7 +68,7 @@ Three converging root causes:
    payload. The decision_log `phase=review` rows that DO accumulate
    round-by-round are surfaced only when `scope=decisions|all` is
    asked, AND each row is a flat one-line `verdict=… findings=N |
-   top: [blocking] X` string — not a structured "finding ID X has
+top: [blocking] X` string — not a structured "finding ID X has
    appeared in rounds R2 R3 R4 R5 R6 R7" diff.
 
 The prompt section "Integrity Correction" already mentions "after
@@ -116,16 +116,16 @@ Evidence: `engine_artifact.kind='integrity_attempt'`,
 
 ### 1.1 Per-round summary
 
-| R | Time (UTC) | Verdict | Reqs | Findings | New blocking finding IDs | Carried-forward (same root) |
-| - | ---------- | ------- | ---- | -------- | ------------------------ | --------------------------- |
-| R1 | 12:44:15 | needs_correction | 4 | 11 | BF-1..BF-5 (stop-gen, conv-switch, regen, key-empty, key-validate) | — |
-| R2 | 13:03:45 | needs_correction | 2 | 9 | BF-1 (settings-validate), BF-2 (key-network) | (R1 BF-1 fixed) |
-| R3 | 13:15:53 | needs_correction | 4 | 10 | BF-SV1..SV4, BF-EH1, BF-TEST2 (renamed; **same settings-validate root**) | BF-1 from R2 ≡ BF-SV1 from R3 |
-| R4 | 13:26:25 | needs_correction | 3 | 3 | BF-1 (settings-validate again), BF-2 (system-prompt), BF-3 | BF-1 R2 ≡ BF-1 R4 |
-| R5 | 13:55:00 | needs_correction | 2 | 10 | CONSENSUS-BF1..BF3 (renamed) | BF-1 settings-validate continues |
-| R6 | 14:21:01 | needs_correction | 2 | 11 | SV-1..SV-3 (renamed) + new build-broke | BF-1 settings-validate continues |
-| R7 | 14:35:17 | needs_correction | 2 | 8 | **BF-1-settings-validation** (text now explicitly says "persisted across 6 consecutive rounds 2-7") | BF-1 settings-validate continues |
-| R8 | 14:46:27 | needs_correction | 2 | 7 | BF-1 (quota), BF-2 (welcome-input) — R2-R7 finding finally fixed | first round where the multi-round finding is gone |
+| R   | Time (UTC) | Verdict          | Reqs | Findings | New blocking finding IDs                                                                            | Carried-forward (same root)                       |
+| --- | ---------- | ---------------- | ---- | -------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| R1  | 12:44:15   | needs_correction | 4    | 11       | BF-1..BF-5 (stop-gen, conv-switch, regen, key-empty, key-validate)                                  | —                                                 |
+| R2  | 13:03:45   | needs_correction | 2    | 9        | BF-1 (settings-validate), BF-2 (key-network)                                                        | (R1 BF-1 fixed)                                   |
+| R3  | 13:15:53   | needs_correction | 4    | 10       | BF-SV1..SV4, BF-EH1, BF-TEST2 (renamed; **same settings-validate root**)                            | BF-1 from R2 ≡ BF-SV1 from R3                     |
+| R4  | 13:26:25   | needs_correction | 3    | 3        | BF-1 (settings-validate again), BF-2 (system-prompt), BF-3                                          | BF-1 R2 ≡ BF-1 R4                                 |
+| R5  | 13:55:00   | needs_correction | 2    | 10       | CONSENSUS-BF1..BF3 (renamed)                                                                        | BF-1 settings-validate continues                  |
+| R6  | 14:21:01   | needs_correction | 2    | 11       | SV-1..SV-3 (renamed) + new build-broke                                                              | BF-1 settings-validate continues                  |
+| R7  | 14:35:17   | needs_correction | 2    | 8        | **BF-1-settings-validation** (text now explicitly says "persisted across 6 consecutive rounds 2-7") | BF-1 settings-validate continues                  |
+| R8  | 14:46:27   | needs_correction | 2    | 7        | BF-1 (quota), BF-2 (welcome-input) — R2-R7 finding finally fixed                                    | first round where the multi-round finding is gone |
 
 R2-R7 = 6 consecutive rounds with identical root cause (under different
 finding IDs because each review team renamed it). User cancelled at
@@ -135,38 +135,38 @@ finding IDs because each review team renamed it). User cancelled at
 
 Pulled from `part` rows in `ses_1ab3d291effeqT8ofY3QCaiglW`.
 
-| t (UTC) | tool | input head | notes |
-| ------- | ---- | ---------- | ----- |
-| 12:15:15 | explore | "What is the current project structure…" | initial sweep |
-| 12:15:38 | requirements | greenfield AI chat | |
-| 12:16:32 | architect | 5 goals | |
-| 12:18:38 | read_context | scope=goals | pre-build only |
-| 12:18-12:27 | build × 5 | one per goal | parallel-ish |
-| 12:35:21 | **read_context scope=all** | | last full refresh until 14:51 |
-| 12:35:24 | integrity | first call → R1 | |
-| 12:44:16 | build (directBuildIntent=modify_files) | "5 Blocking Bug Fixes" | post-R1 |
-| 12:51:24 | integrity → R2 | | |
-| 13:03:46 | build (modify_files) | "2 Remaining Blocking Findings" | post-R2 |
-| 13:07:30 | integrity → R3 | | |
-| 13:15:54 | explore | "Read the current state of these files…" | exploratory — not read_context |
-| 13:16:27 | build (modify_files) | "Round 3 Corrections" | post-R3 |
-| 13:18:51 | integrity → R4 | | |
-| 13:26:38 | build (modify_files) | "Round 4: Fix All 3 Remaining…" | post-R4 |
-| 13:38:54 | integrity → R5 | | |
-| 13:55:11 | build (modify_files) | "Round 5: Fix TypeScript Build Error…" | post-R5 |
-| 14:02:00 | integrity → R6 | | |
-| 14:21:03 | **read_context scope=evaluations** | output: **"No context available yet."** | first refresh attempt in 5 rounds; surfaced nothing |
-| 14:21:11 | explore | "Check the current state of these specific areas…" | falls back to file-read |
-| 14:23:19 | integrity → R7 | | (premature: explore did not change files) |
-| 14:35:18 | build (modify_files) | "Persistent blocking finding across 6+ integrity rounds: getSettings() in storage.ts" | finally addresses the right file, but in **build** lane, not fail/restart |
-| 14:37:42 | integrity → R8 | | R2-R7 finding fixed but new ones surface |
-| 14:46:29 | explore | "Read the full content of these files…" | |
-| 14:47:36 | build (modify_files) | "Integrity round 8: 2 remaining blocking findings" | |
-| 14:50:00 | integrity → R9 (errored) | tool returned error | |
-| 14:51:17 | user message (cancel) | | user gives up |
-| 14:51:22 | read_context scope=all | | |
-| 14:51:30 | build (modify_files) | one more build | |
-| 15:03-15:04 | explore + build | | task already cancelled |
+| t (UTC)     | tool                                   | input head                                                                            | notes                                                                     |
+| ----------- | -------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 12:15:15    | explore                                | "What is the current project structure…"                                              | initial sweep                                                             |
+| 12:15:38    | requirements                           | greenfield AI chat                                                                    |                                                                           |
+| 12:16:32    | architect                              | 5 goals                                                                               |                                                                           |
+| 12:18:38    | read_context                           | scope=goals                                                                           | pre-build only                                                            |
+| 12:18-12:27 | build × 5                              | one per goal                                                                          | parallel-ish                                                              |
+| 12:35:21    | **read_context scope=all**             |                                                                                       | last full refresh until 14:51                                             |
+| 12:35:24    | integrity                              | first call → R1                                                                       |                                                                           |
+| 12:44:16    | build (directBuildIntent=modify_files) | "5 Blocking Bug Fixes"                                                                | post-R1                                                                   |
+| 12:51:24    | integrity → R2                         |                                                                                       |                                                                           |
+| 13:03:46    | build (modify_files)                   | "2 Remaining Blocking Findings"                                                       | post-R2                                                                   |
+| 13:07:30    | integrity → R3                         |                                                                                       |                                                                           |
+| 13:15:54    | explore                                | "Read the current state of these files…"                                              | exploratory — not read_context                                            |
+| 13:16:27    | build (modify_files)                   | "Round 3 Corrections"                                                                 | post-R3                                                                   |
+| 13:18:51    | integrity → R4                         |                                                                                       |                                                                           |
+| 13:26:38    | build (modify_files)                   | "Round 4: Fix All 3 Remaining…"                                                       | post-R4                                                                   |
+| 13:38:54    | integrity → R5                         |                                                                                       |                                                                           |
+| 13:55:11    | build (modify_files)                   | "Round 5: Fix TypeScript Build Error…"                                                | post-R5                                                                   |
+| 14:02:00    | integrity → R6                         |                                                                                       |                                                                           |
+| 14:21:03    | **read_context scope=evaluations**     | output: **"No context available yet."**                                               | first refresh attempt in 5 rounds; surfaced nothing                       |
+| 14:21:11    | explore                                | "Check the current state of these specific areas…"                                    | falls back to file-read                                                   |
+| 14:23:19    | integrity → R7                         |                                                                                       | (premature: explore did not change files)                                 |
+| 14:35:18    | build (modify_files)                   | "Persistent blocking finding across 6+ integrity rounds: getSettings() in storage.ts" | finally addresses the right file, but in **build** lane, not fail/restart |
+| 14:37:42    | integrity → R8                         |                                                                                       | R2-R7 finding fixed but new ones surface                                  |
+| 14:46:29    | explore                                | "Read the full content of these files…"                                               |                                                                           |
+| 14:47:36    | build (modify_files)                   | "Integrity round 8: 2 remaining blocking findings"                                    |                                                                           |
+| 14:50:00    | integrity → R9 (errored)               | tool returned error                                                                   |                                                                           |
+| 14:51:17    | user message (cancel)                  |                                                                                       | user gives up                                                             |
+| 14:51:22    | read_context scope=all                 |                                                                                       |                                                                           |
+| 14:51:30    | build (modify_files)                   | one more build                                                                        |                                                                           |
+| 15:03-15:04 | explore + build                        |                                                                                       | task already cancelled                                                    |
 
 Key observation: **between R2 (13:03) and R6 (14:21) the orchestrator
 never refreshed task context.** Eight build/integrity tool calls in
@@ -246,12 +246,12 @@ The rule did not fire because **the orchestrator could not detect
 "same root issue across rounds"** from the inputs available at
 decision time. Three concrete failure modes, in priority order:
 
-| # | Failure mode | Where | Fix lane |
-| - | ------------ | ----- | -------- |
-| F1 | `read_context scope=all` is the only place integrity_attempt is surfaced, and it surfaces only the **latest** row (1 of N). No diff. | `orchestrator/tools.ts:3840-3884` | **host fact assembly** (rule 6.1 host-side category a) |
-| F2 | `scope=evaluations` does not include integrity_attempts (those are artifacts, not engine_evaluation rows). Returns empty when the orchestrator probes for "what is the verdict history". | `orchestrator/tools.ts:3752-3788` (uses `findEvaluationsByTask`) | host fact assembly |
-| F3 | Even if the orchestrator had the cross-round diff, the prompt does not give a concrete decision criterion: "same finding root across ≥ 3 consecutive non-pass rounds where each round's repair touched the right file" → escalate; not the count, the **shape**. | `prompt/core/orchestrator-core.txt` "Integrity Correction" section | **prompt** (rule 6.1 host-invariant — no max-N gate) |
-| F4 | `fail_task` and `propose_task` tool descriptions are one-liners. Orchestrator has no anchor for "when would I pick this" beyond the prompt's general guidance. | `orchestrator/tools.ts:3938-3953` and 4466-4485 | prompt + tool description |
+| #   | Failure mode                                                                                                                                                                                                                                                     | Where                                                              | Fix lane                                               |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------ |
+| F1  | `read_context scope=all` is the only place integrity_attempt is surfaced, and it surfaces only the **latest** row (1 of N). No diff.                                                                                                                             | `orchestrator/tools.ts:3840-3884`                                  | **host fact assembly** (rule 6.1 host-side category a) |
+| F2  | `scope=evaluations` does not include integrity_attempts (those are artifacts, not engine_evaluation rows). Returns empty when the orchestrator probes for "what is the verdict history".                                                                         | `orchestrator/tools.ts:3752-3788` (uses `findEvaluationsByTask`)   | host fact assembly                                     |
+| F3  | Even if the orchestrator had the cross-round diff, the prompt does not give a concrete decision criterion: "same finding root across ≥ 3 consecutive non-pass rounds where each round's repair touched the right file" → escalate; not the count, the **shape**. | `prompt/core/orchestrator-core.txt` "Integrity Correction" section | **prompt** (rule 6.1 host-invariant — no max-N gate)   |
+| F4  | `fail_task` and `propose_task` tool descriptions are one-liners. Orchestrator has no anchor for "when would I pick this" beyond the prompt's general guidance.                                                                                                   | `orchestrator/tools.ts:3938-3953` and 4466-4485                    | prompt + tool description                              |
 
 F1 + F2 are pure fact-assembly: render the **set of finding root
 labels per round** so the orchestrator can see "R2 R3 R4 R5 R6 R7
@@ -483,7 +483,7 @@ markdown bold in the actual prompt):
 > normalised blocking root labels and a "Persistent blocking roots" list. A
 > root label that appears in ≥ 3 consecutive rounds AND whose
 > latest round's repair was a `build({ request,
-> directBuildIntent: "modify_files" })` targeting the right file
+directBuildIntent: "modify_files" })` targeting the right file
 > — yet the next integrity round flagged the same root — is the
 > shape that means the build lane has stopped converging on this
 > root. Continuing to dispatch `build` against the same root is
@@ -522,7 +522,7 @@ markdown bold in the actual prompt):
 > **Negative example (the anti-pattern this rule blocks):** seeing
 > "settings-validate-storage" persistent across R2 R3 R4 R5 R6 R7
 > and dispatching a seventh `build({ request, directBuildIntent:
-> "modify_files" })` "this time aimed at the right file." The
+"modify_files" })` "this time aimed at the right file." The
 > build lane has had six chances to converge on this root; the
 > evidence proves the goal contract or the task contract is wrong,
 > not the build dispatch.
@@ -572,17 +572,17 @@ scope expansion must route through `propose_task` or `question`.
 
 <!-- removed: host-rendered "not converging" lane signal; reason: H-7 requires the history block to assemble facts only and leave lane choice to the LLM. -->
 
-| Concern | Lane | Why |
-| ------- | ---- | --- |
-| Read integrity_attempt rows for this task's spec snapshot lineage | host | data access |
-| Build conservative root-history groups from ids, titles, descriptions, file paths, symbols, reviewer ids, and attempt order | host | category (a) — deterministic data projection; LLM should not re-fingerprint each turn (token waste, rule 6 minimal-engineering applies in reverse) |
-| Compute "appears in ≥ 3 consecutive rounds" as an output field | host | category (a) — deterministic fact assembly, not route choice |
-| Render the "Persistent blocking roots" list in read_context | host | category (a) — facts only: attempts, reviewer ids, first/latest seen, symptom variations |
-| Mark a completed integrity session `artifact_missing` when its `integrity_attempt` artifact failed to persist | host | category (a) — data completeness for durable artifact storage; not a lane decision |
-| Block stale-verdict build dispatch while the latest integrity session is `artifact_missing` | host | category (a) — do not act on `R(N-1)` as current data when `R(N)` exists but its artifact is missing; recovery/user confirmation is required before dispatch |
-| Decide that the right action is `fail_task` vs `propose_task` vs `modify_goal` vs `architect` vs `question` | **prompt** | category (b) judgement; rule 6.1 host-invariant — never a host route bypass / preflight max-N gate |
-| Stop the orchestrator after N integrity rounds | **NEVER** | this would be the rule 6.1 anti-pattern: a host gate "teaching the LLM the path". The orchestrator MUST be allowed to call build a 7th time if the evidence honestly justifies it (e.g. R7 introduced a new root and R8 has only flagged it twice). |
-| Auto-escalate to `fail_task` after the persistent-root pattern | **NEVER** | same reason. Host renders the diff; LLM decides. |
+| Concern                                                                                                                     | Lane       | Why                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read integrity_attempt rows for this task's spec snapshot lineage                                                           | host       | data access                                                                                                                                                                                                                                         |
+| Build conservative root-history groups from ids, titles, descriptions, file paths, symbols, reviewer ids, and attempt order | host       | category (a) — deterministic data projection; LLM should not re-fingerprint each turn (token waste, rule 6 minimal-engineering applies in reverse)                                                                                                  |
+| Compute "appears in ≥ 3 consecutive rounds" as an output field                                                              | host       | category (a) — deterministic fact assembly, not route choice                                                                                                                                                                                        |
+| Render the "Persistent blocking roots" list in read_context                                                                 | host       | category (a) — facts only: attempts, reviewer ids, first/latest seen, symptom variations                                                                                                                                                            |
+| Mark a completed integrity session `artifact_missing` when its `integrity_attempt` artifact failed to persist               | host       | category (a) — data completeness for durable artifact storage; not a lane decision                                                                                                                                                                  |
+| Block stale-verdict build dispatch while the latest integrity session is `artifact_missing`                                 | host       | category (a) — do not act on `R(N-1)` as current data when `R(N)` exists but its artifact is missing; recovery/user confirmation is required before dispatch                                                                                        |
+| Decide that the right action is `fail_task` vs `propose_task` vs `modify_goal` vs `architect` vs `question`                 | **prompt** | category (b) judgement; rule 6.1 host-invariant — never a host route bypass / preflight max-N gate                                                                                                                                                  |
+| Stop the orchestrator after N integrity rounds                                                                              | **NEVER**  | this would be the rule 6.1 anti-pattern: a host gate "teaching the LLM the path". The orchestrator MUST be allowed to call build a 7th time if the evidence honestly justifies it (e.g. R7 introduced a new root and R8 has only flagged it twice). |
+| Auto-escalate to `fail_task` after the persistent-root pattern                                                              | **NEVER**  | same reason. Host renders the diff; LLM decides.                                                                                                                                                                                                    |
 
 H-7 rule-13 challenge result: this design is compliant only because the host
 assembles facts and does not branch on them. The history block must not render
@@ -613,21 +613,21 @@ consumer (integrity team prompt, debug tooling) that does not call
 Files that must be touched / verified untouched by the eventual
 implementation:
 
-| Path | Action | Reason |
-| ---- | ------ | ------ |
-| `packages/opencorvus/src/integrity/root-history.ts` | add | shared root-history helper consumed by `read_context` and build-uptake; no second persistent-root implementation |
-| `packages/opencorvus/src/orchestrator/tools.ts` ~line 3700-3935 | edit | `read_context` execute body — new history section under scope=all and scope=evaluations; ditch the empty-eval fallback |
-| `packages/opencorvus/src/orchestrator/tools.ts` ~line 3938-3953 | edit | `fail_task` description extension |
-| `packages/opencorvus/src/orchestrator/tools.ts` ~line 4466-4500 | edit | `propose_task` description extension |
-| `packages/opencorvus/src/orchestrator/tools.ts` `modify_goal` registration | edit | tool description must say `modify_goal` narrows/clarifies acceptance only; scope expansion routes through `propose_task` / `question` |
-| `packages/opencorvus/src/orchestrator/tools.ts` ~line 1772-1793 | edit | append `persistent_roots` to the per-round decision_log review row |
-| `packages/opencorvus/src/orchestrator/tools.ts` ~line 1545-1561 | leave | integrity tool return shape stays — full markdown still lives at `pointer`; the cross-round signal moves to read_context where it belongs |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` (lines 358-394) | edit | Integrity Correction additions per §3.3 |
-| `packages/opencorvus/src/engine/persist.ts` (`recordIntegrityAttempt`) | edit | on artifact write failure, surface failure so the integrity session can be marked `artifact_missing`; do not report a usable latest verdict without the artifact |
-| Integrity session persistence / session status writer | edit | add the single `artifact_missing` data-integrity status consumed by `read_context` and orchestrator decision refresh |
-| `packages/opencorvus/src/decision-log/index.ts` | leave | review-phase rendering already works; just feed it the new `persistent_roots` field via the existing key/value contract |
-| `packages/opencorvus/src/agent/sub-agent-protocol.ts` | leave | trimText / yieldResult caps stay; the new history block is sized against the same caps |
-| `packages/opencorvus/src/engine/store.ts` (`findEvaluationsByTask`) | leave | function semantics unchanged; read_context branch above stops misusing it as the integrity history source |
+| Path                                                                        | Action | Reason                                                                                                                                                           |
+| --------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/integrity/root-history.ts`                         | add    | shared root-history helper consumed by `read_context` and build-uptake; no second persistent-root implementation                                                 |
+| `packages/opencorvus/src/orchestrator/tools.ts` ~line 3700-3935             | edit   | `read_context` execute body — new history section under scope=all and scope=evaluations; ditch the empty-eval fallback                                           |
+| `packages/opencorvus/src/orchestrator/tools.ts` ~line 3938-3953             | edit   | `fail_task` description extension                                                                                                                                |
+| `packages/opencorvus/src/orchestrator/tools.ts` ~line 4466-4500             | edit   | `propose_task` description extension                                                                                                                             |
+| `packages/opencorvus/src/orchestrator/tools.ts` `modify_goal` registration  | edit   | tool description must say `modify_goal` narrows/clarifies acceptance only; scope expansion routes through `propose_task` / `question`                            |
+| `packages/opencorvus/src/orchestrator/tools.ts` ~line 1772-1793             | edit   | append `persistent_roots` to the per-round decision_log review row                                                                                               |
+| `packages/opencorvus/src/orchestrator/tools.ts` ~line 1545-1561             | leave  | integrity tool return shape stays — full markdown still lives at `pointer`; the cross-round signal moves to read_context where it belongs                        |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` (lines 358-394) | edit   | Integrity Correction additions per §3.3                                                                                                                          |
+| `packages/opencorvus/src/engine/persist.ts` (`recordIntegrityAttempt`)      | edit   | on artifact write failure, surface failure so the integrity session can be marked `artifact_missing`; do not report a usable latest verdict without the artifact |
+| Integrity session persistence / session status writer                       | edit   | add the single `artifact_missing` data-integrity status consumed by `read_context` and orchestrator decision refresh                                             |
+| `packages/opencorvus/src/decision-log/index.ts`                             | leave  | review-phase rendering already works; just feed it the new `persistent_roots` field via the existing key/value contract                                          |
+| `packages/opencorvus/src/agent/sub-agent-protocol.ts`                       | leave  | trimText / yieldResult caps stay; the new history block is sized against the same caps                                                                           |
+| `packages/opencorvus/src/engine/store.ts` (`findEvaluationsByTask`)         | leave  | function semantics unchanged; read_context branch above stops misusing it as the integrity history source                                                        |
 
 Grep verification commands the implementer must run before commit:
 
@@ -686,31 +686,31 @@ does not replace this inventory.
 ## Implementation Checklist
 
 1. [ ] Add `packages/opencorvus/src/integrity/root-history.ts` as the only
-   persistent-root grouping helper, importing `SpecSnapshotLineage` from the
-   replay-aware API.
+       persistent-root grouping helper, importing `SpecSnapshotLineage` from the
+       replay-aware API.
 2. [ ] Wire `read_context scope=all`, `scope=evaluations`, and the new
-   `scope=integrity_history` to render the §3.1 integrity history block from
-   the shared helper.
+       `scope=integrity_history` to render the §3.1 integrity history block from
+       the shared helper.
 3. [ ] Replace the empty `scope=evaluations` path with integrity history when
-   integrity attempts exist, without changing `findEvaluationsByTask`
-   semantics.
+       integrity attempts exist, without changing `findEvaluationsByTask`
+       semantics.
 4. [ ] Extend the orchestrator Integrity Correction prompt section with the
-   §3.3 lane-choice guidance; keep host output fact-only.
+       §3.3 lane-choice guidance; keep host output fact-only.
 5. [ ] Extend `fail_task`, `propose_task`, and `modify_goal` descriptions per
-   §3.4.
+       §3.4.
 6. [ ] Append `persistent_roots=[...]` to review-phase decision log values
-   using the shared root-history output.
+       using the shared root-history output.
 7. [ ] Render history through the replay-aware shared prompt cap and sanitizer;
-   do not add local attempt-count, label-count, ANSI, bidi, or heading rules.
+       do not add local attempt-count, label-count, ANSI, bidi, or heading rules.
 8. [ ] Add the `artifact_missing` recovery protocol from §3.1.1: persist the
-   session status on artifact write failure, render it through `read_context`,
-   and prevent stale-verdict build dispatch until recovery or explicit user
-   confirmation.
+       session status on artifact write failure, render it through `read_context`,
+       and prevent stale-verdict build dispatch until recovery or explicit user
+       confirmation.
 9. [ ] Add all §7 fact-assembly, decision-log, prompt wiring, tool
-   description, no-host-gate, active-path, and cancel-ordering tests.
+       description, no-host-gate, active-path, and cancel-ordering tests.
 10. [ ] Verify §9 acceptance items 1-12, especially single root-history owner,
-   fact-only rendering, cancel barrier, artifact-missing recovery, and no
-   integrity max-N host counter.
+        fact-only rendering, cancel barrier, artifact-missing recovery, and no
+        integrity max-N host counter.
 11. [ ] Run the targeted orchestrator tests listed in §7.
 
 ## 7. Tests (rule 36)
@@ -867,7 +867,7 @@ A future PR is acceptable iff:
   consumes the type for root history instead of owning a duplicate lineage
   definition.
 - A-2: added an Implementation Checklist mapping the §3 design, §7 tests, and
-   §9 acceptance criteria into concrete implementation items.
+  §9 acceptance criteria into concrete implementation items.
 - N-1: orchestrator history rendering now references replay-aware's shared
   sanitizer owner and must not define local ANSI/bidi/control/heading rules.
 

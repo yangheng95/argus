@@ -1,7 +1,2 @@
 export { ArchitectAgent } from "./agent"
-export type {
-  ArchitectContract,
-  ArchitectDecisionKey,
-  ArchitectResult,
-  ArchitectRetryContext,
-} from "./types"
+export type { ArchitectContract, ArchitectDecisionKey, ArchitectResult, ArchitectRetryContext } from "./types"

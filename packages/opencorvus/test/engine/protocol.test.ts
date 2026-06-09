@@ -26,26 +26,32 @@ let tmp: Awaited<ReturnType<typeof tmpdir>>
 function seedTask() {
   const now = Date.now()
   Database.use((db) =>
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: process.cwd(),
-      name: "Protocol Test",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Protocol Test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "Protocol task",
-      request: "Verify protocol persistence",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Protocol task",
+        request: "Verify protocol persistence",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
 }
 
@@ -113,36 +119,43 @@ describe("orchestrator protocol", () => {
       time: { emitted: Date.now(), created: Date.now(), updated: Date.now() },
     }
 
-    expect(protocolTaskEvent({
-      ...base,
-      payload: {
-        taskID,
-        runID: "run_eval",
-        evaluationID: "art_rejected",
-        status: "failed",
-        verdict: "rejected",
-        summary: "Rejected",
-      },
-    } as any).notify).toEqual({ tier: 1, badge: true })
+    expect(
+      protocolTaskEvent({
+        ...base,
+        payload: {
+          taskID,
+          runID: "run_eval",
+          evaluationID: "art_rejected",
+          status: "failed",
+          verdict: "rejected",
+          summary: "Rejected",
+        },
+      } as any).notify,
+    ).toEqual({ tier: 1, badge: true })
 
-    expect(protocolTaskEvent({
-      ...base,
-      payload: {
-        taskID,
-        runID: "run_eval",
-        evaluationID: "art_accepted",
-        status: "passed",
-        verdict: "accepted",
-        summary: "Accepted",
-      },
-    } as any).notify).toEqual({ tier: 2 })
+    expect(
+      protocolTaskEvent({
+        ...base,
+        payload: {
+          taskID,
+          runID: "run_eval",
+          evaluationID: "art_accepted",
+          status: "passed",
+          verdict: "accepted",
+          summary: "Accepted",
+        },
+      } as any).notify,
+    ).toEqual({ tier: 2 })
   })
 
   test("ephemeral task events carry live cursors and replay without task-list cursor leakage", async () => {
     const seen: any[] = []
-    const stop = ProtocolStore.subscribeEvents((event) => {
-      seen.push(event)
-    }, { aggregate: "task", taskID })
+    const stop = ProtocolStore.subscribeEvents(
+      (event) => {
+        seen.push(event)
+      },
+      { aggregate: "task", taskID },
+    )
 
     ProtocolStore.dispatchEphemeral({
       type: "message.updated",
@@ -320,29 +333,31 @@ describe("orchestrator protocol", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await EngineProtocol.emit(Event.TaskCreated, {
-          taskID,
-          status: "queued",
-          summary: "Task created",
-        }, { source: "test.protocol" })
+        await EngineProtocol.emit(
+          Event.TaskCreated,
+          {
+            taskID,
+            status: "queued",
+            summary: "Task created",
+          },
+          { source: "test.protocol" },
+        )
 
-        await EngineProtocol.emit(Event.TaskUpdated, {
-          taskID,
-          status: "active",
-          summary: "Task started",
-        }, { source: "test.protocol" })
+        await EngineProtocol.emit(
+          Event.TaskUpdated,
+          {
+            taskID,
+            status: "active",
+            summary: "Task started",
+          },
+          { source: "test.protocol" },
+        )
 
         const events = await EngineService.listProtocolEvents(taskID)
         expect(events).toHaveLength(2)
         expect(events.map((item) => item.sequence)).toEqual([1, 2])
-        expect(events.map((item) => item.type)).toEqual([
-          "task.created",
-          "task.updated",
-        ])
-        expect(events.map((item) => item.source)).toEqual([
-          "test.protocol",
-          "test.protocol",
-        ])
+        expect(events.map((item) => item.type)).toEqual(["task.created", "task.updated"])
+        expect(events.map((item) => item.source)).toEqual(["test.protocol", "test.protocol"])
         expect(events[1]?.payload).toMatchObject({
           taskID,
           status: "active",
@@ -359,10 +374,14 @@ describe("orchestrator protocol", () => {
         const row = findTask(taskID)
         if (!row) throw new Error("missing seeded task")
 
-        await updateTask(row, {
-          status: "failed",
-          error: "something went wrong",
-        }, "Task failed")
+        await updateTask(
+          row,
+          {
+            status: "failed",
+            error: "something went wrong",
+          },
+          "Task failed",
+        )
 
         // The state writer emits task.updated AND the terminal counterpart
         // (task.failed here) on every status transition. Both must land in
@@ -375,10 +394,7 @@ describe("orchestrator protocol", () => {
           await Bun.sleep(20)
           events = await EngineService.listProtocolEvents(taskID)
         }
-        expect(events.map((event) => event.type)).toEqual([
-          "task.updated",
-          "task.failed",
-        ])
+        expect(events.map((event) => event.type)).toEqual(["task.updated", "task.failed"])
         expect(events[0]).toMatchObject({
           type: "task.updated",
           source: "state.task",
@@ -421,10 +437,7 @@ describe("orchestrator protocol", () => {
           await Bun.sleep(20)
           events = await EngineService.listProtocolEvents(taskID)
         }
-        expect(events.map((event) => event.type)).toEqual([
-          "task.updated",
-          "task.completed",
-        ])
+        expect(events.map((event) => event.type)).toEqual(["task.updated", "task.completed"])
       },
     })
   })
@@ -436,10 +449,14 @@ describe("orchestrator protocol", () => {
         const row = findTask(taskID)
         if (!row) throw new Error("missing seeded task")
 
-        await updateTask(row, {
-          status: "cancelled",
-          error: "Operator cancelled",
-        }, "Task cancelled")
+        await updateTask(
+          row,
+          {
+            status: "cancelled",
+            error: "Operator cancelled",
+          },
+          "Task cancelled",
+        )
 
         let events = await EngineService.listProtocolEvents(taskID)
         for (const _ of Array.from({ length: 40 })) {
@@ -447,10 +464,7 @@ describe("orchestrator protocol", () => {
           await Bun.sleep(20)
           events = await EngineService.listProtocolEvents(taskID)
         }
-        expect(events.map((event) => event.type)).toEqual([
-          "task.updated",
-          "task.cancelled",
-        ])
+        expect(events.map((event) => event.type)).toEqual(["task.updated", "task.cancelled"])
       },
     })
   })
@@ -462,10 +476,14 @@ describe("orchestrator protocol", () => {
         const row = findTask(taskID)
         if (!row) throw new Error("missing seeded task")
 
-        await updateTask(row, {
-          status: "failed",
-          error: "first failure",
-        }, "Task failed")
+        await updateTask(
+          row,
+          {
+            status: "failed",
+            error: "first failure",
+          },
+          "Task failed",
+        )
         // Re-call updateTask on a task already in failed state with a new
         // summary. deriveTaskStatus is still "failed", so the terminal event
         // must NOT fire again — only the task.updated pulse should land.
@@ -499,7 +517,8 @@ describe("orchestrator protocol", () => {
         const root = await Session.create({ kind: "root", title: "Task root" })
         const child = await Session.create({ kind: "evaluator", parentID: root.id, title: "Judge child" })
         Database.use((db) =>
-          db.update(EngineTaskTable)
+          db
+            .update(EngineTaskTable)
             .set({
               session_id: root.id,
               time_updated: now,
@@ -513,13 +532,16 @@ describe("orchestrator protocol", () => {
           sessionID?: string
           payload?: Record<string, unknown>
         }> = []
-        const stop = ProtocolStore.subscribeEvents((event) => {
-          liveEvents.push({
-            type: event.type,
-            sessionID: event.sessionID,
-            payload: event.payload,
-          })
-        }, { aggregate: "task", taskID })
+        const stop = ProtocolStore.subscribeEvents(
+          (event) => {
+            liveEvents.push({
+              type: event.type,
+              sessionID: event.sessionID,
+              payload: event.payload,
+            })
+          },
+          { aggregate: "task", taskID },
+        )
 
         const rootMessageID = Identifier.ascending("message")
         await Session.updateMessage({
@@ -559,7 +581,8 @@ describe("orchestrator protocol", () => {
           if (
             liveEvents.some((item) => item.type === "message.updated" && item.sessionID === root.id) &&
             liveEvents.some((item) => item.type === "message.part.updated" && item.sessionID === root.id)
-          ) break
+          )
+            break
           await Bun.sleep(20)
         }
         stop()
@@ -591,7 +614,8 @@ describe("orchestrator protocol", () => {
           title: "Requirements",
         })
         Database.use((db) =>
-          db.update(EngineTaskTable)
+          db
+            .update(EngineTaskTable)
             .set({
               session_id: root.id,
               time_updated: now,
@@ -634,7 +658,8 @@ describe("orchestrator protocol", () => {
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "Task root" })
         Database.use((db) =>
-          db.update(EngineTaskTable)
+          db
+            .update(EngineTaskTable)
             .set({
               session_id: root.id,
               time_updated: now,
@@ -659,13 +684,16 @@ describe("orchestrator protocol", () => {
           sessionID?: string
           payload?: Record<string, any>
         }> = []
-        const stop = ProtocolStore.subscribeEvents((event) => {
-          liveEvents.push({
-            type: event.type,
-            sessionID: event.sessionID,
-            payload: event.payload as Record<string, any> | undefined,
-          })
-        }, { aggregate: "task", taskID })
+        const stop = ProtocolStore.subscribeEvents(
+          (event) => {
+            liveEvents.push({
+              type: event.type,
+              sessionID: event.sessionID,
+              payload: event.payload as Record<string, any> | undefined,
+            })
+          },
+          { aggregate: "task", taskID },
+        )
 
         await Session.saveMessage(rootMessage)
         await Session.updatePart({
@@ -681,16 +709,14 @@ describe("orchestrator protocol", () => {
           if (
             liveEvents.some((item) => item.type === "message.part.updated" && item.sessionID === root.id) &&
             liveEvents.some((item) => item.type === "message.updated" && item.sessionID === root.id)
-          ) break
+          )
+            break
           await Bun.sleep(20)
         }
         stop()
 
         const rootEvents = liveEvents.filter((item) => item.sessionID === root.id)
-        expect(rootEvents.map((item) => item.type)).toEqual([
-          "message.part.updated",
-          "message.updated",
-        ])
+        expect(rootEvents.map((item) => item.type)).toEqual(["message.part.updated", "message.updated"])
 
         const partEvent = rootEvents[0]
         expect(partEvent?.payload).toMatchObject({

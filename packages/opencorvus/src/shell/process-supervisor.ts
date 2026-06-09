@@ -183,7 +183,13 @@ export namespace ProcessSupervisor {
   async function waitForPidFile(pidPath: string, exited: Promise<number>, command: string): Promise<number> {
     const deadline = Date.now() + 5_000
     let exitCode: number | undefined
-    exited.then((code) => { exitCode = code }).catch(() => { exitCode = 125 })
+    exited
+      .then((code) => {
+        exitCode = code
+      })
+      .catch(() => {
+        exitCode = 125
+      })
     while (Date.now() < deadline) {
       const text = await fs.readFile(pidPath, "utf8").catch(() => undefined)
       const pid = text ? Number(text.trim()) : NaN

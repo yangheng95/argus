@@ -236,13 +236,17 @@ export function TracePanel(props: TracePanelProps) {
   const hasTarget = createMemo(() =>
     Boolean(("sessionID" in props && props.sessionID) || ("taskID" in props && props.taskID)),
   )
-  const polling = createVisibilityInterval(() => {
-    if (hasTarget()) void refresh()
-  }, 4_000, {
-    onVisible: () => {
+  const polling = createVisibilityInterval(
+    () => {
       if (hasTarget()) void refresh()
     },
-  })
+    4_000,
+    {
+      onVisible: () => {
+        if (hasTarget()) void refresh()
+      },
+    },
+  )
   if (hasTarget()) polling.start()
   onCleanup(() => {
     polling.dispose()
@@ -282,11 +286,23 @@ export function TracePanel(props: TracePanelProps) {
             >
               <Icon name={copyState() === "ok" ? "check" : copyState() === "err" ? "cancel" : "copy"} size={13} />
             </button>
-            <button type="button" class="trace-panel-refresh" onClick={refresh} title="Refresh">
+            <button
+              type="button"
+              class="trace-panel-refresh"
+              onClick={refresh}
+              title={t("trace.refresh_title")}
+              aria-label={t("trace.refresh_title")}
+            >
               <Icon name="refresh" size={13} />
             </button>
             <Show when={props.onClose}>
-              <button type="button" class="trace-panel-close" onClick={() => props.onClose?.()} title="Close">
+              <button
+                type="button"
+                class="trace-panel-close"
+                onClick={() => props.onClose?.()}
+                title={t("trace.close_title")}
+                aria-label={t("trace.close_title")}
+              >
                 <Icon name="close" size={13} />
               </button>
             </Show>

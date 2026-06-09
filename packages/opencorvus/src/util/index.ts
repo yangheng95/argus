@@ -1,6 +1,6 @@
 /**
  * Utility barrel exports
- * 
+ *
  * Central export point for common utilities
  */
 

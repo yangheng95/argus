@@ -364,8 +364,7 @@ function createSingleSessionIntegrityToolKit(input: {
     tools: {
       ...evidenceTools,
       submit_integrity_consensus: tool({
-        description:
-          `Submit the final integrity review. Produce multiple independent reviewer reports inside reviewers[] without spawning reviewer sessions. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
+        description: `Submit the final integrity review. Produce multiple independent reviewer reports inside reviewers[] without spawning reviewer sessions. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
         inputSchema: IntegrityTeamReportSchema,
         execute: async (raw) => {
           const parsed = IntegrityTeamReportSchema.safeParse(raw)
@@ -535,7 +534,7 @@ function renderFrontendDesignSummary(frontendDesign: string): string {
     sanitizePromptBlock(frontendDesign, 2_400),
     "",
     "Reviewers must verify that reference-driven UI work follows this frontend replica contract, source manifest, web-clone-source handoff, source audit expectations, and visual reference requirements.",
-    "Use `inspect_integrity_evidence({ section: \"frontend_design_contract\" })` for the bounded full contract excerpt when this matters to your scope.",
+    'Use `inspect_integrity_evidence({ section: "frontend_design_contract" })` for the bounded full contract excerpt when this matters to your scope.',
   ].join("\n")
 }
 
@@ -544,8 +543,8 @@ function renderVisualQaSummary(visualQa: string): string {
     "# Visual QA Report",
     sanitizePromptBlock(visualQa, 2_400),
     "",
-    "Reviewers must consider this fresh frontend UI/UX evidence when assessing visual/runtime acceptance. UI means User Interface; UX means User Experience.",
-    "Use `inspect_integrity_evidence({ section: \"visual_qa_report\" })` for the bounded full report excerpt when visual/runtime QA matters to your scope.",
+    "Reviewers must consider this fresh frontend visual GUI and functional evidence when assessing acceptance. GUI means Graphical User Interface.",
+    'Use `inspect_integrity_evidence({ section: "visual_qa_report" })` for the bounded full report excerpt when visual and functional QA matters to your scope.',
   ].join("\n")
 }
 
@@ -1207,8 +1206,7 @@ function renderReviewerReportForConsensusPrompt(report: IntegrityReviewerReport)
   }
   if ((report.drilldowns ?? []).length > 0) {
     const items = report.drilldowns.map(
-      (drilldown) =>
-        `${drilldown.kind}:${drilldown.target} - ${drilldown.purpose} => ${drilldown.result}`,
+      (drilldown) => `${drilldown.kind}:${drilldown.target} - ${drilldown.purpose} => ${drilldown.result}`,
     )
     lines.push("Drilldowns:", markdownListWithOmissions(items, limits.drilldowns, limits.fieldChars, "drilldowns"))
   }
@@ -1220,7 +1218,10 @@ function renderReviewerReportForConsensusPrompt(report: IntegrityReviewerReport)
     lines.push("Coverage:", markdownListWithOmissions(items, limits.coverage, limits.fieldChars, "coverage rows"))
   }
   if ((report.evidence ?? []).length > 0) {
-    lines.push("Evidence:", markdownListWithOmissions(report.evidence, limits.evidence, limits.fieldChars, "evidence rows"))
+    lines.push(
+      "Evidence:",
+      markdownListWithOmissions(report.evidence, limits.evidence, limits.fieldChars, "evidence rows"),
+    )
   }
   if ((report.findings ?? []).length > 0) {
     lines.push("Findings:")

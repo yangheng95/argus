@@ -31,4 +31,3 @@ describe("channel runtime tool status", () => {
     expect(status("bash", { command: "echo secret" })).toBe("`$ echo secret`")
   })
 })
-

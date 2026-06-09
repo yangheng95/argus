@@ -7,6 +7,7 @@ export interface SideActivity<T extends string> {
   id: T
   icon: IconName
   labelKey: string
+  tooltipKey?: string
 }
 
 export interface SideActivityToolbarProps<T extends string> {
@@ -26,6 +27,7 @@ export function SideActivityToolbar<T extends string>(props: SideActivityToolbar
         <For each={props.activities}>
           {(activity) => {
             const label = () => t(activity.labelKey)
+            const tooltip = () => (activity.tooltipKey ? t(activity.tooltipKey) : label())
             const active = () => props.isActive?.(activity.id) ?? props.active() === activity.id
             return (
               <Button
@@ -38,8 +40,8 @@ export function SideActivityToolbar<T extends string>(props: SideActivityToolbar
                 data-activity={activity.id}
                 data-active={active() ? "true" : "false"}
                 aria-pressed={active()}
-                title={label()}
-                aria-label={label()}
+                title={tooltip()}
+                aria-label={tooltip()}
                 onClick={() => props.onSelect(activity.id)}
               >
                 <Icon name={activity.icon} />

@@ -33,11 +33,14 @@ export namespace ChannelAttachment {
     const ext = suffix(input.filename, input.mime)
     const file = `${id}${ext}`
     await Filesystem.write(path.join(dir, file), Buffer.from(input.data, "base64"))
-    await Filesystem.write(path.join(dir, `${id}.json`), JSON.stringify({
-      filename: input.filename,
-      mime: input.mime,
-      file,
-    }))
+    await Filesystem.write(
+      path.join(dir, `${id}.json`),
+      JSON.stringify({
+        filename: input.filename,
+        mime: input.mime,
+        file,
+      }),
+    )
     const expires = Date.now() + lifetime
     const token = sign(id, expires)
     return {
@@ -50,7 +53,9 @@ export namespace ChannelAttachment {
   }
 
   export async function get(id: string) {
-    const raw = await Bun.file(path.join(dir, `${id}.json`)).text().catch(() => undefined)
+    const raw = await Bun.file(path.join(dir, `${id}.json`))
+      .text()
+      .catch(() => undefined)
     if (!raw) return
     const meta = Meta.parse(JSON.parse(raw))
     return {

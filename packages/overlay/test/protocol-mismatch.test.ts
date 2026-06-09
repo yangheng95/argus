@@ -3,10 +3,7 @@ import { PROTOCOL_VERSION } from "@opencorvus-ai/transport-protocol"
 // Static import to avoid the Bun circular-load TDZ that
 // `await import(...)` trips (host-transport eager-imports
 // vscode-transport).
-import {
-  __resetVsCodeTransportForTest,
-  createVsCodeTransport,
-} from "../src/services/vscode-transport"
+import { __resetVsCodeTransportForTest, createVsCodeTransport } from "../src/services/vscode-transport"
 
 /**
  * Regression for W2-V2: when sessionStorage is unavailable (privacy
@@ -39,17 +36,25 @@ function installFakeWindow(opts: { sessionStorage: Storage | undefined }): {
   let listener: ((e: MessageEvent) => void) | undefined
   const reloadCountRef = { value: 0 }
   const fakeWindow: any = {
-    addEventListener(_t: string, fn: (e: MessageEvent) => void) { listener = fn },
+    addEventListener(_t: string, fn: (e: MessageEvent) => void) {
+      listener = fn
+    },
     removeEventListener() {},
     location: {
-      reload() { reloadCountRef.value++ },
+      reload() {
+        reloadCountRef.value++
+      },
     },
     sessionStorage: opts.sessionStorage,
     acquireVsCodeApi() {
       return {
-        postMessage(m: unknown) { posted.push(m) },
+        postMessage(m: unknown) {
+          posted.push(m)
+        },
         setState() {},
-        getState() { return null },
+        getState() {
+          return null
+        },
       }
     },
   }
@@ -61,8 +66,12 @@ function installFakeWindow(opts: { sessionStorage: Storage | undefined }): {
       if (!listener) throw new Error("listener not installed")
       listener({ data: m } as MessageEvent)
     },
-    cleanup: () => { (globalThis as any).window = prev },
-    get reloadCount() { return reloadCountRef.value },
+    cleanup: () => {
+      ;(globalThis as any).window = prev
+    },
+    get reloadCount() {
+      return reloadCountRef.value
+    },
     reloadCountRef,
   }
 }
@@ -71,7 +80,9 @@ describe("protocol-mismatch reload circuit breaker (audit W2-V2)", () => {
   test("memory counter bounds reloads even when sessionStorage is undefined", async () => {
     const fake = installFakeWindow({ sessionStorage: undefined })
     try {
-      try { __resetVsCodeTransportForTest() } catch {}
+      try {
+        __resetVsCodeTransportForTest()
+      } catch {}
       createVsCodeTransport()
 
       const mismatch = (received: number) => ({
@@ -97,7 +108,9 @@ describe("protocol-mismatch reload circuit breaker (audit W2-V2)", () => {
   test("rejects malformed protocol-mismatch (non-numeric expected/received)", async () => {
     const fake = installFakeWindow({ sessionStorage: undefined })
     try {
-      try { __resetVsCodeTransportForTest() } catch {}
+      try {
+        __resetVsCodeTransportForTest()
+      } catch {}
       createVsCodeTransport()
       // Synthetic mismatch with non-numeric received — must NOT
       // trigger reload (audit transport F2 isExtensionMessage tightening).

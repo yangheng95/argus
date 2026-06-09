@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import {
-  __setFileReaderFactoryForTest,
-  fileToDataUrl,
-  type FileReaderLike,
-} from "../src/services/file-to-data-url"
+import { __setFileReaderFactoryForTest, fileToDataUrl, type FileReaderLike } from "../src/services/file-to-data-url"
 
 /**
  * audit-2026-04-29 W2-V18 — FileReader rejection contract.
@@ -35,7 +31,9 @@ class FakeReader implements FileReaderLike {
   onerror: (() => void) | null = null
   result: string | ArrayBuffer | null = null
   private mode: "success" | "error"
-  constructor(mode: "success" | "error") { this.mode = mode }
+  constructor(mode: "success" | "error") {
+    this.mode = mode
+  }
   readAsDataURL(_file: unknown): void {
     queueMicrotask(() => {
       if (this.mode === "success") {

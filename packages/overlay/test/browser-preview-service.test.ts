@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
-import { captureTaskBrowserPreviewEvidence, loadTaskBrowserPreviewTarget, saveTaskBrowserPreviewTarget, type BrowserPreviewTarget } from "../src/services/browser-preview"
+import {
+  captureTaskBrowserPreviewEvidence,
+  loadTaskBrowserPreviewTarget,
+  saveTaskBrowserPreviewTarget,
+  type BrowserPreviewTarget,
+} from "../src/services/browser-preview"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
@@ -29,6 +34,15 @@ function fakePreviewTransport(capture: (req: TransportRequest) => void): HostTra
             { id: "mobile", labelKey: "browser_preview.viewport.mobile", width: 390, height: 844 },
           ],
           diagnostics: [],
+          candidates: [
+            {
+              id: "art_previewtarget000000000001",
+              url: "http://127.0.0.1:5173/",
+              source: "task-artifact",
+              selected: true,
+              timeUpdated: 100,
+            },
+          ],
           source: "task-artifact",
         } satisfies BrowserPreviewTarget as T,
       }
@@ -56,7 +70,11 @@ afterEach(() => {
 
 test("browser preview service loads the task-scoped target through HostTransport", async () => {
   let captured: TransportRequest | undefined
-  __setHostTransportForTest(fakePreviewTransport((req) => { captured = req }))
+  __setHostTransportForTest(
+    fakePreviewTransport((req) => {
+      captured = req
+    }),
+  )
 
   const target = await loadTaskBrowserPreviewTarget(TASK_ID)
 
@@ -67,7 +85,11 @@ test("browser preview service loads the task-scoped target through HostTransport
 
 test("browser preview service saves explicit URL as task target instead of query override", async () => {
   let captured: TransportRequest | undefined
-  __setHostTransportForTest(fakePreviewTransport((req) => { captured = req }))
+  __setHostTransportForTest(
+    fakePreviewTransport((req) => {
+      captured = req
+    }),
+  )
 
   await saveTaskBrowserPreviewTarget({ taskID: TASK_ID, url: "  http://127.0.0.1:5173/dashboard  " })
 
@@ -86,7 +108,9 @@ test("browser preview service saves explicit URL as task target instead of query
 test("browser preview service asks the backend to persist Playwright evidence", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest({
-    ...fakePreviewTransport((req) => { captured = req }),
+    ...fakePreviewTransport((req) => {
+      captured = req
+    }),
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       captured = req
       return {
@@ -105,6 +129,15 @@ test("browser preview service asks the backend to persist Playwright evidence", 
             url: "http://127.0.0.1:5173/",
             viewports: [],
             diagnostics: [],
+            candidates: [
+              {
+                id: "art_previewtarget000000000001",
+                url: "http://127.0.0.1:5173/",
+                source: "task-artifact",
+                selected: true,
+                timeUpdated: 100,
+              },
+            ],
             source: "task-artifact",
           },
           viewport: { id: "mobile", labelKey: "browser_preview.viewport.mobile", width: 390, height: 844 },

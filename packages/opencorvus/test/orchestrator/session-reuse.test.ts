@@ -73,19 +73,21 @@ describe("orchestrator session reuse", () => {
         }) as never)
 
         Database.use((db) => {
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "test",
-            title: "Session reuse task",
-            request: "reuse the orchestrator session",
-            kind: "workflow",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Session reuse task",
+              request: "reuse the orchestrator session",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
         })
 
         await Orchestrator.processTask(taskID, { note: "first wake" })

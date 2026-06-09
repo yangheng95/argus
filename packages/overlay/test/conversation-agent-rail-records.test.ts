@@ -1,8 +1,5 @@
 import { expect, test } from "bun:test"
-import {
-  mergeAgentRecords,
-  sortAgentWorkflowRecordsChronologically,
-} from "../src/utils/agent-workflow-records"
+import { mergeAgentRecords, sortAgentWorkflowRecordsChronologically } from "../src/utils/agent-workflow-records"
 import type { AgentWorkflowRecord } from "../src/utils/agent-workflow"
 import {
   conversationAgentStore,
@@ -11,11 +8,7 @@ import {
   resetConversationAgentView,
 } from "../src/store/conversation-agents"
 
-function record(
-  sessionID: string,
-  startedAt: number,
-  renderedCardID?: string,
-): AgentWorkflowRecord {
+function record(sessionID: string, startedAt: number, renderedCardID?: string): AgentWorkflowRecord {
   return {
     id: sessionID,
     sessionID,
@@ -61,11 +54,7 @@ test("ConversationAgentRail records stay in global chronological order", () => {
     record("earliest_parent_a", 100, "card:earliest_parent_a"),
   ])
 
-  expect(sorted.map((item) => item.sessionID)).toEqual([
-    "earliest_parent_a",
-    "early_parent_b",
-    "later_parent_a",
-  ])
+  expect(sorted.map((item) => item.sessionID)).toEqual(["earliest_parent_a", "early_parent_b", "later_parent_a"])
 })
 
 test("hydrated agent records target the latest display message in the session", () => {
@@ -136,7 +125,9 @@ test("hydrated lifecycle-only agent records target the message-less session card
     ],
   })
 
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("frontend-research:session:ses_frontend_research_failed")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(
+    "frontend-research:session:ses_frontend_research_failed",
+  )
   expect(conversationAgentStore.records[0]?.targetMessageID).toBe("")
 })
 
@@ -175,7 +166,7 @@ test("hydrated agent records are scoped to the selected task or session source",
   })
 
   expect(conversationAgentRecordsForSource({ kind: "task", id: "task_a" })).toEqual([])
-  expect(conversationAgentRecordsForSource({ kind: "session", id: "ses_coding" }).map((record) => record.sessionID)).toEqual([
-    "ses_coding_child",
-  ])
+  expect(
+    conversationAgentRecordsForSource({ kind: "session", id: "ses_coding" }).map((record) => record.sessionID),
+  ).toEqual(["ses_coding_child"])
 })

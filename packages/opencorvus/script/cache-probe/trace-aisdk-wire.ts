@@ -10,10 +10,9 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { streamText } from "ai"
 
-const HEXIN_URL =
-  process.env.HEXIN_OPENAI_URL?.trim()
-    ? `${process.env.HEXIN_OPENAI_URL.replace(/\/+$/, "")}/v1`
-    : "https://aimemodeldev.myhexin.com/litellm/v1"
+const HEXIN_URL = process.env.HEXIN_OPENAI_URL?.trim()
+  ? `${process.env.HEXIN_OPENAI_URL.replace(/\/+$/, "")}/v1`
+  : "https://aimemodeldev.myhexin.com/litellm/v1"
 // Embedded fallback removed — operator must export HEXIN_API_KEY (rule 7).
 const API_KEY = process.env.HEXIN_API_KEY?.trim()
 if (!API_KEY) {
@@ -30,7 +29,11 @@ globalThis.fetch = (async (input: any, init: any) => {
   const headers = init?.headers as Record<string, string>
   if (typeof url === "string" && url.includes("/chat/completions")) {
     let parsed: any
-    try { parsed = JSON.parse(body) } catch { parsed = body }
+    try {
+      parsed = JSON.parse(body)
+    } catch {
+      parsed = body
+    }
     captured = { url, body: parsed, headers }
   }
   const resp = await originalFetch(input, init)
@@ -38,7 +41,11 @@ globalThis.fetch = (async (input: any, init: any) => {
     const clone = resp.clone()
     try {
       const text = await clone.text()
-      try { captured.resp = JSON.parse(text) } catch { captured.resp = text }
+      try {
+        captured.resp = JSON.parse(text)
+      } catch {
+        captured.resp = text
+      }
     } catch {}
   }
   return resp
@@ -50,8 +57,9 @@ const provider = createOpenAICompatible({
   apiKey: API_KEY,
 })
 
-const longSystem = Array.from({ length: 200 }, (_, i) =>
-  `- rule ${i}: prompt-cache benchmark padding line; payload tag p7-${i.toString(16)}`,
+const longSystem = Array.from(
+  { length: 200 },
+  (_, i) => `- rule ${i}: prompt-cache benchmark padding line; payload tag p7-${i.toString(16)}`,
 ).join("\n")
 
 const result = streamText({

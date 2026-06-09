@@ -80,18 +80,21 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "kind reject",
-            request: "kind reject",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "kind reject",
+              request: "kind reject",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/session/${executor.id}/reply`, {
@@ -104,7 +107,7 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         expect(response.status).toBe(400)
-        const body = await response.json() as { name?: string; data?: { kind?: string; sessionID?: string } }
+        const body = (await response.json()) as { name?: string; data?: { kind?: string; sessionID?: string } }
         expect(body.name).toBe("InvalidReplyTargetKindError")
         expect(body.data?.kind).toBe("executor")
         expect(body.data?.sessionID).toBe(executor.id)
@@ -137,18 +140,21 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "build reject",
-            request: "build reject",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "build reject",
+              request: "build reject",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/session/${build.id}/reply`, {
@@ -161,7 +167,7 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         expect(response.status).toBe(400)
-        const body = await response.json() as { name?: string; data?: { kind?: string } }
+        const body = (await response.json()) as { name?: string; data?: { kind?: string } }
         expect(body.name).toBe("InvalidReplyTargetKindError")
         expect(body.data?.kind).toBe("build")
       },
@@ -192,18 +198,21 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "hybrid build envelope",
-            request: "hybrid build envelope",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "hybrid build envelope",
+              request: "hybrid build envelope",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         await Session.updateMessage({
@@ -226,7 +235,7 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         expect(response.status).toBe(400)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           name?: string
           data?: { sessionID?: string; sessionKind?: string; envelopeAgent?: string }
         }
@@ -257,18 +266,21 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "envelope missing",
-            request: "envelope missing",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "envelope missing",
+              request: "envelope missing",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/session/${evaluator.id}/reply`, {
@@ -281,7 +293,7 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         expect(response.status).toBe(409)
-        const body = await response.json() as { name?: string; data?: { sessionID?: string } }
+        const body = (await response.json()) as { name?: string; data?: { sessionID?: string } }
         expect(body.name).toBe("ReplyTargetEnvelopeMissingError")
         expect(body.data?.sessionID).toBe(evaluator.id)
       },
@@ -309,18 +321,21 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "contract missing",
-            request: "contract missing",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "contract missing",
+              request: "contract missing",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         await Session.updateMessage({
@@ -342,7 +357,7 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         expect(response.status).toBe(410)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           name?: string
           data?: { sessionID?: string; reason?: string; agentKind?: string }
         }
@@ -376,18 +391,21 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "model missing",
-            request: "model missing",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "model missing",
+              request: "model missing",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         await Session.updateMessage({
@@ -414,7 +432,7 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         expect(response.status).toBe(400)
-        const body = await response.json() as { name?: string; data?: { agent?: string } }
+        const body = (await response.json()) as { name?: string; data?: { agent?: string } }
         expect(body.name).toBe("MissingModelConfigError")
         expect(body.data?.agent).toBe("architect")
       },
@@ -450,18 +468,21 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "contract present",
-            request: "contract present",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "contract present",
+              request: "contract present",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         await Session.updateMessage({
@@ -505,18 +526,21 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "descriptor missing",
-            request: "descriptor missing",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "descriptor missing",
+              request: "descriptor missing",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         await Session.updateMessage({
@@ -549,7 +573,7 @@ describe("AgentSessionReplyBox error taxonomy", () => {
         })
 
         expect(response.status).toBe(410)
-        const body = await response.json() as { name?: string; data?: { agentKind?: string } }
+        const body = (await response.json()) as { name?: string; data?: { agentKind?: string } }
         expect(body.name).toBe("SessionRuntimeContractMissingError")
         expect(body.data?.agentKind).toBe("architect")
         const messages = await Session.messages({ sessionID: architect.id })

@@ -5,40 +5,40 @@
  * 1. Generating — shows streaming indicator when architect step is running
  * 2. Complete — shows contract count, categories, and blueprint summary
  */
-import { For, Show } from "solid-js";
-import { t } from "../utils/i18n";
-import { renderMarkdown } from "../utils/markdown";
+import { For, Show } from "solid-js"
+import { t } from "../utils/i18n"
+import { renderMarkdown } from "../utils/markdown"
 
 interface ArchitectDecision {
-  key: string;
-  value: string;
-  reason: string;
-  goalID?: string | null;
+  key: string
+  value: string
+  reason: string
+  goalID?: string | null
 }
 
 interface ArchitectData {
-  summary: string;
-  contractCount: number;
-  categories: string[];
-  decisions?: ArchitectDecision[];
+  summary: string
+  contractCount: number
+  categories: string[]
+  decisions?: ArchitectDecision[]
 }
 
 interface ArchitectPanelProps {
-  architect: ArchitectData | undefined;
+  architect: ArchitectData | undefined
   /** Whether the architect step is currently running */
-  isGenerating?: boolean;
+  isGenerating?: boolean
 }
 
 function readableKey(key: string): string {
-  return key.replace(/[_-]+/g, " ").trim() || key;
+  return key.replace(/[_-]+/g, " ").trim() || key
 }
 
 function hasMeaningfulSummary(summary: string): boolean {
-  return summary.trim().length > 0 && !/^\d+\s+architect decisions across\s+\d+\s+categories$/i.test(summary.trim());
+  return summary.trim().length > 0 && !/^\d+\s+architect decisions across\s+\d+\s+categories$/i.test(summary.trim())
 }
 
 export function ArchitectPanel(props: ArchitectPanelProps) {
-  const decisions = () => props.architect?.decisions ?? [];
+  const decisions = () => props.architect?.decisions ?? []
 
   return (
     <div class="arch-panel">
@@ -94,5 +94,5 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
         </Show>
       </Show>
     </div>
-  );
+  )
 }

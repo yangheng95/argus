@@ -47,82 +47,98 @@ test("agent output toolkits build explicit non-empty reports", async () => {
   expectReport(architect.buildReport())
 
   const requirements = createRequirementsOutputTools()
-  await requirements.tools.register_requirement.execute({
-    id: "REQ-1",
-    type: "explicit",
-    description: "Show readable agent summaries.",
-    acceptance: "Agent summaries are readable in the generated report.",
-    non_goals: "This requirement does not cover visual styling of the report shell.",
-    evidence_refs: [],
-  }, {} as any)
-  await requirements.tools.register_decision.execute({ key: "ui_surface", value: "overlay", reason: "The user reads reports there." }, {} as any)
+  await requirements.tools.register_requirement.execute(
+    {
+      id: "REQ-1",
+      type: "explicit",
+      description: "Show readable agent summaries.",
+      acceptance: "Agent summaries are readable in the generated report.",
+      non_goals: "This requirement does not cover visual styling of the report shell.",
+      evidence_refs: [],
+    },
+    {} as any,
+  )
+  await requirements.tools.register_decision.execute(
+    { key: "ui_surface", value: "overlay", reason: "The user reads reports there." },
+    {} as any,
+  )
   await requirements.tools.submit_requirements.execute({ final: true }, {} as any)
   expectReport(requirements.buildReport())
 
   const intent = createIntentOutputTools()
-  expectReport(intent.buildReport({
-    structured: {
-      intent_class: "feature",
-      complexity: "medium",
-      confidence: 0.9,
-      summary: "Add explicit agent report summaries.",
-    },
-  }))
+  expectReport(
+    intent.buildReport({
+      structured: {
+        intent_class: "feature",
+        complexity: "medium",
+        confidence: 0.9,
+        summary: "Add explicit agent report summaries.",
+      },
+    }),
+  )
 
   const design = createFrontendTemplateOutputTools()
-  await design.tools.submit_frontend_template.execute({
-    design_system: "OpenCorvus overlay",
-    tech_stack: ["Solid"],
-    final_acceptance_mode: "visual_baseline_allowed",
-    frontend_template: "# Agent workflow report\nReadable cards and reports.",
-    fillable_modules: "Render report payloads directly.",
-    component_inventory: "Report card and popover components.",
-    component_reuse_plan: [
-      {
-        family_id: "comp-report-card",
-        name: "Report card",
-        observed_surface: "Overlay report card",
-        source_refs: ["packages/overlay/src/components/Card.tsx"],
-        implementation_strategy: "existing_project_component",
-        reuse_source: "packages/overlay/src/components/Card.tsx",
-        mature_library_candidates: [],
-        props_states: "summary, detail, expanded state",
-        replacement_boundary: "report card body",
-        parity_guard: "overlay report card remains compact and readable",
-      },
-    ],
-    material_inventory: "Trace report payload samples.",
-    visual_consistency_contract: "Keep cards compact and readable.",
-    ui_data_contract: "Consume trace report payloads.",
-    template_iteration_notes: ["Checked report cards.", "Checked popover scroll."],
-    completeness_review: "Complete for downstream implementation.",
-    reference_artifacts: [],
-    open_questions: [],
-  }, {} as any)
+  await design.tools.submit_frontend_template.execute(
+    {
+      design_system: "OpenCorvus overlay",
+      tech_stack: ["Solid"],
+      final_acceptance_mode: "visual_baseline_allowed",
+      frontend_template: "# Agent workflow report\nReadable cards and reports.",
+      fillable_modules: "Render report payloads directly.",
+      component_inventory: "Report card and popover components.",
+      component_reuse_plan: [
+        {
+          family_id: "comp-report-card",
+          name: "Report card",
+          observed_surface: "Overlay report card",
+          source_refs: ["packages/overlay/src/components/Card.tsx"],
+          implementation_strategy: "existing_project_component",
+          reuse_source: "packages/overlay/src/components/Card.tsx",
+          mature_library_candidates: [],
+          props_states: "summary, detail, expanded state",
+          replacement_boundary: "report card body",
+          parity_guard: "overlay report card remains compact and readable",
+        },
+      ],
+      material_inventory: "Trace report payload samples.",
+      visual_consistency_contract: "Keep cards compact and readable.",
+      ui_data_contract: "Consume trace report payloads.",
+      template_iteration_notes: ["Checked report cards.", "Checked popover scroll."],
+      completeness_review: "Complete for downstream implementation.",
+      reference_artifacts: [],
+      open_questions: [],
+    },
+    {} as any,
+  )
   expectReport(design.buildReport())
 
-  expectReport(buildBuildAgentReport({
-    result: {
-      status: "passed",
-      summary: "Updated report rendering.",
-      contract_restatement:
-        "Implemented the report rendering request for overlay agent report cards and left visual styling outside this build.",
-      followup_workload_guidance:
-        "Follow-up agents should inspect overlay report payload volume before estimating additional report work.",
-      files_changed: [{ path: "src/app.ts", summary: "Read report payload.", reason: "Trace owns summaries." }],
-      tests: [],
-    },
-  }))
+  expectReport(
+    buildBuildAgentReport({
+      result: {
+        status: "passed",
+        summary: "Updated report rendering.",
+        contract_restatement:
+          "Implemented the report rendering request for overlay agent report cards and left visual styling outside this build.",
+        followup_workload_guidance:
+          "Follow-up agents should inspect overlay report payload volume before estimating additional report work.",
+        files_changed: [{ path: "src/app.ts", summary: "Read report payload.", reason: "Trace owns summaries." }],
+        tests: [],
+      },
+    }),
+  )
 
-  expectReport(buildGoalReport({
-    implementation_approach: "Implemented the report contract by routing each agent summary through a single typed payload.",
-    files_changed: [{ path: "src/app.ts", summary: "Read report payload." }],
-    checks_run: [],
-    design_decisions: [],
-    blockers: [],
-    followup_workload_guidance:
-      "Follow-up agents should read trace payload examples before expanding report UI scope.",
-  }))
+  expectReport(
+    buildGoalReport({
+      implementation_approach:
+        "Implemented the report contract by routing each agent summary through a single typed payload.",
+      files_changed: [{ path: "src/app.ts", summary: "Read report payload." }],
+      checks_run: [],
+      design_decisions: [],
+      blockers: [],
+      followup_workload_guidance:
+        "Follow-up agents should read trace payload examples before expanding report UI scope.",
+    }),
+  )
 })
 
 test("agent reports surface workload handoff guidance", () => {
@@ -130,8 +146,7 @@ test("agent reports surface workload handoff guidance", () => {
     result: {
       status: "passed",
       summary: "Implemented the handoff fields.",
-      contract_restatement:
-        "Handled the detailed request to preserve req/goal complexity in build reports.",
+      contract_restatement: "Handled the detailed request to preserve req/goal complexity in build reports.",
       followup_workload_guidance:
         "Subsequent agents must re-read workload evidence before planning more report changes.",
       files_changed: [],

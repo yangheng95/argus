@@ -61,10 +61,7 @@ export async function verifyBrowserPreview(input: {
       projectRoot,
       target: input.target,
       viewport,
-      diagnostics: [
-        "Preview verification requires a resolved http(s) URL.",
-        ...input.target.diagnostics,
-      ],
+      diagnostics: ["Preview verification requires a resolved http(s) URL.", ...input.target.diagnostics],
     }
   }
   const evidenceTargetID = input.targetID ?? input.target.id
@@ -82,20 +79,29 @@ export async function verifyBrowserPreview(input: {
   }
 
   const captureID = Identifier.ascending("artifact")
-  const outDir = input.outDir ?? (
-    input.taskID
+  const outDir =
+    input.outDir ??
+    (input.taskID
       ? ProjectRuntimePaths.taskAbsolute(projectRoot, input.taskID, "browser-preview", captureID, viewport.id)
-      : path.join(ProjectRuntimePaths.projectRuntimeRoot(projectRoot), "browser-preview", "no-task", captureID, viewport.id)
-  )
+      : path.join(
+          ProjectRuntimePaths.projectRuntimeRoot(projectRoot),
+          "browser-preview",
+          "no-task",
+          captureID,
+          viewport.id,
+        ))
   const { result, manifest } = input.capture
-    ? { result: await input.capture({
-        url: input.target.url,
-        outDir,
-        viewport_width: viewport.width,
-        viewport_height: viewport.height,
-        fileLabel: viewport.id,
-        signal: input.signal,
-      }), manifest: undefined }
+    ? {
+        result: await input.capture({
+          url: input.target.url,
+          outDir,
+          viewport_width: viewport.width,
+          viewport_height: viewport.height,
+          fileLabel: viewport.id,
+          signal: input.signal,
+        }),
+        manifest: undefined,
+      }
     : await captureWithBrowserEvidenceRunner({
         taskID: input.taskID,
         targetID: evidenceTargetID,

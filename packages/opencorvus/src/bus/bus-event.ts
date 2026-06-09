@@ -37,9 +37,7 @@ export namespace BusEvent {
   export function resolveNotify(type: string, payload: Record<string, unknown>): NotifyDescriptor | undefined {
     const def = registry.get(type)
     if (!def?.notify) return undefined
-    const descriptor = typeof def.notify === "function"
-      ? def.notify(def.properties.parse(payload))
-      : def.notify
+    const descriptor = typeof def.notify === "function" ? def.notify(def.properties.parse(payload)) : def.notify
     return descriptor ? NotifyDescriptorSchema.parse(descriptor) : undefined
   }
 

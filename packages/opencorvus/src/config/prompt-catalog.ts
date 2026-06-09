@@ -128,9 +128,7 @@ export namespace PromptCatalog {
       if (!contract?.promptEditable) continue
       const promptMode = AgentRoleContract.promptMode(agent.name as AgentRoleID)
       if (promptMode === "none") continue
-      const configuredPrompt = promptMode === "append"
-        ? (agentCfg?.prompt_append ?? null)
-        : (agentCfg?.prompt ?? null)
+      const configuredPrompt = promptMode === "append" ? (agentCfg?.prompt_append ?? null) : (agentCfg?.prompt ?? null)
       const nativeDefault = agent.native ? Agent.nativeDefaultPrompt(agent.name) : undefined
       const defaultPrompt = nativeDefault ?? agent.prompt ?? ""
       const prompt = configuredPrompt ?? (promptMode === "append" ? "" : defaultPrompt)
@@ -138,7 +136,8 @@ export namespace PromptCatalog {
         promptMode === "append"
           ? [defaultPrompt, configuredPrompt].filter((item) => item && item.trim().length > 0).join("\n\n")
           : prompt
-      const inheritsCore = promptMode === "override" && !configuredPrompt && (!defaultPrompt || defaultPrompt === PROMPT_SYSTEM)
+      const inheritsCore =
+        promptMode === "override" && !configuredPrompt && (!defaultPrompt || defaultPrompt === PROMPT_SYSTEM)
       entries.push({
         scope: "agent",
         key: agent.name,

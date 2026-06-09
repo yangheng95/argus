@@ -22,15 +22,13 @@ export const RouteContractSchema = z.object({
 export type RouteContract = z.infer<typeof RouteContractSchema>
 
 export const ComponentContractSchema = z.object({
-  props: z.string().min(1)
+  props: z
+    .string()
+    .min(1)
     .describe("Comma-separated public prop names or prop signatures, for example: title, items, onSelect.")
     .optional(),
-  events: z.array(z.string().min(1))
-    .describe("Event names emitted by the component.")
-    .default([]),
-  slots: z.array(z.string().min(1))
-    .describe("Named content slots exposed by the component.")
-    .default([]),
+  events: z.array(z.string().min(1)).describe("Event names emitted by the component.").default([]),
+  slots: z.array(z.string().min(1)).describe("Named content slots exposed by the component.").default([]),
 })
 export type ComponentContract = z.infer<typeof ComponentContractSchema>
 
@@ -148,9 +146,7 @@ function stableJSONStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJSONStringify).join(",")}]`
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
-    return `{${entries
-      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJSONStringify(entry)}`)
-      .join(",")}}`
+    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableJSONStringify(entry)}`).join(",")}}`
   }
   return JSON.stringify(value)
 }
@@ -175,23 +171,25 @@ export function validateArchitectContractGraph(input: {
   for (const goal of input.goals) {
     for (const dep of goal.depends_on) {
       if (!registeredDependencyPairs.has(edgeKey(dep, goal.id))) {
-        findings.push(blocker(
-          "dependency_edge_missing_reason",
-          `Goal dependency ${dep} -> ${goal.id} has no registered dependency contract reason.`,
-          { goal_ids: [dep, goal.id] },
-          ["register_dependency_contract"],
-        ))
+        findings.push(
+          blocker(
+            "dependency_edge_missing_reason",
+            `Goal dependency ${dep} -> ${goal.id} has no registered dependency contract reason.`,
+            { goal_ids: [dep, goal.id] },
+            ["register_dependency_contract"],
+          ),
+        )
       }
     }
   }
 
   for (const cycle of dependencyCycles(input.goals)) {
-    findings.push(blocker(
-      "dependency_cycle",
-      `Goal dependency cycle detected: ${cycle.join(" -> ")}.`,
-      { goal_ids: cycle },
-      ["register_goal", "modify_goal"],
-    ))
+    findings.push(
+      blocker("dependency_cycle", `Goal dependency cycle detected: ${cycle.join(" -> ")}.`, { goal_ids: cycle }, [
+        "register_goal",
+        "modify_goal",
+      ]),
+    )
   }
 
   for (const contract of input.graph.contracts) {
@@ -445,8 +443,10 @@ export function renderContractGraphForPrompt(graph: ArchitectContractGraph, goal
       if (contract.ir) lines.push(indent(renderContractIR(contract.ir), "  "))
       if (contract.route) lines.push(`  route ${contract.route.method} ${contract.route.path}`)
       if (contract.component) lines.push(`  component props=${contract.component.props ?? "(unspecified)"}`)
-      if ((contract.artifact_paths ?? []).length > 0) lines.push(`  artifacts=${(contract.artifact_paths ?? []).join(", ")}`)
-      if ((contract.evidence_refs ?? []).length > 0) lines.push(`  evidence_refs=${(contract.evidence_refs ?? []).join(", ")}`)
+      if ((contract.artifact_paths ?? []).length > 0)
+        lines.push(`  artifacts=${(contract.artifact_paths ?? []).join(", ")}`)
+      if ((contract.evidence_refs ?? []).length > 0)
+        lines.push(`  evidence_refs=${(contract.evidence_refs ?? []).join(", ")}`)
     }
   }
   lines.push("")
@@ -549,10 +549,7 @@ function dependencyCycles(goals: readonly GraphValidationGoal[]): string[][] {
 function canonicalCycleKey(cycle: string[]): string {
   const body = cycle.slice(0, -1)
   if (body.length === 0) return cycle.join("->")
-  const rotations = body.map((_, index) => [
-    ...body.slice(index),
-    ...body.slice(0, index),
-  ].join("->"))
+  const rotations = body.map((_, index) => [...body.slice(index), ...body.slice(0, index)].join("->"))
   return rotations.sort()[0]!
 }
 

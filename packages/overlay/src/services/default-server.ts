@@ -1,6 +1,6 @@
-import serverDefaults from "../../../opencorvus/server-defaults.json";
+import serverDefaults from "../../../opencorvus/server-defaults.json"
 
-const DEFAULT_LOCAL_SERVER_URL = `http://${serverDefaults.host}:${serverDefaults.port}`;
+const DEFAULT_LOCAL_SERVER_URL = `http://${serverDefaults.host}:${serverDefaults.port}`
 
 export const DEFAULT_SERVER = (() => {
   if (
@@ -8,7 +8,7 @@ export const DEFAULT_SERVER = (() => {
     window.location.protocol.startsWith("http") &&
     window.location.pathname.startsWith("/ui")
   ) {
-    return window.location.origin;
+    return window.location.origin
   }
-  return DEFAULT_LOCAL_SERVER_URL;
-})();
+  return DEFAULT_LOCAL_SERVER_URL
+})()

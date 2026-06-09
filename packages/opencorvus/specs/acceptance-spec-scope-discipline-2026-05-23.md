@@ -10,15 +10,15 @@ state-machine), rule 35 (grep all call sites), rule 36 (tests on every change).
 
 ## Abbreviations
 
-| Term | Meaning |
-| ---- | ------- |
-| REQ | Requirement row (engine_requirement) — user-visible capability extracted by the Requirements agent. |
-| AS | AcceptanceSpec (`packages/opencorvus/src/acceptance/types.ts`) — typed, scorer-bearing acceptance criterion attached to a goal. |
-| BF | Blocking finding emitted by integrity reviewers. |
-| AF | Advisory finding emitted by integrity reviewers. |
-| DB | OpenCorvus persistent SQLite store (`engine_task`, `engine_requirement`, `engine_goal`, `engine_artifact`). |
-| LLM | Large Language Model. |
-| brief | Source brief for implementation and acceptance. |
+| Term  | Meaning                                                                                                                         |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------- |
+| REQ   | Requirement row (engine_requirement) — user-visible capability extracted by the Requirements agent.                             |
+| AS    | AcceptanceSpec (`packages/opencorvus/src/acceptance/types.ts`) — typed, scorer-bearing acceptance criterion attached to a goal. |
+| BF    | Blocking finding emitted by integrity reviewers.                                                                                |
+| AF    | Advisory finding emitted by integrity reviewers.                                                                                |
+| DB    | OpenCorvus persistent SQLite store (`engine_task`, `engine_requirement`, `engine_goal`, `engine_artifact`).                     |
+| LLM   | Large Language Model.                                                                                                           |
+| brief | Source brief for implementation and acceptance.                                                                                 |
 
 ## User Concern
 
@@ -34,26 +34,26 @@ new "maturity gap".
 
 ### Numbers (read-only DB on 2026-05-23T23:00 local)
 
-| Surface | Count | Source |
-| ------- | ----- | ------ |
-| REQ rows | 18 | `engine_requirement WHERE task_id=...` — **9 unique user-visible REQs duplicated x2** (spec_snapshot rewrite re-inserted them; identical title + identical description). |
-| Goals | 5 | `engine_goal WHERE task_id=...` |
-| AcceptanceSpecs total | 25 | sum of `acceptance_specs` JSON across the 5 goals |
-| AcceptanceSpecs that are LLM judges | 1 | `acc-int-6` — `llm_judge` "End-to-end chat flow completeness" |
-| AcceptanceSpecs that are shell greps | 21 | majority — `grep -r 'ChatPanel' src/components --include='*.tsx' -l` style |
-| AcceptanceSpecs that are real shell builds/tests | 3 | `npm run build` x2, `npx vitest run` x1 |
-| Contract graph contracts | 8 | `art_e54c5ed1e001OBiafG0kHFldFj` — Conversation/Message/Settings types, 3 hooks, ThemeContext, ErrorBoundary |
-| `engine_requirement.acceptance` column | **all empty strings** | "acceptance: []" on every row — Requirements agent emits no per-REQ acceptance text |
-| `engine_requirement.non_goals` | **all empty strings** | Requirements emits no non-goal boundary |
-| Integrity attempts | 8 | all `needs_correction`, `post_build` |
+| Surface                                          | Count                 | Source                                                                                                                                                                   |
+| ------------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| REQ rows                                         | 18                    | `engine_requirement WHERE task_id=...` — **9 unique user-visible REQs duplicated x2** (spec_snapshot rewrite re-inserted them; identical title + identical description). |
+| Goals                                            | 5                     | `engine_goal WHERE task_id=...`                                                                                                                                          |
+| AcceptanceSpecs total                            | 25                    | sum of `acceptance_specs` JSON across the 5 goals                                                                                                                        |
+| AcceptanceSpecs that are LLM judges              | 1                     | `acc-int-6` — `llm_judge` "End-to-end chat flow completeness"                                                                                                            |
+| AcceptanceSpecs that are shell greps             | 21                    | majority — `grep -r 'ChatPanel' src/components --include='*.tsx' -l` style                                                                                               |
+| AcceptanceSpecs that are real shell builds/tests | 3                     | `npm run build` x2, `npx vitest run` x1                                                                                                                                  |
+| Contract graph contracts                         | 8                     | `art_e54c5ed1e001OBiafG0kHFldFj` — Conversation/Message/Settings types, 3 hooks, ThemeContext, ErrorBoundary                                                             |
+| `engine_requirement.acceptance` column           | **all empty strings** | "acceptance: []" on every row — Requirements agent emits no per-REQ acceptance text                                                                                      |
+| `engine_requirement.non_goals`                   | **all empty strings** | Requirements emits no non-goal boundary                                                                                                                                  |
+| Integrity attempts                               | 8                     | all `needs_correction`, `post_build`                                                                                                                                     |
 
 ### REQ samples (verbatim, both columns)
 
-| REQ | title (= description) | acceptance | non_goals |
-| --- | --------------------- | ---------- | --------- |
-| REQ-1 | "用户可以输入 DeepSeek API Key，Key 存储在浏览器 localStorage 中..." | `[]` | "" |
-| REQ-6 | "错误处理与容错：API Key 无效/过期、请求频率超限、网络断开等异常均有清晰的中文提示..." | `[]` | "" |
-| REQ-9 | "支持选择 DeepSeek 模型（至少 deepseek-chat 和 deepseek-reasoner），可调节温度等生成参数..." | `[]` | "" |
+| REQ   | title (= description)                                                                        | acceptance | non_goals |
+| ----- | -------------------------------------------------------------------------------------------- | ---------- | --------- |
+| REQ-1 | "用户可以输入 DeepSeek API Key，Key 存储在浏览器 localStorage 中..."                         | `[]`       | ""        |
+| REQ-6 | "错误处理与容错：API Key 无效/过期、请求频率超限、网络断开等异常均有清晰的中文提示..."       | `[]`       | ""        |
+| REQ-9 | "支持选择 DeepSeek 模型（至少 deepseek-chat 和 deepseek-reasoner），可调节温度等生成参数..." | `[]`       | ""        |
 
 The phrase "成熟的" (mature / production-ready) from the original user request
 **does not appear in any REQ, goal, or AS**. It was dropped silently at the
@@ -61,21 +61,21 @@ Requirements stage.
 
 ### Findings drift across rounds (selected)
 
-| Round | New blocker introduced | In any AS? | Traced to REQ? |
-| ----- | ---------------------- | ---------- | -------------- |
-| R1 BF-1 | stop-generation loses partial content | partially (acc-chat-3 "stop/regenerate exist") | `ref=[]` |
-| R1 BF-2 | cross-conversation race on switch | no | `ref=[]` |
-| R2 BF-1 | Settings runtime validation on load from localStorage | no AS asks for runtime validation | tagged `REQ-9` post-hoc |
-| R2 AF-5 | localStorage QuotaExceededError silently swallowed | no | tagged `REQ-6` post-hoc |
-| R2 AF-6 | bundle 1035KB no code-splitting | no | `ref=[]` |
-| R6 F-BT-3 | bundle > 500 kB | no | `ref=[]` |
-| R7 ADV-6 | dead code (`getConversationById` exported but unused) | no | `ref=[]` |
-| R7 ADV-7 | unused `_body` parameter | no | `ref=[]` |
-| R8 BF-1 | quota exceeded silent data loss | no | tagged `REQ-6, REQ-3` post-hoc |
-| R8 BF-2 | NaN passes `validateSettings` | no | tagged `REQ-6, REQ-9` post-hoc |
+| Round     | New blocker introduced                                | In any AS?                                     | Traced to REQ?                 |
+| --------- | ----------------------------------------------------- | ---------------------------------------------- | ------------------------------ |
+| R1 BF-1   | stop-generation loses partial content                 | partially (acc-chat-3 "stop/regenerate exist") | `ref=[]`                       |
+| R1 BF-2   | cross-conversation race on switch                     | no                                             | `ref=[]`                       |
+| R2 BF-1   | Settings runtime validation on load from localStorage | no AS asks for runtime validation              | tagged `REQ-9` post-hoc        |
+| R2 AF-5   | localStorage QuotaExceededError silently swallowed    | no                                             | tagged `REQ-6` post-hoc        |
+| R2 AF-6   | bundle 1035KB no code-splitting                       | no                                             | `ref=[]`                       |
+| R6 F-BT-3 | bundle > 500 kB                                       | no                                             | `ref=[]`                       |
+| R7 ADV-6  | dead code (`getConversationById` exported but unused) | no                                             | `ref=[]`                       |
+| R7 ADV-7  | unused `_body` parameter                              | no                                             | `ref=[]`                       |
+| R8 BF-1   | quota exceeded silent data loss                       | no                                             | tagged `REQ-6, REQ-3` post-hoc |
+| R8 BF-2   | NaN passes `validateSettings`                         | no                                             | tagged `REQ-6, REQ-9` post-hoc |
 
 The pattern: by round 2 the team has exhausted the original AS surface; from
-round 3 onward each round invents a *new* maturity dimension (validation
+round 3 onward each round invents a _new_ maturity dimension (validation
 shape, network resilience, bundle hygiene, dead code, parameter hygiene,
 double-send race, NaN, ...) and labels it `BF` because nothing in the prompt
 chain says the finding must trace back to a committed REQ or AS.
@@ -277,7 +277,7 @@ Append after the existing `acceptance_specs` rules:
 - No host-side count cap on findings per round.
 - No host-side `userRequestQuotes` substring verification.
 - No host-side reject of findings with empty `requirementIDs` (the schema
-  default stays `[]` for shape, the *prompt* forbids it semantically).
+  default stays `[]` for shape, the _prompt_ forbids it semantically).
 - No "spec count" upper bound. The fix is qualitative (every spec must bind
   to a behavior the REQ already named), not quantitative.
 - No state-machine switching between "first review wider" / "later review
@@ -286,11 +286,11 @@ Append after the existing `acceptance_specs` rules:
 
 ## Relationship to the Other Two Specs
 
-| Spec | Problem it solves | Distinct? |
-| ---- | ----------------- | --------- |
-| `integrity-team-replay-aware-2026-05-23.md` | Round N rediscovers round N-1's blockers because reviewers see no prior verdicts. | **Yes — replay memory is orthogonal.** Even a perfectly traceable finding set drifts upward without replay memory. |
-| `acceptance-spec-scope-discipline-2026-05-23.md` (this) | The contract is silent about what "mature" means, so every round invents a new maturity dimension. | This is about **scope width**, not memory. |
-| (assumed) `severity-discipline-*` (codex) | Reviewers misclassify advisories as blockers, so even bounded scope still fails. | Adjacent but distinct — severity is the *priority* axis; scope is the *which-concerns-count* axis. |
+| Spec                                                    | Problem it solves                                                                                  | Distinct?                                                                                                          |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `integrity-team-replay-aware-2026-05-23.md`             | Round N rediscovers round N-1's blockers because reviewers see no prior verdicts.                  | **Yes — replay memory is orthogonal.** Even a perfectly traceable finding set drifts upward without replay memory. |
+| `acceptance-spec-scope-discipline-2026-05-23.md` (this) | The contract is silent about what "mature" means, so every round invents a new maturity dimension. | This is about **scope width**, not memory.                                                                         |
+| (assumed) `severity-discipline-*` (codex)               | Reviewers misclassify advisories as blockers, so even bounded scope still fails.                   | Adjacent but distinct — severity is the _priority_ axis; scope is the _which-concerns-count_ axis.                 |
 
 Recommendation: **keep three separate specs, do not merge.** They attack
 three orthogonal failure modes:
@@ -310,15 +310,15 @@ optimize a still-unbounded review surface.
 
 Files that touch this surface and must be considered in the patch:
 
-| Path | Role | Required change |
-| ---- | ---- | --------------- |
-| `packages/opencorvus/src/prompt/core/requirements-core.txt` | Requirements agent prompt | Add maturity-word landing rule + mandatory `acceptance` / `non_goals`. |
-| `packages/opencorvus/src/prompt/core/architect-core.txt` | Architect prompt | Forbid existence-grep AS under behavior REQs; require AS anchored to REQ.acceptance text. |
-| `packages/opencorvus/src/prompt/core/integrity-team-core.txt` | Integrity team core | Require traceability via REQ / AS / literal user quote; drop unanchored findings. |
-| `packages/opencorvus/src/integrity/team-agent.ts` `buildSupervisorPlanPrompt` / `buildSupervisorConsensusPrompt` / `buildReviewerPrompt` | Live prompt renderers | Render the traceability obligation into the three role prompts so the core text is reinforced at the role level. |
-| `packages/opencorvus/src/integrity/team-schema.ts` | Reviewer report schema | Keep `requirementIDs` / `specIDs` arrays. Do NOT add host validation. Prompt-level constraint only. |
-| `packages/opencorvus/src/requirements/agent.ts` (or wherever the requirements tool collector lives) | Requirements collector | Verify the existing `register_requirement` zod schema accepts `acceptance` and `non_goals`. If not, extend the schema to require them as non-empty strings (this is *data shape* — rule 6.1 allows it because empty strings are a data-integrity failure, not a routing decision). Grep before patching. |
-| `packages/opencorvus/src/acceptance/types.ts` | AS schema | No change. Existence-grep ban is a prompt rule; the AS schema itself stays expressive. |
+| Path                                                                                                                                     | Role                      | Required change                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/prompt/core/requirements-core.txt`                                                                              | Requirements agent prompt | Add maturity-word landing rule + mandatory `acceptance` / `non_goals`.                                                                                                                                                                                                                                   |
+| `packages/opencorvus/src/prompt/core/architect-core.txt`                                                                                 | Architect prompt          | Forbid existence-grep AS under behavior REQs; require AS anchored to REQ.acceptance text.                                                                                                                                                                                                                |
+| `packages/opencorvus/src/prompt/core/integrity-team-core.txt`                                                                            | Integrity team core       | Require traceability via REQ / AS / literal user quote; drop unanchored findings.                                                                                                                                                                                                                        |
+| `packages/opencorvus/src/integrity/team-agent.ts` `buildSupervisorPlanPrompt` / `buildSupervisorConsensusPrompt` / `buildReviewerPrompt` | Live prompt renderers     | Render the traceability obligation into the three role prompts so the core text is reinforced at the role level.                                                                                                                                                                                         |
+| `packages/opencorvus/src/integrity/team-schema.ts`                                                                                       | Reviewer report schema    | Keep `requirementIDs` / `specIDs` arrays. Do NOT add host validation. Prompt-level constraint only.                                                                                                                                                                                                      |
+| `packages/opencorvus/src/requirements/agent.ts` (or wherever the requirements tool collector lives)                                      | Requirements collector    | Verify the existing `register_requirement` zod schema accepts `acceptance` and `non_goals`. If not, extend the schema to require them as non-empty strings (this is _data shape_ — rule 6.1 allows it because empty strings are a data-integrity failure, not a routing decision). Grep before patching. |
+| `packages/opencorvus/src/acceptance/types.ts`                                                                                            | AS schema                 | No change. Existence-grep ban is a prompt rule; the AS schema itself stays expressive.                                                                                                                                                                                                                   |
 
 ## Test Plan
 
@@ -380,7 +380,7 @@ bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts 
   exact "teach the LLM which route to take via host invariant" anti-pattern
   rule 6.1 forbids).
 - Schema-level non-empty constraint on `acceptance` / `non_goals`: yes, but
-  scoped to *data shape only* (an empty string is shape-invalid, not
+  scoped to _data shape only_ (an empty string is shape-invalid, not
   a routing decision). This is the rule 6.1 carve-out for Zod / DB
   constraint.
 - State machine switching reviewer behavior across rounds: no — replay
@@ -389,24 +389,24 @@ bun test packages/opencorvus/test/requirements/maturity-word-discipline.test.ts 
 ## Implementation Checklist
 
 1. [ ] Patch `requirements-core.txt`: add maturity-word landing rule +
-   mandatory `acceptance` / `non_goals`.
+       mandatory `acceptance` / `non_goals`.
 2. [ ] Patch the requirements collector zod schema to require non-empty
-   `acceptance` and `non_goals` (grep all call sites first; rule 35).
+       `acceptance` and `non_goals` (grep all call sites first; rule 35).
 3. [ ] Make `maturity_scope_pending` durable either by immediate
-   `engine_decision_log` persistence in `register_decision` or by returning it
-   as a finalized RequirementsAgent outcome instead of throwing.
+       `engine_decision_log` persistence in `register_decision` or by returning it
+       as a finalized RequirementsAgent outcome instead of throwing.
 4. [ ] Patch orchestrator handling so durable `maturity_scope_pending` routes
-   to the normal `question` lane prompt path, not to requirements failure
-   retry.
+       to the normal `question` lane prompt path, not to requirements failure
+       retry.
 5. [ ] Patch `architect-core.txt`: ban existence-grep AS under behavior
-   REQs; require AS anchored to REQ.acceptance text.
+       REQs; require AS anchored to REQ.acceptance text.
 6. [ ] Patch `integrity-team-core.txt`: traceability-or-drop rule.
 7. [ ] Patch `team-agent.ts` `buildReviewerPrompt` /
-   `buildSupervisorConsensusPrompt` to echo the traceability rule at role
-   level.
+       `buildSupervisorConsensusPrompt` to echo the traceability rule at role
+       level.
 8. [ ] Add the three unit tests above + one replay snapshot test, including a
-   requirements clarification-path regression that asserts the decision is
-   durable without `submit_requirements`.
+       requirements clarification-path regression that asserts the decision is
+       durable without `submit_requirements`.
 9. [ ] Run targeted tests; no broad `bun test`.
 10. [ ] Commit + push (rule 33).
 

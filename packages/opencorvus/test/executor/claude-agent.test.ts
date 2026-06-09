@@ -8,49 +8,53 @@ import { tmpdir } from "../fixture/fixture"
 
 describe("claude agent executor", () => {
   test("maps sdk messages to coding events", async () => {
-    const provider = ClaudeAgentExecutor.create(client([
-      {
-        type: "system",
-        subtype: "init",
-        session_id: "claude_session",
-        model: "claude-sonnet-4-6",
-      },
-      {
-        type: "assistant",
-        session_id: "claude_session",
-        message: {
-          content: [
-            { type: "text", text: "hello" },
-            { type: "tool_use", id: "tool_1", name: "Bash", input: { command: "pwd" } },
-          ],
+    const provider = ClaudeAgentExecutor.create(
+      client([
+        {
+          type: "system",
+          subtype: "init",
+          session_id: "claude_session",
+          model: "claude-sonnet-4-6",
         },
-      },
-      {
-        type: "stream_event",
-        session_id: "claude_session",
-        event: {
-          type: "content_block_delta",
-          delta: { type: "thinking_delta", thinking: "reasoning" },
-          index: 0,
+        {
+          type: "assistant",
+          session_id: "claude_session",
+          message: {
+            content: [
+              { type: "text", text: "hello" },
+              { type: "tool_use", id: "tool_1", name: "Bash", input: { command: "pwd" } },
+            ],
+          },
         },
-      },
-      {
-        type: "result",
-        subtype: "success",
-        session_id: "claude_session",
-        result: "done",
-        total_cost_usd: 0.02,
-        num_turns: 1,
-        usage: {
-          input_tokens: 10,
-          output_tokens: 5,
+        {
+          type: "stream_event",
+          session_id: "claude_session",
+          event: {
+            type: "content_block_delta",
+            delta: { type: "thinking_delta", thinking: "reasoning" },
+            index: 0,
+          },
         },
-      },
-    ]))
+        {
+          type: "result",
+          subtype: "success",
+          session_id: "claude_session",
+          result: "done",
+          total_cost_usd: 0.02,
+          num_turns: 1,
+          usage: {
+            input_tokens: 10,
+            output_tokens: 5,
+          },
+        },
+      ]),
+    )
 
     const events = await collect(provider.run({ prompt: "test" }))
     expect(events.some((item) => item.type === "text_delta")).toBe(true)
-    const tool = events.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
+    const tool = events.find(
+      (item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call",
+    )
     expect(tool?.type).toBe("tool_call")
     expect(tool?.meta?.["adapter"]).toBe("shell")
     expect(tool?.meta?.["tool_kind"]).toBe("shell")
@@ -69,68 +73,73 @@ describe("claude agent executor", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-    const requests: Array<{ id: string }> = []
-    const adapter = ManagedCodingExecutor.create(ClaudeAgentExecutor.create({
-      run(input) {
-        return handle(async function* () {
-          yield {
-            type: "system",
-            subtype: "init",
-            session_id: "claude_session",
-          }
-          if (input.onApproval) {
-            requests.push({ id: "permission:tool_1" })
-            const result = await input.onApproval({
-              id: "permission:tool_1",
-              approval: "can_use_tool",
-              message: "Bash",
-            })
-            yield {
-              type: "raw",
-              session_id: "claude_session",
-              result,
-            }
-          }
-          yield {
-            type: "result",
-            subtype: "success",
-            session_id: "claude_session",
-            result: "done",
-            total_cost_usd: 0,
-            num_turns: 1,
-            usage: {
-              input_tokens: 1,
-              output_tokens: 1,
+        const requests: Array<{ id: string }> = []
+        const adapter = ManagedCodingExecutor.create(
+          ClaudeAgentExecutor.create({
+            run(input) {
+              return handle(
+                (async function* () {
+                  yield {
+                    type: "system",
+                    subtype: "init",
+                    session_id: "claude_session",
+                  }
+                  if (input.onApproval) {
+                    requests.push({ id: "permission:tool_1" })
+                    const result = await input.onApproval({
+                      id: "permission:tool_1",
+                      approval: "can_use_tool",
+                      message: "Bash",
+                    })
+                    yield {
+                      type: "raw",
+                      session_id: "claude_session",
+                      result,
+                    }
+                  }
+                  yield {
+                    type: "result",
+                    subtype: "success",
+                    session_id: "claude_session",
+                    result: "done",
+                    total_cost_usd: 0,
+                    num_turns: 1,
+                    usage: {
+                      input_tokens: 1,
+                      output_tokens: 1,
+                    },
+                  }
+                })(),
+              )
             },
-          }
-        }())
-      },
-    }), {})
+          }),
+          {},
+        )
 
-    const submit = await adapter.submit({
-      sessionID: "oc_session",
-      prompt: "test",
-    })
-    let firstType = ""
-    let approval
-    for await (const event of adapter.events({ queueTaskID: submit.queueTaskID })) {
-      if (!firstType) firstType = event.type
-      if (event.type === "approval.request") {
-        approval = event
-        break
-      }
-    }
-    expect(firstType).toBe("executor.progress")
-    expect(approval?.type).toBe("approval.request")
-    const resolved = await adapter.resolve?.({
-      queueTaskID: submit.queueTaskID,
-      requestID: requests[0]!.id,
-      kind: "approval",
-      response: {
-        decision: "accept",
-      },
-    })
-    expect(resolved).toBe(true)
+        const submit = await adapter.submit({
+          sessionID: "oc_session",
+          prompt: "test",
+        })
+        let firstType = ""
+        let approval
+        for await (const event of adapter.events({ queueTaskID: submit.queueTaskID })) {
+          if (!firstType) firstType = event.type
+          if (event.type === "approval.request") {
+            approval = event
+            break
+          }
+        }
+        expect(firstType).toBe("executor.progress")
+        expect(approval?.type).toBe("approval.request")
+        const resolved = await adapter.resolve?.({
+          queueTaskID: submit.queueTaskID,
+          requestID: requests[0]!.id,
+          kind: "approval",
+          response: {
+            decision: "accept",
+          },
+        })
+        expect(resolved).toBe(true)
       },
     })
   })

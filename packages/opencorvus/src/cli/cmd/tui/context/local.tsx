@@ -160,7 +160,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         })
         .catch((err: any) => {
           if (err?.code !== "ENOENT") {
-            log.warn("failed to load model store", { path: filePath, error: err instanceof Error ? err.message : String(err) })
+            log.warn("failed to load model store", {
+              path: filePath,
+              error: err instanceof Error ? err.message : String(err),
+            })
           }
         })
         .finally(() => {
@@ -444,7 +447,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         togglePin(sessionID: string) {
           batch(() => {
             const exists = sessionStore.pinned.includes(sessionID)
-            const next = exists ? sessionStore.pinned.filter((x) => x !== sessionID) : [...sessionStore.pinned, sessionID]
+            const next = exists
+              ? sessionStore.pinned.filter((x) => x !== sessionID)
+              : [...sessionStore.pinned, sessionID]
             setSessionStore("pinned", next)
             save()
           })

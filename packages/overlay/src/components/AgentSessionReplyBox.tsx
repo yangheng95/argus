@@ -23,9 +23,9 @@
 // same generic banner, so the user could not tell when retrying was
 // pointless.
 
-import { createSignal, Show } from "solid-js";
-import { t } from "../utils/i18n";
-import { Icon } from "./Icon";
+import { createSignal, Show } from "solid-js"
+import { t } from "../utils/i18n"
+import { Icon } from "./Icon"
 
 /** Backend NamedError names the reply route may surface. Mirrored from
  *  packages/opencorvus/src/orchestrator/direct-reply.ts — kept here as a
@@ -36,54 +36,52 @@ type ReplyErrorName =
   | "InvalidReplyTargetKindError"
   | "BuildSessionDirectReplyError"
   | "ReplyTargetEnvelopeMissingError"
-  | "SessionRuntimeContractMissingError";
+  | "SessionRuntimeContractMissingError"
 
 interface ReplyErrorInfo {
-  name: ReplyErrorName | undefined;
+  name: ReplyErrorName | undefined
   /** NamedError body data — currently only BuildSessionDirectReplyError
    *  carries fields the overlay branches on (sessionKind, envelopeAgent
    *  to pick the hybrid-specific copy when sessionKind !== "build" but
    *  envelopeAgent === "build"). Other errors don't need this yet. */
-  data: Record<string, unknown> | undefined;
+  data: Record<string, unknown> | undefined
 }
 
 function pickErrorInfo(err: unknown): ReplyErrorInfo {
-  if (!err || typeof err !== "object") return { name: undefined, data: undefined };
+  if (!err || typeof err !== "object") return { name: undefined, data: undefined }
   // ApiError attaches the parsed JSON body verbatim. NamedError.toObject()
   // shape is `{ name: "...", data: {...} }` — read body.name when
   // available, falling back to top-level name on raw error objects.
-  const body = (err as { body?: unknown }).body;
-  const fromBody = body && typeof body === "object" && typeof (body as { name?: unknown }).name === "string"
-    ? (body as { name: string }).name
-    : undefined;
-  const fromError = typeof (err as { name?: unknown }).name === "string"
-    ? (err as { name: string }).name
-    : undefined;
-  const candidate = fromBody ?? fromError;
-  const rawData = body && typeof body === "object" ? (body as { data?: unknown }).data : undefined;
-  const data = rawData && typeof rawData === "object" && !Array.isArray(rawData)
-    ? (rawData as Record<string, unknown>)
-    : undefined;
-  let name: ReplyErrorName | undefined;
+  const body = (err as { body?: unknown }).body
+  const fromBody =
+    body && typeof body === "object" && typeof (body as { name?: unknown }).name === "string"
+      ? (body as { name: string }).name
+      : undefined
+  const fromError = typeof (err as { name?: unknown }).name === "string" ? (err as { name: string }).name : undefined
+  const candidate = fromBody ?? fromError
+  const rawData = body && typeof body === "object" ? (body as { data?: unknown }).data : undefined
+  const data =
+    rawData && typeof rawData === "object" && !Array.isArray(rawData) ? (rawData as Record<string, unknown>) : undefined
+  let name: ReplyErrorName | undefined
   switch (candidate) {
     case "InvalidReplyTargetKindError":
     case "BuildSessionDirectReplyError":
     case "ReplyTargetEnvelopeMissingError":
     case "SessionRuntimeContractMissingError":
-      name = candidate;
-      break;
+      name = candidate
+      break
     default:
-      name = undefined;
+      name = undefined
   }
-  return { name, data };
+  return { name, data }
 }
 
 function messageForError(info: ReplyErrorInfo, fallback: string): string {
   switch (info.name) {
     case "SessionRuntimeContractMissingError":
-      return t("card.agent_reply_contract_gone");
+      return t("card.agent_reply_contract_gone")
     case "InvalidReplyTargetKindError":
-      return t("card.agent_reply_kind_not_allowed");
+      return t("card.agent_reply_kind_not_allowed")
     case "BuildSessionDirectReplyError": {
       // Hybrid case (session.kind !== "build" but envelope.agent ===
       // "build") gets its own copy: the SESSION is fine, but its last
@@ -91,17 +89,17 @@ function messageForError(info: ReplyErrorInfo, fallback: string): string {
       // "kind not allowed" would be misleading because the session.kind
       // IS in the reply whitelist. Falls back to kind_not_allowed when
       // backend data is malformed. codex review round 2 — minor.
-      const sessionKind = typeof info.data?.sessionKind === "string" ? info.data.sessionKind : "";
-      const envelopeAgent = typeof info.data?.envelopeAgent === "string" ? info.data.envelopeAgent : "";
+      const sessionKind = typeof info.data?.sessionKind === "string" ? info.data.sessionKind : ""
+      const envelopeAgent = typeof info.data?.envelopeAgent === "string" ? info.data.envelopeAgent : ""
       if (sessionKind && sessionKind !== "build" && envelopeAgent === "build") {
-        return t("card.agent_reply_build_envelope");
+        return t("card.agent_reply_build_envelope")
       }
-      return t("card.agent_reply_kind_not_allowed");
+      return t("card.agent_reply_kind_not_allowed")
     }
     case "ReplyTargetEnvelopeMissingError":
-      return t("card.agent_reply_envelope_missing");
+      return t("card.agent_reply_envelope_missing")
     default:
-      return fallback || t("card.agent_reply_failed");
+      return fallback || t("card.agent_reply_failed")
   }
 }
 
@@ -114,47 +112,47 @@ function isTerminalError(name: ReplyErrorName | undefined): boolean {
     case "SessionRuntimeContractMissingError":
     case "InvalidReplyTargetKindError":
     case "BuildSessionDirectReplyError":
-      return true;
+      return true
     case "ReplyTargetEnvelopeMissingError":
     case undefined:
-      return false;
+      return false
   }
 }
 
 export interface AgentSessionReplyBoxProps {
   /** Send the message to the agent session. Resolves when the API
    *  request settles; throws on failure (caller can decide to surface). */
-  onSend: (message: string) => Promise<void>;
+  onSend: (message: string) => Promise<void>
 }
 
 export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
-  const [text, setText] = createSignal("");
-  const [sending, setSending] = createSignal(false);
-  const [error, setError] = createSignal<string>("");
-  const [terminalError, setTerminalError] = createSignal<ReplyErrorName | undefined>(undefined);
+  const [text, setText] = createSignal("")
+  const [sending, setSending] = createSignal(false)
+  const [error, setError] = createSignal<string>("")
+  const [terminalError, setTerminalError] = createSignal<ReplyErrorName | undefined>(undefined)
 
-  const canSend = () => !sending() && !terminalError() && text().trim().length > 0;
+  const canSend = () => !sending() && !terminalError() && text().trim().length > 0
 
   const submit = async (event: SubmitEvent | KeyboardEvent) => {
-    event.preventDefault();
-    if (!canSend()) return;
-    const message = text().trim();
-    setSending(true);
-    setError("");
+    event.preventDefault()
+    if (!canSend()) return
+    const message = text().trim()
+    setSending(true)
+    setError("")
     try {
-      await props.onSend(message);
+      await props.onSend(message)
       // Only clear the textarea on success — failed sends should keep
       // the operator's text so they don't have to retype after a retry.
-      setText("");
+      setText("")
     } catch (e) {
-      const info = pickErrorInfo(e);
-      const fallback = e instanceof Error ? e.message : String(e);
-      setError(messageForError(info, fallback));
-      if (isTerminalError(info.name)) setTerminalError(info.name);
+      const info = pickErrorInfo(e)
+      const fallback = e instanceof Error ? e.message : String(e)
+      setError(messageForError(info, fallback))
+      if (isTerminalError(info.name)) setTerminalError(info.name)
     } finally {
-      setSending(false);
+      setSending(false)
     }
-  };
+  }
 
   return (
     <form
@@ -173,8 +171,8 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
         onInput={(event) => setText(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            void submit(event);
+            event.preventDefault()
+            void submit(event)
           }
         }}
       />
@@ -187,10 +185,7 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
       >
         <Icon name="send" />
         <span>
-          <Show
-            when={!sending()}
-            fallback={t("card.agent_reply_sending")}
-          >
+          <Show when={!sending()} fallback={t("card.agent_reply_sending")}>
             {t("card.agent_reply_send")}
           </Show>
         </span>
@@ -216,5 +211,5 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
         </div>
       </Show>
     </form>
-  );
+  )
 }

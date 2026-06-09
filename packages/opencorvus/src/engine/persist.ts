@@ -58,10 +58,7 @@ import { isTaskTerminal } from "./task-status"
 import { syncGoalStatus } from "./goal-status"
 import { createDecisionLog } from "@/decision-log"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
-import {
-  ArchitectContractGraphSchema,
-  type ArchitectContractGraph,
-} from "@/architect/contract-graph"
+import { ArchitectContractGraphSchema, type ArchitectContractGraph } from "@/architect/contract-graph"
 import type { WorkloadBrief } from "@/goal-workload-analyst/types"
 import {
   ResearchBriefSchema,
@@ -69,6 +66,7 @@ import {
   validateResearchBriefTaskBoundary,
   type ResearchBrief,
 } from "@/research/schema"
+import { renderSpecsAsText } from "@/acceptance/types"
 
 const log = Log.create({ service: "engine-transition" })
 
@@ -109,11 +107,7 @@ function latestBuildReportForGoal(taskID: string, goalID: string): string | unde
   return lines.join("\n")
 }
 
-function retryFeedbackValueFromGoalRun(input: {
-  taskID: string
-  goalID: string
-  priorRun: GoalRunRow
-}): string {
+function retryFeedbackValueFromGoalRun(input: { taskID: string; goalID: string; priorRun: GoalRunRow }): string {
   const lines = [
     `Previous build attempt ${input.priorRun.id} ended with status=${input.priorRun.status} before this retry.`,
     `Retry count on previous attempt: ${input.priorRun.retry_count}.`,
@@ -179,11 +173,7 @@ function appendBuildRetryFeedbackForPriorRun(input: {
   })
 }
 
-export function ensureBuildRetryFeedbackForGoal(input: {
-  taskID: string
-  goalID: string
-  source: string
-}): boolean {
+export function ensureBuildRetryFeedbackForGoal(input: { taskID: string; goalID: string; source: string }): boolean {
   const tip = findLatestTipGoalRun(input.goalID)
   if (!tip) return false
   return appendBuildRetryFeedbackForPriorRun({
@@ -220,6 +210,21 @@ interface GoalRowInput {
   priority?: "blocking" | "advisory"
   source?: "spec" | "system"
   metadata?: Record<string, unknown>
+}
+
+export type AppendGoalToActiveGraphInput = {
+  taskID: string
+  specSnapshotID: string
+  planVersionID?: string | null
+  goal: GoalRowInput
+  now: number
+}
+
+export type AppendGoalToActiveGraphResult = {
+  id: string
+  title: string
+  orderIndex: number
+  planNodeID?: string
 }
 
 function stringArray(value: unknown): string[] {
@@ -451,6 +456,127 @@ export function insertGoalRows(
 }
 
 /**
+ * Append one Orchestrator-owned goal to the current graph. This is the single
+ * writer for follow-up operator instructions that add one concrete buildable
+ * surface without asking Architect to regenerate the full graph.
+ */
+export function appendGoalToActiveGraph(
+  db: Database.TxOrDb,
+  input: AppendGoalToActiveGraphInput,
+): AppendGoalToActiveGraphResult {
+  const existingGoals = db
+    .select({
+      id: EngineGoalTable.id,
+      order_index: EngineGoalTable.order_index,
+    })
+    .from(EngineGoalTable)
+    .where(eq(EngineGoalTable.task_id, input.taskID))
+    .all()
+  const existingGoalIDs = new Set(existingGoals.map((goal) => goal.id))
+  const deps = input.goal.depends_on ?? []
+  for (const dep of deps) {
+    if (!existingGoalIDs.has(dep)) {
+      throw new Error(`appendGoalToActiveGraph: depends_on references unknown goal ${dep}`)
+    }
+  }
+
+  const goalID = input.goal.goalID ?? Identifier.ascending("goal")
+  if (existingGoalIDs.has(goalID)) {
+    throw new Error(`appendGoalToActiveGraph: goal id already exists: ${goalID}`)
+  }
+  const orderIndex = existingGoals.reduce((max, goal) => Math.max(max, goal.order_index), -1) + 1
+  const metadata =
+    input.goal.metadata && typeof input.goal.metadata === "object" && !Array.isArray(input.goal.metadata)
+      ? input.goal.metadata
+      : undefined
+
+  db.insert(EngineGoalTable)
+    .values({
+      id: goalID,
+      task_id: input.taskID,
+      plan_version_id: input.planVersionID ?? null,
+      spec_snapshot_id: input.specSnapshotID,
+      title: input.goal.title,
+      slug: goalSlug(input.goal.title),
+      objective: input.goal.objective,
+      acceptance_specs: input.goal.acceptance_specs,
+      owned_paths: input.goal.owned_paths ?? [],
+      depends_on: deps,
+      kind: input.goal.kind ?? "feature",
+      requirement_ids: input.goal.requirement_ids ?? [],
+      metadata: {
+        ...metadata,
+        source: "operator_add_goal",
+        depends_on_goal_ids: deps.length > 0 ? deps : undefined,
+      },
+      priority: input.goal.priority ?? "blocking",
+      source: input.goal.source ?? "system",
+      order_index: orderIndex,
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+
+  let planNodeID: string | undefined
+  if (input.planVersionID) {
+    const planNodes = db
+      .select({
+        id: EnginePlanNodeTable.id,
+        goal_id: EnginePlanNodeTable.goal_id,
+      })
+      .from(EnginePlanNodeTable)
+      .where(
+        and(
+          eq(EnginePlanNodeTable.task_id, input.taskID),
+          eq(EnginePlanNodeTable.plan_version_id, input.planVersionID),
+        ),
+      )
+      .all()
+    const nodeByGoal = new Map(planNodes.map((node) => [node.goal_id, node.id]))
+    const dependsOnNodeIDs = deps.map((dep) => {
+      const nodeID = nodeByGoal.get(dep)
+      if (!nodeID) {
+        throw new Error(`appendGoalToActiveGraph: active plan ${input.planVersionID} has no node for dependency ${dep}`)
+      }
+      return nodeID
+    })
+    planNodeID = Identifier.ascending("plan_node")
+    db.insert(EnginePlanNodeTable)
+      .values({
+        id: planNodeID,
+        task_id: input.taskID,
+        plan_version_id: input.planVersionID,
+        kind: "goal",
+        goal_id: goalID,
+        title: input.goal.title,
+        brief: renderSpecsAsText(input.goal.acceptance_specs),
+        depends_on_ids: dependsOnNodeIDs.length > 0 ? dependsOnNodeIDs : undefined,
+        order_index: orderIndex,
+        metadata: {
+          source: "operator_add_goal",
+        },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    db.update(EnginePlanVersionTable)
+      .set({
+        summary: `${planNodes.length + 1} goals`,
+        time_updated: input.now,
+      })
+      .where(eq(EnginePlanVersionTable.id, input.planVersionID))
+      .run()
+  }
+
+  return {
+    id: goalID,
+    title: input.goal.title,
+    orderIndex,
+    ...(planNodeID ? { planNodeID } : {}),
+  }
+}
+
+/**
  * Architect-driven goal upsert.
  *
  * Sole persistence path from the Architect's goal set into engine_goal. Computes
@@ -532,9 +658,7 @@ export function upsertGoalsFromArchitect(
       const mapped = llmToDBID.get(dep)
       if (mapped) return removedDepIDs.has(mapped) ? [] : [mapped]
       if (existingByID.has(dep) && !removedDepIDs.has(dep)) return [dep]
-      throw new Error(
-        `upsertGoalsFromArchitect: goal ${dbID} depends_on references unknown id ${dep}`,
-      )
+      throw new Error(`upsertGoalsFromArchitect: goal ${dbID} depends_on references unknown id ${dep}`)
     })
     const priorMetadata =
       existingByID.get(dbID)?.metadata && typeof existingByID.get(dbID)!.metadata === "object"
@@ -727,11 +851,7 @@ function persistResearchBriefArtifact(
   return id
 }
 
-export function persistTaskResearchBrief(input: {
-  taskID: string
-  brief: ResearchBrief
-  now?: number
-}) {
+export function persistTaskResearchBrief(input: { taskID: string; brief: ResearchBrief; now?: number }) {
   return Database.use((db) =>
     persistResearchBrief(db, {
       taskID: input.taskID,
@@ -741,11 +861,7 @@ export function persistTaskResearchBrief(input: {
   )
 }
 
-export function persistTaskFrontendResearchBrief(input: {
-  taskID: string
-  brief: ResearchBrief
-  now?: number
-}) {
+export function persistTaskFrontendResearchBrief(input: { taskID: string; brief: ResearchBrief; now?: number }) {
   return Database.use((db) =>
     persistFrontendResearchBrief(db, {
       taskID: input.taskID,
@@ -1196,8 +1312,7 @@ function appendGoalRunArtifact(input: {
     // process owner (the process driving it live owns it). Terminal/queued rows
     // without an owner stay null. Spec 2026-05-29-goal-run-owner-orphan-liveness.
     owner:
-      merged.owner ??
-      ((LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(merged.status) ? processOwner() : null),
+      merged.owner ?? ((LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(merged.status) ? processOwner() : null),
     time_started: merged.time_started,
     time_completed: merged.time_completed,
   }
@@ -1573,7 +1688,12 @@ export function persistTaskAcceptance(input: {
     Database.effect(() =>
       EngineProtocol.emit(
         Event.AcceptanceReady,
-        { taskID: input.task.id, runID: input.run.id, acceptanceID: input.acceptanceID, summary: input.acceptance.summary },
+        {
+          taskID: input.task.id,
+          runID: input.run.id,
+          acceptanceID: input.acceptanceID,
+          summary: input.acceptance.summary,
+        },
         { source: "persist.acceptance" },
       ),
     )
@@ -1602,8 +1722,8 @@ export function persistTaskAcceptance(input: {
  *
  * The `checks` parameter semantics match the pre-artifact behaviour: when
  * supplied, replaces the previous check set wholesale; when OMITTED, the
-  * prior check set is preserved (used by explicit post-acceptance artifact export
-  * after `deliver` has already written the structured checks). Pass [] to clear.
+ * prior check set is preserved (used by explicit post-acceptance artifact export
+ * after `deliver` has already written the structured checks). Pass [] to clear.
  */
 export function updateEvaluationFromAcceptanceVerdict(input: {
   acceptanceID: string
@@ -1653,14 +1773,18 @@ export function updateEvaluationFromAcceptanceVerdict(input: {
     timeCompleted: now,
     now,
   })
-  void EngineProtocol.emit(Event.EvaluationCompleted, {
-    taskID: evidence.taskID,
-    runID: evidence.runID,
-    evaluationID: evidence.id,
-    status,
-    verdict: input.verdict,
-    summary: input.summary,
-  }, { source: "evaluation.acceptance" })
+  void EngineProtocol.emit(
+    Event.EvaluationCompleted,
+    {
+      taskID: evidence.taskID,
+      runID: evidence.runID,
+      evaluationID: evidence.id,
+      status,
+      verdict: input.verdict,
+      summary: input.summary,
+    },
+    { source: "evaluation.acceptance" },
+  )
 }
 
 export function persistFailedRunEvaluation(input: {
@@ -2127,7 +2251,8 @@ export function finalizeBuildAttempt(input: {
     { additions: 0, deletions: 0 },
   )
   const acceptanceID = Identifier.ascending("acceptance")
-  const summary = input.summary?.trim() || `Goal ${input.goalID} build delivered ${acceptanceDiffs.length} file change(s).`
+  const summary =
+    input.summary?.trim() || `Goal ${input.goalID} build delivered ${acceptanceDiffs.length} file change(s).`
   Database.transaction((db) => {
     db.insert(EngineArtifactTable)
       .values({
@@ -2239,10 +2364,11 @@ export function recordIntegrityAttempt(input: {
   }
   const id = Identifier.ascending("artifact")
   const now = input.now ?? Date.now()
-  const attempts = listIntegrityAttemptArtifacts({
-    taskID: input.taskID,
-    lineage: input.lineage,
-  }).length + 1
+  const attempts =
+    listIntegrityAttemptArtifacts({
+      taskID: input.taskID,
+      lineage: input.lineage,
+    }).length + 1
   const payload = {
     spec_snapshot_id: input.lineage.activeSpecSnapshotID,
     session_id: input.sessionID,

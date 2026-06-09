@@ -17,28 +17,28 @@ The fix should stay semantic and local:
 
 ### Prompt / policy surfaces
 
-| Surface | Role | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | Orchestrator system policy | Keep the change to one short sentence near operator controls; do not add a standalone resume ladder section. |
-| `packages/opencorvus/test/agent/orchestrator-core-grain-ladder.test.ts` | Existing per-goal vs task-wide retry ladder coverage | Keep unchanged; child-session recovery should not create a second large prompt policy block. |
+| Surface                                                                 | Role                                                 | Decision                                                                                                     |
+| ----------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt`             | Orchestrator system policy                           | Keep the change to one short sentence near operator controls; do not add a standalone resume ladder section. |
+| `packages/opencorvus/test/agent/orchestrator-core-grain-ladder.test.ts` | Existing per-goal vs task-wide retry ladder coverage | Keep unchanged; child-session recovery should not create a second large prompt policy block.                 |
 
 ### Tool exposure / runtime
 
-| Surface | Role | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/agent/agent.ts` | Orchestrator include list | Add `cancel_subagent`; keep `task_report` excluded. |
-| `packages/opencorvus/test/agent/agent.test.ts` | Agent exposure regression | Assert orchestrator include list now contains `cancel_subagent`. |
-| `packages/opencorvus/src/orchestrator/tools.ts` | Tool implementation | Keep `steer_subagent`; add `cancel_subagent`; reuse the same target resolver for `session_id` / `goal_id` / legacy `goal_run_id`. |
+| Surface                                         | Role                      | Decision                                                                                                                          |
+| ----------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/agent/agent.ts`        | Orchestrator include list | Add `cancel_subagent`; keep `task_report` excluded.                                                                               |
+| `packages/opencorvus/test/agent/agent.test.ts`  | Agent exposure regression | Assert orchestrator include list now contains `cancel_subagent`.                                                                  |
+| `packages/opencorvus/src/orchestrator/tools.ts` | Tool implementation       | Keep `steer_subagent`; add `cancel_subagent`; reuse the same target resolver for `session_id` / `goal_id` / legacy `goal_run_id`. |
 
 ### Session / goal-run lifecycle
 
-| Surface | Role | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/session/prompt/state.ts` via `SessionPrompt.cancel(...)` | Terminally cancel the child session | Reuse; do not invent a second session-kill path. |
-| `packages/opencorvus/src/engine/persist.ts` via `updateGoalRun(...)` | Retire the live `goal_run` after child cancel | Mark the same attempt `aborted` so re-dispatch is unblocked. |
-| `packages/opencorvus/src/engine/persist.ts` via `updateGoalRunExecutorSessionStatus(...)` | Retire executor lease state for the same attempt | Update alongside `goal_run` to avoid stale "active" executor rows. |
-| `packages/opencorvus/src/server/routes/orchestrator.ts` | No new route | Keep resume control in orchestrator tools; do not create a parallel HTTP-only resume path. |
-| `packages/opencorvus/src/task-api/index.ts` | No task-wide abort change | `cancel_subagent` is intentionally narrower than task restart. |
+| Surface                                                                                   | Role                                             | Decision                                                                                   |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/session/prompt/state.ts` via `SessionPrompt.cancel(...)`         | Terminally cancel the child session              | Reuse; do not invent a second session-kill path.                                           |
+| `packages/opencorvus/src/engine/persist.ts` via `updateGoalRun(...)`                      | Retire the live `goal_run` after child cancel    | Mark the same attempt `aborted` so re-dispatch is unblocked.                               |
+| `packages/opencorvus/src/engine/persist.ts` via `updateGoalRunExecutorSessionStatus(...)` | Retire executor lease state for the same attempt | Update alongside `goal_run` to avoid stale "active" executor rows.                         |
+| `packages/opencorvus/src/server/routes/orchestrator.ts`                                   | No new route                                     | Keep resume control in orchestrator tools; do not create a parallel HTTP-only resume path. |
+| `packages/opencorvus/src/task-api/index.ts`                                               | No task-wide abort change                        | `cancel_subagent` is intentionally narrower than task restart.                             |
 
 ## Design Rules
 

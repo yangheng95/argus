@@ -47,7 +47,9 @@ function walkCss(dir: string): string[] {
 }
 
 // Concatenate all surface + cascade + primitive CSS files.
-const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
+const STYLES = walkCss(STYLES_ROOT)
+  .map((f) => readFileSync(f, "utf8"))
+  .join("\n")
 
 function ruleBody(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")

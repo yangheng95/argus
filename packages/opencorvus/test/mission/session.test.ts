@@ -38,7 +38,8 @@ describe("Mission session helpers", () => {
       directory: projectRoot,
       fn: async () => {
         const s = await ensureMissionSession({ missionID: "m-cwd", defaultCwd: projectRoot })
-        const mission = (s.metadata as { mission?: { id?: string; channelKey?: string; cwd?: string } } | undefined)?.mission
+        const mission = (s.metadata as { mission?: { id?: string; channelKey?: string; cwd?: string } } | undefined)
+          ?.mission
         expect(mission?.id).toBe("m-cwd")
         expect(mission?.channelKey).toBe("mission:m-cwd")
         expect(mission?.cwd).toBe(projectRoot)

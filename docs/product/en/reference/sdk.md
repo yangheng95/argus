@@ -51,17 +51,17 @@ Return shape:
 
 Mirror REST API modules (see [API reference](./api.md)):
 
-| Namespace | Endpoints |
-|---|---|
-| `client.task.*` | `/task`, `/tasks`, `/task/:id/*` |
-| `client.session.*` | `/session/*` |
-| `client.goal.*` / `client.run.*` | `/goal/*` / `/run/*` |
-| `client.event.subscribe()` | `/event` (SSE) |
-| `client.mcp.*` | `/mcp/*` |
-| `client.permission.*` | `/permission/*` |
-| `client.skill.*` | `/skill/*` |
-| `client.executor.*` | `/executor/*` |
-| `client.tui.runtime.*` | `/tui/runtime/*` |
+| Namespace                        | Endpoints                        |
+| -------------------------------- | -------------------------------- |
+| `client.task.*`                  | `/task`, `/tasks`, `/task/:id/*` |
+| `client.session.*`               | `/session/*`                     |
+| `client.goal.*` / `client.run.*` | `/goal/*` / `/run/*`             |
+| `client.event.subscribe()`       | `/event` (SSE)                   |
+| `client.mcp.*`                   | `/mcp/*`                         |
+| `client.permission.*`            | `/permission/*`                  |
+| `client.skill.*`                 | `/skill/*`                       |
+| `client.executor.*`              | `/executor/*`                    |
+| `client.tui.runtime.*`           | `/tui/runtime/*`                 |
 
 ## Event subscription
 
@@ -70,7 +70,9 @@ Mirror REST API modules (see [API reference](./api.md)):
 ```typescript
 const stream = client.event.subscribe({ signal: abortController.signal })
 for await (const event of stream) {
-  if (event.type === "task.updated") { /* ... */ }
+  if (event.type === "task.updated") {
+    /* ... */
+  }
 }
 ```
 

@@ -35,7 +35,9 @@ function buildOnErrorProbe(): Hono {
     return c.json({ name: "UnknownError", data: { message } }, 500)
   })
   probe.get("/__v13_leak_probe__", () => {
-    const inner = () => { throw new Error("upstream blew up") }
+    const inner = () => {
+      throw new Error("upstream blew up")
+    }
     const outer = () => inner()
     outer()
     return new Response("never")
@@ -55,12 +57,11 @@ describe("server error response stack-trace leak (audit W2-V13)", () => {
     // or any frame markers that pre-fix `err.stack` would have
     // included.
     const raw = JSON.stringify(body)
-    expect(raw).not.toContain("at ")           // stack frame markers
-    expect(raw).not.toContain(".ts:")          // file:line refs
-    expect(raw).not.toContain("\\packages\\")  // Windows absolute paths
-    expect(raw).not.toContain("/packages/")    // POSIX absolute paths
-    expect(raw).not.toContain("node_modules")  // dep layout
+    expect(raw).not.toContain("at ") // stack frame markers
+    expect(raw).not.toContain(".ts:") // file:line refs
+    expect(raw).not.toContain("\\packages\\") // Windows absolute paths
+    expect(raw).not.toContain("/packages/") // POSIX absolute paths
+    expect(raw).not.toContain("node_modules") // dep layout
     expect(raw).not.toContain("__v13_leak_probe__")
   })
-
 })

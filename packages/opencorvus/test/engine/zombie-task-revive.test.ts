@@ -13,10 +13,7 @@ import path from "node:path"
 
 describe("EngineRuntime — passive restart resume", () => {
   test("monitorRuns does not auto-revive active tasks after sync wave", async () => {
-    const runtimeSrc = await fs.readFile(
-      path.join(import.meta.dir, "..", "..", "src", "engine", "runtime.ts"),
-      "utf8",
-    )
+    const runtimeSrc = await fs.readFile(path.join(import.meta.dir, "..", "..", "src", "engine", "runtime.ts"), "utf8")
     expect(runtimeSrc).not.toMatch(/async function reviveZombieTasks\b/)
     expect(runtimeSrc).not.toMatch(/await reviveZombieTasks\(\)/)
     expect(runtimeSrc).not.toMatch(/resumeActiveTaskLoop/)

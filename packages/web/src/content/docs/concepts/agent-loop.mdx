@@ -9,11 +9,11 @@ Worker sessions follow the **standard agentic loop**: LLM emits tool-call → to
 
 `SessionLoop` (`packages/opencorvus/src/session/loop.ts:50`) is always in one of:
 
-| State | Meaning | Exit |
-|---|---|---|
-| **standby** | assistant emitted `finish`; waiting for the next user message | new user message arrives |
-| **tool-call** | LLM requested tools; they're executing | all tools resolved |
-| **subtask** | current turn spawned a sub-agent (recursive call) | sub-task completes |
+| State         | Meaning                                                       | Exit                     |
+| ------------- | ------------------------------------------------------------- | ------------------------ |
+| **standby**   | assistant emitted `finish`; waiting for the next user message | new user message arrives |
+| **tool-call** | LLM requested tools; they're executing                        | all tools resolved       |
+| **subtask**   | current turn spawned a sub-agent (recursive call)             | sub-task completes       |
 
 `collectLoopState` scans the last user/assistant pair; if the assistant's `finishReason !== "tool-calls"` and no new user message is queued → standby.
 

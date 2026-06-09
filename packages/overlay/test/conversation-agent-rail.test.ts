@@ -37,7 +37,9 @@ test("Conversation card-scroll waits for virtualized target materialization", ()
   expect(source).toContain("CARD_SCROLL_TARGET_MAX_FRAMES")
   expect(source).toContain("waitForScrollTargetElement")
   expect(source).toContain("const target = await waitForScrollTargetElement(request)")
-  expect(source).not.toContain("await waitForAnimationFrame();\n    await waitForAnimationFrame();\n    const target = scrollTargetElement(request)")
+  expect(source).not.toContain(
+    "await waitForAnimationFrame();\n    await waitForAnimationFrame();\n    const target = scrollTargetElement(request)",
+  )
 })
 
 test("ConversationAgentRail stays a fixed narrow bottom strip", () => {

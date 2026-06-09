@@ -127,7 +127,9 @@ export function sanitizeLocale(value: string): string {
   // Mirror the overlay's sanitizeLocale: only zh-CN and en-US are
   // bundled, anything else maps to en-US. VS Code returns lowercase
   // locale codes (e.g. "zh-cn", "en"); normalise to BCP-47.
-  const text = String(value || "").trim().toLowerCase()
+  const text = String(value || "")
+    .trim()
+    .toLowerCase()
   if (text.startsWith("zh")) return "zh-CN"
   return "en-US"
 }

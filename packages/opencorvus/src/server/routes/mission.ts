@@ -3,7 +3,12 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { randomBytes } from "node:crypto"
 import { Instance } from "@/project/instance"
-import { ensureMissionSession, findExistingMissionSession, getMissionSession, listGlobalMissionSessions } from "@/mission/session"
+import {
+  ensureMissionSession,
+  findExistingMissionSession,
+  getMissionSession,
+  listGlobalMissionSessions,
+} from "@/mission/session"
 import { MissionID } from "@/mission/schema"
 import { listMissionTasks, listTaskRows } from "@/engine/store"
 import { deriveTaskStatus } from "@/engine/task-status"
@@ -100,7 +105,9 @@ function missionTaskStats(tasks: MissionTaskProjectionValue[]): z.infer<typeof M
 }
 
 function projectMissionTasks(session: MissionSessionRecord): MissionTaskProjectionValue[] {
-  return listTaskRows(listMissionTasks({ projectID: session.projectID, missionID: session.missionID, sessionID: session.id })).map(({ task, directory }) =>
+  return listTaskRows(
+    listMissionTasks({ projectID: session.projectID, missionID: session.missionID, sessionID: session.id }),
+  ).map(({ task, directory }) =>
     MissionTaskProjection.parse({
       id: task.id,
       title: task.title,
@@ -132,139 +139,144 @@ function missionRecord(session: MissionSessionRecord): z.infer<typeof MissionRec
 }
 
 export function MissionRoutes() {
-  return new Hono().get(
-    "/",
-    describeRoute({
-      summary: "List Missions",
-      description:
-        "List Mission records across project directories. Each record is backed by " +
-        'exactly one kind="mission" session and can be opened through the session ' +
-        "conversation/event routes.",
-      operationId: "mission.list",
-      responses: {
-        200: {
-          description: "Mission records",
-          content: { "application/json": { schema: resolver(MissionRecord.array()) } },
+  return new Hono()
+    .get(
+      "/",
+      describeRoute({
+        summary: "List Missions",
+        description:
+          "List Mission records across project directories. Each record is backed by " +
+          'exactly one kind="mission" session and can be opened through the session ' +
+          "conversation/event routes.",
+        operationId: "mission.list",
+        responses: {
+          200: {
+            description: "Mission records",
+            content: { "application/json": { schema: resolver(MissionRecord.array()) } },
+          },
         },
+      }),
+      validator("query", MissionListQuery),
+      async (c) => {
+        const query = c.req.valid("query")
+        const records: z.infer<typeof MissionRecord>[] = []
+        for await (const session of listGlobalMissionSessions({
+          directory: query.directory,
+          search: query.search,
+          limit: query.limit,
+          cursorUpdated: query.cursorUpdated,
+          cursorSessionID: query.cursorSessionID,
+          archived: query.archived,
+        })) {
+          records.push(missionRecord(session))
+        }
+        return c.json(records)
       },
-    }),
-    validator("query", MissionListQuery),
-    async (c) => {
-      const query = c.req.valid("query")
-      const records: z.infer<typeof MissionRecord>[] = []
-      for await (const session of listGlobalMissionSessions({
-        directory: query.directory,
-        search: query.search,
-        limit: query.limit,
-        cursorUpdated: query.cursorUpdated,
-        cursorSessionID: query.cursorSessionID,
-        archived: query.archived,
-      })) {
-        records.push(missionRecord(session))
-      }
-      return c.json(records)
-    },
-  ).patch(
-    "/:missionID/title",
-    describeRoute({
-      summary: "Rename a Mission",
-      description: "Rename the Mission session title. The Mission record remains backed by the same mission session.",
-      operationId: "mission.rename",
-      responses: {
-        200: {
-          description: "Renamed Mission record",
-          content: { "application/json": { schema: resolver(MissionRecord) } },
+    )
+    .patch(
+      "/:missionID/title",
+      describeRoute({
+        summary: "Rename a Mission",
+        description: "Rename the Mission session title. The Mission record remains backed by the same mission session.",
+        operationId: "mission.rename",
+        responses: {
+          200: {
+            description: "Renamed Mission record",
+            content: { "application/json": { schema: resolver(MissionRecord) } },
+          },
         },
+      }),
+      validator("param", MissionParam),
+      validator("json", MissionTitleInput),
+      async (c) => {
+        const missionID = c.req.valid("param").missionID
+        const session = await getMissionSession(missionID)
+        const updated = await Session.setTitle({ sessionID: session.id, title: c.req.valid("json").title })
+        return c.json(missionRecord({ ...updated, missionID }))
       },
-    }),
-    validator("param", MissionParam),
-    validator("json", MissionTitleInput),
-    async (c) => {
-      const missionID = c.req.valid("param").missionID
-      const session = await getMissionSession(missionID)
-      const updated = await Session.setTitle({ sessionID: session.id, title: c.req.valid("json").title })
-      return c.json(missionRecord({ ...updated, missionID }))
-    },
-  ).post(
-    "/:missionID/abort",
-    describeRoute({
-      summary: "Abort a Mission",
-      description: "Abort the active Mission session loop for this Mission.",
-      operationId: "mission.abort",
-      responses: {
-        200: {
-          description: "Mission abort accepted",
-          content: { "application/json": { schema: resolver(z.boolean()) } },
+    )
+    .post(
+      "/:missionID/abort",
+      describeRoute({
+        summary: "Abort a Mission",
+        description: "Abort the active Mission session loop for this Mission.",
+        operationId: "mission.abort",
+        responses: {
+          200: {
+            description: "Mission abort accepted",
+            content: { "application/json": { schema: resolver(z.boolean()) } },
+          },
         },
+      }),
+      validator("param", MissionParam),
+      async (c) => {
+        const session = await getMissionSession(c.req.valid("param").missionID)
+        SessionPrompt.cancel(session.id)
+        return c.json(true)
       },
-    }),
-    validator("param", MissionParam),
-    async (c) => {
-      const session = await getMissionSession(c.req.valid("param").missionID)
-      SessionPrompt.cancel(session.id)
-      return c.json(true)
-    },
-  ).delete(
-    "/:missionID",
-    describeRoute({
-      summary: "Delete a Mission",
-      description: "Delete the Mission session and its conversation history.",
-      operationId: "mission.delete",
-      responses: {
-        200: {
-          description: "Mission deleted",
-          content: { "application/json": { schema: resolver(z.boolean()) } },
+    )
+    .delete(
+      "/:missionID",
+      describeRoute({
+        summary: "Delete a Mission",
+        description: "Delete the Mission session and its conversation history.",
+        operationId: "mission.delete",
+        responses: {
+          200: {
+            description: "Mission deleted",
+            content: { "application/json": { schema: resolver(z.boolean()) } },
+          },
         },
+      }),
+      validator("param", MissionParam),
+      async (c) => {
+        const session = await getMissionSession(c.req.valid("param").missionID)
+        await Session.remove(session.id)
+        return c.json(true)
       },
-    }),
-    validator("param", MissionParam),
-    async (c) => {
-      const session = await getMissionSession(c.req.valid("param").missionID)
-      await Session.remove(session.id)
-      return c.json(true)
-    },
-  ).post(
-    "/wake",
-    describeRoute({
-      summary: "Wake the Mission agent",
-      description:
-        "Start (or resume) a Mission agent session and inject a user prompt. " +
-        "Omit `missionID` to start a new mission; supply it to resume an existing one. " +
-        "The route is idempotent for (project, missionID) — exactly one mission " +
-        "session is keyed per mission.",
-      operationId: "mission.wake",
-      responses: {
-        200: {
-          description: "Mission wake accepted",
-          content: { "application/json": { schema: resolver(MissionWakeResult) } },
+    )
+    .post(
+      "/wake",
+      describeRoute({
+        summary: "Wake the Mission agent",
+        description:
+          "Start (or resume) a Mission agent session and inject a user prompt. " +
+          "Omit `missionID` to start a new mission; supply it to resume an existing one. " +
+          "The route is idempotent for (project, missionID) — exactly one mission " +
+          "session is keyed per mission.",
+        operationId: "mission.wake",
+        responses: {
+          200: {
+            description: "Mission wake accepted",
+            content: { "application/json": { schema: resolver(MissionWakeResult) } },
+          },
         },
-      },
-    }),
-    validator("json", MissionWakeInput),
-    async (c) => {
-      const input = c.req.valid("json")
-      const missionID = input.missionID ?? newMissionID()
-      // Snapshot existence BEFORE ensureMissionSession so the response
-      // distinguishes "started" from "resumed". The lookup and the ensure
-      // call both go through the same in-process lock on missionID, so they
-      // observe the same state for any single wake call.
-      const existing = findExistingMissionSession(missionID)
-      const session = await ensureMissionSession({
-        missionID,
-        defaultCwd: Instance.directory,
-      })
-      await SessionWake.wake({
-        sessionID: session.id,
-        prompt: input.text,
-        agent: "mission",
-      })
-      return c.json(
-        MissionWakeResult.parse({
+      }),
+      validator("json", MissionWakeInput),
+      async (c) => {
+        const input = c.req.valid("json")
+        const missionID = input.missionID ?? newMissionID()
+        // Snapshot existence BEFORE ensureMissionSession so the response
+        // distinguishes "started" from "resumed". The lookup and the ensure
+        // call both go through the same in-process lock on missionID, so they
+        // observe the same state for any single wake call.
+        const existing = findExistingMissionSession(missionID)
+        const session = await ensureMissionSession({
           missionID,
+          defaultCwd: Instance.directory,
+        })
+        await SessionWake.wake({
           sessionID: session.id,
-          created: !existing,
-        }),
-      )
-    },
-  )
+          prompt: input.text,
+          agent: "mission",
+        })
+        return c.json(
+          MissionWakeResult.parse({
+            missionID,
+            sessionID: session.id,
+            created: !existing,
+          }),
+        )
+      },
+    )
 }

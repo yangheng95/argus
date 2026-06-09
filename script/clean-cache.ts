@@ -62,10 +62,7 @@ async function findTsBuildInfo(): Promise<string[]> {
   return found
 }
 
-const targets: string[] = [
-  path.join(repoRoot, ".turbo"),
-  path.join(repoRoot, "node_modules", ".cache"),
-]
+const targets: string[] = [path.join(repoRoot, ".turbo"), path.join(repoRoot, "node_modules", ".cache")]
 
 for (const pkg of await listPackages()) {
   targets.push(path.join(pkg, ".turbo"))
@@ -76,7 +73,10 @@ for (const f of await findTsBuildInfo()) targets.push(f)
 
 let removed = 0
 for (const t of targets) {
-  const existed = await fs.stat(t).then(() => true).catch(() => false)
+  const existed = await fs
+    .stat(t)
+    .then(() => true)
+    .catch(() => false)
   if (!existed) continue
   await rm(t)
   removed += 1

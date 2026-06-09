@@ -36,7 +36,8 @@ export namespace RuntimePathIDLookup {
 
   export function task(segment: string): string {
     const rows = Database.use((db) =>
-      db.select({ id: EngineTaskTable.id })
+      db
+        .select({ id: EngineTaskTable.id })
         .from(EngineTaskTable)
         .where(isFullIDSegment(segment) ? eq(EngineTaskTable.id, segment) : like(EngineTaskTable.id, `${segment}%`))
         .all(),
@@ -46,7 +47,8 @@ export namespace RuntimePathIDLookup {
 
   export function goal(segment: string): string {
     const rows = Database.use((db) =>
-      db.select({ id: EngineGoalTable.id })
+      db
+        .select({ id: EngineGoalTable.id })
         .from(EngineGoalTable)
         .where(isFullIDSegment(segment) ? eq(EngineGoalTable.id, segment) : like(EngineGoalTable.id, `${segment}%`))
         .all(),
@@ -55,9 +57,12 @@ export namespace RuntimePathIDLookup {
   }
 
   export function run(segment: string): string {
-    const idMatch = isFullIDSegment(segment) ? eq(EngineArtifactTable.id, segment) : like(EngineArtifactTable.id, `${segment}%`)
+    const idMatch = isFullIDSegment(segment)
+      ? eq(EngineArtifactTable.id, segment)
+      : like(EngineArtifactTable.id, `${segment}%`)
     const rows = Database.use((db) =>
-      db.select({ id: EngineArtifactTable.id })
+      db
+        .select({ id: EngineArtifactTable.id })
         .from(EngineArtifactTable)
         .where(and(eq(EngineArtifactTable.kind, "run"), idMatch))
         .all(),
@@ -67,7 +72,8 @@ export namespace RuntimePathIDLookup {
 
   export function session(segment: string): string {
     const rows = Database.use((db) =>
-      db.select({ id: SessionTable.id })
+      db
+        .select({ id: SessionTable.id })
         .from(SessionTable)
         .where(isFullIDSegment(segment) ? eq(SessionTable.id, segment) : like(SessionTable.id, `${segment}%`))
         .all(),

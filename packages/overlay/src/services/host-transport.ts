@@ -119,13 +119,7 @@ export interface PickFilesOptions {
   multiple?: boolean
 }
 
-export const PROJECT_EDITOR_IDS = [
-  "vscode",
-  "pycharm",
-  "webstorm",
-  "intellij",
-  "cursor",
-] as const
+export const PROJECT_EDITOR_IDS = ["vscode", "pycharm", "webstorm", "intellij", "cursor"] as const
 
 export type ProjectEditorID = (typeof PROJECT_EDITOR_IDS)[number]
 
@@ -150,7 +144,6 @@ export type NativeCommand =
   // services/workspace.ts
   | { kind: "workspace.pickDir"; start?: string }
   | { kind: "workspace.pickFiles"; start?: string; multiple?: boolean }
-  | { kind: "workspace.createDir"; path: string }
   | { kind: "workspace.openProjectEditor"; editor: ProjectEditorID; path: string }
   // services/notify.ts
   | { kind: "notification.permission" }
@@ -159,7 +152,10 @@ export type NativeCommand =
 
 export class UnsupportedNativeCommandError extends Error {
   override readonly name: string = "UnsupportedNativeCommandError"
-  constructor(public readonly host: HostKind, public readonly command: NativeCommand) {
+  constructor(
+    public readonly host: HostKind,
+    public readonly command: NativeCommand,
+  ) {
     super(`Native command "${command.kind}" is not available in host "${host}".`)
   }
 }

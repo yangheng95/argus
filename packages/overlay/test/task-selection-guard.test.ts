@@ -1,45 +1,41 @@
-import { beforeEach, expect, test } from "bun:test";
-import { classifyPanelMessageTarget } from "../src/services/chat";
-import {
-  applyTasks,
-  setBoardStore,
-  setOrphanedSelectionHandler,
-} from "../src/store/board";
+import { beforeEach, expect, test } from "bun:test"
+import { classifyPanelMessageTarget } from "../src/services/chat"
+import { applyTasks, setBoardStore, setOrphanedSelectionHandler } from "../src/store/board"
 
 beforeEach(() => {
-  setBoardStore("board", null as any);
-  setBoardStore("tasks", []);
-  setBoardStore("pendingTasks", []);
-  setBoardStore("selectedSource", null);
-  setBoardStore("taskSwitching", false);
-  setOrphanedSelectionHandler(null);
-});
+  setBoardStore("board", null as any)
+  setBoardStore("tasks", [])
+  setBoardStore("pendingTasks", [])
+  setBoardStore("selectedSource", null)
+  setBoardStore("taskSwitching", false)
+  setOrphanedSelectionHandler(null)
+})
 
 test("applyTasks clears orphaned selection even when board is missing", () => {
-  let orphaned = 0;
+  let orphaned = 0
   setOrphanedSelectionHandler(() => {
-    orphaned += 1;
-  });
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_orphaned" });
-  setBoardStore("board", null as any);
+    orphaned += 1
+  })
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_orphaned" })
+  setBoardStore("board", null as any)
 
-  applyTasks([]);
+  applyTasks([])
 
-  expect(orphaned).toBe(1);
-});
+  expect(orphaned).toBe(1)
+})
 
 test("applyTasks does not clear selection during an in-flight task switch", () => {
-  let orphaned = 0;
+  let orphaned = 0
   setOrphanedSelectionHandler(() => {
-    orphaned += 1;
-  });
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_loading" });
-  setBoardStore("taskSwitching", true);
+    orphaned += 1
+  })
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_loading" })
+  setBoardStore("taskSwitching", true)
 
-  applyTasks([]);
+  applyTasks([])
 
-  expect(orphaned).toBe(0);
-});
+  expect(orphaned).toBe(0)
+})
 
 test("classifyPanelMessageTarget treats stale selected task as orphan", () => {
   expect(
@@ -48,8 +44,8 @@ test("classifyPanelMessageTarget treats stale selected task as orphan", () => {
       boardTaskID: "",
       tasks: [],
     }),
-  ).toBe("orphan");
-});
+  ).toBe("orphan")
+})
 
 test("classifyPanelMessageTarget forces reload when task exists but board is stale", () => {
   expect(
@@ -58,8 +54,8 @@ test("classifyPanelMessageTarget forces reload when task exists but board is sta
       boardTaskID: "",
       tasks: [{ task: { id: "tsk_live" } }],
     }),
-  ).toBe("reload");
-});
+  ).toBe("reload")
+})
 
 test("classifyPanelMessageTarget sends directly when board already matches", () => {
   expect(
@@ -68,5 +64,5 @@ test("classifyPanelMessageTarget sends directly when board already matches", () 
       boardTaskID: "tsk_live",
       tasks: [],
     }),
-  ).toBe("task");
-});
+  ).toBe("task")
+})

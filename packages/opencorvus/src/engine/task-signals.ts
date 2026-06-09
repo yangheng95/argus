@@ -1,5 +1,4 @@
-const FIGMA_URL_REGEX =
-  /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)(?:\/[^\s<>"'`)\]]*)?/i
+const FIGMA_URL_REGEX = /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)(?:\/[^\s<>"'`)\]]*)?/i
 const FIGMA_URL_GLOBAL_REGEX =
   /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)(?:\/[^\s<>"'`)\]]*)?/gi
 const HTTP_URL_REGEX = /\bhttps?:\/\/[^\s<>"'`)\]]+/i

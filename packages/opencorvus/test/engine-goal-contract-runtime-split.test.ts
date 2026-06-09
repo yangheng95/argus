@@ -13,10 +13,7 @@ import { resolve } from "node:path"
 
 describe("engine_goal schema — runtime workspace columns retired", () => {
   test("Drizzle schema has no workspace_dir / workspace_branch / workspace_base_ref columns", () => {
-    const source = readFileSync(
-      resolve(import.meta.dir, "../src/engine/engine.sql.ts"),
-      "utf8",
-    )
+    const source = readFileSync(resolve(import.meta.dir, "../src/engine/engine.sql.ts"), "utf8")
     // The EngineGoalTable definition is the authoritative schema source.
     // Anchor on the table name to scope the search to the table body.
     const tableStart = source.indexOf(`export const EngineGoalTable = sqliteTable(`)
@@ -37,10 +34,7 @@ describe("engine_goal schema — runtime workspace columns retired", () => {
   })
 
   test("DDL has no workspace_* column declarations on engine_goal", () => {
-    const source = readFileSync(
-      resolve(import.meta.dir, "../src/storage/ddl.ts"),
-      "utf8",
-    )
+    const source = readFileSync(resolve(import.meta.dir, "../src/storage/ddl.ts"), "utf8")
     const goalTableStart = source.indexOf("CREATE TABLE IF NOT EXISTS engine_goal")
     expect(goalTableStart).toBeGreaterThan(0)
     const goalTableEnd = source.indexOf(");", goalTableStart)
@@ -62,10 +56,7 @@ describe("engine_goal schema — runtime workspace columns retired", () => {
 
 describe("goal_run_attempt artifact carries the workspace triple", () => {
   test("artifactRowToGoalRunRow includes workspace_branch + workspace_base_ref", () => {
-    const source = readFileSync(
-      resolve(import.meta.dir, "../src/engine/store.ts"),
-      "utf8",
-    )
+    const source = readFileSync(resolve(import.meta.dir, "../src/engine/store.ts"), "utf8")
     // The mapper must read all three workspace_* fields from payload —
     // otherwise findGoalLatestWorkspace cannot reconstitute the triple.
     const mapperStart = source.indexOf("function artifactRowToGoalRunRow(")

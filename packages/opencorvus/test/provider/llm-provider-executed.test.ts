@@ -54,13 +54,13 @@ describe("ProviderLLM local tool execution metadata", () => {
         stream: streamFrom([
           { type: "stream-start", warnings: [] },
           { type: "tool-input-start", id: "call_search", toolName: "search_code", providerExecuted: true },
-          { type: "tool-input-delta", id: "call_search", delta: "{\"pattern\":\"industrialProduction\"}" },
+          { type: "tool-input-delta", id: "call_search", delta: '{"pattern":"industrialProduction"}' },
           { type: "tool-input-end", id: "call_search" },
           {
             type: "tool-call",
             toolCallId: "call_search",
             toolName: "search_code",
-            input: "{\"pattern\":\"industrialProduction\"}",
+            input: '{"pattern":"industrialProduction"}',
             providerExecuted: true,
           },
           { type: "finish", finishReason: "tool-calls", usage: usage() },
@@ -98,7 +98,9 @@ describe("ProviderLLM local tool execution metadata", () => {
     expect(parts.some((part) => part.type === "tool-result")).toBe(true)
     expect(
       parts
-        .filter((part) => (part.type === "tool-input-start" || part.type === "tool-call") && part.toolName === "search_code")
+        .filter(
+          (part) => (part.type === "tool-input-start" || part.type === "tool-call") && part.toolName === "search_code",
+        )
         .every((part) => part.providerExecuted !== true),
     ).toBe(true)
   })
@@ -113,7 +115,7 @@ describe("ProviderLLM local tool execution metadata", () => {
             type: "tool-call",
             toolCallId: "call_server",
             toolName: "server_search",
-            input: "{\"query\":\"macro\"}",
+            input: '{"query":"macro"}',
             providerExecuted: true,
           },
           { type: "finish", finishReason: "tool-calls", usage: usage() },

@@ -57,9 +57,7 @@ function acquireOnce(): VsCodeApi {
   // never re-acquire.
   const acquire = (globalThis as any).window?.acquireVsCodeApi
   if (typeof acquire !== "function") {
-    throw new Error(
-      "vscode-transport: acquireVsCodeApi is not available — this webview was not loaded by VS Code.",
-    )
+    throw new Error("vscode-transport: acquireVsCodeApi is not available — this webview was not loaded by VS Code.")
   }
   _vscode = acquire() as VsCodeApi
   return _vscode
@@ -103,7 +101,9 @@ function ensureAuthChangeSubscribed(): void {
     const snapshot = [...activeStreamForceClose]
     activeStreamForceClose.clear()
     for (const fn of snapshot) {
-      try { fn() } catch {}
+      try {
+        fn()
+      } catch {}
     }
   })
 }
@@ -134,10 +134,7 @@ function handleIncoming(raw: unknown): void {
     // of dropping silently, so a bad upstream bundle is visible in
     // the webview console rather than producing mysterious hangs.
     if (raw && typeof raw === "object") {
-      console.warn(
-        "[vscode-transport] dropping non-protocol message",
-        (raw as { type?: unknown }).type,
-      )
+      console.warn("[vscode-transport] dropping non-protocol message", (raw as { type?: unknown }).type)
     }
     return
   }
@@ -151,7 +148,9 @@ function handleIncoming(raw: unknown): void {
       console.error(
         `[vscode-transport] protocol mismatch: expected ${msg.expected}, got ${msg.received}. Reloading webview.`,
       )
-      try { (globalThis as any).window.location.reload() } catch {}
+      try {
+        ;(globalThis as any).window.location.reload()
+      } catch {}
     } else {
       console.error(
         `[vscode-transport] protocol mismatch reload budget exhausted (expected=${msg.expected}, received=${msg.received}). Halting; user must restart the webview.`,
@@ -181,14 +180,18 @@ function handleIncoming(raw: unknown): void {
       const s = streams.get(msg.id)
       if (!s || s.closed) return
       for (const data of msg.events) {
-        try { s.handlers.onEvent(data) } catch {}
+        try {
+          s.handlers.onEvent(data)
+        } catch {}
       }
       return
     }
     case "stream.error": {
       const s = streams.get(msg.id)
       if (!s) return
-      try { s.handlers.onError?.(new Error(msg.message)) } catch {}
+      try {
+        s.handlers.onError?.(new Error(msg.message))
+      } catch {}
       return
     }
     case "stream.close": {
@@ -199,7 +202,9 @@ function handleIncoming(raw: unknown): void {
       if (s.closed) return
       s.closed = true
       cleanupAbort(s.signal, s.abortListener)
-      try { s.handlers.onClose?.(msg.reason) } catch {}
+      try {
+        s.handlers.onClose?.(msg.reason)
+      } catch {}
       return
     }
     case "ui-command": {
@@ -212,7 +217,9 @@ function handleIncoming(raw: unknown): void {
         return
       }
       for (const handler of handlers) {
-        try { handler(msg.payload) } catch (err) {
+        try {
+          handler(msg.payload)
+        } catch (err) {
           console.error(`[vscode-transport] ui-command handler threw kind=${msg.kind}`, err)
         }
       }
@@ -284,7 +291,9 @@ function shouldHonourProtocolMismatch(_expected: number, _received: number): boo
   memReloadHistory.push(now)
   history.push(now)
   if (storage) {
-    try { storage.setItem(RELOAD_COUNTER_KEY, JSON.stringify(history)) } catch {}
+    try {
+      storage.setItem(RELOAD_COUNTER_KEY, JSON.stringify(history))
+    } catch {}
   }
   return true
 }
@@ -318,10 +327,18 @@ function decodeResponse<T>(msg: {
 }): TransportResponse<T> {
   let body: unknown
   switch (msg.body.kind) {
-    case "json": body = msg.body.value; break
-    case "text": body = msg.body.value; break
-    case "binary": body = base64ToUint8(msg.body.base64); break
-    case "empty": body = undefined; break
+    case "json":
+      body = msg.body.value
+      break
+    case "text":
+      body = msg.body.value
+      break
+    case "binary":
+      body = base64ToUint8(msg.body.base64)
+      break
+    case "empty":
+      body = undefined
+      break
     case "error":
       // Encoded error body — surface directly so caller's catch can read
       // the error name (plan §1: "明确失败").
@@ -445,7 +462,9 @@ export function createVsCodeTransport(): HostTransport {
             id,
           })
         } catch {}
-        try { handlers.onClose?.(reason) } catch {}
+        try {
+          handlers.onClose?.(reason)
+        } catch {}
       }
       const forceClose = () => close("auth-changed")
       active.forceClose = forceClose
@@ -476,7 +495,9 @@ export function createVsCodeTransport(): HostTransport {
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err))
         queueMicrotask(() => {
-          try { handlers.onError?.(error) } catch {}
+          try {
+            handlers.onError?.(error)
+          } catch {}
           close("post-failure")
         })
       }
@@ -521,7 +542,9 @@ export function __resetVsCodeTransportForTest(): void {
   uiCommandHandlers.clear()
   activeStreamForceClose.clear()
   if (authChangeUnsubscribe) {
-    try { authChangeUnsubscribe() } catch {}
+    try {
+      authChangeUnsubscribe()
+    } catch {}
     authChangeUnsubscribe = undefined
   }
   installed = false

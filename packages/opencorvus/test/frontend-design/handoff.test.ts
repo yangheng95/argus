@@ -20,27 +20,33 @@ beforeEach(async () => {
   projectID = `project_handoff_${stamp}`
   const now = Date.now()
   Database.use((db) =>
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: tmp.path,
-      name: "handoff test",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "handoff test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "handoff test",
-      request: "clone a reference page",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "handoff test",
+        request: "clone a reference page",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run(),
   )
 })
 
@@ -58,7 +64,8 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       log.append({
         phase: "frontend_design",
         key: "public_report",
-        value: "## Quality Project Contract\nBuild semantic React source from the source skeleton and preserved CSS sidecars.",
+        value:
+          "## Quality Project Contract\nBuild semantic React source from the source skeleton and preserved CSS sidecars.",
         reason: "public terminal report",
       })
       log.append({
@@ -82,7 +89,8 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       log.append({
         phase: "frontend_design",
         key: "frontend_project",
-        value: "status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\nacceptance_root: .",
+        value:
+          "status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\nacceptance_root: .",
         reason: "source skeleton role",
       })
       log.append({
@@ -110,7 +118,9 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       expect(handoff).toContain("measured webpage_evaluate evidence")
       expect(handoff).toContain("zero-finding web_clone_source_audit evidence")
       expect(handoff).toContain("Do not change other agent prompts or communication paths")
-      expect(handoff).toContain("do not delete `web-clone-source/` content until source-derived style evidence and styling obligations have been migrated")
+      expect(handoff).toContain(
+        "do not delete `web-clone-source/` content until source-derived style evidence and styling obligations have been migrated",
+      )
       expect(handoff).not.toContain("freehand")
       expect(handoff).not.toContain("greenfield")
       expect(handoff).not.toContain("100/100")

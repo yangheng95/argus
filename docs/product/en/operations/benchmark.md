@@ -55,25 +55,25 @@ accepted evaluation when present, and a passing local verification command.
 
 ## Key flags
 
-| flag | purpose |
-|---|---|
-| `--request-file=PATH` | task description file (template) |
-| `--request-attachment=PATH` | attach a file instead of using `--request-file`; the two are mutually exclusive |
-| `--reference-images=PATH` | visual comparison reference image |
-| `--figma-url=URL` | Figma design URL |
-| `--model` | **not accepted**; use environment/config model selection instead |
-| `--executor=opencorvus\|codex\|claude-code` | executor: OpenCorvus / Codex / Claude Code |
-| `--title=TITLE` | task title |
-| `--report=PATH` | output JSON report |
-| `--max-runs=N` | maximum runs |
-| `--max-fix-runs=N` | maximum repair runs |
-| `--max-executor-groups=N` | maximum parallel executor groups |
-| `--max-auto-resumes=N` | automatic resume attempts after failed/cancelled terminal status |
-| `--acceptance-verify-cmd=CMD` | custom acceptance verification command |
-| `--resume-task-id=TID` / `--resume-home-dir=DIR` / `--resume-message=TEXT` | resume mode |
-| `--no-keep` | delete tmp directory on finish |
-| `--skip-local-verify` | skip local re-verification |
-| `--no-browser` | **do not use** for visual benchmark runs; it bypasses overlay UI rendering |
+| flag                                                                       | purpose                                                                         |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `--request-file=PATH`                                                      | task description file (template)                                                |
+| `--request-attachment=PATH`                                                | attach a file instead of using `--request-file`; the two are mutually exclusive |
+| `--reference-images=PATH`                                                  | visual comparison reference image                                               |
+| `--figma-url=URL`                                                          | Figma design URL                                                                |
+| `--model`                                                                  | **not accepted**; use environment/config model selection instead                |
+| `--executor=opencorvus\|codex\|claude-code`                                | executor: OpenCorvus / Codex / Claude Code                                      |
+| `--title=TITLE`                                                            | task title                                                                      |
+| `--report=PATH`                                                            | output JSON report                                                              |
+| `--max-runs=N`                                                             | maximum runs                                                                    |
+| `--max-fix-runs=N`                                                         | maximum repair runs                                                             |
+| `--max-executor-groups=N`                                                  | maximum parallel executor groups                                                |
+| `--max-auto-resumes=N`                                                     | automatic resume attempts after failed/cancelled terminal status                |
+| `--acceptance-verify-cmd=CMD`                                              | custom acceptance verification command                                          |
+| `--resume-task-id=TID` / `--resume-home-dir=DIR` / `--resume-message=TEXT` | resume mode                                                                     |
+| `--no-keep`                                                                | delete tmp directory on finish                                                  |
+| `--skip-local-verify`                                                      | skip local re-verification                                                      |
+| `--no-browser`                                                             | **do not use** for visual benchmark runs; it bypasses overlay UI rendering      |
 
 > ~~`--stall-timeout-ms`~~ / ~~`--planning-stall-timeout-ms`~~ / ~~`--tool-timeout-ms`~~ are no longer accepted. The engine stream-activity watchdog owns inactivity aborts.
 
@@ -84,6 +84,7 @@ accepted evaluation when present, and a passing local verification command.
 ## Pass criteria
 
 Report JSON:
+
 ```json
 {
   "qualityVerdict": "accepted",
@@ -108,6 +109,7 @@ Historical baseline:
 ## Report structure
 
 `--report` JSON contains:
+
 - Task metadata (title, model, executor)
 - Per-stage duration (spec / goals / plan / execute / evaluate / deliver)
 - Per-goal check results

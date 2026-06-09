@@ -96,9 +96,12 @@ export async function translateScenarioToStepsWithDependencies(
 }
 
 function isToolCallPart(part: unknown): part is { type: string; toolName: string; args: unknown } {
-  return typeof part === "object" && part !== null
-    && (part as { type?: unknown }).type === "tool-call"
-    && typeof (part as { toolName?: unknown }).toolName === "string"
+  return (
+    typeof part === "object" &&
+    part !== null &&
+    (part as { type?: unknown }).type === "tool-call" &&
+    typeof (part as { toolName?: unknown }).toolName === "string"
+  )
 }
 
 function isErrorPart(part: unknown): part is { type: string; error: unknown } {

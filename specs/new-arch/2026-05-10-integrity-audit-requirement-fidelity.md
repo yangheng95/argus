@@ -18,6 +18,7 @@
 - **corrections / missing_goals 不动**：REQ 层发现的修复仍然落到 goal 层（modify goal.requirement_ids、split、新建 missing goal owning REQ-N）。整套 wire schema 保持。
 
 不做的事（明确 out of scope）：
+
 - 不引入新的 dimension（rule 5 反对过度工程）。
 - 不改 acceptance_spec / goal contract / verification-evidence 表结构。`goal.requirement_ids`、`acceptance_spec.source_requirement_id`、`engine_artifact[verification-evidence].checks[].spec_id` 已经在了，够 join。
 - 不在 requirements agent 端加 implicit-REQ 抽取逻辑 — integrity 是审查方，不替 requirements agent 抽（独立改动）。
@@ -29,53 +30,54 @@
 
 ### 1.1 维度定义层（语义改动主体）
 
-| 文件 | 改动 |
-|------|------|
-| `packages/opencorvus/src/integrity/dimensions.ts` | id 字面量 `"goal_fidelity"` → `"requirement_fidelity"`；summary + checklist 重写为 REQ-walk；`IntegrityDimension.id` 联合类型同步；hallucination `out_of_scope` 描述里 `goal_fidelity's distorted` 改名 |
-| `packages/opencorvus/src/integrity/agent.ts` | 空 goal-set 兜底 `id: "goal_fidelity"`（line 278）→ `"requirement_fidelity"`；`IntegrityIssue.requirementIDs?: string[]` 加入；`buildIssueInput` 加 `requirement_ids: z.array(z.string()).optional()`；comment 行 711 改名；`buildIntegrityPrompt` 把 REQ 章节前置并附反查表 |
-| `packages/opencorvus/src/integrity/index.ts` | 无（re-export 即可） |
-| `packages/opencorvus/src/integrity/submit-schema.ts` | 无（terminal submit 与维度无关） |
+| 文件                                                 | 改动                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/integrity/dimensions.ts`    | id 字面量 `"goal_fidelity"` → `"requirement_fidelity"`；summary + checklist 重写为 REQ-walk；`IntegrityDimension.id` 联合类型同步；hallucination `out_of_scope` 描述里 `goal_fidelity's distorted` 改名                                                                      |
+| `packages/opencorvus/src/integrity/agent.ts`         | 空 goal-set 兜底 `id: "goal_fidelity"`（line 278）→ `"requirement_fidelity"`；`IntegrityIssue.requirementIDs?: string[]` 加入；`buildIssueInput` 加 `requirement_ids: z.array(z.string()).optional()`；comment 行 711 改名；`buildIntegrityPrompt` 把 REQ 章节前置并附反查表 |
+| `packages/opencorvus/src/integrity/index.ts`         | 无（re-export 即可）                                                                                                                                                                                                                                                         |
+| `packages/opencorvus/src/integrity/submit-schema.ts` | 无（terminal submit 与维度无关）                                                                                                                                                                                                                                             |
 
 ### 1.2 prompt 文本
 
-| 文件 | 改动 |
-|------|------|
-| `packages/opencorvus/src/prompt/core/integrity-core.txt` | `submit_goal_fidelity_verdict` → `submit_requirement_fidelity_verdict`；`granularity_off under \`goal_fidelity\`` 字面量改名；新增"audit unit is each REQ-N, walk REQ rows not goal rows"段，要求 REQ-fidelity issue 必填 `requirement_ids` |
-| `packages/opencorvus/src/prompt/core/architect-core.txt` | 行 47 / 435 / 449 三处 `goal_fidelity` 字面量改 `requirement_fidelity` |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | 行 421 改名；新增一句"fidelity is REQ-keyed; issue.requirement_ids names which REQ failed" |
-| `packages/opencorvus/src/orchestrator/tools.ts` | line 2699 字符串改名；emit/record 路径无逻辑改动（perDimension 字段已 string-typed） |
-| `packages/opencorvus/src/agent/agent.ts` | line 381 描述字符串改名 |
+| 文件                                                        | 改动                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/prompt/core/integrity-core.txt`    | `submit_goal_fidelity_verdict` → `submit_requirement_fidelity_verdict`；`granularity_off under \`goal_fidelity\``字面量改名；新增"audit unit is each REQ-N, walk REQ rows not goal rows"段，要求 REQ-fidelity issue 必填`requirement_ids` |
+| `packages/opencorvus/src/prompt/core/architect-core.txt`    | 行 47 / 435 / 449 三处 `goal_fidelity` 字面量改 `requirement_fidelity`                                                                                                                                                                    |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | 行 421 改名；新增一句"fidelity is REQ-keyed; issue.requirement_ids names which REQ failed"                                                                                                                                                |
+| `packages/opencorvus/src/orchestrator/tools.ts`             | line 2699 字符串改名；emit/record 路径无逻辑改动（perDimension 字段已 string-typed）                                                                                                                                                      |
+| `packages/opencorvus/src/agent/agent.ts`                    | line 381 描述字符串改名                                                                                                                                                                                                                   |
 
 ### 1.3 事件协议 / SDK
 
-| 文件 | 改动 |
-|------|------|
-| `packages/opencorvus/src/engine/model.ts` | `IntegrityReviewCompleted.dimensions[].id` 的 `z.enum([...])` 把 `goal_fidelity` 替换；`issues[]` 加 `requirement_ids: z.array(z.string()).optional()` |
-| `packages/opencorvus/src/integrity/agent.ts` `emitIntegrityEvent` | issue payload 携带 `requirement_ids` |
-| `packages/sdk/openapi.json` | 由 `bun run docs:api` 重生（line 27249 enum） |
-| `packages/sdk/js/src/gen/{types.gen.ts,sdk.gen.ts}` | 由 codegen 重生（line 421 union） |
+| 文件                                                              | 改动                                                                                                                                                   |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/engine/model.ts`                         | `IntegrityReviewCompleted.dimensions[].id` 的 `z.enum([...])` 把 `goal_fidelity` 替换；`issues[]` 加 `requirement_ids: z.array(z.string()).optional()` |
+| `packages/opencorvus/src/integrity/agent.ts` `emitIntegrityEvent` | issue payload 携带 `requirement_ids`                                                                                                                   |
+| `packages/sdk/openapi.json`                                       | 由 `bun run docs:api` 重生（line 27249 enum）                                                                                                          |
+| `packages/sdk/js/src/gen/{types.gen.ts,sdk.gen.ts}`               | 由 codegen 重生（line 421 union）                                                                                                                      |
 
 ### 1.4 overlay
 
-| 文件 | 改动 |
-|------|------|
-| `packages/overlay/src/store/card-tree.ts` | line 211 enum 字面量；issue type 加 `requirement_ids?: string[]` |
-| `packages/overlay/src/services/tree-writer.ts` | line 111 enum、line 910 `dimensionIDs` 数组；payload pipe 透传 `requirement_ids` |
-| `packages/overlay/src/components/IntegrityCard.tsx` | issue `<li>` 渲染时把 `requirement_ids` 当作小 chip 列出来（"REQ-1 REQ-3 …"），无 ids 不渲染 |
+| 文件                                                | 改动                                                                                                                                      |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/store/card-tree.ts`           | line 211 enum 字面量；issue type 加 `requirement_ids?: string[]`                                                                          |
+| `packages/overlay/src/services/tree-writer.ts`      | line 111 enum、line 910 `dimensionIDs` 数组；payload pipe 透传 `requirement_ids`                                                          |
+| `packages/overlay/src/components/IntegrityCard.tsx` | issue `<li>` 渲染时把 `requirement_ids` 当作小 chip 列出来（"REQ-1 REQ-3 …"），无 ids 不渲染                                              |
 | `packages/overlay/src/i18n/zh-CN.json` `en-US.json` | key `integrity.dimension.goal_fidelity` 改 `integrity.dimension.requirement_fidelity`，文案：zh 「需求对齐」/ en 「Requirement Fidelity」 |
-| `packages/overlay/test/redesign-visual.html` | line 214 fixture 文案改名（仅影响 redesign 预览） |
+| `packages/overlay/test/redesign-visual.html`        | line 214 fixture 文案改名（仅影响 redesign 预览）                                                                                         |
 
 ### 1.5 持久化层
 
-| 文件 | 改动 |
-|------|------|
-| `packages/opencorvus/src/engine/persist.ts` `recordIntegrityAttempt` | `perDimension: Array<{ id: string; ... }>` 已 string-typed，无代码改动；注释行 1807 字面量改名 |
-| `packages/opencorvus/src/engine/store.ts` `findLatestIntegrityAttemptArtifact` | 无 |
-| `packages/opencorvus/src/acceptance/checks/project-gate.ts` | 无（按 kind 检索，不依赖 dimension id） |
+| 文件                                                                           | 改动                                                                                           |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/engine/persist.ts` `recordIntegrityAttempt`           | `perDimension: Array<{ id: string; ... }>` 已 string-typed，无代码改动；注释行 1807 字面量改名 |
+| `packages/opencorvus/src/engine/store.ts` `findLatestIntegrityAttemptArtifact` | 无                                                                                             |
+| `packages/opencorvus/src/acceptance/checks/project-gate.ts`                    | 无（按 kind 检索，不依赖 dimension id）                                                        |
 
 ### 1.6 测试（mock 改名 + 新增）
 
 mock 改名（仅替换字面量）：
+
 - `packages/opencorvus/test/integrity/agent.test.ts` 行 39, 63, 97, 107, 167
 - `packages/opencorvus/test/orchestrator/tools.test.ts` 行 177, 1002, 1109, 1346, 1442, 1580, 1740, 1922, 1984, 2054, 2072, 2139, 2157, 2251, 2413, 2503
 - `packages/opencorvus/test/server/task-conversation-routes.test.ts` line 61
@@ -86,6 +88,7 @@ mock 改名（仅替换字面量）：
 - `packages/opencorvus/test/integrity/tool-payload-budget.test.ts` 重测 schema 字符数（新增 `requirement_ids` 字段对单维度 schema 的字符数影响 < 200B，不会越 990k 阈值，但要落新 baseline）
 
 新增测试（rule 36，每条改动配单测）：
+
 - `test/integrity/req-fidelity-audit.test.ts`：
   1. REQ-N 没有任何 goal 在 `requirement_ids` 中声明 → 维度 verdict `needs_correction`，issue type `uncovered`，`requirement_ids=[REQ-N]`。
   2. REQ-N 被两个 goal 同时声明、双方 acceptance_spec 共同覆盖 → 不应误报 `merged_incorrectly`（多 goal 协作不是缺陷）。
@@ -130,7 +133,7 @@ mock 改名（仅替换字面量）：
 - 所有列出的 targeted test 通过。
 - `bun run docs:api` 输出无未提交差异（即 openapi.json / sdk types 已与代码同源）。
 - bench dry-run：overlay 中 integrity 卡片维度名为「需求对齐 / Requirement Fidelity」，issue 行能看到 REQ-id chip。
-- 检索旧字面量：`rg -n '"goal_fidelity"'` 在 packages/* 与 specs/* 之外无残留（specs/_archive 与历史 spec 不动）。
+- 检索旧字面量：`rg -n '"goal_fidelity"'` 在 packages/_ 与 specs/_ 之外无残留（specs/\_archive 与历史 spec 不动）。
 
 ---
 
@@ -152,7 +155,7 @@ mock 改名（仅替换字面量）：
 
 **审查点 A：implicit dependency tier surfacing（pre-build 也能查）**
 
-User request 描述的是 user-visible 交付物，但实现需要的隐含 tier（FE page → BE API + 数据源；CLI tool → 运行时入口 + 持久化；webhook → 外部回调可达性）未必出现在 REQ 列表。`technical_feasibility` 维度对每条 user-visible REQ 推它的实现 tier，逐 tier 检查 *merged tree* 中是否有承担该 tier 的 goal — 缺 tier = `missing_capability` against an implicit infra goal，提议 `missing_goal` 拥有该 tier（或 `modify` 现有 goal 加宽 `owned_paths` / `exports`）。**integrity 不会改 REQ 行**（schema 不允许，见 §6.3.#12）；REQ 列表自身的缺漏由 orchestrator 决策是否回到 requirements agent 重抽。
+User request 描述的是 user-visible 交付物，但实现需要的隐含 tier（FE page → BE API + 数据源；CLI tool → 运行时入口 + 持久化；webhook → 外部回调可达性）未必出现在 REQ 列表。`technical_feasibility` 维度对每条 user-visible REQ 推它的实现 tier，逐 tier 检查 _merged tree_ 中是否有承担该 tier 的 goal — 缺 tier = `missing_capability` against an implicit infra goal，提议 `missing_goal` 拥有该 tier（或 `modify` 现有 goal 加宽 `owned_paths` / `exports`）。**integrity 不会改 REQ 行**（schema 不允许，见 §6.3.#12）；REQ 列表自身的缺漏由 orchestrator 决策是否回到 requirements agent 重抽。
 
 **审查点 B：post-build REQ completion evidence（运行后才有）**
 
@@ -170,6 +173,7 @@ REQ status: done / partial / not_done / unstarted
 ```
 
 REQ 状态机制（pure projection，无状态机代码 — rule 13）：
+
 - 无 claiming goal → `unstarted`（同 `uncovered` issue）
 - 有 claiming goal 但全 unstarted/queued → `unstarted`
 - 至少一 claiming goal 跑了，但与 REQ 关联的 essential spec 全部 pass → `done`
@@ -182,7 +186,7 @@ REQ 状态机制（pure projection，无状态机代码 — rule 13）：
 
 ```ts
 export interface RequirementStatusRow {
-  reqID: string                              // REQ-N
+  reqID: string // REQ-N
   reqDescription: string
   claimingGoals: Array<{
     goalID: string
@@ -224,11 +228,11 @@ export function computeRequirementStatusSnapshot(input: {
 ```markdown
 # Requirement Status Snapshot (post-build evidence)
 
-| REQ | Aggregate | Claiming Goals → run / spec outcomes |
-|-----|-----------|--------------------------------------|
-| REQ-1 (...) | partial | goal_fe (completed): acc-fe-1 pass, acc-fe-2 fail |
-| REQ-2 (...) | not_done | goal_be (failed): no spec evidence |
-| REQ-3 (...) | unstarted | goal_data (queued): — |
+| REQ         | Aggregate | Claiming Goals → run / spec outcomes              |
+| ----------- | --------- | ------------------------------------------------- |
+| REQ-1 (...) | partial   | goal_fe (completed): acc-fe-1 pass, acc-fe-2 fail |
+| REQ-2 (...) | not_done  | goal_be (failed): no spec evidence                |
+| REQ-3 (...) | unstarted | goal_data (queued): —                             |
 ```
 
 ### 5.5 编排器接线（合并进 §1.2）
@@ -280,6 +284,7 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 ### 5.10 实施顺序（与 §2 合并）
 
 §2 步骤间隙处插入：
+
 - §2.2 之后：写 `requirement-status.ts` 模块（pure projection，单测优先）。
 - §2.5 之后：补 dimensions.ts 第二条 checklist + summary 改动。
 - §2.6 之后：orchestrator 接线 computeRequirementStatusSnapshot。
@@ -287,7 +292,7 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 
 ### 5.11 不做的事（明确 out of scope）
 
-- 不在本方案中改 requirements agent 的 prompt 让它主动抽 implicit REQ — 那是 requirements agent 的另一项独立改动。本方案 integrity 是 *审查* 该缺失，不替 requirements agent 抽。
+- 不在本方案中改 requirements agent 的 prompt 让它主动抽 implicit REQ — 那是 requirements agent 的另一项独立改动。本方案 integrity 是 _审查_ 该缺失，不替 requirements agent 抽。
 - 不在本方案中扩 acceptance_spec / verification-evidence 数据形状 — 现有 `spec_id` 就够 join。
 - 不在 integrity 内做 retry/replan 决策 — 那是 orchestrator 的事；integrity 只产出带证据的 verdict。
 
@@ -319,6 +324,7 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 
 **[codex #1]** `packages/opencorvus/src/session/session.sql.ts:35` 注释里有 `goal_fidelity` 字面量；`packages/opencorvus/test/integrity/apply-corrections.test.ts` 使用了 `IntegrityResult` 但未列入 §1.1 / §1.6。
 **修订**：
+
 - §1.5 表追加 `session.sql.ts` line 35 注释字面量改名一行。
 - §1.6 mock 列表追加 `test/integrity/apply-corrections.test.ts` — 仅类型导入，无字面量改动；但若 §6.4 决定收口 implicit_dependency_missing，则保持原样。
 
@@ -336,6 +342,7 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 
 **[codex #11] `implicit_dependency_missing` 与 `technical_feasibility.missing_capability` 语义重复（FE page 缺 BE API = missing_capability）。**
 **修订**：删除新 issue type。implicit-tier walk 不进 `requirement_fidelity` 而进 `technical_feasibility` 的 checklist —— 那里本来就有"merged-tree completeness ... missing_capability against an implicit infra goal"（dimensions.ts:122）。具体改动：
+
 - `requirement_fidelity.issueTypes` 不变（仍是 4 个：uncovered / partial / distorted / merged_incorrectly）。
 - `technical_feasibility.checklist` 加一条："**User-deliverable tier walk.** For each user-visible REQ, derive its implementation tier (FE deliverable → BE API + data source; CLI → runtime + storage; webhook → reachability infra). For each implied tier without a producing goal in the merged tree, that's `missing_capability`. Cite the user phrase that implies the missing tier in `evidence`."
 - `IntegrityIssueType` 不增项；§5.7 关于 `implicit_dependency_missing` 的事件协议改动作废。
@@ -350,6 +357,7 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 **[codex #8] post-build integrity 会被 pre-build 的 attempt 跳过。**
 `project-gate.ts:332` + `orchestrator/tools.ts:3631` 的 `findLatestIntegrityAttemptArtifact` 只按 `(taskID, kind=integrity_attempt, payload.spec_snapshot_id)` 检索，不区分 pre-build vs post-build。一次 pre-build 通过的 attempt 会被 acceptance gate 当作"已审"，post-build 永远不重跑。
 **修订**：在 attempt payload 加 `phase: "pre_build" | "post_build"` 字段（`recordIntegrityAttempt` 输入加 `phase` 必填）。`buildReviewEvidence` (project-gate.ts) 与 `findLatestIntegrityAttemptArtifact`（store.ts）都按 phase 过滤；`runIntegrityReviewOnce` 自己依据上下文（是否存在 tip goal_run with completed/failed status）决定本次 phase。acceptance 阶段必须看到一个 `phase=post_build` 且新于最近 tip goal_run completion 的 attempt 才算 "已审"。
+
 - §1.5 追加 `engine/persist.ts recordIntegrityAttempt` 加 `phase` 字段；`findLatestIntegrityAttemptArtifact` 加 `phase` 参数。
 - §1.5 追加 `acceptance/checks/project-gate.ts:332` 改逻辑（按 phase + freshness 过滤）。
 - §1.6 追加测试："pre-build integrity attempt does not satisfy post-build acceptance gate"。
@@ -360,6 +368,7 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 ### 6.5 测试补齐（rule 36，[codex #13]）
 
 §1.6 / §5.9 追加：
+
 - `renderIntegrityMarkdown` 保留 `requirement_ids` 与 `spec_ids` 字段（issue 行渲染断言）。
 - `IntegrityReviewCompleted` 事件 payload 实际含 issue 的两个新字段（emit 端断言）。
 - REQ-N 取 `metadata.source_requirement_id` 而非 `row.id`（snapshot helper 单测覆盖正反例）。

@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import {
-  EngineArtifactTable,
-  EngineTaskTable,
-} from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import {
   ORCHESTRATOR_STREAM_ERROR_FUSE_THRESHOLD,
   ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS,
@@ -34,50 +31,51 @@ let stamp = ""
 
 function seedTask(taskStartedMs: number) {
   Database.transaction((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: process.cwd(),
-      name: "stream-error fuse test",
-      sandboxes: [],
-      time_created: taskStartedMs,
-      time_updated: taskStartedMs,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "stream-error fuse",
-      request: "test",
-      kind: "workflow",
-      priority: "normal",
-      time_created: taskStartedMs,
-      time_updated: taskStartedMs,
-      time_started: taskStartedMs,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "stream-error fuse test",
+        sandboxes: [],
+        time_created: taskStartedMs,
+        time_updated: taskStartedMs,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "stream-error fuse",
+        request: "test",
+        kind: "workflow",
+        priority: "normal",
+        time_created: taskStartedMs,
+        time_updated: taskStartedMs,
+        time_started: taskStartedMs,
+      })
+      .run()
   })
 }
 
-function seedStreamError(input: {
-  artifactID: string
-  timeCreated: number
-  reason: string
-  errorName?: string
-}) {
+function seedStreamError(input: { artifactID: string; timeCreated: number; reason: string; errorName?: string }) {
   Database.transaction((db) => {
-    db.insert(EngineArtifactTable).values({
-      id: input.artifactID,
-      task_id: taskID,
-      run_id: null,
-      kind: "orchestrator-stream-error",
-      label: "orchestrator-stream-error",
-      payload: {
-        reason: input.reason,
-        errorName: input.errorName ?? null,
-        sessionID: null,
-      },
-      time_created: input.timeCreated,
-      time_updated: input.timeCreated,
-    }).run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: input.artifactID,
+        task_id: taskID,
+        run_id: null,
+        kind: "orchestrator-stream-error",
+        label: "orchestrator-stream-error",
+        payload: {
+          reason: input.reason,
+          errorName: input.errorName ?? null,
+          sessionID: null,
+        },
+        time_created: input.timeCreated,
+        time_updated: input.timeCreated,
+      })
+      .run()
   })
 }
 

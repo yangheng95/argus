@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { Rpc } from "../../src/util/rpc"
 
 function rpcTarget(
-  handler: (packet: Record<string, unknown>, target: { onmessage: ((evt: MessageEvent<string>) => void) | null }) => void,
+  handler: (
+    packet: Record<string, unknown>,
+    target: { onmessage: ((evt: MessageEvent<string>) => void) | null },
+  ) => void,
 ) {
   const target = {
     onmessage: null as ((evt: MessageEvent<string>) => void) | null,

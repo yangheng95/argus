@@ -172,10 +172,15 @@ describe("EngineRuntime goal-run convergence", () => {
         })
         seedGoalRun(taskID, runID, "grun_aborted_one", "aborted", now + 1)
         seedGoalRun(taskID, runID, "grun_aborted_two", "aborted", now + 2)
-        seedGoalBatchNotification(taskID, runID, [
-          { id: "grun_aborted_one", status: "aborted" },
-          { id: "grun_aborted_two", status: "aborted" },
-        ], now + 3)
+        seedGoalBatchNotification(
+          taskID,
+          runID,
+          [
+            { id: "grun_aborted_one", status: "aborted" },
+            { id: "grun_aborted_two", status: "aborted" },
+          ],
+          now + 3,
+        )
 
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -272,7 +277,8 @@ describe("EngineRuntime goal-run convergence", () => {
         })
         seedGoalRun(taskID, runID, "grun_completed", "completed", now + 1)
         Database.use((db) =>
-          db.insert(EngineInteractionRequestTable)
+          db
+            .insert(EngineInteractionRequestTable)
             .values({
               id: `int_goal_pending_${now}`,
               task_id: taskID,
@@ -367,7 +373,8 @@ function goalBatchNotificationsForTask(taskID: string) {
 
 function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: string, now: number) {
   Database.use((db) =>
-    db.insert(EngineArtifactTable)
+    db
+      .insert(EngineArtifactTable)
       .values({
         id: `${goalRunID}_${now}`,
         task_id: taskID,
@@ -408,7 +415,8 @@ function seedGoalBatchNotification(
     .sort()
     .join("|")
   Database.use((db) =>
-    db.insert(EngineArtifactTable)
+    db
+      .insert(EngineArtifactTable)
       .values({
         id: `art_goal_batch_notification_${now}`,
         task_id: taskID,

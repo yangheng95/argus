@@ -148,9 +148,12 @@ export async function launchBrowser(extraArgs?: string[]): Promise<OverlayBrowse
 
   await waitForTurn
   await acquireBrowserLock()
-  const heartbeat = setInterval(() => {
-    writeFileSync(browserLockHeartbeat, `${Date.now()}\n`)
-  }, Math.floor(STALE_BROWSER_LOCK_MS / 4))
+  const heartbeat = setInterval(
+    () => {
+      writeFileSync(browserLockHeartbeat, `${Date.now()}\n`)
+    },
+    Math.floor(STALE_BROWSER_LOCK_MS / 4),
+  )
 
   let released = false
   const releaseOnce = () => {
@@ -185,7 +188,8 @@ class OverlayBrowserSidecar {
   ) {}
 
   async start() {
-    const nodeExecutable = process.env.OPENCORVUS_BROWSER_MCP_NODE ?? (process.platform === "win32" ? "node.exe" : "node")
+    const nodeExecutable =
+      process.env.OPENCORVUS_BROWSER_MCP_NODE ?? (process.platform === "win32" ? "node.exe" : "node")
     this.child = spawn(nodeExecutable, ["-e", NODE_OVERLAY_BROWSER_SCRIPT], {
       cwd: process.cwd(),
       env: {
@@ -216,10 +220,7 @@ class OverlayBrowserSidecar {
       },
       close: async () => {
         try {
-          await Promise.race([
-            this.call("closeBrowser"),
-            new Promise((resolve) => setTimeout(resolve, 5_000)),
-          ])
+          await Promise.race([this.call("closeBrowser"), new Promise((resolve) => setTimeout(resolve, 5_000))])
         } finally {
           this.child?.kill()
           this.release()
@@ -232,9 +233,11 @@ class OverlayBrowserSidecar {
   }
 
   private pageProxy(pageId: string): OverlayPage {
-    const remote = (method: string, args: unknown[] = []) => this.call("pageMethod", { pageId, method, args: encode(args) })
+    const remote = (method: string, args: unknown[] = []) =>
+      this.call("pageMethod", { pageId, method, args: encode(args) })
     return {
-      setViewport: (viewport) => remote("setViewportSize", [{ width: viewport.width, height: viewport.height }]) as Promise<void>,
+      setViewport: (viewport) =>
+        remote("setViewportSize", [{ width: viewport.width, height: viewport.height }]) as Promise<void>,
       setViewportSize: (viewport) => remote("setViewportSize", [viewport]) as Promise<void>,
       setContent: (html, options = {}) => remote("setContent", [html, options]) as Promise<void>,
       goto: (url, options) => remote("goto", [url, options]),
@@ -246,22 +249,34 @@ class OverlayBrowserSidecar {
       reload: (options = {}) => remote("reload", [options]) as Promise<unknown>,
       route: async (pattern, handler) => {
         const events = this.pageHandlers.get(pageId) ?? new Map<string, EventHandler[]>()
-        events.set("route", [async (payload) => {
-          const item = payload as { routeId: string; url: string; method: string }
-          const route: OverlayRoute = {
-            request: () => ({
-              url: () => item.url,
-              method: () => item.method,
-            }),
-            fulfill: (options) => this.call("routeAction", { routeId: item.routeId, action: "fulfill", options: encode(options) }) as Promise<void>,
-            continue: (options) => this.call("routeAction", { routeId: item.routeId, action: "continue", options: encode(options) }) as Promise<void>,
-          }
-          try {
-            await handler(route)
-          } catch {
-            await route.continue().catch(() => undefined)
-          }
-        }])
+        events.set("route", [
+          async (payload) => {
+            const item = payload as { routeId: string; url: string; method: string }
+            const route: OverlayRoute = {
+              request: () => ({
+                url: () => item.url,
+                method: () => item.method,
+              }),
+              fulfill: (options) =>
+                this.call("routeAction", {
+                  routeId: item.routeId,
+                  action: "fulfill",
+                  options: encode(options),
+                }) as Promise<void>,
+              continue: (options) =>
+                this.call("routeAction", {
+                  routeId: item.routeId,
+                  action: "continue",
+                  options: encode(options),
+                }) as Promise<void>,
+            }
+            try {
+              await handler(route)
+            } catch {
+              await route.continue().catch(() => undefined)
+            }
+          },
+        ])
         this.pageHandlers.set(pageId, events)
         await this.call("registerRoute", { pageId, pattern })
       },
@@ -311,9 +326,12 @@ class OverlayBrowserSidecar {
 
   private elementProxy(pageId: string, handleId: string): OverlayElement {
     return {
-      click: (options) => this.call("elementMethod", { pageId, handleId, method: "click", args: encode([options]) }) as Promise<void>,
+      click: (options) =>
+        this.call("elementMethod", { pageId, handleId, method: "click", args: encode([options]) }) as Promise<void>,
       screenshot: async (options) =>
-        decodeBuffer(await this.call("elementMethod", { pageId, handleId, method: "screenshot", args: encode([options]) })),
+        decodeBuffer(
+          await this.call("elementMethod", { pageId, handleId, method: "screenshot", args: encode([options]) }),
+        ),
     }
   }
 
@@ -369,7 +387,8 @@ class OverlayBrowserSidecar {
 function encode(value: unknown): JsonValue | RemoteFunction {
   if (typeof value === "function") return { __opencorvusFunction: value.toString() }
   if (value === undefined) return null
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    return value
   if (Buffer.isBuffer(value)) return { __opencorvusBuffer: value.toString("base64") } as unknown as JsonValue
   if (Array.isArray(value)) return value.map((item) => encode(item) as JsonValue)
   if (typeof value === "object") {
@@ -383,7 +402,8 @@ function encode(value: unknown): JsonValue | RemoteFunction {
 function decode(value: JsonValue): JsonValue {
   if (Array.isArray(value)) return value.map(decode) as JsonValue
   if (value && typeof value === "object") {
-    if (typeof value.__opencorvusBuffer === "string") return Buffer.from(value.__opencorvusBuffer, "base64") as unknown as JsonValue
+    if (typeof value.__opencorvusBuffer === "string")
+      return Buffer.from(value.__opencorvusBuffer, "base64") as unknown as JsonValue
     const out: Record<string, JsonValue> = {}
     for (const [key, item] of Object.entries(value)) out[key] = decode(item as JsonValue)
     return out
@@ -394,7 +414,11 @@ function decode(value: JsonValue): JsonValue {
 function decodeBuffer(value: JsonValue): Buffer {
   const decoded = decode(value)
   if (Buffer.isBuffer(decoded)) return decoded
-  if (decoded && typeof decoded === "object" && typeof (decoded as Record<string, unknown>).__opencorvusBuffer === "string") {
+  if (
+    decoded &&
+    typeof decoded === "object" &&
+    typeof (decoded as Record<string, unknown>).__opencorvusBuffer === "string"
+  ) {
     return Buffer.from((decoded as Record<string, string>).__opencorvusBuffer, "base64")
   }
   return Buffer.alloc(0)
@@ -647,4 +671,4 @@ rl.on("line", async (line) => {
 
 process.on("SIGTERM", () => browser?.close().finally(() => process.exit(0)));
 process.on("SIGINT", () => browser?.close().finally(() => process.exit(130)));
-`;
+`

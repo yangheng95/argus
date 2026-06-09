@@ -65,15 +65,15 @@ task.completed | task.failed | task.cancelled
 
 ## 5. 常用任务端点
 
-| 端点                            | 用途                                                      |
-| ------------------------------- | --------------------------------------------------------- |
-| `GET /tasks`                    | 所有任务列表                                              |
-| `GET /task/<id>`                | 单任务状态                                                |
-| `GET /task/<id>/board`          | Kanban 视图                                               |
-| `POST /task/<id>/message`       | 追加用户消息（follow-up）                                 |
-| `POST /task/<id>/retry`         | 保持 plan，重试执行                                       |
-| `POST /task/<id>/replan`        | 丢弃当前 plan，重新规划                                   |
-| `POST /task/<id>/cancel`        | 取消任务                                                  |
+| 端点                      | 用途                      |
+| ------------------------- | ------------------------- |
+| `GET /tasks`              | 所有任务列表              |
+| `GET /task/<id>`          | 单任务状态                |
+| `GET /task/<id>/board`    | Kanban 视图               |
+| `POST /task/<id>/message` | 追加用户消息（follow-up） |
+| `POST /task/<id>/retry`   | 保持 plan，重试执行       |
+| `POST /task/<id>/replan`  | 丢弃当前 plan，重新规划   |
+| `POST /task/<id>/cancel`  | 取消任务                  |
 
 ## 6. 本地 TUI（交互模式）
 

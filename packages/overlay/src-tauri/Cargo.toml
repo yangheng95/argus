@@ -10,6 +10,7 @@ flate2 = "1"
 tar = "0.4"
 
 [features]
+default = ["devtools"]
 devtools = ["tauri/devtools"]
 
 [dependencies]

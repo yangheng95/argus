@@ -6,10 +6,7 @@
  * decisions now live in src/metrics/arbiter.ts (engine_metric_result +
  * engine_iteration); this module is read-only audit data.
  */
-import type {
-  EngineEvaluationCheck,
-  EngineEvaluationScope,
-} from "@/engine/engine.sql"
+import type { EngineEvaluationCheck, EngineEvaluationScope } from "@/engine/engine.sql"
 import {
   findGoalRunEvidence,
   findLatestAcceptanceEvidence,
@@ -31,9 +28,7 @@ export interface QueryEvidenceInput {
  *  because callers always want the most recent for their scope; if that ever
  *  needs to change we'll add it as an explicit parameter rather than a
  *  boolean flag. */
-export function queryEvidence(
-  input: QueryEvidenceInput,
-): VerificationEvidence | undefined {
+export function queryEvidence(input: QueryEvidenceInput): VerificationEvidence | undefined {
   if (input.scope === "goal_run") {
     if (input.goalRunID) return findGoalRunEvidence(input.goalRunID)
     if (input.goalID) return findLatestGoalRunEvidence(input.goalID)
@@ -53,9 +48,7 @@ export function queryEvidence(
  *  tool result; orchestrator logs it when it short-circuits. */
 export function renderEvidence(evidence: VerificationEvidence): string {
   const parts: string[] = []
-  parts.push(
-    `evidence ${evidence.id} scope=${evidence.scope} verdict=${evidence.verdict} status=${evidence.status}`,
-  )
+  parts.push(`evidence ${evidence.id} scope=${evidence.scope} verdict=${evidence.verdict} status=${evidence.status}`)
   if (evidence.summary) parts.push(`summary: ${evidence.summary}`)
   const byFamily = new Map<string, EngineEvaluationCheck[]>()
   for (const c of evidence.checks) {

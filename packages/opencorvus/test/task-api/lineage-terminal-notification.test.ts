@@ -28,14 +28,16 @@ async function seedRootSession(sessionID: string, text = "initial request") {
   }
   await Session.persistMessage({
     info,
-    parts: [{
-      id: Identifier.ascending("part"),
-      messageID: info.id,
-      sessionID,
-      type: "text",
-      text,
-      kind: "user_content",
-    }],
+    parts: [
+      {
+        id: Identifier.ascending("part"),
+        messageID: info.id,
+        sessionID,
+        type: "text",
+        text,
+        kind: "user_content",
+      },
+    ],
     touchSessionID: sessionID,
   })
 }
@@ -68,35 +70,40 @@ describe("task terminal lineage notifications", () => {
         const childTaskID = Identifier.ascending("task")
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values([
-            {
-              id: parentTaskID,
-              project_id: Instance.project.id,
-              session_id: parentRoot.id,
-              source: "test",
-              title: "parent task",
-              request: "parent task",
-              priority: "normal",
-              time_started: now,
-              time_created: now,
-              time_updated: now,
-            },
-            {
-              id: childTaskID,
-              project_id: Instance.project.id,
-              source: "orchestrator:propose_task",
-              title: "child task",
-              request: "child task",
-              priority: "normal",
-              metadata: { parent_task_id: parentTaskID },
-              time_started: now,
-              time_created: now,
-              time_updated: now,
-            },
-          ]).run(),
+          db
+            .insert(EngineTaskTable)
+            .values([
+              {
+                id: parentTaskID,
+                project_id: Instance.project.id,
+                session_id: parentRoot.id,
+                source: "test",
+                title: "parent task",
+                request: "parent task",
+                priority: "normal",
+                time_started: now,
+                time_created: now,
+                time_updated: now,
+              },
+              {
+                id: childTaskID,
+                project_id: Instance.project.id,
+                source: "orchestrator:propose_task",
+                title: "child task",
+                request: "child task",
+                priority: "normal",
+                metadata: { parent_task_id: parentTaskID },
+                time_started: now,
+                time_created: now,
+                time_updated: now,
+              },
+            ])
+            .run(),
         )
 
-        const child = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, childTaskID)).get())!
+        const child = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, childTaskID)).get(),
+        )!
         await updateTask(child, { status: "completed" }, "child delivered")
         await waitFor(async () => {
           const messages = await Session.messages({ sessionID: parentRoot.id })
@@ -106,17 +113,19 @@ describe("task terminal lineage notifications", () => {
         })
 
         const messages = await Session.messages({ sessionID: parentRoot.id })
-        const text = messages.flatMap((message) => message.parts).find((part) =>
-          part.type === "text" && part.text.includes("Child task terminal update.")
-        )
+        const text = messages
+          .flatMap((message) => message.parts)
+          .find((part) => part.type === "text" && part.text.includes("Child task terminal update."))
         expect(text).toMatchObject({
           type: "text",
           text: expect.stringContaining(`task_id: ${childTaskID}`),
         })
-        expect(dispatchTaskLoop).toHaveBeenCalledWith(expect.objectContaining({
-          taskID: parentTaskID,
-          interrupt: true,
-        }))
+        expect(dispatchTaskLoop).toHaveBeenCalledWith(
+          expect.objectContaining({
+            taskID: parentTaskID,
+            interrupt: true,
+          }),
+        )
       },
     })
   })
@@ -132,29 +141,36 @@ describe("task terminal lineage notifications", () => {
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "mission",
-            title: "mission child",
-            request: "mission child",
-            priority: "normal",
-            metadata: { actor: "mission", mission: { id: mission.missionID, session_id: mission.id } },
-            time_started: now,
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "mission",
+              title: "mission child",
+              request: "mission child",
+              priority: "normal",
+              metadata: { actor: "mission", mission: { id: mission.missionID, session_id: mission.id } },
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
-        const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())!
+        const task = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+        )!
 
         await updateTask(task, { status: "failed", error: "acceptance failed" }, "task failed acceptance")
         await waitFor(() => wake.mock.calls.length > 0)
 
-        expect(wake).toHaveBeenCalledWith(expect.objectContaining({
-          sessionID: mission.id,
-          agent: "mission",
-          prompt: expect.stringContaining("Mission task terminal update."),
-        }))
+        expect(wake).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sessionID: mission.id,
+            agent: "mission",
+            prompt: expect.stringContaining("Mission task terminal update."),
+          }),
+        )
         expect(wake.mock.calls[0]?.[0]?.prompt).toContain(`task_id: ${taskID}`)
         expect(wake.mock.calls[0]?.[0]?.prompt).toContain("error: acceptance failed")
       },

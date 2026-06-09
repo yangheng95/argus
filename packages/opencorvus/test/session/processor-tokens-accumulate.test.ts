@@ -55,10 +55,8 @@ test("session processor accumulates tokens across multiple finish-step events on
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
 
   spyOn(LLM, "stream").mockResolvedValue({
     fullStream: streamOf([

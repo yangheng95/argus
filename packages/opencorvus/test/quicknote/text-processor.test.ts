@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { extractTitle, generateSummary, validateContent, processText, TITLE_LENGTH } from "../../src/quicknote/text-processor"
+import {
+  extractTitle,
+  generateSummary,
+  validateContent,
+  processText,
+  TITLE_LENGTH,
+} from "../../src/quicknote/text-processor"
 
 describe("quicknote.text-processor", () => {
   describe("extractTitle", () => {

@@ -131,7 +131,19 @@ export function protocolInfo(provider: z.infer<typeof ExecutorName>) {
         spec_generation: true,
         plan_generation: true,
         tool_kinds: appServer
-          ? ["builtin", "dynamic", "approval", "input", "mcp", "shell", "patch", "read", "review", "plan", "structured_output"]
+          ? [
+              "builtin",
+              "dynamic",
+              "approval",
+              "input",
+              "mcp",
+              "shell",
+              "patch",
+              "read",
+              "review",
+              "plan",
+              "structured_output",
+            ]
           : ["builtin", "shell", "patch", "read", "unknown"],
       },
     })
@@ -158,7 +170,18 @@ export function protocolInfo(provider: z.infer<typeof ExecutorName>) {
         realtime: false,
         spec_generation: true,
         plan_generation: true,
-        tool_kinds: ["builtin", "approval", "input", "mcp", "shell", "patch", "read", "review", "structured_output", "unknown"],
+        tool_kinds: [
+          "builtin",
+          "approval",
+          "input",
+          "mcp",
+          "shell",
+          "patch",
+          "read",
+          "review",
+          "structured_output",
+          "unknown",
+        ],
       },
     })
   }
@@ -183,7 +206,19 @@ export function protocolInfo(provider: z.infer<typeof ExecutorName>) {
       realtime: false,
       spec_generation: false,
       plan_generation: false,
-      tool_kinds: ["builtin", "dynamic", "approval", "input", "mcp", "shell", "patch", "read", "review", "plan", "structured_output"],
+      tool_kinds: [
+        "builtin",
+        "dynamic",
+        "approval",
+        "input",
+        "mcp",
+        "shell",
+        "patch",
+        "read",
+        "review",
+        "plan",
+        "structured_output",
+      ],
     },
   })
 }

@@ -15,11 +15,7 @@ import {
   requestPermission as tauriRequestNotificationPermission,
   sendNotification as tauriSendNotification,
 } from "@tauri-apps/plugin-notification"
-import {
-  apiHeaders as apiHeadersFromState,
-  apiUrl as apiUrlFromState,
-  onAuthChange,
-} from "./api"
+import { apiHeaders as apiHeadersFromState, apiUrl as apiUrlFromState, onAuthChange } from "./api"
 import type {
   HostTransport,
   NativeCommand,
@@ -125,7 +121,10 @@ function applyBody(init: RequestInit, body?: RequestBody): RequestInit {
       return {
         ...init,
         body: body.value,
-        headers: { "Content-Type": "text/plain;charset=utf-8", ...(init.headers as Record<string, string> | undefined) },
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8",
+          ...(init.headers as Record<string, string> | undefined),
+        },
       }
     case "form":
       // FormData sets its own multipart Content-Type with boundary.
@@ -184,16 +183,18 @@ async function readErrorResponse<T>(res: Response): Promise<T> {
  */
 function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): StreamHandle {
   const controller = new AbortController()
-  const signal = input.signal
-    ? mergeAbort(input.signal, controller.signal)
-    : controller.signal
+  const signal = input.signal ? mergeAbort(input.signal, controller.signal) : controller.signal
   let closed = false
   const closeWithReason = (reason: string): void => {
     if (closed) return
     closed = true
     activeStreamForceClose.delete(forceClose)
-    try { controller.abort() } catch {}
-    try { handlers.onClose?.(reason) } catch {}
+    try {
+      controller.abort()
+    } catch {}
+    try {
+      handlers.onClose?.(reason)
+    } catch {}
   }
   const forceClose = () => closeWithReason("auth-changed")
   activeStreamForceClose.add(forceClose)
@@ -223,16 +224,22 @@ function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): Str
     } catch (err) {
       if (closed) return
       const error = err instanceof Error ? err : new Error(String(err))
-      try { handlers.onError?.(error) } catch {}
+      try {
+        handlers.onError?.(error)
+      } catch {}
       closeWithReason("post-stream-fetch-error")
       return
     }
     if (!res.ok || !res.body) {
-      try { handlers.onError?.(new Error(`POST stream ${res.status}: ${res.statusText}`)) } catch {}
+      try {
+        handlers.onError?.(new Error(`POST stream ${res.status}: ${res.statusText}`))
+      } catch {}
       closeWithReason("post-stream-bad-response")
       return
     }
-    try { handlers.onOpen?.() } catch {}
+    try {
+      handlers.onOpen?.()
+    } catch {}
 
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
@@ -240,7 +247,7 @@ function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): Str
     const consume = (chunk: string, flush = false) => {
       buf += chunk
       const blocks = buf.split(/\r?\n\r?\n/)
-      buf = flush ? "" : (blocks.pop() || "")
+      buf = flush ? "" : blocks.pop() || ""
       for (const block of blocks) {
         const data = block
           .split(/\r?\n/)
@@ -248,7 +255,9 @@ function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): Str
           .map((line) => line.slice(5).trim())
           .join("\n")
         if (!data) continue
-        try { handlers.onEvent(data) } catch {}
+        try {
+          handlers.onEvent(data)
+        } catch {}
       }
     }
 
@@ -265,7 +274,9 @@ function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): Str
     } catch (err) {
       if (!closed) {
         const error = err instanceof Error ? err : new Error(String(err))
-        try { handlers.onError?.(error) } catch {}
+        try {
+          handlers.onError?.(error)
+        } catch {}
       }
     } finally {
       closeWithReason("post-stream-done")
@@ -323,7 +334,9 @@ function ensureAuthChangeSubscribed(): void {
     const snapshot = [...activeStreamForceClose]
     activeStreamForceClose.clear()
     for (const fn of snapshot) {
-      try { fn() } catch {}
+      try {
+        fn()
+      } catch {}
     }
   })
 }
@@ -344,9 +357,10 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
         input.body,
       )
       const res = await fetch(url.toString(), init)
-      const body = res.ok || input.responseKind === "binary"
-        ? await readResponse<T>(res, input.responseKind)
-        : await readErrorResponse<T>(res)
+      const body =
+        res.ok || input.responseKind === "binary"
+          ? await readResponse<T>(res, input.responseKind)
+          : await readErrorResponse<T>(res)
       return {
         status: res.status,
         ok: res.ok,
@@ -389,18 +403,26 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
         closed = true
         clearTimeout(stuckTimer)
         activeStreamForceClose.delete(forceClose)
-        try { source.close() } catch {}
-        try { handlers.onClose?.(reason) } catch {}
+        try {
+          source.close()
+        } catch {}
+        try {
+          handlers.onClose?.(reason)
+        } catch {}
       }
       const forceClose = () => {
         if (closed) return
-        try { handlers.onError?.(new Error("event-source auth-changed")) } catch {}
+        try {
+          handlers.onError?.(new Error("event-source auth-changed"))
+        } catch {}
         closeWithReason("auth-changed")
       }
       activeStreamForceClose.add(forceClose)
       const stuckTimer: ReturnType<typeof setTimeout> = setTimeout(() => {
         if (opened || closed) return
-        try { handlers.onError?.(new Error("event-source open timeout")) } catch {}
+        try {
+          handlers.onError?.(new Error("event-source open timeout"))
+        } catch {}
         closeWithReason("event-source-stuck")
       }, OPEN_TIMEOUT_MS)
       if (typeof (stuckTimer as { unref?: () => void }).unref === "function") {
@@ -409,10 +431,14 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
       source.addEventListener("open", () => {
         opened = true
         clearTimeout(stuckTimer)
-        try { handlers.onOpen?.() } catch {}
+        try {
+          handlers.onOpen?.()
+        } catch {}
       })
       source.addEventListener("message", (e) => {
-        try { handlers.onEvent((e as MessageEvent).data as string) } catch {}
+        try {
+          handlers.onEvent((e as MessageEvent).data as string)
+        } catch {}
       })
       source.addEventListener("error", () => {
         // EventSource fires error on every transient disconnect.
@@ -422,7 +448,9 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
         // - readyState CLOSED: connection is permanently dead; fire
         //   onClose so the consumer can decide on its own reconnect
         //   policy (plan §5.5: transport doesn't own reconnect).
-        try { handlers.onError?.(new Error("event-source error")) } catch {}
+        try {
+          handlers.onError?.(new Error("event-source error"))
+        } catch {}
         if (source.readyState === EventSource.CLOSED && !closed) {
           closeWithReason("event-source-closed")
         }
@@ -487,8 +515,6 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
             start: command.start || undefined,
             multiple: command.multiple ?? true,
           })
-        case "workspace.createDir":
-          return invokeTauri("overlay_create_dir", { path: command.path })
         case "workspace.openProjectEditor":
           return invokeTauri("overlay_open_project_editor", {
             editor: command.editor,

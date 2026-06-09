@@ -68,9 +68,7 @@ describe("AttachmentStore.writeFromPath", () => {
         const projectID = Instance.project.id
         const src = path.join(tmp.path, "mystery.xyz")
         await fs.writeFile(src, Buffer.from([1, 2, 3]))
-        await expect(AttachmentStore.writeFromPath(projectID, src)).rejects.toThrow(
-          /unsupported extension/i,
-        )
+        await expect(AttachmentStore.writeFromPath(projectID, src)).rejects.toThrow(/unsupported extension/i)
       },
     })
   })

@@ -23,4 +23,3 @@ describe("runtime config", () => {
     expect(result.config.permission).toBeDefined()
   })
 })
-

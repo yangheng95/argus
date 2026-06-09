@@ -20,14 +20,7 @@ import path from "node:path"
  * doesn't crawl back via well-meaning "for back-compat" PRs.
  */
 
-const BENCH_SCRIPT = path.join(
-  import.meta.dir,
-  "..",
-  "..",
-  "script",
-  "benchmark",
-  "overlay-web-benchmark.ts",
-)
+const BENCH_SCRIPT = path.join(import.meta.dir, "..", "..", "script", "benchmark", "overlay-web-benchmark.ts")
 const BENCHMARK_DIR = path.dirname(BENCH_SCRIPT)
 
 const src = await Bun.file(BENCH_SCRIPT).text()
@@ -70,12 +63,12 @@ test("benchmark errors cannot be swallowed as successful no-report exits", () =>
   expect(exitCodeIndex).toBeGreaterThan(catchIndex)
   expect(reportIndex).toBeGreaterThan(exitCodeIndex)
   expect(src).toContain("failed to write benchmark report")
-  expect(src).toContain("type: \"benchmark_report_failed\"")
+  expect(src).toContain('type: "benchmark_report_failed"')
 })
 
 test("benchmark path flags tolerate shell-preserved wrapping quotes", () => {
   expect(src).toContain("function stripWrappingQuotes")
-  expect(src).toContain("const report = stripWrappingQuotes(flag(\"--report\"))")
+  expect(src).toContain('const report = stripWrappingQuotes(flag("--report"))')
 })
 
 test("benchmark does not auto-resume failed terminal tasks", () => {
@@ -87,7 +80,7 @@ test("benchmark does not auto-resume failed terminal tasks", () => {
 })
 
 test("resume mode attaches read-only unless an explicit message is provided", () => {
-  expect(src).toContain("const resumeMessage = flag(\"--resume-message\")")
+  expect(src).toContain('const resumeMessage = flag("--resume-message")')
   expect(src).not.toContain("修复所有失败的goals并重试")
   expect(src).toContain("attached without message injection")
   expect(src).toContain("injecting explicit message")
@@ -129,7 +122,7 @@ test("benchmark git changed-file evidence fails loudly", () => {
 
 test("benchmark local visual verification waits for completed tasks", () => {
   expect(src).toContain("skippedLocalVerify")
-  expect(src).toContain("currentTaskStatus !== \"completed\"")
+  expect(src).toContain('currentTaskStatus !== "completed"')
   expect(src).toContain("skipped because task status is")
   expect(src).toContain("skipped because benchmark ended before task completion")
 })
@@ -154,11 +147,11 @@ test("benchmark task metadata wires auto verification into acceptance checks", (
 
 test("benchmark evidence inputs stay outside the project worktree", () => {
   expect(src).not.toContain("Copy request file into the project directory")
-  expect(src).not.toContain("path.join(temp.dir, \"references\")")
+  expect(src).not.toContain('path.join(temp.dir, "references")')
   expect(src).not.toContain("await fs.copyFile(path.resolve(requestFile)")
-  expect(src).not.toContain("path.join(dir, \"opencorvus.json\")")
-  expect(src).not.toContain("path.join(dir, \".opencorvus\", \"opencorvus.json\")")
-  expect(src).toContain("await Bun.write(path.join(temp.config, \"opencorvus.json\"), config)")
+  expect(src).not.toContain('path.join(dir, "opencorvus.json")')
+  expect(src).not.toContain('path.join(dir, ".opencorvus", "opencorvus.json")')
+  expect(src).toContain('await Bun.write(path.join(temp.config, "opencorvus.json"), config)')
 })
 
 test("retired mirror and image-to-code benchmark entrypoints stay removed", async () => {

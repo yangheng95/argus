@@ -31,11 +31,13 @@ export async function runSecurityDataReview(input: {
       proposedSeverity: "blocking",
       category: "evidence_quality",
       claim: "Security/data surface was selected without dependency or file evidence.",
-      evidence: [{
-        kind: "log",
-        ref: input.surfaceManifest.id,
-        excerpt: "security_data selected but no security refs were present",
-      }],
+      evidence: [
+        {
+          kind: "log",
+          ref: input.surfaceManifest.id,
+          excerpt: "security_data selected but no security refs were present",
+        },
+      ],
       affectedRequirementIDs: requirementIDs(input.goals),
     })
   }
@@ -77,9 +79,10 @@ export async function runSecurityDataReview(input: {
     acceptanceId: input.acceptanceID,
     reviewer: "security_data",
     executionStatus: "completed",
-    summary: findings.length === 0
-      ? `Security/data review passed with ${files.length} file evidence ref(s).`
-      : `Security/data review found ${findings.length} issue(s).`,
+    summary:
+      findings.length === 0
+        ? `Security/data review passed with ${files.length} file evidence ref(s).`
+        : `Security/data review found ${findings.length} issue(s).`,
     findings,
     evidenceRefs: evidenceRefs(input.surfaceManifest, files),
     reviewedSurfaces: ["security_data"],
@@ -87,14 +90,16 @@ export async function runSecurityDataReview(input: {
 }
 
 function securityFiles(manifest: AcceptanceSurfaceManifest) {
-  return [...new Set(
-    manifest.evidence
-      .filter((item) => item.surface === "security_data")
-      .flatMap((item) => item.refs)
-      .filter((ref) => ref.kind === "file")
-      .map((ref) => ref.ref)
-      .filter((ref): ref is string => typeof ref === "string" && ref.length > 0),
-  )].sort()
+  return [
+    ...new Set(
+      manifest.evidence
+        .filter((item) => item.surface === "security_data")
+        .flatMap((item) => item.refs)
+        .filter((ref) => ref.kind === "file")
+        .map((ref) => ref.ref)
+        .filter((ref): ref is string => typeof ref === "string" && ref.length > 0),
+    ),
+  ].sort()
 }
 
 function securityDependencies(manifest: AcceptanceSurfaceManifest) {
@@ -111,23 +116,25 @@ function hardcodedSecret(text: string) {
     /\bsk-[a-zA-Z0-9_-]{16,}\b/,
     /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   ]
-  const match = patterns
-    .map((pattern) => text.match(pattern))
-    .find((item): item is RegExpMatchArray => Boolean(item))
+  const match = patterns.map((pattern) => text.match(pattern)).find((item): item is RegExpMatchArray => Boolean(item))
   if (!match) return undefined
   return match[0].slice(0, 300)
 }
 
 function unsafeUploadPath(text: string) {
-  return /\boriginalname\b/.test(text)
-    && /\bpath\.join\b|\bwriteFile\b|\bcreateWriteStream\b/.test(text)
-    && !/\bpath\.basename\b|\bsanitize(?:File)?Name\b/.test(text)
+  return (
+    /\boriginalname\b/.test(text) &&
+    /\bpath\.join\b|\bwriteFile\b|\bcreateWriteStream\b/.test(text) &&
+    !/\bpath\.basename\b|\bsanitize(?:File)?Name\b/.test(text)
+  )
 }
 
 function destructiveDataOperation(text: string) {
-  return /\bdeleteMany\s*\(\s*\{\s*\}\s*\)/.test(text)
-    || /\bDROP\s+TABLE\b/i.test(text)
-    || /\bTRUNCATE\s+TABLE\b/i.test(text)
+  return (
+    /\bdeleteMany\s*\(\s*\{\s*\}\s*\)/.test(text) ||
+    /\bDROP\s+TABLE\b/i.test(text) ||
+    /\bTRUNCATE\s+TABLE\b/i.test(text)
+  )
 }
 
 function evidenceRefs(manifest: AcceptanceSurfaceManifest, files: string[]) {

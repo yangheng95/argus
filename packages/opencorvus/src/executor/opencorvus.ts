@@ -104,10 +104,7 @@ export namespace OpencorvusExecutor {
             time_completed: Date.now(),
             time_updated: Date.now(),
           })
-          .where(and(
-            eq(TaskQueueTable.id, queueTaskID),
-            inArray(TaskQueueTable.status, ["queued", "running"]),
-          ))
+          .where(and(eq(TaskQueueTable.id, queueTaskID), inArray(TaskQueueTable.status, ["queued", "running"])))
           .run(),
       )
     }
@@ -116,19 +113,24 @@ export namespace OpencorvusExecutor {
 
   export async function acceptance(input: { sessionID: string; since?: number }) {
     const msgs = await Session.messages({ sessionID: input.sessionID })
-    const scoped = typeof input.since === "number"
-      ? msgs.filter((item) => (item.info.time?.created ?? 0) >= input.since!)
-      : msgs
-    const diffs = typeof input.since === "number"
-      ? await SessionSummary.computeDiff({ messages: scoped })
-      : await Session.diff(input.sessionID)
+    const scoped =
+      typeof input.since === "number" ? msgs.filter((item) => (item.info.time?.created ?? 0) >= input.since!) : msgs
+    const diffs =
+      typeof input.since === "number"
+        ? await SessionSummary.computeDiff({ messages: scoped })
+        : await Session.diff(input.sessionID)
     return {
       summary: summarize(scoped),
       diffs,
     }
   }
 
-  export async function* events(input: { goalID?: string; sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
+  export async function* events(input: {
+    goalID?: string
+    sessionID?: string
+    queueTaskID?: string
+    signal?: AbortSignal
+  }) {
     if (!input.goalID && !input.sessionID) return
 
     // audit-2026-04-29 W2-V30 — pre-fix the generator awaited

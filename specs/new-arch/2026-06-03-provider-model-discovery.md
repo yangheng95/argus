@@ -11,15 +11,15 @@ operators to hand-type `modelID:name` creates a false configuration problem.
 
 Full-repo grep before design:
 
-| Surface | Evidence | Decision |
-|---|---|---|
+| Surface                                                       | Evidence                                                                                                        | Decision                                                        |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | `packages/overlay/src/components/settings/ProvidersPanel.tsx` | Owns the add/edit form, parses `modelID:name`, writes `PATCH /config`, stores API key through `PUT /auth/{id}`. | Replace manual-only model entry with explicit discovery action. |
-| `packages/opencorvus/src/server/routes/provider.ts` | Owns provider-related live operations: registry refresh, hexin refresh, provider test, auth. | Add a provider route for OpenAI-compatible model discovery. |
-| `packages/opencorvus/src/server/routes/config.ts` | Validates provider sub-shapes on `PATCH /config`. | Keep existing config validation; discovery returns data only. |
-| `packages/opencorvus/src/config/config.ts` | `Config.Provider` schema accepts `api`, `env`, `models`, and `options.apiKey`. | No schema change. |
-| `packages/opencorvus/src/provider/provider.ts` | Config providers default to `@ai-sdk/openai-compatible`; provider models are explicit metadata. | Do not add implicit startup discovery or fallback. |
-| `packages/overlay/src/services/config.ts` | `updateConfig` handles JSON Merge Patch writes. | Reuse existing save path. |
-| `packages/overlay/src/services/api.ts` | Shared API JSON helper. | Reuse for discovery call. |
+| `packages/opencorvus/src/server/routes/provider.ts`           | Owns provider-related live operations: registry refresh, hexin refresh, provider test, auth.                    | Add a provider route for OpenAI-compatible model discovery.     |
+| `packages/opencorvus/src/server/routes/config.ts`             | Validates provider sub-shapes on `PATCH /config`.                                                               | Keep existing config validation; discovery returns data only.   |
+| `packages/opencorvus/src/config/config.ts`                    | `Config.Provider` schema accepts `api`, `env`, `models`, and `options.apiKey`.                                  | No schema change.                                               |
+| `packages/opencorvus/src/provider/provider.ts`                | Config providers default to `@ai-sdk/openai-compatible`; provider models are explicit metadata.                 | Do not add implicit startup discovery or fallback.              |
+| `packages/overlay/src/services/config.ts`                     | `updateConfig` handles JSON Merge Patch writes.                                                                 | Reuse existing save path.                                       |
+| `packages/overlay/src/services/api.ts`                        | Shared API JSON helper.                                                                                         | Reuse for discovery call.                                       |
 
 ## Design
 
@@ -58,11 +58,11 @@ Update `ProvidersPanel`:
 
 Live OpenToken probe on 2026-06-03:
 
-| URL | Result |
-|---|---|
+| URL                                     | Result                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------------- |
 | `https://cn2.gw.opentoken.io/v1/models` | `401 {"error":{"message":"无效的 API Key","type":"auth_error","code":"401"}}` |
-| `https://cn2.gw.opentoken.io/models` | `404 Not Found` |
-| `https://cn2.gw.opentoken.io/` | `404 Not Found` |
+| `https://cn2.gw.opentoken.io/models`    | `404 Not Found`                                                               |
+| `https://cn2.gw.opentoken.io/`          | `404 Not Found`                                                               |
 
 Therefore the correct base URL for OpenToken CN2 is
 `https://cn2.gw.opentoken.io/v1`.

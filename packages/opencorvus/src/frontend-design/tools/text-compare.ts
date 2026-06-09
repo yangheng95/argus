@@ -51,10 +51,24 @@ export function compareText(referenceText: string, renderedText: string): TextCo
   const referenceTokens = tokenize(referenceText)
   const renderedTokens = tokenize(renderedText)
   if (referenceTokens.length === 0 && renderedTokens.length === 0) {
-    return { jaccardSimilarity: 1, coverageRate: 1, referenceTokens: 0, renderedTokens: 0, missingTokens: [], score: 100 }
+    return {
+      jaccardSimilarity: 1,
+      coverageRate: 1,
+      referenceTokens: 0,
+      renderedTokens: 0,
+      missingTokens: [],
+      score: 100,
+    }
   }
   if (referenceTokens.length === 0) {
-    return { jaccardSimilarity: 0, coverageRate: 1, referenceTokens: 0, renderedTokens: renderedTokens.length, missingTokens: [], score: 100 }
+    return {
+      jaccardSimilarity: 0,
+      coverageRate: 1,
+      referenceTokens: 0,
+      renderedTokens: renderedTokens.length,
+      missingTokens: [],
+      score: 100,
+    }
   }
 
   const referenceCounts = multiset(referenceTokens)

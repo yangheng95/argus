@@ -7,9 +7,7 @@ import { Channel } from "@/util/channel"
 export namespace SessionActor {
   export const log = Log.create({ service: "session.actor" })
 
-  type Reply =
-    | { type: "result"; value: Message.WithParts }
-    | { type: "error"; error: Error }
+  type Reply = { type: "result"; value: Message.WithParts } | { type: "error"; error: Error }
 
   type Command =
     | { type: "wait"; reply: Channel<Reply> }
@@ -86,9 +84,11 @@ export namespace SessionActor {
       // whether an external close() injected an error before exit; if so the
       // session terminated with that error, otherwise it's a clean exit.
       const closing = actor.closing
-      SessionStatus.set(sessionID, closing
-        ? { type: "terminal", reason: "error", error: closing.message }
-        : { type: "terminal", reason: "completed" },
+      SessionStatus.set(
+        sessionID,
+        closing
+          ? { type: "terminal", reason: "error", error: closing.message }
+          : { type: "terminal", reason: "completed" },
       )
     }
   }
@@ -103,9 +103,9 @@ export namespace SessionActor {
     // Cancel sets reason to "Session cancelled" (see `cancel` below); other
     // close paths carry a real error.
     const aborted = reason.message === "Session cancelled"
-    SessionStatus.set(sessionID, aborted
-      ? { type: "terminal", reason: "aborted" }
-      : { type: "terminal", reason: "error", error: reason.message },
+    SessionStatus.set(
+      sessionID,
+      aborted ? { type: "terminal", reason: "aborted" } : { type: "terminal", reason: "error", error: reason.message },
     )
   }
 
@@ -174,5 +174,4 @@ export namespace SessionActor {
   export function owns(sessionID: string, signal: AbortSignal) {
     return actors()[sessionID]?.abort.signal === signal
   }
-
 }

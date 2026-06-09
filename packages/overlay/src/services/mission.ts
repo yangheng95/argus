@@ -125,6 +125,11 @@ export interface MissionRecord {
   taskStats: MissionTaskStats
 }
 
+export interface MissionActionTarget {
+  missionID: string
+  directory: string
+}
+
 export interface ChannelBindingRow {
   id: string
   task_id: string
@@ -140,7 +145,9 @@ export interface ChannelBindingRow {
 
 // `gateway/stats` is the kept gateway infrastructure endpoint (operator
 // dashboard summary); the Mission page surfaces it as its own stats block.
-export async function loadMissionStats(opts: { directory?: string; limit?: number; signal?: AbortSignal } = {}): Promise<MissionStats> {
+export async function loadMissionStats(
+  opts: { directory?: string; limit?: number; signal?: AbortSignal } = {},
+): Promise<MissionStats> {
   const params = new URLSearchParams()
   if (opts.directory) params.set("directory", opts.directory)
   if (typeof opts.limit === "number") params.set("limit", String(opts.limit))
@@ -173,15 +180,17 @@ export async function restartChannelRuntime(signal?: AbortSignal): Promise<Chann
   })) as ChannelRuntimeStatus
 }
 
-export async function loadMissions(opts: {
-  directory?: string
-  search?: string
-  limit?: number
-  cursorUpdated?: number
-  cursorSessionID?: string
-  archived?: boolean
-  signal?: AbortSignal
-} = {}): Promise<MissionRecord[]> {
+export async function loadMissions(
+  opts: {
+    directory?: string
+    search?: string
+    limit?: number
+    cursorUpdated?: number
+    cursorSessionID?: string
+    archived?: boolean
+    signal?: AbortSignal
+  } = {},
+): Promise<MissionRecord[]> {
   const params = new URLSearchParams()
   if (opts.directory) params.set("directory", opts.directory)
   if (opts.search) params.set("search", opts.search)
@@ -234,28 +243,36 @@ export async function wakeMission(input: MissionWakeInput): Promise<MissionWakeR
   })) as MissionWakeResult
 }
 
-export async function renameMission(missionID: string, title: string): Promise<MissionRecord> {
-  const trimmed = title.trim()
-  if (!missionID || !trimmed || trimmed.length > 200) {
-    throw new Error("renameMission: missionID and 1-200 character title are required")
+function missionActionPath(target: MissionActionTarget, suffix = ""): string {
+  const missionID = target.missionID.trim()
+  const directory = target.directory.trim()
+  if (!missionID || !directory) {
+    throw new Error("missionActionPath: missionID and directory are required")
   }
-  return (await apiJson(`mission/${encodeURIComponent(missionID)}/title`, {
+  const params = new URLSearchParams({ directory })
+  return `mission/${encodeURIComponent(missionID)}${suffix}?${params.toString()}`
+}
+
+export async function renameMission(target: MissionActionTarget, title: string): Promise<MissionRecord> {
+  const trimmed = title.trim()
+  if (!trimmed || trimmed.length > 200) {
+    throw new Error("renameMission: missionID, directory, and 1-200 character title are required")
+  }
+  return (await apiJson(missionActionPath(target, "/title"), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title: trimmed }),
   })) as MissionRecord
 }
 
-export async function abortMission(missionID: string): Promise<boolean> {
-  if (!missionID) return false
-  return (await apiJson(`mission/${encodeURIComponent(missionID)}/abort`, {
+export async function abortMission(target: MissionActionTarget): Promise<boolean> {
+  return (await apiJson(missionActionPath(target, "/abort"), {
     method: "POST",
   })) as boolean
 }
 
-export async function deleteMission(missionID: string): Promise<boolean> {
-  if (!missionID) return false
-  return (await apiJson(`mission/${encodeURIComponent(missionID)}`, {
+export async function deleteMission(target: MissionActionTarget): Promise<boolean> {
+  return (await apiJson(missionActionPath(target), {
     method: "DELETE",
   })) as boolean
 }

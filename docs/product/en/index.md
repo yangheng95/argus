@@ -10,15 +10,15 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evaluator-driven,
 
 ## Core capabilities
 
-| Capability | Summary |
-|---|---|
-| **Spec-first planning** | A Spec agent turns vague requests into testable specifications with acceptance criteria and evidence chains |
-| **Goal decomposition** | Architect analyzes boundaries, then breaks the spec into at least two modest, independently verifiable implementation goals |
-| **Multi-executor dispatch** | Built-in OpenCorvus; auto-discovers and dispatches to Codex / Claude Code |
-| **Evaluator-driven retry** | build/test/lint/startup/artifact/visual/Playwright/LLM review plus default-on `spec check` acceptance gate |
-| **Multi-channel reach** | Local TUI, HTTP API, Overlay desktop app, 14 IM channels (Slack/Telegram/Feishu/Discord/…) |
-| **Durable state** | All tasks, plans, runs, interactions, deliveries, and evaluations persist to SQLite; session and project memory reused across sessions |
-| **Human-in-the-loop** | `ask/allow/deny` permissions, follow-up messages, manual feedback, all embeddable in unattended pipelines |
+| Capability                  | Summary                                                                                                                                |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Spec-first planning**     | A Spec agent turns vague requests into testable specifications with acceptance criteria and evidence chains                            |
+| **Goal decomposition**      | Architect analyzes boundaries, then breaks the spec into at least two modest, independently verifiable implementation goals            |
+| **Multi-executor dispatch** | Built-in OpenCorvus; auto-discovers and dispatches to Codex / Claude Code                                                              |
+| **Evaluator-driven retry**  | build/test/lint/startup/artifact/visual/Playwright/LLM review plus default-on `spec check` acceptance gate                             |
+| **Multi-channel reach**     | Local TUI, HTTP API, Overlay desktop app, 14 IM channels (Slack/Telegram/Feishu/Discord/…)                                             |
+| **Durable state**           | All tasks, plans, runs, interactions, deliveries, and evaluations persist to SQLite; session and project memory reused across sessions |
+| **Human-in-the-loop**       | `ask/allow/deny` permissions, follow-up messages, manual feedback, all embeddable in unattended pipelines                              |
 
 ## Who it's for
 

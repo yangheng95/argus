@@ -66,9 +66,17 @@ function assertRelativeProjectFile(relativePath: string): void {
 async function listGitIncludedFiles(projectDir: string): Promise<string[]> {
   const result = await git(
     [
-      "-c", "core.fsmonitor=false",
-      "-c", "core.quotepath=false",
-      "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ".",
+      "-c",
+      "core.fsmonitor=false",
+      "-c",
+      "core.quotepath=false",
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      ".",
     ],
     { cwd: projectDir, timeoutProfile: "default" },
   )

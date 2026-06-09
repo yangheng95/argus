@@ -12,21 +12,21 @@
 
 ## Call Point Inventory
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
-| `session/processor.ts` tool-call | Re-normalizes `value.input`; invalid non-object breaks before persisting | Persist SDK `value.input` as `unknown`; do not re-parse or skip |
-| `session/processor.ts` tool-result/tool-error | Only accepts `running` | Accept `running` or `pending`; synthesize start time from existing running time or `Date.now()` |
-| `session/processor.ts` cleanup | Writes a static abort label | Throw typed `ProcessorLostPartsError` for remaining pending/running parts |
-| `session/processor.ts` catch | Message-level error only | Stamp open tool parts with `ToolFailureCause` from the caught original cause before final lost-part audit |
-| `session/message.ts` schemas | Tool error stores string `error`; pending/running inputs require object | Store `failure: ToolFailureCause`; relax pending/running/error input to `z.unknown()` |
-| `session/message.ts` replay | `safeToolInput` converts invalid input to `{}` and pending/running use a static interrupted label | Replay original input and render only persisted `ToolFailureCause` text |
-| `session/loop.ts` task wrapper | Writes a static execution-failed fallback | Persist `ToolFailureCause` from thrown failure; if no thrown failure exists, throw a typed contract error |
-| `agent/runner.ts` hard error | Reads only `finalMessage.info.error` | Also scan assistant tool parts for `ToolFailureCause` and raise `AgentRunError` |
-| `session/compaction.ts` | Reads `part.state.error` | Render `ToolFailureCause` |
-| `acp/agent.ts`, `cli/cmd/run.ts`, `cli/cmd/tui/util/transcript.ts` | Display `part.state.error` | Display rendered `ToolFailureCause` |
-| `engine/engine.sql.ts` | Artifact kind lacks tool execution failures | Add `tool-execute-error` |
-| `engine/persist.ts` | No writer for tool part failures | Add `recordToolExecuteError` modeled after `recordOrchestratorStreamError` |
-| `engine/store.ts`, `engine/describe.ts` | No reader/projection for tool execute artifacts | Add newest-first list and describe/render section |
+| Surface                                                            | Current behavior                                                                                  | Change                                                                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `session/processor.ts` tool-call                                   | Re-normalizes `value.input`; invalid non-object breaks before persisting                          | Persist SDK `value.input` as `unknown`; do not re-parse or skip                                           |
+| `session/processor.ts` tool-result/tool-error                      | Only accepts `running`                                                                            | Accept `running` or `pending`; synthesize start time from existing running time or `Date.now()`           |
+| `session/processor.ts` cleanup                                     | Writes a static abort label                                                                       | Throw typed `ProcessorLostPartsError` for remaining pending/running parts                                 |
+| `session/processor.ts` catch                                       | Message-level error only                                                                          | Stamp open tool parts with `ToolFailureCause` from the caught original cause before final lost-part audit |
+| `session/message.ts` schemas                                       | Tool error stores string `error`; pending/running inputs require object                           | Store `failure: ToolFailureCause`; relax pending/running/error input to `z.unknown()`                     |
+| `session/message.ts` replay                                        | `safeToolInput` converts invalid input to `{}` and pending/running use a static interrupted label | Replay original input and render only persisted `ToolFailureCause` text                                   |
+| `session/loop.ts` task wrapper                                     | Writes a static execution-failed fallback                                                         | Persist `ToolFailureCause` from thrown failure; if no thrown failure exists, throw a typed contract error |
+| `agent/runner.ts` hard error                                       | Reads only `finalMessage.info.error`                                                              | Also scan assistant tool parts for `ToolFailureCause` and raise `AgentRunError`                           |
+| `session/compaction.ts`                                            | Reads `part.state.error`                                                                          | Render `ToolFailureCause`                                                                                 |
+| `acp/agent.ts`, `cli/cmd/run.ts`, `cli/cmd/tui/util/transcript.ts` | Display `part.state.error`                                                                        | Display rendered `ToolFailureCause`                                                                       |
+| `engine/engine.sql.ts`                                             | Artifact kind lacks tool execution failures                                                       | Add `tool-execute-error`                                                                                  |
+| `engine/persist.ts`                                                | No writer for tool part failures                                                                  | Add `recordToolExecuteError` modeled after `recordOrchestratorStreamError`                                |
+| `engine/store.ts`, `engine/describe.ts`                            | No reader/projection for tool execute artifacts                                                   | Add newest-first list and describe/render section                                                         |
 
 ## ToolFailureCause Contract
 

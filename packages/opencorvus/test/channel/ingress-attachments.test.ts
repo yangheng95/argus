@@ -87,14 +87,10 @@ describe("ChannelIngress attachment forwarding", () => {
           channel: "@me",
           thread: "12345",
           text: "Forwarded image.",
-          attachments: [
-            { mime: "image/jpeg", filename: "photo.jpg", url: dataUrl },
-          ],
+          attachments: [{ mime: "image/jpeg", filename: "photo.jpg", url: dataUrl }],
         })
 
-        const call = handleSpy.mock.calls[0]?.[0] as
-          | { attachments?: Array<{ url: string }> }
-          | undefined
+        const call = handleSpy.mock.calls[0]?.[0] as { attachments?: Array<{ url: string }> } | undefined
         expect(call?.attachments?.[0]?.url).toBe(dataUrl)
       },
     })

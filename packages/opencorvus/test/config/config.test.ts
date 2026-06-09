@@ -691,10 +691,7 @@ test("installs dependencies in writable OPENCORVUS_CONFIG_DIR when local plugins
       const cfg = path.join(dir, "configdir")
       await fs.mkdir(cfg, { recursive: true })
       await fs.mkdir(path.join(cfg, "plugin"), { recursive: true })
-      await Filesystem.write(
-        path.join(cfg, "plugin", "local.ts"),
-        "export const Plugin = async () => ({})\n",
-      )
+      await Filesystem.write(path.join(cfg, "plugin", "local.ts"), "export const Plugin = async () => ({})\n")
       return cfg
     },
   })

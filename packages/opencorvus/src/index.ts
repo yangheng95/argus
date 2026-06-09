@@ -89,7 +89,6 @@ let cli = yargs(hideBin(process.argv))
         }
       }
     }
-
   })
   .usage("\n" + UI.logo())
   .completion("completion", "generate shell completion script")

@@ -4,11 +4,11 @@
 
 ## 全局 flag
 
-| flag | 说明 |
-|---|---|
-| `--help`, `-h` | 帮助 |
-| `--version` | 版本号 |
-| `--verbose` | 详细日志 |
+| flag            | 说明         |
+| --------------- | ------------ |
+| `--help`, `-h`  | 帮助         |
+| `--version`     | 版本号       |
+| `--verbose`     | 详细日志     |
 | `--config PATH` | 指定配置文件 |
 
 ## 子命令
@@ -29,20 +29,21 @@ opencorvus
 opencorvus serve [flags]
 ```
 
-| flag | 默认 | 说明 |
-|---|---|---|
-| `--hostname` | `127.0.0.1` | 监听地址（启用 `--mdns` 时改为 `0.0.0.0`） |
-| `--port` | `7878` | 监听端口 |
-| `--project-dir` | `cwd()` | 工作仓库路径 |
-| `--mdns` | off | 启用 mDNS 服务发现 |
-| `--mdns-domain` | `opencorvus.local` | mDNS 域名 |
-| `--cors` | off | 启用 CORS |
+| flag            | 默认               | 说明                                       |
+| --------------- | ------------------ | ------------------------------------------ |
+| `--hostname`    | `127.0.0.1`        | 监听地址（启用 `--mdns` 时改为 `0.0.0.0`） |
+| `--port`        | `7878`             | 监听端口                                   |
+| `--project-dir` | `cwd()`            | 工作仓库路径                               |
+| `--mdns`        | off                | 启用 mDNS 服务发现                         |
+| `--mdns-domain` | `opencorvus.local` | mDNS 域名                                  |
+| `--cors`        | off                | 启用 CORS                                  |
 
 `OPENCORVUS_SERVER_PASSWORD` 通过**环境变量**设置（非 CLI flag）。
 
 核对于 `packages/opencorvus/src/cli/network.ts:4-31`。
 
 暴露端点：
+
 - `POST /task` — 创建任务
 - `GET /tasks` — 任务列表
 - `GET /task/<id>` — 任务详情
@@ -61,12 +62,12 @@ opencorvus serve [flags]
 opencorvus run "实现 src/foo.ts 的单元测试" [flags]
 ```
 
-| flag | 说明 |
-|---|---|
-| `--command CMD` | 直接把命令作为任务 |
-| `--continue`, `-c` | 续接最后一次 session |
-| `--session ID`, `-s ID` | 续接指定 session |
-| `--share` | 产出 share 链接 |
+| flag                    | 说明                 |
+| ----------------------- | -------------------- |
+| `--command CMD`         | 直接把命令作为任务   |
+| `--continue`, `-c`      | 续接最后一次 session |
+| `--session ID`, `-s ID` | 续接指定 session     |
+| `--share`               | 产出 share 链接      |
 
 ### `opencorvus slack`
 
@@ -147,17 +148,17 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 
 `packages/opencorvus/src/index.ts` 注册的全部顶级子命令（权威源），参数以 `--help` 为准：
 
-| 命令 | 用途 |
-|---|---|
-| `opencorvus stats` | 统计信息 |
-| `opencorvus upgrade` | 升级自身 |
-| `opencorvus uninstall` | 卸载 |
-| `opencorvus sidecar` | 嵌入式 sidecar 进程入口（一般由 overlay / 上游 host 内部调用） |
-| `opencorvus import` | 导入 session |
-| `opencorvus github` | GitHub Action runtime 入口（通常由 Action 内部调用） |
-| `opencorvus pr` | PR 相关辅助 |
-| `opencorvus mcp` | MCP 子命令族（`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`） |
-| `opencorvus session` | session 管理 |
+| 命令                   | 用途                                                                        |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `opencorvus stats`     | 统计信息                                                                    |
+| `opencorvus upgrade`   | 升级自身                                                                    |
+| `opencorvus uninstall` | 卸载                                                                        |
+| `opencorvus sidecar`   | 嵌入式 sidecar 进程入口（一般由 overlay / 上游 host 内部调用）              |
+| `opencorvus import`    | 导入 session                                                                |
+| `opencorvus github`    | GitHub Action runtime 入口（通常由 Action 内部调用）                        |
+| `opencorvus pr`        | PR 相关辅助                                                                 |
+| `opencorvus mcp`       | MCP 子命令族（`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`） |
+| `opencorvus session`   | session 管理                                                                |
 
 > ~~`opencorvus attach`~~ / ~~`opencorvus tui-thread`~~ 不是顶级 CLI 命令——`attach` 仅作为 TUI 内部功能存在于 `packages/opencorvus/src/cli/cmd/tui/attach.ts`。
 
@@ -165,11 +166,11 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 
 代码仅在错误路径显式调用 `process.exit(1)`：
 
-| code | 语义 |
-|---|---|
-| 0 | 成功（默认） |
-| 1 | 任何运行时错误 |
-| 130 | 被 Ctrl+C 中断（Bun 默认信号行为） |
+| code | 语义                               |
+| ---- | ---------------------------------- |
+| 0    | 成功（默认）                       |
+| 1    | 任何运行时错误                     |
+| 130  | 被 Ctrl+C 中断（Bun 默认信号行为） |
 
 > 历史版本曾规划 `2`（配置错误）与 `3`（任务失败），**当前未实装**。
 

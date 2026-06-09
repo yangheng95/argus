@@ -79,12 +79,11 @@ export namespace DecisionLogBundle {
    * This is NOT the canonical decision log — it points at a materialized
    * read-only projection; the `decision_log` table remains the source of truth.
    */
-  export function reference(input: {
-    projectDir: string
-    taskID: string
-    mode: "relative" | "absolute"
-  }): string {
-    const p = input.mode === "absolute" ? paths(input.projectDir, input.taskID).absolute : paths(input.projectDir, input.taskID).relative
+  export function reference(input: { projectDir: string; taskID: string; mode: "relative" | "absolute" }): string {
+    const p =
+      input.mode === "absolute"
+        ? paths(input.projectDir, input.taskID).absolute
+        : paths(input.projectDir, input.taskID).relative
     return [
       "## Decision Log (complete, on disk)",
       "",

@@ -167,7 +167,9 @@ export interface RunAgentSessionInput<C> {
    *  instrumentation: "Started" event emission, heartbeat tickers,
    *  stream-chunk forwarders. The runner owns the session; the hook is
    *  strictly observer-scope, not control-scope. */
-  onSessionCreated?: (session: Awaited<ReturnType<typeof Session.createNext>>) => Promise<{ dispose: () => void }> | { dispose: () => void } | void
+  onSessionCreated?: (
+    session: Awaited<ReturnType<typeof Session.createNext>>,
+  ) => Promise<{ dispose: () => void }> | { dispose: () => void } | void
   /** Attempt identity installed on SessionRuntimeContract and mirrored into
    *  the user message envelope so SessionLoop can reject stale retry
    *  collectors before model contact. */
@@ -193,10 +195,7 @@ export interface RunAgentSessionInput<C> {
    *  is still built and prepended as the first part so the prompt
    *  user-text is never silently dropped. */
   buildUserParts?: () => Promise<
-    Array<
-      | { type: "text"; text: string }
-      | { type: "file"; url: string; mime: string; filename?: string }
-    >
+    Array<{ type: "text"; text: string } | { type: "file"; url: string; mime: string; filename?: string }>
   >
   /** When set, registers a JSON-schema StructuredOutput format. The
    *  resulting `Message.Assistant.structured` value is returned to the
@@ -248,10 +247,7 @@ function errorReport(message: string): AgentReport {
   return { summary: text, detail: text }
 }
 
-function buildTraceReport<C>(
-  toolKit: AgentToolKit<C>,
-  context?: AgentReportContext,
-): AgentReport {
+function buildTraceReport<C>(toolKit: AgentToolKit<C>, context?: AgentReportContext): AgentReport {
   try {
     return toolKit.buildReport(context)
   } catch (err) {
@@ -283,9 +279,7 @@ export function promptToolSwitchesForAgentRun(input: {
   extraToolNames: string[]
   kind?: SessionKind
 }): Record<string, boolean> {
-  const switches: Record<string, boolean> = Object.fromEntries(
-    input.extraToolNames.map((name) => [name, true]),
-  )
+  const switches: Record<string, boolean> = Object.fromEntries(input.extraToolNames.map((name) => [name, true]))
   if (input.kind !== "build") return switches
 
   switches.skill = true
@@ -371,34 +365,26 @@ export function buildHardErrorFromFinalMessage(input: {
   }
   if (Message.AbortedError.isInstance(err as Error)) return null
   const errName = (err as { name?: string }).name ?? "UnknownError"
-  const errMessage =
-    (err as { data?: { message?: string } }).data?.message ?? errName
+  const errMessage = (err as { data?: { message?: string } }).data?.message ?? errName
   // Provider errors carry an `isRetryable` flag (AI SDK APIError surfaces
   // it through `.data.isRetryable`). Honour it so retry helpers do not
   // loop deterministically-failing requests.
-  const isRetryable = (err as { data?: { isRetryable?: boolean } }).data
-    ?.isRetryable
+  const isRetryable = (err as { data?: { isRetryable?: boolean } }).data?.isRetryable
   // TerminalToolMissingError is deterministic: the same prompt produces the
   // same finish=stop without the tool call (long-context attention drift
   // toward "I'm done, here's a summary" mode). Treat as non-retryable so
   // any future runAgentSessionWithRetry adoption on the build path does
   // not burn N attempts on a guaranteed-identical failure. Spec
   // build-missing-terminal-signal-restore-2026-05-07.md §5.1.
-  const isTerminalToolMissing = Message.TerminalToolMissingError.isInstance(
-    err as Error,
-  )
-  return new AgentRunError(
-    kind,
-    `LLM error during ${agentName}: ${errName}: ${errMessage}`,
-    {
-      nonRetryable: isRetryable === false || isTerminalToolMissing,
-      // Preserve the original error as cause so downstream catch blocks
-      // (e.g. build/agent.ts converting missing-terminal into a typed
-      // BuildAgentContractError) can instanceof-check rather than
-      // keyword-match the message string (rule 20).
-      cause: err as Error,
-    },
-  )
+  const isTerminalToolMissing = Message.TerminalToolMissingError.isInstance(err as Error)
+  return new AgentRunError(kind, `LLM error during ${agentName}: ${errName}: ${errMessage}`, {
+    nonRetryable: isRetryable === false || isTerminalToolMissing,
+    // Preserve the original error as cause so downstream catch blocks
+    // (e.g. build/agent.ts converting missing-terminal into a typed
+    // BuildAgentContractError) can instanceof-check rather than
+    // keyword-match the message string (rule 20).
+    cause: err as Error,
+  })
 }
 
 function agentRunErrorFromToolFailure(input: {
@@ -411,8 +397,7 @@ function agentRunErrorFromToolFailure(input: {
     `Tool error during ${input.agentName}: ${renderToolFailureCause(input.failure)}`,
     {
       nonRetryable:
-        input.failure.classification === "tool-input-invalid" ||
-        input.failure.classification === "processor-contract",
+        input.failure.classification === "tool-input-invalid" || input.failure.classification === "processor-contract",
       cause: new Error(renderToolFailureCause(input.failure)),
     },
   )
@@ -534,14 +519,10 @@ export function buildUnsatisfiedTerminalToolError(input: {
     toolName: input.toolName,
     retries: 0,
   })
-  return new AgentRunError(
-    input.kind,
-    `LLM error during ${input.agentName}: TerminalToolMissingError: ${message}`,
-    {
-      nonRetryable: true,
-      cause: terminalError,
-    },
-  )
+  return new AgentRunError(input.kind, `LLM error during ${input.agentName}: TerminalToolMissingError: ${message}`, {
+    nonRetryable: true,
+    cause: terminalError,
+  })
 }
 
 async function recordAgentErrorForOrchestrator(input: {
@@ -555,12 +536,9 @@ async function recordAgentErrorForOrchestrator(input: {
 }) {
   if (!input.taskID) return
   const message = input.error instanceof Error ? input.error.message : String(input.error)
-  const cause = input.error instanceof Error && input.error.cause instanceof Error
-    ? input.error.cause.message
-    : undefined
-  const streamLines = input.streamErrors
-    .slice(-3)
-    .map((e) => `- ${e.name ? `[${e.name}] ` : ""}${e.reason}`)
+  const cause =
+    input.error instanceof Error && input.error.cause instanceof Error ? input.error.cause.message : undefined
+  const streamLines = input.streamErrors.slice(-3).map((e) => `- ${e.name ? `[${e.name}] ` : ""}${e.reason}`)
   const lines = [
     `Agent session failed before producing a successful result.`,
     `agent=${input.agentName}`,
@@ -580,9 +558,7 @@ async function recordAgentErrorForOrchestrator(input: {
       goalID: input.goalID,
       key: `${input.agentName}_session_error`,
       value: lines.join("\n"),
-      reason:
-        `model-visible agent failure; session=${input.sessionID}; ` +
-        `kind=${input.kind}`,
+      reason: `model-visible agent failure; session=${input.sessionID}; ` + `kind=${input.kind}`,
     })
   } catch (logErr) {
     log.warn("agent error decision_log append failed (non-fatal)", {
@@ -599,9 +575,7 @@ async function recordAgentErrorForOrchestrator(input: {
 // Core runner
 // ---------------------------------------------------------------------------
 
-export async function runAgentSession<C>(
-  input: RunAgentSessionInput<C>,
-): Promise<RunAgentSessionOutput<C>> {
+export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promise<RunAgentSessionOutput<C>> {
   const { kind } = input
   const agentName = input.agentName ?? kind
   const configScope = input.taskID
@@ -632,13 +606,14 @@ export async function runAgentSession<C>(
     })
   }
   if (!model) {
-    const detail = modelResolutionError instanceof Error
-      ? modelResolutionError.message
-      : modelResolutionError !== undefined
-        ? String(modelResolutionError)
-        : input.model
-          ? `${input.model.providerID}/${input.model.modelID} did not resolve`
-          : `agent ${agentName} did not resolve a default model`
+    const detail =
+      modelResolutionError instanceof Error
+        ? modelResolutionError.message
+        : modelResolutionError !== undefined
+          ? String(modelResolutionError)
+          : input.model
+            ? `${input.model.providerID}/${input.model.modelID} did not resolve`
+            : `agent ${agentName} did not resolve a default model`
     throw new AgentRunError(
       kind,
       `no LLM model available: ${detail}`,
@@ -657,11 +632,7 @@ export async function runAgentSession<C>(
   // without having to memory.search for it (rule 23 / rule 22).
   const composed = input.rawSystemPrompt
     ? { prompt: input.core }
-      : await composeSystemPrompt(
-        agentName,
-        input.core,
-        configScope,
-      )
+    : await composeSystemPrompt(agentName, input.core, configScope)
   const liveContext = input.taskID ? TaskContext.snapshot(input.taskID) : ""
   // INFORMATION MISSING debug toggle: when on, append the fallback block
   // to the system prompt; the matching host-side detection further down
@@ -670,10 +641,8 @@ export async function runAgentSession<C>(
   // opencorvus.jsonc. Default off — runs go through unchanged in
   // production. Spec — 2026-05-07 INFORMATION MISSING debug toggle.
   const debugCfg = (await EngineConfig.get()).debug
-  const baseSystemPrompt = [
-    composed.prompt,
-    liveContext.trim().length > 0 ? liveContext : undefined,
-  ].filter((section): section is string => typeof section === "string" && section.trim().length > 0)
+  const baseSystemPrompt = [composed.prompt, liveContext.trim().length > 0 ? liveContext : undefined]
+    .filter((section): section is string => typeof section === "string" && section.trim().length > 0)
     .join("\n\n")
   const systemPrompt = debugCfg.fail_on_information_missing
     ? appendInformationMissingFallback(baseSystemPrompt)
@@ -765,12 +734,12 @@ export async function runAgentSession<C>(
   const session = input.existingSessionID
     ? await Session.get(input.existingSessionID)
     : await Session.createNext({
-      kind,
-      parentID: input.parentSessionID,
-      goalID: input.goalID,
-      title: input.sessionTitle,
-      directory: input.sessionDirectory ?? Instance.directory,
-    })
+        kind,
+        parentID: input.parentSessionID,
+        goalID: input.goalID,
+        title: input.sessionTitle,
+        directory: input.sessionDirectory ?? Instance.directory,
+      })
   if (input.existingSessionID) {
     if (session.kind !== kind) {
       throw new AgentRunError(kind, `existing session ${session.id} has kind=${session.kind}, expected ${kind}`)
@@ -825,10 +794,7 @@ export async function runAgentSession<C>(
     }),
     ...(input.toolSwitches ?? {}),
   }
-  if (
-    input.terminalTool &&
-    !(input.terminalTool.toolName in input.toolKit.tools)
-  ) {
+  if (input.terminalTool && !(input.terminalTool.toolName in input.toolKit.tools)) {
     throw new AgentRunError(
       kind,
       `terminal tool ${input.terminalTool.toolName} is not registered in the agent tool kit`,
@@ -844,9 +810,8 @@ export async function runAgentSession<C>(
     toolNames: Object.keys(input.toolKit.tools),
   })
 
-  const lifecycleDisposable = !input.existingSessionID && input.onSessionCreated
-    ? await input.onSessionCreated(session)
-    : undefined
+  const lifecycleDisposable =
+    !input.existingSessionID && input.onSessionCreated ? await input.onSessionCreated(session) : undefined
 
   let finalMessage: Message.WithParts | undefined
   let collector: C | undefined
@@ -907,9 +872,7 @@ export async function runAgentSession<C>(
   })
   try {
     try {
-      const promptOnce = async (
-        promptParts: typeof parts = parts,
-      ) => {
+      const promptOnce = async (promptParts: typeof parts = parts) => {
         const promptArgs: Parameters<typeof SessionPrompt.prompt>[0] = {
           sessionID: session.id,
           model: { providerID: model!.providerID, modelID: model!.api.id },
@@ -939,7 +902,11 @@ export async function runAgentSession<C>(
       errorUnsub()
       input.signal?.removeEventListener("abort", abortPrompt)
       if (lifecycleDisposable && typeof lifecycleDisposable === "object" && "dispose" in lifecycleDisposable) {
-        try { lifecycleDisposable.dispose() } catch { /* best-effort disposer */ }
+        try {
+          lifecycleDisposable.dispose()
+        } catch {
+          /* best-effort disposer */
+        }
       }
     }
 
@@ -973,8 +940,8 @@ export async function runAgentSession<C>(
       // eslint-disable-next-line no-console
       console.error(
         `\n[FATAL] INFORMATION MISSING detected in ${agentName} (${kind}) stream — terminating process.\n` +
-        `Session: ${session.id}\n` +
-        `${block}\n`,
+          `Session: ${session.id}\n` +
+          `${block}\n`,
       )
       process.exit(99)
     }
@@ -1037,7 +1004,11 @@ export async function runAgentSession<C>(
         agentName,
         kind: "agent_report_failure",
         collector: (() => {
-          try { return input.toolKit.getCollector() } catch { return undefined }
+          try {
+            return input.toolKit.getCollector()
+          } catch {
+            return undefined
+          }
         })(),
         streamErrors,
         error: errorMessage,
@@ -1060,9 +1031,7 @@ export async function runAgentSession<C>(
   }
 
   // ── 7. Return collector + structured output ──────────────────────────
-  const structured = input.format
-    ? (finalMessage.info as Message.Assistant).structured
-    : undefined
+  const structured = input.format ? (finalMessage.info as Message.Assistant).structured : undefined
   collector ??= input.toolKit.getCollector()
 
   SessionStatus.set(session.id, { type: "terminal", reason: "completed" })
@@ -1140,8 +1109,7 @@ export interface RetryDecision {
   terminal?: boolean
 }
 
-export interface RunAgentSessionWithRetryInput<C>
-  extends Omit<RunAgentSessionInput<C>, "toolKit"> {
+export interface RunAgentSessionWithRetryInput<C> extends Omit<RunAgentSessionInput<C>, "toolKit"> {
   /** Maximum attempts. attempt 1 is the first call; attempt 2..N are retries.
    *  Must be >= 1; pass 1 to disable retry while still using this entry
    *  point uniformly. */
@@ -1267,10 +1235,7 @@ export async function runAgentSessionWithRetry<C>(
   input: RunAgentSessionWithRetryInput<C>,
 ): Promise<RunAgentSessionWithRetryOutput<C>> {
   if (input.maxRetries < 1) {
-    throw new AgentRunError(
-      input.kind,
-      `runAgentSessionWithRetry: maxRetries must be >= 1, got ${input.maxRetries}`,
-    )
+    throw new AgentRunError(input.kind, `runAgentSessionWithRetry: maxRetries must be >= 1, got ${input.maxRetries}`)
   }
   const agentLabel = input.agentName ?? input.kind
   let lastError: Error | undefined
@@ -1295,8 +1260,7 @@ export async function runAgentSessionWithRetry<C>(
     } catch (err) {
       thrownError = err instanceof Error ? err : new Error(String(err))
       lastReport = errorReport(thrownError.message)
-      const aborted =
-        input.signal?.aborted || (err instanceof Error && err.name === "AbortError")
+      const aborted = input.signal?.aborted || (err instanceof Error && err.name === "AbortError")
       if (aborted) throw thrownError
     }
     if (out) {
@@ -1307,9 +1271,7 @@ export async function runAgentSessionWithRetry<C>(
       })
     }
 
-    const decision = out
-      ? input.isComplete(out.collector, out.streamErrors, out.structured)
-      : undefined
+    const decision = out ? input.isComplete(out.collector, out.streamErrors, out.structured) : undefined
     const classification = classifyAttemptOutcome({
       thrownError,
       streamErrors: out?.streamErrors,
@@ -1320,10 +1282,7 @@ export async function runAgentSessionWithRetry<C>(
       if (!out) {
         // Defensive: classifier should never return ok without an out, but
         // type-narrow safely if it ever does.
-        throw new AgentRunError(
-          input.kind,
-          "classifier returned ok without a runAgentSession output",
-        )
+        throw new AgentRunError(input.kind, "classifier returned ok without a runAgentSession output")
       }
       if (AgentTrace.isEnabled() && input.taskID) {
         recordAgentTraceReportForSession(out.session, {
@@ -1357,10 +1316,11 @@ export async function runAgentSessionWithRetry<C>(
       // budget overflows we re-throw the original error type so the
       // operator sees PromptBudgetOverflowError / ToolSchemaBudgetError
       // (with full breakdown) instead of a generic AgentRunError.
-      if (thrownError && (
-        Message.PromptBudgetOverflowError.isInstance(thrownError) ||
-        Message.ToolSchemaBudgetError.isInstance(thrownError)
-      )) {
+      if (
+        thrownError &&
+        (Message.PromptBudgetOverflowError.isInstance(thrownError) ||
+          Message.ToolSchemaBudgetError.isInstance(thrownError))
+      ) {
         log.error(`${agentLabel}: deterministic budget overflow, fail-fast`, {
           attempt,
           error: thrownError.name,
@@ -1406,20 +1366,15 @@ export async function runAgentSessionWithRetry<C>(
       streamErrors: lastOutput?.streamErrors,
       attempts: input.maxRetries,
       error: lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`,
-      report: lastReport ?? errorReport(lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`),
+      report:
+        lastReport ?? errorReport(lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`),
     })
   }
 
   if (!lastOutput) {
-    throw new AgentRunError(
-      input.kind,
-      lastError?.message ?? "agent failed before producing output",
-    )
+    throw new AgentRunError(input.kind, lastError?.message ?? "agent failed before producing output")
   }
-  throw new AgentRunError(
-    input.kind,
-    lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`,
-  )
+  throw new AgentRunError(input.kind, lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`)
 }
 
 // ---------------------------------------------------------------------------
@@ -1442,11 +1397,9 @@ async function composeSystemPrompt(
   const overlay = await resolveSessionOverlay(scope)
   const baseAgent = await Agent.get(agentName, { config })
   const effectiveAgent = baseAgent ? Agent.resolveSessionAgent(baseAgent, overlay) : undefined
-  const userAppend = effectiveAgent?.promptAppend ?? (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
-  const prompt =
-    typeof userAppend === "string" && userAppend.trim().length > 0
-      ? `${core}\n\n${userAppend}`
-      : core
+  const userAppend =
+    effectiveAgent?.promptAppend ?? (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
+  const prompt = typeof userAppend === "string" && userAppend.trim().length > 0 ? `${core}\n\n${userAppend}` : core
   return { prompt }
 }
 

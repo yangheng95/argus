@@ -5,12 +5,7 @@ import { Identifier } from "@/id/id"
 import { SessionControlRecordTable, type SessionControlKind, type SessionControlStatus } from "./session.sql"
 
 export namespace SessionControl {
-  export const Kind = z.enum([
-    "manual_summarize",
-    "compaction_request",
-    "subtask_request",
-    "wake_reason",
-  ])
+  export const Kind = z.enum(["manual_summarize", "compaction_request", "subtask_request", "wake_reason"])
   export type Kind = z.infer<typeof Kind>
 
   export const Status = z.enum(["pending", "consumed", "failed"])
@@ -75,7 +70,9 @@ export namespace SessionControl {
       db
         .select()
         .from(SessionControlRecordTable)
-        .where(and(eq(SessionControlRecordTable.session_id, sessionID), eq(SessionControlRecordTable.status, "pending")))
+        .where(
+          and(eq(SessionControlRecordTable.session_id, sessionID), eq(SessionControlRecordTable.status, "pending")),
+        )
         .orderBy(asc(SessionControlRecordTable.time_created), asc(SessionControlRecordTable.id))
         .all()
         .map(fromRow),
@@ -97,8 +94,7 @@ export namespace SessionControl {
         )
         .get()
       if (!current) return undefined
-      db
-        .update(SessionControlRecordTable)
+      db.update(SessionControlRecordTable)
         .set({ status: "consumed", time_updated: now, time_consumed: now })
         .where(eq(SessionControlRecordTable.id, input.id))
         .run()
@@ -113,16 +109,12 @@ export namespace SessionControl {
         .select()
         .from(SessionControlRecordTable)
         .where(
-          and(
-            eq(SessionControlRecordTable.id, input.id),
-            eq(SessionControlRecordTable.session_id, input.sessionID),
-          ),
+          and(eq(SessionControlRecordTable.id, input.id), eq(SessionControlRecordTable.session_id, input.sessionID)),
         )
         .get()
       if (!current) return undefined
       const payload = { ...current.payload, error: input.error }
-      db
-        .update(SessionControlRecordTable)
+      db.update(SessionControlRecordTable)
         .set({ status: "failed", payload, time_updated: now })
         .where(eq(SessionControlRecordTable.id, input.id))
         .run()

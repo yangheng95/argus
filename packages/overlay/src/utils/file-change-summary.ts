@@ -242,11 +242,7 @@ export function mergeChangeGroups(groups: ChangeGroup[]): ChangeGroup[] {
     .sort((left, right) => groupSortKey(left) - groupSortKey(right) || left.id.localeCompare(right.id))
 }
 
-export function collectAgentFileChangeGroups(
-  node: CardNode,
-  base: string,
-  goalWorkflows: unknown,
-): ChangeGroup[] {
+export function collectAgentFileChangeGroups(node: CardNode, base: string, goalWorkflows: unknown): ChangeGroup[] {
   return collectAgentFileChangeGroupsFromNodes([node], base, goalWorkflows)
 }
 

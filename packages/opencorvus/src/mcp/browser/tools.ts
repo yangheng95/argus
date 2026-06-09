@@ -341,15 +341,17 @@ const detectOpenedPage = async <T>(
   action: () => Promise<T>,
 ): Promise<{ result: T; openedPage?: Awaited<ReturnType<typeof getTabInfo>> }> => {
   const before = new Set(session.page.context().pages())
-  const pagePromise = session.page.context().waitForEvent("page", { timeout: 750 }).catch(() => null)
+  const pagePromise = session.page
+    .context()
+    .waitForEvent("page", { timeout: 750 })
+    .catch(() => null)
   const popupPromise = session.page.waitForEvent("popup", { timeout: 750 }).catch(() => null)
   const result = await action()
   const page =
     session.page
       .context()
       .pages()
-      .find((candidate) => !before.has(candidate)) ??
-    (await Promise.race([popupPromise, pagePromise]))
+      .find((candidate) => !before.has(candidate)) ?? (await Promise.race([popupPromise, pagePromise]))
   if (!page) return { result }
   await page.waitForLoadState("domcontentloaded", { timeout: 5_000 }).catch(() => {})
   const adopted = await adoptPage(session.profileId, page, {
@@ -360,7 +362,10 @@ const detectOpenedPage = async <T>(
 }
 
 const safeDownloadFilename = (input: string) => {
-  const base = path.basename(input).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 160)
+  const base = path
+    .basename(input)
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+    .slice(0, 160)
   return base || "download"
 }
 
@@ -379,7 +384,8 @@ const saveDownload = async (sessionId: string, download: Download) => {
   })
 }
 
-const frameTarget = (page: ReturnType<typeof getSession>["page"], frameSelector: string) => page.frameLocator(frameSelector)
+const frameTarget = (page: ReturnType<typeof getSession>["page"], frameSelector: string) =>
+  page.frameLocator(frameSelector)
 
 const frameLocator = (page: ReturnType<typeof getSession>["page"], frameSelector: string, selector: string) =>
   frameTarget(page, frameSelector).locator(selector)
@@ -391,7 +397,12 @@ export const registerTools = (server: McpServer) => {
     name: string,
     schema: Parameters<typeof server.registerTool>[1],
     handler: Parameters<typeof server.registerTool>[2],
-  ) => origRegister(name, schema, traced(name, handler as Parameters<typeof traced>[1]) as Parameters<typeof server.registerTool>[2])
+  ) =>
+    origRegister(
+      name,
+      schema,
+      traced(name, handler as Parameters<typeof traced>[1]) as Parameters<typeof server.registerTool>[2],
+    )
 
   // ── Session 生命周期 ──────────────────────────────────────────────────────────
 
@@ -422,7 +433,9 @@ export const registerTools = (server: McpServer) => {
         hosts: z
           .record(z.string(), z.string())
           .optional()
-          .describe("域名到 IP 的映射，如 { 'example.com': '192.168.1.1' }。仅对 HTTP 可靠；HTTPS 需目标 IP 的证书包含原域名。"),
+          .describe(
+            "域名到 IP 的映射，如 { 'example.com': '192.168.1.1' }。仅对 HTTP 可靠；HTTPS 需目标 IP 的证书包含原域名。",
+          ),
         virtualCursor: z.boolean().optional().describe("是否注入虚拟光标，默认 true。设为 false 可关闭光标跟踪。"),
         perf: z
           .enum(["close", "silent", "per_tool"])
@@ -430,7 +443,9 @@ export const registerTools = (server: McpServer) => {
           .describe(
             "性能监控模式。close（默认）=不采集，零开销；silent=后台采集，需主动调用 get_perf 查询；per_tool=后台采集，每次工具调用完成后自动将同源性能异常附加到响应文本中。",
           ),
-        storageState: storageStateSchema.optional().describe("Playwright storageState JSON for explicit cookie/localStorage import."),
+        storageState: storageStateSchema
+          .optional()
+          .describe("Playwright storageState JSON for explicit cookie/localStorage import."),
       },
       outputSchema: {
         sessionId: z.string().describe("会话唯一标识符，后续所有操作均需传入"),
@@ -523,7 +538,8 @@ export const registerTools = (server: McpServer) => {
       if (action === "list") return ok({ ok: true, tabs: await listTabs(sessionId) })
       if (action === "new") return ok({ ok: true, tab: await createTab(sessionId, url) })
       if (action === "select") {
-        if (index === undefined) return failJson({ ok: false, error: { code: "INDEX_REQUIRED", message: "tabs select requires index" } })
+        if (index === undefined)
+          return failJson({ ok: false, error: { code: "INDEX_REQUIRED", message: "tabs select requires index" } })
         const selectedSessionId = getTabByIndex(sessionId, index)
         return ok({
           ok: true,
@@ -543,7 +559,7 @@ export const registerTools = (server: McpServer) => {
     "get_perf",
     {
       description:
-        "获取当前 session 的全量累积性能数据。需要在 session_create 时指定 perf: \"silent\" 或 \"per_tool\" 才可用。issues 数组包含所有异常（含第三方），thirdParty=true 的条目通常不影响功能。",
+        '获取当前 session 的全量累积性能数据。需要在 session_create 时指定 perf: "silent" 或 "per_tool" 才可用。issues 数组包含所有异常（含第三方），thirdParty=true 的条目通常不影响功能。',
       inputSchema: { sessionId: z.string() },
       outputSchema: {
         ok: z.boolean().describe("true = 无同源异常"),
@@ -593,7 +609,8 @@ export const registerTools = (server: McpServer) => {
   server.registerTool(
     "diagnostics_get",
     {
-      description: "获取当前 session 累积的页面错误证据，包括 console error/warning、pageerror、请求失败和 HTTP 4xx/5xx。",
+      description:
+        "获取当前 session 累积的页面错误证据，包括 console error/warning、pageerror、请求失败和 HTTP 4xx/5xx。",
       inputSchema: { sessionId: z.string() },
       outputSchema: diagnosticsSchema,
     },
@@ -607,7 +624,9 @@ export const registerTools = (server: McpServer) => {
         "Set automatic handling for JavaScript dialogs. Dialogs block page execution, so the browser MCP always handles them immediately and records the history.",
       inputSchema: {
         sessionId: z.string(),
-        action: z.enum(["dismiss", "accept"]).describe("Automatic action for future alert/confirm/prompt/beforeunload dialogs."),
+        action: z
+          .enum(["dismiss", "accept"])
+          .describe("Automatic action for future alert/confirm/prompt/beforeunload dialogs."),
         promptText: z.string().optional().describe("Text used when accepting prompt dialogs."),
       },
       outputSchema: {
@@ -644,7 +663,8 @@ export const registerTools = (server: McpServer) => {
   server.registerTool(
     "viewport_set",
     {
-      description: "Set the current session viewport size and update the owning profile default viewport for future tabs.",
+      description:
+        "Set the current session viewport size and update the owning profile default viewport for future tabs.",
       inputSchema: {
         sessionId: z.string(),
         width: z.number().int().positive(),
@@ -929,16 +949,15 @@ export const registerTools = (server: McpServer) => {
         dom: includeDom === false ? undefined : await summarizeDom(page),
         diagnostics: includeDiagnostics === false ? undefined : getDiagnostics(sessionId),
       }
-      const content: Array<
-        | { type: "image"; data: string; mimeType: "image/png" }
-        | { type: "text"; text: string }
-      > = []
+      const content: Array<{ type: "image"; data: string; mimeType: "image/png" } | { type: "text"; text: string }> = []
       if (screenshot) content.push({ type: "image", data: screenshot.data, mimeType: "image/png" })
       content.push({
         type: "text",
         text: JSON.stringify({
           ...result,
-          screenshot: screenshot ? { mimeType: screenshot.mimeType, width: screenshot.width, height: screenshot.height } : undefined,
+          screenshot: screenshot
+            ? { mimeType: screenshot.mimeType, width: screenshot.width, height: screenshot.height }
+            : undefined,
         }),
       })
       return { content, structuredContent: result }
@@ -950,10 +969,7 @@ export const registerTools = (server: McpServer) => {
     selector: z.string().optional().describe("CSS selector（与 x/y 二选一）"),
     x: z.number().optional().describe("页面 X 坐标，绝对像素（与 selector 二选一）"),
     y: z.number().optional().describe("页面 Y 坐标，绝对像素（与 selector 二选一）"),
-    force: z
-      .boolean()
-      .optional()
-      .describe("仅坐标模式有效。true 时跳过 guard 拦截，按原始坐标强制执行。默认 false。"),
+    force: z.boolean().optional().describe("仅坐标模式有效。true 时跳过 guard 拦截，按原始坐标强制执行。默认 false。"),
   }
 
   const guardSchema = z
@@ -982,7 +998,8 @@ export const registerTools = (server: McpServer) => {
       guard,
       error: {
         code: "GUARD_BLOCKED",
-        message: guard.message ?? "Coordinate guard blocked this interaction. Re-call with force:true to execute anyway.",
+        message:
+          guard.message ?? "Coordinate guard blocked this interaction. Re-call with force:true to execute anyway.",
       },
     })
 
@@ -1030,7 +1047,13 @@ export const registerTools = (server: McpServer) => {
       try {
         if (selector) {
           const action = await detectOpenedPage(session, async () => page.locator(selector).click())
-          return ok({ ok: true, clicked: true, method: "selector", usedSelector: selector, openedPage: action.openedPage })
+          return ok({
+            ok: true,
+            clicked: true,
+            method: "selector",
+            usedSelector: selector,
+            openedPage: action.openedPage,
+          })
         } else if (x !== undefined && y !== undefined) {
           const point = { x, y }
           await page.mouse.move(x, y)
@@ -1088,14 +1111,28 @@ export const registerTools = (server: McpServer) => {
       try {
         if (selector) {
           const action = await detectOpenedPage(session, async () => page.locator(selector).dblclick())
-          return ok({ ok: true, clicked: true, method: "selector", usedSelector: selector, openedPage: action.openedPage })
+          return ok({
+            ok: true,
+            clicked: true,
+            method: "selector",
+            usedSelector: selector,
+            openedPage: action.openedPage,
+          })
         } else if (x !== undefined && y !== undefined) {
           const point = { x, y }
           await page.mouse.move(x, y)
           const guard = await runPointGuard(page, point, doubleClickGuardProfile, force ?? false)
           if (guard.decision === "block") return guardBlocked("coord", point, guard)
           const action = await detectOpenedPage(session, async () => page.mouse.dblclick(x, y))
-          return ok({ ok: true, clicked: true, method: "coord", point, target: guard.target, guard, openedPage: action.openedPage })
+          return ok({
+            ok: true,
+            clicked: true,
+            method: "coord",
+            point,
+            target: guard.target,
+            guard,
+            openedPage: action.openedPage,
+          })
         } else {
           return {
             isError: true as const,
@@ -1185,7 +1222,8 @@ export const registerTools = (server: McpServer) => {
   server.registerTool(
     "keyboard_shortcut",
     {
-      description: "Press a keyboard shortcut chord, for example Control+A, Meta+K, Shift+Alt+ArrowDown, or Control+Shift+I.",
+      description:
+        "Press a keyboard shortcut chord, for example Control+A, Meta+K, Shift+Alt+ArrowDown, or Control+Shift+I.",
       inputSchema: {
         sessionId: z.string(),
         shortcut: z.string().describe("Playwright keyboard chord, such as Control+A or Meta+K."),
@@ -1224,17 +1262,14 @@ export const registerTools = (server: McpServer) => {
         if (choices.length !== 1) {
           return failJson({
             ok: false,
-            error: { code: "SELECT_OPTION_INPUT", message: "select_option requires exactly one of value, values, label, or index" },
+            error: {
+              code: "SELECT_OPTION_INPUT",
+              message: "select_option requires exactly one of value, values, label, or index",
+            },
           })
         }
         const option =
-          values !== undefined
-            ? values
-            : label !== undefined
-              ? { label }
-              : index !== undefined
-                ? { index }
-                : value!
+          values !== undefined ? values : label !== undefined ? { label } : index !== undefined ? { index } : value!
         const selectedValues = await page.locator(selector).selectOption(option)
         return ok({ ok: true, selectedValues })
       } catch (e) {
@@ -1378,7 +1413,10 @@ export const registerTools = (server: McpServer) => {
           if (guard.decision === "block") return guardBlocked("coord", point, guard)
           await page.mouse.click(x, y)
         } else {
-          return failJson({ ok: false, error: { code: "DOWNLOAD_INPUT", message: "download requires selector or x/y" } })
+          return failJson({
+            ok: false,
+            error: { code: "DOWNLOAD_INPUT", message: "download requires selector or x/y" },
+          })
         }
         const entry = await saveDownload(sessionId, await downloadPromise)
         return ok({ ok: true, suggestedFilename: entry.suggestedFilename, path: entry.path, url: entry.url })
@@ -1395,7 +1433,9 @@ export const registerTools = (server: McpServer) => {
       inputSchema: { sessionId: z.string() },
       outputSchema: {
         sessionId: z.string(),
-        downloads: z.array(z.object({ at: z.number(), suggestedFilename: z.string(), path: z.string(), url: z.string() })),
+        downloads: z.array(
+          z.object({ at: z.number(), suggestedFilename: z.string(), path: z.string(), url: z.string() }),
+        ),
       },
     },
     async ({ sessionId }) => ok(getDownloadHistory(sessionId)),
@@ -1407,7 +1447,9 @@ export const registerTools = (server: McpServer) => {
       description: "List frames/iframes in the current page, including URL and name.",
       inputSchema: { sessionId: z.string() },
       outputSchema: {
-        frames: z.array(z.object({ index: z.number(), name: z.string(), url: z.string(), parentIndex: z.number().nullable() })),
+        frames: z.array(
+          z.object({ index: z.number(), name: z.string(), url: z.string(), parentIndex: z.number().nullable() }),
+        ),
       },
     },
     async ({ sessionId }) => {

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { extractMessageMarkdown, extractMessageText, relativeTime } from "../../src/cli/cmd/tui/feature-plugins/session/util"
+import {
+  extractMessageMarkdown,
+  extractMessageText,
+  relativeTime,
+} from "../../src/cli/cmd/tui/feature-plugins/session/util"
 import type { Part } from "@opencorvus-ai/sdk"
 
 describe("OpenCode session switcher preview utils", () => {
@@ -15,7 +19,15 @@ describe("OpenCode session switcher preview utils", () => {
 
   test("truncates markdown previews and closes open fences", () => {
     const markdown = extractMessageMarkdown(
-      [{ type: "text", text: "```ts\nconst answer = 1\nconst next = 2", id: "part_4", messageID: "msg_2", sessionID: "ses_1" } as Part],
+      [
+        {
+          type: "text",
+          text: "```ts\nconst answer = 1\nconst next = 2",
+          id: "part_4",
+          messageID: "msg_2",
+          sessionID: "ses_1",
+        } as Part,
+      ],
       2,
       80,
     )

@@ -6,14 +6,14 @@ The overlay right panel defaults to `rightPanelCollapsed=true`. In that state th
 
 ## Call Points
 
-| Area | File | Decision |
-| --- | --- | --- |
-| Right activity selection | `packages/overlay/src/main.tsx` `selectRightActivity()` | Expand the right panel through the existing settings store before showing the selected activity. |
-| Right collapse source | `packages/overlay/src/store/settings.ts` `rightPanelCollapsed` | Keep as the single persisted source. No parallel UI state. |
-| Persistence | `packages/overlay/src/services/overlay-settings-storage.ts` / `saveSettings()` | Reuse existing save path so the next overlay load keeps the expanded panel. |
-| Collapse control | `packages/overlay/src/components/PanelHeaderCollapseControl.tsx` | Keep the explicit header rail button as the manual collapse/expand control. |
-| CSS visibility | `packages/overlay/src/styles/surfaces/activity.css` and `inspector.css` | Keep collapse CSS unchanged; the bug is the activity handler not opening the panel. |
-| Regression test | `packages/overlay/test/side-activity-toolbar-browser.test.ts` | Add a browser test for default-collapsed right panel plus Inspector activity click. |
+| Area                     | File                                                                           | Decision                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Right activity selection | `packages/overlay/src/main.tsx` `selectRightActivity()`                        | Expand the right panel through the existing settings store before showing the selected activity. |
+| Right collapse source    | `packages/overlay/src/store/settings.ts` `rightPanelCollapsed`                 | Keep as the single persisted source. No parallel UI state.                                       |
+| Persistence              | `packages/overlay/src/services/overlay-settings-storage.ts` / `saveSettings()` | Reuse existing save path so the next overlay load keeps the expanded panel.                      |
+| Collapse control         | `packages/overlay/src/components/PanelHeaderCollapseControl.tsx`               | Keep the explicit header rail button as the manual collapse/expand control.                      |
+| CSS visibility           | `packages/overlay/src/styles/surfaces/activity.css` and `inspector.css`        | Keep collapse CSS unchanged; the bug is the activity handler not opening the panel.              |
+| Regression test          | `packages/overlay/test/side-activity-toolbar-browser.test.ts`                  | Add a browser test for default-collapsed right panel plus Inspector activity click.              |
 
 ## Implementation
 

@@ -18,6 +18,7 @@
 3. 真痛点两条：**(a) 浅读**——只拿 path 容易浅读几千行；**(b) 估算偏见**——背着实现压力的 agent 倾向把工作量压成「我现在能做的最小集」。
 
 **两条都指向「独立、无实现压力、专职深读 template 的 agent」**：
+
 - 对 (b)：让有实现/分解压力的 agent 自评工作量无法去偏见；必须换一个只读、不写代码、不分解 goal 的 reviewer。
 - 对 (a)：context 不是稀缺约束——**恰恰相反，我们主动把全文 template inline 进 analyst**（它唯一的工作就是消化 template），用 analyst 的 context 预算换深读；下游（architect 再决策 / build 实现）拿到的是 analyst 消化后的 **compact brief**，而非再去浅读原文。
 
@@ -63,15 +64,15 @@ architect(V1)
 
 经全仓核验，用户初版 schema 7 字段里 **6 个已有单一来源**：
 
-| 初版字段 | 既有单一来源 |
-|---|---|
-| `user_visible_workflows` | frontend-design `product_spec`/`fillable_modules` |
-| `visual_surfaces` | frontend-design `visual_consistency_contract`(freeform) + architect `register_reference_coverage`(有 `id`) + `render_surface` 契约(有 `id`) |
-| `interactions_or_states` | frontend-design `fillable_modules` / `register_interaction_spec`(`vis-*`，可选) |
-| `data_contracts` | architect `register_contract`(typed IR + valueDomain，有 `id`) |
-| `verification_plan` | architect `goal.acceptance_specs`(scorers，有 `id`) |
-| `reference_artifacts_to_read` | architect `reference_coverage`/contract `artifact_paths`/design `reference_artifacts` |
-| `why_not_smaller`/低估陷阱/工作面计数/**定型意见** | **无任何来源——本层唯一原创** |
+| 初版字段                                           | 既有单一来源                                                                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_visible_workflows`                           | frontend-design `product_spec`/`fillable_modules`                                                                                           |
+| `visual_surfaces`                                  | frontend-design `visual_consistency_contract`(freeform) + architect `register_reference_coverage`(有 `id`) + `render_surface` 契约(有 `id`) |
+| `interactions_or_states`                           | frontend-design `fillable_modules` / `register_interaction_spec`(`vis-*`，可选)                                                             |
+| `data_contracts`                                   | architect `register_contract`(typed IR + valueDomain，有 `id`)                                                                              |
+| `verification_plan`                                | architect `goal.acceptance_specs`(scorers，有 `id`)                                                                                         |
+| `reference_artifacts_to_read`                      | architect `reference_coverage`/contract `artifact_paths`/design `reference_artifacts`                                                       |
+| `why_not_smaller`/低估陷阱/工作面计数/**定型意见** | **无任何来源——本层唯一原创**                                                                                                                |
 
 **硬约束**：analyst 是既有产物的**索引 + 反低估透镜 + 定型意见（index/lens/verdict）**，不是第三份真理。
 
@@ -91,7 +92,7 @@ architect(V1)
 ```ts
 // src/goal-workload-analyst/types.ts
 export interface WorkloadBrief {
-  goal_id: string            // architect llmID，如 "goal_visual_shell"（必须是已注册 goal）
+  goal_id: string // architect llmID，如 "goal_visual_shell"（必须是已注册 goal）
 
   // ── 定型意见（喂 architect 的主信号） ───────────────────
   /** 非空 = analyst 判断此 goal 对「单次自治 build」过大或欠定义。
@@ -100,30 +101,31 @@ export interface WorkloadBrief {
   decomposition_concern?: string
 
   // ── ORIGINATED（本层唯一原创） ───────────────────────────
-  why_not_smaller: string[]          // 为什么比 title/objective 看起来更大
-  underestimation_traps: string[]    // 具体「别停在 X」，如「建 Header/Sidebar 不够；chart 区含 grid+price axis+overlay+subpanel」
-  execution_inventory: {             // 可数解构 —— 反过早最小化
+  why_not_smaller: string[] // 为什么比 title/objective 看起来更大
+  underestimation_traps: string[] // 具体「别停在 X」，如「建 Header/Sidebar 不够；chart 区含 grid+price axis+overlay+subpanel」
+  execution_inventory: {
+    // 可数解构 —— 反过早最小化
     surfaces: number
     states: number
     data_contracts: number
     verification_points: number
   }
-  verification_inventory: string[]   // build report pass 前必须执行的可观测检查
+  verification_inventory: string[] // build report pass 前必须执行的可观测检查
 
   // ── REFERENCED（指针，禁止重写） ─────────────────────────
   references: {
     contract_ids: string[]
     reference_coverage_ids: string[]
     acceptance_spec_ids: string[]
-    visual_spec_ids: string[]        // 可选 vis-*，可能空
-    prd_sections: string[]           // frontend-template.md 中 build/architect 必须深读的 section
+    visual_spec_ids: string[] // 可选 vis-*，可能空
+    prd_sections: string[] // frontend-template.md 中 build/architect 必须深读的 section
   }
 }
 
 export interface GoalWorkloadResult {
   briefs: WorkloadBrief[]
-  spec_snapshot_id: string           // 本次分析针对的 architect 快照（staleness key）
-  summary: string                    // 一句话：几个 goal 定型 OK / 几个被标 concern
+  spec_snapshot_id: string // 本次分析针对的 architect 快照（staleness key）
+  summary: string // 一句话：几个 goal 定型 OK / 几个被标 concern
 }
 ```
 
@@ -174,7 +176,7 @@ Collector（`output-tools.ts`，镜像 architect collector）：`{ briefs, summa
   const wl = findLatestGoalWorkloadArtifact(taskID)
   const workloadBrief =
     wl && wl.spec_snapshot_id === activeSpecSnapshotID
-      ? wl.briefs.find((b) => b.goal_id === goal.llmID)   // 用 architect llmID 匹配
+      ? wl.briefs.find((b) => b.goal_id === goal.llmID) // 用 architect llmID 匹配
       : undefined
   ```
 - 渲染（`buildUserPrompt` goal 分支，放 `# Goal:` 契约块**之前**，框住契约；仅当存在时渲染，缺省安全）：
@@ -194,6 +196,7 @@ Collector（`output-tools.ts`，镜像 architect collector）：`{ briefs, summa
 ## §7 全部接入点（file → symbol → 改动；行号会漂移，以 symbol 为准）
 
 **新建**
+
 1. `src/goal-workload-analyst/agent.ts` —— `GoalWorkloadAnalystAgent.analyze(input)`，镜像 `architect/agent.ts:89-162`：`filterAgentTools(createAgentContextTools(),"goal-workload-analyst",{taskID})` + `createGoalWorkloadOutputTools(...)` → `runAgentSession({ kind:"goal-workload-analyst", core: withFactCheckRegistration(CORE), sessionTitle, parentSessionID, taskID, signal, onSessionCreated, toolKit, buildUserPrompt, terminalTool:{ toolName:"submit_workload_analysis", isSatisfied:c=>c.finalized, shouldExposeOnlyTerminalTool } })`。
 2. `src/goal-workload-analyst/output-tools.ts` —— `createGoalWorkloadOutputTools({ knownGoalIDs, contractGraph })`。
 3. `src/goal-workload-analyst/types.ts` —— `WorkloadBrief`/`GoalWorkloadResult`（§3）。
@@ -201,28 +204,13 @@ Collector（`output-tools.ts`，镜像 architect collector）：`{ briefs, summa
 5. `src/goal-workload-analyst/prompt.ts` —— `buildWorkloadUserPrompt(input)`：**inline 全文 `frontend-template.md`**（从 materialized 路径读，host 侧读后传入或 prompt 内直引）+ goals + contract graph + reference_coverage + design handoff（§0 决策：analyst 是唯一 inline 全文 template 的 agent）。
 6. `src/prompt/core/goal-workload-analyst-core.txt` —— core prompt（§8）。
 
-**注册**（按 `agent/role-contract.ts` 文件头官方配方）
-7. `src/agent/role-contract.ts` —— `AgentRoleContract.all`(role-contract.ts:33) 加 `"goal-workload-analyst"`(`{id,description,promptConfigMode:"append",promptEditable:true,defaultPromptRequired:true}（与 architect/requirements 等 stage agent 一致；同时加进 `AgentRoleID` union）`)。**必须最先加**：`buildState` 用 `AgentRoleContract.description(id)`，未知 id **抛错**。
-8. `src/session/session.sql.ts` —— `SESSION_KINDS`(65) 加 `"goal-workload-analyst"`（text 列，**无需迁库**）。与 role-contract 被 `test/agent/role-contract.test.ts` 互钉，须同步。
-9. `src/agent/agent.ts`：import core；`buildState` 加条目 **逐字段镜像 architect(448-471)**：`description:AgentRoleContract.description(...)`, `prompt:CORE`, `tools.include:["read_file","find_files","search_code","list_directory","memory_search","memory_get","todoread","todowrite"]`, `steps:1000`, `options:{}`, **`mode:"primary"`**, `native:true`, `hidden:true`；`NATIVE_DEFAULTS`(634) 加映射；**orchestrator `tools.include`(384-413)** 加 `"workload_analysis"`（紧邻 architect）。
-10. `src/engine/engine.sql.ts` —— `EngineArtifactKind` union 加 `| "goal_workload"`。
+**注册**（按 `agent/role-contract.ts` 文件头官方配方）7. `src/agent/role-contract.ts` —— `AgentRoleContract.all`(role-contract.ts:33) 加 `"goal-workload-analyst"`(`{id,description,promptConfigMode:"append",promptEditable:true,defaultPromptRequired:true}（与 architect/requirements 等 stage agent 一致；同时加进 `AgentRoleID` union）`)。**必须最先加**：`buildState` 用 `AgentRoleContract.description(id)`，未知 id **抛错**。8. `src/session/session.sql.ts` —— `SESSION_KINDS`(65) 加 `"goal-workload-analyst"`（text 列，**无需迁库**）。与 role-contract 被 `test/agent/role-contract.test.ts` 互钉，须同步。9. `src/agent/agent.ts`：import core；`buildState` 加条目 **逐字段镜像 architect(448-471)**：`description:AgentRoleContract.description(...)`, `prompt:CORE`, `tools.include:["read_file","find_files","search_code","list_directory","memory_search","memory_get","todoread","todowrite"]`, `steps:1000`, `options:{}`, **`mode:"primary"`**, `native:true`, `hidden:true`；`NATIVE_DEFAULTS`(634) 加映射；**orchestrator `tools.include`(384-413)** 加 `"workload_analysis"`（紧邻 architect）。10. `src/engine/engine.sql.ts` —— `EngineArtifactKind` union 加 `| "goal_workload"`。
 
-**编排器 + 持久化**
-11. `src/orchestrator/tools.ts` —— `tools` 对象加 `workload_analysis: tool({...})`（architect 与 integrity 之间）：`listGoals`+contract graph+active spec snapshot+**全文 template** → `GoalWorkloadAnalystAgent.analyze` → `persistGoalWorkload` → `yieldResult({headline,summary,fields,pointer})`，pointer/summary **引导**：「有 goal 被标 decomposition_concern → 考虑回 architect 重定型；否则进 build」。失败走 architect 同款 catch。
-12. `src/engine/persist.ts` —— `persistGoalWorkload(...)`。
-13. `src/engine/store.ts` —— `findLatestGoalWorkloadArtifact(taskID)`。
+**编排器 + 持久化** 11. `src/orchestrator/tools.ts` —— `tools` 对象加 `workload_analysis: tool({...})`（architect 与 integrity 之间）：`listGoals`+contract graph+active spec snapshot+**全文 template** → `GoalWorkloadAnalystAgent.analyze` → `persistGoalWorkload` → `yieldResult({headline,summary,fields,pointer})`，pointer/summary **引导**：「有 goal 被标 decomposition_concern → 考虑回 architect 重定型；否则进 build」。失败走 architect 同款 catch。12. `src/engine/persist.ts` —— `persistGoalWorkload(...)`。13. `src/engine/store.ts` —— `findLatestGoalWorkloadArtifact(taskID)`。
 
-**消费**
-14. `src/engine/describe.ts` —— goal 投影加事实字段（如 `workload_analyzed`/`workload_stale`/`workload_concern`，对比 active snapshot），让 orchestrator 知道「是否已分析/已过期/有定型 concern」（rule 23，纯事实不 gate）。
-15. `src/orchestrator/tools.ts` `architect` 工具 —— 重派发时读 workload briefs 传给 `coordinate`（§6A）。
-16. `src/architect/agent.ts` —— `CoordinateInput += workloadBriefs?` + `buildUserPrompt` 加 Workload Review 节（§6A）。
-17. `src/prompt/core/architect-core.txt` —— 加「按 decomposition_concern split/rebalance」条（§6A）。
-18. `src/build/agent.ts` —— `BuildContext.workloadBrief?` + `buildUserPrompt` 渲染（§6B）。
-19. `src/orchestrator/tools.ts` `build` 工具 —— BuildContext 装配注入 `workloadBrief`（§6B）。
-20. `src/prompt/core/orchestrator-core.txt` —— 加 advisory：architect 后通常调 `workload_analysis`；其 concern 是 architect 重定型/`modify_goal` 的输入；遵循既有 seal-the-plan 防抖。
+**消费** 14. `src/engine/describe.ts` —— goal 投影加事实字段（如 `workload_analyzed`/`workload_stale`/`workload_concern`，对比 active snapshot），让 orchestrator 知道「是否已分析/已过期/有定型 concern」（rule 23，纯事实不 gate）。15. `src/orchestrator/tools.ts` `architect` 工具 —— 重派发时读 workload briefs 传给 `coordinate`（§6A）。16. `src/architect/agent.ts` —— `CoordinateInput += workloadBriefs?` + `buildUserPrompt` 加 Workload Review 节（§6A）。17. `src/prompt/core/architect-core.txt` —— 加「按 decomposition_concern split/rebalance」条（§6A）。18. `src/build/agent.ts` —— `BuildContext.workloadBrief?` + `buildUserPrompt` 渲染（§6B）。19. `src/orchestrator/tools.ts` `build` 工具 —— BuildContext 装配注入 `workloadBrief`（§6B）。20. `src/prompt/core/orchestrator-core.txt` —— 加 advisory：architect 后通常调 `workload_analysis`；其 concern 是 architect 重定型/`modify_goal` 的输入；遵循既有 seal-the-plan 防抖。
 
-**workflow**
-21. `src/engine/workflow.ts` —— PIPELINE 加 step `{ id:"workload_analysis", tool:"workload_analysis", label:"Workload", hint:"...只读工作量解构：inline 全文 template，逐 goal 产 why_not_smaller/可数清单/低估陷阱/验证清单/定型意见(decomposition_concern)，以 id 引用 architect 契约与 reference coverage；concern 回喂 architect 重定型，brief 供 build 反过早最小化。advisory 可跳过。", scope:"task", skippable:true, after:["architect"] }`；`build.after` 改 `["workload_analysis"]`（advisory）。
+**workflow** 21. `src/engine/workflow.ts` —— PIPELINE 加 step `{ id:"workload_analysis", tool:"workload_analysis", label:"Workload", hint:"...只读工作量解构：inline 全文 template，逐 goal 产 why_not_smaller/可数清单/低估陷阱/验证清单/定型意见(decomposition_concern)，以 id 引用 architect 契约与 reference coverage；concern 回喂 architect 重定型，brief 供 build 反过早最小化。advisory 可跳过。", scope:"task", skippable:true, after:["architect"] }`；`build.after` 改 `["workload_analysis"]`（advisory）。
 
 ---
 

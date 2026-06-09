@@ -6,12 +6,12 @@
 
 系统对外提供四个**语义不同**的扩展点，常被混淆，必须区分：
 
-| 入口 | 位置 | 扩展的是 | 典型对象 |
-|---|---|---|---|
-| **Executor** | `executor/` | 跑代码的外部进程 | claude-code / codex / opencode |
-| **Plugin** | `plugin/` | 非 executor 语义的外部插件（hook / auth） | `@opencorvus-ai/plugin` API 下的任意实现 |
-| **MCP** | `mcp/` | Model Context Protocol server | 任意实现 MCP 的工具服务 |
-| **ACP** | `acp/` | Agent Client Protocol（编辑器集成） | Zed 等外部编辑器 |
+| 入口         | 位置        | 扩展的是                                  | 典型对象                                 |
+| ------------ | ----------- | ----------------------------------------- | ---------------------------------------- |
+| **Executor** | `executor/` | 跑代码的外部进程                          | claude-code / codex / opencode           |
+| **Plugin**   | `plugin/`   | 非 executor 语义的外部插件（hook / auth） | `@opencorvus-ai/plugin` API 下的任意实现 |
+| **MCP**      | `mcp/`      | Model Context Protocol server             | 任意实现 MCP 的工具服务                  |
+| **ACP**      | `acp/`      | Agent Client Protocol（编辑器集成）       | Zed 等外部编辑器                         |
 
 ## Executor —— 执行器
 
@@ -19,16 +19,17 @@
 
 三家实现 × 多种形态：
 
-| 实现 | CLI 形态 | Agent 形态 | App-server 形态 |
-|---|---|---|---|
-| claude | — | `claude-agent.ts` | `claude-code.ts` |
-| codex | `codex-cli.ts` | — | `codex-app-server.ts` + `codex-app-server-client.ts` |
-| opencode | `opencode.ts` | — | — |
-| （共享基座） | — | `codex.ts` | — |
+| 实现         | CLI 形态       | Agent 形态        | App-server 形态                                      |
+| ------------ | -------------- | ----------------- | ---------------------------------------------------- |
+| claude       | —              | `claude-agent.ts` | `claude-code.ts`                                     |
+| codex        | `codex-cli.ts` | —                 | `codex-app-server.ts` + `codex-app-server-client.ts` |
+| opencode     | `opencode.ts`  | —                 | —                                                    |
+| （共享基座） | —              | `codex.ts`        | —                                                    |
 
 **历史变更**：旧的 `claude-cli.ts` 已删除（commit `11fe9bf30` — 从未在生产使用）。
 
 **关键文件**：
+
 - `registry.ts` — 执行器注册表（`ExecutorRegistry.has / require / autoRegister`）
 - `bootstrap.ts` — 启动器（`ExecutorBootstrap.autoRegister`）
 - `discovery.ts` — 能力探测
@@ -38,11 +39,13 @@
 - `protocol/` — 执行器协议定义（`adapter/` · `json-rpc.ts` · `model.ts` · `tool.ts`）
 
 **调用链**：
+
 ```
 Orchestrator build tool → build/agent.ts (LLM 决策 + Worktree.create) →
    ExecutorRegistry.require() → Executor 进程 → diff / acceptance
    + goal/runner.ts::cleanupGoalWorkspace 在 worktree 生命周期末端回收
 ```
+
 （旧 `pipeline/executor.ts` 与 `engine/goal-pool.ts` 已删除。`goal/runner.ts` 当前仅
 121 行，只导出 `cleanupGoalWorkspace`，**不再**承担 worktree 创建或 executor dispatch
 职责；worktree 创建走 `Worktree.create`（在 `build/agent.ts` · `orchestrator/tools.ts`
@@ -66,16 +69,17 @@ Orchestrator build tool → build/agent.ts (LLM 决策 + Worktree.create) →
 
 **代码**：`src/mcp/`
 
-| 文件 | 作用 |
-|---|---|
-| `index.ts` | MCP client 管理（连接、生命周期） |
-| `serve.ts` | argus 自身作为 MCP server 暴露工具 |
-| `stdio.ts` | stdio transport 适配（本地子进程） |
-| `materialize.ts` | 把 MCP 工具实例化进 ToolRegistry / agent 上下文 |
-| `auth.ts` | MCP 鉴权 |
-| `oauth-callback.ts` · `oauth-provider.ts` | OAuth 流 |
+| 文件                                      | 作用                                            |
+| ----------------------------------------- | ----------------------------------------------- |
+| `index.ts`                                | MCP client 管理（连接、生命周期）               |
+| `serve.ts`                                | argus 自身作为 MCP server 暴露工具              |
+| `stdio.ts`                                | stdio transport 适配（本地子进程）              |
+| `materialize.ts`                          | 把 MCP 工具实例化进 ToolRegistry / agent 上下文 |
+| `auth.ts`                                 | MCP 鉴权                                        |
+| `oauth-callback.ts` · `oauth-provider.ts` | OAuth 流                                        |
 
 两种角色：
+
 - **作为 client / host**：接入外部 MCP server，把工具暴露给 agent（Orchestrator / sub-agent 决定调用）
 - **作为 server**：对外暴露 argus 自己的能力（见 `mcp/serve.ts`）
 

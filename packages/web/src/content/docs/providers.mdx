@@ -9,26 +9,26 @@ OpenCorvus's LLM layer sits on top of [Vercel AI SDK](https://sdk.vercel.ai/), u
 
 From `packages/opencorvus/package.json:52-90`:
 
-| Provider | Package |
-|---|---|
-| Anthropic | `@ai-sdk/anthropic` + `@anthropic-ai/claude-agent-sdk` |
-| OpenAI / compatible | `@ai-sdk/openai` + `@ai-sdk/openai-compatible` |
-| Google | `@ai-sdk/google` + `@ai-sdk/google-vertex` |
-| Amazon Bedrock | `@ai-sdk/amazon-bedrock` |
-| Azure OpenAI | `@ai-sdk/azure` |
-| Cerebras / Cohere / DeepInfra / Groq / Mistral / Perplexity / TogetherAI / Vercel / xAI | `@ai-sdk/*` |
-| GitLab AI | `@gitlab/gitlab-ai-provider` |
-| OpenRouter | `@openrouter/ai-sdk-provider` |
-| Vercel Gateway | `ai-gateway-provider` |
+| Provider                                                                                | Package                                                |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Anthropic                                                                               | `@ai-sdk/anthropic` + `@anthropic-ai/claude-agent-sdk` |
+| OpenAI / compatible                                                                     | `@ai-sdk/openai` + `@ai-sdk/openai-compatible`         |
+| Google                                                                                  | `@ai-sdk/google` + `@ai-sdk/google-vertex`             |
+| Amazon Bedrock                                                                          | `@ai-sdk/amazon-bedrock`                               |
+| Azure OpenAI                                                                            | `@ai-sdk/azure`                                        |
+| Cerebras / Cohere / DeepInfra / Groq / Mistral / Perplexity / TogetherAI / Vercel / xAI | `@ai-sdk/*`                                            |
+| GitLab AI                                                                               | `@gitlab/gitlab-ai-provider`                           |
+| OpenRouter                                                                              | `@openrouter/ai-sdk-provider`                          |
+| Vercel Gateway                                                                          | `ai-gateway-provider`                                  |
 
 China-region aliases (declared in `channel-runtime/.env.example`):
 
-| Alias | Underlying |
-|---|---|
-| `alibaba-cn` | DashScope |
+| Alias                    | Underlying            |
+| ------------------------ | --------------------- |
+| `alibaba-cn`             | DashScope             |
 | `alibaba-coding-plan-cn` | DashScope Coding Plan |
-| `moonshotai-cn` | Moonshot |
-| `deepseek` | DeepSeek |
+| `moonshotai-cn`          | Moonshot              |
+| `deepseek`               | DeepSeek              |
 
 ## Configuration
 
@@ -59,11 +59,11 @@ In `opencorvus.jsonc`:
       "api": "https://your-gateway/v1",
       "env": ["MYHUB_API_KEY"],
       "models": {
-        "custom-1": { "name": "Custom 1", "tool_call": true }
-      }
-    }
+        "custom-1": { "name": "Custom 1", "tool_call": true },
+      },
+    },
   },
-  "model": "myhub/custom-1"
+  "model": "myhub/custom-1",
 }
 ```
 
@@ -73,11 +73,11 @@ In `opencorvus.jsonc`:
 
 Three knobs:
 
-| Scenario | Config |
-|---|---|
-| Default execution model | `model` field |
-| Per-agent models | `agent.<name>.model` (independently set, see `packages/opencorvus/src/config/config.ts:1053-1067`) |
-| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL` |
+| Scenario                          | Config                                                                                             |
+| --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Default execution model           | `model` field                                                                                      |
+| Per-agent models                  | `agent.<name>.model` (independently set, see `packages/opencorvus/src/config/config.ts:1053-1067`) |
+| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL`                                                                          |
 
 Splitting planning from execution lets you **plan with a strong/slow model and execute with a fast/cheaper one**:
 
@@ -86,8 +86,8 @@ Splitting planning from execution lets you **plan with a strong/slow model and e
   "model": "alibaba-cn/qwen3.5-plus",
   "assistant": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },
-    "planner":      { "model": "anthropic/claude-sonnet-4-6" }
-  }
+    "planner": { "model": "anthropic/claude-sonnet-4-6" },
+  },
 }
 ```
 

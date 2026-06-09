@@ -3,6 +3,7 @@
 > 状态：DRAFT v3 (2026-04-27)
 > 作者：Heng Yang
 > 关联代码（已逐项核实，行号写在表格内）：
+>
 > - `packages/opencorvus/src/cli/cmd/serve.ts`
 > - `packages/opencorvus/src/cli/cmd/acp.ts`
 > - `packages/opencorvus/src/server/server.ts`
@@ -37,34 +38,34 @@ opencorvus 已具备 VSCode 集成所需的绝大多数后端基础设施（HTTP
 
 ## 1. 现状盘点（已逐项核实代码）
 
-| 能力 | 位置 | 关键事实（核实后） |
-|---|---|---|
-| HTTP server 默认 | `server-defaults.json`、`src/server/defaults.ts:5` | `127.0.0.1:7878`。Hono 框架。SDK 也导出同样的 `DEFAULT_SERVER_HOST/PORT/URL`（`packages/sdk/js/src/defaults.ts`） |
-| Auth | `src/server/server.ts:67` | `OPENCORVUS_SERVER_PASSWORD` 启用 Basic Auth；**未设则完全无鉴权**。本地默认就是无鉴权，不要假设强制 |
-| CORS | `src/server/server.ts:91` | 白名单：`http://localhost:*` / `http://127.0.0.1:*` / `tauri://localhost` / `tauri.localhost` / `*.opencorvus.ai`；`vscode-webview://` **不在**白名单中 — 但 webview 不应直连 daemon（§3.3） |
-| Project 隔离 | `src/server/server.ts:121`、`src/project/instance.ts` | 通过 query `?directory=` 或 header `x-opencorvus-directory` 选择 `Instance.directory`，**单 daemon 多 project 共存**。SDK `createOpenCorvusClient({ directory })` 自动注入 header（`packages/sdk/js/src/client.ts:36`） |
-| 控制平面绕过 Instance | `src/server/server.ts:118` | `/log`、`/shutdown`、`/restart` **不**进入 `Instance.provide`，但仍受 Basic Auth |
-| OpenAPI / SDK | `packages/sdk/openapi.json`、`packages/sdk/js/` | 由路由生成的 `hey-api` fetch 客户端。**已含 SSE helper**（`gen/core/serverSentEvents.gen.ts`）— `text/event-stream` 端点会生成带 `onSseEvent`/`onSseError` 回调的 stream method。扩展 host 直接用 SDK，**不用** `EventSource`、**不用**自己拼 `text/event-stream` parser |
-| ACP server | `src/cli/cmd/acp.ts` | 子命令 `opencorvus acp`，内部 `Server.listen(opts)` + `@agentclientprotocol/sdk` 走 stdio + ndjson `AgentSideConnection`，反向调本地 HTTP server。**ACP 是反向集成场景（把 opencorvus 嵌进 Zed/JetBrains）；VSCode 扩展自己不走这条路**（§3.1）。**重要：`acp` 子进程也启动 server，但不写 lock**（§3.2） |
-| Session/Message/Task | `src/session/`、`src/engine/`、`src/task-api/` | SQLite (Drizzle ORM)，`Instance.directory` 决定项目隔离 |
-| 全局事件 SSE | `routes/app.ts:415` `GET /event` | 订阅 Bus 全部事件（含 `server.connected`/`server.heartbeat`）。**扩展通常不需要这条**（噪声大），用更聚焦的 `/task/events` 与 `/task/:id/events` |
-| 任务列表通知 SSE | `routes/orchestrator.ts:223` `GET /task/events` | **纯通知流**：仅推 `{type, taskID, sequence}`。**无 replay，无任务对象**。客户端收到通知后调 `GET /tasks` 拿列表 |
-| 单任务事件 SSE | `routes/orchestrator.ts:333` `GET /task/:taskID/events?after=N` | 游标参数 **`after`**。支持断线 replay：连接时把 `> after` 的历史事件一次性回放，再切实时。`sequence === 0` 是 ephemeral（不计游标） |
-| 任务 hydrate | `routes/orchestrator.ts:436` `GET /task/:taskID/conversation` | **复合冷启端点**：一次返回 `{lastSequence, board, transcript, timeline, events, eventReplay, view}`。扩展 Inspector 冷启用这条，再用 `lastSequence` 作 SSE `after` 续接 |
-| 会话历史分页 | `routes/orchestrator.ts:501` `GET /task/:taskID/conversation/events?after&until&limit` | 用于 hydrate 之后再向前/向后翻页（默认 limit 500，max 2000） |
-| 任务结构数据 | `routes/orchestrator.ts` `/task/:id/{board,transcript,brief,runs,interactions,progress}` | board/transcript 是 plan/messages 视图原料 |
-| Task 列表 | `routes/orchestrator.ts:134` `GET /tasks` 与 `:157 /global/tasks` | 项目级 vs 跨项目两套，分别配 `task.list` / `task.global.list` operationId |
-| Prompt 投递（4 条入口） | `routes/orchestrator.ts:97`、`:657`、`:680`；`routes/session.ts:653` | ① **`POST /task`** 创建新任务（`task.create`，202 `{ task_id }`）<br>② **`POST /task/:id/message`**（`task.message`，给已结束/失败 task 做 follow-up）<br>③ **`POST /task/:id/inject`**（`task.inject`，向 running task 注入）<br>④ **`POST /session/:id/message`**（**operationId `session.prompt`**，同步阻塞返回 final assistant message — **扩展禁止使用**，违反 §2.6）<br>⑤ `POST /session/:id/prompt_async`（`session.prompt_async`，给已知 sessionID 的 ACP/CLI 用） |
-| Prompt 输入 schema | `src/session/prompt/schema.ts:5` `PromptInput` | `parts: TextPart \| FilePart \| AgentPart \| SubtaskPart`。`@selection`/`@file` 等占位符**由扩展侧解析**为对应 part |
-| Permission/Approval | `routes/permission.ts` | 已有 list + ack；扩展只代理 UI，不维护状态 |
-| 服务端版本 | `routes/global.ts:21` `GET /global/health` | 返回 `{ healthy: true, version }`。**扩展握手用这条**（注意：旧 spec 误写 `/global/info`） |
-| 服务端关停/重启 | `routes/app.ts:75` `POST /shutdown`、`:104` `/restart` | `/restart` 由 daemon 自己 spawn 同参数新进程后退出，**扩展用这条而不是自己 kill+respawn**（前提是 lock.ownerCaller==="vscode"，避免重启共享 daemon） |
-| IDE 检测 | `src/ide/index.ts:47` | `OPENCORVUS_CALLER=vscode\|vscode-insiders` 是 **daemon 自检"我被 vscode 终端包裹"**，作用是 `Ide.alreadyInstalled()` 返回 true → 跳过自动 install。**不是** "daemon 识别客户端类型"信号 |
-| 客户端身份 | `src/flag/flag.ts:27,98` `Flag.OPENCORVUS_CLIENT` | **另一个**变量（默认 `"cli"`）。影响：`session/llm.ts:157` 注入 `x-opencorvus-client` header、`snapshot/index.ts:37` 在 `acp` 时跳过 snapshot、`tool/registry.ts:126` 决定是否注册 question tool、`installation/index.ts:194` 写入 user-agent。**扩展 spawn daemon 时应当设 `OPENCORVUS_CLIENT=vscode`** |
-| 自安装 | `Ide.install()`、`ide/index.ts:14` | `code --install-extension <EXTENSION>`；默认 ID `yangheng95.opencorvus`，可被 `OPENCORVUS_IDE_EXTENSION_ID` 覆盖（marketplace 改名时不要靠改源码） |
-| LSP fleet | `src/lsp/{client,server,language,shared}.ts` | LSP 子进程在 daemon 内管理。**扩展不重做 LSP** |
-| Overlay UI 静态资源 | `src/server/overlay-ui.ts`、路由 `/ui` | daemon 自带 `/ui/` 静态托管。扩展不复制这一套 |
-| Daemon shutdown | `src/server/shutdown.ts`、`serve.ts:149` | 已有 graceful shutdown；扩展不应 SIGKILL 共享 daemon（§7.2） |
+| 能力                    | 位置                                                                                     | 关键事实（核实后）                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP server 默认        | `server-defaults.json`、`src/server/defaults.ts:5`                                       | `127.0.0.1:7878`。Hono 框架。SDK 也导出同样的 `DEFAULT_SERVER_HOST/PORT/URL`（`packages/sdk/js/src/defaults.ts`）                                                                                                                                                                                                                                                                                                                                                           |
+| Auth                    | `src/server/server.ts:67`                                                                | `OPENCORVUS_SERVER_PASSWORD` 启用 Basic Auth；**未设则完全无鉴权**。本地默认就是无鉴权，不要假设强制                                                                                                                                                                                                                                                                                                                                                                        |
+| CORS                    | `src/server/server.ts:91`                                                                | 白名单：`http://localhost:*` / `http://127.0.0.1:*` / `tauri://localhost` / `tauri.localhost` / `*.opencorvus.ai`；`vscode-webview://` **不在**白名单中 — 但 webview 不应直连 daemon（§3.3）                                                                                                                                                                                                                                                                                |
+| Project 隔离            | `src/server/server.ts:121`、`src/project/instance.ts`                                    | 通过 query `?directory=` 或 header `x-opencorvus-directory` 选择 `Instance.directory`，**单 daemon 多 project 共存**。SDK `createOpenCorvusClient({ directory })` 自动注入 header（`packages/sdk/js/src/client.ts:36`）                                                                                                                                                                                                                                                     |
+| 控制平面绕过 Instance   | `src/server/server.ts:118`                                                               | `/log`、`/shutdown`、`/restart` **不**进入 `Instance.provide`，但仍受 Basic Auth                                                                                                                                                                                                                                                                                                                                                                                            |
+| OpenAPI / SDK           | `packages/sdk/openapi.json`、`packages/sdk/js/`                                          | 由路由生成的 `hey-api` fetch 客户端。**已含 SSE helper**（`gen/core/serverSentEvents.gen.ts`）— `text/event-stream` 端点会生成带 `onSseEvent`/`onSseError` 回调的 stream method。扩展 host 直接用 SDK，**不用** `EventSource`、**不用**自己拼 `text/event-stream` parser                                                                                                                                                                                                    |
+| ACP server              | `src/cli/cmd/acp.ts`                                                                     | 子命令 `opencorvus acp`，内部 `Server.listen(opts)` + `@agentclientprotocol/sdk` 走 stdio + ndjson `AgentSideConnection`，反向调本地 HTTP server。**ACP 是反向集成场景（把 opencorvus 嵌进 Zed/JetBrains）；VSCode 扩展自己不走这条路**（§3.1）。**重要：`acp` 子进程也启动 server，但不写 lock**（§3.2）                                                                                                                                                                   |
+| Session/Message/Task    | `src/session/`、`src/engine/`、`src/task-api/`                                           | SQLite (Drizzle ORM)，`Instance.directory` 决定项目隔离                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 全局事件 SSE            | `routes/app.ts:415` `GET /event`                                                         | 订阅 Bus 全部事件（含 `server.connected`/`server.heartbeat`）。**扩展通常不需要这条**（噪声大），用更聚焦的 `/task/events` 与 `/task/:id/events`                                                                                                                                                                                                                                                                                                                            |
+| 任务列表通知 SSE        | `routes/orchestrator.ts:223` `GET /task/events`                                          | **纯通知流**：仅推 `{type, taskID, sequence}`。**无 replay，无任务对象**。客户端收到通知后调 `GET /tasks` 拿列表                                                                                                                                                                                                                                                                                                                                                            |
+| 单任务事件 SSE          | `routes/orchestrator.ts:333` `GET /task/:taskID/events?after=N`                          | 游标参数 **`after`**。支持断线 replay：连接时把 `> after` 的历史事件一次性回放，再切实时。`sequence === 0` 是 ephemeral（不计游标）                                                                                                                                                                                                                                                                                                                                         |
+| 任务 hydrate            | `routes/orchestrator.ts:436` `GET /task/:taskID/conversation`                            | **复合冷启端点**：一次返回 `{lastSequence, board, transcript, timeline, events, eventReplay, view}`。扩展 Inspector 冷启用这条，再用 `lastSequence` 作 SSE `after` 续接                                                                                                                                                                                                                                                                                                     |
+| 会话历史分页            | `routes/orchestrator.ts:501` `GET /task/:taskID/conversation/events?after&until&limit`   | 用于 hydrate 之后再向前/向后翻页（默认 limit 500，max 2000）                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 任务结构数据            | `routes/orchestrator.ts` `/task/:id/{board,transcript,brief,runs,interactions,progress}` | board/transcript 是 plan/messages 视图原料                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Task 列表               | `routes/orchestrator.ts:134` `GET /tasks` 与 `:157 /global/tasks`                        | 项目级 vs 跨项目两套，分别配 `task.list` / `task.global.list` operationId                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Prompt 投递（4 条入口） | `routes/orchestrator.ts:97`、`:657`、`:680`；`routes/session.ts:653`                     | ① **`POST /task`** 创建新任务（`task.create`，202 `{ task_id }`）<br>② **`POST /task/:id/message`**（`task.message`，给已结束/失败 task 做 follow-up）<br>③ **`POST /task/:id/inject`**（`task.inject`，向 running task 注入）<br>④ **`POST /session/:id/message`**（**operationId `session.prompt`**，同步阻塞返回 final assistant message — **扩展禁止使用**，违反 §2.6）<br>⑤ `POST /session/:id/prompt_async`（`session.prompt_async`，给已知 sessionID 的 ACP/CLI 用） |
+| Prompt 输入 schema      | `src/session/prompt/schema.ts:5` `PromptInput`                                           | `parts: TextPart \| FilePart \| AgentPart \| SubtaskPart`。`@selection`/`@file` 等占位符**由扩展侧解析**为对应 part                                                                                                                                                                                                                                                                                                                                                         |
+| Permission/Approval     | `routes/permission.ts`                                                                   | 已有 list + ack；扩展只代理 UI，不维护状态                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 服务端版本              | `routes/global.ts:21` `GET /global/health`                                               | 返回 `{ healthy: true, version }`。**扩展握手用这条**（注意：旧 spec 误写 `/global/info`）                                                                                                                                                                                                                                                                                                                                                                                  |
+| 服务端关停/重启         | `routes/app.ts:75` `POST /shutdown`、`:104` `/restart`                                   | `/restart` 由 daemon 自己 spawn 同参数新进程后退出，**扩展用这条而不是自己 kill+respawn**（前提是 lock.ownerCaller==="vscode"，避免重启共享 daemon）                                                                                                                                                                                                                                                                                                                        |
+| IDE 检测                | `src/ide/index.ts:47`                                                                    | `OPENCORVUS_CALLER=vscode\|vscode-insiders` 是 **daemon 自检"我被 vscode 终端包裹"**，作用是 `Ide.alreadyInstalled()` 返回 true → 跳过自动 install。**不是** "daemon 识别客户端类型"信号                                                                                                                                                                                                                                                                                    |
+| 客户端身份              | `src/flag/flag.ts:27,98` `Flag.OPENCORVUS_CLIENT`                                        | **另一个**变量（默认 `"cli"`）。影响：`session/llm.ts:157` 注入 `x-opencorvus-client` header、`snapshot/index.ts:37` 在 `acp` 时跳过 snapshot、`tool/registry.ts:126` 决定是否注册 question tool、`installation/index.ts:194` 写入 user-agent。**扩展 spawn daemon 时应当设 `OPENCORVUS_CLIENT=vscode`**                                                                                                                                                                    |
+| 自安装                  | `Ide.install()`、`ide/index.ts:14`                                                       | `code --install-extension <EXTENSION>`；默认 ID `yangheng95.opencorvus`，可被 `OPENCORVUS_IDE_EXTENSION_ID` 覆盖（marketplace 改名时不要靠改源码）                                                                                                                                                                                                                                                                                                                          |
+| LSP fleet               | `src/lsp/{client,server,language,shared}.ts`                                             | LSP 子进程在 daemon 内管理。**扩展不重做 LSP**                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Overlay UI 静态资源     | `src/server/overlay-ui.ts`、路由 `/ui`                                                   | daemon 自带 `/ui/` 静态托管。扩展不复制这一套                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Daemon shutdown         | `src/server/shutdown.ts`、`serve.ts:149`                                                 | 已有 graceful shutdown；扩展不应 SIGKILL 共享 daemon（§7.2）                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 **结论**：扩展端只承担 (a) UI、(b) workspace 上下文供给（selection/file 注入）、(c) daemon 进程发现与可选 spawn、(d) file-edit 事件投影到编辑器。**不复制任何 agent 逻辑、不缓存任何能从 daemon 重建的状态**。
 
@@ -90,24 +91,26 @@ opencorvus 已具备 VSCode 集成所需的绝大多数后端基础设施（HTTP
 
 ### 3.1 选型矩阵
 
-| 候选 | 选 | 理由 |
-|---|:-:|---|
-| HTTP + SSE + `@opencorvus-ai/sdk` | ✅ | 已有，OpenAPI 自动同步，session/prompt/task/permission 全套现成；SDK 已含 SSE helper |
-| ACP (stdio JSON-RPC) | ❌ | 反向场景的协议，VSCode 自己绕一层 |
-| WebSocket | ❌ | REST 写 + SSE 读已经覆盖双向需求 |
-| MCP（Claude Code 反向模式） | ❌ | LSP 已在 daemon 内；不需要让 CLI 调 IDE 工具 |
-| `vscode.lm.*`（蹭 Copilot 模型） | ❌ | 模型由 daemon provider 选；蹭 vscode.lm 等于把 model 选择权拆双源（§2.1） |
+| 候选                              | 选  | 理由                                                                                 |
+| --------------------------------- | :-: | ------------------------------------------------------------------------------------ |
+| HTTP + SSE + `@opencorvus-ai/sdk` | ✅  | 已有，OpenAPI 自动同步，session/prompt/task/permission 全套现成；SDK 已含 SSE helper |
+| ACP (stdio JSON-RPC)              | ❌  | 反向场景的协议，VSCode 自己绕一层                                                    |
+| WebSocket                         | ❌  | REST 写 + SSE 读已经覆盖双向需求                                                     |
+| MCP（Claude Code 反向模式）       | ❌  | LSP 已在 daemon 内；不需要让 CLI 调 IDE 工具                                         |
+| `vscode.lm.*`（蹭 Copilot 模型）  | ❌  | 模型由 daemon provider 选；蹭 vscode.lm 等于把 model 选择权拆双源（§2.1）            |
 
 ### 3.2 跨进程发现：lock 文件
 
 不用 Unix socket / named pipe（Windows 兼容差），统一走 **127.0.0.1 + lock 文件 + token**。
 
 **路径**：`${Global.Path.data}/ide/<port>.json`
+
 - `Global.Path.data` 由 `src/global/index.ts:31` 解析：`OPENCORVUS_HOME` 优先，否则 XDG/平台默认（Win: `%LOCALAPPDATA%\opencorvus`；Linux: `~/.local/share/opencorvus`；macOS: `~/Library/Application Support/opencorvus` 经 `xdg-basedir` 兜底）
 - 扩展通过 SDK 暴露的常量读取，**不硬编码**（CLAUDE.md §25）；如果 `@opencorvus-ai/sdk/defaults` 不导出该路径，Phase 1 顺便补 `dataDir()` 导出
 - **不**重新解析 `OPENCORVUS_DATA_DIR` 这种不存在的 env
 
 **文件内容（JSON）**：
+
 ```json
 {
   "version": 1,
@@ -121,10 +124,12 @@ opencorvus 已具备 VSCode 集成所需的绝大多数后端基础设施（HTTP
 ```
 
 **写入边界**：
+
 - **只 `serve` 子命令写**。`acp` 子命令也调 `Server.listen()`（`cli/cmd/acp.ts:26`），但它是 ndjson stdio 的 sidecar 角色 — **明确不写 lock**，避免短命子进程被扩展误连。Phase 1 PR 在 `acp.ts` 里加注释明示这点。
 - 未来再加任何"内嵌 server"子命令时，必须遵循同样规则：lock 写入归 `serve` 独占。
 
 **写入语义**：
+
 - 时机：`Server.listen()` 成功后 `serve.ts` 在 `listening on …` 之后写一次。
 - 原子：先写 `<port>.json.tmp` 再 `rename`。
 - 权限：Unix `0600`；Windows 用 ACL 仅当前 user（在 daemon 一侧封装跨平台 helper，不要让扩展端处理）。
@@ -157,13 +162,13 @@ opencorvus 已具备 VSCode 集成所需的绝大多数后端基础设施（HTTP
 
 ### 3.5 哪条 prompt 入口
 
-| 场景 | 入口 |
-|---|---|
-| 新对话（侧边栏输入框第一句话） | **`POST /task`**（`task.create`） → 202 `{ task_id }` → `GET /task/:id/conversation` 冷启 → `GET /task/:id/events?after=lastSequence` 续接 |
-| 已有 task 的 follow-up（用户在该 task 详情面板继续聊） | **`POST /task/:id/message`**（`task.message`） |
-| 中途插话不打断（罕见） | **`POST /task/:id/inject`**（`task.inject`） |
-| **禁用** ── 同步阻塞拿 final message | `POST /session/:id/message`（**operationId `session.prompt`**），违反 §2.6，扩展端 ESLint 禁字符串 |
-| **禁用** ── ACP/CLI 的"已知 sessionID 灌话" | `POST /session/:id/prompt_async`，留给 ACP，扩展用 `task.create` 即可 |
+| 场景                                                   | 入口                                                                                                                                       |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 新对话（侧边栏输入框第一句话）                         | **`POST /task`**（`task.create`） → 202 `{ task_id }` → `GET /task/:id/conversation` 冷启 → `GET /task/:id/events?after=lastSequence` 续接 |
+| 已有 task 的 follow-up（用户在该 task 详情面板继续聊） | **`POST /task/:id/message`**（`task.message`）                                                                                             |
+| 中途插话不打断（罕见）                                 | **`POST /task/:id/inject`**（`task.inject`）                                                                                               |
+| **禁用** ── 同步阻塞拿 final message                   | `POST /session/:id/message`（**operationId `session.prompt`**），违反 §2.6，扩展端 ESLint 禁字符串                                         |
+| **禁用** ── ACP/CLI 的"已知 sessionID 灌话"            | `POST /session/:id/prompt_async`，留给 ACP，扩展用 `task.create` 即可                                                                      |
 
 ---
 
@@ -260,6 +265,7 @@ packages/vscode-extension/
 ## 6. UX 与视图分布
 
 ### 6.1 Sidebar（始终可见）
+
 - **顶部**：daemon 连接状态 + 当前 project（`x-opencorvus-directory`）+ task 计数
 - **中部**：当前 project 的 task 列表
   - 冷启：`GET /tasks`（`task.list`）
@@ -268,6 +274,7 @@ packages/vscode-extension/
 - 点击 task → 打开 Inspector
 
 ### 6.2 Inspector（按需打开）
+
 - 顶部 tab：**Plan** / **Messages** / **File Edits**
 - **冷启 hydrate**：`GET /task/:id/conversation`（`task.conversation`）一次性拿 `{lastSequence, board, transcript, timeline, events, view}`，**不要**分别拉 `/board` + `/transcript` + `/conversation/events`（旧 spec 错）。
 - **增量**：用 hydrate 返回的 `lastSequence` 作 `GET /task/:id/events?after=<lastSequence>` 的 cursor 续接 SSE。
@@ -276,11 +283,13 @@ packages/vscode-extension/
 - Permission Approve/Reject 按钮代理到 `/permission/*`，**扩展不在本地维护决策状态**
 
 ### 6.3 编辑器集成
+
 - 选中代码后右键 "Send to opencorvus" → 拼 `FilePart`（含 path, range, contents）注入下一个 prompt
 - daemon 触发 file edit 事件时（**只订阅 merge-back 后的事件**，不订阅 goal worktree 内部事件 — 见 §6.5）：构造 `WorkspaceEdit` → `workspace.applyEdit()` → 留作 dirty 让用户决定保存
 - **默认不开 file watcher**（避免与 daemon 写盘自激）
 
 ### 6.4 命令面板
+
 - `Opencorvus: Attach to running session`（多 session 切换）
 - `Opencorvus: Start new task in current workspace`
 - `Opencorvus: Send selection as context`
@@ -298,6 +307,7 @@ packages/vscode-extension/
 扩展只订阅 **merge-back 之后的 file 变更事件**（具体事件名待 daemon 端确认 — Phase 5 PR 必须列出 Bus 上是否已有 `file.merged`/`worktree.merged` 类事件；没有就在 daemon 侧加，不要在扩展端凑）。**扩展绝不订阅 worktree 内部 patch**（那是 daemon 内政）。
 
 ### 6.6 不做什么
+
 - ❌ Inline ghost text 补全（Copilot 领域）
 - ❌ ChatGPT 式占据整块 panel 的 chat UI（sidebar webview 即可）
 - ❌ 自己实现 diff/three-way-merge UI
@@ -337,17 +347,20 @@ packages/vscode-extension/
 - 扩展 deactivate 时主动 unsubscribe 所有 SSE，避免 daemon 端累积连接
 
 ### 7.3 Windows 特殊性
+
 - spawn 用 `detached: false`、`shell: false`；进程树清理依赖 daemon 自身的 SIGINT/SIGBREAK 处理（已在 `serve.ts:175`，含 SIGBREAK）
 - `serve.ts` 双击启动时会 `hideConsoleWindow()`（FFI 调 user32.ShowWindow，`serve.ts:12`）；扩展 spawn 走 stdio inherit，**不**触发 hide（因为有 `serve` 子命令参数）
 - lock 文件 ACL 由 daemon 端处理；扩展端只读
 - 不用 named pipe / Unix socket
 
 ### 7.4 Remote / SSH / WSL（M7+，先不做）
+
 - Remote-SSH 时 daemon 跑远端（agent 必须能改远端文件），扩展 host 在远端
 - WSL 同理（扩展跑 WSL 内）
 - M1-M6 只覆盖 local；远端单列 M7
 
 ### 7.5 发布
+
 - VSCode Marketplace + Open VSX
 - 扩展 ID 默认 `yangheng95.opencorvus`，**与 daemon `Ide.install()` 默认值同步**；改名时同改 `OPENCORVUS_IDE_EXTENSION_ID` 默认值
 - CI 加 `.github/workflows/vscode-extension.yml`，产物 `.vsix` 上传到 GitHub Release
@@ -362,6 +375,7 @@ packages/vscode-extension/
 > **必须严守**：每个 Phase 只做本节列出的范围；尤其禁止把 Phase 5 的"file edit 接管"提前到 Phase 4。
 
 ### Phase 1 — daemon 基建（M1，daemon 侧 PR，先于扩展）
+
 - 实现 lock 文件 `${Global.Path.data}/ide/<port>.json`（§3.2）
   - 在 `serve.ts` 中实现，**只 `serve` 写**；`acp.ts` 加注释明示不写 lock
   - token = `crypto.randomBytes(32).toString("hex")`；写入时机在 `Server.listen()` 成功之后
@@ -376,6 +390,7 @@ packages/vscode-extension/
   - 同一 token 也能用作 Basic Auth password 走 `curl -u :$token http://127.0.0.1:7878/global/health`
 
 ### Phase 2 — 扩展最小连接（M2）
+
 - activate → 扫 lock → 命中则连，没命中则 spawn → 在 status bar 显示 ✅ + port + ownerCaller 标记
 - 实现 SSE 订阅层（用 SDK 生成的 stream method，`onSseEvent` callback）
 - 订阅 `/task/events` 仅打日志到 OutputChannel
@@ -383,6 +398,7 @@ packages/vscode-extension/
 - **验收**：F5 调试，状态栏显示 "● 7878"，断 daemon 后 90s 内变 ❌；扩展 spawn 的 daemon 在 deactivate 时被关停，附着的共享 daemon 在 deactivate 时不受影响（`ps` 仍存在）
 
 ### Phase 3 — 会话只读视图（M3）
+
 - Sidebar：当前 project task 列表（`GET /tasks` + `/task/events` 通知后增量重拉）
 - 点击 task 打开 Inspector：
   - 冷启：`GET /task/:id/conversation`（一次拿 `board + transcript + timeline + events + view + lastSequence`）
@@ -391,6 +407,7 @@ packages/vscode-extension/
 - **验收**：开 TUI 跑一个 task，扩展同步看到任务出现/状态变化/消息流，端到端延迟 < 200ms；Inspector 能展开 plan board；断网重连不丢事件、不重复（用 `after=lastSequence` 验证）
 
 ### Phase 4 — 投递与流式消费（M4）
+
 - 输入框 → `POST /task`（`task.create`）→ 拿 taskID → 自动打开 Inspector 订阅
 - 选中代码右键 "Send to opencorvus" → 拼 `FilePart` 注入
 - 已有 task follow-up → `POST /task/:id/message`（`task.message`）
@@ -399,6 +416,7 @@ packages/vscode-extension/
 - **验收**：发一句话能跑出和 TUI 同款 task 流，消息边到边显示；@selection 注入后 Inspector 能看到 FilePart attach；并发起两个 task 互不串行
 
 ### Phase 5 — 文件编辑接管（M5）
+
 - 在 daemon 侧确认/补 merge-back 后的 file 事件（§6.5）。如 Bus 没有，PR 必须先加 daemon `worktree.merged` event，**spec 同步更新**
 - 扩展订阅之 → 拦截 → `WorkspaceEdit` 投影到 dirty buffer（不强制保存）
 - "View as diff" 命令 → `vscode.diff`
@@ -406,6 +424,7 @@ packages/vscode-extension/
 - **验收**：agent 改文件后 VSCode 编辑器显示 dirty + diff，撤销键能 undo；用户保存才落盘；多文件批量 edit 在一个 atomic `WorkspaceEdit` 内
 
 ### Phase 6 — 打磨与发布（M6）
+
 - 命令面板补完
 - Permission Approve/Reject 按钮代理（订阅 `/permission/*`，扩展只投影 + 转发用户操作）
 - "Open Overlay" 命令：先打开 `http://127.0.0.1:<port>/ui/?auth_token=<token>`；如 daemon 后续提供"启动 Tauri overlay 窗口"API（开放问题 §10），改调该 API
@@ -415,27 +434,28 @@ packages/vscode-extension/
 - **验收**：从空环境 install 扩展 → 引导装 daemon → 完成一个完整 task 不查文档；vsix 包大小 < 10MB（不含 daemon 二进制）
 
 ### Phase 7 — Remote/SSH/WSL（M7，未来）
+
 单独 spec 时再写，本文件不展开。
 
 ---
 
 ## 9. 反漂移护栏（开发期必须守住，可执行化）
 
-| 红线 | 检测方式 | 落地 |
-|---|---|---|
-| 扩展 host 内不出现 LLM provider 调用 | grep 禁用 `@anthropic-ai`、`openai`、`@ai-sdk/`、`langchain` | `packages/vscode-extension/.eslintrc.cjs` `no-restricted-imports` |
-| 不引入第二种协议 | 禁止 `import @agentclientprotocol/sdk`、`ws`、`mcp` 在 `src/` 出现 | 同上 |
-| 不复制 daemon schema | 禁止本地新建 `interface Session\|Task\|Message\|Permission` | ESLint custom rule grep `interface (Session\|Task\|Message)` |
-| 不 fallback | 任何 catch 不得返回降级数据，只能：上报状态 + 引导操作 | code review checklist |
-| 不实现 chat 持久化 | `extensionContext.globalState`/`workspaceState` 仅存 UI 偏好（折叠状态、最近 sessionID） | grep `globalState.update` 看 key |
-| 不写 file-system fallback 路径 | 所有路径来自 daemon 返回；扩展不拼路径（除 lock 文件目录由 SDK 暴露） | grep `path.join` 在 daemon/ 模块外应为 0 |
-| 不直连 daemon from webview | webview 代码内禁止 `fetch`/`EventSource` | ESLint scope: `src/webview/**` |
-| 不用 EventSource | 全局禁止 `new EventSource` | `no-restricted-globals` |
-| 不手写 SSE parser | 全局禁止字符串 `"text/event-stream"`、`"data: "` 出现在 src/ 之外的 SDK gen 目录 | grep 守护，强制走 SDK helper |
-| 不引入 i18n 库 | 禁 `i18next`/`vscode-nls`/`@formatjs/*` | ESLint |
-| 不用同步 prompt 入口 | 全局禁字符串 `"/session/"` 与 `"prompt_async"` 拼接 | grep 端点字符串 |
-| 不动状态机 | 禁止 `enum.*State`/`switch.*case` 用于流程控制 | code review |
-| 不强制 daemon 密码 | grep `OPENCORVUS_SERVER_PASSWORD` 在 spawn env 中应为 0 命中 | 同上 |
+| 红线                                 | 检测方式                                                                                 | 落地                                                              |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 扩展 host 内不出现 LLM provider 调用 | grep 禁用 `@anthropic-ai`、`openai`、`@ai-sdk/`、`langchain`                             | `packages/vscode-extension/.eslintrc.cjs` `no-restricted-imports` |
+| 不引入第二种协议                     | 禁止 `import @agentclientprotocol/sdk`、`ws`、`mcp` 在 `src/` 出现                       | 同上                                                              |
+| 不复制 daemon schema                 | 禁止本地新建 `interface Session\|Task\|Message\|Permission`                              | ESLint custom rule grep `interface (Session\|Task\|Message)`      |
+| 不 fallback                          | 任何 catch 不得返回降级数据，只能：上报状态 + 引导操作                                   | code review checklist                                             |
+| 不实现 chat 持久化                   | `extensionContext.globalState`/`workspaceState` 仅存 UI 偏好（折叠状态、最近 sessionID） | grep `globalState.update` 看 key                                  |
+| 不写 file-system fallback 路径       | 所有路径来自 daemon 返回；扩展不拼路径（除 lock 文件目录由 SDK 暴露）                    | grep `path.join` 在 daemon/ 模块外应为 0                          |
+| 不直连 daemon from webview           | webview 代码内禁止 `fetch`/`EventSource`                                                 | ESLint scope: `src/webview/**`                                    |
+| 不用 EventSource                     | 全局禁止 `new EventSource`                                                               | `no-restricted-globals`                                           |
+| 不手写 SSE parser                    | 全局禁止字符串 `"text/event-stream"`、`"data: "` 出现在 src/ 之外的 SDK gen 目录         | grep 守护，强制走 SDK helper                                      |
+| 不引入 i18n 库                       | 禁 `i18next`/`vscode-nls`/`@formatjs/*`                                                  | ESLint                                                            |
+| 不用同步 prompt 入口                 | 全局禁字符串 `"/session/"` 与 `"prompt_async"` 拼接                                      | grep 端点字符串                                                   |
+| 不动状态机                           | 禁止 `enum.*State`/`switch.*case` 用于流程控制                                           | code review                                                       |
+| 不强制 daemon 密码                   | grep `OPENCORVUS_SERVER_PASSWORD` 在 spawn env 中应为 0 命中                             | 同上                                                              |
 
 CI step：`bun run lint` + `bun run typecheck` + 一个 `verify-no-banned.ts` 脚本扫上述 grep 规则，失败 fail。
 

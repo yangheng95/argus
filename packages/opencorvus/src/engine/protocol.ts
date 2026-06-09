@@ -37,11 +37,7 @@ export namespace EngineProtocol {
     const taskID = meta.taskID ?? text(data, "taskID")
     if (!taskID) throw new Error(`protocol event ${def.type} is missing taskID`)
     const task = Database.use((db) =>
-      db
-        .select({ id: EngineTaskTable.id })
-        .from(EngineTaskTable)
-        .where(eq(EngineTaskTable.id, taskID))
-        .get(),
+      db.select({ id: EngineTaskTable.id }).from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
     )
     if (!task) return
     const now = Date.now()

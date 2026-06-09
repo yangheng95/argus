@@ -20,7 +20,7 @@ import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 
 const client = createOpenCorvusClient({
   baseUrl: "http://127.0.0.1:7878",
-  password: process.env.OPENCORVUS_SERVER_PASSWORD,  // 可选
+  password: process.env.OPENCORVUS_SERVER_PASSWORD, // 可选
 })
 
 // 创建任务
@@ -44,7 +44,7 @@ const { client, server } = await createOpenCorvus({
   directory: "/path/to/repo",
 })
 // ... 使用 client
-await server.close()  // server 句柄上的 close() 关闭进程
+await server.close() // server 句柄上的 close() 关闭进程
 ```
 
 返回对象结构（来自 `packages/sdk/js/src/index.ts:30-43`）：
@@ -57,17 +57,17 @@ await server.close()  // server 句柄上的 close() 关闭进程
 
 对应 REST API（见 [API 参考](./api.md)）：
 
-| 命名空间 | 对应端点 |
-|---|---|
-| `client.task.*` | `/task` / `/tasks` / `/task/:id/*` |
-| `client.session.*` | `/session/*` |
-| `client.goal.*` / `client.run.*` | `/goal/*` / `/run/*` |
-| `client.event.subscribe()` | `/event`（SSE） |
-| `client.mcp.*` | `/mcp/*` |
-| `client.permission.*` | `/permission/*` |
-| `client.skill.*` | `/skill/*` |
-| `client.executor.*` | `/executor/*` |
-| `client.tui.runtime.*` | `/tui/runtime/*` |
+| 命名空间                         | 对应端点                           |
+| -------------------------------- | ---------------------------------- |
+| `client.task.*`                  | `/task` / `/tasks` / `/task/:id/*` |
+| `client.session.*`               | `/session/*`                       |
+| `client.goal.*` / `client.run.*` | `/goal/*` / `/run/*`               |
+| `client.event.subscribe()`       | `/event`（SSE）                    |
+| `client.mcp.*`                   | `/mcp/*`                           |
+| `client.permission.*`            | `/permission/*`                    |
+| `client.skill.*`                 | `/skill/*`                         |
+| `client.executor.*`              | `/executor/*`                      |
+| `client.tui.runtime.*`           | `/tui/runtime/*`                   |
 
 ## 事件订阅
 
@@ -76,7 +76,9 @@ await server.close()  // server 句柄上的 close() 关闭进程
 ```typescript
 const stream = client.event.subscribe({ signal: abortController.signal })
 for await (const event of stream) {
-  if (event.type === "task.updated") { /* ... */ }
+  if (event.type === "task.updated") {
+    /* ... */
+  }
 }
 ```
 

@@ -40,7 +40,10 @@ export abstract class NamedError extends Error {
         // because that's the canonical field across our error schemas;
         // otherwise we serialize the entire data payload.
         const detail =
-          data && typeof data === "object" && "message" in data && typeof (data as { message: unknown }).message === "string"
+          data &&
+          typeof data === "object" &&
+          "message" in data &&
+          typeof (data as { message: unknown }).message === "string"
             ? (data as { message: string }).message
             : data !== undefined
               ? safeStringify(data)

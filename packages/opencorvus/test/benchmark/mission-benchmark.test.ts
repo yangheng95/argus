@@ -120,12 +120,17 @@ describe("mission benchmark scenario", () => {
         },
       },
     ]
-    expect(missionStateMentionsTerminalTasks({
-      "frontier.md": "done",
-      "tasks.md": "task_good | in_progress | benchmark",
-      "handoff.md": "check again later",
-      "notes.md": "notes",
-    }, tasks)).toBe(false)
+    expect(
+      missionStateMentionsTerminalTasks(
+        {
+          "frontier.md": "done",
+          "tasks.md": "task_good | in_progress | benchmark",
+          "handoff.md": "check again later",
+          "notes.md": "notes",
+        },
+        tasks,
+      ),
+    ).toBe(false)
 
     const rejected = evaluateMissionBenchmarkReport({
       missionID: "m1",

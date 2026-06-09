@@ -50,12 +50,7 @@ export namespace EngineMemoryBridge {
         : []
       const checks = (evaluation?.checks as Array<{ name: string; status: string; evidence?: string }>) ?? []
 
-      const sections: string[] = [
-        `# Task Completed: ${task.title}`,
-        "",
-        `## Request`,
-        task.request.slice(0, 500),
-      ]
+      const sections: string[] = [`# Task Completed: ${task.title}`, "", `## Request`, task.request.slice(0, 500)]
 
       if (plan) {
         sections.push("", `## Approach (Plan v${plan.version})`, plan.summary.slice(0, 500))
@@ -70,9 +65,7 @@ export namespace EngineMemoryBridge {
       }
 
       if (checks.length > 0) {
-        const checkLines = checks.map(
-          (c) => `- ${c.name}: ${c.status}`,
-        )
+        const checkLines = checks.map((c) => `- ${c.name}: ${c.status}`)
         sections.push("", "## Check Results", ...checkLines)
       }
 
@@ -81,7 +74,12 @@ export namespace EngineMemoryBridge {
       }
 
       const markdown = sections.join("\n")
-      const atomics: Array<{ kind: "profile" | "lesson" | "fact"; text: string; section: string; importance?: number }> = []
+      const atomics: Array<{
+        kind: "profile" | "lesson" | "fact"
+        text: string
+        section: string
+        importance?: number
+      }> = []
 
       // Outcome section contains facts about what was delivered
       if (acceptance.summary) {
@@ -120,5 +118,4 @@ export namespace EngineMemoryBridge {
       log.warn("failed to flush task learnings", { taskID: task.id, error: String(err) })
     }
   }
-
 }

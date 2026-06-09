@@ -42,10 +42,7 @@ export namespace PidGuard {
     const zshDir = path.join(dir, "pid-guard-zsh")
     const zshEnvPath = path.join(zshDir, ".zshenv")
     await fs.mkdir(zshDir, { recursive: true })
-    await Promise.all([
-      Filesystem.write(bashEnvPath, GUARD_SCRIPT),
-      Filesystem.write(zshEnvPath, GUARD_ZSHENV),
-    ])
+    await Promise.all([Filesystem.write(bashEnvPath, GUARD_SCRIPT), Filesystem.write(zshEnvPath, GUARD_ZSHENV)])
     return { bashEnvPath, zshDir }
   })
 
@@ -65,7 +62,10 @@ export namespace PidGuard {
    */
   export async function env(shellPath: string): Promise<Record<string, string>> {
     const paths = await state()
-    const base = path.basename(shellPath).replace(/\.exe$/i, "").toLowerCase()
+    const base = path
+      .basename(shellPath)
+      .replace(/\.exe$/i, "")
+      .toLowerCase()
     const result: Record<string, string> = {
       OPENCORVUS_PROTECTED_PIDS: protectedPids(),
     }

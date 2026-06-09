@@ -34,10 +34,12 @@ curl ... -d '{... "image_url":{"url":"data:image/png;base64,iVBOR..."} ...}'
 ### 1.2 声明 drift
 
 `packages/opencorvus/src/provider/builtin-test-providers.ts`：
+
 - L64 `glm51`: `attachment: false`
 - **L88 `kimik26`: `attachment: false`** — 实测 true
 
 `packages/opencorvus/src/provider/hexin-profiles.ts`：
+
 - L45 fallback profile: `attachment: false`
 - L195 / L210 kimi family（两条）: `attachment: false` — 与 K2.5/K2.6 实际能力不符
 - L226 / L253 glm family（两条）: `attachment: false` — GLM-4V / 5V 存在
@@ -51,13 +53,13 @@ curl ... -d '{... "image_url":{"url":"data:image/png;base64,iVBOR..."} ...}'
 
 构造 `{ type: "file", url, mediaType }` 的地方（流出 AI SDK 之前的所有调用点）：
 
-| 路径 | 行 | 上下文 |
-|---|---|---|
-| `packages/opencorvus/src/session/message.ts` | 988-992 | tool result media re-injection |
-| `packages/opencorvus/src/session/message.ts` | 749 | tool output → assistant attachments |
-| `packages/opencorvus/src/agent/runner.ts` | 193, 588 | user prompt parts contract |
-| `packages/opencorvus/src/acp/agent.ts` | 1306-1331 | ACP-to-internal file part conversion |
-| 其余 builder：`session/prompt/parts.ts`、`build/agent.ts`、`frontend-design/agent.ts` | (需 codex 二次穷举) | agent 各自的 buildUserParts |
+| 路径                                                                                  | 行                  | 上下文                               |
+| ------------------------------------------------------------------------------------- | ------------------- | ------------------------------------ |
+| `packages/opencorvus/src/session/message.ts`                                          | 988-992             | tool result media re-injection       |
+| `packages/opencorvus/src/session/message.ts`                                          | 749                 | tool output → assistant attachments  |
+| `packages/opencorvus/src/agent/runner.ts`                                             | 193, 588            | user prompt parts contract           |
+| `packages/opencorvus/src/acp/agent.ts`                                                | 1306-1331           | ACP-to-internal file part conversion |
+| 其余 builder：`session/prompt/parts.ts`、`build/agent.ts`、`frontend-design/agent.ts` | (需 codex 二次穷举) | agent 各自的 buildUserParts          |
 
 汇聚点：`provider/transform.ts:170 ProviderTransform.message()` ——所有 outbound 消息 100% 经过这里（在 `applyCaching` / `unsupportedParts` 之后调到 AI SDK 之前）。**这是唯一应当承担 inline-base64 的位置**——往上游分散到每个 builder 会重复 N 份、走回老的双源 trap（rule 8）。
 
@@ -65,12 +67,12 @@ curl ... -d '{... "image_url":{"url":"data:image/png;base64,iVBOR..."} ...}'
 
 `capabilities.input.image` / `attachment` 的所有读点：
 
-| 路径 | 行 | 用途 |
-|---|---|---|
-| `provider/transform.ts` | 155-163 (`unsupportedParts`) | 把不支持的图替换成 ERROR text 给模型 |
-| `frontend-design/tools/webpage-vision-judge.ts` | vision model guard | 强制要求 vision 才能跑 webpage_vision_judge |
-| `storage/attachment-capability-gate.test.ts` | 全文 | 断言 gate 行为 |
-| overlay 前端 | (需穷举：`packages/overlay/src` 中查 `attachment` 字段读处) | UI 上传 / 拖拽时的 gate |
+| 路径                                            | 行                                                          | 用途                                        |
+| ----------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------- |
+| `provider/transform.ts`                         | 155-163 (`unsupportedParts`)                                | 把不支持的图替换成 ERROR text 给模型        |
+| `frontend-design/tools/webpage-vision-judge.ts` | vision model guard                                          | 强制要求 vision 才能跑 webpage_vision_judge |
+| `storage/attachment-capability-gate.test.ts`    | 全文                                                        | 断言 gate 行为                              |
+| overlay 前端                                    | (需穷举：`packages/overlay/src` 中查 `attachment` 字段读处) | UI 上传 / 拖拽时的 gate                     |
 
 ## 2. 方案
 
@@ -79,6 +81,7 @@ curl ... -d '{... "image_url":{"url":"data:image/png;base64,iVBOR..."} ...}'
 **位置**：`ProviderTransform.message()` 内新增 `inlineLocalAttachments(msgs)`，紧跟 `unsupportedParts` 之后、`normalizeMessages` 之前。
 
 **逻辑**：
+
 ```ts
 async function inlineLocalAttachments(msgs: ModelMessage[]): Promise<ModelMessage[]> {
   // 遍历所有 user / tool 消息中的 file part；
@@ -93,6 +96,7 @@ async function inlineLocalAttachments(msgs: ModelMessage[]): Promise<ModelMessag
 ```
 
 **关键约束**：
+
 - 必须 async（`message()` 当前是 sync——需要改签名，所有调用方一并改）。
 - 不按 provider 分支（rule 8）：universal inline。Anthropic SDK 收到 data URL 直接解 base64，跳过它原本的 fetch；OpenAI 收到 data URL 也 OK；openai-compatible 修好。
 - 不缓存 base64 字符串（每次重新读 fs，避免内存堆积）。fs cache 已经够快。
@@ -103,18 +107,20 @@ async function inlineLocalAttachments(msgs: ModelMessage[]): Promise<ModelMessag
 **目标**：让 `attachment` / `reasoning` / `tool_call` 等 capability 不再是手写常量，而是 runtime probe 一次性测出来，落 SQLite。
 
 **新表**（`packages/opencorvus/src/provider/capability.sql.ts`）：
+
 ```ts
 export const ProviderCapabilityTable = sqliteTable("provider_capability", {
   providerID: text().notNull(),
   modelID: text().notNull(),
-  capability: text().notNull(),     // "attachment" | "tool_call" | "reasoning"
+  capability: text().notNull(), // "attachment" | "tool_call" | "reasoning"
   supported: integer({ mode: "boolean" }).notNull(),
-  evidence: text().notNull(),        // JSON: { probedAt, httpStatus, responseSnippet }
+  evidence: text().notNull(), // JSON: { probedAt, httpStatus, responseSnippet }
   // PK: (providerID, modelID, capability)
 })
 ```
 
 **Probe**（`packages/opencorvus/src/provider/capability-probe.ts`）：
+
 - `probeAttachment(model)`：发一条 minimal vision request（1x1 PNG inline + 短文本 + max_tokens=32），按响应判定：
   - HTTP 200 + 响应里"看到图"或不报 image-related error → supported: true
   - HTTP 4xx + body 含 "image" / "vision" / "modality" → supported: false
@@ -122,11 +128,13 @@ export const ProviderCapabilityTable = sqliteTable("provider_capability", {
 - `probeToolCall(model)` / `probeReasoning(model)` 类似。
 
 **触发时机**：
+
 - Provider 首次"测试连接"按钮成功时：扇出 probe 这个 provider 下所有模型的所有 capability。
 - 也提供 CLI `opencorvus capability probe [--provider X] [--model Y]` 手动刷新。
 - **不在用户拖图的瞬间 probe**（UX 慢）。
 
 **Profile 角色变化**：
+
 - `builtin-test-providers.ts` / `hexin-profiles.ts` 里的 `attachment` 字段语义降级为**初始 hint**（DB 未 probe 过时的兜底）。
 - Provider 资料显示 capability 时查 DB，DB miss 才回退到 profile hint。
 - 这不算双源（rule 8）——profile 是 cold-start hint，DB 是权威，方向单一。

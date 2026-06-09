@@ -94,9 +94,7 @@ describe("flat-redesign font-weight token coverage", () => {
       const content = readFileSync(file, "utf8")
       const stripped = content.replace(/\/\*[\s\S]*?\*\//g, "")
       for (const token of RETIRED) {
-        const consumerRe = new RegExp(
-          `var\\(${token.replace(/-/g, "\\-")}\\)`,
-        )
+        const consumerRe = new RegExp(`var\\(${token.replace(/-/g, "\\-")}\\)`)
         if (consumerRe.test(stripped)) {
           violations.push(`${file}: still references ${token}`)
         }

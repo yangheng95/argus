@@ -2,14 +2,8 @@ import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-const MESSAGE_TS = readFileSync(
-  join(import.meta.dir, "..", "src", "utils", "message.ts"),
-  "utf8",
-)
-const AVATAR_TSX = readFileSync(
-  join(import.meta.dir, "..", "src", "components", "Avatar.tsx"),
-  "utf8",
-)
+const MESSAGE_TS = readFileSync(join(import.meta.dir, "..", "src", "utils", "message.ts"), "utf8")
+const AVATAR_TSX = readFileSync(join(import.meta.dir, "..", "src", "components", "Avatar.tsx"), "utf8")
 
 function agentRolesFromSource(): string[] {
   const match = MESSAGE_TS.match(/export type AgentRole\s*=\s*([\s\S]*?);/)
@@ -37,7 +31,7 @@ test("Avatar covers every AgentRole with the canonical avatar-* icon mapping", (
     expect(mappings[role]).toBe(`avatar-${role}`)
   }
   expect(AVATAR_TSX).toContain("normalizeAgentRole")
-  expect(AVATAR_TSX).toContain('class={classes()}')
-  expect(AVATAR_TSX).toContain('data-status={props.status || undefined}')
-  expect(AVATAR_TSX).toContain('size={20}')
+  expect(AVATAR_TSX).toContain("class={classes()}")
+  expect(AVATAR_TSX).toContain("data-status={props.status || undefined}")
+  expect(AVATAR_TSX).toContain("size={20}")
 })

@@ -89,9 +89,10 @@ export namespace Shell {
 
     const terminate = () => supervisor.terminate()
 
-    const idleMs = typeof opts.idleTimeoutMs === "number" && Number.isFinite(opts.idleTimeoutMs) && opts.idleTimeoutMs > 0
-      ? opts.idleTimeoutMs
-      : undefined
+    const idleMs =
+      typeof opts.idleTimeoutMs === "number" && Number.isFinite(opts.idleTimeoutMs) && opts.idleTimeoutMs > 0
+        ? opts.idleTimeoutMs
+        : undefined
     let idleTimer: ReturnType<typeof setTimeout> | undefined
 
     function resetIdleTimer() {
@@ -127,12 +128,13 @@ export namespace Shell {
     opts.abort?.addEventListener("abort", abortHandler, { once: true })
 
     const timeoutMs = typeof opts.timeoutMs === "number" && Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : undefined
-    const timer = timeoutMs && timeoutMs > 0
-      ? setTimeout(() => {
-          timedOut = true
-          void terminate()
-        }, timeoutMs)
-      : undefined
+    const timer =
+      timeoutMs && timeoutMs > 0
+        ? setTimeout(() => {
+            timedOut = true
+            void terminate()
+          }, timeoutMs)
+        : undefined
     timer?.unref?.()
 
     try {
@@ -183,28 +185,40 @@ export namespace Shell {
 
     let initialOutput = ""
     let exited = false
-    supervisor.stdout?.on("data", (chunk: Buffer) => { initialOutput += chunk.toString() })
-    supervisor.stderr?.on("data", (chunk: Buffer) => { initialOutput += chunk.toString() })
-    supervisor.exited.then(() => { exited = true }, () => { exited = true })
+    supervisor.stdout?.on("data", (chunk: Buffer) => {
+      initialOutput += chunk.toString()
+    })
+    supervisor.stderr?.on("data", (chunk: Buffer) => {
+      initialOutput += chunk.toString()
+    })
+    supervisor.exited.then(
+      () => {
+        exited = true
+      },
+      () => {
+        exited = true
+      },
+    )
 
     await new Promise((r) => setTimeout(r, outputSniffMs))
 
     if (exited) {
       await supervisor.dispose()
-      throw new Error(
-        `Process exited immediately after launch. Output:\n${initialOutput.slice(0, 1000)}`,
-      )
+      throw new Error(`Process exited immediately after launch. Output:\n${initialOutput.slice(0, 1000)}`)
     }
 
-    const leaseTimer = typeof leaseMs === "number" && Number.isFinite(leaseMs) && leaseMs > 0
-      ? setTimeout(() => {
-          void supervisor.dispose()
-        }, leaseMs)
-      : undefined
+    const leaseTimer =
+      typeof leaseMs === "number" && Number.isFinite(leaseMs) && leaseMs > 0
+        ? setTimeout(() => {
+            void supervisor.dispose()
+          }, leaseMs)
+        : undefined
     leaseTimer?.unref?.()
-    supervisor.exited.finally(() => {
-      if (leaseTimer) clearTimeout(leaseTimer)
-    }).catch(() => undefined)
+    supervisor.exited
+      .finally(() => {
+        if (leaseTimer) clearTimeout(leaseTimer)
+      })
+      .catch(() => undefined)
     supervisor.unref()
 
     const address = detectLaunchAddress(initialOutput)

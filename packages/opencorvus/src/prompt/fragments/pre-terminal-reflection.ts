@@ -3,10 +3,9 @@ export function renderPreTerminalReflectionPrompt(input: {
   terminalToolName?: string
   usesStructuredOutput?: boolean
 }): string | undefined {
-  const finalizers = [
-    input.terminalToolName,
-    input.usesStructuredOutput ? "StructuredOutput" : undefined,
-  ].filter((name): name is string => typeof name === "string" && name.length > 0)
+  const finalizers = [input.terminalToolName, input.usesStructuredOutput ? "StructuredOutput" : undefined].filter(
+    (name): name is string => typeof name === "string" && name.length > 0,
+  )
   if (finalizers.length === 0) return undefined
 
   return [

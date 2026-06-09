@@ -131,17 +131,20 @@ describe("task conversation routes", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "panel",
-            title: "hydrate fidelity replay",
-            request: "hydrate fidelity replay",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "panel",
+              title: "hydrate fidelity replay",
+              request: "hydrate fidelity replay",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         const session = await Session.create({
@@ -162,7 +165,7 @@ describe("task conversation routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           events?: Array<{
             type?: string
             emittedAt?: number
@@ -200,18 +203,21 @@ describe("task conversation routes", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "lifecycle-only session route",
-            request: "lifecycle-only session route",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "lifecycle-only session route",
+              request: "lifecycle-only session route",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         await EngineProtocol.emit(
@@ -234,7 +240,7 @@ describe("task conversation routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           transcript: unknown[]
           timeline: unknown[]
           events?: Array<{ type?: string; payload?: Record<string, unknown> }>
@@ -283,60 +289,70 @@ describe("task conversation routes", () => {
         })
 
         Database.use((db) => {
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "history lifecycle window",
-            request: "history lifecycle window",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run()
-          db.insert(MessageTable).values({
-            id: "msg_history_old",
-            session_id: assistant.id,
-            time_created: now - 100,
-            time_updated: now - 100,
-            data: {
-              role: "assistant",
-              time: { created: now - 100 },
-            } as any,
-          }).run()
-          db.insert(PartTable).values({
-            id: "prt_history_old",
-            message_id: "msg_history_old",
-            session_id: assistant.id,
-            time_created: now - 100,
-            time_updated: now - 100,
-            data: {
-              type: "text",
-              text: "Older visible message.",
-            } as any,
-          }).run()
-          db.insert(MessageTable).values({
-            id: "msg_history_latest",
-            session_id: assistant.id,
-            time_created: now + 1_000,
-            time_updated: now + 1_000,
-            data: {
-              role: "assistant",
-              time: { created: now + 1_000 },
-            } as any,
-          }).run()
-          db.insert(PartTable).values({
-            id: "prt_history_latest",
-            message_id: "msg_history_latest",
-            session_id: assistant.id,
-            time_created: now + 1_000,
-            time_updated: now + 1_000,
-            data: {
-              type: "text",
-              text: "Latest visible message.",
-            } as any,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "history lifecycle window",
+              request: "history lifecycle window",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+          db.insert(MessageTable)
+            .values({
+              id: "msg_history_old",
+              session_id: assistant.id,
+              time_created: now - 100,
+              time_updated: now - 100,
+              data: {
+                role: "assistant",
+                time: { created: now - 100 },
+              } as any,
+            })
+            .run()
+          db.insert(PartTable)
+            .values({
+              id: "prt_history_old",
+              message_id: "msg_history_old",
+              session_id: assistant.id,
+              time_created: now - 100,
+              time_updated: now - 100,
+              data: {
+                type: "text",
+                text: "Older visible message.",
+              } as any,
+            })
+            .run()
+          db.insert(MessageTable)
+            .values({
+              id: "msg_history_latest",
+              session_id: assistant.id,
+              time_created: now + 1_000,
+              time_updated: now + 1_000,
+              data: {
+                role: "assistant",
+                time: { created: now + 1_000 },
+              } as any,
+            })
+            .run()
+          db.insert(PartTable)
+            .values({
+              id: "prt_history_latest",
+              message_id: "msg_history_latest",
+              session_id: assistant.id,
+              time_created: now + 1_000,
+              time_updated: now + 1_000,
+              data: {
+                type: "text",
+                text: "Latest visible message.",
+              } as any,
+            })
+            .run()
         })
 
         await EngineProtocol.emit(
@@ -365,7 +381,7 @@ describe("task conversation routes", () => {
           throw new Error(await response.text())
         }
         expect(response.status).toBe(200)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           transcript: Array<{ info?: { id?: string } }>
           events?: Array<{ type?: string; payload?: Record<string, unknown> }>
           view?: { sessions?: Array<{ sessionID?: string; stage?: string; messageIDs?: string[] }> }
@@ -404,45 +420,52 @@ describe("task conversation routes", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "watermark task",
-            request: "watermark task",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "watermark task",
+              request: "watermark task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         expect(__taskMessageWatermarkForTest(taskID)).toBe(0)
 
         Database.use((db) => {
-          db.insert(MessageTable).values({
-            id: "msg_watermark",
-            session_id: build.id,
-            time_created: now + 1,
-            time_updated: now + 2,
-            data: {
-              role: "assistant",
-              agent: "build",
-              time: { created: now + 1 },
-            } as any,
-          }).run()
-          db.insert(PartTable).values({
-            id: "prt_watermark",
-            message_id: "msg_watermark",
-            session_id: build.id,
-            time_created: now + 3,
-            time_updated: now + 4,
-            data: {
-              type: "text",
-              text: "tail changed",
-            } as any,
-          }).run()
+          db.insert(MessageTable)
+            .values({
+              id: "msg_watermark",
+              session_id: build.id,
+              time_created: now + 1,
+              time_updated: now + 2,
+              data: {
+                role: "assistant",
+                agent: "build",
+                time: { created: now + 1 },
+              } as any,
+            })
+            .run()
+          db.insert(PartTable)
+            .values({
+              id: "prt_watermark",
+              message_id: "msg_watermark",
+              session_id: build.id,
+              time_created: now + 3,
+              time_updated: now + 4,
+              data: {
+                type: "text",
+                text: "tail changed",
+              } as any,
+            })
+            .run()
         })
 
         expect(__taskMessageWatermarkForTest(taskID)).toBe(now + 4)
@@ -470,18 +493,21 @@ describe("task conversation routes", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "message change SSE task",
-            request: "message change SSE task",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "message change SSE task",
+              request: "message change SSE task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         const abort = new AbortController()
@@ -499,28 +525,32 @@ describe("task conversation routes", () => {
           expect(connected.type).toBe("task.connected")
 
           Database.use((db) => {
-            db.insert(MessageTable).values({
-              id: "msg_sse_watermark",
-              session_id: build.id,
-              time_created: now + 1,
-              time_updated: now + 2,
-              data: {
-                role: "assistant",
-                agent: "build",
-                time: { created: now + 1 },
-              } as any,
-            }).run()
-            db.insert(PartTable).values({
-              id: "prt_sse_watermark",
-              message_id: "msg_sse_watermark",
-              session_id: build.id,
-              time_created: now + 3,
-              time_updated: now + 4,
-              data: {
-                type: "text",
-                text: "SSE tail changed",
-              } as any,
-            }).run()
+            db.insert(MessageTable)
+              .values({
+                id: "msg_sse_watermark",
+                session_id: build.id,
+                time_created: now + 1,
+                time_updated: now + 2,
+                data: {
+                  role: "assistant",
+                  agent: "build",
+                  time: { created: now + 1 },
+                } as any,
+              })
+              .run()
+            db.insert(PartTable)
+              .values({
+                id: "prt_sse_watermark",
+                message_id: "msg_sse_watermark",
+                session_id: build.id,
+                time_created: now + 3,
+                time_updated: now + 4,
+                data: {
+                  type: "text",
+                  text: "SSE tail changed",
+                } as any,
+              })
+              .run()
           })
 
           let changed: any
@@ -559,43 +589,50 @@ describe("task conversation routes", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "message watermark resume task",
-            request: "message watermark resume task",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "message watermark resume task",
+              request: "message watermark resume task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         Database.use((db) => {
-          db.insert(MessageTable).values({
-            id: "msg_resume_watermark",
-            session_id: build.id,
-            time_created: now + 1,
-            time_updated: now + 2,
-            data: {
-              role: "assistant",
-              agent: "build",
-              time: { created: now + 1 },
-            } as any,
-          }).run()
-          db.insert(PartTable).values({
-            id: "prt_resume_watermark",
-            message_id: "msg_resume_watermark",
-            session_id: build.id,
-            time_created: now + 3,
-            time_updated: now + 4,
-            data: {
-              type: "text",
-              text: "SSE resume tail changed",
-            } as any,
-          }).run()
+          db.insert(MessageTable)
+            .values({
+              id: "msg_resume_watermark",
+              session_id: build.id,
+              time_created: now + 1,
+              time_updated: now + 2,
+              data: {
+                role: "assistant",
+                agent: "build",
+                time: { created: now + 1 },
+              } as any,
+            })
+            .run()
+          db.insert(PartTable)
+            .values({
+              id: "prt_resume_watermark",
+              message_id: "msg_resume_watermark",
+              session_id: build.id,
+              time_created: now + 3,
+              time_updated: now + 4,
+              data: {
+                type: "text",
+                text: "SSE resume tail changed",
+              } as any,
+            })
+            .run()
         })
 
         const abort = new AbortController()
@@ -636,36 +673,47 @@ describe("task conversation routes", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "panel",
-            title: "hydrate executor history",
-            request: "hydrate executor history",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "panel",
+              title: "hydrate executor history",
+              request: "hydrate executor history",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
-        await EngineProtocol.emit(Event.RunProgress, {
-          taskID,
-          runID,
-          type: "tool_call",
-          summary: "executor started tool",
-          payload: {
-            id: "call_1",
-            name: "shell",
-            input: { command: "echo hydrate" },
+        await EngineProtocol.emit(
+          Event.RunProgress,
+          {
+            taskID,
+            runID,
+            type: "tool_call",
+            summary: "executor started tool",
+            payload: {
+              id: "call_1",
+              name: "shell",
+              input: { command: "echo hydrate" },
+            },
           },
-        }, { source: "test.server" })
-        await EngineProtocol.emit(Event.RunOutput, {
-          taskID,
-          runID,
-          type: "stdout",
-          text: "hydrate output\n",
-        }, { source: "test.server" })
+          { source: "test.server" },
+        )
+        await EngineProtocol.emit(
+          Event.RunOutput,
+          {
+            taskID,
+            runID,
+            type: "stdout",
+            text: "hydrate output\n",
+          },
+          { source: "test.server" },
+        )
 
         const response = await app.request(`/task/${taskID}/conversation`, {
           headers: {
@@ -674,7 +722,7 @@ describe("task conversation routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           lastSequence?: number
           events?: Array<{
             type?: string
@@ -715,26 +763,33 @@ describe("task conversation routes", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "panel",
-            title: "paged executor history",
-            request: "paged executor history",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "panel",
+              title: "paged executor history",
+              request: "paged executor history",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         for (const text of ["one", "two", "three"]) {
-          await EngineProtocol.emit(Event.RunOutput, {
-            taskID,
-            runID,
-            type: "stdout",
-            text,
-          }, { source: "test.server" })
+          await EngineProtocol.emit(
+            Event.RunOutput,
+            {
+              taskID,
+              runID,
+              type: "stdout",
+              text,
+            },
+            { source: "test.server" },
+          )
         }
 
         const first = await app.request(`/task/${taskID}/conversation/events?after=0&until=3&limit=2`, {
@@ -743,7 +798,7 @@ describe("task conversation routes", () => {
           },
         })
         expect(first.status).toBe(200)
-        const firstBody = await first.json() as {
+        const firstBody = (await first.json()) as {
           events?: Array<{ type?: string; payload?: { text?: string } }>
           eventReplay?: { cursor?: number; latestSequence?: number; complete?: boolean; limit?: number }
         }
@@ -762,7 +817,7 @@ describe("task conversation routes", () => {
           },
         })
         expect(second.status).toBe(200)
-        const secondBody = await second.json() as {
+        const secondBody = (await second.json()) as {
           events?: Array<{ type?: string; payload?: { text?: string } }>
           eventReplay?: { cursor?: number; latestSequence?: number; complete?: boolean; limit?: number }
         }
@@ -799,19 +854,22 @@ describe("task conversation routes", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "cross project hydrate",
-            request: "cross project hydrate",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-            time_completed: now + 10,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "cross project hydrate",
+              request: "cross project hydrate",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now + 10,
+            })
+            .run(),
         )
 
         const messageID = Identifier.ascending("message")
@@ -824,13 +882,15 @@ describe("task conversation routes", () => {
             agent: "orchestrator",
             model: { providerID: "test-provider", modelID: "test-model" },
           },
-          parts: [{
-            id: Identifier.ascending("part"),
-            sessionID: orchestrator.id,
-            messageID,
-            type: "text",
-            text: "cross project hydrate message",
-          }],
+          parts: [
+            {
+              id: Identifier.ascending("part"),
+              sessionID: orchestrator.id,
+              messageID,
+              type: "text",
+              text: "cross project hydrate message",
+            },
+          ],
         })
 
         return {
@@ -849,7 +909,7 @@ describe("task conversation routes", () => {
     })
 
     expect(response.status).toBe(200)
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       transcript?: Array<{ info?: { sessionID?: string; channel?: string; parentSessionID?: string } }>
       view?: { sessions?: Array<{ sessionID?: string; stage?: string; placement?: string }> }
     }
@@ -864,6 +924,114 @@ describe("task conversation routes", () => {
         placement: "top_level",
       }),
     )
+  })
+
+  test("GET /task/:taskID/conversation preserves sub-agent user authorship from persisted extra", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "task root",
+        })
+        const requirements = await Session.create({
+          kind: "requirements",
+          parentID: root.id,
+          title: "requirements",
+        })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "sub-agent authorship hydrate",
+              request: "sub-agent authorship hydrate",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const internalMessageID = Identifier.ascending("message")
+        await Session.persistMessage({
+          info: {
+            id: internalMessageID,
+            sessionID: requirements.id,
+            role: "user",
+            time: { created: now + 1 },
+            agent: "requirements",
+            model: { providerID: "test-provider", modelID: "test-model" },
+            extra: { resume_scope: "requirements" },
+          },
+          parts: [
+            {
+              id: Identifier.ascending("part"),
+              sessionID: requirements.id,
+              messageID: internalMessageID,
+              type: "text",
+              text: "internal requirements dispatch",
+            },
+          ],
+        })
+
+        const directReplyMessageID = Identifier.ascending("message")
+        await Session.persistMessage({
+          info: {
+            id: directReplyMessageID,
+            sessionID: requirements.id,
+            role: "user",
+            time: { created: now + 2 },
+            agent: "requirements",
+            model: { providerID: "test-provider", modelID: "test-model" },
+            extra: {
+              overlay_direct_reply: true,
+              source: "overlay_direct_reply",
+            },
+          },
+          parts: [
+            {
+              id: Identifier.ascending("part"),
+              sessionID: requirements.id,
+              messageID: directReplyMessageID,
+              type: "text",
+              text: "human requirements reply",
+            },
+          ],
+        })
+
+        const response = await app.request(`/task/${taskID}/conversation`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          transcript?: Array<{ info?: { id?: string; channel?: string; resolvedRole?: string } }>
+        }
+        expect(
+          body.transcript?.map((message) => ({
+            id: message.info?.id,
+            channel: message.info?.channel,
+            resolvedRole: message.info?.resolvedRole,
+          })),
+        ).toEqual([
+          { id: internalMessageID, channel: "requirements", resolvedRole: "orchestrator" },
+          { id: directReplyMessageID, channel: "requirements", resolvedRole: "user" },
+        ])
+      },
+    })
   })
 
   test("GET /task/:taskID/conversation bounds hydrate transcript while preserving tail history state", async () => {
@@ -886,18 +1054,21 @@ describe("task conversation routes", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "bounded hydrate task",
-            request: "bounded hydrate task",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "bounded hydrate task",
+              request: "bounded hydrate task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         Database.use((db) => {
@@ -905,27 +1076,31 @@ describe("task conversation routes", () => {
             const suffix = index.toString().padStart(3, "0")
             const id = `msg_bounded_${suffix}`
             const created = now + index
-            db.insert(MessageTable).values({
-              id,
-              session_id: assistant.id,
-              time_created: created,
-              time_updated: created,
-              data: {
-                role: "assistant",
-                time: { created },
-              } as any,
-            }).run()
-            db.insert(PartTable).values({
-              id: `prt_bounded_${suffix}`,
-              message_id: id,
-              session_id: assistant.id,
-              time_created: created,
-              time_updated: created,
-              data: {
-                type: "text",
-                text: `visible ${index}`,
-              } as any,
-            }).run()
+            db.insert(MessageTable)
+              .values({
+                id,
+                session_id: assistant.id,
+                time_created: created,
+                time_updated: created,
+                data: {
+                  role: "assistant",
+                  time: { created },
+                } as any,
+              })
+              .run()
+            db.insert(PartTable)
+              .values({
+                id: `prt_bounded_${suffix}`,
+                message_id: id,
+                session_id: assistant.id,
+                time_created: created,
+                time_updated: created,
+                data: {
+                  type: "text",
+                  text: `visible ${index}`,
+                } as any,
+              })
+              .run()
           }
         })
 
@@ -938,16 +1113,13 @@ describe("task conversation routes", () => {
         if (response.status !== 200) {
           throw new Error(await response.text())
         }
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           transcript?: Array<{ info?: { id?: string } }>
           history?: { hasMore?: boolean; oldestMessageID?: string | null; limit?: number }
           agentView?: { sessions?: Array<{ sessionID?: string; messageIDs?: string[] }> }
         }
 
-        expect(body.transcript?.map((message) => message.info?.id)).toEqual([
-          "msg_bounded_098",
-          "msg_bounded_099",
-        ])
+        expect(body.transcript?.map((message) => message.info?.id)).toEqual(["msg_bounded_098", "msg_bounded_099"])
         expect(body.history).toMatchObject({
           hasMore: true,
           oldestMessageID: "msg_bounded_098",
@@ -1002,18 +1174,21 @@ describe("task conversation routes", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "direct reply",
-            request: "direct reply",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "direct reply",
+              request: "direct reply",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         await Session.updateMessage({
@@ -1104,7 +1279,7 @@ describe("task conversation routes", () => {
         })
 
         expect(response.status).toBe(202)
-        const body = await response.json() as { message_id?: string; session_id?: string; task_id?: string }
+        const body = (await response.json()) as { message_id?: string; session_id?: string; task_id?: string }
         expect(body.task_id).toBe(taskID)
         expect(body.session_id).toBe(requirements.id)
         expect(body.message_id).toBeString()
@@ -1156,18 +1331,21 @@ describe("task conversation routes", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "direct reply root rejection",
-            request: "direct reply root rejection",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "direct reply root rejection",
+              request: "direct reply root rejection",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/session/${root.id}/reply`, {
@@ -1206,18 +1384,21 @@ describe("task conversation routes", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "cancel build",
-            request: "cancel build",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "cancel build",
+              request: "cancel build",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
         SessionStatus.set(build.id, { type: "busy" })
 
@@ -1229,7 +1410,7 @@ describe("task conversation routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { cancelled?: boolean; session_id?: string; task_id?: string }
+        const body = (await response.json()) as { cancelled?: boolean; session_id?: string; task_id?: string }
         expect(body).toEqual({
           task_id: taskID,
           session_id: build.id,
@@ -1274,18 +1455,20 @@ describe("task conversation routes", () => {
         })
 
         Database.use((db) => {
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "cancel task",
-            request: "cancel task",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "cancel task",
+              request: "cancel task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
         })
         SessionStatus.set(root.id, { type: "streaming" })
         SessionStatus.set(requirements.id, { type: "streaming" })

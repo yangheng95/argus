@@ -20,16 +20,16 @@ import { SessionLoop } from "../../src/session/loop"
 
 type AIToolLike = {
   inputSchema: Record<string, unknown>
-  execute: (args: unknown, opts: { toolCallId?: string; messages?: unknown[]; abortSignal?: AbortSignal }) => Promise<{ output: string; title: string; metadata: Record<string, unknown> }>
+  execute: (
+    args: unknown,
+    opts: { toolCallId?: string; messages?: unknown[]; abortSignal?: AbortSignal },
+  ) => Promise<{ output: string; title: string; metadata: Record<string, unknown> }>
   toModelOutput?: (result: unknown) => { type: string; value: string }
   description?: string
   strict?: boolean
 }
 
-async function expectStructuredOutputPayloadError(
-  run: Promise<unknown>,
-  expected: string,
-) {
+async function expectStructuredOutputPayloadError(run: Promise<unknown>, expected: string) {
   try {
     await run
     throw new Error("expected StructuredOutputPayloadError")
@@ -48,11 +48,13 @@ function jsonSchema(shape: z.ZodType): Record<string, any> {
 
 describe("SessionLoop.createStructuredOutputTool", () => {
   test("json_schema requires a tool call for every model family", () => {
-    expect(SessionLoop.structuredOutputToolChoice({
-      type: "json_schema",
-      schema: { type: "object", properties: { answer: { type: "string" } } },
-      retryCount: 2,
-    })).toBe("required")
+    expect(
+      SessionLoop.structuredOutputToolChoice({
+        type: "json_schema",
+        schema: { type: "object", properties: { answer: { type: "string" } } },
+        retryCount: 2,
+      }),
+    ).toBe("required")
     expect(SessionLoop.structuredOutputToolChoice({ type: "text" })).toBeUndefined()
   })
 
@@ -160,9 +162,9 @@ describe("SessionLoop.createStructuredOutputTool", () => {
       onSuccess: (out) => captured.push(out),
     }) as unknown as AIToolLike
 
-    await expect(t.execute({ status: "passed" }, { toolCallId: "call_guard" }))
-      .rejects
-      .toThrow("merge_back must complete")
+    await expect(t.execute({ status: "passed" }, { toolCallId: "call_guard" })).rejects.toThrow(
+      "merge_back must complete",
+    )
     expect(captured).toEqual([])
 
     const ok = await t.execute({ status: "failed" }, { toolCallId: "call_guard_2" })
@@ -275,7 +277,10 @@ describe("SessionLoop.createStructuredOutputTool", () => {
     // The StructuredOutput wrapper strips `$schema` before wiring the tool
     // (some providers reject it). This test verifies that stripping is
     // transparent and the wrapped tool still produces a valid validator.
-    const shapeWithMeta = { $schema: "http://json-schema.org/draft-07/schema#", ...jsonSchema(z.object({ ok: z.boolean() })) }
+    const shapeWithMeta = {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      ...jsonSchema(z.object({ ok: z.boolean() })),
+    }
     const t = SessionLoop.createStructuredOutputTool({
       schema: shapeWithMeta,
       onSuccess: () => undefined,
@@ -290,8 +295,14 @@ describe("SessionLoop.createStructuredOutputTool", () => {
     const b: unknown[] = []
     const shape = jsonSchema(z.object({ v: z.string() }))
 
-    const toolA = SessionLoop.createStructuredOutputTool({ schema: shape, onSuccess: (out) => a.push(out) }) as unknown as AIToolLike
-    const toolB = SessionLoop.createStructuredOutputTool({ schema: shape, onSuccess: (out) => b.push(out) }) as unknown as AIToolLike
+    const toolA = SessionLoop.createStructuredOutputTool({
+      schema: shape,
+      onSuccess: (out) => a.push(out),
+    }) as unknown as AIToolLike
+    const toolB = SessionLoop.createStructuredOutputTool({
+      schema: shape,
+      onSuccess: (out) => b.push(out),
+    }) as unknown as AIToolLike
 
     await toolA.execute({ v: "alpha" }, { toolCallId: "a" })
     await toolB.execute({ v: "beta" }, { toolCallId: "b" })

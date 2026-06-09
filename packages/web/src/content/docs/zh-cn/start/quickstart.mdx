@@ -14,12 +14,12 @@ opencorvus serve
 
 默认监听 `127.0.0.1:7878`。常用 flag：
 
-| flag | 说明 |
-|---|---|
-| `--hostname 0.0.0.0` | 对外监听（必须同时设 `OPENCORVUS_SERVER_PASSWORD`） |
-| `--port 7878` | 改端口 |
-| `--project-dir <path>` | 指定工作仓库 |
-| `--mdns` | 启用 mDNS 服务发现 |
+| flag                   | 说明                                                |
+| ---------------------- | --------------------------------------------------- |
+| `--hostname 0.0.0.0`   | 对外监听（必须同时设 `OPENCORVUS_SERVER_PASSWORD`） |
+| `--port 7878`          | 改端口                                              |
+| `--project-dir <path>` | 指定工作仓库                                        |
+| `--mdns`               | 启用 mDNS 服务发现                                  |
 
 > 如果暴露到 localhost 以外，**务必**先设置 `OPENCORVUS_SERVER_PASSWORD`。
 
@@ -55,15 +55,15 @@ curl -N http://127.0.0.1:7878/task/<task_id>/events
 
 ## 5. 常用任务端点
 
-| 端点 | 用途 |
-|---|---|
-| `GET /tasks` | 所有任务列表 |
-| `GET /task/<id>` | 单任务状态 |
-| `GET /task/<id>/board` | Kanban 视图 |
+| 端点                      | 用途                      |
+| ------------------------- | ------------------------- |
+| `GET /tasks`              | 所有任务列表              |
+| `GET /task/<id>`          | 单任务状态                |
+| `GET /task/<id>/board`    | Kanban 视图               |
 | `POST /task/<id>/message` | 追加用户消息（follow-up） |
-| `POST /task/<id>/retry` | 保持 plan，重试执行 |
-| `POST /task/<id>/replan` | 丢弃当前 plan，重新规划 |
-| `POST /task/<id>/cancel` | 取消任务 |
+| `POST /task/<id>/retry`   | 保持 plan，重试执行       |
+| `POST /task/<id>/replan`  | 丢弃当前 plan，重新规划   |
+| `POST /task/<id>/cancel`  | 取消任务                  |
 
 ## 6. 本地 TUI（交互模式）
 

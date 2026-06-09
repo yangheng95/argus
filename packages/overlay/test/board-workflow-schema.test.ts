@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
-import { acceptanceGoalProgress, goalStepStatus } from "../src/utils/goal-workflow";
+import { expect, test } from "bun:test"
+import { acceptanceGoalProgress, goalStepStatus } from "../src/utils/goal-workflow"
 
 test("goalStepStatus reads only the canonical build step", () => {
   expect(
@@ -9,7 +9,7 @@ test("goalStepStatus reads only the canonical build step", () => {
       },
       "build",
     ),
-  ).toBe("completed");
+  ).toBe("completed")
 
   expect(
     goalStepStatus(
@@ -18,20 +18,19 @@ test("goalStepStatus reads only the canonical build step", () => {
       },
       "build",
     ),
-  ).toBe("pending");
-});
+  ).toBe("pending")
+})
 
 test("acceptanceGoalProgress tracks only build completion or passed goals", () => {
   const progress = acceptanceGoalProgress([
     { goalStatus: "running", steps: [{ stepID: "build", status: "completed" }] },
     { goalStatus: "running", steps: [{ stepID: "execute", status: "failed" }] },
     { goalStatus: "passed", steps: [{ stepID: "build", status: "running" }] },
-  ]);
+  ])
 
   expect(progress).toEqual({
     completed: 2,
     failed: 0,
     total: 3,
-  });
-});
-
+  })
+})

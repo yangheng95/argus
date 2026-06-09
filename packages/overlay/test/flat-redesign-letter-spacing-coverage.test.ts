@@ -3,10 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
-const STYLE_ROOTS = [
-  join(OVERLAY_ROOT, "src", "styles", "surfaces"),
-  join(OVERLAY_ROOT, "src", "styles", "primitives"),
-]
+const STYLE_ROOTS = [join(OVERLAY_ROOT, "src", "styles", "surfaces"), join(OVERLAY_ROOT, "src", "styles", "primitives")]
 
 function walkCssFiles(dir: string): string[] {
   if (!existsSync(dir)) return []

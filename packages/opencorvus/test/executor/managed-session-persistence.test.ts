@@ -25,9 +25,13 @@ describe("managed executor session persistence", () => {
           prompt: "run",
         })
 
-        await waitFor(() => Session.get(session.id).then((info) =>
-          (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id === "thr_1:turn_1"
-        ))
+        await waitFor(() =>
+          Session.get(session.id).then(
+            (info) =>
+              (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id ===
+              "thr_1:turn_1",
+          ),
+        )
 
         const info = await Session.get(session.id)
         expect(info.metadata?.executor).toMatchObject({
@@ -49,23 +53,30 @@ describe("managed executor session persistence", () => {
           sessionID: session.id,
           prompt: "run",
         })
-        await waitFor(() => Session.get(session.id).then((info) =>
-          (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id === "thr_2:turn_1"
-        ))
+        await waitFor(() =>
+          Session.get(session.id).then(
+            (info) =>
+              (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id ===
+              "thr_2:turn_1",
+          ),
+        )
 
         let resumedWith = ""
-        const second = ManagedCodingExecutor.create({
-          name: "codex",
-          capabilities: capabilities,
-          async *run() {},
-          async *resume(input) {
-            resumedWith = input.sessionID
-            yield { type: "done", sessionID: "thr_2:turn_2" }
+        const second = ManagedCodingExecutor.create(
+          {
+            name: "codex",
+            capabilities: capabilities,
+            async *run() {},
+            async *resume(input) {
+              resumedWith = input.sessionID
+              yield { type: "done", sessionID: "thr_2:turn_2" }
+            },
+            async interrupt() {
+              return false
+            },
           },
-          async interrupt() {
-            return false
-          },
-        }, {})
+          {},
+        )
 
         await second.resume({
           sessionID: session.id,
@@ -88,28 +99,39 @@ describe("managed executor session persistence", () => {
           sessionID: session.id,
           prompt: "run",
         })
-        await waitFor(() => Session.get(session.id).then((info) =>
-          (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id === "thr_old:turn_1"
-        ))
+        await waitFor(() =>
+          Session.get(session.id).then(
+            (info) =>
+              (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id ===
+              "thr_old:turn_1",
+          ),
+        )
 
-        await ManagedCodingExecutor.create({
-          name: "claude-code",
-          capabilities: capabilities,
-          async *run() {
-            yield { type: "done", sessionID: "claude_new" }
+        await ManagedCodingExecutor.create(
+          {
+            name: "claude-code",
+            capabilities: capabilities,
+            async *run() {
+              yield { type: "done", sessionID: "claude_new" }
+            },
+            async *resume() {},
+            async interrupt() {
+              return false
+            },
           },
-          async *resume() {},
-          async interrupt() {
-            return false
-          },
-        }, {}).submit({
+          {},
+        ).submit({
           sessionID: session.id,
           prompt: "run with different provider",
         })
 
-        await waitFor(() => Session.get(session.id).then((info) =>
-          (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id === "claude_new"
-        ))
+        await waitFor(() =>
+          Session.get(session.id).then(
+            (info) =>
+              (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id ===
+              "claude_new",
+          ),
+        )
         const info = await Session.get(session.id)
         expect(info.metadata?.executor).toMatchObject({
           provider: "claude-code",
@@ -129,28 +151,37 @@ describe("managed executor session persistence", () => {
           sessionID: session.id,
           prompt: "run",
         })
-        await waitFor(() => Session.get(session.id).then((info) =>
-          (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id === "thr_old:turn_1"
-        ))
+        await waitFor(() =>
+          Session.get(session.id).then(
+            (info) =>
+              (info.metadata?.executor as { native_session_id?: string } | undefined)?.native_session_id ===
+              "thr_old:turn_1",
+          ),
+        )
 
         let resumedWith = ""
-        const executor = ManagedCodingExecutor.create({
-          name: "claude-code",
-          capabilities: capabilities,
-          async *run() {},
-          async *resume(input) {
-            resumedWith = input.sessionID
-            yield { type: "done", sessionID: "claude_new" }
+        const executor = ManagedCodingExecutor.create(
+          {
+            name: "claude-code",
+            capabilities: capabilities,
+            async *run() {},
+            async *resume(input) {
+              resumedWith = input.sessionID
+              yield { type: "done", sessionID: "claude_new" }
+            },
+            async interrupt() {
+              return false
+            },
           },
-          async interrupt() {
-            return false
-          },
-        }, {})
+          {},
+        )
 
-        await expect(executor.resume({
-          sessionID: session.id,
-          message: "continue with different provider",
-        })).rejects.toThrow("does not match claude-code")
+        await expect(
+          executor.resume({
+            sessionID: session.id,
+            message: "continue with different provider",
+          }),
+        ).rejects.toThrow("does not match claude-code")
         expect(resumedWith).toBe("")
       },
     })

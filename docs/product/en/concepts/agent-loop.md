@@ -6,11 +6,11 @@ The executor internals follow the **standard agentic loop**: LLM emits tool-call
 
 `SessionLoop` (`packages/opencorvus/src/session/loop.ts:64`, namespace) is always in one of:
 
-| State | Meaning | Exit |
-|---|---|---|
-| **standby** | assistant emitted `finish`; waiting for the next user message | new user message arrives |
-| **tool-call** | LLM requested tools; they're executing | all tools resolved |
-| **subtask** | current turn spawned a subtask (recursive SessionLoop) | subtask completes |
+| State         | Meaning                                                       | Exit                     |
+| ------------- | ------------------------------------------------------------- | ------------------------ |
+| **standby**   | assistant emitted `finish`; waiting for the next user message | new user message arrives |
+| **tool-call** | LLM requested tools; they're executing                        | all tools resolved       |
+| **subtask**   | current turn spawned a subtask (recursive SessionLoop)        | subtask completes        |
 
 Standby detection: scan the last user/assistant pair; if the assistant's `finishReason !== "tool-calls"` and no new user message is queued → standby.
 

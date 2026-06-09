@@ -99,7 +99,7 @@ export function createReviewReasoningForwarder(input: {
   attempt: () => number
   source: string
 }): TextHooks {
-  const reviewID = () => typeof input.reviewID === "function" ? input.reviewID() : input.reviewID
+  const reviewID = () => (typeof input.reviewID === "function" ? input.reviewID() : input.reviewID)
   let buffer = ""
   let timer: ReturnType<typeof setTimeout> | undefined
   const flush = () => {

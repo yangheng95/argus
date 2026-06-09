@@ -26,7 +26,11 @@ export class UnsupportedPlatformError extends Error {
 
 export class SidecarStartupError extends Error {
   override readonly name: string = "SidecarStartupError"
-  constructor(message: string, public readonly stderrTail?: string, public readonly exitCode?: number) {
+  constructor(
+    message: string,
+    public readonly stderrTail?: string,
+    public readonly exitCode?: number,
+  ) {
     super(message)
   }
 }

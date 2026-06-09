@@ -23,15 +23,18 @@ describe("browser preview routes", () => {
       directory,
       fn: () => {
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            title: "Preview task",
-            request: "Preview task",
-            source: "api",
-            time_created: Date.now(),
-            time_updated: Date.now(),
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Preview task",
+              request: "Preview task",
+              source: "api",
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .run(),
         )
       },
     })
@@ -92,7 +95,7 @@ describe("browser preview routes", () => {
       })
 
       expect(response.status).toBe(200)
-      const body = await response.json() as {
+      const body = (await response.json()) as {
         status: string
         url?: string
         source: string
@@ -108,7 +111,9 @@ describe("browser preview routes", () => {
       ])
 
       const artifact = Database.use((db) =>
-        db.select().from(EngineArtifactTable)
+        db
+          .select()
+          .from(EngineArtifactTable)
           .where(and(eq(EngineArtifactTable.kind, "browser_preview_target"), eq(EngineArtifactTable.task_id, taskID)))
           .limit(1)
           .get(),
@@ -138,7 +143,7 @@ describe("browser preview routes", () => {
     })
 
     expect(response.status).toBe(200)
-    const body = await response.json() as { status: string; url?: string; source: string; diagnostics?: string[] }
+    const body = (await response.json()) as { status: string; url?: string; source: string; diagnostics?: string[] }
     expect(body.status).toBe("missing")
     expect(body.url).toBeUndefined()
     expect(body.source).toBe("none")
@@ -160,7 +165,7 @@ describe("browser preview routes", () => {
     })
 
     expect(response.status).toBe(200)
-    const body = await response.json() as { status: string; url?: string; source: string }
+    const body = (await response.json()) as { status: string; url?: string; source: string }
     expect(body.status).toBe("ready")
     expect(body.url).toBe("http://localhost:5173/")
     expect(body.source).toBe("task-artifact")
@@ -185,7 +190,7 @@ describe("browser preview routes", () => {
     const response = await app.request("/task/tsk_browserpreviewroute000001/browser-preview")
 
     expect(response.status).toBe(400)
-    const body = await response.json() as { name?: string }
+    const body = (await response.json()) as { name?: string }
     expect(body.name).toBe("DirectoryRequiredError")
   })
 
@@ -232,7 +237,7 @@ describe("browser preview routes", () => {
     })
 
     expect(response.status).toBe(200)
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       status: string
       capture?: unknown
       target?: { status: string; url?: string; diagnostics?: string[] }
@@ -242,7 +247,9 @@ describe("browser preview routes", () => {
     expect(body.capture).toBeUndefined()
     expect(body.target?.status).toBe("failed")
     expect(body.target?.url).toBeUndefined()
-    expect(body.target?.diagnostics?.join("\n")).toContain("Browser preview target not found: art_previewtarget_missing")
+    expect(body.target?.diagnostics?.join("\n")).toContain(
+      "Browser preview target not found: art_previewtarget_missing",
+    )
     expect(body.diagnostics?.join("\n")).toContain("requires a resolved http(s) URL")
   })
 })

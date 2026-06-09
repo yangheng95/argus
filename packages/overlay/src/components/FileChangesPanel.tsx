@@ -1,29 +1,25 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
+import { createMemo, Show } from "solid-js"
 import type { DiffTarget } from "../services/diff"
 import { t } from "../utils/i18n"
 import { ChangesPanel } from "./ChangesPanel"
 import { DiffPreviewPanel } from "./DiffPreviewPanel"
 import { Icon } from "./Icon"
 
+export type FileChangesActiveView = "changes" | "diff"
+
 export interface FileChangesPanelProps {
   diffOpen: boolean
   diffTarget: DiffTarget
+  activeView: FileChangesActiveView
+  onActiveViewChange: (view: FileChangesActiveView) => void
   onCloseDiff: () => void
 }
 
 export function FileChangesPanel(props: FileChangesPanelProps) {
-  const [activeView, setActiveView] = createSignal<"changes" | "diff">("changes")
   const hasDiff = createMemo(() => props.diffOpen && !!props.diffTarget?.filePath)
-
-  createEffect(() => {
-    if (hasDiff()) setActiveView("diff")
-  })
-
-  onMount(() => {
-    const handler = () => setActiveView("changes")
-    window.addEventListener("acceptance:focus-changes", handler)
-    onCleanup(() => window.removeEventListener("acceptance:focus-changes", handler))
-  })
+  const activeView = createMemo<FileChangesActiveView>(() =>
+    props.activeView === "diff" && hasDiff() ? "diff" : "changes",
+  )
 
   return (
     <section class="file-changes-panel" data-active-view={activeView()} aria-label={t("section.files")}>
@@ -32,7 +28,7 @@ export function FileChangesPanel(props: FileChangesPanelProps) {
           type="button"
           class="file-changes-tab"
           data-active={activeView() === "changes" ? "true" : "false"}
-          onClick={() => setActiveView("changes")}
+          onClick={() => props.onActiveViewChange("changes")}
         >
           <Icon name="file-document" size={13} />
           <span>{t("files.changes")}</span>
@@ -42,7 +38,7 @@ export function FileChangesPanel(props: FileChangesPanelProps) {
           class="file-changes-tab"
           data-active={activeView() === "diff" ? "true" : "false"}
           disabled={!hasDiff()}
-          onClick={() => setActiveView("diff")}
+          onClick={() => props.onActiveViewChange("diff")}
         >
           <Icon name="panel-right" size={13} />
           <span>{t("workspace.diff")}</span>

@@ -12,7 +12,10 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 let globalEventCalls = 0
 let projectSubscribeCalls = 0
 
-async function* eventStream(): AsyncGenerator<{ directory: string; payload: { type: string; properties: Record<string, never> } }> {
+async function* eventStream(): AsyncGenerator<{
+  directory: string
+  payload: { type: string; properties: Record<string, never> }
+}> {
   yield { directory: "/tmp/proj-a", payload: { type: "server.connected", properties: {} } }
 }
 
@@ -58,7 +61,10 @@ function stubClient() {
     tui: {
       runtime: {
         start: async () => ({ data: {}, error: undefined }),
-        submitTask: async () => ({ data: { accepted: true, taskID: "task_mock", waited: false, completed: false }, error: undefined }),
+        submitTask: async () => ({
+          data: { accepted: true, taskID: "task_mock", waited: false, completed: false },
+          error: undefined,
+        }),
       },
     },
   }

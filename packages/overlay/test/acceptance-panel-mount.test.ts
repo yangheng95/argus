@@ -63,12 +63,19 @@ test("index.html declares toolbar workbench activities without a separate Inspec
   expect(html).not.toContain('id="solidFileEditorToggleMount"')
   expect(html).not.toContain('id="rightPanelWorkflow"')
   expect(html).not.toContain('id="solidAgentWorkflowMount"')
-  expect(html).not.toContain('id="solidLeftActivityToolbar"')
-  expect(html).toContain('id="solidLeftPanelCollapseControl"')
-  expect(html).toContain('id="solidLeftCollapsedRailControl"')
+  expect(html).toContain('id="solidLeftActivityToolbar"')
+  expect(html).not.toContain('id="solidLeftPanelCollapseControl"')
+  expect(html).not.toContain('id="solidLeftCollapsedRailControl"')
+  expect(html).not.toContain('class="sidebar-collapsed-rail"')
   expect(html).toContain('id="solidRightActivityToolbar"')
   expect(html).toContain('id="chatViewTitle"')
   expect(html).toContain('id="leftPanelTasks"')
+  expect(html).toContain('id="leftPanelSkills"')
+  expect(html).toContain('id="leftPanelMcp"')
+  expect(html).toContain('id="leftPanelMemory"')
+  expect(html).toContain('id="solidLeftSkillsPanel"')
+  expect(html).toContain('id="solidLeftMcpPanel"')
+  expect(html).toContain('id="solidLeftMemoryPanel"')
   expect(html).not.toContain('id="leftPanelExplorer"')
   expect(html).not.toContain('id="leftPanelChanges"')
   expect(html).toContain('id="solidFileExplorerMount"')
@@ -127,8 +134,11 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain('document.getElementById("centerWorkbenchDiff")')
   expect(main).toContain('document.getElementById("solidFileChangesMount")')
   expect(main).not.toContain('document.getElementById("chatPluginOutlet")')
-  expect(main).not.toContain('document.getElementById("solidLeftActivityToolbar")')
+  expect(main).toContain('document.getElementById("solidLeftActivityToolbar")')
   expect(main).toContain('document.getElementById("solidRightActivityToolbar")')
+  expect(main).not.toContain('document.getElementById("solidLeftPanelCollapseControl")')
+  expect(main).not.toContain('document.getElementById("solidLeftCollapsedRailControl")')
+  expect(main).not.toContain("LeftPanelHeaderCollapseControl")
   expect(main).toContain('document.getElementById("solidBrowserPreviewMount")')
   expect(main).not.toContain('document.getElementById("solidFileEditorToggleMount")')
   expect(main).not.toContain('document.getElementById("solidAgentWorkflowMount")')
@@ -139,19 +149,45 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain('document.getElementById("solidFrontendPreviewMount")')
   expect(main).not.toContain("<FrontendPreviewPanel")
   expect(main).toContain("<SideActivityToolbar")
+  expect(main).toContain("selectLeftActivity")
   expect(main).toContain("selectRightActivity")
-  expect(main).toContain('type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"')
-  expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchPanel, "file"> | "assistant"')
-  expect(main).toContain('id: "workflow", icon: "workflow", labelKey: "chat.title"')
-  expect(main).toContain('id: "inspector", icon: "inspect", labelKey: "sections.title"')
-  expect(main).toContain('id: "notifications", icon: "notifications", labelKey: "notify.center_label"')
-  expect(main).toContain('id: "explorer", icon: "folder", labelKey: "explorer.title"')
-  expect(main).toContain('id: "diff", icon: "files", labelKey: "workspace.diff"')
-  expect(main).toContain('id: "browser", icon: "web-search", labelKey: "browser_preview.title"')
-  expect(main).toContain('{ id: "assistant", icon: "message", labelKey: "coding_assistant.title" }')
-  expect(main).toContain('const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])')
-  expect(main).not.toContain('centerWorkbenchTabs')
-  expect(main).not.toContain('activeCenterWorkbenchTab')
+  expect(main).toContain('type LeftActivity = "tasks" | "assistant" | "memory" | "skill" | "mcp"')
+  expect(main).toContain(
+    'type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"',
+  )
+  expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchPanel, "file">')
+  expect(main).toContain(
+    'id: "workflow", icon: "workflow", labelKey: "chat.title", tooltipKey: "activity.tooltip.workflow"',
+  )
+  expect(main).toContain(
+    'id: "inspector", icon: "inspect", labelKey: "sections.title", tooltipKey: "activity.tooltip.inspector"',
+  )
+  expect(main).toContain(
+    'id: "explorer", icon: "folder", labelKey: "explorer.title", tooltipKey: "activity.tooltip.explorer"',
+  )
+  expect(main).toContain('id: "diff", icon: "files", labelKey: "workspace.diff", tooltipKey: "activity.tooltip.diff"')
+  expect(main).toContain(
+    'id: "browser", icon: "web-search", labelKey: "browser_preview.title", tooltipKey: "activity.tooltip.browser"',
+  )
+  expect(main).toContain(
+    'id: "notifications", icon: "notifications", labelKey: "notify.center_label", tooltipKey: "activity.tooltip.notifications"',
+  )
+  expect(main).toContain(
+    'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
+  )
+  expect(main).toContain('id: "tasks", icon: "tasks", labelKey: "sidebar.title", tooltipKey: "activity.tooltip.tasks"')
+  expect(main).toContain(
+    'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
+  )
+  expect(main).toContain(
+    'id: "skill", icon: "config-skill", labelKey: "skill.title", tooltipKey: "activity.tooltip.skill"',
+  )
+  expect(main).toContain('id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp"')
+  expect(main).toContain(
+    'const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])',
+  )
+  expect(main).not.toContain("centerWorkbenchTabs")
+  expect(main).not.toContain("activeCenterWorkbenchTab")
   expect(main).toContain('workflow: document.getElementById("centerWorkbenchWorkflow")')
   expect(main).toContain('inspector: document.getElementById("centerWorkbenchInspector")')
   expect(main).toContain('notifications: document.getElementById("centerWorkbenchNotifications")')
@@ -247,8 +283,12 @@ test("surface CSS maps verdict tone to the panel's pseudo-element left-edge acce
   // The accent is a pseudo-element rail, not a decorative border, so the
   // right-panel no-border chrome contract and verdict semantics can coexist.
   expect(css).toMatch(/\.acceptance-panel::before\s*\{[^}]*background:\s*var\(--acceptance-panel-accent\)/)
-  expect(css).toMatch(/\.acceptance-panel\[data-verdict="accepted"\]\s*\{[^}]*--acceptance-panel-accent:\s*var\(--good\)/)
-  expect(css).toMatch(/\.acceptance-panel\[data-verdict="rejected"\]\s*\{[^}]*--acceptance-panel-accent:\s*var\(--bad\)/)
+  expect(css).toMatch(
+    /\.acceptance-panel\[data-verdict="accepted"\]\s*\{[^}]*--acceptance-panel-accent:\s*var\(--good\)/,
+  )
+  expect(css).toMatch(
+    /\.acceptance-panel\[data-verdict="rejected"\]\s*\{[^}]*--acceptance-panel-accent:\s*var\(--bad\)/,
+  )
   expect(css).not.toMatch(/\.acceptance-panel\s*\{[^}]*border-left\s*:/)
   // The deleted `.acceptance-card` family must not survive — every theme
   // override at lines 9822 / 11890 / 12628 was migrated to `.acceptance-panel`.
@@ -283,9 +323,8 @@ test("`acceptance:focus-changes` event contract — AcceptancePanel dispatches, 
   // Dispatch site (AcceptancePanel goal-pill / files-changed footer).
   expect(board).toContain('"acceptance:focus-changes"')
   expect(board).toMatch(/window\.dispatchEvent\(\s*new CustomEvent\("acceptance:focus-changes"/)
-  // Listener side: the side activity file-changes workbench switches to changed files; FileChangesView owns row selection state.
-  expect(filesPanel).toContain('"acceptance:focus-changes"')
-  expect(filesPanel).toContain('setActiveView("changes")')
+  // Listener side: the lifted center-workbench state switches to changed files; FileChangesView owns row selection state.
+  expect(main).toContain('setFileChangesActiveView("changes")')
   expect(filesPanel).not.toContain("showWorkbenchPane")
   expect(main).toContain('"acceptance:focus-changes"')
   expect(main).toContain('openCenterWorkbenchPanel("diff")')

@@ -28,16 +28,16 @@ const client = createOpenCorvusClient({
 
 `createOpenCorvusClient()` 接受生成 fetch client 的配置，并增加 OpenCorvus 专用选项：
 
-| 选项 | 用途 |
-|---|---|
-| `baseUrl` | OpenCorvus 服务地址；未传时使用生成时的默认地址。 |
-| `directory` | 为项目作用域请求添加 `x-opencorvus-directory`；Windows 下会规范化 `/c/repo` 这类 MSYS 路径。 |
-| `username` | Basic Auth 用户名，默认 `opencorvus`。 |
-| `password` | Basic Auth 密码；服务端启用 `OPENCORVUS_SERVER_PASSWORD` 时传入该值。 |
-| `headers` | 额外 header；显式传入的 `Authorization` 不会被 `password` 覆盖。 |
-| `fetch` | 自定义 Fetch 实现，用于代理、埋点、测试或进程内适配。 |
-| `throwOnError` | 为 `true` 时，失败响应直接 throw；否则返回 `{ error }`。 |
-| `responseStyle` | 生成客户端响应模式：默认 fields 对象，也可设为 `"data"` 返回纯数据。 |
+| 选项            | 用途                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------- |
+| `baseUrl`       | OpenCorvus 服务地址；未传时使用生成时的默认地址。                                            |
+| `directory`     | 为项目作用域请求添加 `x-opencorvus-directory`；Windows 下会规范化 `/c/repo` 这类 MSYS 路径。 |
+| `username`      | Basic Auth 用户名，默认 `opencorvus`。                                                       |
+| `password`      | Basic Auth 密码；服务端启用 `OPENCORVUS_SERVER_PASSWORD` 时传入该值。                        |
+| `headers`       | 额外 header；显式传入的 `Authorization` 不会被 `password` 覆盖。                             |
+| `fetch`         | 自定义 Fetch 实现，用于代理、埋点、测试或进程内适配。                                        |
+| `throwOnError`  | 为 `true` 时，失败响应直接 throw；否则返回 `{ error }`。                                     |
+| `responseStyle` | 生成客户端响应模式：默认 fields 对象，也可设为 `"data"` 返回纯数据。                         |
 
 ## 调用与返回值
 
@@ -118,17 +118,17 @@ try {
 
 SDK 跟随 OpenAPI `operationId` 命名。点号分段变成 namespace，snake_case 方法名变成 camelCase。例如 `session.prompt_async` 映射为 `client.session.promptAsync()`。
 
-| 命名空间 | 示例 |
-|---|---|
-| `client.global.*` | `health`、`event`、`config.get`、`db.reset` |
-| `client.task.*` | `create`、`list`、`message`、`retry`、`replan`、`followup` |
-| `client.session.*` | `create`、`prompt`、`promptAsync`、`events`、`trace` |
-| `client.goal.*` / `client.run.*` | Goal / Run 查询与控制路由 |
-| `client.channel.*` | Channel runtime 与附件路由 |
-| `client.mcp.*` | MCP server 生命周期与认证路由 |
-| `client.permission.*` | 权限 reply / reject 路由 |
-| `client.provider.*` | Provider 模型、认证与刷新路由 |
-| `client.tui.runtime.*` | 托管 TUI runtime 路由 |
+| 命名空间                         | 示例                                                       |
+| -------------------------------- | ---------------------------------------------------------- |
+| `client.global.*`                | `health`、`event`、`config.get`、`db.reset`                |
+| `client.task.*`                  | `create`、`list`、`message`、`retry`、`replan`、`followup` |
+| `client.session.*`               | `create`、`prompt`、`promptAsync`、`events`、`trace`       |
+| `client.goal.*` / `client.run.*` | Goal / Run 查询与控制路由                                  |
+| `client.channel.*`               | Channel runtime 与附件路由                                 |
+| `client.mcp.*`                   | MCP server 生命周期与认证路由                              |
+| `client.permission.*`            | 权限 reply / reject 路由                                   |
+| `client.provider.*`              | Provider 模型、认证与刷新路由                              |
+| `client.tui.runtime.*`           | 托管 TUI runtime 路由                                      |
 
 [HTTP API 参考](/docs/zh-cn/reference/api/) 是完整 operation 清单；每个 `operationId` 都按上述规则映射到 SDK namespace / method。
 

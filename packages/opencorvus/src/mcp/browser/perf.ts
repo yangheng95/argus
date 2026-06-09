@@ -67,7 +67,9 @@ export const formatPerfText = (result: PerfResult): string => {
   const own = result.issues.filter((i) => !i.thirdParty)
   const head = `(${(result.windowMs / 1000).toFixed(1)}s, ${result.requests.total} req)`
   if (own.length === 0) return `ok ${head}`
-  const lines = own.map((i) => ` ${i.kind.toUpperCase().padEnd(9)} ${i.msg}${i.nearStep ? ` [after: ${i.nearStep}]` : ""}`)
+  const lines = own.map(
+    (i) => ` ${i.kind.toUpperCase().padEnd(9)} ${i.msg}${i.nearStep ? ` [after: ${i.nearStep}]` : ""}`,
+  )
   return `${own.length} issue${own.length > 1 ? "s" : ""} ${head}:\n${lines.join("\n")}`
 }
 
@@ -203,7 +205,8 @@ export const getPerf = (perf: PerfState, tools: { tool: string; at: number }[], 
   let longTasks: PerfResult["longTasks"] = null
   if (perf.longtask.count > 0) {
     const durations = perf.longtask.list.map((i) => i.duration).sort((a, b) => a - b)
-    const p95 = durations.length === 0 ? 0 : durations[Math.min(durations.length - 1, Math.floor(durations.length * 0.95))]
+    const p95 =
+      durations.length === 0 ? 0 : durations[Math.min(durations.length - 1, Math.floor(durations.length * 0.95))]
     longTasks = {
       count: perf.longtask.count,
       maxMs: Math.round(perf.longtask.max),

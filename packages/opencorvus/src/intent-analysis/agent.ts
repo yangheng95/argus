@@ -28,12 +28,7 @@ import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import type { IntentAnalysisResult } from "./types"
-import {
-  collectorToResult,
-  createIntentOutputTools,
-  IntentFinalSchema,
-  type IntentFinal,
-} from "./output-tools"
+import { collectorToResult, createIntentOutputTools, IntentFinalSchema, type IntentFinal } from "./output-tools"
 
 import INTENT_CORE from "@/prompt/core/intent-analysis-core.txt"
 
@@ -143,7 +138,9 @@ async function buildToolKit(opts?: { taskID?: string; sessionID?: string }) {
 
 function buildUserPrompt(input: IntentAnalysisAgent.AnalyzeInput): string {
   const sections: string[] = []
-  sections.push("# Delegation\n\nOrchestrator is asking intent-analysis to read this task request and return a grounded intent analysis.")
+  sections.push(
+    "# Delegation\n\nOrchestrator is asking intent-analysis to read this task request and return a grounded intent analysis.",
+  )
   if (input.title && input.title.trim()) {
     sections.push(`# Title\n\n${input.title.trim()}`)
   }

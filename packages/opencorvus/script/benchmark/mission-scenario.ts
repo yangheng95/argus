@@ -74,7 +74,7 @@ export type MissionBenchmarkVerdict = {
 
 export function missionTaskRows(board: unknown, missionID: string): MissionBenchmarkTask[] {
   const tasks = Array.isArray((board as { tasks?: unknown[] } | null)?.tasks)
-    ? ((board as { tasks: MissionBenchmarkTask[] }).tasks)
+    ? (board as { tasks: MissionBenchmarkTask[] }).tasks
     : []
   return tasks.filter((item) => missionTaskMatches(item, missionID))
 }
@@ -84,11 +84,13 @@ export function missionTaskMatches(item: MissionBenchmarkTask, missionID: string
   if (!task) return false
   const metadata = task.metadata ?? {}
   const mission = metadata.mission
-  return task.source === "mission" &&
+  return (
+    task.source === "mission" &&
     typeof mission === "object" &&
     mission !== null &&
     (mission as { id?: unknown }).id === missionID &&
     metadata.actor === "mission"
+  )
 }
 
 export function terminalMissionTasks(tasks: MissionBenchmarkTask[]): MissionBenchmarkTask[] {
@@ -110,10 +112,9 @@ export function missionStateMentionsTerminalTasks(
     const id = item.task?.id
     const status = item.task?.status
     if (!id || !status) return false
-    return tasksText.includes(id) &&
-      tasksText.includes(status) &&
-      handoffText.includes(id) &&
-      handoffText.includes(status)
+    return (
+      tasksText.includes(id) && tasksText.includes(status) && handoffText.includes(id) && handoffText.includes(status)
+    )
   })
 }
 
@@ -125,7 +126,7 @@ export function evaluateMissionBenchmarkReport(input: MissionBenchmarkReportInpu
   if (input.secondWakeCreated !== false) failures.push("second /mission/wake did not resume the same mission")
 
   for (const file of ["frontier.md", "tasks.md", "handoff.md", "notes.md"]) {
-    if (!(input.missionState[file]?.trim())) {
+    if (!input.missionState[file]?.trim()) {
       failures.push(`mission state ${file} is empty`)
     }
   }

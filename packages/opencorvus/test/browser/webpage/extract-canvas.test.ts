@@ -25,11 +25,9 @@ async function serveHtml(html: string): Promise<{ url: string; server: Server }>
 }
 
 describe("extractPage canvas assets", () => {
-  test(
-    "captures visible canvas as a categorized webpage evidence image asset",
-    async () => {
-      await using tmp = await tmpdir()
-      const { url, server } = await serveHtml(`<!doctype html>
+  test("captures visible canvas as a categorized webpage evidence image asset", async () => {
+    await using tmp = await tmpdir()
+    const { url, server } = await serveHtml(`<!doctype html>
         <html>
           <head>
             <title>Canvas Chart</title>
@@ -46,19 +44,17 @@ describe("extractPage canvas assets", () => {
             </script>
           </body>
         </html>`)
-      try {
-        const result = await extractPage({ url, noScreenshots: true, waitMs: 0, outputDir: tmp.path })
-        const canvas = result.tree.find((el) => el.tag === "canvas")
+    try {
+      const result = await extractPage({ url, noScreenshots: true, waitMs: 0, outputDir: tmp.path })
+      const canvas = result.tree.find((el) => el.tag === "canvas")
 
-        expect(canvas?.imageSrc).toBe("images/canvas/canvas-0.png")
-        expect(canvas?.imageAlt).toBe("canvas capture")
-        expect(result.assets.images.some((image) => image.src === canvas?.imageSrc)).toBe(true)
-        expect(JSON.stringify(result)).not.toContain("data:image/png;base64")
-        expect(await Bun.file(`${tmp.path}/images/canvas/canvas-0.png`).exists()).toBe(true)
-      } finally {
-        server.close()
-      }
-    },
-    90_000,
-  )
+      expect(canvas?.imageSrc).toBe("images/canvas/canvas-0.png")
+      expect(canvas?.imageAlt).toBe("canvas capture")
+      expect(result.assets.images.some((image) => image.src === canvas?.imageSrc)).toBe(true)
+      expect(JSON.stringify(result)).not.toContain("data:image/png;base64")
+      expect(await Bun.file(`${tmp.path}/images/canvas/canvas-0.png`).exists()).toBe(true)
+    } finally {
+      server.close()
+    }
+  }, 90_000)
 })

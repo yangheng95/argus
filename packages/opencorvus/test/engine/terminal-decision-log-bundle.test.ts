@@ -29,28 +29,55 @@ function seedRunningTaskRun(input?: { taskCompleted?: number }) {
   const runID = `run_term_dl_${now}_${Math.random().toString(36).slice(2)}`
   const projectID = `project_term_dl_${now}_${Math.random().toString(36).slice(2)}`
   Database.transaction((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID, worktree: process.cwd(), name: "terminal dl test",
-      sandboxes: "[]", time_created: now, time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID, project_id: projectID, source: "test",
-      title: "terminal decision-log materialization",
-      request: "materialize complete decision log at terminal",
-      priority: "normal", time_started: now,
-      time_completed: input?.taskCompleted ?? null,
-      time_created: now, time_updated: now,
-    }).run()
-    db.insert(EngineArtifactTable).values({
-      id: runID, task_id: taskID, run_id: runID, kind: "run", label: "run-running",
-      payload: {
-        plan_version_id: null, session_id: null, executor: "opencorvus",
-        status: "running", phase: "deliver", blocking_reason: null, error: null,
-        retry_count: 0, executor_ref: null, metadata: null,
-        time_started: now, time_completed: null,
-      },
-      time_created: now, time_updated: now,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "terminal dl test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "terminal decision-log materialization",
+        request: "materialize complete decision log at terminal",
+        priority: "normal",
+        time_started: now,
+        time_completed: input?.taskCompleted ?? null,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: runID,
+        task_id: taskID,
+        run_id: runID,
+        kind: "run",
+        label: "run-running",
+        payload: {
+          plan_version_id: null,
+          session_id: null,
+          executor: "opencorvus",
+          status: "running",
+          phase: "deliver",
+          blocking_reason: null,
+          error: null,
+          retry_count: 0,
+          executor_ref: null,
+          metadata: null,
+          time_started: now,
+          time_completed: null,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
   })
   return { taskID, runID, now }
 }
@@ -63,7 +90,10 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
       directory: tmp.path,
       fn: async () => {
         createDecisionLog(taskID).append({
-          phase: "requirements", key: "runtime", value: "Bun", reason: "template pins Bun",
+          phase: "requirements",
+          key: "runtime",
+          value: "Bun",
+          reason: "template pins Bun",
         })
         await updateTask(findTask(taskID)!, { status: "completed", time_completed: now + 10 }, "done")
       },

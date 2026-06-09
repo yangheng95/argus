@@ -43,9 +43,7 @@ function buildFactCheckMarkdown(collector: FactCheckCollector) {
       `### Verified (${r.verified.length})\n` +
         r.verified
           .map((v, i) => {
-            const ev = v.evidence
-              .map((e) => `  - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 200)}`)
-              .join("\n")
+            const ev = v.evidence.map((e) => `  - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 200)}`).join("\n")
             return `${i + 1}. ${v.claim}\n${ev}`
           })
           .join("\n\n"),
@@ -56,9 +54,7 @@ function buildFactCheckMarkdown(collector: FactCheckCollector) {
       `### Corrected (${r.corrected.length})\n` +
         r.corrected
           .map((c, i) => {
-            const ev = c.evidence
-              .map((e) => `  - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 200)}`)
-              .join("\n")
+            const ev = c.evidence.map((e) => `  - [${e.kind}] ${e.pointer}: ${e.excerpt.slice(0, 200)}`).join("\n")
             return (
               `${i + 1}. [${c.severity}] ${c.claim}\n` +
               `   → **${c.correction}**\n` +
@@ -72,9 +68,7 @@ function buildFactCheckMarkdown(collector: FactCheckCollector) {
   if (r.unresolved.length > 0) {
     sections.push(
       `### Unresolved (${r.unresolved.length})\n` +
-        r.unresolved
-          .map((u, i) => `${i + 1}. [${u.severity}, ${u.why_unresolved}] ${u.claim}`)
-          .join("\n"),
+        r.unresolved.map((u, i) => `${i + 1}. [${u.severity}, ${u.why_unresolved}] ${u.claim}`).join("\n"),
     )
   }
   const summary = limitSummary(

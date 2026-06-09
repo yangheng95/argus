@@ -29,7 +29,9 @@ describe("explore subagent — verbatim-dump scope boundary", () => {
     expect(n).toContain("metadata count > 0")
     expect(n).toContain('Never describe that as "empty", "no results", or "all searches failed"')
     expect(n).toContain("the broad result was non-empty but did not surface the target yet")
-    expect(n).toContain("Do not generalize one empty memory search or one wrong glob into a claim that all repository search tools are empty")
+    expect(n).toContain(
+      "Do not generalize one empty memory search or one wrong glob into a claim that all repository search tools are empty",
+    )
     expect(n).toContain("When you have already found concrete source files for the question")
   })
 
@@ -62,7 +64,7 @@ describe("explore subagent — verbatim-dump scope boundary", () => {
     expect(n).toContain("call `read` directly and paginate large files with `offset`/`limit`")
     expect(n).toContain("Do NOT delegate verbatim-content reads to a subagent")
     // The escalation anti-pattern is named explicitly so the model recognizes it.
-    expect(n).toContain('do not re-ask explore with louder wording')
+    expect(n).toContain("do not re-ask explore with louder wording")
     expect(n).toContain("that is the wrong tool, not a phrasing problem")
   })
 

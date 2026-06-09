@@ -1,11 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { apiJson, apiJsonWithTimeout, ApiError } from "../src/services/api";
-import { __setHostTransportForTest } from "../src/services/host-transport";
-import type {
-  HostTransport,
-  TransportRequest,
-  TransportResponse,
-} from "../src/services/host-transport";
+import { afterEach, describe, expect, test } from "bun:test"
+import { apiJson, apiJsonWithTimeout, ApiError } from "../src/services/api"
+import { __setHostTransportForTest } from "../src/services/host-transport"
+import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
 // What this pins
 // ----------------
@@ -19,36 +15,32 @@ import type {
 //   - `message` prefers common server fields (message, error, detail)
 //   - 2xx returns the parsed body unchanged (no behavior regression)
 
-function fakeTransport(
-  responder: (req: TransportRequest) => TransportResponse<unknown>,
-): HostTransport {
+function fakeTransport(responder: (req: TransportRequest) => TransportResponse<unknown>): HostTransport {
   return {
     kind: "tauri",
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      return responder(req) as TransportResponse<T>;
+      return responder(req) as TransportResponse<T>
     },
     openStream() {
-      throw new Error("openStream not used in apiJson tests");
+      throw new Error("openStream not used in apiJson tests")
     },
     async native() {
-      throw new Error("native not used in apiJson tests");
+      throw new Error("native not used in apiJson tests")
     },
     onUiCommand() {
-      return { unsubscribe() {} };
+      return { unsubscribe() {} }
     },
-  } as unknown as HostTransport;
+  } as unknown as HostTransport
 }
 
-afterEach(() => __setHostTransportForTest(undefined));
+afterEach(() => __setHostTransportForTest(undefined))
 
 describe("apiJson + ApiError", () => {
   test("2xx returns the parsed body unchanged", async () => {
-    __setHostTransportForTest(
-      fakeTransport(() => ({ status: 200, ok: true, headers: {}, body: { hello: "world" } })),
-    );
-    const result = await apiJson("config");
-    expect(result).toEqual({ hello: "world" });
-  });
+    __setHostTransportForTest(fakeTransport(() => ({ status: 200, ok: true, headers: {}, body: { hello: "world" } })))
+    const result = await apiJson("config")
+    expect(result).toEqual({ hello: "world" })
+  })
 
   test("4xx throws ApiError carrying status / path / body / readable message", async () => {
     __setHostTransportForTest(
@@ -58,21 +50,21 @@ describe("apiJson + ApiError", () => {
         headers: {},
         body: { error: "config.provider.foo: name: Expected string" },
       })),
-    );
-    let caught: unknown;
+    )
+    let caught: unknown
     try {
-      await apiJson("config", { method: "PATCH" });
+      await apiJson("config", { method: "PATCH" })
     } catch (e) {
-      caught = e;
+      caught = e
     }
-    expect(caught).toBeInstanceOf(ApiError);
-    const err = caught as ApiError;
-    expect(err.status).toBe(400);
-    expect(err.path).toBe("config");
-    expect(err.body).toEqual({ error: "config.provider.foo: name: Expected string" });
-    expect(err.message).toContain("400");
-    expect(err.message).toContain("config.provider.foo");
-  });
+    expect(caught).toBeInstanceOf(ApiError)
+    const err = caught as ApiError
+    expect(err.status).toBe(400)
+    expect(err.path).toBe("config")
+    expect(err.body).toEqual({ error: "config.provider.foo: name: Expected string" })
+    expect(err.message).toContain("400")
+    expect(err.message).toContain("config.provider.foo")
+  })
 
   test("ApiError prefers `message` over `error` when both are present", async () => {
     __setHostTransportForTest(
@@ -82,42 +74,38 @@ describe("apiJson + ApiError", () => {
         headers: {},
         body: { message: "primary", error: "fallback" },
       })),
-    );
-    let caught: ApiError | undefined;
+    )
+    let caught: ApiError | undefined
     try {
-      await apiJson("x");
+      await apiJson("x")
     } catch (e) {
-      caught = e as ApiError;
+      caught = e as ApiError
     }
-    expect(caught?.message).toContain("primary");
-    expect(caught?.message).not.toContain("fallback");
-  });
+    expect(caught?.message).toContain("primary")
+    expect(caught?.message).not.toContain("fallback")
+  })
 
   test("ApiError falls back to status + path when body is empty", async () => {
-    __setHostTransportForTest(
-      fakeTransport(() => ({ status: 500, ok: false, headers: {}, body: null })),
-    );
-    let caught: ApiError | undefined;
+    __setHostTransportForTest(fakeTransport(() => ({ status: 500, ok: false, headers: {}, body: null })))
+    let caught: ApiError | undefined
     try {
-      await apiJson("nope");
+      await apiJson("nope")
     } catch (e) {
-      caught = e as ApiError;
+      caught = e as ApiError
     }
-    expect(caught?.message).toBe("API 500 nope");
-  });
+    expect(caught?.message).toBe("API 500 nope")
+  })
 
   test("ApiError with a string body uses the string as detail", async () => {
-    __setHostTransportForTest(
-      fakeTransport(() => ({ status: 502, ok: false, headers: {}, body: "Bad Gateway" })),
-    );
-    let caught: ApiError | undefined;
+    __setHostTransportForTest(fakeTransport(() => ({ status: 502, ok: false, headers: {}, body: "Bad Gateway" })))
+    let caught: ApiError | undefined
     try {
-      await apiJson("upstream");
+      await apiJson("upstream")
     } catch (e) {
-      caught = e as ApiError;
+      caught = e as ApiError
     }
-    expect(caught?.message).toContain("Bad Gateway");
-  });
+    expect(caught?.message).toContain("Bad Gateway")
+  })
 
   test("apiJsonWithTimeout preserves ApiError status / path / body", async () => {
     __setHostTransportForTest(
@@ -127,20 +115,20 @@ describe("apiJson + ApiError", () => {
         headers: {},
         body: { message: "provider config failed before model list loaded" },
       })),
-    );
+    )
 
-    let caught: unknown;
+    let caught: unknown
     try {
-      await apiJsonWithTimeout("config/providers", 100);
+      await apiJsonWithTimeout("config/providers", 100)
     } catch (e) {
-      caught = e;
+      caught = e
     }
 
-    expect(caught).toBeInstanceOf(ApiError);
-    const err = caught as ApiError;
-    expect(err.status).toBe(400);
-    expect(err.path).toBe("config/providers");
-    expect(err.body).toEqual({ message: "provider config failed before model list loaded" });
-    expect(err.message).toContain("provider config failed");
-  });
-});
+    expect(caught).toBeInstanceOf(ApiError)
+    const err = caught as ApiError
+    expect(err.status).toBe(400)
+    expect(err.path).toBe("config/providers")
+    expect(err.body).toEqual({ message: "provider config failed before model list loaded" })
+    expect(err.message).toContain("provider config failed")
+  })
+})

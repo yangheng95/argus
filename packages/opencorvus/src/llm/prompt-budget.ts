@@ -33,13 +33,11 @@ export type PromptBudgetModel = {
   }
 }
 
-const DEFAULT_TRUNCATION_MARKER = "\n... (truncated by prompt budget; inspect stored artifacts or tool results for full detail)"
+const DEFAULT_TRUNCATION_MARKER =
+  "\n... (truncated by prompt budget; inspect stored artifacts or tool results for full detail)"
 
 export function modelInputCharLimit(model: PromptBudgetModel): number {
-  const limit =
-    typeof model.limit.input === "number" && model.limit.input > 0
-      ? model.limit.input
-      : model.limit.context
+  const limit = typeof model.limit.input === "number" && model.limit.input > 0 ? model.limit.input : model.limit.context
   if (!Number.isFinite(limit) || limit <= 0) {
     throw new MissingPromptInputLimitError({
       providerID: model.providerID,
@@ -130,8 +128,8 @@ export class PromptBudget {
       "",
       "Some auxiliary acceptance context was shortened to fit the model input budget. Treat omitted details as unavailable unless you inspect the referenced artifacts or call tools.",
       "",
-      ...this.notices.map((item) =>
-        `- ${item.section}: rendered ${item.renderedChars}/${item.originalChars} chars (${item.reason})`
+      ...this.notices.map(
+        (item) => `- ${item.section}: rendered ${item.renderedChars}/${item.originalChars} chars (${item.reason})`,
       ),
     ]
     return lines.join("\n")

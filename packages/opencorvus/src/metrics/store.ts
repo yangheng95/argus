@@ -23,12 +23,7 @@ import {
   EngineMetricResultTable,
   EngineMetricSpecTable,
 } from "./metrics.sql"
-import type {
-  Counterexample,
-  IterationSnapshot,
-  MetricResult,
-  MetricSpec,
-} from "./types"
+import type { Counterexample, IterationSnapshot, MetricResult, MetricSpec } from "./types"
 import z from "zod"
 
 export const MetricWriteError = NamedError.create(
@@ -181,29 +176,17 @@ export function writeIterationSnapshot(snapshot: IterationSnapshot): void {
 
 export function readSpecsForTask(taskID: string): MetricSpec[] {
   const rows = Database.use((db) =>
-    db
-      .select()
-      .from(EngineMetricSpecTable)
-      .where(eq(EngineMetricSpecTable.task_id, taskID))
-      .all(),
+    db.select().from(EngineMetricSpecTable).where(eq(EngineMetricSpecTable.task_id, taskID)).all(),
   )
   return rows as MetricSpec[]
 }
 
-export function readResultsForIteration(
-  taskID: string,
-  iteration: number,
-): MetricResult[] {
+export function readResultsForIteration(taskID: string, iteration: number): MetricResult[] {
   const rows = Database.use((db) =>
     db
       .select()
       .from(EngineMetricResultTable)
-      .where(
-        and(
-          eq(EngineMetricResultTable.task_id, taskID),
-          eq(EngineMetricResultTable.iteration, iteration),
-        ),
-      )
+      .where(and(eq(EngineMetricResultTable.task_id, taskID), eq(EngineMetricResultTable.iteration, iteration)))
       .all(),
   )
   return rows as MetricResult[]
@@ -211,11 +194,7 @@ export function readResultsForIteration(
 
 export function readCounterexamplesForTask(taskID: string): Counterexample[] {
   const rows = Database.use((db) =>
-    db
-      .select()
-      .from(EngineCounterexampleTable)
-      .where(eq(EngineCounterexampleTable.task_id, taskID))
-      .all(),
+    db.select().from(EngineCounterexampleTable).where(eq(EngineCounterexampleTable.task_id, taskID)).all(),
   )
   return rows as Counterexample[]
 }
@@ -244,21 +223,13 @@ export function readIterationHistory(taskID: string): IterationSnapshot[] {
   }))
 }
 
-export function readPreviousAggregateScore(
-  taskID: string,
-  iteration: number,
-): number {
+export function readPreviousAggregateScore(taskID: string, iteration: number): number {
   if (iteration === 0) return 0
   const row = Database.use((db) =>
     db
       .select({ aggregate_score: EngineIterationTable.aggregate_score })
       .from(EngineIterationTable)
-      .where(
-        and(
-          eq(EngineIterationTable.task_id, taskID),
-          eq(EngineIterationTable.iteration, iteration - 1),
-        ),
-      )
+      .where(and(eq(EngineIterationTable.task_id, taskID), eq(EngineIterationTable.iteration, iteration - 1)))
       .get(),
   )
   return row?.aggregate_score ?? 0
@@ -268,10 +239,7 @@ export function readPreviousAggregateScore(
 // Internal validators
 // ---------------------------------------------------------------------------
 
-function validateScopeInvariant(
-  scope: "goal" | "global",
-  goalID: string | null,
-): void {
+function validateScopeInvariant(scope: "goal" | "global", goalID: string | null): void {
   if (scope === "goal" && goalID === null) {
     throw new MetricWriteError({
       message: "scope='goal' requires goal_id",

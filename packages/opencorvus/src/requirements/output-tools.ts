@@ -56,12 +56,7 @@ const REQUIRED_DECISION_KEYS = [
   "impact_size",
 ] as const
 
-const FRAMEWORK_DECISION_KEYS = [
-  "frontend_framework",
-  "backend_framework",
-  "framework",
-  "runtime_framework",
-] as const
+const FRAMEWORK_DECISION_KEYS = ["frontend_framework", "backend_framework", "framework", "runtime_framework"] as const
 
 function missingRequiredDecisions(collector: RequirementsCollector): string[] {
   const keys = new Set(collector.decisions.map((decision) => decision.key))
@@ -89,7 +84,9 @@ export const RequirementRegistrationSchema = z.object({
   evidence_refs: z
     .array(z.string().min(1))
     .default([])
-    .describe("Research evidence IDs that support this requirement. Empty when the requirement does not depend on research facts."),
+    .describe(
+      "Research evidence IDs that support this requirement. Empty when the requirement does not depend on research facts.",
+    ),
 })
 
 function emptyCollector(): RequirementsCollector {
@@ -112,9 +109,7 @@ export function buildRequirementsReport(collector: RequirementsCollector) {
     (r) =>
       `${r.id} [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals} Evidence: ${r.evidence_refs.join(", ") || "(none)"}`,
   )
-  const decisionLines = collector.decisions.map(
-    (d) => `${d.key}=${d.value} - ${d.reason}`,
-  )
+  const decisionLines = collector.decisions.map((d) => `${d.key}=${d.value} - ${d.reason}`)
   return {
     summary: limitSummary(summarizeRequirements(collector)),
     detail: [
@@ -165,8 +160,14 @@ export function createRequirementsOutputTools(options: RequirementsOutputToolOpt
         "Log under phase='requirements' so the Architect and later agents build " +
         "on the same foundation.",
       inputSchema: z.object({
-        key: z.string().min(1).describe("Decision key, e.g. runtime, backend_framework, test_framework, user_workflows, visual_surfaces"),
-        value: z.string().min(1).describe("Decision value, e.g. Bun, Hono, bun:test, or a concise comma/semicolon-separated inventory"),
+        key: z
+          .string()
+          .min(1)
+          .describe("Decision key, e.g. runtime, backend_framework, test_framework, user_workflows, visual_surfaces"),
+        value: z
+          .string()
+          .min(1)
+          .describe("Decision value, e.g. Bun, Hono, bun:test, or a concise comma/semicolon-separated inventory"),
         reason: z.string().describe("Why this decision was made (based on codebase evidence)"),
       }),
       execute: async ({ key, value, reason }) => {
@@ -195,15 +196,16 @@ export function createRequirementsOutputTools(options: RequirementsOutputToolOpt
         }
         const missing = missingRequiredDecisions(collector)
         if (missing.length > 0) {
-          return `Error: missing required foundational decision(s): ${missing.join(", ")}. ` +
+          return (
+            `Error: missing required foundational decision(s): ${missing.join(", ")}. ` +
             "Register runtime, one framework, test_framework, affected_modules, affected_concepts, and impact_size before submit_requirements."
+          )
         }
         collector.fact_check_items = items
         collector.finalized = true
         return `PASS: Requirements finalized (${collector.requirements.length} requirement(s), ${collector.decisions.length} decision(s), ${items.length} fact-check item(s) registered).`
       },
     }),
-
   }
 
   return {

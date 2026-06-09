@@ -12,13 +12,13 @@ This is not a request to make every concern blocking. The root issue is earlier:
 
 Relevant call sites and surfaces:
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Core reviewer role and evidence policy | `packages/opencorvus/src/prompt/core/integrity-team-core.txt` | Strengthen investigation stance. |
-| Single-session integrity prompt | `packages/opencorvus/src/integrity/team-agent.ts::buildSingleSessionIntegrityPrompt` | Require reviewer perspectives to carry falsification hypotheses and drilldowns before pass. |
-| Independent reviewer prompt | `packages/opencorvus/src/integrity/team-agent.ts::buildReviewerPrompt` | Same discipline for legacy/multi-stage reviewer prompts. |
-| Supervisor consensus prompt | `packages/opencorvus/src/integrity/team-agent.ts::buildSupervisorConsensusPrompt` | Consensus must treat missing investigation as uncovered risk, not as a pass narrative. |
-| Prompt regression tests | `packages/opencorvus/test/integrity/team-agent.test.ts` | Add assertions for investigation discipline wording. |
+| Surface                                | File                                                                                 | Decision                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Core reviewer role and evidence policy | `packages/opencorvus/src/prompt/core/integrity-team-core.txt`                        | Strengthen investigation stance.                                                            |
+| Single-session integrity prompt        | `packages/opencorvus/src/integrity/team-agent.ts::buildSingleSessionIntegrityPrompt` | Require reviewer perspectives to carry falsification hypotheses and drilldowns before pass. |
+| Independent reviewer prompt            | `packages/opencorvus/src/integrity/team-agent.ts::buildReviewerPrompt`               | Same discipline for legacy/multi-stage reviewer prompts.                                    |
+| Supervisor consensus prompt            | `packages/opencorvus/src/integrity/team-agent.ts::buildSupervisorConsensusPrompt`    | Consensus must treat missing investigation as uncovered risk, not as a pass narrative.      |
+| Prompt regression tests                | `packages/opencorvus/test/integrity/team-agent.test.ts`                              | Add assertions for investigation discipline wording.                                        |
 
 Existing schema already rejects `pass` with blocking findings, required repairs, or unresolved disagreements. Adding a host gate would hide the problem and violate the prompt-over-host invariant. The fix is prompt-level discipline plus tests.
 

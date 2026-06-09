@@ -73,17 +73,20 @@ async function createScenario(root: string): Promise<Scenario> {
   const taskID = Identifier.ascending("task")
   const now = Date.now()
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: Instance.project.id,
-      session_id: sessionID,
-      source: "benchmark",
-      title: "rewind benchmark task",
-      request: "rewind benchmark task",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: Instance.project.id,
+        session_id: sessionID,
+        source: "benchmark",
+        title: "rewind benchmark task",
+        request: "rewind benchmark task",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
 
   const filename = path.join(root, "doc.txt")
@@ -171,17 +174,18 @@ async function runCase(item: BenchCase) {
       const target = scenario.steps[2]!
       const result = await rewindTask({
         taskID: scenario.taskID,
-        anchor: item.anchor === "message"
-          ? {
-              kind: "message",
-              sessionID: scenario.sessionID,
-              messageID: target.userMessageID,
-            }
-          : {
-              kind: "cursorTime",
-              cursorTime: scenario.cursorAfterSecondStep,
-              anchorEventID: `bench-${item.name}`,
-            },
+        anchor:
+          item.anchor === "message"
+            ? {
+                kind: "message",
+                sessionID: scenario.sessionID,
+                messageID: target.userMessageID,
+              }
+            : {
+                kind: "cursorTime",
+                cursorTime: scenario.cursorAfterSecondStep,
+                anchorEventID: `bench-${item.name}`,
+              },
         resetWorktree: item.resetWorktree,
         reason: `benchmark ${item.name}`,
       })
@@ -251,5 +255,7 @@ try {
   Database.close()
 }
 
-console.log(`\nresult: pass=${pass} fail=${fail} total=${pass + fail} elapsed=${Date.now() - started}ms idleMs=${idleMs}`)
+console.log(
+  `\nresult: pass=${pass} fail=${fail} total=${pass + fail} elapsed=${Date.now() - started}ms idleMs=${idleMs}`,
+)
 process.exit(fail)

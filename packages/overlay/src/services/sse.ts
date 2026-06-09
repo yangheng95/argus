@@ -182,11 +182,11 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
         replayLive: liveReplayExpiredClose ? false : replayLive,
         afterRestart: liveReplayExpiredClose
           ? (restartedTaskID) => {
-            void mergeLatestConversationTail(restartedTaskID).catch((error) => {
-              if (error instanceof DOMException && error.name === "AbortError") return
-              console.error("[sse] live replay gap tail merge failed", error)
-            })
-          }
+              void mergeLatestConversationTail(restartedTaskID).catch((error) => {
+                if (error instanceof DOMException && error.name === "AbortError") return
+                console.error("[sse] live replay gap tail merge failed", error)
+              })
+            }
           : undefined,
         scheduleRetry: (fn, ms) => {
           sseRetryTimer = setTimeout(() => {
@@ -242,7 +242,11 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
             title: "Conversation event failed to render",
             message: `Event type ${event?.type || "<unknown>"} threw while updating the conversation panel.`,
             details: `${formatErrorDetails(err)}\n\nevent payload:\n${(() => {
-              try { return JSON.stringify(event, null, 2) } catch { return String(event) }
+              try {
+                return JSON.stringify(event, null, 2)
+              } catch {
+                return String(event)
+              }
             })()}`,
             taskID,
           })
@@ -346,7 +350,11 @@ export function startTaskListSSE() {
             title: "Task list event failed to render",
             message: `Event type ${event?.type || "<unknown>"} threw while updating the task list.`,
             details: `${formatErrorDetails(err)}\n\nevent payload:\n${(() => {
-              try { return JSON.stringify(event, null, 2) } catch { return String(event) }
+              try {
+                return JSON.stringify(event, null, 2)
+              } catch {
+                return String(event)
+              }
             })()}`,
           })
         }

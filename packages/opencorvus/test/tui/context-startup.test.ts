@@ -39,9 +39,13 @@ describe("tui context startup", () => {
   test("allows explicit hidden TUI agent selection without polluting the visible list", () => {
     const local = source("context/local.tsx")
 
-    expect(local).toContain('const selectableAgents = createMemo(() => sync.data.agent.filter((x) => x.mode !== "subagent"))')
+    expect(local).toContain(
+      'const selectableAgents = createMemo(() => sync.data.agent.filter((x) => x.mode !== "subagent"))',
+    )
     expect(local).toContain("const agents = createMemo(() => selectableAgents().filter((x) => !x.hidden))")
-    expect(local).toContain("const selected = createMemo(() => selectableAgents().find((x) => x.name === agentStore.current))")
+    expect(local).toContain(
+      "const selected = createMemo(() => selectableAgents().find((x) => x.name === agentStore.current))",
+    )
     expect(local).toContain("if (!selectableAgents().some((x) => x.name === name))")
     expect(local).not.toContain("agents()[0].name")
   })

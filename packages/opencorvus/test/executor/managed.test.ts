@@ -36,9 +36,7 @@ describe("managed coding executor", () => {
         responses: {
           create(input: Record<string, unknown>) {
             seen.push(typeof input.model === "string" ? input.model : undefined)
-            return feed([
-              { type: "response.completed", response: { id: "resp_2", output_text: "ok" } },
-            ])
+            return feed([{ type: "response.completed", response: { id: "resp_2", output_text: "ok" } }])
           },
         },
       }),
@@ -69,9 +67,7 @@ describe("managed coding executor", () => {
         responses: {
           create(input: Record<string, unknown>) {
             seen.push(input.tools)
-            return feed([
-              { type: "response.completed", response: { id: "resp_tools", output_text: "ok" } },
-            ])
+            return feed([{ type: "response.completed", response: { id: "resp_tools", output_text: "ok" } }])
           },
         },
       }),
@@ -79,9 +75,7 @@ describe("managed coding executor", () => {
 
     const executor = ExecutorRegistry.registerCoding("codex", provider, {
       cwd: "/repo",
-      tools: [
-        { type: "function", name: "shell_command", description: "run shell", inputSchema: { type: "object" } },
-      ],
+      tools: [{ type: "function", name: "shell_command", description: "run shell", inputSchema: { type: "object" } }],
     })
 
     const submitted = await executor.submit({
@@ -95,14 +89,16 @@ describe("managed coding executor", () => {
     }
 
     expect(status.status).toBe("completed")
-    expect(seen).toEqual([[
-      {
-        type: "function",
-        name: "shell_command",
-        description: "run shell",
-        parameters: { type: "object" },
-      },
-    ]])
+    expect(seen).toEqual([
+      [
+        {
+          type: "function",
+          name: "shell_command",
+          description: "run shell",
+          parameters: { type: "object" },
+        },
+      ],
+    ])
   })
 
   test("registerCoding preserves provider options for direct external dispatch", () => {
@@ -134,11 +130,17 @@ describe("managed coding executor", () => {
   test("registerCoding adapts claude provider and supports abort", async () => {
     const stopped: string[] = []
     const provider = ClaudeCodeExecutor.create(() =>
-      feed([
-        { type: "system", subtype: "init", session_id: "claude_1" },
-        { type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "A" } } },
-        { type: "result", subtype: "success", session_id: "claude_1", result: "done" },
-      ], 5),
+      feed(
+        [
+          { type: "system", subtype: "init", session_id: "claude_1" },
+          {
+            type: "stream_event",
+            event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "A" } },
+          },
+          { type: "result", subtype: "success", session_id: "claude_1", result: "done" },
+        ],
+        5,
+      ),
     )
     const interruptible = {
       ...provider,
@@ -316,8 +318,8 @@ describe("managed coding executor", () => {
       responses: {
         create() {
           return feed([
-            { type: "response.output_text.delta", delta: "{\"summary\":\"ok\"" },
-            { type: "response.completed", response: { id: "resp_plan", output_text: "{\"summary\":\"ok\"}" } },
+            { type: "response.output_text.delta", delta: '{"summary":"ok"' },
+            { type: "response.completed", response: { id: "resp_plan", output_text: '{"summary":"ok"}' } },
           ])
         },
       },
@@ -338,7 +340,7 @@ describe("managed coding executor", () => {
       prompt: "spec",
     })
 
-    expect(result?.output).toBe("{\"summary\":\"ok\"}")
+    expect(result?.output).toBe('{"summary":"ok"}')
   })
 
   test("planning generation keeps read-only sandbox without forcing no-tool mode", async () => {
@@ -371,9 +373,7 @@ describe("managed coding executor", () => {
 
     const executor = ExecutorRegistry.registerCoding("codex", provider, {
       cwd: "/repo",
-      tools: [
-        { type: "function", name: "shell_command", description: "run shell", inputSchema: { type: "object" } },
-      ],
+      tools: [{ type: "function", name: "shell_command", description: "run shell", inputSchema: { type: "object" } }],
     })
 
     await executor.generatePlanning?.({

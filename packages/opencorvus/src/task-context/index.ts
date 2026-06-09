@@ -34,9 +34,7 @@ export namespace TaskContext {
   export function snapshot(taskID: string): string {
     if (!taskID) return ""
 
-    const task = Database.use((db) =>
-      db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-    )
+    const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
     if (!task) {
       log.warn("snapshot: task not found", { taskID })
       return ""
@@ -52,9 +50,7 @@ export namespace TaskContext {
     )
 
     const decisionLog = createDecisionLog(taskID)
-    const recentDecisions = decisionLog
-      .read()
-      .slice(-RECENT_DECISION_LIMIT)
+    const recentDecisions = decisionLog.read().slice(-RECENT_DECISION_LIMIT)
 
     const sections: string[] = []
 
@@ -87,9 +83,7 @@ export namespace TaskContext {
       sections.push("")
       sections.push(`### Goals (${goals.length})`)
       for (const goal of goals) {
-        const accept = Array.isArray(goal.acceptance_specs)
-          ? goal.acceptance_specs.length
-          : 0
+        const accept = Array.isArray(goal.acceptance_specs) ? goal.acceptance_specs.length : 0
         const objective = String(goal.objective ?? "").slice(0, 200)
         const status = goalStatusByID(goal.id)
         sections.push(

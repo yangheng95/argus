@@ -25,10 +25,7 @@ export const VISUAL_QA_STATIC_TOOL_IDS = [
   ...VISUAL_QA_IMPLEMENTATION_TOOL_IDS,
 ] as const
 
-export const VISUAL_QA_SESSION_TOOL_IDS = [
-  ...VISUAL_QA_STATIC_TOOL_IDS,
-  "submit_visual_qa_report",
-] as const
+export const VISUAL_QA_SESSION_TOOL_IDS = [...VISUAL_QA_STATIC_TOOL_IDS, "submit_visual_qa_report"] as const
 
-export type VisualQaStaticToolID = typeof VISUAL_QA_STATIC_TOOL_IDS[number]
-export type VisualQaSessionToolID = typeof VISUAL_QA_SESSION_TOOL_IDS[number]
+export type VisualQaStaticToolID = (typeof VISUAL_QA_STATIC_TOOL_IDS)[number]
+export type VisualQaSessionToolID = (typeof VISUAL_QA_SESSION_TOOL_IDS)[number]

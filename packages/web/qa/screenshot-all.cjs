@@ -1,6 +1,16 @@
 #!/usr/bin/env node
 /* eslint-disable */
-const PW_PATH = require("node:path").join(__dirname, "..", "..", "..", "node_modules", ".bun", "playwright-core@1.59.1", "node_modules", "playwright-core")
+const PW_PATH = require("node:path").join(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "node_modules",
+  ".bun",
+  "playwright-core@1.59.1",
+  "node_modules",
+  "playwright-core",
+)
 const { chromium } = require(PW_PATH)
 const { readdirSync, statSync, mkdirSync } = require("node:fs")
 const { join, relative } = require("node:path")
@@ -22,7 +32,9 @@ function listMdx(dir) {
 }
 
 function fileToUrl(absPath) {
-  let rel = relative(ROOT, absPath).replace(/\\/g, "/").replace(/\.mdx$/, "")
+  let rel = relative(ROOT, absPath)
+    .replace(/\\/g, "/")
+    .replace(/\.mdx$/, "")
   if (rel === "index") return `${BASE}/`
   if (rel === "zh-cn/index") return `${BASE}/zh-cn/`
   return `${BASE}/${rel}/`

@@ -13,22 +13,22 @@ Each thread maps to one OpenCorvus session; all messages in a thread share the s
 
 ## Supported 14 channels
 
-| Channel | Adapter | Transport |
-|---|---|---|
-| [Slack](./slack.md) | `src/adapters/slack.ts` | Socket Mode |
-| [Telegram](./telegram.md) | `src/adapters/telegram.ts` | Long polling |
-| [Discord](./discord.md) | `src/adapters/discord.ts` | Gateway WebSocket |
-| [Feishu / Lark](./feishu.md) | `src/adapters/feishu.ts` | Webhook |
-| [WhatsApp](./whatsapp.md) | `src/adapters/whatsapp.ts` | Webhook (WA Business) |
-| [Google Chat](./googlechat.md) | `src/adapters/googlechat.ts` | Webhook |
-| [Microsoft Teams](./msteams.md) | `src/adapters/msteams.ts` | Webhook |
-| [LINE](./line.md) | `src/adapters/line.ts` | Webhook |
-| [Matrix](./matrix.md) | `src/adapters/matrix.ts` | Long polling |
-| [Mattermost](./mattermost.md) | `src/adapters/mattermost.ts` | Webhook |
-| [Signal](./signal.md) | `src/adapters/signal.ts` | signal-cli REST |
-| [WeCom](./wecom.md) | `src/adapters/wecom.ts` | Webhook |
-| [DingTalk](./dingtalk.md) | `src/adapters/dingtalk.ts` | Webhook |
-| [QQ](./qq.md) | `src/adapters/qq.ts` | QQ Bot |
+| Channel                         | Adapter                      | Transport             |
+| ------------------------------- | ---------------------------- | --------------------- |
+| [Slack](./slack.md)             | `src/adapters/slack.ts`      | Socket Mode           |
+| [Telegram](./telegram.md)       | `src/adapters/telegram.ts`   | Long polling          |
+| [Discord](./discord.md)         | `src/adapters/discord.ts`    | Gateway WebSocket     |
+| [Feishu / Lark](./feishu.md)    | `src/adapters/feishu.ts`     | Webhook               |
+| [WhatsApp](./whatsapp.md)       | `src/adapters/whatsapp.ts`   | Webhook (WA Business) |
+| [Google Chat](./googlechat.md)  | `src/adapters/googlechat.ts` | Webhook               |
+| [Microsoft Teams](./msteams.md) | `src/adapters/msteams.ts`    | Webhook               |
+| [LINE](./line.md)               | `src/adapters/line.ts`       | Webhook               |
+| [Matrix](./matrix.md)           | `src/adapters/matrix.ts`     | Long polling          |
+| [Mattermost](./mattermost.md)   | `src/adapters/mattermost.ts` | Webhook               |
+| [Signal](./signal.md)           | `src/adapters/signal.ts`     | signal-cli REST       |
+| [WeCom](./wecom.md)             | `src/adapters/wecom.ts`      | Webhook               |
+| [DingTalk](./dingtalk.md)       | `src/adapters/dingtalk.ts`   | Webhook               |
+| [QQ](./qq.md)                   | `src/adapters/qq.ts`         | QQ Bot                |
 
 Registry: `packages/channel-config/src/index.ts` `ChannelCatalog`.
 
@@ -44,10 +44,10 @@ bun run dev
 
 ## Backend comms
 
-| Direction | Protocol | Endpoints |
-|---|---|---|
+| Direction                    | Protocol         | Endpoints                                                                                                                          |
+| ---------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | channel-runtime → OpenCorvus | HTTP REST (JSON) | `/session`, `/session/{sessionID}/prompt_async`, `/tui/runtime/start`, `/tui/runtime/submit-task`, `/permission/{requestID}/reply` |
-| OpenCorvus → channel-runtime | SSE | `/event` |
+| OpenCorvus → channel-runtime | SSE              | `/event`                                                                                                                           |
 
 SDK: `@opencorvus-ai/sdk`.
 
@@ -88,11 +88,11 @@ Reference: [Slack implementation](./slack.md).
 
 ## Shared features
 
-| Feature | Env control |
-|---|---|
-| STT | `STT_PROVIDERS=groq,openai-whisper,deepgram,google-gemini,local-cli` |
-| Vision | `OPENCORVUS_VISION_MODEL` |
+| Feature            | Env control                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| STT                | `STT_PROVIDERS=groq,openai-whisper,deepgram,google-gemini,local-cli`                  |
+| Vision             | `OPENCORVUS_VISION_MODEL`                                                             |
 | Permission profile | `OPENCORVUS_CHANNEL_PERMISSION_PROFILE=restricted\|standard\|permissive\|passthrough` |
-| Attachment upload | `POST /channel/attachment` |
+| Attachment upload  | `POST /channel/attachment`                                                            |
 
 See [Environment reference](../reference/env.md).

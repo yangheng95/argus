@@ -34,10 +34,7 @@ export namespace EffectiveConfig {
   }
 
   export async function effective(opts?: { taskID?: string; sessionID?: string }): Promise<Config.Info> {
-    const [baseConfig, overlay] = await Promise.all([
-      base(opts),
-      resolveOverlay(opts),
-    ])
+    const [baseConfig, overlay] = await Promise.all([base(opts), resolveOverlay(opts)])
     return Config.mergeOverlay(baseConfig, overlay ?? {})
   }
 

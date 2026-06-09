@@ -22,13 +22,8 @@ export const WebSearchTool = Tool.define("websearch", async () => {
       type: z
         .enum(["auto", "fast", "deep"])
         .optional()
-        .describe(
-          "Search type - 'auto': balanced search, 'fast': quick results, 'deep': comprehensive search",
-        ),
-      contextMaxCharacters: z
-        .number()
-        .optional()
-        .describe("Maximum characters for context string optimized for LLMs"),
+        .describe("Search type - 'auto': balanced search, 'fast': quick results, 'deep': comprehensive search"),
+      contextMaxCharacters: z.number().optional().describe("Maximum characters for context string optimized for LLMs"),
     }),
     async execute(params, ctx) {
       await ctx.ask({

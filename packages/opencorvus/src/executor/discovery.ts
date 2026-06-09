@@ -24,13 +24,7 @@ const common = () => {
       path.join(home, ".local", "bin"),
     ]
   }
-  return [
-    path.join(home, ".local", "bin"),
-    path.join(home, "bin"),
-    "/usr/local/bin",
-    "/opt/homebrew/bin",
-    "/usr/bin",
-  ]
+  return [path.join(home, ".local", "bin"), path.join(home, "bin"), "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"]
 }
 
 function split(input: string | undefined) {
@@ -174,12 +168,13 @@ async function locate(input: {
 
   const envPath = process.env[input.env]?.trim()
   const envExecutable = envPath ? unwrapCommandQuotes(envPath) : undefined
-  const envResolved = envExecutable && exists(envExecutable)
-    ? {
-        path: envExecutable,
-        source: "env" as const,
-      }
-    : undefined
+  const envResolved =
+    envExecutable && exists(envExecutable)
+      ? {
+          path: envExecutable,
+          source: "env" as const,
+        }
+      : undefined
   const rootFound = findInRoots(input.names)
   const pathFound = findOnPath(input.names)
   const next = envResolved ?? rootFound ?? pathFound
@@ -232,9 +227,10 @@ export namespace ExecutorDiscovery {
         // shim emitted by yarn/pnpm) are spawnable directly. Fall back to
         // .cmd only when no .exe is on the search path; users who land on it
         // will see the documented error and can install the .exe variant.
-        names: process.platform === "win32"
-          ? ["claude.exe", "claude-code.exe", "claude.cmd", "claude-code.cmd", "claude"]
-          : ["claude", "claude-code"],
+        names:
+          process.platform === "win32"
+            ? ["claude.exe", "claude-code.exe", "claude.cmd", "claude-code.cmd", "claude"]
+            : ["claude", "claude-code"],
       }),
     ])
 

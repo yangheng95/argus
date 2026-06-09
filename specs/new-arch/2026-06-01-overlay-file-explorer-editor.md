@@ -15,15 +15,15 @@ Add a VS Code-style file explorer and an editor pane:
 
 ## Existing Sources And Call Points
 
-| Surface | Current role | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/server/routes/file.ts` | Owns `/file`, `/file/content`, `/find/file`, `/file/status` | Extend `/file/content` with `PATCH` for text saves; keep reads/lists unchanged. |
-| `packages/opencorvus/src/file/index.ts` | Owns path canonicalization, `File.read`, `File.list`, search cache, `File.Event.Edited` | Add `File.writeText` beside `read/list` and reuse the same path allow-list. |
-| `packages/overlay/src/components/RightPanelTabs.tsx` | Top-level right-panel tab owner | Add `explorer`; rename current changed-files tab label to `changes` without moving its existing body id. |
-| `packages/overlay/src/components/ChangesPanel.tsx` | Changed-files tab content | Keep as-is; no explorer logic here. |
-| `packages/overlay/src/components/WorkspacePanel.tsx` | Bottom diff workspace | Keep as diff workspace; file editor is a separate message-side sidecar. |
-| `packages/overlay/src/services/api.ts` | Single overlay HTTP transport | Explorer/editor wrappers call `apiJson`; no direct fetch. |
-| `packages/overlay/src/styles/surfaces/workspace.css` | Workspace and main layout CSS | Add message/editor split rules here because the editor pane is attached to the workspace main chat column. |
+| Surface                                              | Current role                                                                            | Decision                                                                                                   |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/server/routes/file.ts`      | Owns `/file`, `/file/content`, `/find/file`, `/file/status`                             | Extend `/file/content` with `PATCH` for text saves; keep reads/lists unchanged.                            |
+| `packages/opencorvus/src/file/index.ts`              | Owns path canonicalization, `File.read`, `File.list`, search cache, `File.Event.Edited` | Add `File.writeText` beside `read/list` and reuse the same path allow-list.                                |
+| `packages/overlay/src/components/RightPanelTabs.tsx` | Top-level right-panel tab owner                                                         | Add `explorer`; rename current changed-files tab label to `changes` without moving its existing body id.   |
+| `packages/overlay/src/components/ChangesPanel.tsx`   | Changed-files tab content                                                               | Keep as-is; no explorer logic here.                                                                        |
+| `packages/overlay/src/components/WorkspacePanel.tsx` | Bottom diff workspace                                                                   | Keep as diff workspace; file editor is a separate message-side sidecar.                                    |
+| `packages/overlay/src/services/api.ts`               | Single overlay HTTP transport                                                           | Explorer/editor wrappers call `apiJson`; no direct fetch.                                                  |
+| `packages/overlay/src/styles/surfaces/workspace.css` | Workspace and main layout CSS                                                           | Add message/editor split rules here because the editor pane is attached to the workspace main chat column. |
 
 ## UX Contract
 

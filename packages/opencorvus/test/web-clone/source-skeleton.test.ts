@@ -41,13 +41,15 @@ describe("web-clone source skeleton", () => {
       url: "https://example.test/calendar",
     })
     extraction.pageIr = mergeExtractedLayoutIntoPageIr(extraction.pageIr, {
-      tree: [{
-        selector: "main.calendar",
-        tag: "main",
-        bounds: { x: 0, y: 0, w: 960, h: 600 },
-        styles: { display: "grid", gridTemplateColumns: "180px 1fr", gap: "16px" },
-        text: "Economic calendar 08:30 US 2.1%",
-      }],
+      tree: [
+        {
+          selector: "main.calendar",
+          tag: "main",
+          bounds: { x: 0, y: 0, w: 960, h: 600 },
+          styles: { display: "grid", gridTemplateColumns: "180px 1fr", gap: "16px" },
+          text: "Economic calendar 08:30 US 2.1%",
+        },
+      ],
     })
     await writeWebCloneArchiveExtraction(sourcePackageDir, extraction)
     const handoff = buildWebCloneHandoff(extraction.pageIr, extraction.assetGraph)
@@ -81,10 +83,18 @@ describe("web-clone source skeleton", () => {
     const fullSourceCss = await Bun.file(path.join(result.skeletonDir, "full-source.css")).text()
     const usedSelectors = JSON.parse(await Bun.file(path.join(result.skeletonDir, "used-selectors.json")).text())
     const readme = await Bun.file(path.join(result.skeletonDir, "README.md")).text()
-    const componentTree = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "component-tree.json")).text())
-    const contentModel = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "content-model.json")).text())
-    const sourceQualityAudit = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "source-quality-audit.json")).text())
-    const styleProfile = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "style-profile.json")).text())
+    const componentTree = JSON.parse(
+      await Bun.file(path.join(sourcePackageDir, "source-ir", "component-tree.json")).text(),
+    )
+    const contentModel = JSON.parse(
+      await Bun.file(path.join(sourcePackageDir, "source-ir", "content-model.json")).text(),
+    )
+    const sourceQualityAudit = JSON.parse(
+      await Bun.file(path.join(sourcePackageDir, "source-ir", "source-quality-audit.json")).text(),
+    )
+    const styleProfile = JSON.parse(
+      await Bun.file(path.join(sourcePackageDir, "source-ir", "style-profile.json")).text(),
+    )
 
     expect(html).toContain('data-reference-image="../reference.png"')
     expect(html).toContain("data-source-node-id=")
@@ -102,12 +112,14 @@ describe("web-clone source skeleton", () => {
     expect(styleProfile.purpose).toBe("web-clone-style-profile")
     expect(styleProfile.regions.length).toBeGreaterThan(0)
     expect(styleProfile.regions[0].styleSummary).toBeDefined()
-    expect(contentModel.sourceComponentPatterns).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        kind: "data_grid_surface",
-        recommendedReplacementKind: "data_table_or_heatmap_component",
-      }),
-    ]))
+    expect(contentModel.sourceComponentPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "data_grid_surface",
+          recommendedReplacementKind: "data_table_or_heatmap_component",
+        }),
+      ]),
+    )
     expect(sourceQualityAudit.passed).toBe(true)
     expect(readme).toContain("This directory is the only development-facing webpage clone seed.")
     expect(readme).toContain("component-tree.json")
@@ -122,7 +134,8 @@ describe("web-clone source skeleton", () => {
     await writeMinimalSourceManifest(sourcePackageDir)
     const evidence = await inspectWebCloneSourceSkeletonEvidence({
       projectDir: tmp.path,
-      citedText: "Use web-clone-source/source-skeleton/README.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/source-skeleton/index.html",
+      citedText:
+        "Use web-clone-source/source-skeleton/README.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/source-skeleton/index.html",
     })
     expect(evidence.referenced).toBe(true)
     expect(evidence.ok).toBe(true)
@@ -161,20 +174,26 @@ describe("web-clone source skeleton", () => {
       segments: handoff.segments,
     })
 
-    const contentModel = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "content-model.json")).text())
+    const contentModel = JSON.parse(
+      await Bun.file(path.join(sourcePackageDir, "source-ir", "content-model.json")).text(),
+    )
 
-    expect(contentModel.repeatedGroups).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        count: 3,
-        itemTag: "article",
-      }),
-    ]))
-    expect(contentModel.sourceComponentPatterns).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        kind: "card_collection_surface",
-        recommendedReplacementKind: "card_collection_component",
-      }),
-    ]))
+    expect(contentModel.repeatedGroups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          count: 3,
+          itemTag: "article",
+        }),
+      ]),
+    )
+    expect(contentModel.sourceComponentPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "card_collection_surface",
+          recommendedReplacementKind: "card_collection_component",
+        }),
+      ]),
+    )
   })
 
   test("source skeleton evidence reports a PNG signature without an IHDR chunk", async () => {
@@ -183,33 +202,46 @@ describe("web-clone source skeleton", () => {
     const skeletonDir = path.join(sourcePackageDir, "source-skeleton")
     const sourceIrDir = path.join(sourcePackageDir, "source-ir")
     await Bun.write(path.join(sourcePackageDir, "reference.png"), fakePngWithoutIhdr())
-    await Bun.write(path.join(skeletonDir, "index.html"), '<body data-reference-image="../reference.png"><main>Economic calendar</main></body>')
+    await Bun.write(
+      path.join(skeletonDir, "index.html"),
+      '<body data-reference-image="../reference.png"><main>Economic calendar</main></body>',
+    )
     await Bun.write(path.join(skeletonDir, "styles.css"), "@import url('./critical.css');")
     await Bun.write(path.join(skeletonDir, "critical.css"), "main { display: block; }")
     await Bun.write(path.join(skeletonDir, "full-source.css"), "main { display: block; }")
     await Bun.write(path.join(skeletonDir, "used-selectors.json"), JSON.stringify({ rules: [] }))
     await Bun.write(path.join(skeletonDir, "README.md"), "../reference.png")
-    await Bun.write(path.join(skeletonDir, "source-skeleton-audit.json"), JSON.stringify({
-      version: 1,
-      purpose: "web-clone-source-skeleton-audit",
-      passed: true,
-      hasHtml: true,
-      hasCss: true,
-      hasCriticalCss: true,
-      hasFullSourceCss: true,
-      hasUsedSelectors: true,
-      hasReadme: true,
-      hasSourceIr: true,
-      frameworkAgnostic: true,
-      referencesScreenshot: true,
-      cssAssetBytes: 24,
-      criticalCssBytes: 24,
-      computedStyleRuleCount: 0,
-      replayFactoryDetected: false,
-      generatedProjectDetected: false,
-      findings: [],
-    }))
-    for (const file of ["component-tree.json", "content-model.json", "layout-map.json", "style-tokens.json", "style-profile.json", "interaction-hints.json"]) {
+    await Bun.write(
+      path.join(skeletonDir, "source-skeleton-audit.json"),
+      JSON.stringify({
+        version: 1,
+        purpose: "web-clone-source-skeleton-audit",
+        passed: true,
+        hasHtml: true,
+        hasCss: true,
+        hasCriticalCss: true,
+        hasFullSourceCss: true,
+        hasUsedSelectors: true,
+        hasReadme: true,
+        hasSourceIr: true,
+        frameworkAgnostic: true,
+        referencesScreenshot: true,
+        cssAssetBytes: 24,
+        criticalCssBytes: 24,
+        computedStyleRuleCount: 0,
+        replayFactoryDetected: false,
+        generatedProjectDetected: false,
+        findings: [],
+      }),
+    )
+    for (const file of [
+      "component-tree.json",
+      "content-model.json",
+      "layout-map.json",
+      "style-tokens.json",
+      "style-profile.json",
+      "interaction-hints.json",
+    ]) {
       await Bun.write(path.join(sourceIrDir, file), JSON.stringify({ version: 1 }))
     }
     await Bun.write(path.join(sourceIrDir, "source-quality-audit.json"), JSON.stringify({ passed: true }))
@@ -243,13 +275,19 @@ describe("web-clone source skeleton", () => {
       url: "https://example.test/bbc",
     })
     extraction.pageIr = mergeExtractedLayoutIntoPageIr(extraction.pageIr, {
-      tree: [{
-        selector: "main.hero",
-        tag: "main",
-        bounds: { x: 0, y: 0, w: 1440, h: 900 },
-        styles: { backgroundImage: "image-set(url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB) 1x type(\"image/png\"))", color: "rgb(24, 24, 24)" },
-        text: "Welcome to the BBC",
-      }],
+      tree: [
+        {
+          selector: "main.hero",
+          tag: "main",
+          bounds: { x: 0, y: 0, w: 1440, h: 900 },
+          styles: {
+            backgroundImage:
+              'image-set(url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB) 1x type("image/png"))',
+            color: "rgb(24, 24, 24)",
+          },
+          text: "Welcome to the BBC",
+        },
+      ],
     })
     await writeWebCloneArchiveExtraction(sourcePackageDir, extraction)
     const handoff = buildWebCloneHandoff(extraction.pageIr, extraction.assetGraph)
@@ -272,7 +310,10 @@ describe("web-clone source skeleton", () => {
   test("audit rejects runtime replay and generated-project markers", async () => {
     await using tmp = await tmpdir()
     const skeletonDir = path.join(tmp.path, "source-skeleton")
-    await Bun.write(path.join(skeletonDir, "index.html"), '<body data-reference-image="../reference.png"><script>document.createElement("div")</script></body>')
+    await Bun.write(
+      path.join(skeletonDir, "index.html"),
+      '<body data-reference-image="../reference.png"><script>document.createElement("div")</script></body>',
+    )
     await Bun.write(path.join(skeletonDir, "styles.css"), ".x { color: red; }")
     await Bun.write(path.join(skeletonDir, "README.md"), "../reference.png\nbun run dev")
 
@@ -408,15 +449,10 @@ describe("web-clone source skeleton", () => {
 
 function minimalPngBytes(): Uint8Array {
   return Uint8Array.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-    0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49,
+    0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00,
+    0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
   ])
 }
 
@@ -432,14 +468,34 @@ function fakePngWithoutIhdr(): Uint8Array {
 
 async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<void> {
   const referenceSha256 = createHash("sha256").update(Buffer.from(minimalPngBytes())).digest("hex")
-  await Bun.write(path.join(sourcePackageDir, "web-clone-source-manifest.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-visible-source-package",
-    provenance: {
-      source: "webpage-evidence",
-      webpageEvidenceDir: sourcePackageDir,
-      reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: minimalPngBytes().length },
-    },
-    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "webpage-evidence/reference.png" }],
-  }, null, 2))
+  await Bun.write(
+    path.join(sourcePackageDir, "web-clone-source-manifest.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        purpose: "web-clone-visible-source-package",
+        provenance: {
+          source: "webpage-evidence",
+          webpageEvidenceDir: sourcePackageDir,
+          reference: {
+            path: "reference.png",
+            sha256: referenceSha256,
+            width: 1,
+            height: 1,
+            bytes: minimalPngBytes().length,
+          },
+        },
+        files: [
+          {
+            path: "reference.png",
+            sha256: referenceSha256,
+            bytes: minimalPngBytes().length,
+            source: "webpage-evidence/reference.png",
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
 }

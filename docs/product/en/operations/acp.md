@@ -44,43 +44,43 @@ Zed spawns `opencorvus acp` on demand and communicates via stdin/stdout (`src/ac
 
 ### Initialization
 
-| Method | Description |
-|---|---|
+| Method       | Description                                                |
+| ------------ | ---------------------------------------------------------- |
 | `initialize` | Negotiates protocol version (`1`), advertises capabilities |
 
 Advertised (`src/acp/agent.ts:539-555`): `loadSession: true`; MCP `http`, `sse`; prompt `embeddedContext`, `image`; session `fork`, `list`, `resume`.
 
 ### Session management
 
-| Method | Description |
-|---|---|
-| `session/new` | Creates new session |
-| `session/load` | Loads session, replays history, restores model and mode |
-| `unstable_listSessions` | Lists sessions newest first, 100/page cursor |
-| `unstable_forkSession` | Forks a session, replays history |
-| `unstable_resumeSession` | Resumes without replay |
-| `unstable_setSessionModel` | Switches model, supports variants |
-| `setSessionMode` | Switches primary agent |
+| Method                     | Description                                             |
+| -------------------------- | ------------------------------------------------------- |
+| `session/new`              | Creates new session                                     |
+| `session/load`             | Loads session, replays history, restores model and mode |
+| `unstable_listSessions`    | Lists sessions newest first, 100/page cursor            |
+| `unstable_forkSession`     | Forks a session, replays history                        |
+| `unstable_resumeSession`   | Resumes without replay                                  |
+| `unstable_setSessionModel` | Switches model, supports variants                       |
+| `setSessionMode`           | Switches primary agent                                  |
 
 ### Prompting
 
-| Method | Description |
-|---|---|
+| Method           | Description                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
 | `session/prompt` | Sends message; `text` / `image` / `resource_link` / `resource`; `/command` prefix → slash command |
 
 ### Real-time notifications
 
 Via `connection.sessionUpdate()`:
 
-| Update | When |
-|---|---|
-| `agent_message_chunk` | Streaming AI text (driven by `message.part.delta`) |
-| `agent_thought_chunk` | Reasoning model thoughts |
-| `tool_call` | Tool invocation start |
-| `tool_call_update` | In progress / done / failed |
-| `plan` | Todo list sync on `todowrite` completion |
-| `usage_update` | Tokens + cost after each prompt |
-| `available_commands_update` | Slash commands on session load |
+| Update                      | When                                               |
+| --------------------------- | -------------------------------------------------- |
+| `agent_message_chunk`       | Streaming AI text (driven by `message.part.delta`) |
+| `agent_thought_chunk`       | Reasoning model thoughts                           |
+| `tool_call`                 | Tool invocation start                              |
+| `tool_call_update`          | In progress / done / failed                        |
+| `plan`                      | Todo list sync on `todowrite` completion           |
+| `usage_update`              | Tokens + cost after each prompt                    |
+| `available_commands_update` | Slash commands on session load                     |
 
 ### Authentication
 
@@ -95,6 +95,7 @@ For `edit` permissions, after client approval, ACP calls `connection.writeTextFi
 ## MCP server support
 
 `session/new` and `session/load` accept an `mcpServers` list:
+
 - Local processes (`command`, `args`, `env`)
 - Remote HTTP/SSE (`url`, `headers`)
 
@@ -102,24 +103,24 @@ ACP calls `sdk.mcp.add()` to register each server into the internal opencorvus i
 
 ## vs `opencorvus serve` (REST)
 
-| Dimension | ACP | serve |
-|---|---|---|
-| Transport | stdin/stdout (ndjson) | HTTP (REST + SSE) |
-| Clients | ACP-compatible editors | Browser / SDK / GH Action |
-| Protocol | ACP v1 (JSON-RPC) | Custom REST |
-| Streaming | `session/update` | SSE `/event` |
-| External port | None | `7878` |
-| Concurrency | Single client | Multi-client |
+| Dimension     | ACP                    | serve                     |
+| ------------- | ---------------------- | ------------------------- |
+| Transport     | stdin/stdout (ndjson)  | HTTP (REST + SSE)         |
+| Clients       | ACP-compatible editors | Browser / SDK / GH Action |
+| Protocol      | ACP v1 (JSON-RPC)      | Custom REST               |
+| Streaming     | `session/update`       | SSE `/event`              |
+| External port | None                   | `7878`                    |
+| Concurrency   | Single client          | Multi-client              |
 
 ## vs MCP
 
-| Dimension | ACP | MCP |
-|---|---|---|
-| Role | Editor ↔ AI agent | LLM ↔ tool/data |
-| Direction | Editor calls agent | LLM calls tools |
-| Sessions | Yes (`session/new/load`) | No |
-| Permission UI | Agent asks editor | N/A |
-| OpenCorvus | **ACP Server** (editor connects) | **MCP Client** (connects to external MCP) |
+| Dimension     | ACP                              | MCP                                       |
+| ------------- | -------------------------------- | ----------------------------------------- |
+| Role          | Editor ↔ AI agent               | LLM ↔ tool/data                          |
+| Direction     | Editor calls agent               | LLM calls tools                           |
+| Sessions      | Yes (`session/new/load`)         | No                                        |
+| Permission UI | Agent asks editor                | N/A                                       |
+| OpenCorvus    | **ACP Server** (editor connects) | **MCP Client** (connects to external MCP) |
 
 ## Current limitations
 

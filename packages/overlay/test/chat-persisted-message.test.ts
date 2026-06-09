@@ -1,10 +1,10 @@
-import { expect, test } from "bun:test";
-import { cardTreeStore } from "../src/store/card-tree";
-import { resetWriter } from "../src/services/tree-writer";
-import { ingestPersistedConversationMessage } from "../src/services/chat";
+import { expect, test } from "bun:test"
+import { cardTreeStore } from "../src/store/card-tree"
+import { resetWriter } from "../src/services/tree-writer"
+import { ingestPersistedConversationMessage } from "../src/services/chat"
 
 test("persisted task message is projected into the visible conversation tree", () => {
-  resetWriter();
+  resetWriter()
 
   ingestPersistedConversationMessage({
     info: {
@@ -28,10 +28,12 @@ test("persisted task message is projected into the visible conversation tree", (
         channel: "main",
       },
     ],
-  });
+  })
 
-  expect(cardTreeStore.order.length).toBeGreaterThan(0);
-  expect(Object.values(cardTreeStore.cards).some((card) =>
-    card.parts.some((part: any) => part.text === "visible user text"),
-  )).toBe(true);
-});
+  expect(cardTreeStore.order.length).toBeGreaterThan(0)
+  expect(
+    Object.values(cardTreeStore.cards).some((card) =>
+      card.parts.some((part: any) => part.text === "visible user text"),
+    ),
+  ).toBe(true)
+})

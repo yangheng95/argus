@@ -89,9 +89,12 @@ function callName(input: ts.LeftHandSideExpression) {
 
 function functionName(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && node.name) return node.name.text
-  if ((ts.isFunctionExpression(node) || ts.isArrowFunction(node))
-    && ts.isVariableDeclaration(node.parent)
-    && ts.isIdentifier(node.parent.name)) return node.parent.name.text
+  if (
+    (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) &&
+    ts.isVariableDeclaration(node.parent) &&
+    ts.isIdentifier(node.parent.name)
+  )
+    return node.parent.name.text
   return ""
 }
 
@@ -116,9 +119,11 @@ function wrapperNames(source: ts.SourceFile) {
           let hit = false
           const scan = (child: ts.Node) => {
             if (hit) return
-            if (ts.isCallExpression(child)
-              && names.has(callName(child.expression))
-              && callParam(child.arguments[0], param)) {
+            if (
+              ts.isCallExpression(child) &&
+              names.has(callName(child.expression)) &&
+              callParam(child.arguments[0], param)
+            ) {
               hit = true
               return
             }
@@ -152,15 +157,11 @@ function scriptKeys(file: string, text: string) {
     if (
       ts.isPropertyAssignment(node) &&
       ts.isIdentifier(node.name) &&
-      node.name.text === "labelKey"
+      (node.name.text === "labelKey" || node.name.text === "tooltipKey")
     ) {
       for (const key of callKey(node.initializer)) keys.add(key)
     }
-    if (
-      ts.isPropertyAssignment(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === "title"
-    ) {
+    if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && node.name.text === "title") {
       for (const key of callKey(node.initializer)) {
         if (key.startsWith("chat.role.")) keys.add(key)
       }
@@ -191,10 +192,7 @@ function referenced(keys: string[], input: string) {
 // it literally or defines at least one descendant key (for dynamic prefix
 // keys such as `task.status.${x}` → panelKey "task.status").
 function covered(localeKeys: string[], panelKey: string): boolean {
-  return (
-    localeKeys.includes(panelKey) ||
-    localeKeys.some((k) => k.startsWith(`${panelKey}.`))
-  )
+  return localeKeys.includes(panelKey) || localeKeys.some((k) => k.startsWith(`${panelKey}.`))
 }
 
 // Revision hash: only panel files (index.html)
@@ -215,11 +213,15 @@ const revision = createHash("sha256")
 
 // Key-usage scan: all source files
 const sourceText = await Promise.all(sourceFiles.map((file) => Bun.file(file).text()))
-const panelKeys = [...new Set(sourceFiles.flatMap((file, index) => {
-  const text = sourceText[index]
-  if (file.endsWith(".html")) return extract(text)
-  return scriptKeys(file, text)
-}))].sort()
+const panelKeys = [
+  ...new Set(
+    sourceFiles.flatMap((file, index) => {
+      const text = sourceText[index]
+      if (file.endsWith(".html")) return extract(text)
+      return scriptKeys(file, text)
+    }),
+  ),
+].sort()
 
 const docs = await Promise.all(
   locale.map(async (file) => {

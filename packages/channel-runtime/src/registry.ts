@@ -1,9 +1,4 @@
-import {
-  ChannelCatalog,
-  type ChannelName,
-  channelRequiredFields,
-  resolveChannel,
-} from "@opencorvus-ai/channel-config"
+import { ChannelCatalog, type ChannelName, channelRequiredFields, resolveChannel } from "@opencorvus-ai/channel-config"
 import type { ChannelAdapter } from "./adapter"
 
 type Env = Record<string, string | undefined>

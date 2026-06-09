@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
-import {
-  executableName,
-  resolveBundledBinary,
-  resolveTarget,
-} from "../src/sidecar/binary-resolver"
+import { executableName, resolveBundledBinary, resolveTarget } from "../src/sidecar/binary-resolver"
 import { UnsupportedPlatformError } from "../src/sidecar/errors"
 
 describe("resolveTarget", () => {
@@ -42,7 +38,9 @@ describe("resolveBundledBinary", () => {
   })
 
   afterEach(() => {
-    try { fs.rmSync(extensionRoot, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(extensionRoot, { recursive: true, force: true })
+    } catch {}
     delete process.env.OPENCORVUS_DEV_BINARY
   })
 
