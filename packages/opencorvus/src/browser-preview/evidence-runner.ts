@@ -24,8 +24,9 @@ export type BrowserEvidenceManifestSummary = {
   operations: Array<{
     kind: "preview-capture"
     status: "completed" | "failed"
+    viewportIDs: BrowserPreviewViewportID[]
     artifactPaths: string[]
-    diagnosticsPath?: string
+    diagnosticsPath: string
   }>
 }
 
@@ -137,6 +138,32 @@ export async function runBrowserPreviewEvidenceJob(
     diagnostics.push(finalized.diagnostic)
   }
 
+  const manifest = await writeBrowserEvidenceManifest({
+    outDir: input.outDir,
+    jobID: input.jobID,
+    taskID: input.taskID,
+    targetID: input.targetID,
+    url: input.url,
+    viewportIDs: input.viewportIDs,
+    artifactPaths,
+    captures,
+    diagnostics,
+  })
+  return { manifest, captures }
+}
+
+export async function writeBrowserEvidenceManifest(input: {
+  outDir: string
+  jobID: string
+  taskID: string
+  targetID: string
+  url: string
+  viewportIDs: BrowserPreviewViewportID[]
+  artifactPaths: string[]
+  captures: Record<string, RuntimeCaptureResult>
+  diagnostics: string[]
+}): Promise<BrowserEvidenceManifestSummary> {
+  const diagnosticsPath = path.join(input.outDir, "diagnostics.json")
   const manifest: BrowserEvidenceManifestSummary = {
     manifestPath: path.join(input.outDir, "manifest.json"),
     jobID: input.jobID,
@@ -145,25 +172,44 @@ export async function runBrowserPreviewEvidenceJob(
     operations: [
       {
         kind: "preview-capture",
-        status: Object.values(captures).every((capture) => capture.captured && capture.passed) ? "completed" : "failed",
-        artifactPaths,
+        status: Object.values(input.captures).every((capture) => capture.captured && capture.passed)
+          ? "completed"
+          : "failed",
+        viewportIDs: input.viewportIDs,
+        artifactPaths: input.artifactPaths,
+        diagnosticsPath,
       },
     ],
   }
+  await fs.writeFile(
+    diagnosticsPath,
+    JSON.stringify(
+      {
+        jobID: input.jobID,
+        taskID: input.taskID,
+        targetID: input.targetID,
+        url: input.url,
+        viewportIDs: input.viewportIDs,
+        diagnostics: input.diagnostics,
+      },
+      null,
+      2,
+    ),
+  )
   await fs.writeFile(
     manifest.manifestPath,
     JSON.stringify(
       {
         ...manifest,
         url: input.url,
-        captures,
-        diagnostics,
+        captures: input.captures,
+        diagnostics: input.diagnostics,
       },
       null,
       2,
     ),
   )
-  return { manifest, captures }
+  return manifest
 }
 
 export async function finalizeBrowserPreviewSidecarCapture(input: {
