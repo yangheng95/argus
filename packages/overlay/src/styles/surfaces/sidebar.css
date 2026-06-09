@@ -560,6 +560,7 @@
   right: 0;
   transform: translateY(-50%);
   z-index: 2;
+  pointer-events: none;
 }
 
 .task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-delete"],

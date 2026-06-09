@@ -86,6 +86,7 @@ describe("task-row action buttons hover-only contract", () => {
     expect(body!).toContain("right: 0")
     expect(body!).toContain("width: var(--task-row-actions-width)")
     expect(body!).toContain("transform: translateY(-50%)")
+    expect(body!).toContain("pointer-events: none")
   })
 
   test("hover/focus reveal restores opacity and pointer events", () => {
