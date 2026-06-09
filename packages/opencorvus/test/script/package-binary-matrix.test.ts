@@ -34,7 +34,8 @@ describe("package-binary-matrix", () => {
   })
 
   test("parses skip-build for matrix smoke runs", () => {
-    expect(parseBinaryMatrixArgs([])).toEqual({ skipBuild: false })
-    expect(parseBinaryMatrixArgs(["--skip-build"])).toEqual({ skipBuild: true })
+    expect(parseBinaryMatrixArgs([])).toEqual({ skipBuild: false, skipUi: false })
+    expect(parseBinaryMatrixArgs(["--skip-build"])).toEqual({ skipBuild: true, skipUi: false })
+    expect(parseBinaryMatrixArgs(["--skip-ui"])).toEqual({ skipBuild: false, skipUi: true })
   })
 })

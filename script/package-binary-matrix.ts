@@ -1,4 +1,12 @@
 #!/usr/bin/env bun
+/**
+ * Host-verified binary package matrix.
+ *
+ * This matrix only packages rows that can be built and smoke-verified on the
+ * current host. Today that means Linux x64 on a Linux x64 host. Other rows are
+ * listed and reported as skipped instead of pretending to cross-package
+ * unverifiable native runtimes.
+ */
 
 import fs from "node:fs"
 import path from "node:path"
@@ -15,6 +23,7 @@ export interface BinaryPackageMatrixRow {
 
 export interface BinaryPackageMatrixOptions {
   skipBuild?: boolean
+  skipUi?: boolean
   platform?: NodeJS.Platform
   arch?: NodeJS.Architecture
   env?: NodeJS.ProcessEnv
@@ -68,6 +77,7 @@ export const BINARY_PACKAGE_MATRIX: readonly BinaryPackageMatrixRow[] = [
 export function parseBinaryMatrixArgs(argv: readonly string[]): BinaryPackageMatrixOptions {
   return {
     skipBuild: argv.includes("--skip-build"),
+    skipUi: argv.includes("--skip-ui"),
   }
 }
 
@@ -93,6 +103,7 @@ export async function packageBinaryMatrix(
   const results: BinaryPackageMatrixResult[] = []
   const packageOpts: PackageLinuxBinaryOptions = {
     skipBuild: opts.skipBuild,
+    skipUi: opts.skipUi,
     platform: opts.platform ?? process.platform,
     arch: opts.arch ?? process.arch,
     env: opts.env ?? process.env,
