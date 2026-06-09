@@ -17,7 +17,7 @@ export function WorkspaceOnboardingDialog() {
   const [activeAction, setActiveAction] = createSignal<string>("")
   const [browserPathDraft, setBrowserPathDraft] = createSignal("")
   const open = createMemo(() => !settingsStore.directory)
-  const browserHost = createMemo(() => getHostTransport().kind === "browser")
+  const manualWorkspacePathEntry = createMemo(() => getHostTransport().capabilities.ui.manualWorkspacePathEntry)
   const recentDirectories = createMemo(() => {
     settingsStore.directoryEpoch
     settingsStore.savedDirectory
@@ -87,7 +87,7 @@ export function WorkspaceOnboardingDialog() {
               </div>
             </div>
             <Show
-              when={browserHost()}
+              when={manualWorkspacePathEntry()}
               fallback={
                 <Button
                   type="button"

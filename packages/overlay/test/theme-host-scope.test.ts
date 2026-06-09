@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import type { HostKind, HostTransport } from "../src/services/host-transport"
-import { __setHostTransportForTest } from "../src/services/host-transport"
+import { HOST_CAPABILITIES, __setHostTransportForTest } from "../src/services/host-transport"
 import { applyTheme } from "../src/services/theme"
 import { sanitizeThemeForHost, themeOptionsForHost, themeOptionsForCurrentHost } from "../src/services/theme-registry"
 import { applySettings, DEFAULT_SETTINGS, settingsStore } from "../src/store/settings"
@@ -8,6 +8,7 @@ import { applySettings, DEFAULT_SETTINGS, settingsStore } from "../src/store/set
 function fakeTransport(kind: HostKind): HostTransport {
   return {
     kind,
+    capabilities: HOST_CAPABILITIES[kind],
     async request() {
       throw new Error("request not used in theme host-scope tests")
     },

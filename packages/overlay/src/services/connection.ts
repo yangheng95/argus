@@ -29,7 +29,8 @@ function wait(ms: number): Promise<void> {
  *  local server (the extension owns the sidecar there, not the
  *  webview). Use this whenever a code path is Tauri-specific. */
 function hostOwnsLocalServer(): boolean {
-  return getHostTransport().kind === "tauri"
+  const commands = getHostTransport().capabilities.nativeCommands
+  return commands["server.info"] && commands["server.restart"]
 }
 
 function normalizeUrl(value: string | undefined, fallback: string): string {
