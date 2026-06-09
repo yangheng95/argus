@@ -89,13 +89,16 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC.indexOf("patchSessionConfig(ctx.sessionID")).toBeLessThan(SRC.indexOf("patchConfig({ model"))
   })
 
-  test("selected task without resolved root session disables mirror writes instead of falling back to project config", () => {
+  test("selected task without resolved root session disables mirror writes without disabling the chip", () => {
     expect(SRC).toMatch(
       /const mirrorWriteDisabled = createMemo\(\(\) => hasSelectedTask\(\) && !currentTaskOperatorContext\(\)\?\.sessionID\)/,
     )
-    expect(SRC).toMatch(/function openMirror\(\)[\s\S]*?if \(mirrorWriteDisabled\(\)\) return/)
+    expect(SRC).toMatch(/refetch: refetchTaskOperatorContext/)
+    expect(SRC).toMatch(/function openMirror\(\)[\s\S]*?mirror\.openIt\(\)/)
+    expect(SRC).not.toMatch(/function openMirror\(\)[\s\S]*?if \(mirrorWriteDisabled\(\)\) return/)
     expect(SRC).toMatch(/if \(hasSelectedTask\(\)\)[\s\S]*?if \(!ctx\?\.agent \|\| !ctx\.sessionID\)[\s\S]*?return/)
-    expect(SRC).toMatch(/disabled=\{mirrorWriteDisabled\(\)\}/)
+    expect(SRC).toMatch(/data-ui="executor-mirror-context-error"/)
+    expect(SRC).toMatch(/onClick=\{retryTaskOperatorContext\}/)
     expect(SRC).toMatch(/disabled=\{props\.disabled\}/)
   })
 
