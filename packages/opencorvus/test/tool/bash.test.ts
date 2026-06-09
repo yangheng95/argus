@@ -404,7 +404,7 @@ describe("tool.bash", () => {
     }
   })
 
-  test("background process output candidate is hidden when the preview server is unreachable", async () => {
+  test("background process output does not persist unreachable preview targets", async () => {
     await resetDatabase()
     try {
       await using tmp = await tmpdir({ git: true })
@@ -456,7 +456,7 @@ describe("tool.bash", () => {
               { ...ctx, extra: { taskID } },
             )
 
-            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe("http://127.0.0.1:9/")
+            expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
             const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
             expect(target.status).toBe("missing")
             expect(target.candidates).toEqual([])

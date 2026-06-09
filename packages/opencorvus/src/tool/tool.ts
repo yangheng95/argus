@@ -108,7 +108,6 @@ export namespace Tool {
           await persistBrowserPreviewTargetFromProcessOutput({
             taskID,
             output: result.output,
-            probe: async () => true,
           })
           // skip truncation for tools that handle it themselves
           if (result.metadata.truncated !== undefined) {

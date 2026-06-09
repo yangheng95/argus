@@ -106,34 +106,48 @@ describe("browser preview target resolver", () => {
 
   test("generic tool output materializes browser preview candidates", async () => {
     await using tmp = await tmpdir()
+    const preview = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return new Response("<!doctype html><title>Preview</title>", {
+          headers: { "content-type": "text/html" },
+        })
+      },
+    })
     const taskID = await seedTask(tmp.path)
-    const info = await Tool.define("fixture_preview_output", {
-      description: "Fixture preview output",
-      parameters: z.object({}),
-      async execute() {
-        return {
-          title: "fixture",
-          metadata: {},
-          output: "dev server ready at localhost:5173",
-        }
-      },
-    }).init()
+    try {
+      const previewUrl = `http://127.0.0.1:${preview.port}/`
+      const info = await Tool.define("fixture_preview_output", {
+        description: "Fixture preview output",
+        parameters: z.object({}),
+        async execute() {
+          return {
+            title: "fixture",
+            metadata: {},
+            output: `dev server ready at ${previewUrl}`,
+          }
+        },
+      }).init()
 
-    await info.execute(
-      {},
-      {
-        sessionID: "ses_preview_fixture",
-        messageID: "msg_preview_fixture",
-        agent: "build",
-        abort: AbortSignal.any([]),
-        extra: { taskID },
-        messages: [],
-        metadata() {},
-        async ask() {},
-      },
-    )
+      await info.execute(
+        {},
+        {
+          sessionID: "ses_preview_fixture",
+          messageID: "msg_preview_fixture",
+          agent: "build",
+          abort: AbortSignal.any([]),
+          extra: { taskID },
+          messages: [],
+          metadata() {},
+          async ask() {},
+        },
+      )
 
-    expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual(["http://localhost:5173/"])
+      expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([previewUrl])
+    } finally {
+      preview.stop(true)
+    }
   })
 
   test("persisting a preview target emits a task update event for overlay refresh", async () => {
