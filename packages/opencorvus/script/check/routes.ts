@@ -2,6 +2,7 @@
 import path from "node:path"
 import fs from "node:fs"
 import { Server } from "../../src/server/server"
+import { extractSdkRoutesFromText } from "./sdk-route-extractor"
 
 const ROOT = path.resolve(import.meta.dir, "..", "..")
 const ROUTES_DIR = path.join(ROOT, "src", "server", "routes")
@@ -133,14 +134,8 @@ function openapiRoutes(spec: { paths?: Record<string, Record<string, unknown>> }
 }
 
 function sdkRoutes() {
-  const routes = new Set<string>()
   const text = fs.readFileSync(SDK_TS, "utf8")
-  const pattern = /\.(?:sse\.)?(get|post|put|patch|delete)<[\s\S]*?\{\s*url:\s*"([^"]+)"/g
-  let match: RegExpExecArray | null
-  while ((match = pattern.exec(text))) {
-    routes.add(`${match[1].toUpperCase()} ${match[2]}`)
-  }
-  return routes
+  return extractSdkRoutesFromText(text)
 }
 
 function difference(left: Set<string>, right: Set<string>) {
