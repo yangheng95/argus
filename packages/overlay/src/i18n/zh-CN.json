@@ -931,6 +931,7 @@
   "mission.error.action.retry": "重跑任务",
   "mission.error.action.replan": "重新规划",
   "mission.error.action.delete": "删除 Mission",
+  "mission.error.action.mission": "打开 Mission",
   "mission.error.action.reorder": "调整队列顺序",
   "mission.error.action.start": "启动排队任务",
   "mission.error.action.restart": "重启通道运行时",
