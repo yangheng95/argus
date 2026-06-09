@@ -95,38 +95,10 @@
 
 .browser-preview-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto;
+  justify-content: end;
   align-items: center;
   gap: calc(4px * var(--ui-scale));
-}
-
-.browser-preview-url-field {
-  min-width: 0;
-  min-height: calc(30px * var(--ui-scale));
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  padding: 0 calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface);
-  color: var(--text-muted);
-}
-
-.browser-preview-url-field:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
-}
-
-.browser-preview-url-field input {
-  min-width: 0;
-  min-height: calc(28px * var(--ui-scale));
-  flex: 1 1 auto;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: var(--ui-font-control);
-  line-height: 1.3;
 }
 
 .browser-preview-candidate-select {

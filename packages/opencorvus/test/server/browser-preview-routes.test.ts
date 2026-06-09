@@ -71,25 +71,8 @@ describe("browser preview routes", () => {
       const app = Server.App()
       const liveUrl = `http://127.0.0.1:${preview.port}/task`
 
-      const dead = await app.request(`/task/${taskID}/browser-preview/target`, {
-        method: "PUT",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": tmp.path,
-        },
-        body: JSON.stringify({ url: "http://127.0.0.1:9/dead" }),
-      })
-      expect(dead.status).toBe(200)
-
-      const save = await app.request(`/task/${taskID}/browser-preview/target`, {
-        method: "PUT",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": tmp.path,
-        },
-        body: JSON.stringify({ url: liveUrl }),
-      })
-      expect(save.status).toBe(200)
+      await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead" })
+      await persistBrowserPreviewTarget({ taskID, url: liveUrl })
 
       const response = await app.request(`/task/${taskID}/browser-preview`, {
         headers: {
@@ -153,7 +136,31 @@ describe("browser preview routes", () => {
     expect(body.diagnostics?.join("\n")).toContain("No browser preview target saved for this task")
   }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
-  test("PUT /task/:taskID/browser-preview/target accepts loopback host-port input", async () => {
+  test("PUT /task/:taskID/browser-preview/target selects an existing saved target", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const app = Server.App()
+    const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
+
+    const response = await app.request(`/task/${taskID}/browser-preview/target`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ targetID: target.id }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { id?: string; status: string; url?: string; source: string; diagnostics?: string[] }
+    expect(body.id).toBe(target.id)
+    expect(body.status).toBe("ready")
+    expect(body.url).toBe("http://127.0.0.1:5173/")
+    expect(body.source).toBe("task-artifact")
+    expect(body.diagnostics?.join("\n")).toContain(`Selected task browser preview target ${target.id}.`)
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
+
+  test("PUT /task/:taskID/browser-preview/target rejects arbitrary URL bodies", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
     const app = Server.App()
@@ -167,11 +174,9 @@ describe("browser preview routes", () => {
       body: JSON.stringify({ url: "localhost:5173" }),
     })
 
-    expect(response.status).toBe(200)
-    const body = (await response.json()) as { status: string; url?: string; source: string }
-    expect(body.status).toBe("ready")
-    expect(body.url).toBe("http://localhost:5173/")
-    expect(body.source).toBe("task-artifact")
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(JSON.stringify(body)).toContain("targetID")
   }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
   test("GET /task/:taskID/browser-preview/evidence/:evidenceID returns only persisted task evidence", async () => {
@@ -268,15 +273,7 @@ describe("browser preview routes", () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
     const app = Server.App()
-    const save = await app.request(`/task/${taskID}/browser-preview/target`, {
-      method: "PUT",
-      headers: {
-        "content-type": "application/json",
-        "x-opencorvus-directory": tmp.path,
-      },
-      body: JSON.stringify({ url: "http://127.0.0.1:5174/task" }),
-    })
-    expect(save.status).toBe(200)
+    await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
 
     const response = await app.request(`/task/${taskID}/browser-preview/capture`, {
       method: "POST",

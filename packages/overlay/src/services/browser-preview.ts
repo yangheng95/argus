@@ -78,15 +78,15 @@ export async function loadTaskBrowserPreviewTarget(
   return (await apiJson(`task/${encodeURIComponent(taskID)}/browser-preview`, { signal })) as BrowserPreviewTarget
 }
 
-export async function saveTaskBrowserPreviewTarget(input: {
+export async function selectTaskBrowserPreviewTarget(input: {
   taskID: string
-  url: string
+  targetID: string
   signal?: AbortSignal
 }): Promise<BrowserPreviewTarget> {
   return (await apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/target`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: input.url }),
+    body: JSON.stringify({ targetID: input.targetID }),
     signal: input.signal,
   })) as BrowserPreviewTarget
 }

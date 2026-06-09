@@ -3,7 +3,7 @@ import {
   captureTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewTarget,
   loadTaskBrowserPreviewEvidence,
-  saveTaskBrowserPreviewTarget,
+  selectTaskBrowserPreviewTarget,
   type BrowserPreviewEvidence,
   type BrowserPreviewTarget,
   type BrowserPreviewViewportID,
@@ -22,7 +22,6 @@ export interface BrowserPreviewPanelProps {
 }
 
 export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
-  const [draftUrl, setDraftUrl] = createSignal("")
   const [viewportID, setViewportID] = createSignal<BrowserPreviewViewportID>("desktop")
   const [viewportScopeKey, setViewportScopeKey] = createSignal("")
   const [refreshToken, setRefreshToken] = createSignal(0)
@@ -81,12 +80,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   createEffect(() => {
     const resolved = currentTarget()
-    if (resolved?.source === "task-artifact" && resolved.url) setDraftUrl(resolved.url)
-    if (!props.taskID()) setDraftUrl("")
-  })
-
-  createEffect(() => {
-    const resolved = currentTarget()
     const taskID = props.taskID()
     if (!taskID || resolved?.status !== "ready" || !resolved.url) return
     const previewKey = `${taskID}:${resolved.id ?? resolved.url}`
@@ -106,20 +99,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     setViewportID(ids.includes(viewportID()) ? viewportID() : ids[0])
   })
 
-  const submitUrl = (event: Event) => {
-    event.preventDefault()
-    const taskID = props.taskID()
-    const url = draftUrl().trim()
-    if (!taskID || !url) return
-    void saveTaskBrowserPreviewTarget({ taskID, url }).then(() => setRefreshToken((value) => value + 1))
-  }
-
   const selectCandidate = (event: Event) => {
     const taskID = props.taskID()
     const candidateID = (event.currentTarget as HTMLSelectElement).value
     const candidate = candidates().find((item) => item.id === candidateID)
     if (!taskID || !candidate || candidate.selected) return
-    void saveTaskBrowserPreviewTarget({ taskID, url: candidate.url }).then(() => setRefreshToken((value) => value + 1))
+    void selectTaskBrowserPreviewTarget({ taskID, targetID: candidate.id }).then(() =>
+      setRefreshToken((value) => value + 1),
+    )
   }
 
   const captureEvidence = () => {
@@ -132,28 +119,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   return (
     <section class="browser-preview-panel" aria-label={t("browser_preview.title")} data-active={String(panelActive())}>
       <div class="browser-preview-command-surface">
-        <form class="browser-preview-toolbar" onSubmit={submitUrl}>
-          <label class="browser-preview-url-field">
-            <Icon name="external-link" size={13} />
-            <input
-              value={draftUrl()}
-              onInput={(event) => setDraftUrl(event.currentTarget.value)}
-              placeholder={t("browser_preview.url_placeholder")}
-              aria-label={t("browser_preview.url_label")}
-              disabled={!props.taskID()}
-            />
-          </label>
-          <Button
-            type="submit"
-            variant="solid"
-            size="icon"
-            tone="accent"
-            title={t("browser_preview.load_title")}
-            aria-label={t("browser_preview.load_title")}
-            disabled={!props.taskID()}
-          >
-            <Icon name="external-link" size={13} />
-          </Button>
+        <div class="browser-preview-toolbar">
           <Button
             type="button"
             variant="outline"
@@ -166,7 +132,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
           >
             <Icon name="refresh" size={13} />
           </Button>
-        </form>
+        </div>
 
         <div class="browser-preview-controls">
           <div class="browser-preview-status" data-status={currentTarget()?.status ?? "loading"}>

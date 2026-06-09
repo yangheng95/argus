@@ -7,13 +7,12 @@ import { requireTask } from "@/engine/store"
 import {
   findBrowserPreviewEvidenceByID,
   findBrowserPreviewTargetByID,
-  persistBrowserPreviewTarget,
+  promoteBrowserPreviewTarget,
   PersistedBrowserPreviewEvidence,
 } from "../../browser-preview/persist"
 import {
   BrowserPreviewTarget,
   failedBrowserPreviewTarget,
-  normalizeBrowserPreviewUrl,
   resolveBrowserPreviewTarget,
   taskBrowserPreviewTarget,
 } from "../../browser-preview/target"
@@ -60,8 +59,7 @@ export const BrowserPreviewRoutes = lazy(() =>
       "/task/:taskID/browser-preview/evidence/:evidenceID",
       describeRoute({
         summary: "Read browser preview verification evidence",
-        description:
-          "Return the persisted Playwright evidence artifact for a task-scoped browser preview target.",
+        description: "Return the persisted Playwright evidence artifact for a task-scoped browser preview target.",
         operationId: "browserPreview.readTaskEvidence",
         responses: {
           200: {
@@ -86,10 +84,10 @@ export const BrowserPreviewRoutes = lazy(() =>
     .put(
       "/task/:taskID/browser-preview/target",
       describeRoute({
-        summary: "Save task browser preview target",
+        summary: "Select task browser preview target",
         description:
-          "Persist the explicit browser preview URL as the task's preview target artifact. The overlay must use this route instead of local storage or query overrides.",
-        operationId: "browserPreview.saveTaskTarget",
+          "Promote an existing task browser preview target artifact. Arbitrary operator URLs are not accepted as preview targets.",
+        operationId: "browserPreview.selectTaskTarget",
         responses: {
           200: {
             description: "Persisted browser preview target",
@@ -102,30 +100,28 @@ export const BrowserPreviewRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1) })),
-      validator("json", z.object({ url: z.string().min(1) })),
+      validator("json", z.object({ targetID: z.string().min(1) })),
       async (c) => {
         const { taskID } = c.req.valid("param")
-        const { url: rawUrl } = c.req.valid("json")
+        const { targetID } = c.req.valid("json")
         requireTask(taskID)
-        const url = normalizeBrowserPreviewUrl(rawUrl)
-        if (!url) {
+        const persisted = await promoteBrowserPreviewTarget({ taskID, targetID })
+        if (!persisted)
           return c.json(
             failedBrowserPreviewTarget({
               projectRoot: Instance.directory,
               taskID,
-              diagnostics: [`Invalid preview URL: ${rawUrl}`],
+              diagnostics: [`Browser preview target not found: ${targetID}`],
             }),
-            400,
+            404,
           )
-        }
-        const persisted = await persistBrowserPreviewTarget({ taskID, url })
         return c.json(
           taskBrowserPreviewTarget({
             id: persisted.id,
             taskID,
             projectRoot: Instance.directory,
             url: persisted.url,
-            diagnostics: [`Saved task browser preview target ${persisted.id}.`],
+            diagnostics: [`Selected task browser preview target ${persisted.id}.`],
           }) satisfies BrowserPreviewTarget,
         )
       },

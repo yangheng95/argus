@@ -19,5 +19,6 @@ test("conversation and tool-output text share markdown url preview rendering", (
   expect(textPart).toContain("createStreamingTextPartModel(props, renderMarkdown)")
   expect(toolPart).toContain("<StaticTextPart text={text} />")
   expect(toolPart).toContain("<StaticTextPart text={error()} />")
-  expect(main).toContain("openBrowserPreviewUrl(previewUrl)")
+  expect(main).toContain("openBrowserPreviewFromMessage()")
+  expect(main).not.toContain("saveTaskBrowserPreviewTarget")
 })
