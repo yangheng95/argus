@@ -26,21 +26,7 @@ function createNoopClient() {
       create: async () => ({ data: { id: "session_mock" }, error: undefined }),
       get: async () => ({ data: undefined, error: undefined }),
       message: async () => ({ data: { parts: [] }, error: undefined }),
-      promptAsync: async () => ({ data: {}, error: undefined }),
-    },
-    tui: {
-      runtime: {
-        start: async () => ({ data: {}, error: undefined }),
-        submitTask: async () => ({
-          data: {
-            accepted: true,
-            taskID: "task_mock",
-            waited: false,
-            completed: false,
-          },
-          error: undefined,
-        }),
-      },
+      promptAsync: async () => ({ data: { taskID: "task_mock" }, error: undefined }),
     },
   }
 }
@@ -64,7 +50,6 @@ export class OpenCorvusClientMock {
   event = createNoopClient().event
   permission = createNoopClient().permission
   session = createNoopClient().session
-  tui = createNoopClient().tui
 }
 
 export const OpencodeClientMock = OpenCorvusClientMock

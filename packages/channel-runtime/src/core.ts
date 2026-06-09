@@ -123,7 +123,6 @@ export class ChannelRuntime {
   /** Base URL of the OpenCorvus server */
   private serverUrl!: string
   private sharedSessionId?: string
-  private runtimeSession?: string
   /** Prevent creating duplicate overlay mirror threads */
   private overlayMirrorBound = false
   /** Active channel-runtime jobs keyed by sessionID */
@@ -248,7 +247,6 @@ export class ChannelRuntime {
 
   async stop(): Promise<void> {
     this.running = false
-    this.runtimeSession = undefined
     this.stopPendingWatch()
     this.pending.clear()
     this.taskBindings.clear()
@@ -386,11 +384,18 @@ export class ChannelRuntime {
       activeJob.lastActivityAt = Date.now()
       activeJob.lastReport = undefined
       this.session.start(session.sessionId)
-      await this.client.session.promptAsync({
+      const result = await this.client.session.promptAsync({
         sessionID: session.sessionId,
         parts: [{ type: "text", text }],
         system: this.buildSystemPrompt(msg.platform),
       })
+      if (result.error) {
+        console.error("[ChannelRuntime] user-answer promptAsync error:", JSON.stringify(result.error).slice(0, 500))
+        this.session.stop(session.sessionId)
+        activeJob.status = "waiting_user"
+        return
+      }
+      this.markPending(session.sessionId, result.data.taskID)
       return
     }
 
@@ -457,42 +462,6 @@ export class ChannelRuntime {
   }
 
   private async submitTask(sessionID: string, text: string, platform: string) {
-    if (this.taskMode() === "tui-runtime") {
-      const runtimeReady = await this.startRuntime(sessionID)
-      if (!runtimeReady) {
-        return "failed" as const
-      }
-      const result = await this.client.tui.runtime.submitTask({
-        sessionID,
-        text,
-        wait: false,
-      })
-      if (!result.error) {
-        const data = result.data as
-          | {
-              accepted?: boolean
-              taskID?: string | null
-              completed?: boolean
-              waited?: boolean
-            }
-          | undefined
-        if (data?.accepted) {
-          const taskId =
-            typeof data.taskID === "string" && data.taskID.trim() ? data.taskID.trim() : this.taskId(sessionID)
-          this.markPending(sessionID, taskId)
-          console.log(
-            `[ChannelRuntime] Task accepted via tui.runtime.submitTask for session ${sessionID} (task=${taskId}, waited=${data?.waited ? "true" : "false"})`,
-          )
-          return "ok" as const
-        }
-        console.warn(
-          `[ChannelRuntime] tui.runtime.submitTask did not accept task for session ${sessionID} (waited=${data?.waited ? "true" : "false"})`,
-        )
-      }
-      console.error("[ChannelRuntime] tui.runtime.submitTask error:", JSON.stringify(result.error).slice(0, 500))
-      return "failed" as const
-    }
-
     const result = await this.client.session.promptAsync({
       sessionID,
       parts: [{ type: "text", text }],
@@ -502,42 +471,14 @@ export class ChannelRuntime {
       console.error("[ChannelRuntime] session.promptAsync error:", JSON.stringify(result.error).slice(0, 500))
       return "failed" as const
     }
-    this.markPending(sessionID, this.taskId(sessionID))
+    this.markPending(sessionID, result.data.taskID)
     console.log(`[ChannelRuntime] Prompt sent via session.promptAsync for session ${sessionID}`)
     return "ok" as const
   }
 
-  private async startRuntime(sessionID: string) {
-    if (this.runtimeSession === sessionID) return true
-
-    const directory = process.env.OPENCORVUS_PROJECT_DIR?.trim() || process.cwd()
-    const bin = process.env.OPENCORVUS_BIN_PATH?.trim()
-    const result = await this.client.tui.runtime.start({
-      mode: "spawn",
-      directory,
-      sessionID,
-      ...(bin ? { bin } : {}),
-    })
-    if (result.error) {
-      console.error("[ChannelRuntime] tui.runtime.start error:", JSON.stringify(result.error).slice(0, 500))
-      return false
-    }
-
-    this.runtimeSession = sessionID
-    console.log(`[ChannelRuntime] TUI runtime started for session ${sessionID}`)
-    return true
-  }
-
-  private taskMode() {
-    const raw = process.env.OPENCORVUS_CHANNEL_TASK_MODE?.trim().toLowerCase()
-    if (raw === "session-async") return "session-async"
-    return "tui-runtime"
-  }
-
   /**
    * Build channel-runtime system prompt injected via the API's `system` field.
-   * Provides operational context: remote interaction mode, TUI launch instructions,
-   * and window binding strategy for on-demand TUI.
+   * Provides operational context: remote interaction mode and window binding strategy.
    */
   private buildSystemPrompt(platform: string): string {
     const channel = platform === "slack" ? "Slack" : platform === "discord" ? "Discord" : platform
@@ -546,10 +487,8 @@ export class ChannelRuntime {
       "",
       "## The visibility principle",
       "Everything you do must be visible to the user. Using background tools (write, bash) to produce code silently is unacceptable - the user has no idea what you changed or whether it is correct.",
-      "For coding tasks, open a visible coding tool first:",
-      '- **Claude Code**: `bash(\'start "Claude Code" cmd /k "set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude"\')` — opens in a new terminal',
-      '- **OpenCorvus TUI (preferred)**: use the `tui` tool, e.g. `tui({ action: "start", mode: "spawn", directory: "<project_dir>" })`',
-      '- Then submit coding work with `tui({ action: "submit_task", text: "<task>", wait: true })`',
+      "For coding tasks, work through the current OpenCorvus session and report progress with task_report.",
+      "- Do not launch retired terminal UI processes or use removed UI tools.",
       "- Do NOT use `bun --preload ... src/index.ts` style launch commands in packaged/runtime environments.",
       "Exception: if the user explicitly asks for a specific tool ('use codex', 'use VS Code', 'run bash'), follow that instruction.",
       "",
@@ -849,10 +788,6 @@ export class ChannelRuntime {
     })
   }
 
-  private taskId(sessionId: string) {
-    return `task_${sessionId.slice(-6)}_${Date.now().toString(36)}`
-  }
-
   private pendingTimeout() {
     const raw = Number(process.env.OPENCORVUS_CHANNEL_TASK_TIMEOUT_MS)
     if (!Number.isFinite(raw) || raw <= 0) return 10 * 60 * 1000
@@ -936,7 +871,7 @@ export class ChannelRuntime {
                   console.error("[ChannelRuntime] dequeue handleMessage error:", err),
                 )
             } else {
-              this.markPending(sessionId, this.taskId(sessionId))
+              this.markPending(sessionId, result.data.taskID)
             }
           })
           .catch((err) => {
@@ -977,50 +912,11 @@ export class ChannelRuntime {
     )
   }
 
-  private async pendingStatus(taskId: string) {
-    const res = await fetch(`${this.serverUrl}/tui/runtime/task-status`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ taskID: taskId }),
-      signal: AbortSignal.timeout(4_000),
-    }).catch(() => null)
-    if (!res?.ok) return null
-    const body = (await res.json().catch(() => null)) as {
-      found?: boolean
-      status?: string
-      terminal?: boolean
-      error?: string | null
-    } | null
-    if (!body || body.found !== true) return null
-    return {
-      status: typeof body.status === "string" ? body.status : "",
-      terminal: body.terminal === true,
-      error: typeof body.error === "string" && body.error.trim() ? body.error.trim() : null,
-    }
-  }
-
   private async expirePending() {
     if (this.pending.size === 0) return
     const now = Date.now()
     const timeout = this.pendingTimeout()
     for (const [sessionId, item] of Array.from(this.pending.entries())) {
-      const status = await this.pendingStatus(item.taskId)
-      if (status && !status.terminal) {
-        this.touchPending(sessionId)
-        continue
-      }
-      if (status?.terminal) {
-        this.releaseSession(sessionId)
-        if (status.status !== "failed") continue
-        const sessions = this.findSessions(sessionId)
-        if (sessions.length === 0) continue
-        const msg = status.error ? `Task failed (${item.taskId}): ${status.error}` : `Task failed (${item.taskId}).`
-        this.mirrorSessions("system", msg, sessionId, sessions)
-        for (const session of sessions) {
-          await this.safeSend(session.adapter, session.channel, session.thread, msg)
-        }
-        continue
-      }
       if (now - item.touch < timeout) continue
       this.releaseSession(sessionId)
       const sessions = this.findSessions(sessionId)
@@ -1195,10 +1091,7 @@ export class ChannelRuntime {
       }
       const pending = this.pending.get(info.sessionID)
       if (!pending) return
-      const status = await this.pendingStatus(pending.taskId)
-      if (status?.terminal) {
-        this.releaseSession(info.sessionID)
-      }
+      this.releaseSession(info.sessionID)
       return
     }
 
