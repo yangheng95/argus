@@ -2,6 +2,8 @@ import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { closeImagePreview, imagePreviewState, openImagePreview } from "../services/image-preview"
 import {
   calculateImagePreviewFitScale,
+  calculateImagePreviewOpenScale,
+  calculateImagePreviewWidthScale,
   clampImagePreviewScale,
   type ImagePreviewSize,
 } from "../utils/image-preview-scale"
@@ -64,8 +66,8 @@ export function ImagePreviewHost() {
     if (!body) return
     resizeObserver?.disconnect()
     resizeObserver = new ResizeObserver(() => {
-      const fit = fitScale()
-      if (imagePreviewState().open && imageSize().width > 0 && scale() < fit) setScale(fit)
+      const openScale = previewOpenScale()
+      if (imagePreviewState().open && imageSize().width > 0 && scale() < openScale) setScale(openScale)
     })
     resizeObserver.observe(body)
   })
@@ -81,6 +83,8 @@ export function ImagePreviewHost() {
   })
 
   const fitScale = () => calculateImagePreviewFitScale(imageSize(), viewportSize())
+  const widthScale = () => calculateImagePreviewWidthScale(imageSize(), viewportSize())
+  const previewOpenScale = () => calculateImagePreviewOpenScale(imageSize(), viewportSize())
   const scaleLabel = () => `${Math.round(scale() * 100)}%`
   const stageStyle = () => {
     const rendered = renderedSize()
@@ -110,7 +114,7 @@ export function ImagePreviewHost() {
       height: image.naturalHeight || image.height,
     }
     setImageSize(nextSize)
-    setScale(calculateImagePreviewFitScale(nextSize, viewportSize()))
+    setScale(calculateImagePreviewOpenScale(nextSize, viewportSize()))
     requestAnimationFrame(() => {
       if (!bodyRef) return
       bodyRef.scrollLeft = 0
@@ -142,6 +146,15 @@ export function ImagePreviewHost() {
 
   function setFitScale(): void {
     applyScale(fitScale(), { x: 0, y: 0 })
+    requestAnimationFrame(() => {
+      if (!bodyRef) return
+      bodyRef.scrollLeft = 0
+      bodyRef.scrollTop = 0
+    })
+  }
+
+  function setWidthScale(): void {
+    applyScale(widthScale(), { x: 0, y: 0 })
     requestAnimationFrame(() => {
       if (!bodyRef) return
       bodyRef.scrollLeft = 0
@@ -228,12 +241,39 @@ export function ImagePreviewHost() {
           >
             <Icon name="minimize" size={13} />
           </Button>
+          <span class="image-preview-dialog__scale" role="status" aria-label="Current zoom">
+            {scaleLabel()}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-chrome="icon-action"
+            title="Zoom in"
+            aria-label="Zoom in"
+            onClick={() => updateScale(SCALE_STEP)}
+          >
+            <Icon name="maximize" size={13} />
+          </Button>
+          <span class="image-preview-dialog__separator" aria-hidden="true" />
           <Button
             type="button"
             variant="outline"
             size="sm"
             tone="neutral"
-            title="Fit image"
+            title="Fit width"
+            aria-label="Fit width"
+            onClick={setWidthScale}
+          >
+            Width
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            tone="neutral"
+            title="Fit whole image"
             aria-label="Fit image"
             onClick={setFitScale}
           >
@@ -248,20 +288,9 @@ export function ImagePreviewHost() {
             aria-label="Original size"
             onClick={setOriginalScale}
           >
-            {scaleLabel()}
+            1:1
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            tone="neutral"
-            data-chrome="icon-action"
-            title="Zoom in"
-            aria-label="Zoom in"
-            onClick={() => updateScale(SCALE_STEP)}
-          >
-            <Icon name="maximize" size={13} />
-          </Button>
+          <span class="image-preview-dialog__separator" aria-hidden="true" />
           <Button
             type="button"
             variant="ghost"

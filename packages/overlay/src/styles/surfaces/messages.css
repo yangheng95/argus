@@ -526,13 +526,26 @@
 }
 
 .dialog .image-preview-dialog__form {
-  width: min(calc(96vw - calc(24px * var(--ui-scale))), calc(1280px * var(--ui-scale)));
-  max-width: min(calc(96vw - calc(24px * var(--ui-scale))), calc(1280px * var(--ui-scale)));
-  height: min(calc(92vh - calc(24px * var(--ui-scale))), calc(900px * var(--ui-scale)));
-  max-height: min(calc(92vh - calc(24px * var(--ui-scale))), calc(900px * var(--ui-scale)));
+  width: calc(100vw - calc(16px * var(--ui-scale)));
+  max-width: calc(100vw - calc(16px * var(--ui-scale)));
+  height: calc(100vh - calc(16px * var(--ui-scale)));
+  max-height: calc(100vh - calc(16px * var(--ui-scale)));
   padding: 0;
   gap: 0;
   overflow: hidden;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--border-strong) 84%, transparent);
+}
+
+.dialog .image-preview-dialog__form > .dialog-header {
+  min-height: calc(40px * var(--ui-scale));
+  margin: 0;
+  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale))
+    calc(10px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border-strong) 76%, transparent);
+  box-shadow: none;
 }
 
 .dialog .image-preview-dialog__form .dialog-title {
@@ -540,7 +553,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: calc(15px * var(--ui-scale));
+  font-family: var(--mono);
+  font-size: calc(13px * var(--ui-scale));
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0;
 }
 
@@ -551,16 +566,52 @@
 .image-preview-dialog__toolbar {
   display: inline-flex;
   align-items: center;
-  gap: var(--ui-gap-xs);
+  gap: calc(4px * var(--ui-scale));
+}
+
+.image-preview-dialog__toolbar .oc-button[data-size="icon"] {
+  --oc-button-height: calc(26px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+}
+
+.image-preview-dialog__toolbar .oc-button[data-size="sm"] {
+  --oc-button-height: calc(26px * var(--ui-scale));
+  --oc-button-padding-x: calc(8px * var(--ui-scale));
+}
+
+.image-preview-dialog__scale {
+  min-width: calc(42px * var(--ui-scale));
+  height: calc(26px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(7px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  color: var(--text-strong);
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.image-preview-dialog__separator {
+  width: var(--oc-border-width);
+  height: calc(18px * var(--ui-scale));
+  margin: 0 calc(2px * var(--ui-scale));
+  background: color-mix(in srgb, var(--border-strong) 70%, transparent);
 }
 
 .image-preview-dialog__body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: var(--ui-gap-md);
-  background: var(--surface-inset);
+  padding: calc(12px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-inset) 92%, var(--surface));
   cursor: grab;
+  scrollbar-gutter: stable both-edges;
+  overscroll-behavior: contain;
   touch-action: none;
   user-select: none;
 }
@@ -584,9 +635,10 @@
   height: var(--image-preview-rendered-height, auto);
   max-width: none;
   max-height: none;
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
+  border-radius: calc(4px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border-strong) 72%, transparent);
   background: var(--surface);
+  box-shadow: 0 calc(12px * var(--ui-scale)) calc(30px * var(--ui-scale)) color-mix(in srgb, black 24%, transparent);
   pointer-events: none;
 }
 
