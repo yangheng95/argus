@@ -21,8 +21,8 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
   return (
     <section class="workspace" id="workspacePanel">
       <header class="workspace-header">
-        <div class="workspace-tabs" role="tablist">
-          <button type="button" class="workspace-tab" role="tab" aria-selected="true" data-active="true">
+        <div class="workspace-tabs" data-ui="workspace-view-label">
+          <div class="workspace-tab" data-active="true">
             <span class="workspace-tab-label">
               {t("workspace.diff")}
               <Show when={diffFilePath()}>
@@ -32,7 +32,7 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
                 </span>
               </Show>
             </span>
-          </button>
+          </div>
         </div>
         <button
           type="button"
