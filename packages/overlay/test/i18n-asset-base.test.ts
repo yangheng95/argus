@@ -10,6 +10,15 @@ afterEach(() => {
 })
 
 describe("i18n asset loading", () => {
+  test("throws when a locale file cannot be loaded", async () => {
+    ;(globalThis as any).__OPENCORVUS_ASSET_BASE__ = "vscode-webview://media-root/ui/"
+    globalThis.fetch = (async () => {
+      return new Response("missing", { status: 404 })
+    }) as typeof fetch
+
+    await expect(loadAllLocales()).rejects.toThrow(/Failed to load locale zh-CN: HTTP 404/)
+  })
+
   test("uses the host-provided asset base for VS Code webview locale files", async () => {
     const urls: string[] = []
     ;(globalThis as any).__OPENCORVUS_ASSET_BASE__ = "vscode-webview://media-root/ui/"
@@ -29,12 +38,16 @@ describe("i18n asset loading", () => {
     ])
   })
 
-  test("throws when a locale file cannot be loaded", async () => {
+  test("does not refetch locale files once every supported locale is loaded", async () => {
+    const urls: string[] = []
     ;(globalThis as any).__OPENCORVUS_ASSET_BASE__ = "vscode-webview://media-root/ui/"
-    globalThis.fetch = (async () => {
-      return new Response("missing", { status: 404 })
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      urls.push(String(input))
+      return new Response("missing", { status: 500 })
     }) as typeof fetch
 
-    await expect(loadAllLocales()).rejects.toThrow(/Failed to load locale zh-CN: HTTP 404/)
+    await loadAllLocales()
+
+    expect(urls).toEqual([])
   })
 })

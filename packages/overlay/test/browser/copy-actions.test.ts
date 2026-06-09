@@ -1,12 +1,18 @@
-import { expect, test } from "bun:test"
-import { launchBrowser } from "./launch"
-import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { launchBrowser } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
 test(
   "copying logs does not open the dialog",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
     const now = Date.now()
     const task = {
       id: "task-1",
@@ -114,88 +120,99 @@ test(
           ...(init?.headers || {}),
         },
       })
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
-        const url = new URL(req.url)
-        const path = route(url)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") {
-          return new Response(null, { status: 204 })
-        }
-        if (path === "/ui" || path === "/ui/") {
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        }
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/task/events" || path === "/task/task-1/events") {
-          return new Response(":\n\n", {
-            headers: {
-              "content-type": "text/event-stream; charset=utf-8",
-              "cache-control": "no-cache",
-            },
-          })
-        }
-        if (path === "/tasks") return send(data.tasks)
-        if (path === "/global/tasks") return send(data.tasks)
-        if (path === "/session") return send([])
-        if (path === "/config/prompt") return send([])
-        if (path.startsWith("/task/") && path.endsWith("/board")) return send(data.board)
-        if (path === "/task/task-1/conversation") {
-          return send({
-            board: data.board,
-            transcript: data.timeline.task["task-1"] || [],
-            timeline: data.timeline.task["task-1"] || [],
-            events: [],
-            view: {
-              sessions: [
-                {
-                  sessionID: "session-1",
-                  stage: "assistant",
-                  messageIDs: ["msg-assistant"],
-                  firstMessageTime: now - 7_000,
-                  placement: "top_level",
-                },
-              ],
-            },
-            eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
-            lastSequence: 0,
-          })
-        }
-        if (path.startsWith("/task/task-1/conversation/events")) {
-          return send({
-            events: [],
-            eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
-          })
-        }
-        if (path === "/task/task-1/transcript") return send(data.timeline.task["task-1"] || [])
-        if (path === "/path") return send(data.path)
-        if (path === "/vcs") return send(data.vcs)
-        if (path === "/config") return send(data.config)
-        if (path === "/provider") return send(data.provider)
-        if (path === "/provider/auth") return send(data.providerAuth)
-        if (path === "/agent") return send([])
-        if (path === "/config/providers") {
-          return send({ providers: [], default: data.provider.default || {} })
-        }
-        if (path === "/channel") return send(data.channels)
-        if (path === "/executor") return send(data.executors)
-        if (path === "/skill/installed" || path === "/skill") return send(data.skills)
-        if (path === "/mcp") return send(data.mcp)
-        if (path === "/panel/knowledge/memory") return send(data.memory)
-        if (path === "/panel/knowledge/preference") return send(data.preferences)
-        if (path === "/log/tail") return send({ path: "D:/overlay/logs/server.log", lines: data.logs })
-        if (path === "/log" && req.method === "POST") return send(true)
-        return text("not found", { status: 404 })
-      },
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") {
+        return new Response(null, { status: 204 })
+      }
+      if (path === "/ui" || path === "/ui/") {
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      }
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/task/events" || path === "/task/task-1/events") {
+        return new Response(":\n\n", {
+          headers: {
+            "content-type": "text/event-stream; charset=utf-8",
+            "cache-control": "no-cache",
+          },
+        })
+      }
+      if (path === "/tasks") return send(data.tasks)
+      if (path === "/global/tasks") return send(data.tasks)
+      if (path === "/session") return send([])
+      if (path === "/config/prompt") return send([])
+      if (path.startsWith("/task/") && path.endsWith("/board")) return send(data.board)
+      if (path === "/task/task-1/conversation") {
+        return send({
+          board: data.board,
+          transcript: data.timeline.task["task-1"] || [],
+          timeline: data.timeline.task["task-1"] || [],
+          events: [],
+          view: {
+            sessions: [
+              {
+                sessionID: "session-1",
+                stage: "assistant",
+                messageIDs: ["msg-assistant"],
+                firstMessageTime: now - 7_000,
+                placement: "top_level",
+              },
+            ],
+          },
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+          lastSequence: 0,
+        })
+      }
+      if (path.startsWith("/task/task-1/conversation/events")) {
+        return send({
+          events: [],
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+        })
+      }
+      if (path === "/task/task-1/transcript") return send(data.timeline.task["task-1"] || [])
+      if (path === "/path") return send(data.path)
+      if (path === "/vcs") return send(data.vcs)
+      if (path === "/config") return send(data.config)
+      if (path === "/provider") return send(data.provider)
+      if (path === "/provider/auth") return send(data.providerAuth)
+      if (path === "/agent") return send([])
+      if (path === "/config/providers") {
+        return send({ providers: [], default: data.provider.default || {} })
+      }
+      if (path === "/channel") return send(data.channels)
+      if (path === "/executor") return send(data.executors)
+      if (path === "/skill/installed" || path === "/skill") return send(data.skills)
+      if (path === "/mcp") return send(data.mcp)
+      if (path === "/panel/knowledge/memory") return send(data.memory)
+      if (path === "/panel/knowledge/preference") return send(data.preferences)
+      if (path === "/log/tail") return send({ path: "D:/overlay/logs/server.log", lines: data.logs })
+      if (path === "/log" && req.method === "POST") return send(true)
+      return text("not found", { status: 404 })
     })
-    const page = await launchBrowser()
+    const browser = await launchBrowser()
 
     try {
-      const tab = await page.newPage()
-      const base = `http://127.0.0.1:${server.port}`
+      const tab = await browser.newPage()
+      const base = server.origin
+      const errors: string[] = []
+      tab.on("pageerror", (error) => {
+        errors.push(`pageerror: ${error.message}`)
+      })
+      tab.on("requestfailed", (request) => {
+        errors.push(`requestfailed: ${request.url()}`)
+      })
+      tab.on("response", (response) => {
+        if (response.status() === 404) errors.push(`response404: ${response.url()}`)
+      })
+      tab.on("console", (msg) => {
+        if (msg.type() === "error") errors.push(`console: ${msg.text()}`)
+      })
       await tab.evaluateOnNewDocument((serverUrl) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        if (document.documentElement) document.documentElement.lang = "en-US"
         const state = { writes: [] as string[] }
         Object.defineProperty(window, "__copyTest", {
           configurable: true,
@@ -217,6 +234,7 @@ test(
                   serverUrl,
                   autoServer: false,
                   directory: "D:/overlay/workspace/app",
+                  locale: "en-US",
                 }
               }
               if (command === "overlay_settings_save") return true
@@ -237,11 +255,22 @@ test(
             },
           },
         }
+        localStorage.setItem("oc_locale", "en-US")
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_auto_server", "false")
       }, base)
       await tab.goto(`${base}/ui/index.html`, { waitUntil: "load" })
-      await tab.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
+      try {
+        await tab.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
+      } catch (error) {
+        const snapshot = await tab.evaluate(() => ({
+          badge: document.querySelector("#connBadge")?.textContent || "",
+          badgeStatus: document.querySelector<HTMLElement>("#connBadge")?.dataset.status || "",
+          body: document.body.textContent?.slice(0, 500) || "",
+          serverUrl: localStorage.getItem("oc_server_url"),
+        }))
+        assert.fail(`${error instanceof Error ? error.message : String(error)}\n${JSON.stringify({ errors, snapshot })}`)
+      }
       await tab.waitForSelector(".task-row-main[data-task-id='task-1']")
       await tab.click(".task-row-main[data-task-id='task-1']")
 
@@ -262,12 +291,12 @@ test(
         }
       })
 
-      expect(afterLog.dialogOpen).toBe(false)
-      expect(afterLog.writes.length).toBe(1)
-      expect(afterLog.writes[0]).toContain("overlay ready")
+      assert.equal(afterLog.dialogOpen, false)
+      assert.equal(afterLog.writes.length, 1)
+      assert.match(afterLog.writes[0], /overlay ready/)
     } finally {
-      await page.close().catch(() => undefined)
-      server.stop(true)
+      await browser.close().catch(() => undefined)
+      await server.close()
     }
   },
   { timeout: 60_000 },
