@@ -1,6 +1,9 @@
-import { expect, test } from "bun:test"
-import { launchBrowser, type OverlayBrowser, type OverlayPage } from "./launch"
-import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { launchBrowser, type OverlayBrowser, type OverlayPage } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
 
 type Browser = OverlayBrowser
 type Page = OverlayPage
@@ -80,6 +83,9 @@ async function withOverlay(
     },
   ) => Promise<void>,
 ) {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
   const calls: Calls = {
     authorize: [],
     callback: [],
@@ -88,75 +94,74 @@ async function withOverlay(
     authPut: [],
   }
 
-  const server = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      const url = new URL(req.url)
-      const path = route(url)
-      if (path === "/favicon.ico" || path === "/ui/favicon.ico") {
-        return new Response(null, { status: 204 })
-      }
-      if (path === "/ui" || path === "/ui/") {
-        return Response.redirect(`${url.origin}/ui/index.html`, 302)
-      }
-      const staticResponse = await overlayStaticResponse(path)
-      if (staticResponse) return staticResponse
-      if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks") return send({ tasks: [] })
-      if (path === "/global/tasks") return send({ tasks: [] })
-      if (path === "/session") return send([])
-      if (path === "/path") return send(data.path)
-      if (path === "/vcs") return send(data.vcs)
-      if (path === "/provider") return send(data.provider)
-      if (path === "/provider/auth") return send(data.providerAuth)
-      if (path === "/agent") return send([])
-      if (path === "/config/providers") {
-        return send({
-          providers: data.provider.all.map((item: any) => ({
-            id: item.id,
-            name: item.name || item.id,
-            models: item.models || {},
-          })),
-          default: data.provider.default || {},
-        })
-      }
-      if (path === "/config/prompt") return send([])
-      if (path === "/config" && req.method === "GET") return send(data.config)
-      if (path === "/config" && req.method === "PATCH") {
-        const body = (await req.json()) as Record<string, unknown>
-        calls.configPatch.push(body)
-        data.config = mergePatch(data.config, body) as Record<string, unknown>
-        return send(data.config)
-      }
-      if (path.startsWith("/auth/") && req.method === "PUT") {
-        const providerID = path.slice("/auth/".length)
-        const body = (await req.json()) as Record<string, unknown>
-        calls.authPut.push({ providerID, body })
-        const provider = data.provider.all.find((item: any) => item.id === providerID)
-        if (provider) provider.key = typeof body.key === "string" ? body.key : provider.key
-        if (!data.provider.connected.includes(providerID)) data.provider.connected.push(providerID)
-        return send(true)
-      }
-      if (path === "/channel") return send(data.channels)
-      if (path === "/skill/installed" || path === "/skill") return send(data.skills)
-      if (path === "/mcp") return send(data.mcp)
-      if (path === "/executor") return send(data.executors)
-      if (path === "/panel/knowledge/memory") return send(data.memory)
-      if (path === "/panel/knowledge/preference") return send(data.preference)
-      if (path === "/log" && req.method === "POST") return send({ ok: true })
-      return (
-        (await handler({ req, url, path, data, calls })) ||
-        new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      )
-    },
+  const server = await startBrowserFixture(async (req) => {
+    const url = new URL(req.url)
+    const path = route(url)
+    if (path === "/favicon.ico" || path === "/ui/favicon.ico") {
+      return new Response(null, { status: 204 })
+    }
+    if (path === "/ui" || path === "/ui/") {
+      return Response.redirect(`${url.origin}/ui/index.html`, 302)
+    }
+    const staticResponse = await overlayStaticResponse(path)
+    if (staticResponse) return staticResponse
+    if (path === "/global/health") return send({ version: "1.2.3" })
+    if (path === "/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/session") return send([])
+    if (path === "/path") return send(data.path)
+    if (path === "/vcs") return send(data.vcs)
+    if (path === "/provider") return send(data.provider)
+    if (path === "/provider/auth") return send(data.providerAuth)
+    if (path === "/agent") return send([])
+    if (path === "/config/providers") {
+      return send({
+        providers: data.provider.all.map((item: any) => ({
+          id: item.id,
+          name: item.name || item.id,
+          models: item.models || {},
+        })),
+        default: data.provider.default || {},
+      })
+    }
+    if (path === "/config/prompt") return send([])
+    if (path === "/config" && req.method === "GET") return send(data.config)
+    if (path === "/config" && req.method === "PATCH") {
+      const body = (await req.json()) as Record<string, unknown>
+      calls.configPatch.push(body)
+      data.config = mergePatch(data.config, body) as Record<string, unknown>
+      return send(data.config)
+    }
+    if (path.startsWith("/auth/") && req.method === "PUT") {
+      const providerID = path.slice("/auth/".length)
+      const body = (await req.json()) as Record<string, unknown>
+      calls.authPut.push({ providerID, body })
+      const provider = data.provider.all.find((item: any) => item.id === providerID)
+      if (provider) provider.key = typeof body.key === "string" ? body.key : provider.key
+      if (!data.provider.connected.includes(providerID)) data.provider.connected.push(providerID)
+      return send(true)
+    }
+    if (path === "/channel") return send(data.channels)
+    if (path === "/skill/installed" || path === "/skill") return send(data.skills)
+    if (path === "/mcp") return send(data.mcp)
+    if (path === "/executor") return send(data.executors)
+    if (path === "/panel/knowledge/memory") return send(data.memory)
+    if (path === "/panel/knowledge/preference") return send(data.preference)
+    if (path === "/log" && req.method === "POST") return send({ ok: true })
+    return (
+      (await handler({ req, url, path, data, calls })) ||
+      new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+    )
   })
 
   const page = await launchBrowser()
 
   try {
     const tab = await page.newPage()
-    const base = `http://127.0.0.1:${server.port}`
+    const base = server.origin
     await tab.evaluateOnNewDocument((serverUrl) => {
+      ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+      localStorage.setItem("oc_locale", "en-US")
       const state = {
         open: [] as string[],
         settings: {},
@@ -173,6 +178,7 @@ async function withOverlay(
                 serverUrl,
                 autoServer: false,
                 directory: "D:/overlay/workspace/app",
+                locale: "en-US",
               }
             }
             if (command === "overlay_settings_save") {
@@ -206,7 +212,7 @@ async function withOverlay(
     await run(tab, { calls })
   } finally {
     await page.close()
-    server.stop(true)
+    await server.close()
   }
 }
 
@@ -292,7 +298,15 @@ async function submitDialogSelect(tab: Page, value: string) {
     body: document.querySelector("#appDialogBody")?.textContent || "",
     label: document.querySelector("#appDialogSelectLabel")?.textContent || "",
   }))
-  await tab.select("#appDialogSelect", value)
+  await tab.$eval(
+    "#appDialogSelect",
+    (node: HTMLSelectElement, nextValue: string) => {
+      node.value = nextValue
+      node.dispatchEvent(new Event("input", { bubbles: true }))
+      node.dispatchEvent(new Event("change", { bubbles: true }))
+    },
+    value,
+  )
   await tab.click("#btnAppDialogOk")
   await tab.waitForFunction(
     (prev) => {
@@ -411,10 +425,10 @@ test(
             toolbarRight: toolbar.right,
           }
         })
-        expect(layout.actionsRight).toBeLessThanOrEqual(layout.toolbarRight + 1)
-        expect(layout.searchRight).toBeLessThanOrEqual(layout.contentRight + 1)
-        expect(layout.saveRight).toBeLessThanOrEqual(layout.contentRight + 1)
-        expect(layout.searchTop).toBeGreaterThanOrEqual(layout.titleBottom - 1)
+        assert.ok(layout.actionsRight <= layout.toolbarRight + 1)
+        assert.ok(layout.searchRight <= layout.contentRight + 1)
+        assert.ok(layout.saveRight <= layout.contentRight + 1)
+        assert.ok(layout.searchTop >= layout.titleBottom - 1)
 
         await tab.type('[data-testid="provider-search-input"]', "claude")
         await tab.waitForFunction(
@@ -597,9 +611,9 @@ test(
           }
         })
 
-        expect(result.connectedText).toContain("Connected")
-        expect(result.opened).toContain("https://auth.openai.com/oauth/authorize?state=overlay-state")
-        expect(state.calls.authorize).toEqual([
+        assert.ok(result.connectedText.includes("Connected"))
+        assert.ok(result.opened.includes("https://auth.openai.com/oauth/authorize?state=overlay-state"))
+        assert.deepEqual(state.calls.authorize, [
           {
             method: 0,
             inputs: {
@@ -608,7 +622,7 @@ test(
             },
           },
         ])
-        expect(state.calls.callback).toEqual([
+        assert.deepEqual(state.calls.callback, [
           {
             method: 0,
             code: "http://localhost:1455/auth/callback?code=oauth-code&state=overlay-state",
@@ -752,8 +766,8 @@ test(
           connectedText: document.body.textContent || "",
         }))
 
-        expect(result.connectedText).toContain("Connected")
-        expect(state.calls.execute).toEqual([
+        assert.ok(result.connectedText.includes("Connected"))
+        assert.deepEqual(state.calls.execute, [
           {
             method: 0,
             inputs: {
@@ -838,7 +852,7 @@ test(
         )
         await tab.waitForSelector('[data-testid="provider-catalog-row-anthropic"]')
 
-        expect(state.calls.authPut).toEqual([
+        assert.deepEqual(state.calls.authPut, [
           {
             providerID: "anthropic",
             body: {
@@ -847,8 +861,8 @@ test(
             },
           },
         ])
-        expect(state.calls.configPatch.filter((patch) => Object.hasOwn(patch, "provider"))).toEqual([])
-        expect(await tab.$('[data-testid="provider-custom-row-anthropic"]')).toBeNull()
+        assert.deepEqual(state.calls.configPatch.filter((patch) => Object.hasOwn(patch, "provider")), [])
+        assert.equal(await tab.$('[data-testid="provider-custom-row-anthropic"]'), null)
       },
     )
   },
