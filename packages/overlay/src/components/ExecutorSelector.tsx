@@ -88,6 +88,11 @@ function connectedProviderIDs(): Set<string> {
   return out
 }
 
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  return String(error || "")
+}
+
 function buildProviderGroups(
   filter?: (id: string) => boolean,
   prioritizeAvailable = true,
@@ -181,14 +186,13 @@ export function ExecutorSelector() {
     if (!id) return null
     return { taskID: id, refresh: sessionConfigRefreshToken() }
   })
-  const [taskOperatorContext, { mutate: mutateTaskOperatorContext }] = createResource(
-    taskOperatorContextKey,
-    async (key): Promise<TaskOperatorModelContext> => {
+  const [taskOperatorContext, { mutate: mutateTaskOperatorContext, refetch: refetchTaskOperatorContext }] =
+    createResource(taskOperatorContextKey, async (key): Promise<TaskOperatorModelContext> => {
       return await getTaskOperatorModelContext(key.taskID)
-    },
-  )
+    })
 
   const currentTaskOperatorContext = createMemo(() => {
+    if (taskOperatorContext.error) return null
     const ctx = taskOperatorContext()
     if (!ctx) return null
     if (ctx.taskID !== taskID()) return null
@@ -203,11 +207,15 @@ export function ExecutorSelector() {
   })
   const openCorvusModelPlaceholder = createMemo(() => {
     if (!hasSelectedTask()) return t("agent_models.option_not_set")
-    if (taskOperatorContext.loading) return t("common.loading")
     if (taskOperatorContext.error) return t("common.error")
+    if (taskOperatorContext.loading) return t("common.loading")
     return t("agent_models.option_not_set")
   })
   const openCorvusModelLabel = createMemo(() => openCorvusModel() || openCorvusModelPlaceholder())
+  const mirrorContextError = createMemo(() => (hasSelectedTask() ? taskOperatorContext.error : null))
+  const mirrorContextLoading = createMemo(
+    () => hasSelectedTask() && taskOperatorContext.loading && !mirrorContextError(),
+  )
   const externalModel = createMemo(() => {
     const id = externalActiveID()
     return id ? executorCurrentModel(id) : ""
@@ -240,7 +248,6 @@ export function ExecutorSelector() {
   const focusedCurrentModel = createMemo(() => executorCurrentModel(focusedExternalID()))
 
   function openMirror() {
-    if (mirrorWriteDisabled()) return
     external.close()
     void ensureProviderInfoLoaded()
     mirror.openIt()
@@ -308,6 +315,10 @@ export function ExecutorSelector() {
   // silently writing the project /config.
   const mirrorWriteDisabled = createMemo(() => hasSelectedTask() && !currentTaskOperatorContext()?.sessionID)
 
+  function retryTaskOperatorContext() {
+    void refetchTaskOperatorContext()
+  }
+
   async function pickExternalModel(executorID: string, model: string) {
     if (executorID !== activeID()) {
       setSettingsStore("executor", sanitizeExecutor(executorID))
@@ -349,7 +360,6 @@ export function ExecutorSelector() {
         ariaLabel={t("executor.mirror_chip_aria", {
           model: openCorvusModelLabel(),
         })}
-        disabled={mirrorWriteDisabled()}
       >
         <>
           <div class="executor-popover-header">
@@ -364,18 +374,41 @@ export function ExecutorSelector() {
               </div>
             }
           >
-            <div class="executor-popover-body">
-              <For each={mirrorGroups()}>
-                {(group) => (
-                  <ProviderModelGroup
-                    group={group}
-                    currentModel={openCorvusModel()}
-                    disabled={mirrorWriteDisabled()}
-                    onPick={(modelID) => void pickMirrorModel(modelID)}
-                  />
-                )}
-              </For>
-            </div>
+            <Show
+              when={!mirrorContextLoading()}
+              fallback={<div class="executor-popover-empty">{t("common.loading")}</div>}
+            >
+              <Show
+                when={!mirrorContextError()}
+                fallback={
+                  <div class="executor-popover-empty executor-popover-error" data-ui="executor-mirror-context-error">
+                    <span>{errorMessage(mirrorContextError()) || t("common.error")}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="mini"
+                      tone="neutral"
+                      onClick={retryTaskOperatorContext}
+                    >
+                      {t("common.retry")}
+                    </Button>
+                  </div>
+                }
+              >
+                <div class="executor-popover-body">
+                  <For each={mirrorGroups()}>
+                    {(group) => (
+                      <ProviderModelGroup
+                        group={group}
+                        currentModel={openCorvusModel()}
+                        disabled={mirrorWriteDisabled()}
+                        onPick={(modelID) => void pickMirrorModel(modelID)}
+                      />
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </Show>
           </Show>
         </>
       </ExecutorChip>

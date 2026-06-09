@@ -671,6 +671,18 @@
   line-height: 1.4;
 }
 
+.executor-popover-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.executor-popover-error > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .executor-popover-group {
   display: flex;
   flex-direction: column;
@@ -726,6 +738,16 @@
 .executor-popover-model:hover {
   background: var(--executor-menu-row-hover-bg);
   color: var(--text-strong);
+}
+
+.executor-popover-model:disabled {
+  cursor: not-allowed;
+  opacity: var(--ui-opacity-faint);
+}
+
+.executor-popover-model:disabled:hover {
+  background: transparent;
+  color: var(--text-soft);
 }
 
 .executor-popover-model[data-active="true"] {
