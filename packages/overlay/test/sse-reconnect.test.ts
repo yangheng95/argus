@@ -12,6 +12,7 @@ import {
   type SseStartOptions,
 } from "../src/services/sse"
 import {
+  HOST_CAPABILITIES,
   __setHostTransportForTest,
   type HostTransport,
   type StreamHandlers,
@@ -274,6 +275,7 @@ describe("startSSE stream error handling", () => {
       let closeCalls = 0
       const transport = {
         kind: "tauri",
+        capabilities: HOST_CAPABILITIES.tauri,
         request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
         openStream: (_input: StreamOpenRequest, h: StreamHandlers) => {
           handlers = h
@@ -316,6 +318,7 @@ describe("startSSE stream error handling", () => {
       let handlers: StreamHandlers | undefined
       const transport = {
         kind: "tauri",
+        capabilities: HOST_CAPABILITIES.tauri,
         request: async <T>(input: TransportRequest) => {
           requests.push(input.path)
           return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_expired", 6) as T }
@@ -377,6 +380,7 @@ describe("startSSE stream error handling", () => {
       let closeCalls = 0
       const transport = {
         kind: "tauri",
+        capabilities: HOST_CAPABILITIES.tauri,
         request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
         openStream: (_input: StreamOpenRequest, h: StreamHandlers) => {
           handlers = h
@@ -413,6 +417,7 @@ describe("startSSE stream error handling", () => {
       let closeCalls = 0
       const transport = {
         kind: "tauri",
+        capabilities: HOST_CAPABILITIES.tauri,
         request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
         openStream: (_input: StreamOpenRequest, h: StreamHandlers) => {
           handlers = h
@@ -464,6 +469,7 @@ describe("startSSE stream error handling", () => {
     const streams: StreamOpenRequest[] = []
     const transport = {
       kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
       request: async <T>(input: TransportRequest) => ({
         status: 200,
         ok: true,
@@ -524,6 +530,7 @@ describe("startSSE stream error handling", () => {
       let streamOpened = 0
       const transport = {
         kind: "tauri",
+        capabilities: HOST_CAPABILITIES.tauri,
         request: async <T>(input: TransportRequest) => {
           paths.push(input.path)
           return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T }
@@ -581,6 +588,7 @@ describe("startSSE stream error handling", () => {
     try {
       const transport = {
         kind: "tauri",
+        capabilities: HOST_CAPABILITIES.tauri,
         request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
         openStream: (_input: StreamOpenRequest, h: StreamHandlers) => {
           return {
