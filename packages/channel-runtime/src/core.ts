@@ -333,6 +333,7 @@ export class ChannelRuntime {
       }
       if (!shared) {
         const createResult = await this.client.session.create({
+          kind: "assistant",
           title: `${msg.platform} thread ${msg.thread}`,
         })
 
@@ -751,6 +752,7 @@ export class ChannelRuntime {
     }
 
     const createResult = await this.client.session.create({
+      kind: "assistant",
       title: `${msg.platform} shared session`,
     })
     if (createResult.error || !createResult.data) {
