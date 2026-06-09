@@ -109,7 +109,7 @@ export const BrowserPreviewRoutes = lazy(() =>
       validator(
         "json",
         z.object({
-          targetID: z.string().optional(),
+          targetID: z.string().min(1),
           viewportID: BrowserPreviewViewportID.default("desktop"),
         }),
       ),
@@ -117,25 +117,20 @@ export const BrowserPreviewRoutes = lazy(() =>
         const { taskID } = c.req.valid("param")
         const body = c.req.valid("json")
         requireTask(taskID)
-        const persisted = body.targetID ? findBrowserPreviewTargetByID({ taskID, targetID: body.targetID }) : undefined
-        const target = body.targetID
-          ? persisted
-            ? taskBrowserPreviewTarget({
-              id: persisted.id,
-              taskID,
-              projectRoot: Instance.directory,
-              url: persisted.url,
-              diagnostics: [`Using task browser preview target ${persisted.id}.`],
-            })
-            : failedBrowserPreviewTarget({
-              projectRoot: Instance.directory,
-              taskID,
-              diagnostics: [`Browser preview target not found: ${body.targetID}`],
-            })
-          : await resolveBrowserPreviewTarget({
-              projectRoot: Instance.directory,
-              taskID,
-            })
+        const persisted = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
+        const target = persisted
+          ? taskBrowserPreviewTarget({
+            id: persisted.id,
+            taskID,
+            projectRoot: Instance.directory,
+            url: persisted.url,
+            diagnostics: [`Using task browser preview target ${persisted.id}.`],
+          })
+          : failedBrowserPreviewTarget({
+            projectRoot: Instance.directory,
+            taskID,
+            diagnostics: [`Browser preview target not found: ${body.targetID}`],
+          })
         const verification = await verifyBrowserPreview({
           projectRoot: Instance.directory,
           target,

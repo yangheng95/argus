@@ -1,92 +1,60 @@
 import { persistBrowserPreviewTarget, type PersistedBrowserPreviewTarget } from "./persist"
 import { normalizeBrowserPreviewUrl } from "./target"
+import { isLoopbackBrowserPreviewUrl, waitForBrowserPreviewUrlReachable } from "./liveness"
 import { Log } from "@/util/log"
 
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"])
-const HTTP_URL_TOKEN = /https?:\/\/[^\s<>"'`]+/gi
+const LOCAL_URL_TOKEN = /(?:^|[\s(<])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/[^\s<>"'`]*)?)/gi
 const ANSI_ESCAPE = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g
-const PREVIEW_TARGET_REACHABILITY_TIMEOUT_MS = 5_000
-const PREVIEW_TARGET_REACHABILITY_INTERVAL_MS = 250
-const PREVIEW_TARGET_REACHABILITY_REQUEST_TIMEOUT_MS = 1_000
+const MAX_PREVIEW_OUTPUT_SCAN_CHARS = 65_536
+const MAX_EXTRACTED_PREVIEW_URLS = 16
 const log = Log.create({ service: "browser-preview-extract" })
 
 export function extractBrowserPreviewUrlFromText(text: string): string | undefined {
+  return extractBrowserPreviewUrlsFromText(text)[0]
+}
+
+export function extractBrowserPreviewUrlsFromText(text: string): string[] {
   const clean = text.replace(ANSI_ESCAPE, "")
-  for (const match of clean.matchAll(HTTP_URL_TOKEN)) {
-    const normalized = normalizeBrowserPreviewUrl(trimUrlToken(match[0]))
+  const scan = clean.length > MAX_PREVIEW_OUTPUT_SCAN_CHARS ? clean.slice(-MAX_PREVIEW_OUTPUT_SCAN_CHARS) : clean
+  const urls: string[] = []
+  const seen = new Set<string>()
+  for (const match of scan.matchAll(LOCAL_URL_TOKEN)) {
+    const normalized = normalizeBrowserPreviewUrl(trimUrlToken(match[1]))
     if (!normalized) continue
-    if (isLoopbackBrowserPreviewUrl(normalized)) return normalized
+    if (!isLoopbackBrowserPreviewUrl(normalized)) continue
+    const key = normalized.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    urls.push(normalized)
+    if (urls.length >= MAX_EXTRACTED_PREVIEW_URLS) break
   }
-  return undefined
+  return urls
 }
 
 export function persistBrowserPreviewTargetFromProcessOutput(input: {
   taskID?: string
   output: string
   probe?: (url: string) => Promise<boolean>
-}): Promise<PersistedBrowserPreviewTarget | undefined> {
+}): Promise<PersistedBrowserPreviewTarget[]> {
   const taskID = input.taskID?.trim()
-  if (!taskID) return Promise.resolve(undefined)
-  const url = extractBrowserPreviewUrlFromText(input.output)
-  if (!url) return Promise.resolve(undefined)
+  if (!taskID) return Promise.resolve([])
+  const urls = extractBrowserPreviewUrlsFromText(input.output)
+  if (urls.length === 0) return Promise.resolve([])
   const probe = input.probe ?? waitForBrowserPreviewUrlReachable
-  return probe(url)
-    .then((reachable) => {
-      if (!reachable) {
+  return Promise.all(urls.map(async (url) => {
+    try {
+      if (!(await probe(url))) {
         log.warn("skipped unreachable browser preview target from process output", { taskID, url })
         return undefined
       }
       return persistBrowserPreviewTarget({ taskID, url })
-    })
-    .catch((error) => {
+    } catch (error) {
       log.warn("failed to persist browser preview target from process output", { taskID, url, error })
       return undefined
-    })
-}
-
-export async function waitForBrowserPreviewUrlReachable(
-  url: string,
-  input: {
-    timeoutMs?: number
-    intervalMs?: number
-    fetchImpl?: typeof fetch
-  } = {},
-): Promise<boolean> {
-  const timeoutMs = input.timeoutMs ?? PREVIEW_TARGET_REACHABILITY_TIMEOUT_MS
-  const intervalMs = input.intervalMs ?? PREVIEW_TARGET_REACHABILITY_INTERVAL_MS
-  const fetchImpl = input.fetchImpl ?? fetch
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() <= deadline) {
-    if (await probeBrowserPreviewUrl(url, fetchImpl)) return true
-    await new Promise((resolve) => setTimeout(resolve, intervalMs))
-  }
-  return false
-}
-
-async function probeBrowserPreviewUrl(url: string, fetchImpl: typeof fetch): Promise<boolean> {
-  const signal = AbortSignal.timeout(PREVIEW_TARGET_REACHABILITY_REQUEST_TIMEOUT_MS)
-  try {
-    const response = await fetchImpl(url, {
-      method: "GET",
-      cache: "no-store",
-      signal,
-    })
-    await response.body?.cancel().catch(() => undefined)
-    return response.status >= 200 && response.status < 400
-  } catch {
-    return false
-  }
+    }
+  })).then((targets): PersistedBrowserPreviewTarget[] => targets.filter((target): target is PersistedBrowserPreviewTarget => Boolean(target)))
 }
 
 function trimUrlToken(token: string): string {
   return token.replace(/[),.;\]}]+$/g, "")
-}
-
-function isLoopbackBrowserPreviewUrl(raw: string): boolean {
-  try {
-    const url = new URL(raw)
-    return LOOPBACK_HOSTS.has(url.hostname.toLowerCase())
-  } catch {
-    return false
-  }
 }

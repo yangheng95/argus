@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { extractBrowserPreviewUrlFromText } from "../../src/browser-preview/extract"
-import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import { extractBrowserPreviewUrlFromText, extractBrowserPreviewUrlsFromText } from "../../src/browser-preview/extract"
+import { findRecentBrowserPreviewTargets, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { Instance } from "../../src/project/instance"
 import { ProtocolStore } from "../../src/protocol/store"
@@ -60,6 +60,7 @@ describe("browser preview target resolver", () => {
     const target = await resolveBrowserPreviewTarget({
       projectRoot: tmp.path,
       taskID,
+      isVisible: async () => true,
     })
 
     expect(target.id).toBe(persisted.id)
@@ -67,7 +68,35 @@ describe("browser preview target resolver", () => {
     expect(target.status).toBe("ready")
     expect(target.source).toBe("task-artifact")
     expect(target.url).toBe("http://127.0.0.1:5173/task")
+    expect(target.candidates).toEqual([
+      {
+        id: persisted.id,
+        url: "http://127.0.0.1:5173/task",
+        source: "task-artifact",
+        selected: true,
+        timeUpdated: persisted.timeUpdated,
+      },
+    ])
     expect(target.viewports.map((viewport) => viewport.id)).toEqual(["desktop", "tablet", "mobile"])
+  })
+
+  test("duplicate preview target saves reuse one artifact and promote by update time", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const first = await persistBrowserPreviewTarget({
+      taskID,
+      url: "http://127.0.0.1:5173/task",
+      now: 100,
+    })
+    const second = await persistBrowserPreviewTarget({
+      taskID,
+      url: "http://127.0.0.1:5173/task",
+      now: 100,
+    })
+
+    expect(second.id).toBe(first.id)
+    expect(second.timeUpdated).toBeGreaterThan(first.timeUpdated)
+    expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.id)).toEqual([first.id])
   })
 
   test("persisting a preview target emits a task update event for overlay refresh", async () => {
@@ -140,6 +169,20 @@ describe("browser preview target resolver", () => {
     ].join("\n")
 
     expect(extractBrowserPreviewUrlFromText(output)).toBe("http://localhost:5173/")
+  })
+
+  test("extracts multiple loopback preview URLs from process output", () => {
+    const output = [
+      "  Local:   localhost:5173",
+      "  Network: http://127.0.0.1:5174/dashboard",
+      "  docs: https://vite.dev/",
+      "  Local:   http://localhost:5173/",
+    ].join("\n")
+
+    expect(extractBrowserPreviewUrlsFromText(output)).toEqual([
+      "http://localhost:5173/",
+      "http://127.0.0.1:5174/dashboard",
+    ])
   })
 
   test("extracts an IPv6 loopback preview URL from process output", () => {

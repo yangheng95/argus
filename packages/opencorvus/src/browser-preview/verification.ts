@@ -3,6 +3,7 @@ import z from "zod"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { captureRuntimePage, type RuntimeCaptureInput, type RuntimeCaptureResult } from "@/runtime/page-capture"
 import { Identifier } from "@/id/id"
+import { runBrowserPreviewEvidenceJob, type BrowserEvidenceManifestSummary } from "./evidence-runner"
 import { persistBrowserPreviewEvidence } from "./persist"
 import { BrowserPreviewTarget } from "./target"
 import { browserPreviewViewportByID, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
@@ -24,6 +25,7 @@ export const BrowserPreviewCaptureSummary = z.object({
   path: z.string().optional(),
   sha: z.string().optional(),
   bytes: z.number().optional(),
+  manifest: z.unknown().optional(),
   layers: z.unknown().optional(),
   dom: z.unknown().optional(),
   capture_error: z.unknown().optional(),
@@ -65,33 +67,54 @@ export async function verifyBrowserPreview(input: {
       ],
     }
   }
+  const evidenceTargetID = input.targetID ?? input.target.id
+  if (input.taskID && !evidenceTargetID) {
+    return {
+      status: "failed",
+      projectRoot,
+      target: input.target,
+      viewport,
+      diagnostics: [
+        "Preview verification requires a persisted browser preview target ID.",
+        ...input.target.diagnostics,
+      ],
+    }
+  }
 
-  const capture = input.capture ?? captureRuntimePage
   const captureID = Identifier.ascending("artifact")
   const outDir = input.outDir ?? (
     input.taskID
       ? ProjectRuntimePaths.taskAbsolute(projectRoot, input.taskID, "browser-preview", captureID, viewport.id)
       : path.join(ProjectRuntimePaths.projectRuntimeRoot(projectRoot), "browser-preview", "no-task", captureID, viewport.id)
   )
-  const result = await capture({
-    url: input.target.url,
-    outDir,
-    viewport_width: viewport.width,
-    viewport_height: viewport.height,
-    fileLabel: viewport.id,
-    signal: input.signal,
-  })
+  const { result, manifest } = input.capture
+    ? { result: await input.capture({
+        url: input.target.url,
+        outDir,
+        viewport_width: viewport.width,
+        viewport_height: viewport.height,
+        fileLabel: viewport.id,
+        signal: input.signal,
+      }), manifest: undefined }
+    : await captureWithBrowserEvidenceRunner({
+        taskID: input.taskID,
+        targetID: evidenceTargetID,
+        url: input.target.url,
+        outDir,
+        viewportID: viewport.id,
+        signal: input.signal,
+      })
   const status = result.captured && result.passed ? "passed" : "failed"
   const diagnostics = [result.summary]
   let evidenceID: string | undefined
   if (input.taskID) {
     evidenceID = persistBrowserPreviewEvidence({
       taskID: input.taskID,
-      targetID: input.targetID ?? input.target.id,
+      targetID: evidenceTargetID!,
       viewportID: viewport.id,
       status,
       summary: result.summary,
-      capture: result,
+      capture: manifest ? { ...result, manifest } : result,
       diagnostics,
     })
   }
@@ -101,7 +124,43 @@ export async function verifyBrowserPreview(input: {
     projectRoot,
     target: evidenceID ? { ...input.target, latestEvidenceID: evidenceID } : input.target,
     viewport,
-    capture: result,
+    capture: manifest ? { ...result, manifest } : result,
     diagnostics,
   }
+}
+
+async function captureWithBrowserEvidenceRunner(input: {
+  taskID?: string
+  targetID?: string
+  url: string
+  outDir: string
+  viewportID: BrowserPreviewViewportID
+  signal?: AbortSignal
+}): Promise<{ result: RuntimeCaptureResult; manifest?: BrowserEvidenceManifestSummary }> {
+  if (!input.taskID || !input.targetID) {
+    return {
+      result: await captureRuntimePage({
+        url: input.url,
+        outDir: input.outDir,
+        viewport_width: browserPreviewViewportByID(input.viewportID).width,
+        viewport_height: browserPreviewViewportByID(input.viewportID).height,
+        fileLabel: input.viewportID,
+        signal: input.signal,
+      }),
+    }
+  }
+  const job = await runBrowserPreviewEvidenceJob({
+    jobID: Identifier.ascending("artifact"),
+    taskID: input.taskID,
+    targetID: input.targetID,
+    url: input.url,
+    outDir: input.outDir,
+    viewportIDs: [input.viewportID],
+    signal: input.signal,
+  })
+  const result = job.captures[input.viewportID]
+  if (!result) {
+    throw new Error(`Browser preview evidence runner did not return viewport ${input.viewportID}`)
+  }
+  return { result, manifest: job.manifest }
 }

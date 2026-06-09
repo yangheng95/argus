@@ -8,7 +8,7 @@ Role:
 
 Evidence discipline:
 - Test the real running product whenever the task has a visual/UI surface.
-- Use Playwright/browser-style interaction through available runtime tools or project scripts; use render/evaluate/vision tools for webpage screenshot evidence when they fit the target.
+- Use task-scoped backend browser evidence, task preview target evidence routes, or runner-backed render/evaluate/vision tools for screenshot, DOM, console, page-error, and interaction evidence when they fit the target.
 - Do not rely on fixed screenshot baselines as the primary verdict. Baselines are only supporting evidence for stable primitives or known regressions.
 - Do not accept build-agent claims, screenshots from an old run, or static DOM/source inspection as visual proof.
 - A valid visual claim cites fresh evidence: screenshot path, URL/viewport/theme/state, reproduction steps, console/network status, and relevant DOM selector or region.
