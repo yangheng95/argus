@@ -519,6 +519,8 @@ interface ExecutorChipProps {
 }
 
 function ExecutorChip(props: ExecutorChipProps) {
+  const [slotRef, setSlotRef] = createSignal<HTMLElement>()
+
   return (
     <Popover.Root
       open={props.disclosure.open()}
@@ -529,10 +531,17 @@ function ExecutorChip(props: ExecutorChipProps) {
         }
         props.disclosure.close()
       }}
+      anchorRef={slotRef}
       placement="top-start"
       gutter={6}
+      slide={false}
     >
-      <div class="executor-chip-slot" data-side={props.side} data-open={props.disclosure.open() ? "true" : "false"}>
+      <div
+        ref={setSlotRef}
+        class="executor-chip-slot"
+        data-side={props.side}
+        data-open={props.disclosure.open() ? "true" : "false"}
+      >
         <Popover.Trigger
           as={Button}
           type="button"
