@@ -8,6 +8,7 @@ import {
   isWebviewMessage,
   routeRequiresProjectDirectory,
   uint8ToBase64,
+  type NativeCommand,
   type ExtensionMessage,
   type WebviewMessage,
 } from "../src/index"
@@ -72,6 +73,10 @@ describe("isWebviewMessage", () => {
       const needsMethod = type === "request" || type === "stream.open"
       const env: any = { protocol: PROTOCOL_VERSION, type }
       if (needsMethod) env.method = "GET"
+      if (type === "native.request") {
+        env.id = "native-1"
+        env.command = { kind: "open-url", url: "https://example.com" } satisfies NativeCommand
+      }
       expect(isWebviewMessage(env)).toBe(true)
     }
   })
@@ -116,6 +121,33 @@ describe("isWebviewMessage", () => {
     expect(isWebviewMessage({ protocol: PROTOCOL_VERSION, type: "stream.close" })).toBe(true)
     expect(isWebviewMessage({ protocol: PROTOCOL_VERSION, type: "request.abort" })).toBe(true)
   })
+
+  test("native.request requires a valid native command payload", () => {
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "n1",
+        command: { kind: "workspace.pickDir", start: "D:/workspace" },
+      }),
+    ).toBe(true)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "n2",
+        command: { kind: "workspace.openProjectEditor", editor: "notepad", path: "D:/workspace" },
+      }),
+    ).toBe(false)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "n3",
+        command: { kind: "notification.send", body: "missing title" },
+      }),
+    ).toBe(false)
+  })
 })
 
 describe("base64 codec (audit F4)", () => {
@@ -157,8 +189,8 @@ describe("base64 codec (audit F4)", () => {
 })
 
 describe("schema snapshot (audit F8)", () => {
-  test("PROTOCOL_VERSION is 1", () => {
-    expect(PROTOCOL_VERSION).toBe(1)
+  test("PROTOCOL_VERSION is 2", () => {
+    expect(PROTOCOL_VERSION).toBe(2)
   })
 
   test("EXTENSION_MESSAGE_TYPES is the canonical, ordered set", () => {
@@ -170,13 +202,14 @@ describe("schema snapshot (audit F8)", () => {
       "stream.event",
       "stream.error",
       "stream.close",
+      "native.response",
       "ui-command",
       "host:theme",
     ])
   })
 
   test("WEBVIEW_MESSAGE_TYPES is the canonical, ordered set", () => {
-    expect(WEBVIEW_MESSAGE_TYPES).toEqual(["request", "stream.open", "stream.close", "request.abort"])
+    expect(WEBVIEW_MESSAGE_TYPES).toEqual(["request", "stream.open", "stream.close", "request.abort", "native.request"])
   })
 
   test("ExtensionMessage union shape is JSON-clonable (no methods, no symbols)", () => {
@@ -193,9 +226,10 @@ describe("schema snapshot (audit F8)", () => {
       { protocol: PROTOCOL_VERSION, type: "stream.event", id: "x", events: ["a", "b"] },
       { protocol: PROTOCOL_VERSION, type: "stream.error", id: "x", message: "boom" },
       { protocol: PROTOCOL_VERSION, type: "stream.close", id: "x", reason: "done" },
+      { protocol: PROTOCOL_VERSION, type: "native.response", id: "x", ok: true, value: "D:/workspace" },
       { protocol: PROTOCOL_VERSION, type: "ui-command", kind: "composer.attach", payload: { foo: 1 } },
       { protocol: PROTOCOL_VERSION, type: "host:theme", theme: "vscode-dark" },
-      { type: "protocol-mismatch", expected: 1, received: 2 },
+      { type: "protocol-mismatch", expected: 2, received: 1 },
     ]
     for (const s of samples) {
       const clone = JSON.parse(JSON.stringify(s))
@@ -228,6 +262,12 @@ describe("schema snapshot (audit F8)", () => {
       },
       { protocol: PROTOCOL_VERSION, type: "stream.close", id: "x" },
       { protocol: PROTOCOL_VERSION, type: "request.abort", id: "x" },
+      {
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "native-1",
+        command: { kind: "workspace.pickFiles", start: "D:/workspace", multiple: true },
+      },
     ]
     for (const s of samples) {
       expect(JSON.parse(JSON.stringify(s))).toEqual(s)

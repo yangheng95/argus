@@ -82,6 +82,7 @@ interface ActiveStream {
 }
 
 const pending = new Map<string, Pending>()
+const pendingNative = new Map<string, { resolve: (value: unknown) => void; reject: (err: Error) => void }>()
 const streams = new Map<string, ActiveStream>()
 const uiCommandHandlers = new Map<string, Set<(payload: unknown) => void>>()
 let installed = false
@@ -205,6 +206,19 @@ function handleIncoming(raw: unknown): void {
       try {
         s.handlers.onClose?.(msg.reason)
       } catch {}
+      return
+    }
+    case "native.response": {
+      const p = pendingNative.get(msg.id)
+      if (!p) return
+      pendingNative.delete(msg.id)
+      if (msg.ok) {
+        p.resolve(msg.value)
+        return
+      }
+      const err = new Error(msg.error?.message || "native command failed")
+      if (msg.error?.name) err.name = msg.error.name
+      p.reject(err)
       return
     }
     case "ui-command": {
@@ -512,9 +526,24 @@ export function createVsCodeTransport(): HostTransport {
         case "settings.save":
           return saveBrowserOverlaySettings(command.payload as Record<string, unknown>)
         default:
-          // Plan §5.2: reject every command until M5 wires the safe subset
-          // (open-url, pickDir, pickFiles) through the extension host.
-          return nativeUnsupported("vscode", command)
+          if (!HOST_CAPABILITIES.vscode.nativeCommands[command.kind]) {
+            return nativeUnsupported("vscode", command)
+          }
+          return new Promise((resolve, reject) => {
+            const id = newId()
+            pendingNative.set(id, { resolve, reject })
+            try {
+              vscode.postMessage(<WebviewMessage>{
+                protocol: PROTOCOL_VERSION,
+                type: "native.request",
+                id,
+                command,
+              })
+            } catch (err) {
+              pendingNative.delete(id)
+              reject(err instanceof Error ? err : new Error(String(err)))
+            }
+          })
       }
     },
     subscribeUiCommand(kind, handler) {
@@ -539,6 +568,7 @@ export function createVsCodeTransport(): HostTransport {
 /** Test seam — clears in-memory pending/stream maps. */
 export function __resetVsCodeTransportForTest(): void {
   pending.clear()
+  pendingNative.clear()
   streams.clear()
   uiCommandHandlers.clear()
   activeStreamForceClose.clear()

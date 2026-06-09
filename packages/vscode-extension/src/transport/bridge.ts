@@ -6,9 +6,12 @@ import {
   isWebviewMessage,
   uint8ToBase64,
   type ExtensionMessage,
+  type HostPermission,
+  type NativeCommand,
   type RequestBodyEncoding,
   type RequestMethod,
   type ResponseBodyEncoding,
+  type WebviewNativeRequestMessage,
   type WebviewRequestMessage,
   type WebviewStreamOpenMessage,
 } from "@opencorvus-ai/transport-protocol"
@@ -180,6 +183,31 @@ export class TransportBridge {
         }
         return
       }
+      case "native.request":
+        await this.handleNativeRequest(raw)
+        return
+    }
+  }
+
+  private async handleNativeRequest(msg: WebviewNativeRequestMessage): Promise<void> {
+    try {
+      const value = await runVsCodeNativeCommand(msg.command)
+      this.send({
+        protocol: PROTOCOL_VERSION,
+        type: "native.response",
+        id: msg.id,
+        ok: true,
+        value,
+      })
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      this.send({
+        protocol: PROTOCOL_VERSION,
+        type: "native.response",
+        id: msg.id,
+        ok: false,
+        error: { message: error.message, name: error.name },
+      })
     }
   }
 
@@ -589,6 +617,62 @@ function headersToObject(h: Headers): Record<string, string> {
     out[k] = v
   })
   return out
+}
+
+async function runVsCodeNativeCommand(command: NativeCommand): Promise<unknown> {
+  switch (command.kind) {
+    case "open-url":
+      return vscode.env.openExternal(vscode.Uri.parse(command.url))
+    case "open-path":
+      return vscode.env.openExternal(vscode.Uri.file(command.path))
+    case "workspace.pickDir": {
+      const selected = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        defaultUri: command.start ? vscode.Uri.file(command.start) : undefined,
+      })
+      return selected?.[0]?.fsPath ?? ""
+    }
+    case "workspace.pickFiles": {
+      const selected = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: command.multiple ?? true,
+        defaultUri: command.start ? vscode.Uri.file(command.start) : undefined,
+      })
+      return selected?.map((uri) => uri.fsPath) ?? []
+    }
+    case "workspace.openProjectEditor":
+      if (command.editor !== "vscode") {
+        throw new Error(`VS Code host cannot open project paths in ${command.editor}`)
+      }
+      return openProjectPathInVsCode(command.path)
+    case "notification.permission":
+    case "notification.requestPermission":
+      return "granted" satisfies HostPermission
+    case "notification.send":
+      await vscode.window.showInformationMessage([command.title, command.body].filter(Boolean).join("\n"))
+      return undefined
+    default:
+      throw new Error(`Native command "${command.kind}" is not available in the VS Code host.`)
+  }
+}
+
+async function openProjectPathInVsCode(path: string): Promise<boolean> {
+  const uri = vscode.Uri.file(path)
+  try {
+    const stat = await vscode.workspace.fs.stat(uri)
+    if (stat.type === vscode.FileType.Directory) {
+      await vscode.commands.executeCommand("vscode.openFolder", uri, { forceNewWindow: true })
+      return true
+    }
+  } catch {
+    // Missing paths still flow to vscode.open so VS Code can surface
+    // its own editor-level error with the exact target URI.
+  }
+  await vscode.commands.executeCommand("vscode.open", uri)
+  return true
 }
 
 // Side-effect import suppression — keeps `http` import in case future

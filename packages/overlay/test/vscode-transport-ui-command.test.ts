@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { PROTOCOL_VERSION, type ExtensionMessage } from "@opencorvus-ai/transport-protocol"
+import { UnsupportedNativeCommandError } from "../src/services/host-transport"
 import { __resetVsCodeTransportForTest, createVsCodeTransport } from "../src/services/vscode-transport"
 
 /**
@@ -309,5 +310,62 @@ describe("vscode-transport stream lifecycle envelopes (audit W2-G3)", () => {
       events: ["zombie"],
     } as any)
     expect(events).toEqual([])
+  })
+})
+
+describe("vscode-transport native command bridge", () => {
+  let cleanupFake: (() => void) | undefined
+  beforeEach(() => {
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
+  })
+  afterEach(() => {
+    cleanupFake?.()
+    cleanupFake = undefined
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
+  })
+
+  test("supported native commands post native.request and resolve native.response", async () => {
+    const fake = installFakeWindow()
+    cleanupFake = fake.cleanup
+    const t = createVsCodeTransport()
+    const promise = t.native({ kind: "workspace.pickDir", start: "D:/workspace" })
+    const request = fake.fake.posted.find((message) => message.type === "native.request")!
+    expect(request.command).toEqual({ kind: "workspace.pickDir", start: "D:/workspace" })
+    fake.trigger({
+      protocol: PROTOCOL_VERSION,
+      type: "native.response",
+      id: request.id,
+      ok: true,
+      value: "D:/workspace/app",
+    } as any)
+    expect(await promise).toBe("D:/workspace/app")
+  })
+
+  test("native.response errors reject the pending native promise", async () => {
+    const fake = installFakeWindow()
+    cleanupFake = fake.cleanup
+    const t = createVsCodeTransport()
+    const promise = t.native({ kind: "open-path", path: "D:/missing" })
+    const request = fake.fake.posted.find((message) => message.type === "native.request")!
+    fake.trigger({
+      protocol: PROTOCOL_VERSION,
+      type: "native.response",
+      id: request.id,
+      ok: false,
+      error: { name: "NativeCommandError", message: "missing path" },
+    } as any)
+    await expect(promise).rejects.toThrow("missing path")
+  })
+
+  test("unsupported native commands still fail locally without posting", async () => {
+    const fake = installFakeWindow()
+    cleanupFake = fake.cleanup
+    const t = createVsCodeTransport()
+    await expect(t.native({ kind: "server.restart" })).rejects.toBeInstanceOf(UnsupportedNativeCommandError)
+    expect(fake.fake.posted.some((message) => message.type === "native.request")).toBe(false)
   })
 })

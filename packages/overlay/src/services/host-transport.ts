@@ -114,43 +114,15 @@ export interface ServerInfo {
   port?: number
 }
 
-export interface PickFilesOptions {
-  start?: string
-  multiple?: boolean
-}
+export type {
+  NativeCommand,
+  NativeCommandKind,
+  ProjectEditorID,
+} from "@opencorvus-ai/transport-protocol"
+export { PROJECT_EDITOR_IDS } from "@opencorvus-ai/transport-protocol"
 
-export const PROJECT_EDITOR_IDS = ["vscode", "pycharm", "webstorm", "intellij", "cursor"] as const
-
-export type ProjectEditorID = (typeof PROJECT_EDITOR_IDS)[number]
-
-export type NativeCommand =
-  // utils/native.ts
-  | { kind: "open-url"; url: string }
-  | { kind: "open-path"; path: string }
-  // services/init.ts + store/settings.ts
-  | { kind: "settings.load" }
-  | { kind: "settings.save"; payload: unknown }
-  // services/config.ts
-  | { kind: "config.write-file"; path: string; content: string }
-  // services/connection.ts
-  | { kind: "server.info" }
-  | { kind: "server.restart" }
-  // services/theme.ts
-  | { kind: "devtools.toggle" }
-  // services/window.ts
-  | { kind: "window.quit" }
-  | { kind: "tray.attention.set"; active: boolean }
-  | { kind: "badge.set"; count: number }
-  // services/workspace.ts
-  | { kind: "workspace.pickDir"; start?: string }
-  | { kind: "workspace.pickFiles"; start?: string; multiple?: boolean }
-  | { kind: "workspace.openProjectEditor"; editor: ProjectEditorID; path: string }
-  // services/notify.ts
-  | { kind: "notification.permission" }
-  | { kind: "notification.requestPermission" }
-  | { kind: "notification.send"; title: string; body?: string; tag?: string }
-
-export type NativeCommandKind = NativeCommand["kind"]
+import { PROJECT_EDITOR_IDS } from "@opencorvus-ai/transport-protocol"
+import type { NativeCommand, NativeCommandKind, ProjectEditorID } from "@opencorvus-ai/transport-protocol"
 
 export type NativeCommandCapabilities = Readonly<Record<NativeCommandKind, boolean>>
 
@@ -165,6 +137,8 @@ export interface HostUiCapabilities {
   readonly manualWorkspacePathEntry: boolean
   /** Whether task-event desktop notifications must read host permission before sending. */
   readonly desktopNotificationsRequirePermission: boolean
+  /** Project editors that this host can launch through workspace.openProjectEditor. */
+  readonly projectEditors: readonly ProjectEditorID[]
 }
 
 export interface HostCapabilities {
@@ -213,8 +187,8 @@ const BROWSER_NATIVE_COMMANDS: NativeCommandCapabilities = {
 }
 
 const VSCODE_NATIVE_COMMANDS: NativeCommandCapabilities = {
-  "open-url": false,
-  "open-path": false,
+  "open-url": true,
+  "open-path": true,
   "settings.load": true,
   "settings.save": true,
   "config.write-file": false,
@@ -224,12 +198,12 @@ const VSCODE_NATIVE_COMMANDS: NativeCommandCapabilities = {
   "window.quit": false,
   "tray.attention.set": false,
   "badge.set": false,
-  "workspace.pickDir": false,
-  "workspace.pickFiles": false,
-  "workspace.openProjectEditor": false,
-  "notification.permission": false,
-  "notification.requestPermission": false,
-  "notification.send": false,
+  "workspace.pickDir": true,
+  "workspace.pickFiles": true,
+  "workspace.openProjectEditor": true,
+  "notification.permission": true,
+  "notification.requestPermission": true,
+  "notification.send": true,
 }
 
 export const HOST_CAPABILITIES: Readonly<Record<HostKind, HostCapabilities>> = {
@@ -241,6 +215,7 @@ export const HOST_CAPABILITIES: Readonly<Record<HostKind, HostCapabilities>> = {
       overlayZoomHotkeys: true,
       manualWorkspacePathEntry: false,
       desktopNotificationsRequirePermission: false,
+      projectEditors: PROJECT_EDITOR_IDS,
     },
   },
   browser: {
@@ -251,6 +226,7 @@ export const HOST_CAPABILITIES: Readonly<Record<HostKind, HostCapabilities>> = {
       overlayZoomHotkeys: false,
       manualWorkspacePathEntry: true,
       desktopNotificationsRequirePermission: true,
+      projectEditors: [],
     },
   },
   vscode: {
@@ -261,6 +237,7 @@ export const HOST_CAPABILITIES: Readonly<Record<HostKind, HostCapabilities>> = {
       overlayZoomHotkeys: false,
       manualWorkspacePathEntry: true,
       desktopNotificationsRequirePermission: false,
+      projectEditors: ["vscode"],
     },
   },
 } as const

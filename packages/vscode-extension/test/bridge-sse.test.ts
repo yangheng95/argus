@@ -1,6 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { PROTOCOL_VERSION, type ExtensionMessage, type WebviewMessage } from "@opencorvus-ai/transport-protocol"
-import { TransportBridge } from "../src/transport/bridge"
+import { vscodeRuntimeMock } from "./vscode-runtime-mock"
+
+mock.module("vscode", () => vscodeRuntimeMock)
+
+const { TransportBridge } = await import("../src/transport/bridge")
 
 /**
  * G1 coverage: bridge.driveStream SSE block parsing + batching.

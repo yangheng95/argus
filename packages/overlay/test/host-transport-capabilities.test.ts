@@ -54,13 +54,25 @@ describe("HostTransport capability contract", () => {
       "notification.requestPermission",
       "notification.send",
     ])
-    expect(supported(HOST_CAPABILITIES.vscode)).toEqual(["settings.load", "settings.save"])
+    expect(supported(HOST_CAPABILITIES.vscode)).toEqual([
+      "open-url",
+      "open-path",
+      "settings.load",
+      "settings.save",
+      "workspace.pickDir",
+      "workspace.pickFiles",
+      "workspace.openProjectEditor",
+      "notification.permission",
+      "notification.requestPermission",
+      "notification.send",
+    ])
   })
 
   test("visible controls read HostTransport capabilities instead of host kind checks", () => {
     const titlebar = read("src/components/titlebar/TitlebarMenubar.tsx")
     const onboarding = read("src/components/WorkspaceOnboardingDialog.tsx")
     const windowControls = read("src/components/WindowControls.tsx")
+    const editorLaunchers = read("src/components/WorkspaceEditorLaunchers.tsx")
 
     expect(titlebar).toContain('nativeCommands["workspace.pickDir"]')
     expect(titlebar).toContain('nativeCommands["open-path"]')
@@ -76,5 +88,9 @@ describe("HostTransport capability contract", () => {
     expect(windowControls).toContain("capabilities")
     expect(windowControls).toContain("ui.windowControls")
     expect(windowControls).toContain("ui.windowDrag")
+
+    expect(editorLaunchers).toContain("capabilities.ui.projectEditors")
+    expect(editorLaunchers).not.toContain("<For each={PROJECT_EDITORS}>")
+    expect(HOST_CAPABILITIES.vscode.ui.projectEditors).toEqual(["vscode"])
   })
 })
