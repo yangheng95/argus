@@ -12,6 +12,8 @@ describe("frontend-research agent", () => {
     expect(config).not.toHaveProperty("createAdditionalTools")
     expect(config.delegation).toContain("publish webpage investigation work packets")
     expect(config.delegation).toContain("host prepares source URL evidence before your session")
+    expect(config.delegation).toContain("Requirements-Agent Handoff")
+    expect(config.delegation).toContain("page interface verification and API adaptation documentation")
     expect(config.delegation).toContain("Do not create the frontend implementation template")
   })
 
@@ -31,5 +33,9 @@ describe("frontend-research agent", () => {
     expect(prompt).toContain("color roles, typography scale, spacing/density, radii/borders/shadows")
     expect(prompt).toContain("Do not synthesize a final token catalog")
     expect(prompt).toContain("raw DOM replay, iframe preview, or screenshot-only HTML")
+    expect(prompt).toContain("Requirements-Agent Handoff")
+    expect(prompt).toContain("page API verification scope")
+    expect(prompt).toContain("expected persisted API adaptation document")
+    expect(prompt).toContain("do not invent endpoints, payloads, live market feeds, or backend obligations from visual labels alone")
   })
 })

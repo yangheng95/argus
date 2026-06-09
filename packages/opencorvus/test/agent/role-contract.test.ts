@@ -234,6 +234,8 @@ test("deep-research and frontend-design role descriptions keep document research
   expect(AgentRoleContract.description("frontend-research")).toContain("host-prepared rendered webpage evidence")
   expect(AgentRoleContract.description("frontend-research")).toContain("source-backed webpage investigation work packets")
   expect(AgentRoleContract.description("frontend-research")).toContain("frontend_research_brief")
+  expect(AgentRoleContract.description("frontend-research")).toContain("page interface verification")
+  expect(AgentRoleContract.description("frontend-research")).toContain("API adaptation documentation handoff cues")
   expect(AgentRoleContract.description("frontend-research")).toContain("PRD outline, or document material are reference inputs only")
   expect(AgentRoleContract.description("frontend-research")).toContain("downstream webpage rewriting must be based on ainvest-frontend-design")
   expect(AgentRoleContract.description("frontend-research")).toContain("does not call build")
