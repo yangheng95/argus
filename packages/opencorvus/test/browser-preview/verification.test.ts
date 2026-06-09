@@ -8,7 +8,7 @@ import { verifyBrowserPreview } from "../../src/browser-preview/verification"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import type { RuntimeCaptureInput, RuntimeCaptureResult } from "../../src/runtime/page-capture"
+import type { RuntimeCaptureInput, RuntimeCaptureResult, RuntimeCaptureSuccess } from "../../src/runtime/page-capture"
 
 describe("browser preview verification", () => {
   afterEach(async () => {
@@ -63,7 +63,7 @@ describe("browser preview verification", () => {
           size: { width: 834, height: 1112 },
           requested_viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0 },
           viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0, capped: false },
-          layers: {},
+          layers: passedLayers(`${tmp.path}/tablet.png`),
           dom: {
             textLength: 12,
             nodeCount: 8,
@@ -150,3 +150,14 @@ describe("browser preview verification", () => {
     expect(evidence?.diagnostics).toEqual(["runtime capture failed: server refused connection"])
   })
 })
+
+function passedLayers(screenshotPath: string): RuntimeCaptureSuccess["layers"] {
+  return {
+    http: { passed: true, status: 200, content_type: "text/html", body_length: 240, reason: "" },
+    asset: { passed: true, total: 1, failed: [] },
+    dom: { passed: true, body_descendants: 20, required: 20 },
+    js: { passed: true, console_errors: [], page_errors: [] },
+    pixel: { passed: true, variance: 64, floor: 25, screenshot_path: screenshotPath },
+    expected: { passed: true, missing_selectors: [], missing_texts: [] },
+  }
+}
