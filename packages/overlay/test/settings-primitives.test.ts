@@ -12,15 +12,6 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import {
-  SettingsEmpty,
-  SettingsGroup,
-  SettingsPanel,
-  SettingsPill,
-  SettingsRow,
-  SettingsSegmented,
-  SettingsToolbar,
-} from "../src/components/settings/primitives"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"), "utf8")
@@ -103,13 +94,17 @@ describe("settings primitives — CSS contract", () => {
 
 describe("settings primitives — Solid exports", () => {
   test("primitives module exports every documented component", () => {
-    expect(SettingsPanel).toBeTypeOf("function")
-    expect(SettingsGroup).toBeTypeOf("function")
-    expect(SettingsRow).toBeTypeOf("function")
-    expect(SettingsPill).toBeTypeOf("function")
-    expect(SettingsToolbar).toBeTypeOf("function")
-    expect(SettingsEmpty).toBeTypeOf("function")
-    expect(SettingsSegmented).toBeTypeOf("function")
+    for (const name of [
+      "SettingsPanel",
+      "SettingsGroup",
+      "SettingsRow",
+      "SettingsPill",
+      "SettingsToolbar",
+      "SettingsEmpty",
+      "SettingsSegmented",
+    ]) {
+      expect(PRIMITIVES_SRC).toContain(`export function ${name}`)
+    }
   })
 
   test("Pill tone type is exported alongside the component", () => {
@@ -129,7 +124,17 @@ describe("settings primitives — Solid exports", () => {
     // Important: PermissionsPanel.patchConfig hits the network on every
     // setPermission call. The primitive must early-return when the
     // clicked option is already active.
-    expect(PRIMITIVES_SRC).toMatch(/if\s*\(\s*props\.value\s*!==\s*opt\.value\s*\)\s*props\.onChange/)
+    expect(PRIMITIVES_SRC).toMatch(/if\s*\(\s*next\s*&&\s*next\s*!==\s*props\.value\s*\)\s*props\.onChange/)
+  })
+
+  test("Segmented delegates toggle semantics to Kobalte", () => {
+    expect(PRIMITIVES_SRC).toContain(
+      'import { Item as KobalteToggleGroupItem, Root as KobalteToggleGroupRoot } from "@kobalte/core/toggle-group"',
+    )
+    expect(PRIMITIVES_SRC).toContain("<KobalteToggleGroupRoot")
+    expect(PRIMITIVES_SRC).toContain("<KobalteToggleGroupItem")
+    expect(PRIMITIVES_SRC).not.toContain('role="group"')
+    expect(PRIMITIVES_SRC).not.toContain("aria-pressed")
   })
 })
 

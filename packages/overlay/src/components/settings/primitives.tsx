@@ -11,6 +11,7 @@
  * specs/overlay-settings-primitives-2026-05-26.md.
  */
 import { For, Show, mergeProps, splitProps } from "solid-js"
+import { Item as KobalteToggleGroupItem, Root as KobalteToggleGroupRoot } from "@kobalte/core/toggle-group"
 import type { JSX } from "solid-js"
 
 export type SettingsPillTone = "ok" | "warn" | "bad" | "accent" | "muted" | "neutral"
@@ -150,27 +151,32 @@ export interface SettingsSegmentedProps<T extends string> {
 }
 
 export function SettingsSegmented<T extends string>(props: SettingsSegmentedProps<T>): JSX.Element {
+  function handleChange(next: string | null) {
+    if (next && next !== props.value) props.onChange(next as T)
+  }
+
   return (
-    <div class="s-segmented" role="group" aria-label={props.ariaLabel}>
+    <KobalteToggleGroupRoot
+      class="s-segmented"
+      value={props.value}
+      onChange={handleChange}
+      aria-label={props.ariaLabel}
+    >
       <For each={props.options}>
         {(opt) => (
-          <button
-            type="button"
+          <KobalteToggleGroupItem
             class="s-segmented-btn"
+            value={opt.value}
             data-active={props.value === opt.value ? "true" : undefined}
             data-tone={opt.tone ?? "neutral"}
             data-value={opt.value}
             title={opt.title}
             disabled={opt.disabled}
-            aria-pressed={props.value === opt.value}
-            onClick={() => {
-              if (props.value !== opt.value) props.onChange(opt.value)
-            }}
           >
             {opt.label}
-          </button>
+          </KobalteToggleGroupItem>
         )}
       </For>
-    </div>
+    </KobalteToggleGroupRoot>
   )
 }
