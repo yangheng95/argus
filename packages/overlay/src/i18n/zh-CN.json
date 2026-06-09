@@ -651,6 +651,8 @@
   "browser_preview.capture_loading": "正在捕获证据",
   "browser_preview.candidates.label": "预览候选页",
   "browser_preview.empty.failed": "预览目标解析失败。",
+  "browser_preview.empty.host_blocked": "VS Code 中无法嵌入预览。",
+  "browser_preview.empty.host_blocked_detail": "后端 Playwright 证据仍使用已保存的任务预览目标。",
   "browser_preview.empty.missing": "当前任务没有保存浏览器预览目标。",
   "browser_preview.frame_title": "浏览器预览",
   "browser_preview.load_title": "保存并加载当前任务的预览 URL。",

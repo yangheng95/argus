@@ -651,6 +651,8 @@
   "browser_preview.capture_loading": "Capturing evidence",
   "browser_preview.candidates.label": "Preview candidates",
   "browser_preview.empty.failed": "Preview target failed to resolve.",
+  "browser_preview.empty.host_blocked": "Embedded preview is unavailable in VS Code.",
+  "browser_preview.empty.host_blocked_detail": "Backend Playwright evidence still uses the saved task preview target.",
   "browser_preview.empty.missing": "No browser preview target is saved for this task.",
   "browser_preview.frame_title": "Browser preview",
   "browser_preview.load_title": "Save and load this task's preview URL.",
