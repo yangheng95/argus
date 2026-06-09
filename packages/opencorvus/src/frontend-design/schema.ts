@@ -62,16 +62,16 @@ export const ComponentReusePlanItemSchema = z.object({
     .default([])
     .describe("Evidence anchors such as source ids, skeleton files, screenshot regions, or source-ir paths."),
   implementation_strategy: z
-    .enum(["existing_project_component", "mature_library", "extracted_baseline_defer", "custom_fallback"])
+    .enum(["existing_project_component", "mature_library", "extracted_baseline_defer", "project_specific_component"])
     .describe(
       "Chosen implementation route. Prefer existing_project_component; use mature_library for hard domains; " +
-        "use extracted_baseline_defer when the generated DOM/CSS baseline must remain until a parity-preserving replacement exists; custom_fallback is last resort.",
+        "use extracted_baseline_defer when the generated DOM/CSS baseline must remain until a parity-preserving replacement exists; project_specific_component is last resort.",
     ),
   reuse_source: z
     .string()
     .min(1)
     .describe(
-      "Concrete existing file/component/design-system primitive/library/package to reuse, or 'not found after inspecting <paths>' for a justified fallback.",
+      "Concrete existing file/component/design-system primitive/library/package to reuse, or inspected paths when a project-specific component is justified.",
     ),
   mature_library_candidates: z
     .array(z.string().min(1))
@@ -97,11 +97,11 @@ export const ComponentReusePlanItemSchema = z.object({
     .describe(
       "How frontend_design verified replacement did not regress visual fidelity, plus any Build fine-tuning verification anchors.",
     ),
-  custom_fallback_reason: z
+  project_specific_reason: z
     .string()
     .default("")
     .describe(
-      "Optional reason when implementation_strategy=custom_fallback; explain why existing components and mature libraries do not fit when known.",
+      "Optional reason when implementation_strategy=project_specific_component; explain why existing components and mature libraries do not fit when known.",
     ),
 })
 
@@ -126,15 +126,15 @@ export const BaselineReplacementPlanItemSchema = z.object({
     .min(1)
     .describe("Component family from component_reuse_plan that owns the replacement/deletion boundary."),
   replacement_strategy: z
-    .enum(["existing_project_component", "mature_library", "extracted_baseline_defer", "custom_fallback"])
+    .enum(["existing_project_component", "mature_library", "extracted_baseline_defer", "project_specific_component"])
     .describe(
-      "Refinement route. Prefer existing_project_component, then mature_library; custom_fallback is last resort.",
+      "Refinement route. Prefer existing_project_component, then mature_library; project_specific_component is last resort.",
     ),
   reuse_source: z
     .string()
     .min(1)
     .describe(
-      "Concrete project component/design primitive/library package to reuse, or inspected paths plus reason for fallback/defer.",
+      "Concrete project component/design primitive/library package to reuse, or inspected paths plus reason for project-specific/deferred work.",
     ),
   mature_library_candidates: z
     .array(z.string().min(1))
@@ -156,11 +156,11 @@ export const BaselineReplacementPlanItemSchema = z.object({
     .string()
     .min(1)
     .describe("Concrete visual/source checks to run before deleting or replacing a region."),
-  custom_fallback_reason: z
+  project_specific_reason: z
     .string()
     .default("")
     .describe(
-      "Optional reason when replacement_strategy=custom_fallback; explain why no project component or mature library fits when known.",
+      "Optional reason when replacement_strategy=project_specific_component; explain why no project component or mature library fits when known.",
     ),
 })
 
@@ -231,7 +231,7 @@ export const FrontendTemplateFinalSchema = z.object({
     .array(ComponentReusePlanItemSchema)
     .min(1)
     .describe(
-      "Structured, auditable reuse plan for the implementation surface. Each reusable family must say whether frontend_design reused an existing project component/design-system primitive, used a mature maintained library, kept the extracted DOM/CSS baseline until replacement is safe, or used a custom fallback with an explicit reason. This keeps complex controls tied to project/library ownership without turning the handoff into a component catalog.",
+      "Structured, auditable reuse plan for the implementation surface. Each reusable family must say whether frontend_design reused an existing project component/design-system primitive, used a mature maintained library, kept the extracted DOM/CSS baseline until replacement is safe, or used a justified project-specific component. This keeps complex controls tied to project/library ownership without turning the handoff into a component catalog.",
     ),
   baseline_replacement_plan: z
     .array(BaselineReplacementPlanItemSchema)
@@ -354,14 +354,14 @@ export const ToolComponentReusePlanItemSchema = z.object({
     "existing_project_component",
     "mature_library",
     "extracted_baseline_defer",
-    "custom_fallback",
+    "project_specific_component",
   ]),
   reuse_source: z.string().min(1),
   mature_library_candidates: z.array(z.string().min(1)).default([]),
   props_states: z.string().min(1),
   replacement_boundary: z.string().min(1),
   parity_guard: z.string().min(1),
-  custom_fallback_reason: z.string().default(""),
+  project_specific_reason: z.string().default(""),
 })
 
 export const ToolBaselineReplacementPlanItemSchema = z.object({
@@ -373,14 +373,14 @@ export const ToolBaselineReplacementPlanItemSchema = z.object({
     "existing_project_component",
     "mature_library",
     "extracted_baseline_defer",
-    "custom_fallback",
+    "project_specific_component",
   ]),
   reuse_source: z.string().min(1),
   mature_library_candidates: z.array(z.string().min(1)).default([]),
   deletion_rule: z.string().min(1),
   source_refs: z.array(z.string().min(1)).default([]),
   parity_guard: z.string().min(1),
-  custom_fallback_reason: z.string().default(""),
+  project_specific_reason: z.string().default(""),
 })
 
 export const FrontendTemplateToolInputSchema = z.object({

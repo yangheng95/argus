@@ -283,7 +283,7 @@ jobs:
         env:
           OPENCORVUS_VERSION: ${{ needs.prepare.outputs.version }}
           OPENCORVUS_CHANNEL: ${{ needs.prepare.outputs.release == '1' && 'latest' || '' }}
-        run: bun run build
+        run: bun run script/build.ts
 
       - name: Stage overlay artifacts
         shell: bash
