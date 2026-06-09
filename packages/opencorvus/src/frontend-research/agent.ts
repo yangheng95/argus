@@ -21,6 +21,7 @@ function frontendResearchSessionConfig(): ResearchSessionConfig {
     delegation:
       "Orchestrator is asking frontend-research to publish webpage investigation work packets for downstream requirements, architecture, and implementation. " +
       "Use the host-prepared rendered webpage evidence summaries injected into the prompt; the host prepares source URL evidence before your session when a URL is supplied. " +
+      "Include a source-backed Requirements-Agent Handoff for page interface verification and API adaptation documentation when the evidence shows page data or interface obligations. " +
       "Do not create the frontend implementation template, do not build source, do not produce final REQ-N, acceptance specs, goal graph, implementation plan, or next-tool routing instructions.",
   }
 }

@@ -593,6 +593,11 @@ describe("core prompt hygiene", () => {
     expect(requirements).toContain("visual_surfaces")
     expect(requirements).toContain("interactions_and_states")
     expect(requirements).toContain("data_contracts")
+    expect(requirements).toContain("Requirements-Agent Handoff")
+    expect(requirements).toContain("page_interface_verification")
+    expect(requirements).toContain("api_adaptation_documentation")
+    expect(requirements).toContain("API adaptation document")
+    expect(requirements).toContain("interface verification report")
     expect(requirements).toContain("verification_surfaces")
     expect(requirements).toContain("complexity_drivers")
     expect(requirements).toContain("impact_size")
@@ -610,6 +615,9 @@ describe("core prompt hygiene", () => {
     )
     expect(normalized).toContain(
       "For broad UI/webpage/data-flow tasks, also record user_workflows + visual_surfaces + interactions_and_states + data_contracts + verification_surfaces + complexity_drivers",
+    )
+    expect(normalized).toContain(
+      "When frontend_research supplies a Requirements-Agent Handoff for interface work, also record page_interface_verification and api_adaptation_documentation",
     )
   })
 
@@ -659,6 +667,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Each packet must name the region/component, evidence ids and paths")
     expect(normalized).toContain("A short page outline is insufficient; a deep PRD is also wrong for your role")
     expect(normalized).toContain("Component-Kind Hypotheses")
+    expect(normalized).toContain("Requirements-Agent Handoff")
+    expect(normalized).toContain("Page Interface Verification")
+    expect(normalized).toContain("API Adaptation Documentation Questions")
     expect(normalized).toContain("Data/Content Questions")
     expect(normalized).toContain("Interaction/State Questions")
     expect(normalized).toContain("Style/Layout Questions")
@@ -679,6 +690,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("mechanical dump shape")
     expect(normalized).toContain("`SourceDomPage`, `src/components/source-dom/*`, `src/data/sourceDom*`")
     expect(normalized).toContain("pervasive `data-source-node-id`")
+    expect(normalized).toContain("page API verification scope")
+    expect(normalized).toContain("expected persisted API adaptation document")
+    expect(normalized).toContain("do not invent endpoints, payloads, live market feeds, or backend obligations from visual labels alone")
   })
 
   test("webpage replica prompts enforce frontend-owned visual skeleton first workflow", async () => {
