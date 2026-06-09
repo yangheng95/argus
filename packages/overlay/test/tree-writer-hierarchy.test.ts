@@ -909,12 +909,9 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
 
   const afterRetry = cardTreeStore.cards[integrityCardID]!
   // Subtitle reflects the retry attempt; nothing about elapsed time.
-  // In the test harness `t()` returns the key verbatim because no
-  // locale bundle is loaded — that's still adequate to prove the
-  // tree-writer no longer composes an elapsed string.
   expect(afterRetry.subtitle).toBeDefined()
   expect(afterRetry.subtitle).not.toContain("elapsed")
-  expect(afterRetry.subtitle).toContain("integrity.attempt_label")
+  expect(afterRetry.subtitle).toMatch(/attempt 2|integrity\.attempt_label/)
   // `time` is set from the started event so CardHeader can subtract from
   // the shared 1Hz tick to display the running duration.
   expect(afterRetry.time).toBe(1_776_000_001_000)
@@ -1207,6 +1204,42 @@ test("message arrival migrates lifecycle-only frontend card without leaving a du
   expect(cardTreeStore.cards[messageCardID]?.messageID).toBe("msg_frontend_design_lifecycle")
   expect(cardTreeStore.order).not.toContain(lifecycleCardID)
   expect(cardTreeStore.order).toContain(messageCardID)
+})
+
+test("goal phase stub title is an i18n role key, not the raw phase id", () => {
+  resetWriter()
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "planner starts before board phase projection",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("planner", {
+        id: "msg_planner_phase_stub",
+        sessionID: "ses_planner_phase_stub",
+        role: "assistant",
+        parentSessionID: ROOT_SID,
+        goalID: "goal_phase_stub",
+        time: { created: 1_776_000_003_000 },
+      }),
+    },
+  })
+
+  const phaseCardID = "step:goal_phase_stub:build:phase:plan"
+  expect(cardTreeStore.cards[phaseCardID]).toBeDefined()
+  expect(cardTreeStore.cards[phaseCardID]?.title).toBe("chat.role.planner")
 })
 
 test("session.error marks the session card with the original stream error", () => {

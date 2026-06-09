@@ -67,9 +67,21 @@ export class MissingI18nKeyError extends Error {
   }
 }
 
-function requiredLocaleValue(key: string, expected: string): any {
+const reportedMissingI18nKeys = new Set<string>()
+
+function reportMissingI18nKey(key: string, expected: string): void {
+  const signature = `${currentLocale}:${expected}:${key}`
+  if (reportedMissingI18nKeys.has(signature)) return
+  reportedMissingI18nKeys.add(signature)
+  console.error(new MissingI18nKeyError(currentLocale, key, expected))
+}
+
+function runtimeLocaleValue(key: string, expected: string): any {
   const value = localeValue(key)
-  if (value === undefined) throw new MissingI18nKeyError(currentLocale, key, expected)
+  if (value === undefined) {
+    reportMissingI18nKey(key, expected)
+    return undefined
+  }
   return value
 }
 
@@ -83,26 +95,34 @@ export function fillTemplate(text: string, vars: Record<string, any> = {}): stri
 }
 
 export function t(key: string, vars?: Record<string, any>): string {
-  const value = requiredLocaleValue(key, "string")
-  if (typeof value !== "string") throw new MissingI18nKeyError(currentLocale, key, "string")
+  const value = runtimeLocaleValue(key, "string")
+  if (value === undefined) return fillTemplate(key, vars)
+  if (typeof value !== "string") {
+    reportMissingI18nKey(key, "string")
+    return fillTemplate(key, vars)
+  }
   return fillTemplate(value, vars)
 }
 
 export function tArray(key: string): string[] {
-  const value = requiredLocaleValue(key, "string array")
+  const value = runtimeLocaleValue(key, "string array")
+  if (value === undefined) return [key]
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    throw new MissingI18nKeyError(currentLocale, key, "string array")
+    reportMissingI18nKey(key, "string array")
+    return [key]
   }
   return value
 }
 
 export function tc(key: string, count: number, vars?: Record<string, any>): string {
-  const value = requiredLocaleValue(key, "plural object")
+  const value = runtimeLocaleValue(key, "plural object")
+  if (value === undefined) return fillTemplate(key, { count, ...vars })
   if (record(value)) {
     const text = (value as Record<string, any>)[count === 1 ? "one" : "other"]
     if (typeof text === "string") return fillTemplate(text, { count, ...vars })
   }
-  throw new MissingI18nKeyError(currentLocale, key, "plural object")
+  reportMissingI18nKey(key, "plural object")
+  return fillTemplate(key, { count, ...vars })
 }
 
 export function localeTag(): string {

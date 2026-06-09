@@ -1961,7 +1961,7 @@ function resolveTurnCardID(
         stage,
         accent: stageAccent(stage),
         status: "running",
-        title: phase.phaseID,
+        title: roleTitleKey(stage),
         parts: [],
         childIDs: [],
         phaseID: phase.phaseID,

@@ -33,29 +33,43 @@ const ZH_CN_FIXTURE = {
   "strict.not_plural": "不是复数",
 }
 
+const originalConsoleError = console.error
+let reportedErrors: unknown[] = []
+
 beforeEach(async () => {
+  reportedErrors = []
+  console.error = (...args: unknown[]) => {
+    reportedErrors.push(args[0])
+  }
   setLocaleData("en-US", EN_US_FIXTURE)
   setLocaleData("zh-CN", ZH_CN_FIXTURE)
   await setLocale("zh-CN")
 })
 
 afterEach(async () => {
+  console.error = originalConsoleError
   setLocaleData("en-US", REAL_EN_US)
   setLocaleData("zh-CN", REAL_ZH_CN)
   await setLocale("en-US")
 })
 
-test("t reads only the active locale and never falls back to en-US or the key", () => {
+test("t reads only the active locale and reports missing keys without crashing render", () => {
   expect(t("strict.title", { name: "OpenCorvus" })).toBe("标题 OpenCorvus")
-  expect(() => t("strict.only_en")).toThrow(MissingI18nKeyError)
-  expect(() => t("strict.missing")).toThrow("Missing i18n string for locale zh-CN: strict.missing")
+  expect(t("strict.only_en")).toBe("strict.only_en")
+  expect(t("strict.missing")).toBe("strict.missing")
+  expect(t("frontend_design")).toBe("frontend_design")
+  expect(reportedErrors).toHaveLength(3)
+  expect(reportedErrors.every((error) => error instanceof MissingI18nKeyError)).toBe(true)
+  expect(String((reportedErrors[2] as MissingI18nKeyError).message)).toContain("frontend_design")
 })
 
-test("tArray and tc reject wrong locale value shapes instead of returning empty or string fallbacks", () => {
+test("tArray and tc report wrong locale value shapes without crashing render", () => {
   expect(tArray("strict.items")).toEqual(["一", "二"])
   expect(tc("strict.count", 2)).toBe("2 项")
-  expect(() => tArray("strict.not_array")).toThrow(MissingI18nKeyError)
-  expect(() => tc("strict.not_plural", 2)).toThrow(MissingI18nKeyError)
+  expect(tArray("strict.not_array")).toEqual(["strict.not_array"])
+  expect(tc("strict.not_plural", 2)).toBe("strict.not_plural")
+  expect(reportedErrors).toHaveLength(2)
+  expect(reportedErrors.every((error) => error instanceof MissingI18nKeyError)).toBe(true)
 })
 
 test("unsupported locale input is rejected instead of silently becoming en-US", async () => {
