@@ -598,8 +598,10 @@ async function appendTaskSessionMessage(
  */
 async function messageContext(sessionID: string, taskID: string) {
   const session = await Session.get(sessionID)
+  const task = requireTask(taskID)
   const config = await EffectiveConfig.effective({ taskID, sessionID })
   const name =
+    (session.kind === "root" && task.session_id === session.id ? "orchestrator" : undefined) ??
     SessionAgentIdentity.ownedAgentForSessionKind(session.kind) ??
     (await latestSessionAgent(sessionID)) ??
     (await Agent.defaultAgent({ config }).catch(() => undefined))
