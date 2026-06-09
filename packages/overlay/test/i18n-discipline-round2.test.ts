@@ -99,7 +99,7 @@ describe("round 2 i18n discipline", () => {
   test("OpenCorvus menubar label is an explicit brand whitelist", () => {
     const titlebar = read("src/components/titlebar/TitlebarMenubar.tsx")
     expect(titlebar).toContain("OpenCorvus is the product brand name")
-    expect(titlebar).toContain('role="menubar"')
+    expect(titlebar).toContain("<Menubar.Root")
     expect(titlebar).toContain('aria-label="OpenCorvus"')
   })
 })

@@ -1,4 +1,6 @@
+import * as Menubar from "@kobalte/core/menubar"
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { Portal } from "solid-js/web"
 import { appStore } from "../../store/app"
 import { boardStore } from "../../store/board"
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings"
@@ -23,7 +25,6 @@ import {
   setDirectory,
 } from "../../services/workspace"
 import { t } from "../../utils/i18n"
-import { Button } from "../ui/Button"
 
 type MenuID = "workspace" | "provider" | "run" | "tools" | "settings" | "view" | "help"
 
@@ -91,30 +92,30 @@ function MenuItem(props: {
   const fallbackTitle = () => (typeof props.children === "string" ? props.children : undefined)
   const tooltip = () => props.title || props.meta || fallbackTitle()
   return (
-    <button
+    <Menubar.Item
+      as="button"
       type="button"
-      role="menuitem"
       class="titlebar-menubar-item"
       disabled={props.disabled}
       data-testid={props.testid}
       title={tooltip()}
       aria-label={props.ariaLabel || tooltip()}
-      onClick={() => void props.onClick()}
+      onSelect={() => void props.onClick()}
     >
       <span class="titlebar-menubar-item-title">{props.children}</span>
       <Show when={props.meta}>
         <span class="titlebar-menubar-item-meta">{props.meta}</span>
       </Show>
-    </button>
+    </Menubar.Item>
   )
 }
 
 function MenuGroup(props: { title: string; children: any }) {
   return (
-    <div class="titlebar-menubar-group" role="group" aria-label={props.title}>
-      <div class="titlebar-menubar-group-title">{props.title}</div>
+    <Menubar.Group class="titlebar-menubar-group">
+      <Menubar.GroupLabel class="titlebar-menubar-group-title">{props.title}</Menubar.GroupLabel>
       {props.children}
-    </div>
+    </Menubar.Group>
   )
 }
 
@@ -124,16 +125,16 @@ function directoryLeaf(dir: string): string {
 
 function RecentDirectoryMenuItem(props: { dir: string; onClick: () => void | Promise<void> }) {
   return (
-    <button
+    <Menubar.Item
+      as="button"
       type="button"
-      role="menuitem"
       class="titlebar-menubar-item titlebar-menubar-recent-item"
       title={props.dir}
-      onClick={() => void props.onClick()}
+      onSelect={() => void props.onClick()}
     >
       <span class="titlebar-menubar-recent-name">{directoryLeaf(props.dir)}</span>
       <span class="titlebar-menubar-recent-path">{props.dir}</span>
-    </button>
+    </Menubar.Item>
   )
 }
 
@@ -183,6 +184,7 @@ function MenuRange(props: {
 
 export function TitlebarMenubar() {
   const [openMenu, setOpenMenu] = createSignal<MenuID | null>(null)
+  const [autoFocusMenu, setAutoFocusMenu] = createSignal(false)
   const [recentDirs, setRecentDirs] = createSignal<string[]>([])
   let rootRef: HTMLDivElement | undefined
   let altPressedOnly = false
@@ -198,11 +200,37 @@ export function TitlebarMenubar() {
   ])
 
   function closeMenu() {
+    setAutoFocusMenu(false)
     setOpenMenu(null)
   }
 
-  function open(id: MenuID) {
+  function handleMenuValueChange(value: string | null | undefined) {
+    if (value && MENU_IDS.includes(value as MenuID)) {
+      setRecentDirs(loadRecentDirectories())
+      setMenuAnchor(value as MenuID)
+      setAutoFocusMenu(true)
+      setOpenMenu(value as MenuID)
+      return
+    }
+    closeMenu()
+  }
+
+  function setMenuAnchor(id: MenuID) {
+    const trigger = document.querySelector<HTMLElement>(`[data-menu-trigger="${id}"]`)
+    const left = trigger?.getBoundingClientRect().left ?? 0
+    document.documentElement.style.setProperty("--titlebar-menu-anchor-left", `${left}px`)
+  }
+
+  function toggleMenuFromTrigger(event: PointerEvent, id: MenuID) {
+    if (event.button !== 0 || event.isPrimary === false) return
+    event.preventDefault()
     setRecentDirs(loadRecentDirectories())
+    const trigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+    document.documentElement.style.setProperty(
+      "--titlebar-menu-anchor-left",
+      `${trigger?.getBoundingClientRect().left ?? 0}px`,
+    )
+    setAutoFocusMenu(false)
     setOpenMenu((current) => (current === id ? null : id))
   }
 
@@ -212,12 +240,14 @@ export function TitlebarMenubar() {
 
   function focusFirstMenuItem(id: MenuID) {
     queueMicrotask(() => {
-      document.querySelector<HTMLElement>(`#titlebar-menu-${id} [role="menuitem"]:not([disabled])`)?.focus()
+      document.querySelector<HTMLElement>(`#titlebar-menu-${id} .titlebar-menubar-item:not([data-disabled])`)?.focus()
     })
   }
 
   function openFromKeyboard(id: MenuID) {
     setRecentDirs(loadRecentDirectories())
+    setMenuAnchor(id)
+    setAutoFocusMenu(true)
     setOpenMenu(id)
     focusFirstMenuItem(id)
   }
@@ -290,12 +320,6 @@ export function TitlebarMenubar() {
   }
 
   onMount(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      if (!openMenu()) return
-      const target = event.target as Node | null
-      if (rootRef && target && rootRef.contains(target)) return
-      closeMenu()
-    }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return
       if (event.key === "Alt" && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
@@ -314,10 +338,6 @@ export function TitlebarMenubar() {
       } else if (event.key !== "Alt") {
         altPressedOnly = false
       }
-      if (!openMenu()) return
-      if (event.key === "Escape" || event.key === "Tab") {
-        closeMenu()
-      }
     }
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key !== "Alt" || !altPressedOnly) return
@@ -331,31 +351,13 @@ export function TitlebarMenubar() {
         focusTrigger("workspace")
       }
     }
-    document.addEventListener("pointerdown", onPointerDown)
     document.addEventListener("keydown", onKeyDown)
     document.addEventListener("keyup", onKeyUp)
     onCleanup(() => {
-      document.removeEventListener("pointerdown", onPointerDown)
       document.removeEventListener("keydown", onKeyDown)
       document.removeEventListener("keyup", onKeyUp)
     })
   })
-
-  function triggerKey(event: KeyboardEvent, id: MenuID) {
-    const index = MENU_IDS.indexOf(id)
-    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
-      event.preventDefault()
-      setOpenMenu(id)
-      focusFirstMenuItem(id)
-      return
-    }
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
-    event.preventDefault()
-    const delta = event.key === "ArrowRight" ? 1 : -1
-    const next = MENU_IDS[(index + delta + MENU_IDS.length) % MENU_IDS.length]
-    document.querySelector<HTMLButtonElement>(`[data-menu-trigger="${next}"]`)?.focus()
-    if (openMenu()) setOpenMenu(next)
-  }
 
   const maxGroups = createMemo(() => clampInt(configNumber("max_executor_groups"), 1, 10))
   const compactionThresholdPercent = createMemo(() => {
@@ -369,22 +371,26 @@ export function TitlebarMenubar() {
 
   return (
     /* OpenCorvus is the product brand name, so this menubar landmark keeps the literal brand label. */
-    <div
+    <Menubar.Root
       class="titlebar-menubar"
-      role="menubar"
       aria-label="OpenCorvus"
       data-no-drag="true"
+      value={openMenu()}
+      onValueChange={handleMenuValueChange}
+      autoFocusMenu={autoFocusMenu()}
+      onAutoFocusMenuChange={setAutoFocusMenu}
       ref={(el) => (rootRef = el)}
     >
       <For each={menus()}>
         {(menu) => (
-          <div class="titlebar-menubar-slot">
-            <Button
+          <Menubar.Menu value={menu.id}>
+            <div class="titlebar-menubar-slot">
+            <Menubar.Trigger
               type="button"
-              variant="ghost"
-              size="sm"
-              tone="neutral"
-              role="menuitem"
+              class="oc-button"
+              data-variant="ghost"
+              data-size="sm"
+              data-tone="neutral"
               data-ui="titlebar-menubar-trigger"
               data-menu-trigger={menu.id}
               data-compact={menu.compact}
@@ -393,22 +399,18 @@ export function TitlebarMenubar() {
               title={menu.label}
               aria-label={menu.label}
               aria-keyshortcuts={`Alt+${menu.accessKey.toUpperCase()}`}
-              aria-haspopup="menu"
-              aria-expanded={openMenu() === menu.id ? "true" : "false"}
-              aria-controls={`titlebar-menu-${menu.id}`}
-              onClick={() => open(menu.id)}
-              onKeyDown={(event) => triggerKey(event, menu.id)}
+              onPointerDown={(event) => toggleMenuFromTrigger(event, menu.id)}
             >
               <span class="titlebar-menu-trigger-label">{menu.label}</span>
               <span class="titlebar-menu-trigger-compact" aria-hidden="true">
                 {menu.compact}
               </span>
-            </Button>
-            <Show when={openMenu() === menu.id}>
-              <div
+            </Menubar.Trigger>
+            </div>
+            <Portal>
+              <Menubar.Content
                 id={`titlebar-menu-${menu.id}`}
                 class="titlebar-menubar-panel"
-                role="menu"
                 data-menu={menu.id}
                 data-testid={`titlebar-menu-${menu.id}`}
               >
@@ -636,11 +638,11 @@ export function TitlebarMenubar() {
                     </MenuItem>
                   </MenuGroup>
                 </Show>
-              </div>
-            </Show>
-          </div>
+              </Menubar.Content>
+            </Portal>
+          </Menubar.Menu>
         )}
       </For>
-    </div>
+    </Menubar.Root>
   )
 }
