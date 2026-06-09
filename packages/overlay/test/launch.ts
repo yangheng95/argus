@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { createRequire } from "node:module"
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -109,15 +109,25 @@ async function acquireBrowserLock() {
   while (true) {
     try {
       mkdirSync(browserLockDir)
-      writeFileSync(join(browserLockDir, "owner"), `${process.pid}\n${Date.now()}\n`)
-      writeFileSync(browserLockHeartbeat, `${Date.now()}\n`)
-      return
+      try {
+        writeFileSync(join(browserLockDir, "owner"), `${process.pid}\n${Date.now()}\n`)
+        writeFileSync(browserLockHeartbeat, `${Date.now()}\n`)
+        return
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") throw error
+        continue
+      }
     } catch (error) {
       const code = (error as NodeJS.ErrnoException | undefined)?.code
       if (code !== "EEXIST") throw error
       try {
-        const lockStat = statSync(browserLockHeartbeat)
+        const heartbeatExists = existsSync(browserLockHeartbeat)
+        const lockStat = heartbeatExists ? statSync(browserLockHeartbeat) : statSync(browserLockDir)
         const age = Date.now() - lockStat.mtimeMs
+        if (!heartbeatExists && age <= 1_000) {
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          continue
+        }
         if (lockedOwnerIsDead() || age > STALE_BROWSER_LOCK_MS) {
           rmSync(browserLockDir, { recursive: true, force: true })
           continue

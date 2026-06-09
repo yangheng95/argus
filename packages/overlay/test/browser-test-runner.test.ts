@@ -38,4 +38,9 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   expect(hoverGeometry).toContain('import test from "node:test"')
   expect(hoverGeometry).toContain('from "../launch.ts"')
   expect(hoverGeometry).toContain('typeof globalThis.Bun, "undefined"')
+
+  const longTranscript = readText("test/browser/long-transcript-scroll.test.ts")
+  expect(longTranscript).toContain('import test from "node:test"')
+  expect(longTranscript).toContain('from "../launch.ts"')
+  expect(longTranscript).toContain('typeof globalThis.Bun, "undefined"')
 })
