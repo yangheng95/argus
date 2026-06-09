@@ -16,6 +16,7 @@ import type {
   AuthSetErrors,
   AuthSetResponses,
   BrowserPreviewCaptureTaskTargetResponses,
+  BrowserPreviewReadTaskEvidenceResponses,
   BrowserPreviewSaveTaskTargetResponses,
   BrowserPreviewTaskTargetResponses,
   ChannelAttachmentCreateErrors,
@@ -5004,6 +5005,38 @@ export class BrowserPreview extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<BrowserPreviewTaskTargetResponses, unknown, ThrowOnError>({
       url: "/task/{taskID}/browser-preview",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read browser preview verification evidence
+   *
+   * Return the persisted Playwright evidence artifact for a task-scoped browser preview target.
+   */
+  public readTaskEvidence<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      evidenceID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "path", key: "evidenceID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<BrowserPreviewReadTaskEvidenceResponses, unknown, ThrowOnError>({
+      url: "/task/{taskID}/browser-preview/evidence/{evidenceID}",
       ...options,
       ...params,
     })

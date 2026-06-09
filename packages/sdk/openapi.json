@@ -12482,6 +12482,108 @@
         ]
       }
     },
+    "/task/{taskID}/browser-preview/evidence/{evidenceID}": {
+      "get": {
+        "operationId": "browserPreview.readTaskEvidence",
+        "summary": "Read browser preview verification evidence",
+        "description": "Return the persisted Playwright evidence artifact for a task-scoped browser preview target.",
+        "responses": {
+          "200": {
+            "description": "Persisted browser preview evidence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "taskID": {
+                      "type": "string"
+                    },
+                    "targetID": {
+                      "type": "string"
+                    },
+                    "viewportID": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "passed",
+                        "failed"
+                      ]
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "capture": {},
+                    "diagnostics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "timeCompleted": {
+                      "type": "number"
+                    },
+                    "timeCreated": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "taskID",
+                    "targetID",
+                    "viewportID",
+                    "status",
+                    "summary",
+                    "diagnostics",
+                    "timeCompleted",
+                    "timeCreated"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "evidenceID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.readTaskEvidence({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/browser-preview/target": {
       "put": {
         "operationId": "browserPreview.saveTaskTarget",
