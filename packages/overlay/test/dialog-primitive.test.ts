@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import { readdirSync, readFileSync, statSync } from "node:fs"
+import { join, relative } from "node:path"
 
 const OVERLAY_ROOT = join(import.meta.dir, "../")
 const DIALOG_SOURCE = join(OVERLAY_ROOT, "src/components/primitives/Dialog.tsx")
@@ -8,6 +8,26 @@ const DIALOG_CSS = join(OVERLAY_ROOT, "src/styles/surfaces/dialog.css")
 
 function readText(path: string): string {
   return readFileSync(path, "utf8")
+}
+
+function componentSources(): Array<{ rel: string; text: string }> {
+  const root = join(OVERLAY_ROOT, "src/components")
+  const out: Array<{ rel: string; text: string }> = []
+  const visit = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry)
+      if (statSync(full).isDirectory()) {
+        visit(full)
+        continue
+      }
+      if (!full.endsWith(".tsx")) continue
+      const rel = relative(OVERLAY_ROOT, full).replace(/\\/g, "/")
+      if (rel === "src/components/primitives/Dialog.tsx") continue
+      out.push({ rel, text: readText(full) })
+    }
+  }
+  visit(root)
+  return out
 }
 
 describe("Dialog primitive", () => {
@@ -65,25 +85,30 @@ describe("Dialog primitive", () => {
 })
 
 describe("Dialog primitive adoption", () => {
-  const migrated = [
-    "src/components/MemoryPanel.tsx",
-    "src/components/LogViewer.tsx",
-    "src/components/settings/ChannelsPanel.tsx",
-  ]
-
-  test("migrated components import the Dialog primitive", () => {
-    for (const rel of migrated) {
-      const text = readText(join(OVERLAY_ROOT, rel))
-      expect(text).toContain("Dialog")
-      expect(text).toMatch(/<Dialog\b/)
+  test("components rendering Dialog import the primitive", () => {
+    const users = componentSources().filter(({ text }) => /<Dialog\b/.test(text))
+    expect(users.map(({ rel }) => rel).sort()).toEqual([
+      "src/components/AppDialogHost.tsx",
+      "src/components/ConfigDialogHost.tsx",
+      "src/components/GoalDialogHost.tsx",
+      "src/components/ImagePreview.tsx",
+      "src/components/InteractionDialogHost.tsx",
+      "src/components/LogViewer.tsx",
+      "src/components/SessionDialogHost.tsx",
+      "src/components/WorkspaceOnboardingDialog.tsx",
+      "src/components/settings/ChannelsPanel.tsx",
+    ])
+    for (const { text } of users) {
+      expect(text).toContain("primitives/Dialog")
     }
   })
 
-  test("migrated components no longer render raw dialog tags or showModal", () => {
-    for (const rel of migrated) {
-      const text = readText(join(OVERLAY_ROOT, rel))
+  test("feature components no longer render raw dialog tags or showModal", () => {
+    for (const { rel, text } of componentSources()) {
       expect(text).not.toMatch(/<dialog\b/)
       expect(text).not.toContain("showModal()")
+      expect(text).not.toContain("querySelectorAll(\"dialog.dialog\")")
+      expect(text).not.toContain("dataset.backdropClose")
     }
   })
 })

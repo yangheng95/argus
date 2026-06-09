@@ -74,7 +74,7 @@ import { hydrateIconPlaceholders } from "./utils/icon-html"
 import { installNativeContextMenuSuppression } from "./utils/context-menu"
 import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
 import { applyDirectory, activeDirectory, openPathInSelectedEditor } from "./services/workspace"
-import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
+import { openConfigDialog, openGoalDialog, renderAboutVersion } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
 import { isCodingAssistantSource, selectCodingAssistantSession } from "./services/coding-assistant"
@@ -837,7 +837,6 @@ function installGlobalBridges(): void {
 }
 
 installGlobalBridges()
-setupDialogBackdropClose()
 
 // Components call strict `t()` at render time. Load the locale bundles before
 // mounting any Solid surface so early hosts do not render against an empty
