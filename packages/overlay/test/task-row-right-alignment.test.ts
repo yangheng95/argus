@@ -63,5 +63,6 @@ describe("task row right column stays anchored to the row edge", () => {
     expect(body).toMatch(/width:\s*var\(--task-row-actions-width\)\s*;/)
     expect(body).toMatch(/right:\s*0\s*;/)
     expect(body).toMatch(/transform:\s*translateY\(-50%\)\s*;/)
+    expect(body).toMatch(/pointer-events:\s*none\s*;/)
   })
 })
