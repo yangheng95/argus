@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 const browserTestDir = new URL("./browser/", import.meta.url)
 const entries = await readdir(browserTestDir, { withFileTypes: true })
 const files = entries
-  .filter((entry) => entry.isFile() && entry.name.endsWith(".test.mjs"))
+  .filter((entry) => entry.isFile() && (entry.name.endsWith(".test.mjs") || entry.name.endsWith(".test.ts")))
   .map((entry) => fileURLToPath(new URL(entry.name, browserTestDir)))
   .sort()
 
