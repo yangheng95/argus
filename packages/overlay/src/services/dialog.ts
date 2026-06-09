@@ -1,5 +1,5 @@
 // ── Dialog Service ──
-// Manages dialog open/close, config tab switching, and backdrop close handlers.
+// Manages dialog open/close and config tab switching.
 // Uses direct imports.
 // imports as of Phase 4 cleanup.
 
@@ -260,16 +260,4 @@ export async function openBuildSessionDialog(sessionID: string, title: string): 
 export function closeBuildSessionDialog(): void {
   sessionDialogSeq += 1
   setDialogStore("session", "open", false)
-}
-
-export function setupDialogBackdropClose(): void {
-  document.querySelectorAll("dialog.dialog").forEach((dialog) => {
-    const el = dialog as HTMLDialogElement
-    if (el.dataset.backdropClose === "true") return
-    el.dataset.backdropClose = "true"
-    el.addEventListener("click", (event) => {
-      if (event.target !== el) return
-      el.close()
-    })
-  })
 }

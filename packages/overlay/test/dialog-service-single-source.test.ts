@@ -33,6 +33,8 @@ describe("app/session dialog single source", () => {
     expect(dialogService).not.toContain('document.getElementById("sessionDialogBody")')
     expect(dialogService).not.toContain('document.getElementById("sessionDialog")')
     expect(dialogService).not.toContain("dialog.showModal()")
+    expect(dialogService).not.toContain("setupDialogBackdropClose")
+    expect(dialogService).not.toContain('querySelectorAll("dialog.dialog")')
     expect(dialogService).toContain("closeBuildSessionDialog")
     expect(dialogService).toContain('setDialogStore("session"')
   })
@@ -45,6 +47,7 @@ describe("app/session dialog single source", () => {
     expect(main).not.toContain("btnCloseSession")
     expect(main).not.toContain("installAppDialogBridge")
     expect(main).not.toContain("installGoalFormHandlers")
+    expect(main).not.toContain("setupDialogBackdropClose")
     expect(main).not.toContain('document.getElementById("configSidebar")?.addEventListener("click"')
   })
 
