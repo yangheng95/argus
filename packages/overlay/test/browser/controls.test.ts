@@ -1,12 +1,18 @@
-import { expect, test } from "bun:test"
-import { launchBrowser } from "./launch"
-import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { launchBrowser } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
 test(
   "overlay controls trigger without runtime failures",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
     const now = Date.now()
     const task = {
       id: "task-1",
@@ -130,6 +136,8 @@ test(
         tasks: [{ task, updated_at: now - 1_000 }],
       },
       board: {
+        snapshotVersion: "controls-board-1",
+        lastSequence: 0,
         task,
         run: {
           executor: "opencorvus",
@@ -573,12 +581,11 @@ test(
         },
       ]
     }
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
-        const url = new URL(req.url)
-        const path = route(url)
+    const requests: string[] = []
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      requests.push(`${req.method} ${url.pathname}${url.search}`)
         if (path === "/favicon.ico" || path === "/ui/favicon.ico") {
           return new Response(null, { status: 204 })
         }
@@ -598,6 +605,7 @@ test(
         if (path === "/executor") return send(data.executors)
         if (path === "/terminal/profiles") return send({ profiles: [] })
         if (path === "/coding/cli/profiles") return send({ profiles: [] })
+        if (path === "/project/current/worktrees") return send([])
         if (path === "/path") return send({ ...data.path, directory: projectDir(url) })
         if (path === "/vcs") return send(data.vcs)
         if (path === "/provider") return send(data.provider)
@@ -763,6 +771,26 @@ test(
             lastSequence: 0,
           })
         }
+        if (path === "/task/task-1/operator-model-context") {
+          return send({
+            taskID: "task-1",
+            sessionID: "session-1",
+            agent: "orchestrator",
+            model: { providerID: "openai", modelID: "gpt-4o-mini" },
+          })
+        }
+        if (path === "/task/task-1/browser-preview") {
+          return send({
+            taskID: "task-1",
+            kind: "missing",
+            status: "missing",
+            projectRoot: "D:/overlay/workspace/app",
+            viewports: [],
+            diagnostics: [],
+            candidates: [],
+            source: "none",
+          })
+        }
         if (path.startsWith("/task/task-1/conversation/events")) {
           return send({
             events: [],
@@ -863,12 +891,11 @@ test(
           return send({ ok: true })
         }
         if (path === "/log/tail") return send({ lines: data.logs })
-        return text(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      },
+      return text(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
     const seen: string[] = []
     const errors: string[] = []
-    const app = `http://127.0.0.1:${server.port}`
+    const app = server.origin
     const client = await launchBrowser(["--disable-dev-shm-usage"])
     const page = await client.newPage()
     await page.setViewport({ width: 1600, height: 1200 })
@@ -885,7 +912,9 @@ test(
     page.on("console", (msg) => {
       if (msg.type() === "error") errors.push(`console: ${msg.text()}`)
     })
-    await page.evaluateOnNewDocument(() => {
+    await page.evaluateOnNewDocument((serverUrl) => {
+      ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+      localStorage.setItem("oc_locale", "en-US")
       const state = {
         close: 0,
         drag: 0,
@@ -895,6 +924,9 @@ test(
         copy: [] as string[],
         picked: ["D:/overlay/picked", "D:/overlay/picked", "D:/overlay/workspace/app"] as string[],
         settings: {
+          serverUrl,
+          autoServer: false,
+          locale: "en-US",
           directory: "D:/overlay/workspace/app",
           directoryMode: "custom",
           workspaceTaskID: "task-1",
@@ -957,7 +989,7 @@ test(
           },
         },
       }
-    })
+    }, app)
     try {
       const waitEnabled = async (selector: string) => {
         await page.waitForFunction(
@@ -1016,7 +1048,7 @@ test(
           value,
         )
         const next = await page.$eval(selector, (node) => (node as HTMLDetailsElement).open)
-        expect(next).toBe(value)
+        assert.equal(next, value)
       }
       const ensureMenuOpen = async (menu: string) => {
         const panel = `[data-testid="titlebar-menu-${menu}"]`
@@ -1061,7 +1093,25 @@ test(
       await page.waitForFunction(
         () => document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active === "true",
       )
-      await page.waitForSelector(".req-item")
+      try {
+        await page.waitForSelector(".req-item")
+      } catch (error) {
+        const snapshot = await page.evaluate(() => ({
+          activeTask: document.querySelector<HTMLElement>(".task-row-main[data-active='true']")?.dataset.taskId || "",
+          inspector: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
+          rightPanel: document.querySelector<HTMLElement>("#rightPanelInspector")?.dataset.active || "",
+          sectionText: document.querySelector<HTMLElement>("#sections")?.textContent?.slice(0, 1200) || "",
+          inspectorText: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.textContent?.slice(0, 1200) || "",
+          bodyText: document.body.textContent?.slice(0, 1200) || "",
+        }))
+        assert.fail(
+          `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(
+            { requests, errors, snapshot },
+            null,
+            2,
+          )}`,
+        )
+      }
       const workflowPanels = await page.evaluate(() => {
         const req = document.querySelector<HTMLElement>(".req-item")
         const reqDesc = document.querySelector<HTMLElement>(".req-desc")
@@ -1085,21 +1135,21 @@ test(
           archSummaryText: archSummary?.textContent || "",
         }
       })
-      expect(workflowPanels.reqIDText).toBe("REQ 01")
-      expect(workflowPanels.reqIDTitle).toContain("req_de4c67cdd001")
-      expect(workflowPanels.descWidth).toBeGreaterThan(workflowPanels.itemWidth * 0.6)
-      expect(workflowPanels.archDecisionText).toContain("Conversation records use one persisted schema")
-      expect(workflowPanels.archDecisionText).toContain("Keeps resume and export flows")
-      expect(workflowPanels.archDecisionText).toContain("Seventh decision remains visible")
-      expect(workflowPanels.archDecisionText).toContain("Large decision logs still need inspectable")
-      expect(workflowPanels.archDecisionStrong).toBe("one persisted schema")
-      expect(workflowPanels.archDecisionCode).toBe("streaming cursors")
-      expect(workflowPanels.archDecisionReasonList).toContain("Keeps resume and export flows")
-      expect(workflowPanels.archSummaryText).not.toContain("architect decisions across")
-      await page.waitForSelector(".change-row")
-      await page.waitForSelector(".interaction-card[data-id='interaction-1'] [data-action='once']")
+      assert.equal(workflowPanels.reqIDText, "REQ 01")
+      assert.ok(workflowPanels.reqIDTitle.includes("req_de4c67cdd001"))
+      assert.ok(workflowPanels.descWidth > workflowPanels.itemWidth * 0.6)
+      assert.ok(workflowPanels.archDecisionText.includes("Conversation records use one persisted schema"))
+      assert.ok(workflowPanels.archDecisionText.includes("Keeps resume and export flows"))
+      assert.ok(workflowPanels.archDecisionText.includes("Seventh decision remains visible"))
+      assert.ok(workflowPanels.archDecisionText.includes("Large decision logs still need inspectable"))
+      assert.equal(workflowPanels.archDecisionStrong, "one persisted schema")
+      assert.equal(workflowPanels.archDecisionCode, "streaming cursors")
+      assert.ok(workflowPanels.archDecisionReasonList.includes("Keeps resume and export flows"))
+      assert.equal(workflowPanels.archSummaryText.includes("architect decisions across"), false)
+      await page.waitForSelector(".change-row", { state: "attached" })
+      await page.waitForSelector(".interaction-card[data-id='interaction-1'] [data-action='once']", { state: "attached" })
 
-      expect(await page.$("[data-testid^='titlebar-menu-']")).toBeNull()
+      assert.equal(await page.$("[data-testid^='titlebar-menu-']"), null)
       await page.click('[data-menu-trigger="help"]')
       await page.waitForSelector('[data-testid="titlebar-menu-help"]')
       await page.click('[data-menu-trigger="help"]')
@@ -1156,16 +1206,16 @@ test(
       const stub = await page.evaluate(
         () => (window as typeof window & { __overlayTest: Record<string, unknown> }).__overlayTest,
       )
-      expect(seen).toContain('[data-testid="titlebar-settings-skill"]')
-      expect(seen).toContain('[data-testid="titlebar-settings-mcp"]')
-      expect(seen).toContain('[data-testid="titlebar-settings-skill-market"]')
-      expect(stub.open).toBeDefined()
-      expect(stub.close).toBe(0)
-      expect(errors).toEqual([])
+      assert.ok(seen.includes('[data-testid="titlebar-settings-skill"]'))
+      assert.ok(seen.includes('[data-testid="titlebar-settings-mcp"]'))
+      assert.ok(seen.includes('[data-testid="titlebar-settings-skill-market"]'))
+      assert.notEqual(stub.open, undefined)
+      assert.equal(stub.close, 0)
+      assert.deepEqual(errors, [])
     } finally {
       await Promise.race([page.close().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 1000))])
       await Promise.race([client.close().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 1000))])
-      server.stop(true)
+      await server.close()
     }
   },
   { timeout: 120_000 },
