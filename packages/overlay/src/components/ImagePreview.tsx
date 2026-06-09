@@ -12,13 +12,15 @@ function clampScale(value: number): number {
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, Number.isFinite(value) ? value : 1))
 }
 
-export function PreviewableImage(props: { src: string; alt?: string }) {
+export function PreviewableImage(props: { src: string; alt?: string; triggerClass?: string; imageClass?: string }) {
   const alt = () => props.alt || ""
+  const triggerClass = () => ["msg-image-trigger", props.triggerClass].filter(Boolean).join(" ")
+  const imageClass = () => ["md-img", props.imageClass].filter(Boolean).join(" ")
 
   return (
     <button
       type="button"
-      class="msg-image-trigger"
+      class={triggerClass()}
       data-image-preview-trigger="true"
       title="Open image preview"
       aria-label="Open image preview"
@@ -28,7 +30,7 @@ export function PreviewableImage(props: { src: string; alt?: string }) {
         openImagePreview(props.src, alt())
       }}
     >
-      <img class="md-img" src={props.src} alt={alt()} loading="lazy" />
+      <img class={imageClass()} src={props.src} alt={alt()} loading="lazy" />
     </button>
   )
 }

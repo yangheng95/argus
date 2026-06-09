@@ -15,6 +15,7 @@ import { StaticTextPart } from "./TextPart"
 import { toolFileChangesFromState, type ToolFileChange } from "../utils/file-change-summary"
 import { STREAMING_ACTIVE_TEXT_LIMIT, visibleStreamingText } from "./text-part-model"
 import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api"
+import { PreviewableImage } from "./ImagePreview"
 
 // Same tool-kind sets used to drive code rendering below.
 const FILE_WRITE_TOOLS = new Set(["write", "writefile"])
@@ -42,9 +43,10 @@ function BrowserEvidenceImage(props: { url: string; alt: string }) {
     <Show when={!objectUrl.error}>
       <Show when={resolved()}>
         {(src) => (
-          <img
-            class="msg-browser-evidence__image"
+          <PreviewableImage
             src={src()}
+            imageClass="msg-browser-evidence__image"
+            triggerClass="msg-browser-evidence__trigger"
             alt={props.alt}
           />
         )}

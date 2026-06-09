@@ -32,6 +32,16 @@ describe("message image preview", () => {
     expect(source).toContain("<PreviewableImage src={resolved()} alt={props.alt} />")
   })
 
+  test("browser evidence screenshots use the shared previewable image component", () => {
+    const source = read("src/components/InlineToolPart.tsx")
+
+    expect(source).toContain('import { PreviewableImage } from "./ImagePreview"')
+    expect(source).toContain("<PreviewableImage")
+    expect(source).toContain('imageClass="msg-browser-evidence__image"')
+    expect(source).toContain('triggerClass="msg-browser-evidence__trigger"')
+    expect(source).not.toContain('class="msg-browser-evidence__image"')
+  })
+
   test("markdown delegated clicks open the shared image preview", () => {
     const source = read("src/main.tsx")
 
@@ -52,6 +62,18 @@ describe("message image preview", () => {
     expect(mdImg).toContain("max-height: calc(420px * var(--ui-scale));")
     expect(trigger).toContain("display: inline-flex;")
     expect(trigger).toContain("cursor: zoom-in;")
+  })
+
+  test("browser evidence thumbnails keep intrinsic size while capped by the evidence column", () => {
+    const messagesCss = read("src/styles/surfaces/messages.css")
+    const image = block(messagesCss, ".msg-browser-evidence__image")
+    const trigger = block(messagesCss, ".msg-browser-evidence__trigger")
+
+    expect(image).toContain("width: auto;")
+    expect(image).toContain("height: auto;")
+    expect(image).toContain("max-width: 100%;")
+    expect(image).toContain("max-height: calc(160px * var(--ui-scale));")
+    expect(trigger).toContain("justify-self: start;")
   })
 
   test("modal preview owns zoom controls and does not cap the image to thumbnail size", () => {
