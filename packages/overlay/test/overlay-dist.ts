@@ -1,4 +1,6 @@
+import { spawn } from "node:child_process"
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
@@ -92,12 +94,15 @@ export async function ensureOverlayDist() {
   )
   try {
     if (distFresh()) return
-    const proc = Bun.spawn(["bun", "run", "build:vite"], {
+    const proc = spawn("bun", ["run", "build:vite"], {
       cwd: overlayPackageDir,
-      stdout: "inherit",
-      stderr: "inherit",
+      stdio: "inherit",
+      windowsHide: true,
     })
-    const code = await proc.exited
+    const code = await new Promise<number | null>((resolve, reject) => {
+      proc.once("error", reject)
+      proc.once("exit", (exitCode) => resolve(exitCode))
+    })
     if (code !== 0) throw new Error(`overlay build:vite failed with exit code ${code}`)
   } finally {
     clearInterval(heartbeat)
@@ -117,10 +122,10 @@ export async function overlayStaticResponse(pathname: string): Promise<Response 
   }
   if (!name) return null
   if (name.includes("..")) return new Response("forbidden", { status: 403 })
-  const file = Bun.file(new URL(name, overlayDist))
-  if (!(await file.exists())) return new Response("not found", { status: 404 })
+  const file = new URL(name, overlayDist)
+  if (!existsSync(file)) return new Response("not found", { status: 404 })
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : ""
-  return new Response(file, {
+  return new Response(await readFile(file), {
     headers: { "content-type": overlayAssetTypes[ext] || "application/octet-stream" },
   })
 }
