@@ -131,11 +131,11 @@ export namespace PromptCatalog {
       const configuredPrompt = promptMode === "append" ? (agentCfg?.prompt_append ?? null) : (agentCfg?.prompt ?? null)
       const nativeDefault = agent.native ? Agent.nativeDefaultPrompt(agent.name) : undefined
       const defaultPrompt = nativeDefault ?? agent.prompt ?? ""
-      const prompt = configuredPrompt ?? (promptMode === "append" ? "" : defaultPrompt)
       const effectivePrompt =
         promptMode === "append"
           ? [defaultPrompt, configuredPrompt].filter((item) => item && item.trim().length > 0).join("\n\n")
-          : prompt
+          : (configuredPrompt ?? defaultPrompt)
+      const prompt = effectivePrompt
       const inheritsCore =
         promptMode === "override" && !configuredPrompt && (!defaultPrompt || defaultPrompt === PROMPT_SYSTEM)
       entries.push({

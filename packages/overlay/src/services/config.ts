@@ -372,7 +372,8 @@ export async function savePromptEntry(entry: any, value: string): Promise<void> 
           ? { ...current.agent[entry.key] }
           : {}
       const field = entry.prompt_mode === "append" ? "prompt_append" : "prompt"
-      if (value.trim()) item[field] = value
+      const configValue = promptConfigValueForSave(entry, value)
+      if (configValue.trim()) item[field] = configValue
       else delete (item as any)[field]
       if (Object.keys(item).length === 0) delete current.agent[entry.key]
       else current.agent[entry.key] = item
@@ -383,6 +384,17 @@ export async function savePromptEntry(entry: any, value: string): Promise<void> 
     AppLog.error("ui", "Failed to save prompt override", { error: String(e) })
     throw e
   }
+}
+
+export function promptConfigValueForSave(entry: any, value: string): string {
+  if (entry?.prompt_mode !== "append") return value
+  const defaultPrompt = typeof entry.default_prompt === "string" ? entry.default_prompt : ""
+  if (!defaultPrompt) return value
+  if (value === defaultPrompt) return ""
+  if (value.startsWith(`${defaultPrompt}\n\n`)) return value.slice(defaultPrompt.length + 2)
+  if (value.startsWith(`${defaultPrompt}\n`)) return value.slice(defaultPrompt.length + 1)
+  if (value.startsWith(defaultPrompt)) return value.slice(defaultPrompt.length)
+  throw new Error(t("prompt.append_core_edit_error"))
 }
 
 /**
