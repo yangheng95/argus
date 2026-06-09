@@ -22,6 +22,7 @@ import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { FileEditorPane } from "./components/FileEditorPane"
 import { FileChangesPanel, type FileChangesActiveView } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
+import { saveTaskBrowserPreviewTarget } from "./services/browser-preview"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
 import { McpPanel, SkillsPanel } from "./components/settings/SkillMarketPanel"
 import { MemoryPanel } from "./components/MemoryPanel"
@@ -168,6 +169,7 @@ window.addEventListener("oc:open-logs", () => setLogOpen(true), listenerOpts)
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 const [fileChangesActiveView, setFileChangesActiveView] = createSignal<FileChangesActiveView>("changes")
+const [browserPreviewLinkRefresh, setBrowserPreviewLinkRefresh] = createSignal(0)
 
 type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"
 type RightActivity = Exclude<CenterWorkbenchPanel, "file">
@@ -277,6 +279,15 @@ function openRightActivity(activity: RightActivity): void {
     return
   }
   openCenterWorkbenchPanel(activity)
+}
+
+async function openBrowserPreviewUrl(url: string): Promise<boolean> {
+  const taskID = activeTaskID()
+  if (!taskID) return false
+  openRightActivity("browser")
+  await saveTaskBrowserPreviewTarget({ taskID, url })
+  setBrowserPreviewLinkRefresh((value) => value + 1)
+  return true
 }
 
 function selectLeftActivity(activity: LeftActivity): void {
@@ -724,12 +735,24 @@ document.addEventListener(
     if (!target) return
     const anchor = target.closest<HTMLAnchorElement>("a[href]")
     if (!anchor || anchor.hasAttribute("data-file-path")) return
-    const href = anchor.getAttribute("href") || ""
+    const previewUrl = anchor.getAttribute("data-browser-preview-url") || ""
+    const href = previewUrl || anchor.getAttribute("href") || ""
     if (!/^https?:\/\//i.test(href)) return
     ev.preventDefault()
-    void nativeOpen(href).catch((error) => {
-      console.error("[ui] Failed to open external link", error)
-    })
+    void (async () => {
+      try {
+        if (previewUrl && (await openBrowserPreviewUrl(previewUrl))) return
+        await nativeOpen(href)
+      } catch (error) {
+        console.error("[ui] Failed to open external link", error)
+        notifyError({
+          id: "browser-preview:open-url",
+          title: t("browser_preview.title"),
+          message: error instanceof Error ? error.message : String(error),
+          details: formatErrorDetails(error),
+        })
+      }
+    })()
   },
   listenerOpts,
 )
@@ -1195,7 +1218,7 @@ if (browserPreviewEl) {
       <BrowserPreviewPanel
         active={() => isCenterWorkbenchPanelOpen("browser")}
         directory={activeDirectory}
-        refreshKey={() => boardStore.boardUpdatedAt}
+        refreshKey={() => `${boardStore.boardUpdatedAt}:${browserPreviewLinkRefresh()}`}
         taskID={() => activeTaskID() || undefined}
         onReady={() => openRightActivity("browser")}
       />

@@ -147,7 +147,7 @@ marked.use({
       if (!href) return label
       const title = token.title ? ` title="${escapeAttr(token.title)}"` : ""
       const external = isHttpUrl(href) ? ` target="_blank" rel="noopener noreferrer"` : ""
-      return `<a href="${escapeAttr(href)}"${title}${external}>${label}</a>`
+      return `<a href="${escapeAttr(href)}"${title}${external}${browserPreviewAttrs(href)}>${label}</a>`
     },
     image({ href, title, text }: { href: string; title?: string | null; text: string }) {
       const src = safeMarkdownImageSrc(href)
@@ -195,6 +195,10 @@ function safeMarkdownImageSrc(raw: string): string {
 
 function isHttpUrl(raw: string): boolean {
   return /^https?:\/\//i.test(raw)
+}
+
+function browserPreviewAttrs(raw: string): string {
+  return isHttpUrl(raw) ? ` data-browser-preview-url="${escapeAttr(raw)}"` : ""
 }
 
 // File-ish extensions we treat as path indicators when no slash is present.
