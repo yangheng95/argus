@@ -114,7 +114,9 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       (node as HTMLButtonElement).click(),
     )
     await page.waitForFunction(
-      () => document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "diff",
+      () =>
+        document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "diff" &&
+        document.querySelector<HTMLElement>("#centerWorkbenchDiff")?.dataset.active === "true",
     )
 
     const state = await page.evaluate(() => ({
