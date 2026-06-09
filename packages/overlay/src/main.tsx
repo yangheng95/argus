@@ -1175,7 +1175,7 @@ if (leftActivityToolbarEl) {
 
 const leftSkillsPanelEl = document.getElementById("solidLeftSkillsPanel")
 if (leftSkillsPanelEl) {
-  render(() => <SkillsPanel compact />, leftSkillsPanelEl)
+  render(() => <SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />, leftSkillsPanelEl)
 }
 
 const leftMcpPanelEl = document.getElementById("solidLeftMcpPanel")
@@ -1185,7 +1185,7 @@ if (leftMcpPanelEl) {
 
 const leftMemoryPanelEl = document.getElementById("solidLeftMemoryPanel")
 if (leftMemoryPanelEl) {
-  render(() => <MemoryPanel taskID={activeTaskID() || undefined} compact />, leftMemoryPanelEl)
+  render(() => <MemoryPanel taskID={() => activeTaskID() || undefined} compact />, leftMemoryPanelEl)
 }
 
 const browserPreviewEl = document.getElementById("solidBrowserPreviewMount")

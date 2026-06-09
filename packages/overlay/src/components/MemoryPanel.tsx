@@ -61,8 +61,7 @@ function formatDateTime(ts: number): string {
 // ── MemoryPanel ──
 
 export interface MemoryPanelProps {
-  /** Currently selected task ID — passed in from the host view. */
-  taskID?: string
+  taskID?: string | (() => string | undefined)
   compact?: boolean
 }
 
@@ -73,18 +72,20 @@ export function MemoryPanel(props: MemoryPanelProps) {
   const [loading, setLoading] = createSignal(false)
   const [expandedFileId, setExpandedFileId] = createSignal<string | null>(null)
   const [detailStates, setDetailStates] = createSignal<Record<string, MemoryDetailState>>({})
+  const currentTaskID = () => (typeof props.taskID === "function" ? props.taskID() : props.taskID)
 
   // ── Data loading ──
 
   const loadMemory = async () => {
-    if (!props.taskID) {
+    const taskID = currentTaskID()
+    if (!taskID) {
       setFiles([])
       setSearchMode(false)
       return
     }
     setLoading(true)
     try {
-      const query = `?taskID=${encodeURIComponent(props.taskID)}`
+      const query = `?taskID=${encodeURIComponent(taskID)}`
       const data = await apiJson(`panel/knowledge/memory${query}`)
       setFiles(Array.isArray(data) ? data : [])
       setSearchMode(false)
@@ -111,7 +112,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: q.trim(),
-          taskID: props.taskID || undefined,
+          taskID: currentTaskID() || undefined,
           limit: 20,
         }),
       })
@@ -209,7 +210,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
 
   // Reload when taskID changes (reactive)
   createEffect(() => {
-    const _ = props.taskID
+    const _ = currentTaskID()
     void loadMemory()
   })
 
@@ -220,7 +221,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
 
   const emptyHint = createMemo(() => {
     if (searchMode()) return t("memory.no_results")
-    if (props.taskID) return t("memory.none")
+    if (currentTaskID()) return t("memory.none")
     return t("memory.none_unselected")
   })
 

@@ -17,6 +17,8 @@ import { nativeOpen } from "../../utils/native"
 import { createVisibilityInterval } from "../../utils/visibility-interval"
 import {
   loadExtensions,
+  loadInstalledSkills,
+  loadMcpStatus,
   loadSkillMarket,
   importSkillArchive,
   importSkillFile,
@@ -478,10 +480,18 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   })
 
   createEffect(() => {
+    if (props.mode !== "skill" || props.active !== true) return
+
+    loadInstalledSkills().catch((e) => {
+      setPanelNotice(e instanceof Error ? e.message : String(e))
+    })
+  })
+
+  createEffect(() => {
     if (props.mode !== "mcp" || props.active !== true) return
 
     const refresh = () => {
-      loadExtensions().catch((e) => {
+      loadMcpStatus().catch((e) => {
         setPanelNotice(e instanceof Error ? e.message : String(e))
       })
     }
@@ -967,8 +977,8 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   )
 }
 
-export function SkillsPanel(props: { compact?: boolean } = {}) {
-  return <ExtensionSettingsPanel mode="skill" compact={props.compact} />
+export function SkillsPanel(props: { active?: boolean; compact?: boolean } = {}) {
+  return <ExtensionSettingsPanel mode="skill" active={props.active ?? true} compact={props.compact} />
 }
 
 export function McpPanel(props: { compact?: boolean } = {}) {

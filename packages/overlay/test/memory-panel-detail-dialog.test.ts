@@ -17,4 +17,11 @@ describe("MemoryPanel inline detail lifecycle", () => {
     expect(source).toContain('data-expanded={expanded() ? "true" : "false"}')
     expect(source).toContain("aria-expanded={expanded()}")
   })
+
+  test("memory panel reads task identifier through a reactive accessor", () => {
+    expect(source).toContain("taskID?: string | (() => string | undefined)")
+    expect(source).toContain('const currentTaskID = () => (typeof props.taskID === "function" ? props.taskID() : props.taskID)')
+    expect(source).toContain("const taskID = currentTaskID()")
+    expect(source).toContain("taskID: currentTaskID() || undefined")
+  })
 })

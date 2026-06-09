@@ -179,7 +179,7 @@ export function ConfigDialogHost() {
       case "mcp":
         return <McpPanel />
       case "memory":
-        return <MemoryPanel taskID={activeTaskID() || undefined} />
+        return <MemoryPanel taskID={() => activeTaskID() || undefined} />
       case "providers":
         return <ProvidersPanel />
       case "agent-models":
