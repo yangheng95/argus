@@ -69,14 +69,14 @@
 }
 
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"] {
-  --oc-button-color: var(--text-strong);
-  --oc-button-bg: color-mix(in srgb, var(--surface-strong) 92%, transparent);
-  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--border-strong) 58%, transparent);
+  --oc-button-color: var(--text-soft);
+  --oc-button-bg: transparent;
+  --oc-button-shadow: none;
 }
 
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"][data-tone="danger"] {
-  --oc-button-color: color-mix(in srgb, var(--bad) 74%, var(--text-strong));
-  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--bad) 14%, var(--border-strong));
+  --oc-button-color: var(--text-soft);
+  --oc-button-shadow: none;
 }
 
 .oc-button[data-variant="solid"] {
@@ -138,6 +138,11 @@
   flex: 0 0 auto;
 }
 
+.oc-button[data-size="icon"][data-chrome="window-control"] > svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+}
+
 .oc-button:focus-visible {
   outline: var(--oc-border-width) solid var(--accent);
   outline-offset: calc(1px * var(--ui-scale));
@@ -162,14 +167,14 @@
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"]:focus-visible {
   --oc-button-color: var(--text-strong);
   --oc-button-bg: var(--surface-hover);
-  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--accent) 22%, transparent);
+  --oc-button-shadow: none;
 }
 
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"][data-tone="danger"]:hover,
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"][data-tone="danger"]:focus-visible {
   --oc-button-color: var(--surface);
   --oc-button-bg: color-mix(in srgb, var(--bad) 88%, var(--surface));
-  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--bad) 42%, var(--border-strong));
+  --oc-button-shadow: none;
 }
 
 .oc-button[data-variant="solid"][data-tone="neutral"]:hover,
