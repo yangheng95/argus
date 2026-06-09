@@ -5,6 +5,7 @@ import path from "node:path"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { persistBrowserPreviewEvidence, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -169,6 +170,54 @@ describe("browser preview routes", () => {
     expect(body.status).toBe("ready")
     expect(body.url).toBe("http://localhost:5173/")
     expect(body.source).toBe("task-artifact")
+  })
+
+  test("GET /task/:taskID/browser-preview/evidence/:evidenceID returns only persisted task evidence", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+    const evidenceID = persistBrowserPreviewEvidence({
+      taskID,
+      targetID: target.id,
+      viewportID: "desktop",
+      status: "passed",
+      summary: "all runtime capture layers passed",
+      capture: { captured: true, passed: true, path: "D:/workspace/app/.opencorvus/browser-preview/desktop.png" },
+      diagnostics: ["all runtime capture layers passed"],
+      now: 1000,
+    })
+    const app = Server.App()
+
+    const response = await app.request(`/task/${taskID}/browser-preview/evidence/${evidenceID}`, {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      id: string
+      taskID: string
+      targetID: string
+      viewportID: string
+      status: string
+      capture?: { path?: string }
+      diagnostics?: string[]
+    }
+    expect(body.id).toBe(evidenceID)
+    expect(body.taskID).toBe(taskID)
+    expect(body.targetID).toBe(target.id)
+    expect(body.viewportID).toBe("desktop")
+    expect(body.status).toBe("passed")
+    expect(body.capture?.path).toContain("desktop.png")
+    expect(body.diagnostics).toEqual(["all runtime capture layers passed"])
+
+    const missing = await app.request(`/task/${taskID}/browser-preview/evidence/art_missing`, {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+    expect(missing.status).toBe(404)
   })
 
   test("old project-scoped browser preview target route is removed", async () => {

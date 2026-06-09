@@ -76,6 +76,7 @@
 }
 
 .browser-preview-panel {
+  container: browser-preview / inline-size;
   display: flex;
   flex: 1 1 0;
   min-height: 0;
@@ -117,6 +118,7 @@
 
 .browser-preview-url-field input {
   min-width: 0;
+  min-height: calc(28px * var(--ui-scale));
   flex: 1 1 auto;
   border: 0;
   outline: 0;
@@ -124,6 +126,7 @@
   color: var(--text);
   font: inherit;
   font-size: var(--ui-font-control);
+  line-height: 1.3;
 }
 
 .browser-preview-candidate-select {
@@ -145,6 +148,7 @@
 
 .browser-preview-candidate-select select {
   min-width: 0;
+  min-height: calc(28px * var(--ui-scale));
   flex: 1 1 auto;
   border: 0;
   outline: 0;
@@ -152,6 +156,7 @@
   color: var(--text);
   font: inherit;
   font-size: var(--ui-font-control);
+  line-height: 1.3;
 }
 
 .browser-preview-candidate-select select:disabled {
@@ -190,43 +195,6 @@
   background: var(--surface-inset);
 }
 
-.browser-preview-visibility-toggles {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  flex-wrap: wrap;
-}
-
-.browser-preview-viewport-toggle {
-  min-height: calc(26px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  padding: 0 calc(6px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface-inset);
-  color: var(--text-soft);
-  font-size: var(--ui-font-meta);
-  white-space: nowrap;
-}
-
-.browser-preview-viewport-toggle[data-visible="true"] {
-  color: var(--text);
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
-}
-
-.browser-preview-viewport-toggle[data-visible="false"] {
-  opacity: 0.58;
-}
-
-.browser-preview-viewport-toggle input {
-  width: calc(13px * var(--ui-scale));
-  height: calc(13px * var(--ui-scale));
-  margin: 0;
-  accent-color: var(--accent);
-}
-
 .browser-preview-status {
   flex: 0 0 auto;
   min-height: calc(26px * var(--ui-scale));
@@ -263,75 +231,71 @@
   background-size: calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale));
 }
 
-.browser-preview-frame-grid {
+.browser-preview-evidence {
   width: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(360px * var(--ui-scale))), 1fr));
   align-content: start;
-  align-items: start;
-  justify-items: center;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale));
-}
-
-.browser-preview-frame-shell {
-  width: min(100%, var(--browser-preview-width));
-  min-width: min(calc(180px * var(--ui-scale)), 100%);
-  min-height: 0;
-  max-height: calc(100vh - 170px * var(--ui-scale));
-  display: flex;
-  flex-direction: column;
-  border: var(--oc-border-width) solid var(--border-strong);
-  background: var(--surface);
-  box-shadow: 0 calc(12px * var(--ui-scale)) calc(24px * var(--ui-scale)) var(--ui-shadow-tone);
-}
-
-.browser-preview-frame-shell[data-active="true"] {
-  border-color: color-mix(in srgb, var(--accent) 56%, var(--border-strong));
-}
-
-.browser-preview-frame-header {
-  flex: 0 0 auto;
-  min-height: calc(24px * var(--ui-scale));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: calc(8px * var(--ui-scale));
-  padding: 0 calc(8px * var(--ui-scale));
-  border-bottom: var(--oc-border-width) solid var(--border);
-  color: var(--text-soft);
+  padding: calc(12px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--good) 34%, var(--border));
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  color: var(--text);
+  font-size: var(--ui-font-control);
+}
+
+.browser-preview-evidence[data-status="failed"] {
+  border-color: color-mix(in srgb, var(--bad) 42%, var(--border));
+}
+
+.browser-preview-evidence-header {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  color: var(--text-strong);
+}
+
+.browser-preview-evidence-header code,
+.browser-preview-evidence code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  font-family: var(--ui-font-mono);
   font-size: var(--ui-font-meta);
 }
 
-.browser-preview-frame-title {
+.browser-preview-evidence p {
+  margin: 0;
+  color: var(--text);
+}
+
+.browser-preview-evidence-facts {
+  display: grid;
+  gap: calc(6px * var(--ui-scale));
+  margin: 0;
+}
+
+.browser-preview-evidence-facts div {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: grid;
+  grid-template-columns: minmax(calc(72px * var(--ui-scale)), max-content) minmax(0, 1fr);
+  gap: calc(8px * var(--ui-scale));
 }
 
-.browser-preview-frame-actions {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
+.browser-preview-evidence-facts dt {
+  color: var(--text-soft);
 }
 
-.browser-preview-frame-actions .oc-button[data-ui="browser-preview-frame-close"] {
-  width: calc(20px * var(--ui-scale));
-  height: calc(20px * var(--ui-scale));
-  min-width: calc(20px * var(--ui-scale));
-  min-height: calc(20px * var(--ui-scale));
-}
-
-.browser-preview-frame {
-  width: 100%;
-  height: min(var(--browser-preview-height), calc(100vh - 200px * var(--ui-scale)));
-  min-height: calc(180px * var(--ui-scale));
-  display: block;
-  border: 0;
-  background: white;
+.browser-preview-evidence-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
 }
 
 .browser-preview-empty {
@@ -350,11 +314,6 @@
 .browser-preview-empty p {
   margin: 0;
   color: var(--text);
-}
-
-.browser-preview-empty[data-status="host-blocked"] {
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 36%, var(--border));
-  background: color-mix(in srgb, var(--warn) 8%, var(--surface));
 }
 
 .browser-preview-empty code {
@@ -408,6 +367,29 @@
     align-items: stretch;
   }
 
+  .browser-preview-candidate-select,
+  .browser-preview-viewport-controls,
+  .browser-preview-evidence-status {
+    flex-basis: 100%;
+  }
+}
+
+@container browser-preview (max-width: 280px) {
+  .browser-preview-command-surface {
+    gap: calc(5px * var(--ui-scale));
+    padding: calc(5px * var(--ui-scale));
+  }
+
+  .browser-preview-toolbar {
+    gap: calc(3px * var(--ui-scale));
+  }
+
+  .browser-preview-controls {
+    align-items: stretch;
+    gap: calc(5px * var(--ui-scale));
+  }
+
+  .browser-preview-status,
   .browser-preview-candidate-select,
   .browser-preview-viewport-controls,
   .browser-preview-evidence-status {

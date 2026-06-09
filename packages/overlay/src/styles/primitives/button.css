@@ -24,6 +24,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  height: var(--oc-button-height);
   min-height: var(--oc-button-height);
   padding: var(--oc-button-padding-y) var(--oc-button-padding-x);
   gap: var(--oc-button-gap);
