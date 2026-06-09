@@ -67,6 +67,8 @@ describe("agent session controls", () => {
     expect(css).toContain("height: calc(58px * var(--ui-scale));")
     expect(css).toContain("max-height: calc(58px * var(--ui-scale));")
     expect(css).toContain("top: 50%;")
+    expect(component).toContain('<Icon name="send" />')
+    expect(css).not.toMatch(/\.card__agent-reply-send svg\s*\{[^}]*transform:\s*rotate\(180deg\)/)
     expect(css).not.toContain("min-height: calc(104px * var(--ui-scale));")
   })
 })

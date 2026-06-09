@@ -1187,7 +1187,6 @@ body {
 .card__agent-reply-send svg {
   width: calc(13px * var(--ui-scale));
   height: calc(13px * var(--ui-scale));
-  transform: rotate(180deg);
 }
 
 .card__agent-reply-send:not(:disabled):hover,
