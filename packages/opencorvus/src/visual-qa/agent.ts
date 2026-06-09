@@ -124,8 +124,13 @@ export namespace VisualQaAgent {
 
 function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
   const sections = [
-    "# Delegation\n\nOrchestrator is asking visual-qa to run dedicated frontend UI/UX testing. UI means User Interface; UX means User Experience. Consume task-scoped frontend_design/build evidence as the source of truth, test the real rendered product, repair in-scope visual/runtime defects when safe, and submit one structured visual QA report.",
-    renderUserRequestSection({ heading: "# Task", title: input.taskTitle, request: input.taskRequest, taskID: input.taskID }),
+    "# Delegation\n\nOrchestrator is asking visual-qa to run dedicated frontend visual GUI fidelity and functional testing. GUI means Graphical User Interface: the visible application screen and controls. Consume task-scoped frontend_design/build evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. If any reference image is present, it is the authoritative visual truth: require 1:1 layout and style fidelity. 1:1 means one-to-one visible geometry and styling, not a relaxed similarity standard.",
+    renderUserRequestSection({
+      heading: "# Task",
+      title: input.taskTitle,
+      request: input.taskRequest,
+      taskID: input.taskID,
+    }),
     `# Dispatch Reason\n\n${input.reason}`,
   ]
   if (input.focus?.trim()) sections.push(`# Focus\n\n${input.focus}`)
@@ -137,15 +142,21 @@ function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
         "Use Node for Playwright/browser automation on Windows. Do not launch Playwright through bun.",
     )
   }
-  if (input.frontendDesign?.trim()) sections.push(`# Frontend Design Evidence\n\n${input.frontendDesign}`)
-  if (input.frontendResearch?.trim()) sections.push(`# Frontend Research Work Packets\n\n${input.frontendResearch}`)
-  if (input.buildEvidence?.trim()) sections.push(`# Build Evidence\n\n${input.buildEvidence}`)
-  if (input.priorVisualQa?.trim()) sections.push(`# Prior Visual QA Evidence\n\n${input.priorVisualQa}`)
+  pushContextSection(sections, "Frontend Design Context", input.frontendDesign)
+  pushContextSection(sections, "Frontend Research Context", input.frontendResearch)
+  pushContextSection(sections, "Build Evidence Context", input.buildEvidence)
+  pushContextSection(sections, "Prior Visual QA Context", input.priorVisualQa)
   sections.push(
     "# Required Output\n\n" +
-      "Call `submit_visual_qa_report` exactly once. A passing report needs fresh evidence paths or URLs, coverage of checked regions/viewports/states, and no open critical/major finding. If you repair files, include changed_files and verification evidence.",
+      "Call `submit_visual_qa_report` exactly once. A passing report needs fresh evidence paths or URLs, coverage of checked GUI regions/viewports/states/functions, and no open critical/major finding. With a reference image, accepted=true also requires evidence that the rendered screenshot matches the reference image's layout geometry, spacing, typography, colors, component styling, and visible state styling 1:1. If you repair files, include changed_files and verification evidence.",
   )
   return sections.join("\n\n")
+}
+
+function pushContextSection(sections: string[], heading: string, value?: string): void {
+  const trimmed = value?.trim()
+  if (!trimmed) return
+  sections.push(trimmed.startsWith("#") ? trimmed : `# ${heading}\n\n${trimmed}`)
 }
 
 async function createVisualQaContextTools(input: { taskID?: string; sessionID?: string }): Promise<ToolSet> {
@@ -189,8 +200,13 @@ async function createVisualQaTool(
     description: initialized.description,
     inputSchema: initialized.parameters,
     execute: async (args, options) => {
-      const meta = (options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined)?.opencorvus
-      const abort = (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ?? input.signal ?? new AbortController().signal
+      const meta = (
+        options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined
+      )?.opencorvus
+      const abort =
+        (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ??
+        input.signal ??
+        new AbortController().signal
       return initialized.execute(args as never, {
         sessionID: meta?.sessionID ?? "",
         messageID: meta?.messageID ?? "",
@@ -206,11 +222,7 @@ async function createVisualQaTool(
   })
 }
 
-function selectVisualQaStaticTools(
-  tools: ToolSet,
-  ids: readonly string[],
-  label: string,
-): ToolSet {
+function selectVisualQaStaticTools(tools: ToolSet, ids: readonly string[], label: string): ToolSet {
   const selected: ToolSet = {}
   for (const id of ids) {
     const item = tools[id]
