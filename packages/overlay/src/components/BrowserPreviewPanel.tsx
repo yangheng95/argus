@@ -6,6 +6,7 @@ import {
   type BrowserPreviewTarget,
   type BrowserPreviewViewportID,
 } from "../services/browser-preview"
+import { getHostTransport } from "../services/host-transport"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -67,6 +68,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   )
   const visibleViewportCount = createMemo(() => visibleViewportIDs().length)
   const frameUrl = createMemo(() => currentTarget()?.url)
+  const canEmbedPreviewFrame = createMemo(() => getHostTransport().kind !== "vscode")
+  const embeddableFrameUrl = createMemo(() => (canEmbedPreviewFrame() ? frameUrl() : undefined))
 
   createEffect(() => {
     const resolved = currentTarget()
@@ -175,7 +178,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
           tone="neutral"
           title={t("browser_preview.refresh_title")}
           aria-label={t("browser_preview.refresh_title")}
-          disabled={!frameUrl()}
+          disabled={!embeddableFrameUrl()}
           onClick={reloadFrame}
         >
           <Icon name="refresh" size={13} />
@@ -272,7 +275,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
           <div class="browser-preview-stage">
             <Switch>
-              <Match when={frameUrl()}>
+              <Match when={frameUrl() && !canEmbedPreviewFrame()}>
+                <div class="browser-preview-empty" data-status="host-blocked" data-ui="browser-preview-host-blocked">
+                  <Icon name="info-circle" size={18} />
+                  <p>{t("browser_preview.empty.host_blocked")}</p>
+                  <code>{t("browser_preview.empty.host_blocked_detail")}</code>
+                </div>
+              </Match>
+              <Match when={embeddableFrameUrl()}>
                 {(url) => (
                   <div class="browser-preview-frame-grid">
                     <For each={visibleViewportIDs()}>

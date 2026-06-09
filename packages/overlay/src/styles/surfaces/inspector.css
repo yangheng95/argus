@@ -338,6 +338,12 @@
   color: var(--text);
 }
 
+.browser-preview-empty[data-status="host-blocked"] {
+  width: min(100%, calc(360px * var(--ui-scale)));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 36%, var(--border));
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface));
+}
+
 .browser-preview-empty code,
 .browser-preview-command code {
   max-width: 100%;
