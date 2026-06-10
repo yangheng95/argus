@@ -5,7 +5,8 @@ import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sq
 import { Instance } from "../../src/project/instance"
 import { findReadableBrowserPreviewEvidenceByID, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
-import { verifyBrowserPreview, verifyBrowserPreviewForTest } from "../../src/browser-preview/verification"
+import { verifyBrowserPreview } from "../../src/browser-preview/verification"
+import { verifyBrowserPreviewForTest } from "../../src/browser-preview/verification-test-harness"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -250,15 +251,26 @@ describe("browser preview verification", () => {
 
   test("product verification path does not import direct runtime page capture", () => {
     const source = readFileSync(new URL("../../src/browser-preview/verification.ts", import.meta.url), "utf8")
+    const coreSource = readFileSync(new URL("../../src/browser-preview/verification-core.ts", import.meta.url), "utf8")
+    const harnessSource = readFileSync(
+      new URL("../../src/browser-preview/verification-test-harness.ts", import.meta.url),
+      "utf8",
+    )
     const routeSource = readFileSync(new URL("../../src/server/routes/browser-preview.ts", import.meta.url), "utf8")
 
     expect(source).toContain("runBrowserPreviewEvidenceJob")
     expect(source).toContain("export async function verifyBrowserPreview(input: BrowserPreviewVerificationInput)")
-    expect(source).toContain("export async function verifyBrowserPreviewForTest")
-    expect(source).toContain("captureForTest: CaptureRuntimePage")
-    expect(source).toContain("verifyBrowserPreviewInternal")
+    expect(source).toContain("runBrowserPreviewVerification")
+    expect(source).not.toContain("export async function verifyBrowserPreviewForTest")
+    expect(source).not.toContain("captureForTest")
+    expect(source).not.toContain("RuntimeCaptureInput")
+    expect(source).not.toContain("writeBrowserEvidenceManifest")
+    expect(harnessSource).toContain("export async function verifyBrowserPreviewForTest")
+    expect(harnessSource).toContain("captureForTest: CaptureRuntimePage")
+    expect(coreSource).toContain("export async function runBrowserPreviewVerification")
     expect(routeSource).toContain("verifyBrowserPreview")
     expect(routeSource).not.toContain("verifyBrowserPreviewForTest")
+    expect(routeSource).not.toContain("verification-test-harness")
     expect(source).not.toContain("captureRuntimePage")
     expect(source).not.toContain('"no-task"')
     expect(source).not.toContain("targetID?:")
