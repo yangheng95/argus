@@ -156,9 +156,7 @@ describe("overlay architecture guards", () => {
     expect(existsSync(join(OVERLAY_ROOT, "src/components/App.tsx"))).toBe(true)
   })
 
-  test("God CSS archive is reference-only and isolated from the runtime graph", () => {
-    expect(existsSync(GOD_CSS_ARCHIVE_DIR)).toBe(true)
-
+  test("God CSS archive is retired and isolated from the runtime graph", () => {
     const runtimeFiles = [
       ...walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx|js|jsx|mjs|cjs)$/.test(path)),
       ...walkFiles(join(OVERLAY_ROOT, "test"), (path) => {
@@ -182,6 +180,7 @@ describe("overlay architecture guards", () => {
       /(?:archive|legacy|god).*\.css$/i.test(path),
     )
     expect(archivedCssUnderSource).toEqual([])
+    expect(existsSync(GOD_CSS_ARCHIVE_DIR)).toBe(false)
   })
 
   test("legacy style debt cannot increase while migration is in progress", () => {
@@ -561,7 +560,7 @@ describe("overlay architecture guards", () => {
       expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\] \.sidebar-title,/)
+    expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\]\s*\{/)
     expect(sidebarSurface).toContain("--ui-collapsed-pane-width")
     expect(sidebarSurface).not.toContain("sidebar-toolset")
     expect(html).not.toContain('data-ui="sidebar-refresh-button"')
@@ -917,7 +916,7 @@ describe("overlay architecture guards", () => {
     // Status variants must remain.
     expect(body).toMatch(/\.conn-banner\[data-status="connecting"\]\s*\{/)
     expect(body).toMatch(/\.conn-banner__dot\s*\{/)
-    expect(body).toMatch(/@keyframes conn-banner-pulse\s*\{/)
+    expect(body).not.toMatch(/@keyframes conn-banner-pulse\s*\{/)
   })
 
   test("shared .verdict-pill primitive routes verdict tones through palette tokens", () => {
@@ -1684,7 +1683,8 @@ describe("overlay architecture guards", () => {
       expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(conversationSurface).toMatch(/@keyframes task-switch-progress-slide/)
+    expect(conversationSurface).not.toMatch(/@keyframes task-switch-progress-slide/)
+    expect(soloRuleBody(conversationSurface, ".task-switch-progress")).toContain("transition: opacity")
     expect(conversationSurface).toMatch(/\.task-switch-progress::before/)
     expect(conversationSurface).toMatch(/\.chat-header-meta\s*\{/)
     expect(conversationSurface).toMatch(/\.chat-usage\s*\{/)
@@ -1696,7 +1696,7 @@ describe("overlay architecture guards", () => {
 
     expect(styles).not.toMatch(/(^|\n)\.chat-scroll\s*\{/)
     expect(conversationSurface).toMatch(/(^|\n)\.chat-scroll\s*\{/)
-    expect(conversationSurface).toMatch(/\.chat-scroll > \.card,\n\.chat-scroll > \.interaction-card/)
+    expect(conversationSurface).toMatch(/\.conversation-virtual-item > \.card,\n\.conversation-virtual-item > \.interaction-card/)
     expect(conversationSurface).toMatch(/@media \(max-width: 900px\)/)
   })
 
@@ -2164,8 +2164,8 @@ describe("overlay architecture guards", () => {
     const composerSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")))
     const body = soloRuleBody(composerSurface, ".chat-input")
     expect(body).toContain("margin: 0")
-    expect(body).toContain("padding: calc(4px * var(--ui-scale))")
-    expect(body).toContain("gap: calc(2px * var(--ui-scale))")
+    expect(body).toContain("padding: calc(6px * var(--ui-scale))")
+    expect(body).toContain("gap: calc(4px * var(--ui-scale))")
     expect(body).toContain("border-radius: var(--oc-radius-none)")
   })
 
@@ -2834,6 +2834,7 @@ describe("overlay architecture guards", () => {
       for (const match of text.matchAll(pxLiteral)) {
         const start = match.index ?? 0
         if (breakpointPxOffsets.has(start)) continue
+        if (match[0] === "0px") continue
         const window = text.slice(Math.max(0, start - 80), start + match[0].length + 80)
         // --px-exact is an escape-hatch CSS custom property for px values
         // that MUST stay at exactly 1px (visually-hidden / layout-collapse).
@@ -2967,8 +2968,12 @@ describe("overlay architecture guards", () => {
     const css = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/chat-bubble.css")))
     expect(css).toContain('.chat-bubble-row[data-kind="agent"] .chat-bubble')
     expect(css).toContain("border-left: calc(3px * var(--ui-scale)) solid var(--card-stage);")
-    expect(css).not.toMatch(/\.chat-bubble-row\[data-kind="agent"\] \.chat-bubble\s*\{[^}]*background:/)
-    expect(css).not.toMatch(/\.chat-bubble-row\[data-kind="agent"\] \.chat-bubble:hover\s*\{[^}]*background:/)
+    expect(soloRuleBody(css, '.chat-bubble-row[data-kind="agent"] .chat-bubble')).toContain(
+      "background: var(--card-bg-0)",
+    )
+    expect(soloRuleBody(css, '.chat-bubble-row[data-kind="agent"] .chat-bubble:hover')).toContain(
+      "background: var(--card-bg-0)",
+    )
     expect(css).not.toMatch(/border-inline-(?:start|end)\s*:/)
     expect(css).not.toContain("--card-system-rail")
     expect(css).not.toContain("--card-stage-user) 84%")

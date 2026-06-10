@@ -155,7 +155,9 @@
 }
 
 .chat-bubble-row[data-kind="agent"] .chat-bubble__head {
-  padding: calc(var(--card-pad-y) + 1px) calc(var(--card-pad-x) + 1px);
+  padding: calc(var(--card-pad-y) + calc(1px * var(--ui-scale))) calc(
+      var(--card-pad-x) + calc(1px * var(--ui-scale))
+    );
   min-height: calc(42px * var(--ui-scale));
   border-bottom-color: color-mix(in srgb, var(--card-line-dim) 84%, transparent);
 }
