@@ -2154,6 +2154,13 @@ export type CodingCliOpenResponse = {
   ok: boolean
 }
 
+export type AcceptanceDiffSummary = {
+  file: string
+  additions?: number
+  deletions?: number
+  status?: "added" | "deleted" | "modified"
+}
+
 export type SessionRuntimeContractMissingError = {
   name: "SessionRuntimeContractMissingError"
   data: {
@@ -10117,7 +10124,7 @@ export type TaskProgressResponses = {
       result: {
         summary: string
         changedFiles: Array<string>
-        diffs: Array<FileDiff>
+        diffs: Array<AcceptanceDiffSummary>
         artifacts?: Array<{
           kind: string
           label: string
@@ -10356,7 +10363,7 @@ export type TaskConversationResponses = {
         result: {
           summary: string
           changedFiles: Array<string>
-          diffs: Array<FileDiff>
+          diffs: Array<AcceptanceDiffSummary>
           artifacts?: Array<{
             kind: string
             label: string
@@ -10382,7 +10389,7 @@ export type TaskConversationResponses = {
         result: {
           summary: string
           changedFiles: Array<string>
-          diffs: Array<FileDiff>
+          diffs: Array<AcceptanceDiffSummary>
           artifacts?: Array<{
             kind: string
             label: string
@@ -10408,7 +10415,7 @@ export type TaskConversationResponses = {
         result: {
           summary: string
           changedFiles: Array<string>
-          diffs: Array<FileDiff>
+          diffs: Array<AcceptanceDiffSummary>
           artifacts?: Array<{
             kind: string
             label: string
@@ -11111,7 +11118,7 @@ export type TaskBoardResponses = {
       result: {
         summary: string
         changedFiles: Array<string>
-        diffs: Array<FileDiff>
+        diffs: Array<AcceptanceDiffSummary>
         artifacts?: Array<{
           kind: string
           label: string
@@ -11137,7 +11144,7 @@ export type TaskBoardResponses = {
       result: {
         summary: string
         changedFiles: Array<string>
-        diffs: Array<FileDiff>
+        diffs: Array<AcceptanceDiffSummary>
         artifacts?: Array<{
           kind: string
           label: string
@@ -11163,7 +11170,7 @@ export type TaskBoardResponses = {
       result: {
         summary: string
         changedFiles: Array<string>
-        diffs: Array<FileDiff>
+        diffs: Array<AcceptanceDiffSummary>
         artifacts?: Array<{
           kind: string
           label: string
@@ -12290,7 +12297,7 @@ export type RunAcceptanceResponses = {
     result: {
       summary: string
       changedFiles: Array<string>
-      diffs: Array<FileDiff>
+      diffs: Array<AcceptanceDiffSummary>
       artifacts?: Array<{
         kind: string
         label: string
@@ -12347,7 +12354,7 @@ export type GoalRunAcceptanceResponses = {
     result: {
       summary: string
       changedFiles: Array<string>
-      diffs: Array<FileDiff>
+      diffs: Array<AcceptanceDiffSummary>
       artifacts?: Array<{
         kind: string
         label: string
