@@ -110,6 +110,27 @@ export type ServerConfig = {
   cors?: Array<string>
 }
 
+/**
+ * Provider HTTP proxy configuration
+ */
+export type NetworkProxyConfig = {
+  /**
+   * Enable the configured HTTP(S) proxy for provider fetch requests
+   */
+  enabled?: boolean
+  /**
+   * HTTP(S) proxy URL, e.g. http://127.0.0.1:7890
+   */
+  url?: string
+}
+
+/**
+ * Network transport configuration
+ */
+export type NetworkConfig = {
+  proxy?: NetworkProxyConfig
+}
+
 export type SlackChannelConfig = {
   /**
    * Enable Slack channel integration
@@ -767,6 +788,7 @@ export type Config = {
   $schema?: string
   logLevel?: LogLevel
   server?: ServerConfig
+  network?: NetworkConfig
   channel?: ChannelConfig
   /**
    * Command configuration, see https://opencorvus.ai/docs/commands
@@ -8113,6 +8135,7 @@ export type MissionListResponses = {
       id: string
       title: string
       status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      executionStatus: "success" | "failed" | "running"
       priority: "critical" | "high" | "normal" | "low"
       source: string
       directory: string
@@ -8133,6 +8156,119 @@ export type MissionListResponses = {
 }
 
 export type MissionListResponse = MissionListResponses[keyof MissionListResponses]
+
+export type MissionStatusData = {
+  body?: never
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}/status"
+}
+
+export type MissionStatusResponses = {
+  /**
+   * Mission status snapshot
+   */
+  200: {
+    missionID: string
+    sessionID: string
+    title: string
+    directory: string
+    status: "success" | "failed" | "running"
+    taskCounts: {
+      total: number
+      success: number
+      failed: number
+      running: number
+    }
+    progress: {
+      total: number
+      completed: number
+      failed: number
+      running: number
+      pending: number
+      percent: number
+    }
+    tasks: Array<{
+      taskID: string
+      title: string
+      status: "success" | "failed" | "running"
+      lifecycleStatus: "queued" | "active" | "completed" | "failed" | "cancelled"
+      source: string
+      priority: "critical" | "high" | "normal" | "low"
+      directory?: string
+      error?: string
+      progress: {
+        total: number
+        completed: number
+        failed: number
+        running: number
+        pending: number
+        percent: number
+      }
+      workflow?: {
+        id: string
+        name: string
+        steps: Array<{
+          id: string
+          label: string
+          scope: "task" | "goal"
+          tool: string
+          status: "success" | "failed" | "running"
+          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+        }>
+      }
+      goals: Array<{
+        goalID: string
+        title: string
+        objective?: string
+        status: "success" | "failed" | "running"
+        rawStatus: string
+        orderIndex: number
+        priority: "blocking" | "advisory"
+        progress: {
+          total: number
+          completed: number
+          failed: number
+          running: number
+          pending: number
+          percent: number
+        }
+        steps: Array<{
+          stepID: string
+          label: string
+          status: "success" | "failed" | "running"
+          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+          startedAt?: number
+          completedAt?: number
+          summary?: string
+          phases?: Array<{
+            phaseID: string
+            status: "success" | "failed" | "running"
+            rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+            startedAt?: number
+            completedAt?: number
+          }>
+        }>
+      }>
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }>
+    generatedAt: number
+  }
+}
+
+export type MissionStatusResponse = MissionStatusResponses[keyof MissionStatusResponses]
 
 export type MissionRenameData = {
   body: {
@@ -8166,6 +8302,7 @@ export type MissionRenameResponses = {
       id: string
       title: string
       status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      executionStatus: "success" | "failed" | "running"
       priority: "critical" | "high" | "normal" | "low"
       source: string
       directory: string
@@ -9169,7 +9306,7 @@ export type TaskListResponses = {
       pending_interaction_items: Array<{
         id: string
         taskID: string
-        runID: string
+        runID: string | null
         sessionID?: string | null
         externalID: string
         type: "permission" | "question"
@@ -9344,7 +9481,7 @@ export type TaskGlobalListResponses = {
       pending_interaction_items: Array<{
         id: string
         taskID: string
-        runID: string
+        runID: string | null
         sessionID?: string | null
         externalID: string
         type: "permission" | "question"
@@ -9632,6 +9769,106 @@ export type TaskGetResponses = {
 
 export type TaskGetResponse = TaskGetResponses[keyof TaskGetResponses]
 
+export type TaskStatusData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/status"
+}
+
+export type TaskStatusErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskStatusError = TaskStatusErrors[keyof TaskStatusErrors]
+
+export type TaskStatusResponses = {
+  /**
+   * Task status snapshot
+   */
+  200: {
+    taskID: string
+    title: string
+    status: "success" | "failed" | "running"
+    lifecycleStatus: "queued" | "active" | "completed" | "failed" | "cancelled"
+    source: string
+    priority: "critical" | "high" | "normal" | "low"
+    directory?: string
+    error?: string
+    progress: {
+      total: number
+      completed: number
+      failed: number
+      running: number
+      pending: number
+      percent: number
+    }
+    workflow?: {
+      id: string
+      name: string
+      steps: Array<{
+        id: string
+        label: string
+        scope: "task" | "goal"
+        tool: string
+        status: "success" | "failed" | "running"
+        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+      }>
+    }
+    goals: Array<{
+      goalID: string
+      title: string
+      objective?: string
+      status: "success" | "failed" | "running"
+      rawStatus: string
+      orderIndex: number
+      priority: "blocking" | "advisory"
+      progress: {
+        total: number
+        completed: number
+        failed: number
+        running: number
+        pending: number
+        percent: number
+      }
+      steps: Array<{
+        stepID: string
+        label: string
+        status: "success" | "failed" | "running"
+        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+        startedAt?: number
+        completedAt?: number
+        summary?: string
+        phases?: Array<{
+          phaseID: string
+          status: "success" | "failed" | "running"
+          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+          startedAt?: number
+          completedAt?: number
+        }>
+      }>
+    }>
+    time: {
+      created: number
+      updated: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskStatusResponse = TaskStatusResponses[keyof TaskStatusResponses]
+
 export type TaskProjectArchiveData = {
   body?: never
   path: {
@@ -9852,7 +10089,7 @@ export type TaskProgressResponses = {
     pendingInteractions: Array<{
       id: string
       taskID: string
-      runID: string
+      runID: string | null
       sessionID?: string | null
       externalID: string
       type: "permission" | "question"
@@ -10212,7 +10449,7 @@ export type TaskConversationResponses = {
       interactions: Array<{
         id: string
         taskID: string
-        runID: string
+        runID: string | null
         sessionID?: string | null
         externalID: string
         type: "permission" | "question"
@@ -10967,7 +11204,7 @@ export type TaskBoardResponses = {
     interactions: Array<{
       id: string
       taskID: string
-      runID: string
+      runID: string | null
       sessionID?: string | null
       externalID: string
       type: "permission" | "question"
@@ -11219,22 +11456,6 @@ export type TaskOperatorModelContextErrors = {
    * Not found
    */
   404: NotFoundError
-  /**
-   * Conflict
-   */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancelledMessageError"
-        data: {
-          [key: string]: unknown
-        }
-      }
 }
 
 export type TaskOperatorModelContextError = TaskOperatorModelContextErrors[keyof TaskOperatorModelContextErrors]
@@ -11343,7 +11564,7 @@ export type TaskInteractionsResponses = {
   200: Array<{
     id: string
     taskID: string
-    runID: string
+    runID: string | null
     sessionID?: string | null
     externalID: string
     type: "permission" | "question"
@@ -12355,7 +12576,7 @@ export type InteractionReplyResponses = {
   200: {
     id: string
     taskID: string
-    runID: string
+    runID: string | null
     sessionID?: string | null
     externalID: string
     type: "permission" | "question"
@@ -12415,7 +12636,7 @@ export type InteractionRejectResponses = {
   200: {
     id: string
     taskID: string
-    runID: string
+    runID: string | null
     sessionID?: string | null
     externalID: string
     type: "permission" | "question"

@@ -11858,6 +11858,14 @@
                                 "cancelled"
                               ]
                             },
+                            "executionStatus": {
+                              "type": "string",
+                              "enum": [
+                                "success",
+                                "failed",
+                                "running"
+                              ]
+                            },
                             "priority": {
                               "type": "string",
                               "enum": [
@@ -11890,6 +11898,7 @@
                             "id",
                             "title",
                             "status",
+                            "executionStatus",
                             "priority",
                             "source",
                             "directory",
@@ -12000,6 +12009,534 @@
         ]
       }
     },
+    "/mission/{missionID}/status": {
+      "get": {
+        "operationId": "mission.status",
+        "summary": "Get Mission status",
+        "description": "Collect the current Mission status from its tasks and each task's workflow/goal progress. The top-level and nested detail `status` fields are normalized to \"success\", \"failed\", or \"running\"; raw lifecycle states remain available as lifecycleStatus/rawStatus fields.",
+        "responses": {
+          "200": {
+            "description": "Mission status snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "missionID": {
+                      "type": "string"
+                    },
+                    "sessionID": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "directory": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success",
+                        "failed",
+                        "running"
+                      ]
+                    },
+                    "taskCounts": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "success": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "running": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "success",
+                        "failed",
+                        "running"
+                      ]
+                    },
+                    "progress": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "completed": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "running": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "pending": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "percent": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "completed",
+                        "failed",
+                        "running",
+                        "pending",
+                        "percent"
+                      ]
+                    },
+                    "tasks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "taskID": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "success",
+                              "failed",
+                              "running"
+                            ]
+                          },
+                          "lifecycleStatus": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "active",
+                              "completed",
+                              "failed",
+                              "cancelled"
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": [
+                              "critical",
+                              "high",
+                              "normal",
+                              "low"
+                            ]
+                          },
+                          "directory": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          },
+                          "progress": {
+                            "type": "object",
+                            "properties": {
+                              "total": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "completed": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "failed": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "running": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "pending": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "percent": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              }
+                            },
+                            "required": [
+                              "total",
+                              "completed",
+                              "failed",
+                              "running",
+                              "pending",
+                              "percent"
+                            ]
+                          },
+                          "workflow": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "steps": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "task",
+                                        "goal"
+                                      ]
+                                    },
+                                    "tool": {
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "type": "string",
+                                      "enum": [
+                                        "success",
+                                        "failed",
+                                        "running"
+                                      ]
+                                    },
+                                    "rawStatus": {
+                                      "type": "string",
+                                      "enum": [
+                                        "pending",
+                                        "running",
+                                        "completed",
+                                        "skipped",
+                                        "failed"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "scope",
+                                    "tool",
+                                    "status",
+                                    "rawStatus"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "steps"
+                            ]
+                          },
+                          "goals": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "goalID": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "objective": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "success",
+                                    "failed",
+                                    "running"
+                                  ]
+                                },
+                                "rawStatus": {
+                                  "type": "string"
+                                },
+                                "orderIndex": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                "priority": {
+                                  "type": "string",
+                                  "enum": [
+                                    "blocking",
+                                    "advisory"
+                                  ]
+                                },
+                                "progress": {
+                                  "type": "object",
+                                  "properties": {
+                                    "total": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "completed": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "failed": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "running": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "pending": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "percent": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    }
+                                  },
+                                  "required": [
+                                    "total",
+                                    "completed",
+                                    "failed",
+                                    "running",
+                                    "pending",
+                                    "percent"
+                                  ]
+                                },
+                                "steps": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stepID": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "success",
+                                          "failed",
+                                          "running"
+                                        ]
+                                      },
+                                      "rawStatus": {
+                                        "type": "string",
+                                        "enum": [
+                                          "pending",
+                                          "running",
+                                          "completed",
+                                          "skipped",
+                                          "failed"
+                                        ]
+                                      },
+                                      "startedAt": {
+                                        "type": "number"
+                                      },
+                                      "completedAt": {
+                                        "type": "number"
+                                      },
+                                      "summary": {
+                                        "type": "string"
+                                      },
+                                      "phases": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "phaseID": {
+                                              "type": "string"
+                                            },
+                                            "status": {
+                                              "type": "string",
+                                              "enum": [
+                                                "success",
+                                                "failed",
+                                                "running"
+                                              ]
+                                            },
+                                            "rawStatus": {
+                                              "type": "string",
+                                              "enum": [
+                                                "pending",
+                                                "running",
+                                                "completed",
+                                                "skipped",
+                                                "failed"
+                                              ]
+                                            },
+                                            "startedAt": {
+                                              "type": "number"
+                                            },
+                                            "completedAt": {
+                                              "type": "number"
+                                            }
+                                          },
+                                          "required": [
+                                            "phaseID",
+                                            "status",
+                                            "rawStatus"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "stepID",
+                                      "label",
+                                      "status",
+                                      "rawStatus"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "goalID",
+                                "title",
+                                "status",
+                                "rawStatus",
+                                "orderIndex",
+                                "priority",
+                                "progress",
+                                "steps"
+                              ]
+                            }
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              },
+                              "started": {
+                                "type": "number"
+                              },
+                              "completed": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "taskID",
+                          "title",
+                          "status",
+                          "lifecycleStatus",
+                          "source",
+                          "priority",
+                          "progress",
+                          "goals",
+                          "time"
+                        ]
+                      }
+                    },
+                    "generatedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "missionID",
+                    "sessionID",
+                    "title",
+                    "directory",
+                    "status",
+                    "taskCounts",
+                    "progress",
+                    "tasks",
+                    "generatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "missionID",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mission.status({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/mission/{missionID}/title": {
       "patch": {
         "operationId": "mission.rename",
@@ -12058,6 +12595,14 @@
                               "cancelled"
                             ]
                           },
+                          "executionStatus": {
+                            "type": "string",
+                            "enum": [
+                              "success",
+                              "failed",
+                              "running"
+                            ]
+                          },
                           "priority": {
                             "type": "string",
                             "enum": [
@@ -12090,6 +12635,7 @@
                           "id",
                           "title",
                           "status",
+                          "executionStatus",
                           "priority",
                           "source",
                           "directory",
@@ -15474,8 +16020,15 @@
                                   "pattern": "^tsk.*"
                                 },
                                 "runID": {
-                                  "type": "string",
-                                  "pattern": "^run.*"
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^run.*"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 },
                                 "sessionID": {
                                   "anyOf": [
@@ -16276,8 +16829,15 @@
                                   "pattern": "^tsk.*"
                                 },
                                 "runID": {
-                                  "type": "string",
-                                  "pattern": "^run.*"
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^run.*"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 },
                                 "sessionID": {
                                   "anyOf": [
@@ -17200,6 +17760,426 @@
         ]
       }
     },
+    "/task/{taskID}/status": {
+      "get": {
+        "operationId": "task.status",
+        "summary": "Get task status",
+        "description": "Collect the current task status from the task board projection, including workflow progress and per-goal details. The response `status` field is normalized to \"success\", \"failed\", or \"running\"; raw task lifecycle and step states remain available as lifecycleStatus/rawStatus fields.",
+        "responses": {
+          "200": {
+            "description": "Task status snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "taskID": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success",
+                        "failed",
+                        "running"
+                      ]
+                    },
+                    "lifecycleStatus": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "active",
+                        "completed",
+                        "failed",
+                        "cancelled"
+                      ]
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "priority": {
+                      "type": "string",
+                      "enum": [
+                        "critical",
+                        "high",
+                        "normal",
+                        "low"
+                      ]
+                    },
+                    "directory": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "progress": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "completed": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "running": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "pending": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "percent": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "completed",
+                        "failed",
+                        "running",
+                        "pending",
+                        "percent"
+                      ]
+                    },
+                    "workflow": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "task",
+                                  "goal"
+                                ]
+                              },
+                              "tool": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "success",
+                                  "failed",
+                                  "running"
+                                ]
+                              },
+                              "rawStatus": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "running",
+                                  "completed",
+                                  "skipped",
+                                  "failed"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "scope",
+                              "tool",
+                              "status",
+                              "rawStatus"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "steps"
+                      ]
+                    },
+                    "goals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "goalID": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "objective": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "success",
+                              "failed",
+                              "running"
+                            ]
+                          },
+                          "rawStatus": {
+                            "type": "string"
+                          },
+                          "orderIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": [
+                              "blocking",
+                              "advisory"
+                            ]
+                          },
+                          "progress": {
+                            "type": "object",
+                            "properties": {
+                              "total": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "completed": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "failed": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "running": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "pending": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "percent": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              }
+                            },
+                            "required": [
+                              "total",
+                              "completed",
+                              "failed",
+                              "running",
+                              "pending",
+                              "percent"
+                            ]
+                          },
+                          "steps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "stepID": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "success",
+                                    "failed",
+                                    "running"
+                                  ]
+                                },
+                                "rawStatus": {
+                                  "type": "string",
+                                  "enum": [
+                                    "pending",
+                                    "running",
+                                    "completed",
+                                    "skipped",
+                                    "failed"
+                                  ]
+                                },
+                                "startedAt": {
+                                  "type": "number"
+                                },
+                                "completedAt": {
+                                  "type": "number"
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "phases": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "phaseID": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "success",
+                                          "failed",
+                                          "running"
+                                        ]
+                                      },
+                                      "rawStatus": {
+                                        "type": "string",
+                                        "enum": [
+                                          "pending",
+                                          "running",
+                                          "completed",
+                                          "skipped",
+                                          "failed"
+                                        ]
+                                      },
+                                      "startedAt": {
+                                        "type": "number"
+                                      },
+                                      "completedAt": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "phaseID",
+                                      "status",
+                                      "rawStatus"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "stepID",
+                                "label",
+                                "status",
+                                "rawStatus"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "goalID",
+                          "title",
+                          "status",
+                          "rawStatus",
+                          "orderIndex",
+                          "priority",
+                          "progress",
+                          "steps"
+                        ]
+                      }
+                    },
+                    "time": {
+                      "type": "object",
+                      "properties": {
+                        "created": {
+                          "type": "number"
+                        },
+                        "updated": {
+                          "type": "number"
+                        },
+                        "started": {
+                          "type": "number"
+                        },
+                        "completed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "created",
+                        "updated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "taskID",
+                    "title",
+                    "status",
+                    "lifecycleStatus",
+                    "source",
+                    "priority",
+                    "progress",
+                    "goals",
+                    "time"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.status({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/project-archive": {
       "get": {
         "operationId": "task.projectArchive",
@@ -17941,8 +18921,15 @@
                             "pattern": "^tsk.*"
                           },
                           "runID": {
-                            "type": "string",
-                            "pattern": "^run.*"
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "sessionID": {
                             "anyOf": [
@@ -19428,8 +20415,15 @@
                                 "pattern": "^tsk.*"
                               },
                               "runID": {
-                                "type": "string",
-                                "pattern": "^run.*"
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^run.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
                               },
                               "sessionID": {
                                 "anyOf": [
@@ -22532,8 +23526,15 @@
                             "pattern": "^tsk.*"
                           },
                           "runID": {
-                            "type": "string",
-                            "pattern": "^run.*"
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "sessionID": {
                             "anyOf": [
@@ -23590,57 +24591,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "ReplyTargetEnvelopeMissingError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "TaskCancelledMessageError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
           }
         },
         "parameters": [
@@ -23875,8 +24825,15 @@
                         "pattern": "^tsk.*"
                       },
                       "runID": {
-                        "type": "string",
-                        "pattern": "^run.*"
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "sessionID": {
                         "anyOf": [
@@ -26579,8 +27536,15 @@
                       "pattern": "^tsk.*"
                     },
                     "runID": {
-                      "type": "string",
-                      "pattern": "^run.*"
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^run.*"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "sessionID": {
                       "anyOf": [
@@ -26771,8 +27735,15 @@
                       "pattern": "^tsk.*"
                     },
                     "runID": {
-                      "type": "string",
-                      "pattern": "^run.*"
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^run.*"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "sessionID": {
                       "anyOf": [
@@ -30307,6 +31278,32 @@
         },
         "additionalProperties": false
       },
+      "NetworkProxyConfig": {
+        "description": "Provider HTTP proxy configuration",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable the configured HTTP(S) proxy for provider fetch requests",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "HTTP(S) proxy URL, e.g. http://127.0.0.1:7890",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "NetworkConfig": {
+        "description": "Network transport configuration",
+        "type": "object",
+        "properties": {
+          "proxy": {
+            "$ref": "#/components/schemas/NetworkProxyConfig"
+          }
+        },
+        "additionalProperties": false
+      },
       "SlackChannelConfig": {
         "type": "object",
         "properties": {
@@ -31396,6 +32393,9 @@
           },
           "server": {
             "$ref": "#/components/schemas/ServerConfig"
+          },
+          "network": {
+            "$ref": "#/components/schemas/NetworkConfig"
           },
           "channel": {
             "$ref": "#/components/schemas/ChannelConfig"

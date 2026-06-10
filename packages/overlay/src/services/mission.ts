@@ -90,11 +90,13 @@ export interface MissionWakeResult {
 }
 
 export type MissionTaskStatus = "queued" | "active" | "completed" | "failed" | "cancelled"
+export type MissionExecutionStatus = "success" | "failed" | "running"
 
 export interface MissionTaskProjection {
   id: string
   title: string
   status: MissionTaskStatus
+  executionStatus: MissionExecutionStatus
   priority: "critical" | "high" | "normal" | "low"
   source: string
   directory: string
@@ -129,6 +131,94 @@ export interface MissionPage {
   records: MissionRecord[]
   hasMore: boolean
   cursor: { updated: number; sessionID: string } | null
+}
+
+export interface StatusProgress {
+  total: number
+  completed: number
+  failed: number
+  running: number
+  pending: number
+  percent: number
+}
+
+export interface TaskStatusWorkflowStep {
+  id: string
+  label: string
+  scope: "task" | "goal"
+  tool: string
+  status: MissionExecutionStatus
+  rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+}
+
+export interface TaskStatusGoalStep {
+  stepID: string
+  label: string
+  status: MissionExecutionStatus
+  rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+  startedAt?: number
+  completedAt?: number
+  summary?: string
+  phases?: Array<{
+    phaseID: string
+    status: MissionExecutionStatus
+    rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+    startedAt?: number
+    completedAt?: number
+  }>
+}
+
+export interface TaskStatusGoalDetail {
+  goalID: string
+  title: string
+  objective?: string
+  status: MissionExecutionStatus
+  rawStatus: string
+  orderIndex: number
+  priority: "blocking" | "advisory"
+  progress: StatusProgress
+  steps: TaskStatusGoalStep[]
+}
+
+export interface TaskStatusDetail {
+  taskID: string
+  title: string
+  status: MissionExecutionStatus
+  lifecycleStatus: MissionTaskStatus
+  source: string
+  priority: "critical" | "high" | "normal" | "low"
+  directory?: string
+  error?: string
+  progress: StatusProgress
+  workflow?: {
+    id: string
+    name: string
+    steps: TaskStatusWorkflowStep[]
+  }
+  goals: TaskStatusGoalDetail[]
+  time: {
+    created: number
+    updated: number
+    started?: number
+    completed?: number
+  }
+}
+
+export interface MissionStatusSnapshot {
+  missionID: string
+  sessionID: string
+  title: string
+  directory: string
+  status: MissionExecutionStatus
+  taskCounts: {
+    total: number
+    success: number
+    failed: number
+    running: number
+  }
+  progress: StatusProgress
+  tasks: TaskStatusDetail[]
+  generatedAt: number
 }
 
 export function missionPage(records: MissionRecord[], visibleLimit: number): MissionPage {
@@ -222,6 +312,18 @@ export async function loadMissions(
     )
   }
   return data as MissionRecord[]
+}
+
+export async function loadMissionStatus(missionID: string, signal?: AbortSignal): Promise<MissionStatusSnapshot> {
+  const trimmed = missionID.trim()
+  if (!trimmed) throw new Error("loadMissionStatus: missionID is required")
+  return (await apiJson(`mission/${encodeURIComponent(trimmed)}/status`, { signal })) as MissionStatusSnapshot
+}
+
+export async function loadTaskStatus(taskID: string, signal?: AbortSignal): Promise<TaskStatusDetail> {
+  const trimmed = taskID.trim()
+  if (!trimmed) throw new Error("loadTaskStatus: taskID is required")
+  return (await apiJson(`task/${encodeURIComponent(trimmed)}/status`, { signal })) as TaskStatusDetail
 }
 
 export async function loadTaskBindings(taskID: string, signal?: AbortSignal): Promise<ChannelBindingRow[]> {

@@ -112,6 +112,7 @@ description: "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
 | POST | `/task/{taskID}/session/{sessionID}/cancel` | Cancel a task agent session | `task.session.cancel` |
 | POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session | `task.session.reply` |
 | POST | `/task/{taskID}/start-now` | Start a queued task immediately | `task.queue.startNow` |
+| GET | `/task/{taskID}/status` | Get task status | `task.status` |
 | PATCH | `/task/{taskID}/title` | Update task title | `task.updateTitle` |
 | GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) | `task.trace` |
 | GET | `/task/{taskID}/transcript` | Get task transcript | `task.transcript` |
@@ -333,6 +334,7 @@ description: "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
 | POST | `/mission/wake` | Wake the Mission agent | `mission.wake` |
 | DELETE | `/mission/{missionID}` | Delete a Mission | `mission.delete` |
 | POST | `/mission/{missionID}/abort` | Abort a Mission | `mission.abort` |
+| GET | `/mission/{missionID}/status` | Get Mission status | `mission.status` |
 | PATCH | `/mission/{missionID}/title` | Rename a Mission | `mission.rename` |
 
 ### Terminal

@@ -12,6 +12,14 @@ import {
 import { MissionID } from "@/mission/schema"
 import { listMissionTasks, listTaskRows } from "@/engine/store"
 import { deriveTaskStatus } from "@/engine/task-status"
+import {
+  MissionStatusSnapshot,
+  StatusSnapshotState,
+  missionStatusSnapshot,
+  statusFromTaskLifecycle,
+  taskStatusDetailFromBoard,
+} from "@/status/task-status-snapshot"
+import { compileBoard } from "@/workbench/board"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionWake } from "@/session/wake"
@@ -38,6 +46,7 @@ const MissionTaskProjection = z.object({
   id: z.string(),
   title: z.string(),
   status: MissionTaskStatus,
+  executionStatus: StatusSnapshotState,
   priority: z.enum(["critical", "high", "normal", "low"]),
   source: z.string(),
   directory: z.string(),
@@ -107,11 +116,13 @@ function missionTaskStats(tasks: MissionTaskProjectionValue[]): z.infer<typeof M
 function projectMissionTasks(session: MissionSessionRecord): MissionTaskProjectionValue[] {
   return listTaskRows(
     listMissionTasks({ projectID: session.projectID, missionID: session.missionID, sessionID: session.id }),
-  ).map(({ task, directory }) =>
-    MissionTaskProjection.parse({
+  ).map(({ task, directory }) => {
+    const lifecycleStatus = deriveTaskStatus(task)
+    return MissionTaskProjection.parse({
       id: task.id,
       title: task.title,
-      status: deriveTaskStatus(task),
+      status: lifecycleStatus,
+      executionStatus: statusFromTaskLifecycle(lifecycleStatus),
       priority: task.priority,
       source: task.source,
       directory,
@@ -119,8 +130,8 @@ function projectMissionTasks(session: MissionSessionRecord): MissionTaskProjecti
       updated: task.time_updated,
       started: task.time_started ?? undefined,
       completed: task.time_completed ?? undefined,
-    }),
-  )
+    })
+  })
 }
 
 function missionRecord(session: MissionSessionRecord): z.infer<typeof MissionRecord> {
@@ -135,6 +146,19 @@ function missionRecord(session: MissionSessionRecord): z.infer<typeof MissionRec
     archived: session.time.archived,
     tasks,
     taskStats: missionTaskStats(tasks),
+  })
+}
+
+function missionStatusRecord(session: MissionSessionRecord): z.infer<typeof MissionStatusSnapshot> {
+  const tasks = listTaskRows(
+    listMissionTasks({ projectID: session.projectID, missionID: session.missionID, sessionID: session.id }),
+  ).map(({ task }) => taskStatusDetailFromBoard(compileBoard({ taskID: task.id })))
+  return missionStatusSnapshot({
+    missionID: session.missionID,
+    sessionID: session.id,
+    title: session.title,
+    directory: session.directory,
+    tasks,
   })
 }
 
@@ -171,6 +195,28 @@ export function MissionRoutes() {
           records.push(missionRecord(session))
         }
         return c.json(records)
+      },
+    )
+    .get(
+      "/:missionID/status",
+      describeRoute({
+        summary: "Get Mission status",
+        description:
+          "Collect the current Mission status from its tasks and each task's workflow/goal progress. " +
+          'The top-level and nested detail `status` fields are normalized to "success", "failed", or "running"; ' +
+          "raw lifecycle states remain available as lifecycleStatus/rawStatus fields.",
+        operationId: "mission.status",
+        responses: {
+          200: {
+            description: "Mission status snapshot",
+            content: { "application/json": { schema: resolver(MissionStatusSnapshot) } },
+          },
+        },
+      }),
+      validator("param", MissionParam),
+      async (c) => {
+        const session = await getMissionSession(c.req.valid("param").missionID)
+        return c.json(missionStatusRecord(session))
       },
     )
     .patch(

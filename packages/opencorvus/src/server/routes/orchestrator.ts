@@ -36,6 +36,7 @@ import {
   TraceEventList,
   UpdateGoalInput,
 } from "@/engine/model"
+import { TaskStatusDetail, taskStatusDetailFromBoard } from "@/status/task-status-snapshot"
 import { RewindTaskInput, taskRewindCursor } from "@/engine/rewind"
 import { requireTask } from "@/engine/store"
 import { abortChildExecutionForSession } from "@/engine/execution-abort"
@@ -419,6 +420,33 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         return c.json(await EngineService.getTask(c.req.valid("param").taskID))
+      },
+    )
+    .get(
+      "/task/:taskID/status",
+      describeRoute({
+        summary: "Get task status",
+        description:
+          "Collect the current task status from the task board projection, including workflow progress and per-goal details. " +
+          'The response `status` field is normalized to "success", "failed", or "running"; raw task lifecycle and step states ' +
+          "remain available as lifecycleStatus/rawStatus fields.",
+        operationId: "task.status",
+        responses: {
+          200: {
+            description: "Task status snapshot",
+            content: {
+              "application/json": {
+                schema: resolver(TaskStatusDetail),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        const board = await EngineService.getBoard(c.req.valid("param").taskID, { sync: false })
+        return c.json(taskStatusDetailFromBoard(board))
       },
     )
     .get(
