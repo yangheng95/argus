@@ -9,6 +9,8 @@ import { GoalDialogHost } from "./GoalDialogHost"
 import { ImagePreviewHost } from "./ImagePreview"
 import { InteractionDialogHost } from "./InteractionDialogHost"
 import { SessionDialogHost } from "./SessionDialogHost"
+import { ProjectDirectoryBar } from "./TaskDirBar"
+import { TaskStatusHeader } from "./TaskStatusHeader"
 import { TitlebarMenubar } from "./titlebar/TitlebarMenubar"
 import { WindowControls } from "./WindowControls"
 import { WorkspaceOnboardingDialog } from "./WorkspaceOnboardingDialog"
@@ -38,6 +40,12 @@ export function App() {
       </StaticMountPortal>
       <StaticMountPortal id="solidConnBadge">
         <ConnectionBadge />
+      </StaticMountPortal>
+      <StaticMountPortal id="solidProjectDirectoryBarMount">
+        <ProjectDirectoryBar />
+      </StaticMountPortal>
+      <StaticMountPortal id="solidTaskStatusMount">
+        <TaskStatusHeader />
       </StaticMountPortal>
       <div id="connectionBannerHost">
         <ConnectionBanner />

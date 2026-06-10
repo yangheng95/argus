@@ -11,8 +11,6 @@ import { TaskList } from "./components/TaskList"
 import { Board } from "./components/Board"
 import { Mission } from "./components/Mission"
 import { pageMode, setPageMode } from "./store/page-mode"
-import { TaskStatusHeader } from "./components/TaskStatusHeader"
-import { ProjectDirectoryBar } from "./components/TaskDirBar"
 import { ChatComposer } from "./components/ChatComposer"
 import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
@@ -1153,11 +1151,6 @@ if (btnTerminateRun) {
   })
 }
 
-const projectDirectoryBarEl = document.getElementById("solidProjectDirectoryBarMount")
-if (projectDirectoryBarEl) {
-  render(() => <ProjectDirectoryBar />, projectDirectoryBarEl)
-}
-
 const rightActivityToolbarEl = document.getElementById("solidRightActivityToolbar")
 if (rightActivityToolbarEl) {
   render(
@@ -1221,17 +1214,6 @@ if (browserPreviewEl) {
     ),
     browserPreviewEl,
   )
-}
-
-// ── Mount: TaskStatusHeader ──
-// Reactive replacement for the previous imperative createEffects in main.tsx
-// that toggled #taskStatus[hidden], wrote #statusIcon.innerHTML, set
-// #statusLabel textContent and ticked #taskElapsed via getElementById each
-// frame. Owns its own visibility-gated 1Hz interval via Solid lifecycle.
-
-const taskStatusMountEl = document.getElementById("solidTaskStatusMount")
-if (taskStatusMountEl) {
-  render(() => <TaskStatusHeader />, taskStatusMountEl)
 }
 
 disposers.push(
@@ -1538,7 +1520,7 @@ disposers.push(
     })
 
     // Task status header + elapsed timer moved to <TaskStatusHeader/> component
-    // (mounted into #solidTaskStatusMount above). The component owns its own
+    // (owned by <App/> and portaled into #solidTaskStatusMount). The component owns its own
     // visibility-gated 1Hz interval and renders all four spans (status-icon,
     // status-label, elapsed) via Solid's reactive graph instead of four
     // getElementById writes per board update.
