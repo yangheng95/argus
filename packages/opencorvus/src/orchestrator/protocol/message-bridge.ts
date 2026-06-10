@@ -81,7 +81,17 @@ export function overlayMeta(
     )
   }
   const role = info.role
-  const isRoot = !!rootSessionID && sessionID === rootSessionID
+
+  const kind = sessionRole(sessionID)
+  if (!kind) {
+    throw new Error(
+      `overlayMeta: session ${sessionID} has no kind in the DB. Every session ` +
+        `must be created via Session.createNext({kind: ...}); a row missing kind ` +
+        `means a code path bypassed createNext or the row was inserted directly.`,
+    )
+  }
+  const parentID = sessionParentID(sessionID)
+  const isRoot = (!!rootSessionID && sessionID === rootSessionID) || (!rootSessionID && kind === "root" && !parentID)
 
   if (isRoot) {
     if (role !== "user") {
@@ -94,14 +104,6 @@ export function overlayMeta(
     return { resolvedRole: "user", channel: "main" }
   }
 
-  const kind = sessionRole(sessionID)
-  if (!kind) {
-    throw new Error(
-      `overlayMeta: session ${sessionID} has no kind in the DB. Every session ` +
-        `must be created via Session.createNext({kind: ...}); a row missing kind ` +
-        `means a code path bypassed createNext or the row was inserted directly.`,
-    )
-  }
   if (kind === "root") {
     throw new Error(
       `overlayMeta: child session ${sessionID} has kind="root" (only the ` +
@@ -110,6 +112,7 @@ export function overlayMeta(
     )
   }
   if (role === "user") {
+    if (!parentID) return { resolvedRole: "user", channel: "main" }
     return { resolvedRole: isOverlayDirectReply(info) ? "user" : "orchestrator", channel: kind }
   }
   return { resolvedRole: kind, channel: kind }
