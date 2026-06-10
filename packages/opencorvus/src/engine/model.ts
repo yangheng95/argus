@@ -4,7 +4,6 @@ import { ExecutorName } from "@/executor/contract"
 import { Identifier } from "@/id/id"
 import { Reply as PermissionReply } from "@/permission/types"
 import { Answer as QuestionAnswer } from "@/question/types"
-import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 
 export const Budget = z.object({
   maxExecutorGroups: z.number().int().positive().optional(),
@@ -27,6 +26,18 @@ export const StageRouting = z.object({
 })
 
 export const GoalKind = z.enum(["bootstrap", "feature", "verification", "integration", "system"])
+
+export const AcceptanceDiffSummary = z
+  .object({
+    file: z.string(),
+    additions: z.number().optional(),
+    deletions: z.number().optional(),
+    status: z.enum(["added", "deleted", "modified"]).optional(),
+  })
+  .meta({
+    ref: "AcceptanceDiffSummary",
+  })
+export type AcceptanceDiffSummary = z.infer<typeof AcceptanceDiffSummary>
 
 import { AcceptanceSpecSchema } from "@/acceptance/types"
 import { IntegrityReviewCompletedPayloadSchema } from "@/integrity/team-schema"
@@ -422,7 +433,7 @@ export const Acceptance = z.object({
   result: z.object({
     summary: z.string(),
     changedFiles: z.string().array(),
-    diffs: SnapshotFileDiff.array(),
+    diffs: AcceptanceDiffSummary.array(),
     artifacts: z
       .array(
         z.object({

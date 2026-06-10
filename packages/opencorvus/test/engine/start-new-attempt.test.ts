@@ -6,6 +6,7 @@ import {
   beginBuildAttempt,
   ensureBuildRetryFeedbackForGoal,
   finalizeBuildAttempt,
+  persistTaskAcceptance,
   startNewAttempt,
   updateGoalWorkspace,
 } from "../../src/engine/persist"
@@ -14,6 +15,8 @@ import {
   findAcceptanceByGoalRun,
   findGoalLatestWorkspace,
   findGoalRun,
+  findRun,
+  requireTask,
   getGoalRetryCount,
 } from "../../src/engine/store"
 import { createDecisionLog } from "../../src/decision-log"
@@ -496,6 +499,61 @@ describe("Goal.startNewAttempt — options", () => {
     const acceptance = findAcceptanceByGoalRun(nextRunID)
     expect(acceptance?.result?.commit_ref).toBe("def5678")
     expect(acceptance?.result?.changed_files).toEqual(["src/index.ts"])
-    expect(acceptance?.result?.diffs).toMatchObject([{ file: "src/index.ts" }])
+    expect(acceptance?.result?.diffs).toEqual([
+      { file: "src/index.ts", status: "modified", additions: 1, deletions: 1 },
+    ])
+    expect(JSON.stringify(acceptance?.result?.diffs)).not.toContain("export const value")
+  })
+
+  test("persistTaskAcceptance stores bounded diff summaries in all acceptance artifacts", () => {
+    const acceptanceID = "acc_start_new_summary"
+    const task = requireTask(taskID)
+    const run = findRun(runID)
+    expect(run).toBeDefined()
+
+    persistTaskAcceptance({
+      task,
+      run: run!,
+      acceptanceID,
+      now: Date.now(),
+      acceptance: {
+        summary: "Task acceptance summary.",
+        commitRef: "abc1234",
+        diffs: [
+          {
+            file: "src/large.ts",
+            before: "a".repeat(2048),
+            after: "b".repeat(2048),
+            diff: "c".repeat(2048),
+            additions: 20,
+            deletions: 10,
+            status: "modified",
+          },
+        ],
+      },
+    })
+
+    const artifacts = Database.use((db) =>
+      db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.acceptance_id, acceptanceID)).all(),
+    )
+    const acceptanceArtifact = artifacts.find((item) => item.kind === "acceptance")
+    const workspaceDiffArtifact = artifacts.find((item) => item.kind === "diff" && item.label === "workspace-diff")
+    const changedFileArtifact = artifacts.find((item) => item.kind === "changed_file" && item.label === "src/large.ts")
+
+    expect(acceptanceArtifact?.payload.result.diffs).toEqual([
+      { file: "src/large.ts", status: "modified", additions: 20, deletions: 10 },
+    ])
+    expect(workspaceDiffArtifact?.payload.diffs).toEqual([
+      { file: "src/large.ts", status: "modified", additions: 20, deletions: 10 },
+    ])
+    expect(changedFileArtifact?.payload).toEqual({
+      file: "src/large.ts",
+      status: "modified",
+      additions: 20,
+      deletions: 10,
+    })
+    expect(JSON.stringify(artifacts)).not.toContain("aaaa")
+    expect(JSON.stringify(artifacts)).not.toContain("bbbb")
+    expect(JSON.stringify(artifacts)).not.toContain("cccc")
   })
 })

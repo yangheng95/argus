@@ -18,7 +18,7 @@ export interface Requirement {
 import { writeEvaluationSnapshot } from "@/engine/docs"
 import { Database, and, desc, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
-import { Event } from "./model"
+import { Event, type AcceptanceDiffSummary } from "./model"
 import {
   EngineArtifactTable,
   EngineGoalTable,
@@ -1545,6 +1545,30 @@ type AcceptanceInput = {
   report?: import("@/acceptance/checks").GoalReportClaim
 }
 
+function summarizeAcceptanceDiffs(diffs: Array<{ file: string; [key: string]: unknown }>): AcceptanceDiffSummary[] {
+  return diffs.map((diff) => {
+    const status =
+      diff.status === "added" || diff.status === "deleted" || diff.status === "modified" ? diff.status : undefined
+    return {
+      file: diff.file,
+      ...(status ? { status } : {}),
+      ...(typeof diff.additions === "number" ? { additions: diff.additions } : {}),
+      ...(typeof diff.deletions === "number" ? { deletions: diff.deletions } : {}),
+    }
+  })
+}
+
+function acceptanceDiffStats(diffs: AcceptanceDiffSummary[]) {
+  return diffs.reduce(
+    (acc, diff) => {
+      acc.additions += diff.additions ?? 0
+      acc.deletions += diff.deletions ?? 0
+      return acc
+    },
+    { additions: 0, deletions: 0 },
+  )
+}
+
 // Diff-stat reduction + artifact inserts for the task-level acceptance path.
 // Per-goal deliveries are written inline by `finalizeBuildAttempt`; only
 // `persistTaskAcceptance` calls this helper now.
@@ -1559,16 +1583,8 @@ function writeAcceptanceRow(
     now: number
   },
 ) {
-  const stats = input.acceptance.diffs.reduce(
-    (acc, d) => {
-      const a = typeof (d as any).additions === "number" ? (d as any).additions : 0
-      const r = typeof (d as any).deletions === "number" ? (d as any).deletions : 0
-      acc.additions += a
-      acc.deletions += r
-      return acc
-    },
-    { additions: 0, deletions: 0 },
-  )
+  const acceptanceDiffs = summarizeAcceptanceDiffs(input.acceptance.diffs)
+  const stats = acceptanceDiffStats(acceptanceDiffs)
   // Phase-6-c: the acceptance row itself is now an `engine_artifact` with
   // kind="acceptance" + label="acceptance-<scope>" (task vs goal_run). Payload
   // carries the full AcceptanceRow shape so the read-model can reconstruct it
@@ -1589,8 +1605,8 @@ function writeAcceptanceRow(
         result: {
           summary: input.acceptance.summary,
           commit_ref: input.acceptance.commitRef,
-          changed_files: input.acceptance.diffs.map((item) => item.file),
-          diffs: input.acceptance.diffs,
+          changed_files: acceptanceDiffs.map((item) => item.file),
+          diffs: acceptanceDiffs,
           stats,
           report: input.acceptance.report,
         },
@@ -1623,7 +1639,7 @@ function writeAcceptanceRow(
         acceptance_id: input.acceptanceID,
         kind: "diff",
         label: "workspace-diff",
-        payload: { diffs: input.acceptance.diffs },
+        payload: { diffs: acceptanceDiffs },
         time_created: input.now,
         time_updated: input.now,
       })
@@ -1645,7 +1661,7 @@ function writeAcceptanceRow(
       })
       .run()
   }
-  for (const item of input.acceptance.diffs) {
+  for (const item of acceptanceDiffs) {
     db.insert(EngineArtifactTable)
       .values({
         id: Identifier.ascending("artifact"),
@@ -2240,19 +2256,13 @@ export function finalizeBuildAttempt(input: {
   const acceptanceDiffs = (Array.isArray(input.diffs) ? input.diffs : []).filter(
     (item) => !ProjectRuntimePaths.isInternalRuntimeRelativePath(item.file),
   )
-  const includeAcceptance = input.status === "completed" && !!input.commitRef && acceptanceDiffs.length > 0
+  const acceptanceDiffSummaries = summarizeAcceptanceDiffs(acceptanceDiffs)
+  const includeAcceptance = input.status === "completed" && !!input.commitRef && acceptanceDiffSummaries.length > 0
   if (!includeAcceptance) return
-  const stats = acceptanceDiffs.reduce(
-    (acc, d) => {
-      acc.additions += typeof d.additions === "number" ? d.additions : 0
-      acc.deletions += typeof d.deletions === "number" ? d.deletions : 0
-      return acc
-    },
-    { additions: 0, deletions: 0 },
-  )
+  const stats = acceptanceDiffStats(acceptanceDiffSummaries)
   const acceptanceID = Identifier.ascending("acceptance")
   const summary =
-    input.summary?.trim() || `Goal ${input.goalID} build delivered ${acceptanceDiffs.length} file change(s).`
+    input.summary?.trim() || `Goal ${input.goalID} build delivered ${acceptanceDiffSummaries.length} file change(s).`
   Database.transaction((db) => {
     db.insert(EngineArtifactTable)
       .values({
@@ -2269,9 +2279,9 @@ export function finalizeBuildAttempt(input: {
           result: {
             summary,
             commit_ref: input.commitRef,
-            changed_files: acceptanceDiffs.map((d) => d.file),
+            changed_files: acceptanceDiffSummaries.map((d) => d.file),
             file_changes: input.fileChanges ?? [],
-            diffs: acceptanceDiffs,
+            diffs: acceptanceDiffSummaries,
             stats,
           },
         },

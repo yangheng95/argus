@@ -649,7 +649,10 @@ function viewBoardAcceptance(row: AcceptanceRow | undefined) {
               file: d.file as string,
               additions: typeof d.additions === "number" ? d.additions : 0,
               deletions: typeof d.deletions === "number" ? d.deletions : 0,
-              status: d.status ?? (!d.before && d.after ? "added" : d.before && !d.after ? "deleted" : "modified"),
+              status:
+                d.status === "added" || d.status === "deleted" || d.status === "modified"
+                  ? (d.status as "added" | "deleted" | "modified")
+                  : ("modified" as const),
             }))
         : [],
       artifacts: Array.isArray(result.artifacts) ? result.artifacts.slice(0, 12) : [],
@@ -1228,8 +1231,6 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
         file?: string
         additions?: unknown
         deletions?: unknown
-        before?: unknown
-        after?: unknown
         status?: string
       }[]
       stats?: { additions?: number; deletions?: number }
@@ -1245,8 +1246,6 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
               file: string
               additions?: unknown
               deletions?: unknown
-              before?: unknown
-              after?: unknown
               status?: string
             } => !!d && typeof d.file === "string",
           )
@@ -1256,12 +1255,8 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
             deletions: typeof d.deletions === "number" ? d.deletions : 0,
             status:
               d.status === "added" || d.status === "deleted" || d.status === "modified"
-                ? d.status
-                : typeof d.before === "string" && d.before === "" && typeof d.after === "string" && d.after !== ""
-                  ? ("added" as const)
-                  : typeof d.after === "string" && d.after === "" && typeof d.before === "string" && d.before !== ""
-                    ? ("deleted" as const)
-                    : ("modified" as const),
+                ? (d.status as "added" | "deleted" | "modified")
+                : ("modified" as const),
           }))
       : []
     changedFiles = result?.changed_files ?? (diffRows.length > 0 ? diffRows.map((d) => d.file) : undefined)

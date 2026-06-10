@@ -20,9 +20,8 @@ import {
   sql,
 } from "@/storage/db"
 import type { SQL } from "@/storage/db"
-import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 import { specSnapshotIDsForLineage, type SpecSnapshotLineage } from "@/integrity/replay-lineage"
-import { EvaluationCheck } from "./model"
+import { AcceptanceDiffSummary, EvaluationCheck } from "./model"
 import {
   EngineArtifactTable,
   EngineGoalTable,
@@ -1797,7 +1796,7 @@ function arrayOfStrings(input: unknown) {
 function arrayOfDiffs(input: unknown) {
   if (!Array.isArray(input)) return []
   return input.flatMap((item) => {
-    const parsed = SnapshotFileDiff.safeParse(item)
+    const parsed = AcceptanceDiffSummary.safeParse(item)
     return parsed.success ? [parsed.data] : []
   })
 }
