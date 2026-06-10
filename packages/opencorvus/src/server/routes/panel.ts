@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
-import { streamSSE } from "hono/streaming"
+import { streamSSE } from "../sse"
 import z from "zod"
 import { ControlMessage } from "@/control/message"
 import { ControlMessageInput, ControlMessageResult } from "@/control/message-schema"
