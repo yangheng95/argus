@@ -94,6 +94,7 @@ describe("message image preview", () => {
     expect(component).toContain('aria-label="Fit width"')
     expect(component).toContain('aria-label="Fit image"')
     expect(component).toContain('aria-label="Original size"')
+    expect(component).toContain('aria-label="Copy image"')
     expect(component).toContain("calculateImagePreviewOpenScale")
     expect(component).toContain("calculateImagePreviewFitScale")
     expect(component).toContain("onPointerDown={startPan}")
@@ -109,6 +110,17 @@ describe("message image preview", () => {
     expect(image).toContain("height: var(--image-preview-rendered-height, auto);")
     expect(image).toContain("max-width: none;")
     expect(image).not.toContain("transform: scale")
+  })
+
+  test("modal preview copies image bytes instead of the image url", () => {
+    const component = read("src/components/ImagePreview.tsx")
+
+    expect(component).toContain("navigator.clipboard?.write")
+    expect(component).not.toContain("navigator.clipboard?.writeText")
+    expect(component).toContain('canvas.toBlob')
+    expect(component).toContain('"image/png"')
+    expect(component).toContain("new ClipboardItem")
+    expect(component).toContain("onClick={() => void copyPreviewImage()}")
   })
 
   test("modal preview opens tall screenshots at readable width and keeps whole-image fit explicit", () => {

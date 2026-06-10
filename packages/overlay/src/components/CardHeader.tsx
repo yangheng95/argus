@@ -23,6 +23,10 @@ function isStageCard(node: CardNode): boolean {
   return node.kind === "phase" || node.kind === "step"
 }
 
+function cardTitleText(title: string): string {
+  return /^[\w-]+(?:\.[\w-]+)+$/.test(title) ? t(title) : title
+}
+
 async function writeClipboard(text: string): Promise<boolean> {
   if (!text) return false
   if (navigator.clipboard?.writeText) {
@@ -142,7 +146,7 @@ export function CardHeader(props: {
           >
             <span class="card__round card__round--lead">{stepRevisionLabel()}</span>
           </Show>
-          <span class="card__title">{t(props.node.title)}</span>
+          <span class="card__title">{cardTitleText(props.node.title)}</span>
           <Show when={durationText()}>
             <span
               class="card__duration"
