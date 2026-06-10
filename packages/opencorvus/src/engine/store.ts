@@ -1397,6 +1397,7 @@ function taskStatusCondition(status: string): SQL {
 export function listGlobalTasks(input?: {
   directory?: string
   cursor?: number
+  cursorTaskID?: string
   query?: string
   status?: string
   limit?: number
@@ -1406,7 +1407,12 @@ export function listGlobalTasks(input?: {
   if (input?.directory) {
     conditions.push(eq(SessionTable.directory, input.directory))
   }
-  if (input?.cursor) {
+  if (input?.cursor && input.cursorTaskID) {
+    conditions.push(sql`(
+      ${EngineTaskTable.time_updated} < ${input.cursor}
+      OR (${EngineTaskTable.time_updated} = ${input.cursor} AND ${EngineTaskTable.id} < ${input.cursorTaskID})
+    )`)
+  } else if (input?.cursor) {
     conditions.push(lt(EngineTaskTable.time_updated, input.cursor))
   }
   if (input?.status) {

@@ -3,7 +3,7 @@
 // Displays tasks from boardStore in stable creation-time order.
 
 import { createMemo, createSelector, createSignal, For, Show } from "solid-js"
-import { boardStore, visibleTasks, loadTasks, taskCreatedAt, activeTaskID } from "../store/board"
+import { boardStore, visibleTasks, loadTasks, loadMoreTasks, taskCreatedAt, activeTaskID } from "../store/board"
 import { buildTaskTree, flattenGroup as flattenGroupPure, type TaskTreeEntry, type TaskTreeShape } from "./taskTree"
 import { settingsStore } from "../store/settings"
 import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue"
@@ -823,6 +823,19 @@ export function TaskList(props: TaskListProps) {
     }
   }
 
+  async function handleLoadMoreTasks() {
+    try {
+      await loadMoreTasks()
+    } catch (err) {
+      notifyError({
+        id: "task:list:load-more",
+        title: t("task.load_failed"),
+        message: err instanceof Error ? err.message : String(err),
+        details: formatErrorDetails(err),
+      })
+    }
+  }
+
   async function handleStartNow(taskID: string) {
     if (startNowBusyID()) return
     setStartNowBusyID(taskID)
@@ -1056,6 +1069,21 @@ export function TaskList(props: TaskListProps) {
             )
           }}
         </For>
+        <Show when={boardStore.tasksHasMore}>
+          <div class="project-group-show-more task-list-load-more">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
+              data-ui="task-list-load-more"
+              disabled={boardStore.tasksLoadingMore}
+              onClick={handleLoadMoreTasks}
+            >
+              {boardStore.tasksLoadingMore ? t("common.loading") : t("acceptance.show_more")}
+            </Button>
+          </div>
+        </Show>
       </Show>
     </div>
   )

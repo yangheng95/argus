@@ -68,6 +68,11 @@ export const [boardStore, setBoardStore] = createStore({
    *  (empty-hint copy). Stays true for the lifetime of the overlay
    *  unless tasksError is set. */
   tasksLoaded: false as boolean,
+  tasksHasMore: false as boolean,
+  tasksLoadedLimit: 0 as number,
+  tasksCursorUpdated: null as number | null,
+  tasksCursorTaskID: "" as string,
+  tasksLoadingMore: false as boolean,
 })
 
 // ── Loaders ──
@@ -81,6 +86,8 @@ let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null
 let _boardLoading: Promise<void> | null = null
 let _boardQueued = false
 let _tasksLoading: Promise<void> | null = null
+
+export const TASK_LIST_PAGE_SIZE = 10
 
 // Invariant handler: fires when the current task source no longer refers
 // to any task in the merged (tasks + pendingTasks) list. Registered by
@@ -414,6 +421,11 @@ export function clearTasksForMissingDirectory(): void {
   applyTasks([], [])
   setBoardStore("tasksError", "")
   setBoardStore("tasksLoaded", true)
+  setBoardStore("tasksHasMore", false)
+  setBoardStore("tasksLoadedLimit", 0)
+  setBoardStore("tasksCursorUpdated", null)
+  setBoardStore("tasksCursorTaskID", "")
+  setBoardStore("tasksLoadingMore", false)
 }
 
 export async function loadTasks(): Promise<void> {
@@ -431,16 +443,88 @@ async function loadTasksOnce(): Promise<void> {
   // UI surfaces the failure explicitly. The previous silent catch left the UI
   // stuck on an empty list with no indication that the backend was unreachable.
   try {
-    const data = await apiJson("global/tasks")
-    const tasks = sortedTasks(data)
+    const visibleLimit = Math.max(TASK_LIST_PAGE_SIZE, boardStore.tasksLoadedLimit || TASK_LIST_PAGE_SIZE)
+    const data = await apiJson(taskListPagePath({ limit: visibleLimit + 1 }))
+    const page = taskPageFromResponse(data, visibleLimit)
+    const tasks = sortedTasks({ tasks: page.tasks })
     const seen = new Set(tasks.map((item: any) => item?.task?.requestID).filter(Boolean))
     const nextPending = boardStore.pendingTasks.filter((item: any) => !seen.has(item?.requestID))
     applyTasks(tasks, nextPending)
     setBoardStore("tasksError", "")
     setBoardStore("tasksLoaded", true)
+    setBoardStore("tasksHasMore", page.hasMore)
+    setBoardStore("tasksLoadedLimit", tasks.length)
+    setBoardStore("tasksCursorUpdated", page.cursor?.updated ?? null)
+    setBoardStore("tasksCursorTaskID", page.cursor?.taskID ?? "")
   } catch (e) {
     setBoardStore("tasksError", e instanceof Error ? e.message : String(e))
     throw e
+  }
+}
+
+export async function loadMoreTasks(): Promise<void> {
+  if (_tasksLoading) {
+    await _tasksLoading
+  }
+  if (!boardStore.tasksHasMore || boardStore.tasksLoadingMore) return
+  const cursorUpdated = boardStore.tasksCursorUpdated
+  const cursorTaskID = boardStore.tasksCursorTaskID
+  if (!Number.isFinite(cursorUpdated) || !cursorTaskID) {
+    throw new Error("loadMoreTasks: missing task pagination cursor")
+  }
+  setBoardStore("tasksLoadingMore", true)
+  try {
+    const data = await apiJson(
+      taskListPagePath({
+        limit: TASK_LIST_PAGE_SIZE + 1,
+        cursorUpdated: cursorUpdated as number,
+        cursorTaskID,
+      }),
+    )
+    const page = taskPageFromResponse(data, TASK_LIST_PAGE_SIZE)
+    const currentByID = new Map(boardStore.tasks.map((item: any) => [item?.task?.id, item]))
+    for (const item of page.tasks) {
+      const id = item?.task?.id
+      if (typeof id === "string" && id) currentByID.set(id, item)
+    }
+    const tasks = sortedTasks({ tasks: [...currentByID.values()] })
+    applyTasks(tasks)
+    setBoardStore("tasksError", "")
+    setBoardStore("tasksLoaded", true)
+    setBoardStore("tasksHasMore", page.hasMore)
+    setBoardStore("tasksLoadedLimit", tasks.length)
+    setBoardStore("tasksCursorUpdated", page.cursor?.updated ?? null)
+    setBoardStore("tasksCursorTaskID", page.cursor?.taskID ?? "")
+  } catch (e) {
+    setBoardStore("tasksError", e instanceof Error ? e.message : String(e))
+    throw e
+  } finally {
+    setBoardStore("tasksLoadingMore", false)
+  }
+}
+
+function taskListPagePath(input: { limit: number; cursorUpdated?: number; cursorTaskID?: string }): string {
+  const params = new URLSearchParams({ limit: String(input.limit) })
+  if (input.cursorUpdated !== undefined && input.cursorTaskID) {
+    params.set("cursor", String(input.cursorUpdated))
+    params.set("cursorTaskID", input.cursorTaskID)
+  }
+  return `global/tasks?${params.toString()}`
+}
+
+function taskPageFromResponse(
+  data: { tasks?: any[] } | null | undefined,
+  visibleLimit: number,
+): { tasks: any[]; hasMore: boolean; cursor: { updated: number; taskID: string } | null } {
+  const raw = Array.isArray(data?.tasks) ? data!.tasks : []
+  const tasks = raw.slice(0, visibleLimit)
+  const last = tasks.at(-1)
+  const updated = Number(last?.task?.time?.updated)
+  const taskID = typeof last?.task?.id === "string" ? last.task.id : ""
+  return {
+    tasks,
+    hasMore: raw.length > visibleLimit,
+    cursor: Number.isFinite(updated) && taskID ? { updated, taskID } : null,
   }
 }
 

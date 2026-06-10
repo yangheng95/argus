@@ -263,6 +263,10 @@ export const EngineRoutes = lazy(() =>
           status: z.string().optional(),
           limit: z.coerce.number().optional(),
           cursor: z.coerce.number().optional(),
+          cursorTaskID: z.string().optional(),
+        }).refine((query) => (query.cursor === undefined) === (query.cursorTaskID === undefined), {
+          message: "cursor and cursorTaskID must be provided together",
+          path: ["cursor"],
         }),
       ),
       async (c) => {
@@ -274,6 +278,7 @@ export const EngineRoutes = lazy(() =>
             status: query.status,
             limit: query.limit,
             cursor: query.cursor,
+            cursorTaskID: query.cursorTaskID,
           }),
         )
       },
