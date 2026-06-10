@@ -53,6 +53,13 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).not.toContain("useHotkey({")
   })
 
+  test("external picker tabs do not hand-roll focus suppression", () => {
+    expect(SRC).toContain('data-ui="executor-popover-tabs"')
+    expect(SRC).toContain('data-ui="executor-popover-tab"')
+    expect(SRC).not.toContain("onMouseDown")
+    expect(SRC).not.toContain("preventDefault")
+  })
+
   test("mirror picker only surfaces models from connected providers", () => {
     expect(SRC).toMatch(/connectedProviderIDs/)
     expect(SRC).toMatch(/function mirrorProviderGroups\(\)[\s\S]*?filter\(\(group\) => group\.available\)/)

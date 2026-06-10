@@ -221,6 +221,10 @@ test(
       // for the picker, so we match case-insensitively.
       await page.click('[data-ui="executor-chip-mirror"]')
       await page.waitForSelector('[data-section="mirror"]')
+      await page.waitForFunction(() => {
+        const body = document.querySelector('[data-section="mirror"]') as HTMLElement | null
+        return body?.innerText.toLowerCase().includes("openai") ?? false
+      })
       const mirrorBody = (
         await page.$eval('[data-section="mirror"]', (node) => (node as HTMLElement).innerText)
       ).toLowerCase()
@@ -242,6 +246,10 @@ test(
       assert.equal(await page.$('[data-section="mirror"]'), null)
 
       // External popover defaults to the active executor (codex).
+      await page.waitForFunction(() => {
+        const body = document.querySelector('[data-section="external"]') as HTMLElement | null
+        return body?.innerText.toLowerCase().includes("openai") ?? false
+      })
       const externalBody = (
         await page.$eval('[data-section="external"]', (node) => (node as HTMLElement).innerText)
       ).toLowerCase()
