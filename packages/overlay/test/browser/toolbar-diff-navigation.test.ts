@@ -104,11 +104,10 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       () => document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "diff",
     )
 
-    await page.$eval(".file-changes-tab", (node) => (node as HTMLButtonElement).click())
-    assert.equal(
-      await page.$eval(".file-changes-panel", (node) => (node as HTMLElement).dataset.activeView),
-      "changes",
+    await page.$eval('[data-ui="file-changes-view-tab"][data-value="changes"]', (node) =>
+      (node as HTMLButtonElement).click(),
     )
+    assert.equal(await page.$eval(".file-changes-panel", (node) => (node as HTMLElement).dataset.activeView), "changes")
 
     await page.$eval('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]', (node) =>
       (node as HTMLButtonElement).click(),

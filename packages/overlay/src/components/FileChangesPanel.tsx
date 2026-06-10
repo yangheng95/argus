@@ -4,6 +4,7 @@ import { t } from "../utils/i18n"
 import { ChangesPanel } from "./ChangesPanel"
 import { DiffPreviewPanel } from "./DiffPreviewPanel"
 import { Icon } from "./Icon"
+import { Tab, Tabs } from "./ui/Tabs"
 
 export type FileChangesActiveView = "changes" | "diff"
 
@@ -24,25 +25,36 @@ export function FileChangesPanel(props: FileChangesPanelProps) {
   return (
     <section class="file-changes-panel" data-active-view={activeView()} aria-label={t("section.files")}>
       <header class="file-changes-switcher" aria-label={t("section.files")}>
-        <button
-          type="button"
-          class="file-changes-tab"
-          data-active={activeView() === "changes" ? "true" : "false"}
-          onClick={() => props.onActiveViewChange("changes")}
+        <Tabs
+          size="sm"
+          tone="neutral"
+          value={activeView()}
+          onValueChange={(view) => props.onActiveViewChange(view as FileChangesActiveView)}
         >
-          <Icon name="file-document" size={13} />
-          <span>{t("files.changes")}</span>
-        </button>
-        <button
-          type="button"
-          class="file-changes-tab"
-          data-active={activeView() === "diff" ? "true" : "false"}
-          disabled={!hasDiff()}
-          onClick={() => props.onActiveViewChange("diff")}
-        >
-          <Icon name="panel-right" size={13} />
-          <span>{t("workspace.diff")}</span>
-        </button>
+          <Tab
+            value="changes"
+            active={activeView() === "changes"}
+            size="sm"
+            tone="neutral"
+            data-ui="file-changes-view-tab"
+            data-value="changes"
+          >
+            <Icon name="file-document" size={13} />
+            <span>{t("files.changes")}</span>
+          </Tab>
+          <Tab
+            value="diff"
+            active={activeView() === "diff"}
+            size="sm"
+            tone="neutral"
+            data-ui="file-changes-view-tab"
+            data-value="diff"
+            disabled={!hasDiff()}
+          >
+            <Icon name="panel-right" size={13} />
+            <span>{t("workspace.diff")}</span>
+          </Tab>
+        </Tabs>
       </header>
       <div class="file-changes-body">
         <section class="file-changes-view" data-active={activeView() === "changes" ? "true" : "false"}>
