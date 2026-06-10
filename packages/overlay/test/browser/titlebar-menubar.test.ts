@@ -126,6 +126,14 @@ test(
           await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
           await page.waitForSelector('[data-menu-trigger="workspace"]')
           await page.waitForFunction((value) => document.documentElement.lang === value, {}, locale)
+          await page.waitForFunction(
+            (port) => {
+              const title = document.querySelector("#connBadge")?.getAttribute("title") || ""
+              return title.includes(String(port)) && title.includes("12345")
+            },
+            {},
+            server.port,
+          )
           const expectedWorkspaceMenu = locale === "zh-CN" ? "项目" : "Project"
           const workspaceMenu = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
             const el = node as HTMLElement
