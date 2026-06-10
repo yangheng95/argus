@@ -13,6 +13,7 @@ import { apiJson } from "../../services/api"
 import { activeDirectory, pickDirectory } from "../../services/workspace"
 import { appStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
+import { getHostTransport } from "../../services/host-transport"
 import { nativeOpen } from "../../utils/native"
 import { createVisibilityInterval } from "../../utils/visibility-interval"
 import {
@@ -218,6 +219,10 @@ function policyLabel(policy: string): string {
   return policy
 }
 
+function isRemoteUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value)
+}
+
 // ── Extension Settings Panels ──
 
 type ExtensionPanelMode = "skill" | "mcp" | "skill-market"
@@ -252,6 +257,10 @@ function PanelActionButton(props: {
 }
 
 function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: boolean; compact?: boolean }) {
+  const nativeCommands = getHostTransport().capabilities.nativeCommands
+  const canOpenLocalPath = createMemo(() => nativeCommands["open-path"])
+  const canOpenRemoteUrl = createMemo(() => nativeCommands["open-url"])
+  const canPickSkillDirectory = createMemo(() => nativeCommands["workspace.pickDir"])
   const [notice, setNotice] = createSignal("")
   const [noticeStatus, setNoticeStatus] = createSignal<"active" | "error" | "warn">("error")
   const [loading, setLoading] = createSignal(false)
@@ -309,6 +318,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   }
 
   async function handleOpenSkill(location: string) {
+    if (isRemoteUrl(location) ? !canOpenRemoteUrl() : !canOpenLocalPath()) return
     try {
       await nativeOpen(location)
     } catch {
@@ -383,6 +393,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
 
   async function handleOpenHomepage(url: string | undefined) {
     if (!url) return
+    if (!canOpenRemoteUrl()) return
     await nativeOpen(url)
   }
 
@@ -447,6 +458,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   }
 
   async function handleBrowseFolder() {
+    if (!canPickSkillDirectory()) return
     try {
       const selected = await pickDirectory()
       if (selected) {
@@ -507,6 +519,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   })
 
   async function handleOpenSkillDir() {
+    if (!canOpenLocalPath()) return
     try {
       const dirs = await apiJson("skill/directories")
       const target = (dirs as any)?.global_config || (dirs as any)?.managed_skills
@@ -594,7 +607,9 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
                 actions={
                   <>
                     <PanelActionButton icon="refresh" label={t("common.reload")} onClick={handleReloadSkills} />
-                    <PanelActionButton icon="folder-open" label={t("skill.open_dir")} onClick={handleOpenSkillDir} />
+                    <Show when={canOpenLocalPath()}>
+                      <PanelActionButton icon="folder-open" label={t("skill.open_dir")} onClick={handleOpenSkillDir} />
+                    </Show>
                     <PanelActionButton
                       icon="plus"
                       label={t("skill.add")}
@@ -614,7 +629,9 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
           >
             <div class="tool-panel-toolbar" role="toolbar" aria-label={t("skill.title")}>
               <PanelActionButton compact icon="refresh" label={t("common.reload")} onClick={handleReloadSkills} />
-              <PanelActionButton compact icon="folder-open" label={t("skill.open_dir")} onClick={handleOpenSkillDir} />
+              <Show when={canOpenLocalPath()}>
+                <PanelActionButton compact icon="folder-open" label={t("skill.open_dir")} onClick={handleOpenSkillDir} />
+              </Show>
               <PanelActionButton
                 compact
                 icon="plus"
@@ -670,7 +687,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
                       placeholder={t("skill.value_placeholder")}
                       onInput={(e) => setSkillForm("value", e.currentTarget.value)}
                     />
-                    <Show when={skillForm.type === "path"}>
+                    <Show when={skillForm.type === "path" && canPickSkillDirectory()}>
                       <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleBrowseFolder}>
                         {t("skill.browse_folder")}
                       </Button>
@@ -730,7 +747,13 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
                             {t("common.delete")}
                           </Button>
                         </Show>
-                        <Show when={item.location && item.location !== "builtin"}>
+                        <Show
+                          when={
+                            item.location &&
+                            item.location !== "builtin" &&
+                            (isRemoteUrl(item.location) ? canOpenRemoteUrl() : canOpenLocalPath())
+                          }
+                        >
                           <Button
                             type="button"
                             variant="ghost"
@@ -938,17 +961,19 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
                           <Show
                             when={installable}
                             fallback={
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                tone="neutral"
-                                title={t("skill.market.open_site_title")}
-                                aria-label={t("skill.market.open_site_title")}
-                                onClick={() => handleOpenHomepage(item.homepage)}
-                              >
-                                {t("skill.market.open_site")}
-                              </Button>
+                              <Show when={item.homepage && canOpenRemoteUrl()}>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  tone="neutral"
+                                  title={t("skill.market.open_site_title")}
+                                  aria-label={t("skill.market.open_site_title")}
+                                  onClick={() => handleOpenHomepage(item.homepage)}
+                                >
+                                  {t("skill.market.open_site")}
+                                </Button>
+                              </Show>
                             }
                           >
                             <Button
