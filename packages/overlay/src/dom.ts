@@ -116,7 +116,6 @@ export interface DomRefs {
   // Log viewer
   logDialog: HTMLElement | null
   logViewerBody: HTMLElement | null
-  logLevelFilter: HTMLSelectElement | null
   btnLog: HTMLButtonElement | null
   btnLogRefresh: HTMLButtonElement | null
   btnLogCopy: HTMLButtonElement | null
@@ -251,7 +250,6 @@ export function getDomRefs(): DomRefs {
     // Log viewer
     logDialog: $<HTMLElement>("#logDialog"),
     logViewerBody: $<HTMLElement>("#logViewerBody"),
-    logLevelFilter: $<HTMLSelectElement>("#logLevelFilter"),
     btnLog: $<HTMLButtonElement>("#btnLog"),
     btnLogRefresh: $<HTMLButtonElement>("#btnLogRefresh"),
     btnLogCopy: $<HTMLButtonElement>("#btnLogCopy"),

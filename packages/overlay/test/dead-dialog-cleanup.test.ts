@@ -42,6 +42,8 @@ describe("retired dialog dead code is removed from overlay runtime", () => {
       "appDialogSelect:",
       "btnAppDialogCancel:",
       "btnAppDialogOk:",
+      "logLevelFilter:",
+      "HTMLSelectElement",
     ]) {
       expect(domRefs).not.toContain(token)
     }

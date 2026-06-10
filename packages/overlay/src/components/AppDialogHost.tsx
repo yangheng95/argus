@@ -14,7 +14,7 @@ type AppDialogSelectOption = { value: string; label?: string }
 function AppDialogSelectOptionItem(props: Select.SelectRootItemComponentProps<AppDialogSelectOption>): JSX.Element {
   const option = () => props.item.rawValue
   return (
-    <Select.Item item={props.item} class="oc-select-option app-dialog-select-option">
+    <Select.Item item={props.item} class="oc-select-option app-dialog-select-option" data-value={option().value}>
       <Select.ItemLabel>{option().label || option().value}</Select.ItemLabel>
       <Select.ItemIndicator class="oc-select-indicator">
         <Icon name="status-completed" size={12} />

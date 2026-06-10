@@ -114,10 +114,6 @@ export function settleAppDialog(confirmed: boolean, epoch?: number, valueOverrid
     typeof document !== "undefined"
       ? (document.getElementById("appDialogInput") as HTMLInputElement | null)?.value
       : undefined
-  const selectValue =
-    typeof document !== "undefined"
-      ? (document.getElementById("appDialogSelect") as HTMLSelectElement | null)?.value
-      : undefined
   const value =
     valueOverride !== undefined
       ? valueOverride
@@ -126,7 +122,7 @@ export function settleAppDialog(confirmed: boolean, epoch?: number, valueOverrid
         : dialogStore.app.input
           ? (inputValue ?? dialogStore.app.inputValue ?? "")
           : dialogStore.app.select
-            ? (selectValue ?? dialogStore.app.selectValue ?? null)
+            ? (dialogStore.app.selectValue || null)
             : null
   const resolve = resolver
   resolver = null
