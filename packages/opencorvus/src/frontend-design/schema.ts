@@ -180,6 +180,25 @@ export const CompactTemplateItemSchema = z.object({
     ),
 })
 
+export const MaterialInventoryItemSchema = z.object({
+  title: z
+    .string()
+    .min(1)
+    .describe("Short stable name for a required material group, such as CSS tokens, assets, fixtures, fonts, or icons."),
+  detail: z
+    .string()
+    .min(1)
+    .describe(
+      "What this material contains, why the frontend skeleton or later project needs it, and any ownership or extraction note.",
+    ),
+  source_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe(
+      "Evidence anchors or file/path ids for this material group. Reference paths/ids instead of dense payloads.",
+    ),
+})
+
 const OptionalMarkdownField = (description: string) =>
   z
     .string()
@@ -252,10 +271,10 @@ export const FrontendTemplateFinalSchema = z.object({
     "Material and asset inventory: CSS/tokens, sidecar SVG/image/canvas assets, data fixtures, text samples, icons, fonts, and dense resources.",
   ),
   material_inventory_items: z
-    .array(CompactTemplateItemSchema)
-    .default([])
+    .array(MaterialInventoryItemSchema)
+    .min(1)
     .describe(
-      "Preferred compact replacement for a long material_inventory string. Reference paths/ids instead of dense payloads.",
+      "Required compact material inventory. Include at least one item covering the CSS/tokens, sidecar SVG/image/canvas assets, data fixtures, text samples, icons, fonts, or dense resources needed to reproduce the frontend. Reference paths/ids instead of dense payloads.",
     ),
   frontend_project: z
     .object({
@@ -345,6 +364,12 @@ export const ToolCompactTemplateItemSchema = z.object({
   source_refs: z.array(z.string().min(1)).default([]),
 })
 
+export const ToolMaterialInventoryItemSchema = z.object({
+  title: z.string().min(1),
+  detail: z.string().min(1),
+  source_refs: z.array(z.string().min(1)).default([]),
+})
+
 export const ToolComponentReusePlanItemSchema = z.object({
   family_id: z.string().min(1),
   name: z.string().min(1),
@@ -397,7 +422,7 @@ export const FrontendTemplateToolInputSchema = z.object({
   quality_project_contract: z.string().default(""),
   quality_project_items: z.array(ToolCompactTemplateItemSchema).default([]),
   material_inventory: z.string().default(""),
-  material_inventory_items: z.array(ToolCompactTemplateItemSchema).default([]),
+  material_inventory_items: z.array(ToolMaterialInventoryItemSchema).min(1),
   frontend_project: z
     .object({
       status: z.enum(["created", "not_created", "blocked"]).default("not_created"),

@@ -10,6 +10,8 @@ test("frontend-design schema module owns compact submit schema and visual spec s
   const providerSchema = asSchema(FrontendTemplateToolInputSchema).jsonSchema
 
   expect(providerSchema.required).toContain("final_acceptance_mode")
+  expect(providerSchema.required).toContain("material_inventory_items")
+  expect(providerSchema.properties?.material_inventory_items).toHaveProperty("minItems", 1)
   expect(JSON.stringify(providerSchema).length).toBeLessThan(12_000)
   expect(
     VisualSpecSchema.parse({
@@ -26,6 +28,13 @@ test("frontend-design schema module owns compact submit schema and visual spec s
     design_system: "source-derived visual baseline",
     tech_stack: ["static HTML", "CSS"],
     final_acceptance_mode: "visual_baseline_allowed",
+    material_inventory_items: [
+      {
+        title: "Source materials",
+        detail: "Use reference pixels, source CSS tokens, and assets for the visual skeleton.",
+        source_refs: ["web-clone-source/reference.png"],
+      },
+    ],
     component_reuse_plan: [
       {
         family_id: "comp-shell",

@@ -129,6 +129,13 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
             },
           ],
           material_inventory: "reference.png, sourceDomReplacementPlan.ts, heroData.ts",
+          material_inventory_items: [
+            {
+              title: "Hero source materials",
+              detail: "Use reference pixels, replacement-plan rows, and hero data for visual restoration.",
+              source_refs: ["reference.png", "sourceDomReplacementPlan.ts", "heroData.ts"],
+            },
+          ],
           visual_consistency_contract: "Maintain source screenshot parity for the replaced hero region.",
           ui_data_contract: "Local hero data fixture.",
           template_iteration_notes: ["Checked source-region process evidence."],
