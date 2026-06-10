@@ -3,9 +3,8 @@ import { readFileSync } from "fs"
 import { join } from "path"
 
 import { configure } from "../src/services/api"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
-const { cancelAgentSession, replyToAgentSession } = await import("../src/services/task")
+const { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } = await import("../src/services/task")
 
 const originalFetch = globalThis.fetch
 const root = join(import.meta.dir, "..")
@@ -53,6 +52,28 @@ describe("agent session controls", () => {
     expect(calls[0].init?.method).toBe("POST")
   })
 
+  test("sendTaskOperatorMessage posts visible build guidance to the task message route", async () => {
+    configure({ serverUrl: "http://overlay.test", directory: "" })
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    globalThis.fetch = mock(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      return new Response(JSON.stringify({ kind: "note", message: "ok", should_resume: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    }) as typeof fetch
+
+    await sendTaskOperatorMessage("tsk_1", "  Build session steering from overlay.\n\nuse hchart  ")
+
+    expect(calls.length).toBe(1)
+    expect(calls[0].url).toBe("http://overlay.test/task/tsk_1/message")
+    expect(calls[0].init?.method).toBe("POST")
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+      text: "Build session steering from overlay.\n\nuse hchart",
+      source: "overlay_operator_message",
+    })
+  })
+
   test("agent steer input is constrained to two control rows", () => {
     const component = readFileSync(join(root, "src/components/AgentSessionReplyBox.tsx"), "utf8")
     const css = readFileSync(join(root, "src/styles/surfaces/card.css"), "utf8")
@@ -70,5 +91,19 @@ describe("agent session controls", () => {
     expect(component).toContain('<Icon name="send" />')
     expect(css).not.toMatch(/\.card__agent-reply-send svg\s*\{[^}]*transform:\s*rotate\(180deg\)/)
     expect(css).not.toContain("min-height: calc(104px * var(--ui-scale));")
+  })
+
+  test("build cards route steer text through task operator guidance", () => {
+    const card = readFileSync(join(root, "src/components/Card.tsx"), "utf8")
+    const bubble = readFileSync(join(root, "src/components/ChatBubble.tsx"), "utf8")
+
+    for (const source of [card, bubble]) {
+      expect(source).toContain("sendTaskOperatorMessage")
+      expect(source).toContain('normalizeAgentRole(')
+      expect(source).toContain('"build" ? "task" : "session"')
+      expect(source).toContain("Build session steering from overlay.")
+      expect(source).toContain("overlay_build_steer")
+      expect(source).toContain("replyToAgentSession(taskID, sessionID, message)")
+    }
   })
 })

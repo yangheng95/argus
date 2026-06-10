@@ -11,7 +11,7 @@ import {
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import { boardStore, rootTaskSessionID, activeTaskID } from "../store/board"
 import { loadConversationSessionHistory } from "../services/conversation"
-import { cancelAgentSession, replyToAgentSession } from "../services/task"
+import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
 import { apiRequest } from "../services/api"
 import { normalizeAgentRole } from "../utils/message"
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
@@ -130,6 +130,17 @@ export function Card(props: { node: CardNode; depth: number }) {
     if (sessionID === rootTaskSessionID()) return undefined
     return sessionID
   })
+  const directAgentSessionKind = createMemo(() => {
+    if (props.node.kind === "phase") return props.node.phaseSessionKind || props.node.phaseID || props.node.stage
+    if (props.node.kind === "step") {
+      const phase = promotedBuildPhase()
+      return phase?.phaseSessionKind || phase?.phaseID || phase?.stage
+    }
+    return props.node.stage
+  })
+  const directAgentReplyMode = createMemo<"session" | "task">(() =>
+    normalizeAgentRole(directAgentSessionKind() || "") === "build" ? "task" : "session",
+  )
   const [traceOpen, setTraceOpen] = createSignal(false)
   const onTraceToggle = () => {
     if (!traceSessionID()) return
@@ -181,6 +192,19 @@ export function Card(props: { node: CardNode; depth: number }) {
   const onAgentReply = async (sessionID: string, message: string) => {
     const taskID = activeTaskID()
     if (!taskID) return
+    if (directAgentReplyMode() === "task") {
+      const context = [
+        "Build session steering from overlay.",
+        `Target build session: ${sessionID}.`,
+        props.node.goalID ? `Target goal: ${props.node.goalID}.` : "",
+        "",
+        message,
+      ]
+        .filter((line) => line.length > 0)
+        .join("\n")
+      await sendTaskOperatorMessage(taskID, context, { source: "overlay_build_steer" })
+      return
+    }
     await replyToAgentSession(taskID, sessionID, message)
   }
 
@@ -375,8 +399,9 @@ export function Card(props: { node: CardNode; depth: number }) {
             />
           </Show>
 
-          {/* Inline reply box at the END of every direct-replyable agent
-              session card. Always visible (no toggle) — replaces the
+          {/* Inline steer box at the END of every targetable agent session
+              card. Build sessions route through task guidance; other
+              sessions use direct reply. Always visible (no toggle) — replaces the
               previous CardHeader collapsible reply form so the input
               sits where the user expects: directly after the agent's
               latest output. */}
