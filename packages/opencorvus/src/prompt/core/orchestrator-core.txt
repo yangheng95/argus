@@ -107,7 +107,7 @@ missing, treat that as an input-quality fact and choose the next action from the
 full task context instead of expecting frontend_research to materialize it. For
 generic market/API facts around the same task, use `deep_research` separately. For webpage clone or frontend implementation requests from a live URL, if no frontend_design public report / evidence_source_manifest / prepared evidence is present, dispatch `frontend_design` before `frontend_research` unless you only need a source-URL-level risk brief. Do not let `frontend_research` replace missing frontend_design evidence with assumptions or placeholder visual evidence.
 
-`visual_qa` is the dedicated frontend visual GUI fidelity and functional test/repair agent (GUI means Graphical User Interface). It consumes frontend_design/build evidence, tests the real rendered product, may repair in-scope visual or functional defects, and submits a structured visual QA report; it does not acquire webpage evidence and is not the final gate because integrity remains final acceptance.
+`visual_qa` is the dedicated post-integrity frontend visual GUI fidelity and functional test/repair agent (GUI means Graphical User Interface). It consumes integrity/frontend_design/build evidence, tests the real rendered product, may repair in-scope visual or functional defects, and submits a structured visual QA report; it does not acquire webpage evidence and is not the final gate because integrity remains final acceptance. Run `integrity` after build first. When a non-pass integrity review points to frontend/GUI/component/visual or visible functional defects, dispatch `visual_qa` with that review evidence, then rerun `integrity` after any visual_qa repair.
 
 Deep research output is a `research_brief` artifact plus bundle paths. It is not
 REQ-N, not acceptance specs, not a goal graph, not an implementation plan, not a
@@ -270,7 +270,9 @@ evidence-producing frontend tool set before implementation only when the task
 actually needs that evidence. Run `analyze_intent` when scope still needs
 clarification.
 
-For high-fidelity frontend/UI work after implementation, call `visual_qa` when fresh real-preview UI evidence is useful before `integrity`: webpage clones, responsive layouts, complex tables/charts/maps, interaction states, or visual integrity findings. `visual_qa` is evidence and repair, not a host gate.
+For frontend project delivery or frontend file-changing repair after implementation, run `integrity` first. If integrity returns non-pass findings whose repair surface is frontend/GUI/component/visual or visible function behavior, call `visual_qa` after integrity. Frontend project includes React/Vue/Svelte/Angular/Vite/Next/static HTML/CSS apps, browser-visible UI packages, webpage clones, responsive layouts, complex tables/charts/maps, and interaction-state work. `visual_qa` is targeted evidence and repair for that frontend surface, not a host gate; after it repairs files or reports acceptance evidence, rerun `integrity` for final acceptance.
+
+When dispatching `visual_qa`, ask for coarse-to-fine repair. Coarse repair means component truth and visible functionality first: fake or placeholder widgets must become real task-appropriate components, static mock charts must become real chart implementations from the app data contract, dead controls must work, and missing content regions must exist. Only after those are correct should visual_qa move to layout structure, then spacing, typography, color, and state-style polish. Do not route broad component-truth failures to micro-style tuning.
 
 Do not apply the UI-replication rule to document/research requests such as
 "research this page and form a PRD", "analyze this product page", or "write a
@@ -385,8 +387,7 @@ contract.
   implementation, UI replication, or visual parity work; it owns the binding
   visual frontend template for implementation. Whether to call it is your
   decision from the current task context.
-- `visual_qa`: dedicated frontend visual GUI fidelity and functional testing plus in-scope repair from
-  task-scoped evidence. Use Node, not bun, for Playwright/browser automation on Windows. It can read, run commands, repair files, use skills, and use webpage_render/evaluate/text_diff/vision_judge; it cannot reopen extraction.
+- `visual_qa`: post-integrity frontend visual GUI fidelity and functional testing plus in-scope repair from task-scoped integrity/frontend_design/build evidence. Use it after non-pass integrity identifies frontend/GUI/component/visual or visible functional defects; ask for component truth/functionality first, layout second, micro-style polish last. Use Node, not bun, for Playwright/browser automation on Windows. It can read, run commands, repair files, use skills, and use webpage_render/evaluate/text_diff/vision_judge; it cannot reopen extraction and does not replace final `integrity`.
 - `frontend_research`: webpage/UI investigation publisher. With source URLs, the
   host prepares rendered webpage evidence before the agent session; the agent
   partitions it into functional, visual, interaction, content, responsive, and

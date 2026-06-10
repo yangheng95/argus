@@ -116,7 +116,7 @@ Prompt-readable webpage evidence artifacts:
 - `webpage-evidence/source-ir/interaction-hints.json` as link/button/input/tab/dropdown/search/accordion candidates.
 - `webpage-evidence/source-ir/interaction-state-snapshots.json` as browser runtime evidence for scroll-triggered sticky/floating surfaces, active/selected tabs, expanded controls, and viewport-persistent elements.
 - `webpage-evidence/source-skeleton/index.html` as raw semantic HTML evidence that downstream Build may read for exact hierarchy/source ids only. It is not a template to mechanically convert into one giant component.
-- `webpage-evidence/source-skeleton/critical.css` as reachable CSS plus computed-style recovery rules.
+- `webpage-evidence/source-skeleton/critical.css` as reachable CSS plus computed-style fallback rules.
 - `webpage-evidence/source-skeleton/full-source.css` as the complete CSS sidecar for targeted missing style detail.
 - `webpage-evidence/source-skeleton/used-selectors.json` as selector reachability evidence.
 - `webpage-evidence/source-skeleton/skeleton-manifest.json` for source coverage and component hints.

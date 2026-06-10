@@ -55,6 +55,7 @@ import {
   renderVisualQaBuildEvidenceContext,
   renderVisualQaFrontendDesignContext,
   renderVisualQaFrontendResearchContext,
+  renderVisualQaIntegrityContext,
   renderVisualQaPriorReportContext,
 } from "@/visual-qa/context"
 import { materializeMcpToolResult } from "@/mcp/materialize"
@@ -82,6 +83,7 @@ import {
   findLatestArchitectContractGraphArtifact,
   findLatestFrontendResearchBriefArtifact,
   findLatestGoalWorkloadArtifact,
+  findLatestIntegrityAttemptArtifact,
   findLatestResearchBriefArtifact,
   findLatestAcceptanceVerdictArtifact,
   findLatestAcceptanceVerdictArtifactForAcceptance,
@@ -3705,10 +3707,11 @@ export function createOrchestratorTools(input: {
 
     visual_qa: tool({
       description:
-        "Dedicated frontend visual GUI fidelity and functional testing agent. GUI means Graphical User Interface. " +
-        "Use after build or visual repair when a frontend/UI surface needs fresh real-preview evidence before integrity: desktop/mobile screenshots, " +
+        "Dedicated post-integrity frontend visual GUI fidelity and functional testing agent. GUI means Graphical User Interface. " +
+        "Use after a non-pass integrity review identifies frontend/GUI/component/visual or visible functional defects: desktop/mobile screenshots, " +
         "interaction-state checks, visual comparison, console/network review, or direct repair of visual or functional defects. " +
-        "It consumes task-scoped frontend_design/build evidence and may use skills, bash/edit/write/apply_patch, and webpage_render/evaluate/text_diff/vision_judge. " +
+        "It consumes task-scoped integrity/frontend_design/build evidence and repairs coarse-to-fine: component truth and visible functionality first, layout/composition second, micro-style polish last. " +
+        "It may use skills, bash/edit/write/apply_patch, and webpage_render/evaluate/text_diff/vision_judge. " +
         "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final.",
       inputSchema: VisualQaInputSchema,
       execute: async ({ reason, focus, app_url, preview_command }) => {
@@ -3731,6 +3734,16 @@ export function createOrchestratorTools(input: {
         )
         const buildEvidence = renderVisualQaBuildEvidenceContext(findDeliveriesForTask(taskID))
         const priorVisualQa = renderVisualQaPriorReportContext(decisionLog.readByPhase("visual_qa"))
+        const activeSpec = findActiveSpecForTask(taskID)
+        const integrityContext = renderVisualQaIntegrityContext(
+          activeSpec
+            ? findLatestIntegrityAttemptArtifact({
+                taskID,
+                specSnapshotID: activeSpec.id,
+                phase: "post_build",
+              })
+            : undefined,
+        )
 
         try {
           const { VisualQaAgent } = await import("@/visual-qa")
@@ -3743,6 +3756,7 @@ export function createOrchestratorTools(input: {
             previewCommand: preview_command,
             frontendDesign,
             frontendResearch,
+            integrityContext,
             buildEvidence,
             priorVisualQa,
             taskID,

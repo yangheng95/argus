@@ -33,6 +33,7 @@ describe("pipeline workflow architecture review step", () => {
       "architect",
       "build",
       "integrity",
+      "visual_qa",
     ])
     expect(pipeline!.steps.find((step) => step.id === "frontend_design")?.after).toEqual([])
     expect(pipeline!.steps.find((step) => step.id === "frontend_research")?.after).toEqual([])
@@ -46,6 +47,8 @@ describe("pipeline workflow architecture review step", () => {
     ])
     expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["architect"])
     expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
+    expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.after).toEqual(["integrity"])
+    expect(stepIDs.indexOf("integrity")).toBeLessThan(stepIDs.indexOf("visual_qa"))
   })
 
   test("rendered workflow prompt does not expose deleted architect or scheduler semantics", () => {
@@ -124,6 +127,52 @@ describe("pipeline workflow architecture review step", () => {
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
     expect(taskSteps.frontend_design?.status).toBe("completed")
+  })
+
+  test("projects visual_qa as completed from structured decision log report", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_visual_qa_${stamp}`
+    const taskID = `tsk_workflow_visual_qa_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow visual QA step test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow visual QA status",
+          request: "Repair a frontend after integrity review",
+          kind: "workflow",
+          priority: "normal",
+          design_specs: [],
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    createDecisionLog(taskID).append({
+      phase: "visual_qa",
+      key: "latest_summary",
+      value: "accepted=true\nsummary=real chart replaced placeholder",
+      reason: "Latest structured visual QA summary for integrity review.",
+    })
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
   test("projects integrity as completed when top-level pass has advisory concerns evidence", () => {

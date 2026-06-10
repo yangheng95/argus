@@ -3,6 +3,7 @@ import {
   renderVisualQaBuildEvidenceContext,
   renderVisualQaFrontendDesignContext,
   renderVisualQaFrontendResearchContext,
+  renderVisualQaIntegrityContext,
   renderVisualQaPriorReportContext,
 } from "../../src/visual-qa/context"
 import type { ResearchBrief } from "../../src/research/schema"
@@ -108,6 +109,40 @@ describe("visual-qa context rendering", () => {
     expect(context).toContain("accepted=false")
     expect(context).toContain("finding_mobile_overlap")
     expect(context).not.toContain("OLD_REPORT_SHOULD_NOT_APPEAR")
+  })
+
+  test("integrity context keeps bounded post-build repair priorities", () => {
+    const context = renderVisualQaIntegrityContext({
+      id: "artifact_integrity",
+      payload: {
+        verdict: "needs_correction",
+        reason: "The dashboard uses a fake static chart and a dead filter.",
+        findings_count: 2,
+        required_repairs_count: 1,
+        findings: [
+          {
+            severity: "major",
+            title: "Fake chart",
+            description: "Replace the placeholder bars with a real chart bound to the app data contract.",
+          },
+        ],
+        required_repairs: [
+          {
+            reason: "Static mock chart does not satisfy the visible data requirement.",
+            repair: "Implement a real chart component and verify the filter updates it.",
+          },
+        ],
+        team_report_markdown: "TEAM_REPORT_WITH_FAKE_CHART_FINDING",
+      },
+    })
+
+    expect(context).toContain("Integrity Review Pointers")
+    expect(context).toContain("verdict: needs_correction")
+    expect(context).toContain("Fake chart")
+    expect(context).toContain("component truth and visible functionality first")
+    expect(context).toContain("static mock charts")
+    expect(context).toContain("layout/composition second")
+    expect(context).toContain("state-style polish last")
   })
 })
 

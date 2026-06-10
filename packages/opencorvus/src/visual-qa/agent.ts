@@ -41,6 +41,7 @@ export namespace VisualQaAgent {
     previewCommand?: string
     frontendDesign?: string
     frontendResearch?: string
+    integrityContext?: string
     buildEvidence?: string
     priorVisualQa?: string
     taskID?: string
@@ -124,7 +125,7 @@ export namespace VisualQaAgent {
 
 function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
   const sections = [
-    "# Delegation\n\nOrchestrator is asking visual-qa to run dedicated frontend visual GUI fidelity and functional testing. GUI means Graphical User Interface: the visible application screen and controls. Consume task-scoped frontend_design/build evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. If any reference image is present, it is the authoritative visual truth: require 1:1 layout and style fidelity. 1:1 means one-to-one visible geometry and styling, not a relaxed similarity standard.",
+    "# Delegation\n\nOrchestrator is asking visual-qa to run post-integrity frontend visual GUI fidelity and functional testing. GUI means Graphical User Interface: the visible application screen and controls. Consume task-scoped integrity/frontend_design/build evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. Repair coarse-to-fine: component truth and visible functionality first, layout/composition second, spacing/typography/color/state-style polish last. If any reference image is present, it is the authoritative visual truth: require 1:1 layout and style fidelity. 1:1 means one-to-one visible geometry and styling, not a relaxed similarity standard.",
     renderUserRequestSection({
       heading: "# Task",
       title: input.taskTitle,
@@ -144,11 +145,12 @@ function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
   }
   pushContextSection(sections, "Frontend Design Context", input.frontendDesign)
   pushContextSection(sections, "Frontend Research Context", input.frontendResearch)
+  pushContextSection(sections, "Integrity Review Context", input.integrityContext)
   pushContextSection(sections, "Build Evidence Context", input.buildEvidence)
   pushContextSection(sections, "Prior Visual QA Context", input.priorVisualQa)
   sections.push(
     "# Required Output\n\n" +
-      "Call `submit_visual_qa_report` exactly once. A passing report needs fresh evidence paths or URLs, coverage of checked GUI regions/viewports/states/functions, and no open critical/major finding. With a reference image, accepted=true also requires evidence that the rendered screenshot matches the reference image's layout geometry, spacing, typography, colors, component styling, and visible state styling 1:1. If you repair files, include changed_files and verification evidence.",
+      "Call `submit_visual_qa_report` exactly once. A passing report needs fresh evidence paths or URLs, coverage of checked GUI regions/viewports/states/functions, no open critical/major finding, and evidence that coarse component/function defects named by integrity are actually repaired before style polish. With a reference image, accepted=true also requires evidence that the rendered screenshot matches the reference image's layout geometry, spacing, typography, colors, component styling, and visible state styling 1:1. If you repair files, include changed_files and verification evidence.",
   )
   return sections.join("\n\n")
 }

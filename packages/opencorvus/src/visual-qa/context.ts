@@ -5,6 +5,10 @@ import type { ResearchBrief } from "@/research/schema"
 
 type VisualQaDecisionEntry = Pick<DecisionEntry, "key" | "value" | "reason">
 type VisualQaDelivery = Pick<AcceptanceRow, "id" | "status" | "summary" | "result">
+type VisualQaIntegrityAttempt = {
+  id?: string
+  payload?: unknown
+}
 
 const FRONTEND_DESIGN_KEYS_FOR_VISUAL_QA = [
   "final_acceptance_mode",
@@ -151,6 +155,39 @@ export function renderVisualQaPriorReportContext(entries: VisualQaDecisionEntry[
   return lines.join("\n")
 }
 
+export function renderVisualQaIntegrityContext(row?: VisualQaIntegrityAttempt | null): string {
+  const payload = normalizeIntegrityPayload(row?.payload)
+  if (!payload) return ""
+  const lines = [
+    "# Integrity Review Pointers",
+    "",
+    "Use this post-build integrity review as the repair source. Fix component truth and visible functionality before layout or style polish.",
+    "",
+    `artifact_id: ${row?.id ?? "(unknown)"}`,
+    `verdict: ${payload.verdict ?? "(unknown)"}`,
+  ]
+  if (payload.reason) lines.push(`summary: ${limitText(payload.reason, 800)}`)
+  if (typeof payload.findings_count === "number") lines.push(`findings_count: ${payload.findings_count}`)
+  if (typeof payload.required_repairs_count === "number") {
+    lines.push(`required_repairs_count: ${payload.required_repairs_count}`)
+  }
+  const findings = payload.findings.slice(0, 6).map(renderIntegrityItem)
+  const repairs = payload.required_repairs.slice(0, 6).map(renderIntegrityItem)
+  lines.push(renderBulletGroup("integrity_findings", findings))
+  lines.push(renderBulletGroup("integrity_required_repairs", repairs))
+  if (payload.team_report_markdown) {
+    lines.push("", "team_report_excerpt:", limitText(payload.team_report_markdown, 2_400))
+  }
+  lines.push(
+    "",
+    "Repair priority:",
+    "- component truth and visible functionality first, including fake/placeholder widgets, static mock charts, dead controls, and missing regions",
+    "- layout/composition second",
+    "- spacing, typography, color, and state-style polish last",
+  )
+  return lines.filter((line) => line !== "").join("\n")
+}
+
 function latestDecisionByKey(entries: VisualQaDecisionEntry[]): Map<string, VisualQaDecisionEntry> {
   const latest = new Map<string, VisualQaDecisionEntry>()
   for (const entry of entries) latest.set(entry.key, entry)
@@ -165,6 +202,42 @@ function hasFrontendDesignReferenceImage(latest: Map<string, VisualQaDecisionEnt
 function renderBulletGroup(title: string, items: string[]): string {
   if (items.length === 0) return ""
   return ["", `${title}:`, ...items.map((item) => `- ${item}`)].join("\n")
+}
+
+function normalizeIntegrityPayload(payload: unknown):
+  | {
+      verdict?: string
+      reason?: string
+      findings_count?: number
+      required_repairs_count?: number
+      team_report_markdown?: string
+      findings: unknown[]
+      required_repairs: unknown[]
+    }
+  | undefined {
+  if (!payload || typeof payload !== "object") return undefined
+  const obj = payload as Record<string, unknown>
+  return {
+    verdict: typeof obj.verdict === "string" ? obj.verdict : undefined,
+    reason: typeof obj.reason === "string" ? obj.reason : undefined,
+    findings_count: typeof obj.findings_count === "number" ? obj.findings_count : undefined,
+    required_repairs_count:
+      typeof obj.required_repairs_count === "number" ? obj.required_repairs_count : undefined,
+    team_report_markdown: typeof obj.team_report_markdown === "string" ? obj.team_report_markdown : undefined,
+    findings: Array.isArray(obj.findings) ? obj.findings : [],
+    required_repairs: Array.isArray(obj.required_repairs) ? obj.required_repairs : [],
+  }
+}
+
+function renderIntegrityItem(item: unknown): string {
+  if (!item || typeof item !== "object") return limitText(String(item), 360)
+  const obj = item as Record<string, unknown>
+  const parts: string[] = []
+  for (const key of ["severity", "title", "description", "summary", "reason", "repair", "goalID"]) {
+    const value = obj[key]
+    if (typeof value === "string" && value.trim()) parts.push(`${key}=${limitText(value, 220)}`)
+  }
+  return parts.length > 0 ? parts.join("; ") : limitText(JSON.stringify(obj) ?? String(obj), 360)
 }
 
 function limitText(value: string, max: number): string {
