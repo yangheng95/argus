@@ -21,6 +21,7 @@ import { setSettingsStore } from "../src/store/settings"
 ;(globalThis as any).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 let events: typeof import("../src/services/events")
+const originalDocument = globalThis.document
 
 beforeAll(async () => {
   mock.module("../src/utils/icon-html", () => ({
@@ -80,10 +81,17 @@ function installTransport() {
 }
 
 function setFocus(focused: boolean): void {
+  const currentDocument = (globalThis as any).document
   Object.defineProperty(globalThis, "document", {
     configurable: true,
     writable: true,
-    value: { hasFocus: () => focused },
+    value: {
+      ...(currentDocument && typeof currentDocument === "object" ? currentDocument : {}),
+      documentElement: currentDocument?.documentElement ?? { dataset: {}, lang: "" },
+      hidden: !focused,
+      visibilityState: focused ? "visible" : "hidden",
+      hasFocus: () => focused,
+    },
   })
 }
 
@@ -122,7 +130,6 @@ beforeEach(() => {
   setPageMode("panel")
   setFocus(false)
   clearNotifications()
-  setBoardStore("selectedTaskID", "")
   setBoardStore("selectedSource", null)
   setBoardStore("tasks", [taskItem({ id: "tsk_notify" })])
   replaceBadgeAcksForTest([])
@@ -131,18 +138,21 @@ beforeEach(() => {
 afterEach(() => {
   __setHostTransportForTest(undefined)
   clearNotifications()
-  setBoardStore("selectedTaskID", "")
   setBoardStore("selectedSource", null)
   setBoardStore("tasks", [])
   setPageMode("panel")
   replaceBadgeAcksForTest([])
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    writable: true,
+    value: originalDocument,
+  })
 })
 
 describe("routeNotification tier matrix", () => {
   test("tier 1 shows in-app but suppresses OS when focused selected task detail is visible", async () => {
     const calls = installTransport()
     setFocus(true)
-    setBoardStore("selectedTaskID", "tsk_notify")
     setBoardStore("selectedSource", { kind: "task", id: "tsk_notify" })
 
     routeNotification({ type: "task.failed", taskID: "tsk_notify", notify: { tier: 1, badge: true } })
@@ -322,7 +332,6 @@ describe("computeBadge projection", () => {
     const calls = installTransport()
     const visible = taskItem({ id: "tsk_visible", pending: 1, updated: 100 })
     setFocus(true)
-    setBoardStore("selectedTaskID", "tsk_visible")
     setBoardStore("selectedSource", { kind: "task", id: "tsk_visible" })
     setBoardStore("tasks", [visible])
 
