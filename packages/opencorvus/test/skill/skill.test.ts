@@ -235,6 +235,36 @@ expires_at: ${new Date(Date.now() - 60_000).toISOString()}
   })
 })
 
+test("dedupes .opencorvus/skills when reached by external and config directory scans", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, ".opencorvus", "skills", "shared-opencorvus", "SKILL.md"),
+        `---
+name: shared-opencorvus
+description: Shared OpenCorvus plural skill.
+---
+
+# Shared OpenCorvus
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = nonBuiltin(await Skill.all())
+      const shared = skills.find((s) => s.name === "shared-opencorvus")
+      expect(skills.filter((s) => s.name === "shared-opencorvus").length).toBe(1)
+      expect(shared).toBeDefined()
+      expect(shared!.location).toBe(path.join(tmp.path, ".opencorvus", "skills", "shared-opencorvus", "SKILL.md"))
+      expect(shared!.duplicate_locations).toEqual([])
+    },
+  })
+})
+
 test("skips skills with missing frontmatter", async () => {
   await using tmp = await tmpdir({
     git: true,
@@ -492,13 +522,14 @@ This skill is loaded from the global home directory.
   }
 })
 
-test("discovers skills from .claude/skills/, .agents/skills/, and .codex/skills/", async () => {
+test("discovers skills from .claude/skills/, .agents/skills/, .codex/skills/, and .opencorvus/skills/", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
       const claudeDir = path.join(dir, ".claude", "skills", "claude-skill")
       const agentDir = path.join(dir, ".agents", "skills", "agent-skill")
       const codexDir = path.join(dir, ".codex", "skills", "codex-skill")
+      const opencorvusDir = path.join(dir, ".opencorvus", "skills", "opencorvus-agent-skill")
       await Bun.write(
         path.join(claudeDir, "SKILL.md"),
         `---
@@ -529,6 +560,16 @@ description: A skill in the .codex/skills directory.
 # Codex Skill
 `,
       )
+      await Bun.write(
+        path.join(opencorvusDir, "SKILL.md"),
+        `---
+name: opencorvus-agent-skill
+description: A skill in the .opencorvus/skills directory.
+---
+
+# OpenCorvus Agent Skill
+`,
+      )
     },
   })
 
@@ -536,10 +577,11 @@ description: A skill in the .codex/skills directory.
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills).length).toBe(3)
+      expect(nonBuiltin(skills).length).toBe(4)
       expect(skills.find((s) => s.name === "claude-skill")).toBeDefined()
       expect(skills.find((s) => s.name === "agent-skill")).toBeDefined()
       expect(skills.find((s) => s.name === "codex-skill")).toBeDefined()
+      expect(skills.find((s) => s.name === "opencorvus-agent-skill")).toBeDefined()
     },
   })
 })

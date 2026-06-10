@@ -241,9 +241,11 @@ describe("skill routes", () => {
         expect(body.name).toBe("folder-review")
         expect(body.names).toEqual(["folder-review"])
         expect(body.source).toBe(path.join(tmp.path, ".opencorvus", "skill", "folder-review", "SKILL.md"))
-        expect(await Filesystem.readText(path.join(tmp.path, ".opencorvus", "skill", "folder-review", "scripts", "review.txt"))).toBe(
-          "folder-script",
-        )
+        expect(
+          await Filesystem.readText(
+            path.join(tmp.path, ".opencorvus", "skill", "folder-review", "scripts", "review.txt"),
+          ),
+        ).toBe("folder-script")
 
         const listed = await app.request("/skill/installed", {
           headers: {
@@ -293,7 +295,9 @@ describe("skill routes", () => {
         expect(body.names).toEqual(["zip-review"])
         expect(body.source).toBe(path.join(tmp.path, ".opencorvus", "skill", "zip-review", "SKILL.md"))
         expect(
-          await Filesystem.readText(path.join(tmp.path, ".opencorvus", "skill", "zip-review", "references", "guide.md")),
+          await Filesystem.readText(
+            path.join(tmp.path, ".opencorvus", "skill", "zip-review", "references", "guide.md"),
+          ),
         ).toBe("zip-reference")
 
         const listed = await app.request("/skill/installed", {
@@ -348,6 +352,53 @@ describe("skill routes", () => {
         expect(item?.source_type).toBe("external")
         expect(item?.trust).toBe("external")
         expect(item?.recommended_policy).toBe("ask")
+      },
+    })
+  }, 20000)
+
+  test("GET /skill/installed classifies .opencorvus/skills as external without duplicating config scan", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const skillDir = path.join(dir, ".opencorvus", "skills", "opencorvus-review")
+        await Filesystem.write(
+          path.join(skillDir, "SKILL.md"),
+          [
+            "---",
+            "name: opencorvus-review",
+            "description: OpenCorvus plural skill root",
+            "---",
+            "",
+            "Use this skill from an OpenCorvus plural skill directory.",
+          ].join("\n"),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const listed = await app.request("/skill/installed", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(listed.status).toBe(200)
+        const body = (await listed.json()) as Array<{
+          name: string
+          source_type: string
+          trust: string
+          recommended_policy: string
+          duplicate_locations: string[]
+        }>
+        const matches = body.filter((entry) => entry.name === "opencorvus-review")
+        expect(matches.length).toBe(1)
+        expect(matches[0]?.source_type).toBe("external")
+        expect(matches[0]?.trust).toBe("external")
+        expect(matches[0]?.recommended_policy).toBe("ask")
+        expect(matches[0]?.duplicate_locations).toEqual([])
       },
     })
   }, 20000)

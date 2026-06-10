@@ -25,19 +25,19 @@ Frontmatter 字段（`src/skill/skill.ts:23-63`）：
 | `auto_detect.task_signals` | object                               | 任务级发现提示（`has_attachment_image` / `request_contains_url` / `request_contains_figma_url` / `package_has_script[]` / `request_text_any[]`） |
 | `priority`                 | number                               | 多 skill 命中时的排序（大在前，默认 0）                                                                                                          |
 | `required_tools`           | string[]                             | skill 预期可能需要的工具提示                                                                                                                     |
+| `expires_at`               | string                               | 可选 ISO 时间戳；当前时间达到或超过该时间后，skill 不再加载                                                                                      |
 
 ## 2. 内置 Skills
 
-随二进制打包（`src/skill/skill.ts` 的 `builtins` 数组），**只有两个**：
+随二进制打包（`src/skill/skill.ts` 的 `builtins` 数组），**只有一个**：
 
-| Skill                   | 用途                                                                |
-| ----------------------- | ------------------------------------------------------------------- |
-| `ainvest-design-system` | 提供内置 Ainvest UI tokens、组件、规则和资产，用于 Ainvest 前端工作 |
-| `research-report`       | 用 `websearch` 和按需 `webfetch` 产出带来源的 Markdown 调研报告     |
+| Skill             | 用途                                                            |
+| ----------------- | --------------------------------------------------------------- |
+| `research-report` | 用 `websearch` 和按需 `webfetch` 产出带来源的 Markdown 调研报告 |
 
 > 其他 skill 需要通过 `skills.paths` / `skills.urls` 显式加载。
 >
-> `panel-control` builtin skill 已在 commit `f94f56231` 删除；`webpage-generate` builtin skill 也已删除。仍引用这些 skill 的客户端会找不到对应 skill。
+> `panel-control` builtin skill 已在 commit `f94f56231` 删除；`webpage-generate` 与 `ainvest-design-system` builtin skill 也已删除。仍引用这些 skill 的客户端会找不到对应 skill。
 
 内置 Skill 默认权限为 `allow`（`src/skill/manager.ts`）。
 
@@ -45,7 +45,7 @@ Frontmatter 字段（`src/skill/skill.ts:23-63`）：
 
 **方式 A**：放到项目 `.opencorvus/skill/<name>/SKILL.md` 或全局 config 目录下，启动时自动扫描。
 
-**方式 B**：兼容 Claude Code 布局，`.claude/skills/` 或 `.agents/skills/` 也会被发现。
+**方式 B**：兼容 Claude Code / Codex / OpenCorvus / Agent 布局，`.claude/skills/`、`.codex/skills/`、`.opencorvus/skills/` 或 `.agents/skills/` 也会被发现。
 
 **方式 C**：在 `opencorvus.jsonc` 中声明搜索路径：
 
@@ -123,12 +123,12 @@ Session 初始化时会提供 Skill Policy 与可用 skill 摘要。Agent 需要
 
 | 等级        | 来源                               |
 | ----------- | ---------------------------------- |
-| `builtin`   | 随二进制打包（3 个）               |
+| `builtin`   | 随二进制打包                       |
 | `official`  | openai/skills 或 anthropics/skills |
 | `curated`   | skills.sh / skillstore.io          |
 | `community` | skills.pub                         |
 | `local`     | 本地路径                           |
-| `external`  | `.claude/` 或 `.agents/` 目录发现  |
+| `external`  | `.claude/`、`.codex/`、`.opencorvus/skills/` 或 `.agents/` 目录发现 |
 
 风险评估：目录含 `scripts/` → 高风险；含 `agents/` 或 `references/` → 中等。
 
@@ -140,4 +140,4 @@ OPENCORVUS_DISABLE_EXTERNAL_SKILLS=1
 OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS=1
 ```
 
-跳过 `.claude/` 与 `.agents/` 目录扫描，不影响 `skills.paths` 与 `skills.urls`。
+跳过 `.claude/`、`.codex/`、`.opencorvus/skills/` 与 `.agents/` 目录扫描，不影响 `skills.paths` 与 `skills.urls`。

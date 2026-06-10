@@ -390,7 +390,10 @@ export namespace SkillManager {
     await Config.state.reset()
     await Skill.state.reset()
     if (input.policy) {
-      await applyPolicyToNames(imported.map((item) => item.name), input.policy)
+      await applyPolicyToNames(
+        imported.map((item) => item.name),
+        input.policy,
+      )
     }
     return {
       name: imported[0]!.name,
@@ -538,7 +541,8 @@ function sourceTypeFor(dir: string, configuredPaths: string[], cache: string, ki
   if (
     dir.includes(`${path.sep}.claude${path.sep}`) ||
     dir.includes(`${path.sep}.agents${path.sep}`) ||
-    dir.includes(`${path.sep}.codex${path.sep}`)
+    dir.includes(`${path.sep}.codex${path.sep}`) ||
+    dir.includes(`${path.sep}.opencorvus${path.sep}skills${path.sep}`)
   )
     return "external"
   return "unknown"
@@ -554,7 +558,8 @@ function trustFor(skill: z.infer<typeof SkillInfo>, source?: string) {
   if (
     skill.location.includes(`${path.sep}.claude${path.sep}`) ||
     skill.location.includes(`${path.sep}.agents${path.sep}`) ||
-    skill.location.includes(`${path.sep}.codex${path.sep}`)
+    skill.location.includes(`${path.sep}.codex${path.sep}`) ||
+    skill.location.includes(`${path.sep}.opencorvus${path.sep}skills${path.sep}`)
   ) {
     return "external" as const
   }

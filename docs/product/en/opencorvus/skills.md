@@ -25,6 +25,7 @@ Frontmatter fields (`src/skill/skill.ts:26-45`):
 | `auto_detect.task_signals` | object                           | Discovery hint from task signals such as image attachment, non-Figma URL, Figma URL, package scripts, or request text |
 | `priority`                 | number                           | Sort order (higher first, default 0)                                                                                  |
 | `required_tools`           | string[]                         | Tool hints the skill expects the agent may need                                                                       |
+| `expires_at`               | string                           | Optional ISO timestamp; the skill stops loading once current time reaches or passes this timestamp                     |
 
 ## Skill ↔ agent relationship
 
@@ -34,12 +35,11 @@ Sessions receive a Skill Policy block that lists available skills. Agents should
 
 ## Built-in skills
 
-Shipped with the binary (`src/skill/skill.ts`), exactly two:
+Shipped with the binary (`src/skill/skill.ts`), exactly one:
 
-| Name                    | Purpose                                                                                        |
-| ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `ainvest-design-system` | Provide the bundled Ainvest UI tokens, components, rules, and assets for Ainvest frontend work |
-| `research-report`       | Produce a sourced Markdown research report using `websearch` and targeted `webfetch`           |
+| Name              | Purpose                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| `research-report` | Produce a sourced Markdown research report using `websearch` and targeted `webfetch` |
 
 Other skills must be loaded through configured skill paths or URLs if you need them.
 
@@ -48,7 +48,7 @@ Built-in skills get `allow` policy by default (`src/skill/manager.ts`).
 ## Adding a local skill
 
 **A**: drop into `.opencorvus/skill/<name>/SKILL.md` (project or global).
-**B**: Claude Code layout — `.claude/skills/` or `.agents/skills/` also discovered (`src/skill/skill.ts:68-69`).
+**B**: Claude Code, Codex, OpenCorvus, or agent layout — `.claude/skills/`, `.codex/skills/`, `.opencorvus/skills/`, or `.agents/skills/` also discovered (`src/skill/skill.ts`).
 **C**: declare paths in `opencorvus.jsonc`:
 
 ```jsonc
@@ -98,4 +98,4 @@ Built-in → `allow`; community/external → `ask`; skills with a `scripts/` dir
 OPENCORVUS_DISABLE_EXTERNAL_SKILLS=1
 ```
 
-Skips `.claude/` and `.agents/` discovery. Does not affect `skills.paths` or `skills.urls` (`src/flag/flag.ts:134-139`).
+Skips `.claude/`, `.codex/`, `.opencorvus/skills/`, and `.agents/` discovery. Does not affect `skills.paths` or `skills.urls` (`src/flag/flag.ts:134-139`).
