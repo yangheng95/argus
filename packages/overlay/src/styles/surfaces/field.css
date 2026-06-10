@@ -72,6 +72,22 @@
   box-shadow: var(--shadow-md);
 }
 
+.oc-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  width: 100%;
+  text-align: left;
+}
+
+.oc-select-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .oc-select-listbox {
   max-height: min(calc(260px * var(--ui-scale)), calc(100vh - 32px));
   overflow: auto;

@@ -237,16 +237,11 @@ test(
         () => document.querySelector('[data-config-panel="agent-models"]')?.classList.contains("active") === true,
       )
       await page.waitForSelector('[data-testid="agent-model-select-build"]')
-      await page.focus('[data-testid="agent-model-select-build"]')
-      await page.waitForFunction(
-        () =>
-          !!(document.querySelector(
-            '[data-testid="agent-model-select-build"] option[value="hexin/gpt-5.4-mini"]',
-          ) as HTMLOptionElement | null),
-      )
+      await page.click('[data-testid="agent-model-select-build"]')
+      await page.waitForSelector('.agent-model-select-option[data-model-value="hexin/gpt-5.4-mini"]')
 
-      const optionValues = await page.$$eval('[data-testid="agent-model-select-build"] option', (nodes) =>
-        nodes.map((node) => (node as HTMLOptionElement).value),
+      const optionValues = await page.$$eval(".agent-model-select-option", (nodes) =>
+        nodes.map((node) => (node as HTMLElement).dataset.modelValue || ""),
       )
       assert.ok(optionValues.includes("hexin/gpt-5.4-mini"))
       assert.ok(optionValues.includes("hexin/gpt-5.4"))

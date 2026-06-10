@@ -38,16 +38,11 @@ function mergePatch(target: unknown, patch: unknown): unknown {
   return base
 }
 
-async function selectOption(page: any, selector: string, value: string) {
-  await page.$eval(
-    selector,
-    (node: HTMLSelectElement, nextValue: string) => {
-      node.value = nextValue
-      node.dispatchEvent(new Event("input", { bubbles: true }))
-      node.dispatchEvent(new Event("change", { bubbles: true }))
-    },
-    value,
-  )
+async function chooseModelOption(page: any, triggerSelector: string, value: string) {
+  await page.click(triggerSelector)
+  const optionSelector = `.agent-model-select-option[data-model-value="${value}"]`
+  await page.waitForSelector(optionSelector)
+  await page.click(optionSelector)
 }
 
 test("agent model selects patch independent per-agent overrides", async () => {
@@ -182,36 +177,19 @@ test("agent model selects patch independent per-agent overrides", async () => {
     await page.waitForSelector('[data-testid="agent-model-select-build"]')
     await page.waitForSelector('[data-testid="agent-model-select-integrity"]')
 
-    const initialOptionCount = await page.$$eval(".agent-model-select option", (nodes: HTMLOptionElement[]) => nodes.length)
-    assert.ok(initialOptionCount <= 6)
+    const initialOptionCount = await page.$$eval(".agent-model-select-option", (nodes: HTMLElement[]) => nodes.length)
+    assert.equal(initialOptionCount, 0)
 
-    await page.focus('[data-testid="agent-model-select-build"]')
+    await chooseModelOption(page, '[data-testid="agent-model-select-build"]', "anthropic/claude-sonnet-4-6")
     await page.waitForFunction(
       () =>
-        !!(document.querySelector(
-          '[data-testid="agent-model-select-build"] option[value="anthropic/claude-sonnet-4-6"]',
-        ) as HTMLOptionElement | null),
-    )
-    await selectOption(page, '[data-testid="agent-model-select-build"]', "anthropic/claude-sonnet-4-6")
-    await page.waitForFunction(
-      () =>
-        (document.querySelector('[data-testid="agent-model-select-build"]') as HTMLSelectElement | null)?.value ===
-        "anthropic/claude-sonnet-4-6",
+        document.querySelector('[data-testid="agent-model-select-build"]')?.textContent?.includes("claude-sonnet-4-6"),
     )
 
     await page.waitForSelector('[data-testid="agent-model-select-integrity"]')
-    await page.focus('[data-testid="agent-model-select-integrity"]')
+    await chooseModelOption(page, '[data-testid="agent-model-select-integrity"]', "openai/gpt-4.1")
     await page.waitForFunction(
-      () =>
-        !!(document.querySelector(
-          '[data-testid="agent-model-select-integrity"] option[value="openai/gpt-4.1"]',
-        ) as HTMLOptionElement | null),
-    )
-    await selectOption(page, '[data-testid="agent-model-select-integrity"]', "openai/gpt-4.1")
-    await page.waitForFunction(
-      () =>
-        (document.querySelector('[data-testid="agent-model-select-integrity"]') as HTMLSelectElement | null)?.value ===
-        "openai/gpt-4.1",
+      () => document.querySelector('[data-testid="agent-model-select-integrity"]')?.textContent?.includes("gpt-4.1"),
     )
 
     const modelPatches = patches.filter((patch) => "agent" in patch)

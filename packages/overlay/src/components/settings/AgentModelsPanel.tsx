@@ -16,7 +16,9 @@
 // removed because they silently switched provider/model between goal retries
 // and collapsed prompt cache.
 
+import * as Select from "@kobalte/core/select"
 import { createSignal, createMemo, createResource, For, Show } from "solid-js"
+import type { JSX } from "solid-js"
 import {
   getSessionConfig,
   patchConfig,
@@ -30,6 +32,7 @@ import { t } from "../../utils/i18n"
 import { loadAgentModelsData, type AgentInfo, type ProvidersPayload } from "./agent-models-data"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
+import { Icon } from "../Icon"
 
 // Tier groupings are display-only: they organize the UI list but no longer
 // affect default model resolution (all agents inherit the project default).
@@ -53,7 +56,6 @@ const TIER_LABEL: Record<string, string> = {
 export default function AgentModelsPanel(props: { scope?: "project" | "session"; sessionID?: string }) {
   const [savingAgents, setSavingAgents] = createSignal<Set<string>>(new Set())
   const [savingDefault, setSavingDefault] = createSignal(false)
-  const [activeSelect, setActiveSelect] = createSignal<string>("")
   const [sessionRefreshToken, setSessionRefreshToken] = createSignal(0)
   const scope = () => props.scope ?? "project"
   const sessionID = () => (props.sessionID ?? "").trim()
@@ -191,6 +193,12 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
     models: Array<{ value: string; label: string }>
   }
 
+  interface ModelSelectOption {
+    value: string
+    label: string
+    groupLabel?: string
+  }
+
   function providerGroups(payload: ProvidersPayload | undefined): ProviderGroup[] {
     if (!payload) return []
     const groups: ProviderGroup[] = []
@@ -225,12 +233,47 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
     return byTier
   }
 
-  function optionLabel(value: string, groups: ProviderGroup[]): string {
-    for (const group of groups) {
-      const found = group.models.find((model) => model.value === value)
-      if (found) return found.label
+  function modelOptions(props: {
+    value: string
+    groups: ProviderGroup[]
+    unavailable: boolean
+    emptyLabel: string
+    unavailableLabel: string
+  }): ModelSelectOption[] {
+    const options: ModelSelectOption[] = [{ value: "", label: props.emptyLabel }]
+    const selectedAvailable = props.groups.some((group) =>
+      group.models.some((model) => model.value === props.value),
+    )
+    if (props.value && (props.unavailable || !selectedAvailable)) {
+      options.push({ value: props.value, label: props.unavailableLabel })
     }
-    return value
+    for (const group of props.groups) {
+      for (const model of group.models) {
+        options.push({ value: model.value, label: model.label, groupLabel: group.name })
+      }
+    }
+    return options
+  }
+
+  function ModelSelectOptionItem(props: Select.SelectRootItemComponentProps<ModelSelectOption>): JSX.Element {
+    const option = () => props.item.rawValue
+    return (
+      <Select.Item
+        item={props.item}
+        class="oc-select-option agent-model-select-option"
+        data-model-value={option().value}
+      >
+        <span class="agent-model-select-option-text">
+          <Select.ItemLabel>{option().label}</Select.ItemLabel>
+          <Show when={option().groupLabel}>
+            {(groupLabel) => <small>{groupLabel()}</small>}
+          </Show>
+        </span>
+        <Select.ItemIndicator class="oc-select-indicator">
+          <Icon name="status-completed" size={12} />
+        </Select.ItemIndicator>
+      </Select.Item>
+    )
   }
 
   function ModelSelect(props: {
@@ -244,36 +287,42 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
     unavailableLabel: string
     onSelect: (value: string) => void
   }) {
-    const expanded = () => activeSelect() === props.id
-    const selected = () => props.value
-    const selectedAvailable = () =>
-      !!selected() && props.groups.some((group) => group.models.some((model) => model.value === selected()))
+    const options = createMemo(() => modelOptions(props))
+    const selectedOption = () => options().find((option) => option.value === props.value) ?? options()[0] ?? null
+    const setSelectedOption = (option: ModelSelectOption | null) => {
+      if (!option) return
+      if (option.value === props.value) return
+      props.onSelect(option.value)
+    }
     return (
-      <select
-        class="field-input agent-model-select"
-        data-testid={props.testid}
-        value={selected()}
+      <Select.Root<ModelSelectOption>
+        class="agent-model-select"
+        options={options()}
+        optionValue="value"
+        optionTextValue="label"
+        value={selectedOption()}
+        onChange={setSelectedOption}
+        itemComponent={ModelSelectOptionItem}
         disabled={props.disabled}
-        onFocus={() => setActiveSelect(props.id)}
-        onPointerDown={() => setActiveSelect(props.id)}
-        onChange={(e) => props.onSelect((e.currentTarget as HTMLSelectElement).value)}
+        disallowEmptySelection
+        gutter={4}
+        sameWidth
       >
-        <option value="">{props.emptyLabel}</option>
-        <Show when={!!selected() && (!expanded() || props.unavailable || !selectedAvailable())}>
-          <option value={selected()}>
-            {props.unavailable ? props.unavailableLabel : optionLabel(selected(), props.groups)}
-          </option>
-        </Show>
-        <Show when={expanded()}>
-          <For each={props.groups}>
-            {(g) => (
-              <optgroup label={g.name}>
-                <For each={g.models}>{(opt) => <option value={opt.value}>{opt.label}</option>}</For>
-              </optgroup>
-            )}
-          </For>
-        </Show>
-      </select>
+        <Select.Trigger class="field-input oc-select-trigger agent-model-select-trigger" data-testid={props.testid}>
+          <Select.Value<ModelSelectOption>>
+            {(state) => <span>{state.selectedOption()?.label ?? props.emptyLabel}</span>}
+          </Select.Value>
+          <Select.Icon>
+            <Icon name="caret-down" size={12} />
+          </Select.Icon>
+        </Select.Trigger>
+        <Select.HiddenSelect />
+        <Select.Portal>
+          <Select.Content class="oc-select-content agent-model-select-content">
+            <Select.Listbox class="oc-select-listbox agent-model-select-listbox" />
+          </Select.Content>
+        </Select.Portal>
+      </Select.Root>
     )
   }
 
