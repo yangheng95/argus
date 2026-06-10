@@ -519,10 +519,8 @@
 }
 
 .titlebar-menubar-panel {
-  position: absolute !important;
-  top: calc(100% + calc(7px * var(--ui-scale)));
-  left: 0;
-  transform: none !important;
+  --titlebar-menu-viewport-shift: 0px;
+
   z-index: var(--ui-z-dialog);
   width: min(
     calc(340px * var(--ui-scale)),
@@ -558,11 +556,10 @@
 @media (max-width: 520px) {
   /* breakpoint: --ui-breakpoint-sm */
   .titlebar-menubar-panel {
-    position: fixed !important;
     top: calc(var(--ui-titlebar-height) + calc(8px * var(--ui-scale)));
-    left: calc(12px * var(--ui-scale)) !important;
-    right: calc(12px * var(--ui-scale)) !important;
-    width: calc(100vw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale))) !important;
+    left: calc(12px * var(--ui-scale));
+    right: calc(12px * var(--ui-scale));
+    width: calc(100vw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)));
     max-height: calc(100vh - var(--ui-titlebar-height) - calc(24px * var(--ui-scale)));
   }
 }
@@ -767,19 +764,19 @@
   }
 
   .titlebar-menubar-panel {
-    position: fixed !important;
+    --titlebar-menu-viewport-shift: calc(-1 * var(--titlebar-menu-anchor-left, 0px));
+
     top: calc(var(--ui-titlebar-height) + calc(13px * var(--ui-scale)));
-    left: calc(12px * var(--ui-scale)) !important;
-    right: calc(12px * var(--ui-scale)) !important;
-    width: calc(100vw - calc(24px * var(--ui-scale))) !important;
-    transform: translateX(calc(-1 * var(--titlebar-menu-anchor-left, 0px))) !important;
+    left: calc(12px * var(--ui-scale));
+    right: calc(12px * var(--ui-scale));
+    width: calc(100vw - calc(24px * var(--ui-scale)));
     max-height: calc(100vh - calc(var(--ui-titlebar-height) + calc(44px * var(--ui-scale))));
   }
 
   .titlebar-menubar-panel[data-menu="help"] {
-    left: calc(12px * var(--ui-scale)) !important;
-    right: calc(12px * var(--ui-scale)) !important;
-    width: calc(100vw - calc(24px * var(--ui-scale))) !important;
+    left: calc(12px * var(--ui-scale));
+    right: calc(12px * var(--ui-scale));
+    width: calc(100vw - calc(24px * var(--ui-scale)));
   }
 
   .titlebar-menubar-panel[data-menu="help"] .titlebar-menubar-item {

@@ -386,7 +386,7 @@ export function TitlebarMenubar() {
     >
       <For each={menus()}>
         {(menu) => (
-          <Menubar.Menu value={menu.id}>
+          <Menubar.Menu value={menu.id} placement="bottom-start" gutter={7} fitViewport slide={false} flip={false}>
             <div class="titlebar-menubar-slot">
             <Menubar.Trigger
               type="button"
@@ -416,6 +416,7 @@ export function TitlebarMenubar() {
                 class="titlebar-menubar-panel"
                 data-menu={menu.id}
                 data-testid={`titlebar-menu-${menu.id}`}
+                style={{ transform: "translateX(var(--titlebar-menu-viewport-shift, 0px))" }}
               >
                 <Show when={menu.id === "workspace"}>
                   <MenuGroup title={t("titlebar.menu.workspace")}>

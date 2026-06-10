@@ -1492,7 +1492,7 @@ body {
   transition: max-height var(--ui-duration-base) var(--ui-timing-standard);
 }
 .task-progress__pills[data-collapsed="false"] {
-  max-height: none !important;
+  max-height: none;
 }
 
 .task-progress[data-folded="true"] .task-progress__pills,

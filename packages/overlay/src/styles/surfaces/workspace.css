@@ -347,8 +347,8 @@ body[data-center-workbench-panel-resizing="true"] .center-workbench-view[data-re
 
 body[data-center-workbench-panel-resizing="true"],
 body[data-center-workbench-panel-resizing="true"] * {
-  cursor: col-resize !important;
-  user-select: none !important;
+  cursor: col-resize;
+  user-select: none;
 }
 
 .center-workbench-activity {
