@@ -7,9 +7,6 @@
 // providerAuthInputs, authorizeProvider, executeProviderAuth,
 // runProviderAuthMethod, authenticateSelectedProvider, testProviderConnection,
 // llmSelection, llmSelectionKey, llmCurrent.
-// DOM-dependent functions (llmSelection, llmCurrent, etc.) have their DOM
-// reads replaced with explicit parameters; the original DOM-coupled call sites
-// are marked with // TODO: DOM side.
 // This module reads provider state from appStore; it does NOT write to appStore
 // directly — callers are responsible for store mutations after API calls.
 
@@ -111,11 +108,11 @@ export interface AuthDialogCallbacks {
   /** Open a URL in an external browser. */
   nativeOpen: (url: string) => Promise<boolean | void>
 
-  /**
-   * Show the LLM notice banner.
-   * TODO: DOM side — remove once notice is fully reactive in Solid.
-   */
+  /** Show long-running provider auth instructions to the operator. */
   showLlmNotice: (message: string, tone?: string, duration?: number) => void
+
+  /** Mark provider auth as dismissed after the operator cancels an auth flow. */
+  onAuthCancelled: (providerID: string) => void
 }
 
 // ── Provider catalog helpers ──
@@ -266,8 +263,7 @@ export function llmCurrent(formProviderID: string, formModelID: string): { provi
 }
 
 // ── Provider selection data helpers ──
-// Pure data logic extracted from populateProviderSelect / populateModelSelect.
-// DOM mutations are left to the caller (marked // TODO: DOM side).
+// Pure data logic for provider/model picker components.
 
 export interface SortedProvider extends ProviderEntry {
   stateLabel: string
@@ -276,9 +272,6 @@ export interface SortedProvider extends ProviderEntry {
 /**
  * Return the sorted provider list (connected first, then alphabetical).
  * Each entry includes a `stateLabel` derived from providerState.
- * Mirrors the data portion of populateProviderSelect.
- * TODO: DOM side — callers must render the returned list into the
- * <select> element themselves.
  */
 export function sortedProviders(config?: any): SortedProvider[] {
   const catalog = appStore.providerCatalog
@@ -300,9 +293,6 @@ export function sortedProviders(config?: any): SortedProvider[] {
 
 /**
  * Return the sorted model list for a given provider.
- * Mirrors the data portion of populateModelSelect.
- * TODO: DOM side — callers must render the returned list into the
- * <select> element themselves.
  */
 export function modelsForProvider(providerID: string): string[] {
   const catalog = appStore.providerCatalog
@@ -464,8 +454,6 @@ export async function executeProviderAuth(
 /**
  * Run the full OAuth authorization flow for a provider.
  * Returns true on success, false if the user cancelled.
- * Note: the caller is responsible for updating appStore.providerAuthDismissed
- * based on the returned value.
  */
 export async function authorizeProvider(
   providerID: string,
@@ -489,14 +477,14 @@ export async function authorizeProvider(
       },
     )
     if (!confirmed) {
-      // TODO: DOM side — caller should set appStore.providerAuthDismissed[providerID] = true
+      callbacks.onAuthCancelled(providerID)
       return false
     }
   }
 
   const collected = await providerAuthInputs(providerID, match.index, callbacks)
   if (collected == null) {
-    // TODO: DOM side — caller should set appStore.providerAuthDismissed[providerID] = true
+    callbacks.onAuthCancelled(providerID)
     return false
   }
 
@@ -525,7 +513,7 @@ export async function authorizeProvider(
       },
     )
     if (code == null) {
-      // TODO: DOM side — caller should set appStore.providerAuthDismissed[providerID] = true
+      callbacks.onAuthCancelled(providerID)
       return false
     }
     await apiJson(`provider/${providerID}/oauth/callback`, {
@@ -564,7 +552,10 @@ export async function runProviderAuthMethod(
     return authorizeProvider(providerID, method.index, callbacks)
   }
   const inputs = await providerAuthInputs(providerID, method.index, callbacks)
-  if (inputs == null) return false
+  if (inputs == null) {
+    callbacks.onAuthCancelled(providerID)
+    return false
+  }
   if (Object.keys(inputs).length === 0) {
     // No server-side prompts — the caller should focus the API key field.
     return "input"
