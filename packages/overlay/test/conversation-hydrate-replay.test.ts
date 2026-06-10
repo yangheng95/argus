@@ -56,7 +56,6 @@ afterEach(() => {
   cancelConversationReplay()
   __setHostTransportForTest(undefined)
   resetWriter()
-  setBoardStore("selectedTaskID", "")
   setBoardStore("selectedSource", null)
 })
 
@@ -125,7 +124,7 @@ test("hydration replay projects persisted executor output into the card tree", (
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", "tsk_hydrate")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_hydrate" })
 
   replayTaskEventToTree({
     event_id: "pev_1",
@@ -154,7 +153,6 @@ test("hydration replay projects persisted executor output into the card tree", (
 
 test("hydrateTaskConversation waits for persisted event replay before returning resume sequence", async () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_replay")
   setBoardStore("selectedSource", { kind: "task", id: "tsk_replay" })
 
   let resolveReplayPage!: (body: unknown) => void
@@ -245,7 +243,6 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
 
 test("hydrateTaskConversation preserves agent rail records until the replacement view arrives", async () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_preserve_agents")
   setBoardStore("selectedSource", { kind: "task", id: "tsk_preserve_agents" })
   hydrateConversationAgentView("task:tsk_preserve_agents", {
     sessions: [
@@ -325,7 +322,6 @@ test("hydrateTaskConversation preserves agent rail records until the replacement
 
 test("hydrateTaskConversation renders the live tail first and prepends older history on demand", async () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_lazy")
   setBoardStore("selectedSource", { kind: "task", id: "tsk_lazy" })
   const requests: TransportRequest[] = []
 
@@ -351,7 +347,16 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
       channel: "integrity",
       time: { created: 1_776_000_000_100 },
     },
-    parts: [{ id: "part_old", sessionID: "ses_old", messageID: "msg_old", type: "text", text: "Older history." }],
+    parts: [
+      {
+        id: "part_old",
+        sessionID: "ses_old",
+        messageID: "msg_old",
+        resolvedRole: "integrity",
+        type: "text",
+        text: "Older history.",
+      },
+    ],
   }
   const latestMessage = {
     info: {
@@ -456,10 +461,11 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
     "assistant:session:ses_root:message:msg_latest",
   ])
   expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_old", "ses_root"])
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("integrity:session:ses_old")
-  expect(cardTreeStore.cards["integrity:session:ses_old"]).toBeUndefined()
+  const oldCardID = "integrity:session:ses_old"
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(oldCardID)
+  expect(cardTreeStore.cards[oldCardID]).toBeUndefined()
 
-  await expect(loadConversationHistoryUntilCard("integrity:session:ses_old", "tsk_lazy")).resolves.toBe(true)
+  await expect(loadConversationHistoryUntilCard(oldCardID, "tsk_lazy")).resolves.toBe(true)
   expect(cardTreeStore.order.filter((id) => id !== "ctx:user-request")).toEqual([
     "integrity:session:ses_old",
     "assistant:session:ses_root:message:msg_latest",
@@ -469,7 +475,6 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
 
 test("history paging replays lifecycle-only frontend agent cards", async () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_lifecycle_history")
   setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_history" })
   const requests: TransportRequest[] = []
   const cardID = "frontend-research:session:ses_frontend_lifecycle"
@@ -634,7 +639,6 @@ test("history paging replays lifecycle-only frontend agent cards", async () => {
 
 test("history paging continues when a goal phase card exists but its target message is not loaded", async () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_phase_history")
   setBoardStore("selectedSource", { kind: "task", id: "tsk_phase_history" })
   const requests: TransportRequest[] = []
   const phaseCardID = "step:gol_phase:build:phase:build"
@@ -840,7 +844,6 @@ test("history paging continues when a goal phase card exists but its target mess
 
 test("goal phase history can hydrate a build session directly by session id", async () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_phase_session")
   setBoardStore("selectedSource", { kind: "task", id: "tsk_phase_session" })
   const requests: TransportRequest[] = []
   const phaseCardID = "step:gol_phase_session:build:phase:build"
@@ -1043,7 +1046,6 @@ test("goal phase history can hydrate a build session directly by session id", as
 
 test("session-scoped history replays lifecycle-only frontend agent cards", async () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_lifecycle_session")
   setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_session" })
   const requests: TransportRequest[] = []
   const cardID = "frontend-research:session:ses_frontend_session"

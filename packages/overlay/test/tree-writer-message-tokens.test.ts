@@ -50,7 +50,7 @@ test("handleMessageUpdated projects info.tokens + info.cost onto the turn card",
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent(
@@ -90,7 +90,7 @@ test("handleMessageUpdated projects the actual assistant model from message info
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent(
@@ -119,7 +119,7 @@ test("grouped assistant card displays latest real model from grouped messages", 
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent(
@@ -158,7 +158,7 @@ test("grouped assistant card clears model when latest assistant message has no r
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent(
@@ -191,7 +191,7 @@ test("handleMessageUpdated leaves card.usage unset for assistant messages with z
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   // The engine creates the message row eagerly with zero counters
@@ -223,7 +223,7 @@ test("hydrateConversationView restores usage and context tokens from transcript 
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   hydrateConversationView({ sessions: [{ sessionID: SID, stage: "assistant" }] }, [
@@ -265,7 +265,7 @@ test("hydrateConversationView restores actual model from transcript message info
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   hydrateConversationView({ sessions: [{ sessionID: SID, stage: "assistant" }] }, [
@@ -300,7 +300,7 @@ test("context token hint uses the latest grouped message instead of cumulative s
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent(
@@ -343,7 +343,7 @@ test("external executor cumulative usage does not masquerade as current context"
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent(
@@ -373,7 +373,7 @@ test("user messages do not get a usage chip even when tokens accidentally appear
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent(
@@ -403,7 +403,7 @@ test("user messages do not get a model chip even when provider fields accidental
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent(
@@ -431,7 +431,7 @@ test("aggregateUsageAcrossSessions sums per-message usage across multiple sessio
     interactions: [],
     goalWorkflows: [],
   } as any)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent(

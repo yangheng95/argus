@@ -121,7 +121,7 @@ function applyBoardEvent(event: FixtureEvent): boolean {
     if (Array.isArray(incomingTask.interactions)) next.interactions = incomingTask.interactions
     next.task = { ...(current.task || {}), ...incomingTask }
     setBoardStore("board", next)
-    if (incomingTask.id) setBoardStore("selectedTaskID", incomingTask.id)
+    if (incomingTask.id) setBoardStore("selectedSource", { kind: "task", id: incomingTask.id })
     return true
   }
   if (type === "interaction.requested" || type === "interaction.resolved") {
@@ -138,8 +138,9 @@ function applyBoardEvent(event: FixtureEvent): boolean {
 }
 
 export async function replay(events: FixtureEvent[], initialBoard: any): Promise<TreeSnapshot> {
+  const initialTaskID = String(initialBoard?.task?.id || "")
   setBoardStore("board", initialBoard)
-  setBoardStore("selectedTaskID", initialBoard?.task?.id || "")
+  setBoardStore("selectedSource", initialTaskID ? { kind: "task", id: initialTaskID } : null)
   resetWriter()
 
   for (const event of events) {

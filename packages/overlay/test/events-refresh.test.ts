@@ -93,7 +93,6 @@ async function waitForStreamCount(
 }
 
 function selectTaskForTest(taskID: string): void {
-  setBoardStore("selectedTaskID", taskID)
   setBoardStore("selectedSource", taskID ? { kind: "task", id: taskID } : null)
 }
 

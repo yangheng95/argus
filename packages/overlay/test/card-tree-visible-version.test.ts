@@ -19,7 +19,7 @@ const MESSAGE_ID = "msg_visible_version"
 const PART_ID = "part_visible_version"
 
 function seedPart(): void {
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   setBoardStore("board", {
     task: {
       id: TASK_ID,

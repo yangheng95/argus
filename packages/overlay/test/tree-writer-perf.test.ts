@@ -50,7 +50,7 @@ const INITIAL_BOARD = {
 
 function bootstrap() {
   setBoardStore("board", INITIAL_BOARD)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
   applyEvent({
     type: "message.updated",
@@ -126,7 +126,7 @@ function seedAssistantSession(sessionID: string, messageID: string, time: number
 
 function bootstrapExecutorWithManyCards(extraCards: number): void {
   setBoardStore("board", INITIAL_BOARD)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   const baseTime = 1_776_000_000_000
@@ -250,7 +250,7 @@ test("executor reasoning deltas do not rebuild top-level order for every token",
 
 test("new message.updated for new sessions stays cheap under many concurrent sessions", () => {
   setBoardStore("board", INITIAL_BOARD)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   const COUNT = 500

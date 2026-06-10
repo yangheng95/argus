@@ -69,14 +69,14 @@ afterEach(() => {
   resetWriter()
   setBoardStore({
     board: null,
-    selectedTaskID: "",
+    selectedSource: null,
     snapshotVersion: "",
   })
 })
 
 test("setBoardData reprojects step and phase cards immediately", () => {
   resetWriter()
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   setBoardData(boardWith("running"))
   expect(boardStore.snapshotVersion).toBe("board-revision-running")

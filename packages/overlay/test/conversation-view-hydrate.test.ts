@@ -5,7 +5,7 @@ import { hydrateConversationView, resetWriter } from "../src/services/tree-write
 
 test("hydrateConversationView routes goal-phase transcript messages into the phase card", () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_hydrate_view")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_hydrate_view" })
   setBoardStore("board", {
     task: {
       id: "tsk_hydrate_view",
@@ -102,7 +102,7 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
 
 test("hydrateConversationView uses transcript message identity for persisted goal-phase parts", () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_hydrate_persisted_parts")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_hydrate_persisted_parts" })
   setBoardStore("board", {
     task: {
       id: "tsk_hydrate_persisted_parts",
@@ -226,7 +226,7 @@ test("hydrateConversationView uses transcript message identity for persisted goa
 
 test("hydrateConversationView restores task-scope agent cards with reasoning parts", () => {
   resetWriter()
-  setBoardStore("selectedTaskID", "tsk_task_scope_hydrate")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_task_scope_hydrate" })
   setBoardStore("board", {
     task: {
       id: "tsk_task_scope_hydrate",

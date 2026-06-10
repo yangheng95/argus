@@ -7,7 +7,7 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
 }
 
-const { setBoardStore } = await import("../src/store/board")
+const { boardStore, setBoardStore } = await import("../src/store/board")
 const { applyEvent, flushBufferedPartDeltas, resetWriter, hydrateConversationView } = await import(
   "../src/services/tree-writer"
 )
@@ -148,7 +148,7 @@ test("executor sessions surface when they contain visible reasoning", () => {
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   const executorCardID = `executor:session:${EXECUTOR_SID}:message:msg_executor_reasoning`
@@ -219,7 +219,7 @@ test("non-goal agent message shells stay hidden until display content arrives", 
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   const architectCardID = "architect:session:ses_architect_blank:message:msg_architect_blank"
@@ -273,7 +273,7 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent({
@@ -355,7 +355,7 @@ test("follow-up user sessions render as plain user bubbles without boundary chro
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent({
@@ -437,7 +437,7 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
     ],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   applyEvent({
     type: "task.updated",
     properties: {
@@ -494,7 +494,7 @@ test("tree-writer projects interactions into session children and top-level card
       },
     ],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   applyEvent({
@@ -533,7 +533,7 @@ test("tree-writer projects raw Mission question events into the session card", (
     directory: "D:/repo",
   })
   setBoardStore("selectedSource", { kind: "session", id: MISSION_SID })
-  setBoardStore("selectedTaskID", "")
+  expect(boardStore.selectedSource).toEqual({ kind: "session", id: MISSION_SID })
   resetWriter()
 
   applyEvent({
@@ -592,7 +592,6 @@ test("tree-writer does not duplicate task questions from raw question events", (
     interactions: [],
   })
   setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
-  setBoardStore("selectedTaskID", TASK_ID)
   resetWriter()
 
   applyEvent({
@@ -631,7 +630,7 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   applyEvent({
     type: "message.updated",
@@ -681,7 +680,7 @@ test("channel-stamped part.updated materializes the correct session card immedia
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   // A message.part.updated arrives before any message.updated for this
   // session (high-cadence streaming race). Because the fixture now carries
@@ -785,7 +784,7 @@ test("integrity completed event materializes an integrity session card with stru
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   applyEvent({
     type: "integrity.review.completed",
@@ -866,7 +865,7 @@ test("integrity completed event can materialize before any message stream arrive
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   // The protocol event itself carries enough identity to create the
   // integrity session card even before any message/part stream arrives.
@@ -928,7 +927,7 @@ test("integrity event missing sessionID throws (schema became required)", () => 
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   expect(() =>
     applyEvent({
@@ -969,7 +968,7 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   applyEvent({
     type: "review.stream.started",
@@ -1038,7 +1037,7 @@ test("integrity reasoning chunks append byte-identical text without changing the
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   applyEvent({
     type: "review.stream.started",
@@ -1092,7 +1091,7 @@ test("resetWriter clears integrity session cards materialized from protocol even
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   applyEvent({
     type: "integrity.review.completed",
@@ -1151,7 +1150,7 @@ test("tree-writer explicitly accepts non-projected protocol events", () => {
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   const beforeOrder = [...cardTreeStore.order]
   const beforeCards = Object.keys(cardTreeStore.cards)
@@ -1224,7 +1223,7 @@ test("session.status materializes frontend research card when preparation fails 
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   const sessionID = "ses_frontend_research_prepare_failed"
   const cardID = `frontend-research:session:${sessionID}`
@@ -1270,7 +1269,7 @@ test("message arrival migrates lifecycle-only frontend card without leaving a du
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   const sessionID = "ses_frontend_design_lifecycle"
   const lifecycleCardID = `frontend-design:session:${sessionID}`
@@ -1341,7 +1340,7 @@ test("goal phase stub title is an i18n role key, not the raw phase id", () => {
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   applyEvent({
     type: "message.updated",
@@ -1426,7 +1425,7 @@ function seedTurnBoard(request: string): void {
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 }
 
@@ -2162,7 +2161,7 @@ test("interaction remains attached to the turn active at interaction time", () =
       },
     ],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_i1`
@@ -2359,7 +2358,7 @@ test("hydrate keeps consecutive same-agent messages in one card", () => {
     goalWorkflows: [],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
   const mk = (id: string, created: number, text: string) => ({
     info: {

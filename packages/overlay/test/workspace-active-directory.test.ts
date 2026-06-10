@@ -5,7 +5,8 @@ import { appStore, setAppStore } from "../src/store/app"
 import { apiUrl } from "../src/services/api"
 import { activeDirectory, closeProject } from "../src/services/workspace"
 import { startTaskListSSE, stopTaskListSSE } from "../src/services/sse"
-import { __setHostTransportForTest, type HostTransport } from "../src/services/host-transport"
+import { __setHostTransportForTest, HOST_CAPABILITIES, type HostTransport } from "../src/services/host-transport"
+import { activeTaskID } from "../src/store/board"
 
 describe("workspace active directory", () => {
   afterEach(() => {
@@ -14,7 +15,7 @@ describe("workspace active directory", () => {
     setBoardStore({
       board: null,
       tasks: [],
-      selectedTaskID: "",
+      selectedSource: null,
       pendingTasks: [],
       path: null,
       vcs: null,
@@ -69,6 +70,7 @@ describe("workspace active directory", () => {
     const nativeCommands: unknown[] = []
     __setHostTransportForTest({
       kind: "browser",
+      capabilities: HOST_CAPABILITIES.browser,
       request: async () => ({ status: 200, ok: true, headers: {}, body: null }),
       openStream: () => ({ close: () => undefined }),
       native: async (command) => {
@@ -85,7 +87,7 @@ describe("workspace active directory", () => {
       workspaceDirectory: "D:/repo/current",
     })
     setBoardStore({
-      selectedTaskID: "task_1",
+      selectedSource: { kind: "task", id: "task_1" },
       board: { task: { id: "task_1", directory: "D:/repo/current" } },
       tasks: [{ task: { id: "task_1" } }],
       pendingTasks: [{ id: "pending_1" }],
@@ -110,7 +112,8 @@ describe("workspace active directory", () => {
     closeProject()
 
     expect(activeDirectory()).toBe("")
-    expect(boardStore.selectedTaskID).toBe("")
+    expect(boardStore.selectedSource).toBeNull()
+    expect(activeTaskID()).toBe("")
     expect(boardStore.board).toBeNull()
     expect(boardStore.tasks).toEqual([])
     expect(boardStore.pendingTasks).toEqual([])
@@ -140,6 +143,7 @@ describe("workspace active directory", () => {
     let closeCalls = 0
     __setHostTransportForTest({
       kind: "browser",
+      capabilities: HOST_CAPABILITIES.browser,
       request: async () => ({ status: 200, ok: true, headers: {}, body: null }),
       openStream: () => {
         openCalls += 1

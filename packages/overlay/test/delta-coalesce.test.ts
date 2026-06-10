@@ -10,7 +10,7 @@ const SESSION_ID = "ses_delta_coalesce"
 const MESSAGE_ID = "msg_delta_coalesce"
 
 function seedBoard(): void {
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   setBoardStore("taskSequence", 0)
   setBoardStore("board", {
     task: {

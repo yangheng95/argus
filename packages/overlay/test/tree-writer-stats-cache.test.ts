@@ -47,7 +47,7 @@ const BOARD = {
 
 function bootstrap() {
   setBoardStore("board", BOARD)
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
   applyEvent({
     type: "message.updated",
@@ -471,7 +471,7 @@ test("rebuilds that detach a child clear parentID on the orphaned card", async (
     ],
     interactions: [],
   })
-  setBoardStore("selectedTaskID", TASK_ID)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   applyEvent({
     type: "task.updated",
     properties: { taskID: TASK_ID, task: { id: TASK_ID, goalWorkflows: [] } },

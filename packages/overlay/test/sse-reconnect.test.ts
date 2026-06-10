@@ -274,7 +274,6 @@ describe("startSSE stream error handling", () => {
     stopTaskListSSE()
     resetSelectedLiveCursor()
     __setHostTransportForTest(undefined)
-    setBoardStore("selectedTaskID", "")
     setBoardStore("selectedSource", null)
     setBoardStore("taskSequence", 0)
     setBoardStore("board", null)
@@ -304,7 +303,6 @@ describe("startSSE stream error handling", () => {
       } satisfies HostTransport
 
       __setHostTransportForTest(transport)
-      setBoardStore("selectedTaskID", "tsk_error")
       setBoardStore("selectedSource", { kind: "task", id: "tsk_error" })
 
       startSSE({ kind: "task", id: "tsk_error" })
@@ -353,7 +351,6 @@ describe("startSSE stream error handling", () => {
 
       try {
         __setHostTransportForTest(transport)
-        setBoardStore("selectedTaskID", "tsk_expired")
         setBoardStore("selectedSource", { kind: "task", id: "tsk_expired" })
         setBoardStore("taskSequence", 6)
 
@@ -453,7 +450,6 @@ describe("startSSE stream error handling", () => {
 
       try {
         __setHostTransportForTest(transport)
-        setBoardStore("selectedTaskID", "tsk_watchdog")
         setBoardStore("selectedSource", { kind: "task", id: "tsk_watchdog" })
         setBoardStore("taskSequence", 41)
 
@@ -498,7 +494,6 @@ describe("startSSE stream error handling", () => {
     } satisfies HostTransport
 
     __setHostTransportForTest(transport)
-    setBoardStore("selectedTaskID", "tsk_same")
     setBoardStore("selectedSource", { kind: "task", id: "tsk_same" })
     setBoardStore("taskSequence", 77)
     setBoardStore("board", {
