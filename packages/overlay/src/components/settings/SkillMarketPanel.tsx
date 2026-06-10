@@ -6,7 +6,9 @@
 // • Skill market catalog with install / open-site actions
 // All CRUD operations are self-contained — no dependency on static HTML dialogs.
 
+import * as Select from "@kobalte/core/select"
 import { createEffect, createSignal, createMemo, For, onCleanup, Show } from "solid-js"
+import type { JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { t } from "../../utils/i18n"
 import { apiJson } from "../../services/api"
@@ -228,6 +230,11 @@ function isRemoteUrl(value: string): boolean {
 type ExtensionPanelMode = "skill" | "mcp" | "skill-market"
 const MCP_STATUS_REFRESH_INTERVAL_MS = 1_000
 
+interface FormSelectOption {
+  value: string
+  label: string
+}
+
 function PanelActionButton(props: {
   icon: IconName
   label: string
@@ -256,11 +263,79 @@ function PanelActionButton(props: {
   )
 }
 
+function FormSelectOptionItem(props: Select.SelectRootItemComponentProps<FormSelectOption>): JSX.Element {
+  const option = () => props.item.rawValue
+  return (
+    <Select.Item item={props.item} class="oc-select-option settings-form-select-option" data-value={option().value}>
+      <Select.ItemLabel>{option().label}</Select.ItemLabel>
+      <Select.ItemIndicator class="oc-select-indicator">
+        <Icon name="status-completed" size={12} />
+      </Select.ItemIndicator>
+    </Select.Item>
+  )
+}
+
+function FormSelect(props: {
+  value: string
+  options: FormSelectOption[]
+  ariaLabel: string
+  onChange: (value: string) => void
+}): JSX.Element {
+  const selectedOption = () => props.options.find((option) => option.value === props.value) ?? props.options[0] ?? null
+  const setSelectedOption = (option: FormSelectOption | null) => {
+    if (!option || option.value === props.value) return
+    props.onChange(option.value)
+  }
+  return (
+    <Select.Root<FormSelectOption>
+      class="settings-form-select"
+      options={props.options}
+      optionValue="value"
+      optionTextValue="label"
+      value={selectedOption()}
+      onChange={setSelectedOption}
+      itemComponent={FormSelectOptionItem}
+      disallowEmptySelection
+      gutter={4}
+      sameWidth
+    >
+      <Select.Trigger class="field-input oc-select-trigger settings-form-select-trigger" aria-label={props.ariaLabel}>
+        <Select.Value<FormSelectOption>>
+          {(state) => <span>{state.selectedOption()?.label ?? ""}</span>}
+        </Select.Value>
+        <Select.Icon>
+          <Icon name="caret-down" size={12} />
+        </Select.Icon>
+      </Select.Trigger>
+      <Select.HiddenSelect aria-label={props.ariaLabel} />
+      <Select.Portal>
+        <Select.Content class="oc-select-content settings-form-select-content">
+          <Select.Listbox class="oc-select-listbox settings-form-select-listbox" />
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
+  )
+}
+
 function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: boolean; compact?: boolean }) {
   const nativeCommands = getHostTransport().capabilities.nativeCommands
   const canOpenLocalPath = createMemo(() => nativeCommands["open-path"])
   const canOpenRemoteUrl = createMemo(() => nativeCommands["open-url"])
   const canPickSkillDirectory = createMemo(() => nativeCommands["workspace.pickDir"])
+  const skillSourceOptions = (): FormSelectOption[] => [
+    { value: "path", label: t("skill.source.path") },
+    { value: "url", label: t("skill.source.url") },
+    { value: "git", label: t("skill.source.git") },
+  ]
+  const skillPolicyOptions = (): FormSelectOption[] => [
+    { value: "ask", label: t("skill.policy.ask") },
+    { value: "allow", label: t("skill.policy.allow") },
+    { value: "deny", label: t("skill.policy.deny") },
+  ]
+  const mcpTypeOptions = (): FormSelectOption[] => [
+    { value: "remote", label: t("mcp.type.remote") },
+    { value: "local", label: t("mcp.type.local") },
+  ]
   const [notice, setNotice] = createSignal("")
   const [noticeStatus, setNoticeStatus] = createSignal<"active" | "error" | "warn">("error")
   const [loading, setLoading] = createSignal(false)
@@ -667,15 +742,12 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
               <div class="config-inline-form">
                 <label class="field">
                   <span class="field-label">{t("skill.source_type")}</span>
-                  <select
-                    class="field-input"
+                  <FormSelect
                     value={skillForm.type}
-                    onChange={(e) => setSkillForm("type", e.currentTarget.value as any)}
-                  >
-                    <option value="path">{t("skill.source.path")}</option>
-                    <option value="url">{t("skill.source.url")}</option>
-                    <option value="git">{t("skill.source.git")}</option>
-                  </select>
+                    options={skillSourceOptions()}
+                    ariaLabel={t("skill.source_type")}
+                    onChange={(value) => setSkillForm("type", value as any)}
+                  />
                 </label>
                 <label class="field">
                   <span class="field-label">{t("skill.value")}</span>
@@ -696,15 +768,12 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
                 </label>
                 <label class="field">
                   <span class="field-label">{t("skill.policy")}</span>
-                  <select
-                    class="field-input"
+                  <FormSelect
                     value={skillForm.policy}
-                    onChange={(e) => setSkillForm("policy", e.currentTarget.value as any)}
-                  >
-                    <option value="ask">{t("skill.policy.ask")}</option>
-                    <option value="allow">{t("skill.policy.allow")}</option>
-                    <option value="deny">{t("skill.policy.deny")}</option>
-                  </select>
+                    options={skillPolicyOptions()}
+                    ariaLabel={t("skill.policy")}
+                    onChange={(value) => setSkillForm("policy", value as any)}
+                  />
                 </label>
                 <div class="dialog-actions compact">
                   <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={() => setShowAddSkill(false)}>
@@ -841,14 +910,12 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
                 </label>
                 <label class="field">
                   <span class="field-label">{t("mcp.type")}</span>
-                  <select
-                    class="field-input"
+                  <FormSelect
                     value={mcpForm.type}
-                    onChange={(e) => setMcpForm("type", e.currentTarget.value as any)}
-                  >
-                    <option value="remote">{t("mcp.type.remote")}</option>
-                    <option value="local">{t("mcp.type.local")}</option>
-                  </select>
+                    options={mcpTypeOptions()}
+                    ariaLabel={t("mcp.type")}
+                    onChange={(value) => setMcpForm("type", value as any)}
+                  />
                 </label>
                 <Show when={mcpForm.type === "remote"}>
                   <label class="field">

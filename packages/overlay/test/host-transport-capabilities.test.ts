@@ -100,6 +100,12 @@ describe("HostTransport capability contract", () => {
     expect(skillMarketPanel).toContain("canPickSkillDirectory()")
     expect(skillMarketPanel).toContain("canOpenLocalPath()")
     expect(skillMarketPanel).toContain("canOpenRemoteUrl()")
+    expect(skillMarketPanel).toContain('import * as Select from "@kobalte/core/select"')
+    expect(skillMarketPanel).toContain("<Select.Root<FormSelectOption>")
+    expect(skillMarketPanel).toContain("function FormSelectOptionItem")
+    expect(skillMarketPanel).not.toContain("<select")
+    expect(skillMarketPanel).not.toContain("<option")
+    expect(skillMarketPanel).not.toContain("<optgroup")
 
     expect(main).toContain('getHostTransport().capabilities.nativeCommands["open-url"]')
     expect(main).toContain("if (!previewUrl && !canOpenExternalUrl) return")
