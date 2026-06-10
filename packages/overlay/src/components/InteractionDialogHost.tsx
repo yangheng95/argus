@@ -19,29 +19,10 @@
 
 import { createMemo, createSignal, Show } from "solid-js"
 import { boardStore } from "../store/board"
+import { pickDialogInteraction } from "../utils/interaction-dialog"
 import { t } from "../utils/i18n"
 import { InteractionCard, type InteractionData } from "./InteractionCard"
 import { Dialog } from "./primitives/Dialog"
-
-export function pickDialogInteraction(
-  interactions: InteractionData[] | null | undefined,
-  dismissed: ReadonlySet<string>,
-): InteractionData | null {
-  if (!Array.isArray(interactions)) return null
-  const pending = interactions.filter(
-    (it) => it?.status === "pending" && (it.type === "permission" || it.type === "question"),
-  )
-  if (pending.length === 0) return null
-  const sorted = [...pending].sort((a, b) => {
-    const aT = Number((a as any)?.time?.created ?? 0)
-    const bT = Number((b as any)?.time?.created ?? 0)
-    return aT - bT
-  })
-  for (const it of sorted) {
-    if (!dismissed.has(it.id)) return it
-  }
-  return null
-}
 
 export function InteractionDialogHost() {
   const [dismissed, setDismissed] = createSignal<ReadonlySet<string>>(new Set())

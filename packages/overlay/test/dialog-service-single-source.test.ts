@@ -13,6 +13,7 @@ describe("app/session dialog single source", () => {
   const dialogService = readText("src/services/dialog.ts")
   const main = readText("src/main.tsx")
   const indexHtml = readText("src/index.html")
+  const app = readText("src/components/App.tsx")
   const appHost = readText("src/components/AppDialogHost.tsx")
   const sessionHost = readText("src/components/SessionDialogHost.tsx")
   const goalHost = readText("src/components/GoalDialogHost.tsx")
@@ -39,11 +40,18 @@ describe("app/session dialog single source", () => {
     expect(dialogService).toContain('setDialogStore("session"')
   })
 
-  test("main mounts host components instead of binding close buttons", () => {
-    expect(main).toContain("render(() => <AppDialogHost />, appDialogHost)")
-    expect(main).toContain("render(() => <SessionDialogHost />, sessionDialogHost)")
-    expect(main).toContain("render(() => <GoalDialogHost />, goalDialogHost)")
-    expect(main).toContain("render(() => <ConfigDialogHost />, configDialogHost)")
+  test("App owns host components instead of main binding close buttons", () => {
+    expect(main).toContain('import { App } from "./components/App"')
+    expect(main).toContain("render(() => <App />, host)")
+    expect(main).toContain("ensureOverlayAppHost()")
+    expect(app).toContain("<AppDialogHost />")
+    expect(app).toContain("<SessionDialogHost />")
+    expect(app).toContain("<GoalDialogHost />")
+    expect(app).toContain("<ConfigDialogHost />")
+    expect(main).not.toContain("render(() => <AppDialogHost")
+    expect(main).not.toContain("render(() => <SessionDialogHost")
+    expect(main).not.toContain("render(() => <GoalDialogHost")
+    expect(main).not.toContain("render(() => <ConfigDialogHost")
     expect(main).not.toContain("btnCloseSession")
     expect(main).not.toContain("installAppDialogBridge")
     expect(main).not.toContain("installGoalFormHandlers")
@@ -51,12 +59,13 @@ describe("app/session dialog single source", () => {
     expect(main).not.toContain('document.getElementById("configSidebar")?.addEventListener("click"')
   })
 
-  test("config dialog host is mounted before async init can block settings menus", () => {
-    const ensureIndex = main.indexOf("ensureConfigDialogHost()")
+  test("App host is mounted before async init can block settings menus", () => {
+    const ensureIndex = main.indexOf("ensureOverlayAppHost()")
     const initIndex = main.indexOf("await initApp({")
     expect(ensureIndex).toBeGreaterThanOrEqual(0)
     expect(initIndex).toBeGreaterThanOrEqual(0)
     expect(ensureIndex).toBeLessThan(initIndex)
+    expect(app).toContain('id="configDialogHost"')
   })
 
   test("index html no longer contains static app/session/goal/config dialog shells", () => {

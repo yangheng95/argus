@@ -6,7 +6,7 @@
  * Two layers (per project rule 36):
  *   1. Behaviour test for `pickDialogInteraction` — the queue / dismiss
  *      selector that decides which interaction the dialog shows.
- *   2. Adoption guard — the host is registered in main.tsx alongside the
+ *   2. Adoption guard — the host is registered in App alongside the
  *      other dialog hosts, and reuses <InteractionCard> as the body (single
  *      source for interaction rendering, rules 8 / 9).
  */
@@ -15,7 +15,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-import { pickDialogInteraction } from "../src/components/InteractionDialogHost"
+import { pickDialogInteraction } from "../src/utils/interaction-dialog"
 import type { InteractionData } from "../src/components/InteractionCard"
 
 const OVERLAY_ROOT = join(import.meta.dir, "../")
@@ -82,15 +82,22 @@ describe("pickDialogInteraction", () => {
 })
 
 describe("InteractionDialogHost — wiring", () => {
-  test("host is registered in main.tsx alongside the other dialog hosts", () => {
+  test("host is registered in App alongside the other overlay hosts", () => {
     const main = readText(MAIN_SOURCE)
-    expect(main).toContain('import { InteractionDialogHost } from "./components/InteractionDialogHost"')
-    expect(main).toContain("<InteractionDialogHost />")
-    expect(main).toContain('interactionDialogHost.id = "interactionDialogHost"')
+    const app = readText(join(OVERLAY_ROOT, "src/components/App.tsx"))
+    expect(main).not.toContain('import { InteractionDialogHost } from "./components/InteractionDialogHost"')
+    expect(main).not.toContain('interactionDialogHost.id = "interactionDialogHost"')
+    expect(app).toContain('import { InteractionDialogHost } from "./InteractionDialogHost"')
+    expect(app).toContain("<InteractionDialogHost />")
+    expect(app).toContain('id="interactionDialogHost"')
   })
 
   test("host renders the shared <InteractionCard> (single source for interaction UI)", () => {
     const source = readText(HOST_SOURCE)
+    const selector = readText(join(OVERLAY_ROOT, "src/utils/interaction-dialog.ts"))
+    expect(source).toContain('from "../utils/interaction-dialog"')
+    expect(source).not.toContain("export function pickDialogInteraction")
+    expect(selector).toContain("export function pickDialogInteraction")
     expect(source).toContain("InteractionCard")
     expect(source).toContain("<InteractionCard")
     expect(source).toContain("<Dialog")

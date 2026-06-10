@@ -5,6 +5,7 @@
 
 import { render } from "solid-js/web"
 import { createEffect, createRoot, createSignal, untrack } from "solid-js"
+import { App } from "./components/App"
 import { Conversation } from "./components/Conversation"
 import { TaskList } from "./components/TaskList"
 import { Board } from "./components/Board"
@@ -57,15 +58,7 @@ import {
   PANEL_PANE_CONFIG,
 } from "./services/pane"
 import { panelMessage } from "./services/chat"
-import { ConnectionBanner } from "./components/ConnectionBanner"
-import { CommandPalette } from "./components/CommandPalette"
 import { NotificationCenter } from "./components/NotificationCenter"
-import { AppDialogHost } from "./components/AppDialogHost"
-import { InteractionDialogHost } from "./components/InteractionDialogHost"
-import { SessionDialogHost } from "./components/SessionDialogHost"
-import { GoalDialogHost } from "./components/GoalDialogHost"
-import { ConfigDialogHost } from "./components/ConfigDialogHost"
-import { WorkspaceOnboardingDialog } from "./components/WorkspaceOnboardingDialog"
 import { waitForLogDrain, AppLog } from "./utils/log"
 import { teardownApp } from "./services/init"
 import { stopTimers } from "./services/sync"
@@ -80,7 +73,6 @@ import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
 import { isCodingAssistantSource, selectCodingAssistantSession } from "./services/coding-assistant"
 import { openImagePreview } from "./services/image-preview"
-import { ImagePreviewHost } from "./components/ImagePreview"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -847,6 +839,20 @@ installGlobalBridges()
 // translation dictionary.
 await loadAllLocales()
 await setLocale(localeTag())
+
+function ensureOverlayAppHost(): void {
+  if (document.getElementById("overlayAppHost")) return
+  const host = document.createElement("div")
+  host.id = "overlayAppHost"
+  document.body.appendChild(host)
+  const dispose = render(() => <App />, host)
+  disposers.push(() => {
+    dispose()
+    host.remove()
+  })
+}
+
+ensureOverlayAppHost()
 
 // ── Mount: NotificationCenter ──
 // Keep the in-app notification layer alive before any async boot work, so
@@ -1765,94 +1771,27 @@ installSystemThemeListener(() => applyTheme(settingsStore.theme))
 // script calls `ensureConfigHost()` first so it can open the dialog
 // even when the rest of the app is offline.
 if (import.meta.env.DEV) {
-  let configHostMounted = false
   function ensureConfigHost(): void {
-    if (configHostMounted) return
-    if (document.getElementById("configDialogHost")) {
-      configHostMounted = true
-      return
-    }
-    const host = document.createElement("div")
-    host.id = "configDialogHost"
-    document.body.appendChild(host)
-    render(() => <ConfigDialogHost />, host)
-    configHostMounted = true
+    ensureOverlayAppHost()
   }
-  let goalHostMounted = false
   function ensureGoalHost(): void {
-    if (goalHostMounted) return
-    if (document.getElementById("goalDialogHost")) {
-      goalHostMounted = true
-      return
-    }
-    const host = document.createElement("div")
-    host.id = "goalDialogHost"
-    document.body.appendChild(host)
-    render(() => <GoalDialogHost />, host)
-    goalHostMounted = true
+    ensureOverlayAppHost()
   }
   ;(window as any).__OC_DEV__ = { openConfigDialog, ensureConfigHost, openGoalDialog, ensureGoalHost }
 }
 
 // ── Init ──
 
-function ensureAppDialogHost(): void {
-  if (document.getElementById("appDialogHost")) return
-  const appDialogHost = document.createElement("div")
-  appDialogHost.id = "appDialogHost"
-  document.body.appendChild(appDialogHost)
-  render(() => <AppDialogHost />, appDialogHost)
-}
-
-function ensureConfigDialogHost(): void {
-  if (document.getElementById("configDialogHost")) return
-  const configDialogHost = document.createElement("div")
-  configDialogHost.id = "configDialogHost"
-  document.body.appendChild(configDialogHost)
-  render(() => <ConfigDialogHost />, configDialogHost)
-}
-
 ;(window as any).__overlayInitSettled = false
 void (async () => {
   try {
-    ensureAppDialogHost()
-    ensureConfigDialogHost()
+    ensureOverlayAppHost()
     await initApp({
       onSettingsLoaded: () => {
         setSettingsHydrated(true)
       },
     })
     renderAboutVersion()
-    const connBannerHost = document.createElement("div")
-    connBannerHost.id = "connectionBannerHost"
-    document.body.appendChild(connBannerHost)
-    render(() => <ConnectionBanner />, connBannerHost)
-    const cmdkHost = document.createElement("div")
-    cmdkHost.id = "commandPaletteHost"
-    document.body.appendChild(cmdkHost)
-    render(() => <CommandPalette />, cmdkHost)
-    const sessionDialogHost = document.createElement("div")
-    sessionDialogHost.id = "sessionDialogHost"
-    document.body.appendChild(sessionDialogHost)
-    render(() => <SessionDialogHost />, sessionDialogHost)
-    ensureAppDialogHost()
-    const interactionDialogHost = document.createElement("div")
-    interactionDialogHost.id = "interactionDialogHost"
-    document.body.appendChild(interactionDialogHost)
-    render(() => <InteractionDialogHost />, interactionDialogHost)
-    const goalDialogHost = document.createElement("div")
-    goalDialogHost.id = "goalDialogHost"
-    document.body.appendChild(goalDialogHost)
-    render(() => <GoalDialogHost />, goalDialogHost)
-    ensureConfigDialogHost()
-    const imagePreviewHost = document.createElement("div")
-    imagePreviewHost.id = "imagePreviewHost"
-    document.body.appendChild(imagePreviewHost)
-    render(() => <ImagePreviewHost />, imagePreviewHost)
-    const onboardingHost = document.createElement("div")
-    onboardingHost.id = "workspaceOnboardingHost"
-    document.body.appendChild(onboardingHost)
-    render(() => <WorkspaceOnboardingDialog />, onboardingHost)
   } catch (error) {
     reportOverlayRuntimeError("initApp", error)
   } finally {
