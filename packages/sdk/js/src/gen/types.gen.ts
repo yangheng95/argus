@@ -11456,6 +11456,22 @@ export type TaskOperatorModelContextErrors = {
    * Not found
    */
   404: NotFoundError
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancelledMessageError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskOperatorModelContextError = TaskOperatorModelContextErrors[keyof TaskOperatorModelContextErrors]

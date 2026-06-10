@@ -32,6 +32,17 @@ describe("app routes", () => {
     expect(paths["/task/{taskID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"]).toBeDefined()
   })
 
+  test("Server.openapi documents task operator model context conflict errors", async () => {
+    const spec = await Server.openapi()
+    const response = spec.paths?.["/task/{taskID}/operator-model-context"]?.get?.responses?.[409]
+    const schemas = response?.content?.["application/json"]?.schema?.anyOf ?? []
+    const names = schemas.map((schema: { properties?: { name?: { const?: string } } }) => schema.properties?.name?.const)
+
+    expect(response?.description).toBe("Conflict")
+    expect(names).toContain("ReplyTargetEnvelopeMissingError")
+    expect(names).toContain("TaskCancelledMessageError")
+  })
+
   test("Server.openapi documents directory query for project-scoped routes only once", async () => {
     const spec = await Server.openapi()
     const paths = spec.paths ?? {}
