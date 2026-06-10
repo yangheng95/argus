@@ -7,6 +7,7 @@ import {
   createBrowserPreviewProcessOutputMaterializer,
   extractBrowserPreviewUrlFromText,
   extractBrowserPreviewUrlsFromText,
+  persistBrowserPreviewTargetFromProcessOutput,
 } from "../../src/browser-preview/extract"
 import { findRecentBrowserPreviewTargets, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
@@ -147,6 +148,36 @@ describe("browser preview target resolver", () => {
           async ask() {},
         },
       )
+
+      expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([previewUrl])
+    } finally {
+      preview.stop(true)
+    }
+  })
+
+  test("browser MCP navigation result materializes a task preview target", async () => {
+    await using tmp = await tmpdir()
+    const preview = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return new Response("<!doctype html><title>Browser MCP Preview</title>", {
+          headers: { "content-type": "text/html" },
+        })
+      },
+    })
+    const taskID = await seedTask(tmp.path)
+    try {
+      const previewUrl = `http://127.0.0.1:${preview.port}/world-economy/`
+
+      await persistBrowserPreviewTargetFromProcessOutput({
+        taskID,
+        output: JSON.stringify({
+          url: previewUrl,
+          title: "World Economy",
+          loadStatus: "full",
+        }),
+      })
 
       expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([previewUrl])
     } finally {
