@@ -70,6 +70,8 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("BrowserPreviewCandidateOption")
   expect(component).toContain("browser-preview-viewport-controls")
   expect(component).toContain('data-orientation="horizontal"')
+  expect(component).toContain("onValueChange={(value) => setViewportID(value as BrowserPreviewViewportID)}")
+  expect(component).not.toContain("onClick={() => setViewportID(item.id)}")
   expect(component).not.toContain("browser-preview-viewport-layout")
   expect(component).not.toContain("browser-preview-viewport-tab-row")
   expect(component).not.toContain("browser-preview-visibility-toggles")

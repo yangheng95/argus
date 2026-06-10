@@ -17,7 +17,7 @@ export interface TabsProps
 }
 
 export interface TabProps
-  extends Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList" | "role" | "type"> {
+  extends Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList" | "role" | "type" | "onClick"> {
   value: string
   active: boolean
   size: TabsSize

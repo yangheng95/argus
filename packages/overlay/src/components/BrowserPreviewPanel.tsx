@@ -227,7 +227,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                       size="sm"
                       tone="neutral"
                       data-ui="browser-preview-viewport"
-                      onClick={() => setViewportID(item.id)}
                     >
                       {viewportLabel(item.id)}
                     </Tab>
