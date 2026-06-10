@@ -17,6 +17,7 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   const service = readText("src/services/file-workbench.ts")
   const html = readText("src/index.html")
   const main = readText("src/main.tsx")
+  const app = readText("src/components/App.tsx")
   const inspectorCss = readText("src/styles/surfaces/inspector.css")
   const activityCss = readText("src/styles/surfaces/activity.css")
   const workspaceCss = readText("src/styles/surfaces/workspace.css")
@@ -48,7 +49,9 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(main).toContain(
     '<FileExplorerPanel active={() => isCenterWorkbenchPanelOpen("explorer")} directory={activeDirectory}',
   )
-  expect(main).toContain("<FileEditorPane")
+  expect(app).toContain('id="solidFileEditorMount"')
+  expect(app).toContain("<FileEditorPane />")
+  expect(main).not.toContain("<FileEditorPane")
   expect(main).toContain("<FileChangesPanel")
   expect(main).toContain('workflow: document.getElementById("centerWorkbenchWorkflow")')
   expect(main).toContain("diffOpen={workspaceOpen()}")
@@ -62,7 +65,7 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(main).not.toContain('setChatView("file")')
   expect(main).not.toContain('setChatView("diff")')
   expect(main).toContain("closeFileEditor()")
-  expect(main).toContain("fileEditorMountEl")
+  expect(main).not.toContain("fileEditorMountEl")
   expect(main).not.toContain("hidden = !fileWorkbenchOpen()")
   expect(main).not.toContain('document.getElementById("workspaceResizer")')
   expect(main).not.toContain('if (fileWorkbenchOpen() || workspaceOpen()) setRightPanelTab("files")')

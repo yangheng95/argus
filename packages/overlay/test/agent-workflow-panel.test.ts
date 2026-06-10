@@ -106,11 +106,13 @@ test("right-panel AgentWorkflowPanel is retired in favor of ConversationAgentRai
 
   const html = readFileSync(join(import.meta.dir, "../src/index.html"), "utf8")
   const main = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
+  const app = readFileSync(join(import.meta.dir, "../src/components/App.tsx"), "utf8")
   expect(html).not.toContain("solidAgentWorkflowMount")
   expect(html).not.toContain("rightPanelWorkflow")
   expect(html).not.toContain("styles/surfaces/agent-workflow.css")
   expect(main).not.toContain("AgentWorkflowPanel")
-  expect(main).toContain("ConversationAgentRail")
+  expect(main).not.toContain("ConversationAgentRail")
+  expect(app).toContain("ConversationAgentRail")
 })
 
 test("agent workflow projection maps hidden build phase to the rendered owner step", () => {
