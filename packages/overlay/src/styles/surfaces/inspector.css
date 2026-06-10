@@ -118,10 +118,14 @@
   border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
 }
 
-.browser-preview-candidate-select select {
+.browser-preview-candidate-trigger {
   min-width: 0;
   min-height: calc(28px * var(--ui-scale));
   flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(6px * var(--ui-scale));
   border: 0;
   outline: 0;
   background: transparent;
@@ -129,11 +133,70 @@
   font: inherit;
   font-size: var(--ui-font-control);
   line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
 }
 
-.browser-preview-candidate-select select:disabled {
+.browser-preview-candidate-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-preview-candidate-trigger:disabled {
   color: var(--text-soft);
   opacity: 1;
+  cursor: default;
+}
+
+.browser-preview-candidate-content {
+  z-index: 1000;
+  min-width: min(calc(420px * var(--ui-scale)), calc(100vw - 32px));
+  max-width: min(calc(560px * var(--ui-scale)), calc(100vw - 32px));
+  max-height: min(calc(280px * var(--ui-scale)), calc(100vh - 96px));
+  overflow: auto;
+  padding: calc(4px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--dialog-bg);
+  color: var(--text);
+  box-shadow: 0 calc(12px * var(--ui-scale)) calc(28px * var(--ui-scale)) rgba(0, 0, 0, 0.24);
+}
+
+.browser-preview-candidate-listbox {
+  display: grid;
+  gap: calc(2px * var(--ui-scale));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.browser-preview-candidate-option {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  color: var(--text);
+  font-size: var(--ui-font-control);
+  cursor: pointer;
+}
+
+.browser-preview-candidate-option[data-highlighted],
+.browser-preview-candidate-option:hover {
+  background: var(--surface-hover);
+}
+
+.browser-preview-candidate-option span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-preview-candidate-indicator {
+  color: var(--accent);
 }
 
 .browser-preview-controls {
