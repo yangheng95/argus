@@ -1,5 +1,5 @@
 import { Hono } from "hono"
-import { streamSSE } from "hono/streaming"
+import { streamSSE } from "../sse"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
