@@ -19055,7 +19055,7 @@
                             "diffs": {
                               "type": "array",
                               "items": {
-                                "$ref": "#/components/schemas/FileDiff"
+                                "$ref": "#/components/schemas/AcceptanceDiffSummary"
                               }
                             },
                             "artifacts": {
@@ -20004,7 +20004,7 @@
                                 "diffs": {
                                   "type": "array",
                                   "items": {
-                                    "$ref": "#/components/schemas/FileDiff"
+                                    "$ref": "#/components/schemas/AcceptanceDiffSummary"
                                   }
                                 },
                                 "artifacts": {
@@ -20114,7 +20114,7 @@
                                 "diffs": {
                                   "type": "array",
                                   "items": {
-                                    "$ref": "#/components/schemas/FileDiff"
+                                    "$ref": "#/components/schemas/AcceptanceDiffSummary"
                                   }
                                 },
                                 "artifacts": {
@@ -20224,7 +20224,7 @@
                                 "diffs": {
                                   "type": "array",
                                   "items": {
-                                    "$ref": "#/components/schemas/FileDiff"
+                                    "$ref": "#/components/schemas/AcceptanceDiffSummary"
                                   }
                                 },
                                 "artifacts": {
@@ -23115,7 +23115,7 @@
                             "diffs": {
                               "type": "array",
                               "items": {
-                                "$ref": "#/components/schemas/FileDiff"
+                                "$ref": "#/components/schemas/AcceptanceDiffSummary"
                               }
                             },
                             "artifacts": {
@@ -23225,7 +23225,7 @@
                             "diffs": {
                               "type": "array",
                               "items": {
-                                "$ref": "#/components/schemas/FileDiff"
+                                "$ref": "#/components/schemas/AcceptanceDiffSummary"
                               }
                             },
                             "artifacts": {
@@ -23335,7 +23335,7 @@
                             "diffs": {
                               "type": "array",
                               "items": {
-                                "$ref": "#/components/schemas/FileDiff"
+                                "$ref": "#/components/schemas/AcceptanceDiffSummary"
                               }
                             },
                             "artifacts": {
@@ -26782,7 +26782,7 @@
                         "diffs": {
                           "type": "array",
                           "items": {
-                            "$ref": "#/components/schemas/FileDiff"
+                            "$ref": "#/components/schemas/AcceptanceDiffSummary"
                           }
                         },
                         "artifacts": {
@@ -26945,7 +26945,7 @@
                             "diffs": {
                               "type": "array",
                               "items": {
-                                "$ref": "#/components/schemas/FileDiff"
+                                "$ref": "#/components/schemas/AcceptanceDiffSummary"
                               }
                             },
                             "artifacts": {
@@ -36796,6 +36796,31 @@
         },
         "required": [
           "ok"
+        ]
+      },
+      "AcceptanceDiffSummary": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "additions": {
+            "type": "number"
+          },
+          "deletions": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "added",
+              "deleted",
+              "modified"
+            ]
+          }
+        },
+        "required": [
+          "file"
         ]
       },
       "SessionRuntimeContractMissingError": {

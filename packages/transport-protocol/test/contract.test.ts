@@ -309,6 +309,7 @@ describe("route directory policy", () => {
       "/path",
       "/vcs",
       "/config/providers",
+      "/session/session_123/conversation",
       "/mission/wake",
       "/task/abc/browser-preview?targetID=art_1",
     ]) {
