@@ -298,15 +298,8 @@ async function submitDialogSelect(tab: Page, value: string) {
     body: document.querySelector("#appDialogBody")?.textContent || "",
     label: document.querySelector("#appDialogSelectLabel")?.textContent || "",
   }))
-  await tab.$eval(
-    "#appDialogSelect",
-    (node: HTMLSelectElement, nextValue: string) => {
-      node.value = nextValue
-      node.dispatchEvent(new Event("input", { bubbles: true }))
-      node.dispatchEvent(new Event("change", { bubbles: true }))
-    },
-    value,
-  )
+  await clickVisible(tab, "#appDialogSelect")
+  await clickVisible(tab, `.app-dialog-select-option[data-value="${value}"]`)
   await tab.click("#btnAppDialogOk")
   await tab.waitForFunction(
     (prev) => {
