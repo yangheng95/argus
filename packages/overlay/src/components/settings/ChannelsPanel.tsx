@@ -8,6 +8,7 @@ import { createSignal, createMemo, createEffect, For, Show } from "solid-js"
 import { t } from "../../utils/i18n"
 import { appStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
+import { getHostTransport } from "../../services/host-transport"
 import { nativeOpen } from "../../utils/native"
 import { Dialog } from "../primitives/Dialog"
 import { useAsyncAction } from "../../solid/async-action"
@@ -69,6 +70,8 @@ function channelStatusLabel(status: string): string {
 // ── Component ──
 
 export default function ChannelsPanel() {
+  const nativeCommands = getHostTransport().capabilities.nativeCommands
+  const canOpenTutorialDocs = createMemo(() => nativeCommands["open-url"])
   const [editingID, setEditingID] = createSignal<string | null>(null)
   const [fieldValues, setFieldValues] = createSignal<Record<string, any>>({})
   const [notice, setNotice] = createSignal("")
@@ -234,17 +237,19 @@ export default function ChannelsPanel() {
                 <span class="extension-status" data-state={item.status}>
                   {channelStatusLabel(item.status)}
                 </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  tone="neutral"
-                  title={t("channel.tutorial_hint")}
-                  aria-label={t("channel.tutorial_hint")}
-                  onClick={() => nativeOpen(channelTutorialUrl(item.id))}
-                >
-                  {t("channel.tutorial")}
-                </Button>
+                <Show when={canOpenTutorialDocs()}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    tone="neutral"
+                    title={t("channel.tutorial_hint")}
+                    aria-label={t("channel.tutorial_hint")}
+                    onClick={() => nativeOpen(channelTutorialUrl(item.id))}
+                  >
+                    {t("channel.tutorial")}
+                  </Button>
+                </Show>
                 <Button
                   type="button"
                   variant="solid"
@@ -304,17 +309,19 @@ export default function ChannelsPanel() {
                     {t("channel.tutorial_credit", { source: OPENCLAW_DOCS.credit })}
                   </small>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="md"
-                  tone="neutral"
-                  title={t("channel.tutorial_hint")}
-                  aria-label={t("channel.tutorial_hint")}
-                  onClick={() => nativeOpen(channelTutorialUrl(entry.id))}
-                >
-                  {t("channel.tutorial")}
-                </Button>
+                <Show when={canOpenTutorialDocs()}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    tone="neutral"
+                    title={t("channel.tutorial_hint")}
+                    aria-label={t("channel.tutorial_hint")}
+                    onClick={() => nativeOpen(channelTutorialUrl(entry.id))}
+                  >
+                    {t("channel.tutorial")}
+                  </Button>
+                </Show>
               </div>
 
               <For each={entry.fields}>

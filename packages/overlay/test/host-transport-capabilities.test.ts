@@ -72,6 +72,7 @@ describe("HostTransport capability contract", () => {
     const topbar = read("src/components/TopBar.tsx")
     const taskDirBar = read("src/components/TaskDirBar.tsx")
     const titlebar = read("src/components/titlebar/TitlebarMenubar.tsx")
+    const channelsPanel = read("src/components/settings/ChannelsPanel.tsx")
     const onboarding = read("src/components/WorkspaceOnboardingDialog.tsx")
     const windowControls = read("src/components/WindowControls.tsx")
     const editorLaunchers = read("src/components/WorkspaceEditorLaunchers.tsx")
@@ -85,6 +86,10 @@ describe("HostTransport capability contract", () => {
     expect(taskDirBar).toContain('openDirectory: nativeCommands["open-path"]')
     expect(taskDirBar).toContain('if (!nativeCommands["workspace.pickDir"]) return')
     expect(taskDirBar).toContain('if (!nativeCommands["open-path"]) return')
+
+    expect(channelsPanel).toContain("const nativeCommands = getHostTransport().capabilities.nativeCommands")
+    expect(channelsPanel).toContain('nativeCommands["open-url"]')
+    expect(channelsPanel).toContain("canOpenTutorialDocs()")
 
     expect(titlebar).toContain('nativeCommands["workspace.pickDir"]')
     expect(titlebar).toContain('nativeCommands["open-path"]')
