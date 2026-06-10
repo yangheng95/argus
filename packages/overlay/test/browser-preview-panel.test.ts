@@ -3,9 +3,14 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const ROOT = path.resolve(import.meta.dir, "..")
+const REPO_ROOT = path.resolve(ROOT, "../..")
 
 function readText(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8")
+}
+
+function readRepo(rel: string): string {
+  return readFileSync(path.join(REPO_ROOT, rel), "utf8")
 }
 
 test("browser preview panel uses mature primitives and task evidence-backed service", () => {
@@ -145,4 +150,23 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(css).toContain(".browser-preview-evidence-facts")
   expect(css).toContain(".browser-preview-evidence-status")
   expect(css).toContain("place-items: center")
+})
+
+test("VS Code preview contract is evidence-backed under frame-src none", () => {
+  const component = readText("src/components/BrowserPreviewPanel.tsx")
+  const service = readText("src/services/browser-preview.ts")
+  const vscodeWebview = readRepo("packages/vscode-extension/src/webview/html.ts")
+
+  expect(vscodeWebview).toContain("frame-src 'none'")
+  expect(component).not.toContain("<iframe")
+  expect(component).not.toContain("sandbox=")
+  expect(component).not.toContain("referrerPolicy=")
+  expect(component).not.toContain("canEmbedPreviewFrame")
+  expect(component).not.toContain("browser-preview-host-blocked")
+  expect(component).toContain('data-ui="browser-preview-evidence"')
+  expect(component).toContain('data-ui="browser-preview-evidence-missing"')
+  expect(component).toContain('aria-label={t("browser_preview.capture_title")}')
+  expect(component).toContain("captureTaskBrowserPreviewEvidence")
+  expect(service).toContain("targetID: input.targetID")
+  expect(service).toContain("viewportIDs: input.viewportIDs")
 })
