@@ -12,10 +12,8 @@ import { Board } from "./components/Board"
 import { Mission } from "./components/Mission"
 import { pageMode, setPageMode } from "./store/page-mode"
 import { ChatComposer } from "./components/ChatComposer"
-import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
-import { FileEditorPane } from "./components/FileEditorPane"
 import { FileChangesPanel, type FileChangesActiveView } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
@@ -905,17 +903,7 @@ if (chatScroll) {
   chatScroll.innerHTML = ""
   render(() => <Conversation container={chatScroll} />, chatScroll)
 }
-const conversationAgentRailMount = document.getElementById("solidConversationAgentRailMount")
-if (conversationAgentRailMount) {
-  conversationAgentRailMount.innerHTML = ""
-  render(() => <ConversationAgentRail />, conversationAgentRailMount)
-}
 
-const fileEditorMountEl = document.getElementById("solidFileEditorMount")
-if (fileEditorMountEl) {
-  fileEditorMountEl.innerHTML = ""
-  render(() => <FileEditorPane />, fileEditorMountEl)
-}
 
 const fileChangesMountEl = document.getElementById("solidFileChangesMount")
 if (fileChangesMountEl) {

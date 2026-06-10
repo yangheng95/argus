@@ -5,6 +5,8 @@ import { CommandPalette } from "./CommandPalette"
 import { ConnectionBadge } from "./ConnectionBadge"
 import { ConfigDialogHost } from "./ConfigDialogHost"
 import { ConnectionBanner } from "./ConnectionBanner"
+import { ConversationAgentRail } from "./ConversationAgentRail"
+import { FileEditorPane } from "./FileEditorPane"
 import { GoalDialogHost } from "./GoalDialogHost"
 import { ImagePreviewHost } from "./ImagePreview"
 import { InteractionDialogHost } from "./InteractionDialogHost"
@@ -46,6 +48,12 @@ export function App() {
       </StaticMountPortal>
       <StaticMountPortal id="solidTaskStatusMount">
         <TaskStatusHeader />
+      </StaticMountPortal>
+      <StaticMountPortal id="solidConversationAgentRailMount">
+        <ConversationAgentRail />
+      </StaticMountPortal>
+      <StaticMountPortal id="solidFileEditorMount">
+        <FileEditorPane />
       </StaticMountPortal>
       <div id="connectionBannerHost">
         <ConnectionBanner />
