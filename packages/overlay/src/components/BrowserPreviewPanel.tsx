@@ -73,7 +73,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       null,
   )
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
-  const frameUrl = createMemo(() => currentTarget()?.url)
+  const targetUrl = createMemo(() => currentTarget()?.url)
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
     const verified = verification()
     if (verified) return evidenceFromVerification(verified, viewportID())
@@ -194,7 +194,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               data-ui="browser-preview-candidate-trigger"
             >
               <Select.Value<BrowserPreviewCandidate>>
-                {(state) => <span>{state.selectedOption()?.url ?? frameUrl() ?? ""}</span>}
+                {(state) => <span>{state.selectedOption()?.url ?? targetUrl() ?? ""}</span>}
               </Select.Value>
               <Select.Icon>
                 <Icon name="caret-down" size={12} />
@@ -243,7 +243,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             tone="neutral"
             title={t("browser_preview.capture_title")}
             aria-label={t("browser_preview.capture_title")}
-            disabled={!props.taskID() || !frameUrl() || !currentTarget()?.id || verification.loading}
+            disabled={!props.taskID() || !targetUrl() || !currentTarget()?.id || verification.loading}
             onClick={captureEvidence}
           >
             <Icon name="inspect" size={13} />
@@ -330,11 +330,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               </section>
             )}
           </Match>
-          <Match when={frameUrl()}>
+          <Match when={targetUrl()}>
             <div class="browser-preview-empty" data-status="ready" data-ui="browser-preview-evidence-missing">
               <Icon name="inspect" size={18} />
               <p>{t("browser_preview.capture_title")}</p>
-              <code>{frameUrl()}</code>
+              <code>{targetUrl()}</code>
             </div>
           </Match>
           <Match when={currentTargetError()}>
