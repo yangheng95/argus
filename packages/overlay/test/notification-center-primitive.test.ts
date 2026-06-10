@@ -5,6 +5,7 @@ import { join } from "node:path"
 const SOURCE = readFileSync(join(import.meta.dir, "../src/components/NotificationCenter.tsx"), "utf8")
 const STYLES = readFileSync(join(import.meta.dir, "../src/styles/surfaces/notifications.css"), "utf8")
 const MAIN = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
+const APP = readFileSync(join(import.meta.dir, "../src/components/App.tsx"), "utf8")
 const NOTIFY = readFileSync(join(import.meta.dir, "../src/services/notify.ts"), "utf8")
 
 test("NotificationCenter routes dismiss control through the Button primitive", () => {
@@ -66,10 +67,12 @@ test("main preloads i18n before mounting translated Solid surfaces", () => {
   expect(MAIN.indexOf("await setLocale(localeTag())")).toBeLessThan(MAIN.indexOf('document.getElementById("solidMissionMount")'))
 })
 
-test("main mounts toast and workbench notification center from the same component", () => {
+test("main keeps the early toast root and App owns the workbench notification center", () => {
   expect(MAIN).toContain('<NotificationCenter surface="toast" />')
-  expect(MAIN).toContain('document.getElementById("solidNotificationCenterMount")')
-  expect(MAIN).toContain('<NotificationCenter surface="panel" />')
+  expect(MAIN).not.toContain('document.getElementById("solidNotificationCenterMount")')
+  expect(MAIN).not.toContain('<NotificationCenter surface="panel" />')
+  expect(APP).toContain('id="solidNotificationCenterMount"')
+  expect(APP).toContain('<NotificationCenter surface="panel" />')
   expect(MAIN).toContain('id: "notifications"')
   expect(MAIN).toContain('icon: "notifications"')
   expect(MAIN).toContain('labelKey: "notify.center_label"')

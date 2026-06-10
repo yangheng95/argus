@@ -1257,10 +1257,6 @@ if (boardMountEl) {
   )
 }
 
-const notificationPanelEl = document.getElementById("solidNotificationCenterMount")
-if (notificationPanelEl) {
-  render(() => <NotificationCenter surface="panel" />, notificationPanelEl)
-}
 
 // ── Mount: LogViewer (renders its own <dialog id="logDialog">) ──
 
