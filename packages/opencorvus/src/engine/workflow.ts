@@ -161,14 +161,14 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity；
- *  integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
+ *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity → visual_qa(按 frontend 修复需要)；
+ *  integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。visual_qa 是 integrity 之后的 frontend 修复/证据阶段，修后仍回 integrity。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
   description:
-    "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
+    "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity → visual_qa(按修复需要)。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "frontend_design",
@@ -233,22 +233,22 @@ const PIPELINE: MiniWorkflow = {
       phases: [{ id: "build", label: "Build", sessionKind: "build" }],
     },
     {
-      id: "visual_qa",
-      tool: "visual_qa",
-      label: "Visual QA",
-      hint: "前端视觉 GUI 还原度与功能测试阶段。GUI=Graphical User Interface，图形用户界面。消费 frontend_design/build 的 task-scoped evidence，启动真实预览，使用 Node/Playwright 或 webpage_render/evaluate/vision_judge 生成桌面/移动/交互状态证据；发现当前任务内可修复的视觉/功能缺陷时直接修复并提交 structured visual QA report。它不是 host gate，最终验收仍由 integrity 决定。",
-      scope: "task",
-      skippable: true,
-      after: ["build"],
-    },
-    {
       id: "integrity",
       tool: "integrity",
       label: "Review",
       hint: "最终系统完整性 gate：在所有 blocking goal build 完成后调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
       scope: "task",
       skippable: false,
-      after: ["build", "visual_qa"],
+      after: ["build"],
+    },
+    {
+      id: "visual_qa",
+      tool: "visual_qa",
+      label: "Visual QA",
+      hint: "post-integrity 前端 GUI 修复/证据阶段。GUI=Graphical User Interface，图形用户界面。仅在 integrity 非 pass 指向 frontend/GUI/组件/视觉或可见功能缺陷时调用；消费 integrity/frontend_design/build 的 task-scoped evidence，先修组件真实性和可见功能（例如占位/虚假图表必须替换为真实图表实现），再修布局结构，最后才做样式微调。它不是 host gate；若修改文件，完成后必须回到 integrity 复核。",
+      scope: "task",
+      skippable: true,
+      after: ["integrity"],
     },
   ],
   goalLoopStepIDs: ["build"],
@@ -395,6 +395,12 @@ function taskStepStatusByTool(
       if (!verdict) return "pending"
       return verdict === "pass" ? "completed" : "failed"
     }
+    case "visual_qa":
+      return createDecisionLog(taskID)
+        .readByPhase("visual_qa")
+        .some((entry) => entry.key === "latest_summary" || entry.key.startsWith("report_"))
+        ? "completed"
+        : "pending"
     case "build":
       // direct workflow: any run (artifact kind="run") means a build occurred
       return findRuns(taskID).length > 0 ? "completed" : "pending"

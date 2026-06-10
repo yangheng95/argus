@@ -33,13 +33,21 @@ describe("visual-qa agent", () => {
       taskTitle: "Clone page",
       taskRequest: "Replicate the visual page.",
       reason: "Need fresh desktop and mobile evidence.",
+      integrityContext: "Integrity says the fake chart must become a real data-bound chart.",
       frontendDesign: "visual_consistency_contract",
       buildEvidence: "Build report",
       previewCommand: "npm run dev",
     })
+    expect(prompt).toContain("post-integrity frontend visual GUI fidelity")
     expect(prompt).toContain("visual GUI fidelity and functional testing")
     expect(prompt).toContain("GUI means Graphical User Interface")
     expect(prompt).not.toContain("UX means User Experience")
+    expect(prompt).toContain("Integrity Review Context")
+    expect(prompt).toContain("fake chart must become a real data-bound chart")
+    expect(prompt).toContain("Repair coarse-to-fine")
+    expect(prompt).toContain("component truth and visible functionality first")
+    expect(prompt).toContain("layout/composition second")
+    expect(prompt).toContain("state-style polish last")
     expect(prompt).toContain("Frontend Design Context")
     expect(prompt).not.toContain("Frontend Research Work Packets")
     expect(prompt).toContain("Use Node for Playwright")
