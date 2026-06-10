@@ -2,6 +2,8 @@
 
 This repository has one canonical release flow.
 
+For the full package-script and artifact-shape map, see [docs/packaging.md](/docs/packaging.md).
+
 ## Source Of Truth
 
 - Release version source of truth: [packages/opencorvus/package.json](/packages/opencorvus/package.json)
@@ -42,6 +44,13 @@ The workflow does all of the following in one pipeline:
 5. Publish the `release` branch contents
 
 `build-overlays.yml` is debug-only and is not the canonical release path.
+
+Current packaging note: the canonical CI CLI package still stages overlay UI as
+a sibling `ui/` directory. The local Linux single-binary package in
+`script/package-linux-binary.ts` embeds the same UI into the executable under
+`packages/opencorvus/dist/binary/*/opencorvus`. These are different package
+shapes until the CI CLI package is migrated. The mismatch is documented in
+[docs/packaging.md](/docs/packaging.md).
 
 ## Local Release Command
 
