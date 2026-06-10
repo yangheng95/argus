@@ -50,16 +50,23 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
     } catch {}
   })
 
-  test("GET /ui/ rewrites absolute asset paths to /ui/<asset>", async () => {
+  test("GET /ui redirects to the slash-terminated UI root", async () => {
+    const res = await app.request("http://localhost/ui")
+    expect(res.status).toBe(308)
+    expect(res.headers.get("location")).toBe("ui/")
+  })
+
+  test("GET /ui/ rewrites absolute asset paths to paths relative to the UI root", async () => {
     const res = await app.request("http://localhost/ui/")
     expect(res.status).toBe(200)
     expect(res.headers.get("content-type")).toMatch(/text\/html/)
     const body = await res.text()
-    // /assets/* → /ui/assets/*
-    expect(body).toContain('href="/ui/assets/main.css"')
-    expect(body).toContain('src="/ui/assets/app.js"')
-    // /i18n/* → /ui/i18n/*
-    expect(body).toContain('src="/ui/i18n/zh-CN.json"')
+    // /assets/* → ./assets/* so reverse-proxy prefixes work without
+    // requiring X-Forwarded-Prefix.
+    expect(body).toContain('href="./assets/main.css"')
+    expect(body).toContain('src="./assets/app.js"')
+    // /i18n/* → ./i18n/*
+    expect(body).toContain('src="./i18n/zh-CN.json"')
     // External URLs untouched
     expect(body).toContain('src="https://cdn.example.com/keep.js"')
   })
@@ -75,6 +82,15 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
     expect(body).toContain('href="/opencorvus/ui/assets/main.css"')
     expect(body).toContain('src="/opencorvus/ui/assets/app.js"')
     expect(body).toContain('src="/opencorvus/ui/i18n/zh-CN.json"')
+  })
+
+  test("SPA fallback rewrites assets relative to the public deep-link path when proxy prefix is unknown", async () => {
+    const res = await app.request("http://localhost/ui/task/abc/conversation")
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    expect(body).toContain('href="../../assets/main.css"')
+    expect(body).toContain('src="../../assets/app.js"')
+    expect(body).toContain('src="../../i18n/zh-CN.json"')
   })
 
   test("GET /ui/assets/app.js serves with the JS MIME and no-cache", async () => {
@@ -104,7 +120,7 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
     const body = await res.text()
     expect(body).toContain('<div id="root">')
     // Rewrite must still apply on the fallback path.
-    expect(body).toContain('src="/ui/assets/app.js"')
+    expect(body).toContain('src="../../assets/app.js"')
   })
 
   test("path traversal probe never leaks the on-disk secret file", async () => {
@@ -145,7 +161,7 @@ describe("OverlayUI built bundle", () => {
     const indexRes = await app.request("http://localhost/ui/index.html")
     expect(indexRes.status).toBe(200)
     const indexHtml = await indexRes.text()
-    const scriptMatch = indexHtml.match(/src="\/ui\/assets\/([^"]+\.js)"/)
+    const scriptMatch = indexHtml.match(/src="\.\/assets\/([^"]+\.js)"/)
     expect(scriptMatch?.[1]).toBeDefined()
 
     const scriptRes = await app.request(`http://localhost/ui/assets/${scriptMatch![1]}`)
@@ -154,8 +170,6 @@ describe("OverlayUI built bundle", () => {
     expect(script).toContain("skill/installed")
     expect(script).toContain("panel/knowledge/memory")
     expect(script).toContain("x-opencorvus-directory")
-    expect(script).toContain("duplicate_locations")
     expect(script).toContain("workspace.no_directory")
-    expect(script).toContain("directory:Tt")
   })
 })

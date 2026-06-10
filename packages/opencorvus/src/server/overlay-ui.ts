@@ -53,9 +53,19 @@ function normalizePublicPrefix(prefix: string | undefined): string {
   return withLeadingSlash.replace(/\/+/g, "/").replace(/\/$/, "")
 }
 
+function overlayRelativeBase(reqPath: string): string {
+  const suffix = reqPath.replace(/^\/ui\/?/, "")
+  if (!suffix || suffix === "index.html") return "."
+
+  const parts = suffix.split("/").filter(Boolean)
+  const directoryDepth = reqPath.endsWith("/") ? parts.length : Math.max(0, parts.length - 1)
+  return directoryDepth === 0 ? "." : Array.from({ length: directoryDepth }, () => "..").join("/")
+}
+
 function overlayPublicBase(c: Context): string {
   const prefix = normalizePublicPrefix(c.req.header("x-forwarded-prefix"))
-  return `${prefix}/ui`
+  if (prefix) return `${prefix}/ui`
+  return overlayRelativeBase(c.req.path)
 }
 
 export namespace OverlayUI {
@@ -118,9 +128,11 @@ export namespace OverlayUI {
   export function routes(dirOverride?: string) {
     const app = new Hono()
 
-    // vite builds HTML with absolute asset paths (e.g. `/assets/...`).
-    // When served under `/ui/` or a reverse-proxied prefix such as
-    // `/opencorvus/ui/`, those paths miss the public mount point.
+    // Vite builds HTML with absolute asset paths (e.g. `/assets/...`).
+    // Prefer proxy-prefix absolute paths when the proxy reports one;
+    // otherwise emit paths relative to the current `/ui/...` document
+    // so `/opencorvus/ui/` works even when the proxy strips the prefix
+    // without sending `X-Forwarded-Prefix`.
     const rewriteHtmlAssets = (c: Context, html: string): string =>
       html.replace(/(src|href)="\/(assets|i18n)\//g, `$1="${overlayPublicBase(c)}/$2/`)
 
@@ -148,6 +160,10 @@ export namespace OverlayUI {
     }
 
     const handle = async (c: Context) => {
+      if (c.req.path.endsWith("/ui")) {
+        return c.redirect("ui/", 308)
+      }
+
       if (!dirOverride && hasEmbeddedOverlayUi()) {
         return serveEmbedded(c)
       }
