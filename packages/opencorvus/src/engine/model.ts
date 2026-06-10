@@ -383,7 +383,7 @@ export const Run = z.object({
 export const Interaction = z.object({
   id: Identifier.schema("interaction"),
   taskID: Identifier.schema("task"),
-  runID: Identifier.schema("run"),
+  runID: Identifier.schema("run").nullable(),
   sessionID: Identifier.schema("session").nullable().optional(),
   externalID: z.string(),
   type: z.enum(["permission", "question"]),
