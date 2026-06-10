@@ -59,7 +59,7 @@ async function copyRuntimePackageTree(
 ) {
   const source = resolvePackageSource(packageName, requireFrom, target)
   const destination = packageDestination(outNodeModules, packageName)
-  const copiedKey = path.resolve(destination).toLowerCase()
+  const copiedKey = fs.realpathSync(source).toLowerCase()
   if (copied.has(copiedKey)) return
   copied.add(copiedKey)
 
@@ -72,12 +72,10 @@ async function copyRuntimePackageTree(
   if (dependencyNames.length === 0) return
 
   const packageRequire = createRequire(path.join(source, "package.json"))
-  const dependencyNodeModules = path.join(destination, "node_modules")
-  await fs.promises.mkdir(dependencyNodeModules, { recursive: true })
   for (const dependencyName of dependencyNames) {
     await copyRuntimePackageTree(
       dependencyName,
-      dependencyNodeModules,
+      outNodeModules,
       packageRequire,
       target,
       copied,

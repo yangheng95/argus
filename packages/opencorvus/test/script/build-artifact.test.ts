@@ -104,6 +104,9 @@ describe("build-artifact", () => {
   test("packaged runtime keeps AWS credential providers as packaged node modules", () => {
     expect(artifactExternalModules()).toContain("@aws-sdk/credential-providers")
     expect(artifactRuntimeNodeModuleNames(currentRuntimeTarget())).toContain("@aws-sdk/credential-providers")
+    const vendorSource = readFileSync(resolve(import.meta.dir, "../../src/provider/vendor.ts"), "utf8")
+    expect(vendorSource).not.toContain('import { fromNodeProviderChain } from "@aws-sdk/credential-providers"')
+    expect(vendorSource).toContain('await import("@aws-sdk/credential-providers")')
   })
 
   test("packaged runtime keeps native Node packages as packaged node modules", () => {
@@ -175,7 +178,7 @@ describe("build-artifact", () => {
     expect(packages).not.toContain("node-screenshots-linux-arm64-musl")
   })
 
-  test("runtime node module copy keeps package-owner dependencies nested", async () => {
+  test("runtime node module copy keeps package dependencies in the runtime node_modules root", async () => {
     const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-runtime-node-modules-"))
     try {
       const target = { os: "win32", arch: "x64" } as const
@@ -183,26 +186,36 @@ describe("build-artifact", () => {
         ["sharp", "@parcel/watcher", "node-screenshots"].includes(item.name),
       )
       await copyRuntimeNodeModules(target, outdir, resolve(import.meta.dir, "../../"), nativeRuntimeModules)
-      expect(existsSync(resolve(outdir, "node_modules/sharp/node_modules/@img/colour/package.json"))).toBe(true)
-      expect(existsSync(resolve(outdir, "node_modules/sharp/node_modules/@img/sharp-win32-x64/package.json"))).toBe(
-        true,
-      )
+      expect(existsSync(resolve(outdir, "node_modules/@img/colour/package.json"))).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules/@img/sharp-win32-x64/package.json"))).toBe(true)
       expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher/wrapper.js"))).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher-win32-x64/package.json"))).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules/micromatch/package.json"))).toBe(true)
       expect(
-        existsSync(resolve(outdir, "node_modules/@parcel/watcher/node_modules/@parcel/watcher-win32-x64/package.json")),
-      ).toBe(true)
-      expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher/node_modules/micromatch/package.json"))).toBe(
-        true,
-      )
-      expect(
-        existsSync(
-          resolve(outdir, "node_modules/node-screenshots/node_modules/node-screenshots-win32-x64-msvc/package.json"),
-        ),
+        existsSync(resolve(outdir, "node_modules/node-screenshots-win32-x64-msvc/package.json")),
       ).toBe(true)
     } finally {
       await rm(outdir, { recursive: true, force: true })
     }
   })
+
+  test("runtime node module copy flattens the AWS shared dependency graph", async () => {
+    const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-aws-runtime-node-modules-"))
+    try {
+      await copyRuntimeNodeModules(currentRuntimeTarget(), outdir, resolve(import.meta.dir, "../../"), [
+        { name: "@aws-sdk/credential-providers" },
+      ])
+      expect(existsSync(resolve(outdir, "node_modules/@aws-sdk/credential-providers/package.json"))).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules/@smithy/property-provider/package.json"))).toBe(true)
+      expect(
+        existsSync(
+          resolve(outdir, "node_modules/@aws-sdk/credential-providers/node_modules/@smithy/property-provider"),
+        ),
+      ).toBe(false)
+    } finally {
+      await rm(outdir, { recursive: true, force: true })
+    }
+  }, 60000)
 
   test("runtime node module copy lets parcel watcher load through its package entrypoint", async () => {
     const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-parcel-watcher-runtime-"))
@@ -252,7 +265,7 @@ describe("build-artifact", () => {
     } finally {
       await rm(outdir, { recursive: true, force: true })
     }
-  })
+  }, 60000)
 
   test("overlay browser automation modules do not statically import browser drivers", () => {
     const files = [
@@ -288,7 +301,7 @@ describe("build-artifact", () => {
     } finally {
       await rm(outdir, { recursive: true, force: true })
     }
-  })
+  }, 60000)
 
   test("browser MCP node runtime executable name is platform specific", () => {
     expect(artifactBrowserMcpNodeExecutableName("win32")).toBe("node.exe")

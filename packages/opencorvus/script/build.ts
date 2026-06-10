@@ -27,6 +27,7 @@ import {
 } from "./build-artifact"
 import { detectArtifactNodeRuntimeHost } from "./build-host-runtime"
 import { copyRuntimeNodeModules } from "./build-runtime-node-modules"
+import { cleanBuildDist } from "./build-clean"
 
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 const modelsSnapshotPath = path.join(dir, "src/provider/models-snapshot.ts")
@@ -61,7 +62,7 @@ const buildFlavor = parseBuildFlavor(process.argv)
 // is responsible for producing the musl variants alongside the host's
 // glibc artifacts.
 const muslOnlyFlag = process.argv.includes("--musl-only")
-// --no-clean skips the `rm -rf dist` step so a follow-up single-target
+// --no-clean skips the dist cleanup step so a follow-up single-target
 // invocation (e.g. the musl docker step running after the glibc step)
 // can augment an existing dist/ without wiping the earlier artifacts.
 const noCleanFlag = process.argv.includes("--no-clean")
@@ -192,7 +193,7 @@ if (single && targets.length === 0) {
 }
 
 if (!noCleanFlag) {
-  await $`rm -rf dist`.nothrow()
+  await cleanBuildDist(path.join(dir, "dist"))
 }
 
 const binaries: Record<string, string> = {}

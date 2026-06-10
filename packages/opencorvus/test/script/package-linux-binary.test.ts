@@ -19,8 +19,15 @@ describe("package-linux-binary", () => {
   test("copies Linux ELF outputs into single-binary bundle directories", () => {
     const artifacts = resolveLinuxBinaryArtifacts("/repo")
     expect(artifacts.map((artifact) => artifact.source)).toEqual([
-      path.join("/repo", "packages", "opencorvus", "dist", "opencorvus-linux-x64", "opencorvus"),
-      path.join("/repo", "packages", "opencorvus", "dist", "opencorvus-linux-x64-baseline", "opencorvus"),
+      path.join("/repo", "packages", "opencorvus", "dist", "opencorvus-overlay-server-linux-x64", "opencorvus"),
+      path.join(
+        "/repo",
+        "packages",
+        "opencorvus",
+        "dist",
+        "opencorvus-overlay-server-linux-x64-baseline",
+        "opencorvus",
+      ),
     ])
     expect(artifacts.map((artifact) => artifact.output)).toEqual([
       path.join("/repo", "packages", "opencorvus", "dist", "binary", "opencorvus-linux-x64", "opencorvus"),
@@ -87,6 +94,13 @@ describe("package-linux-binary", () => {
       OPENCORVUS_CHANNEL: "nightly",
       OPENCORVUS_DISABLE_MODELS_FETCH: "false",
     })
+  })
+
+  test("builds the overlay-server flavor so the Linux binary starts the UI server by default", async () => {
+    const source = await Bun.file(path.resolve(import.meta.dir, "../../../../script/package-linux-binary.ts")).text()
+
+    expect(source).toContain("script/build.ts --overlay-server --single --baseline")
+    expect(source).toContain("opencorvus-overlay-server-")
   })
 
   test("parses the skip-build CLI option", () => {

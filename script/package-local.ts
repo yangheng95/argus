@@ -3,7 +3,7 @@
  * Local full-platform packaging script.
  *
  * Builds all possible platform artifacts from the current machine:
- *   - opencorvus CLI: all platforms (Bun cross-compile)
+ *   - opencorvus overlay-server sidecar: all platforms (Bun cross-compile)
  *   - overlay windows-x64: native build (Windows only)
  *   - overlay linux-x64 / linux-arm64: Docker build
  *   - overlay darwin-*: skipped (requires macOS hardware)
