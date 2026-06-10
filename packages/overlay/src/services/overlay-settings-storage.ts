@@ -1,4 +1,4 @@
-import { DEFAULT_SERVER } from "./default-server"
+import { currentDefaultServer, DEFAULT_LOCAL_SERVER_URL, DEFAULT_SERVER } from "./default-server"
 
 export type BrowserOverlaySettings = Record<string, unknown>
 
@@ -51,12 +51,17 @@ function writeOptionalJSON(key: string, value: unknown): void {
 }
 
 export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
-  const serverUrl = read("oc_server_url") || DEFAULT_SERVER
+  const storedServerUrl = read("oc_server_url")
+  const defaultServer = currentDefaultServer()
+  const serverUrl =
+    storedServerUrl && !(storedServerUrl === DEFAULT_LOCAL_SERVER_URL && defaultServer !== DEFAULT_LOCAL_SERVER_URL)
+      ? storedServerUrl
+      : defaultServer
   const autoServerRaw = read("oc_auto_server")
   const rightPanelCollapsedRaw = read("oc_right_panel_collapsed")
   return {
     serverUrl,
-    autoServer: autoServerRaw === null ? !serverUrl || serverUrl === DEFAULT_SERVER : autoServerRaw !== "false",
+    autoServer: autoServerRaw === null ? !serverUrl || serverUrl === defaultServer : autoServerRaw !== "false",
     password: read("oc_password") || "",
     username: read("oc_username") || "opencorvus",
     executor: read("oc_executor") || undefined,
