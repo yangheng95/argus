@@ -2,6 +2,14 @@ import { expect, test } from "bun:test"
 import { asSchema } from "ai"
 import { buildFrontendTemplateReport, createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
 
+const materialInventoryItems = [
+  {
+    title: "Source materials",
+    detail: "Use reference pixels, source CSS tokens, assets, and fixture data required by the frontend skeleton.",
+    source_refs: ["web-clone-source/reference.png"],
+  },
+]
+
 test("submit_frontend_template defaults missing fact_check_items during direct execution", async () => {
   const kit = createFrontendTemplateOutputTools()
 
@@ -30,6 +38,7 @@ test("submit_frontend_template defaults missing fact_check_items during direct e
       ],
       baseline_replacement_plan: [],
       material_inventory: "Quote/candle fixture data and chart visual tokens.",
+      material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "Match the observed chart workspace spacing, colors, and control density.",
       ui_data_contract: "Provide local quote and candle endpoints with deterministic mock data.",
       template_iteration_notes: ["Checked page inventory and downstream implementability."],
@@ -95,6 +104,7 @@ test("submit_frontend_template tolerates missing review fields from provider too
         },
       ],
       material_inventory: "materials",
+      material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
       ui_data_contract: "data contract",
     },
@@ -134,6 +144,7 @@ test("submit_frontend_template normalizes markdown open questions", async () => 
         },
       ],
       material_inventory: "materials",
+      material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
       ui_data_contract: "data contract",
       frontend_project: {
@@ -187,6 +198,7 @@ test("submit_frontend_template rebuilds flattened frontend_project provider args
       ],
       baseline_replacement_plan: [],
       material_inventory: "materials",
+      material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
       ui_data_contract: "data contract",
       template_iteration_notes: ["checked inventory"],
@@ -216,6 +228,8 @@ test("submit_frontend_template provider schema stays compact while preserving co
   expect(schemaText.length).toBeLessThan(12_000)
   expect(schema.properties?.final_acceptance_mode).toBeDefined()
   expect(schema.properties?.component_reuse_plan).toBeDefined()
+  expect(schema.required).toContain("material_inventory_items")
+  expect(schema.properties?.material_inventory_items).toHaveProperty("minItems", 1)
   expect(schema.properties?.frontend_project).toBeDefined()
   expect(schema.properties).not.toHaveProperty("fact_check_items")
 })
@@ -476,6 +490,7 @@ test("visual baseline report marks below-threshold measured skeleton as incomple
       ],
       baseline_replacement_plan: [],
       material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
+      material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "Current score: 81/100 (SSIM 0.8263, pixel diff 10.69%) against reference.png.",
       ui_data_contract: "Static visible source content only.",
       frontend_project: {
@@ -536,6 +551,7 @@ test("visual baseline workflow reports source baseline submissions as incomplete
       ],
       baseline_replacement_plan: [],
       material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
+      material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "95% visual similarity against web-clone-source/reference.png.",
       ui_data_contract: "Static visible source content only.",
       frontend_project: {
@@ -575,6 +591,7 @@ test("component reuse plan accepts provider naming and incomplete library hints 
     fillable_modules: "fillable modules",
     component_inventory: "component inventory",
     material_inventory: "materials",
+    material_inventory_items: materialInventoryItems,
     visual_consistency_contract: "visual contract",
     ui_data_contract: "data contract",
     frontend_project: {
@@ -702,6 +719,7 @@ test("maintainable acceptance does not synthesize a whole-page source baseline r
       },
     ],
     material_inventory: "materials",
+    material_inventory_items: materialInventoryItems,
     visual_consistency_contract: "visual contract",
     ui_data_contract: "data contract",
     frontend_project: {
@@ -799,6 +817,7 @@ test("baseline replacement project-specific reason is optional provider detail",
         },
       ],
       material_inventory: "materials",
+      material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
       ui_data_contract: "data contract",
       template_iteration_notes: ["checked inventory"],
@@ -840,6 +859,7 @@ test("submit_frontend_template closes collector against duplicate submit and lat
     ],
     baseline_replacement_plan: [],
     material_inventory: "materials",
+    material_inventory_items: materialInventoryItems,
     visual_consistency_contract: "visual contract",
     ui_data_contract: "data contract",
     template_iteration_notes: ["checked inventory"],

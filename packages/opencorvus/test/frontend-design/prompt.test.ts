@@ -21,10 +21,7 @@ import { tmpdir } from "../fixture/fixture"
 
 describe("frontend-design prompt assembly", () => {
   test("core prompt pins visual HTML skeleton restoration workflow", async () => {
-    const prompt = await fs.readFile(
-      path.join(process.cwd(), "src", "prompt", "core", "frontend-design-core.txt"),
-      "utf8",
-    )
+    const prompt = await fs.readFile(new URL("../../src/prompt/core/frontend-design-core.txt", import.meta.url), "utf8")
 
     expect(prompt).toContain("## Visual HTML Skeleton Restoration Algorithm")
     expect(prompt).toContain("Source map")
@@ -635,6 +632,13 @@ describe("frontend-design prompt assembly", () => {
           },
         ],
         material_inventory: "material inventory",
+        material_inventory_items: [
+          {
+            title: "Reference materials",
+            detail: "Use reference pixels and source artifacts needed by the frontend replica.",
+            source_refs: ["webpage-evidence/reference.png"],
+          },
+        ],
         visual_consistency_contract: "visual consistency contract",
         ui_data_contract: "UI data contract",
         template_iteration_notes: ["bounded inventory and implementation review complete"],
@@ -677,6 +681,13 @@ describe("frontend-design prompt assembly", () => {
         },
       ],
       material_inventory: "material inventory",
+      material_inventory_items: [
+        {
+          title: "Reference materials",
+          detail: "Use reference pixels and source artifacts needed by the frontend replica.",
+          source_refs: ["webpage-evidence/reference.png"],
+        },
+      ],
       visual_consistency_contract: "visual consistency contract",
       ui_data_contract: "UI data contract",
       template_iteration_notes: ["pass 1 inventory complete"],
