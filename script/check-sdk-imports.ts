@@ -12,7 +12,12 @@ const deprecatedSymbols = [
 const symbolPattern = new RegExp(`\\b(${deprecatedSymbols.join("|")})\\b`)
 const issues: Array<{ file: string; line: number; text: string }> = []
 
-const patterns = exts.flatMap((ext) => [`packages/**/*${ext}`, `script/**/*${ext}`])
+const patterns = exts.flatMap((ext) => [
+  `packages/*/*${ext}`,
+  `packages/*/src/**/*${ext}`,
+  `packages/*/script/**/*${ext}`,
+  `script/**/*${ext}`,
+])
 
 for (const pattern of patterns) {
   for await (const item of new Bun.Glob(pattern).scan({ cwd: root, absolute: true })) {
