@@ -185,6 +185,7 @@
         "codemirror": "^6.0.2",
         "diff": "catalog:",
         "highlight.js": "^11.11.1",
+        "linkify-it": "5.0.0",
         "lucide-solid": "1.17.0",
         "marked": "^17.0.1",
         "solid-js": "^1",

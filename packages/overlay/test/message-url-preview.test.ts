@@ -15,7 +15,9 @@ test("conversation and tool-output text share markdown url preview rendering", (
   const main = readText("src/main.tsx")
 
   expect(markdown).toContain("data-browser-preview-url")
+  expect(markdown).toContain("plainUrlLinkifier")
   expect(markdown).toContain("isHttpUrl(raw)")
+  expect(markdown).toContain("url()")
   expect(textPart).toContain("createStreamingTextPartModel(props, renderMarkdown)")
   expect(toolPart).toContain("<StaticTextPart text={text} />")
   expect(toolPart).toContain("<StaticTextPart text={error()} />")
