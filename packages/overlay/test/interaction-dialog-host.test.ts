@@ -1,7 +1,7 @@
 /**
- * Coverage guard for InteractionDialogHost — the modal that pops the oldest
- * pending permission/question interaction so the user can't lose the answer
- * surface in the conversation timeline / sidebar.
+ * Coverage guard for InteractionDialogHost — the dismissible overlay that
+ * pops the oldest pending permission/question interaction so the user can't
+ * lose the answer surface in the conversation timeline / sidebar.
  *
  * Two layers (per project rule 36):
  *   1. Behaviour test for `pickDialogInteraction` — the queue / dismiss
@@ -101,5 +101,6 @@ describe("InteractionDialogHost — wiring", () => {
     expect(source).toContain("InteractionCard")
     expect(source).toContain("<InteractionCard")
     expect(source).toContain("<Dialog")
+    expect(source).toContain("modal={false}")
   })
 })

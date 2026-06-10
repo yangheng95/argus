@@ -272,7 +272,6 @@ export function ImagePreviewHost() {
       open={imagePreviewState().open}
       title={imagePreviewState().alt || "Image preview"}
       onClose={closeImagePreview}
-      draggable={false}
       headerActions={
         <div class="image-preview-dialog__toolbar" role="toolbar" aria-label="Image preview controls">
           <Button
