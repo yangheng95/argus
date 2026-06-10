@@ -1248,6 +1248,10 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).toMatch(/\.extension-head:hover,\s*\.extension-head:focus-within\s*\{/)
     expect(settingsSurface).toMatch(/\.extension-block \+ \.extension-block\s*\{/)
     expect(settingsSurface).toMatch(/\.extension-row span,\s*\.extension-row small\s*\{/)
+    const titleBody = soloRuleBody(settingsSurface, ".extension-row strong")
+    expect(titleBody).toContain("display: inline-flex")
+    expect(titleBody).toContain("gap: calc(6px * var(--ui-scale))")
+    expect(titleBody).toContain("min-width: 0")
     expect(settingsSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.04\)/)
   })
 

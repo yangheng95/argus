@@ -647,6 +647,10 @@
 }
 
 .extension-row strong {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  min-width: 0;
   font-size: var(--ui-font-control);
   color: var(--text-strong);
 }
