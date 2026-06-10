@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 
 import { configure } from "../src/services/api"
 import {
+  HOST_CAPABILITIES,
   __setHostTransportForTest,
   type HostTransport,
   type NativeCommand,
@@ -10,6 +11,9 @@ import {
 } from "../src/services/host-transport"
 import { clearNotifications, notificationStore } from "../src/services/notify"
 import { DEFAULT_SETTINGS, applySettings } from "../src/store/settings"
+import { installRealOverlayI18n } from "./fixtures/i18n"
+
+installRealOverlayI18n()
 
 function installTransport(input: {
   native?: (command: NativeCommand) => Promise<unknown> | unknown
@@ -17,6 +21,7 @@ function installTransport(input: {
 }): void {
   const transport: HostTransport = {
     kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
     async request<T>(request: TransportRequest): Promise<TransportResponse<T>> {
       if (input.request) {
         const body = await input.request(request)

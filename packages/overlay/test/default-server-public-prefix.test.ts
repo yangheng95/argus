@@ -1,0 +1,76 @@
+import { afterEach, expect, test } from "bun:test"
+import { DEFAULT_LOCAL_SERVER_URL, serverUrlFromOverlayLocation } from "../src/services/default-server"
+
+class MemoryStorage {
+  private readonly items = new Map<string, string>()
+
+  getItem(key: string) {
+    return this.items.get(key) ?? null
+  }
+
+  setItem(key: string, value: string) {
+    this.items.set(key, value)
+  }
+
+  removeItem(key: string) {
+    this.items.delete(key)
+  }
+}
+
+const previousWindow = (globalThis as { window?: unknown }).window
+const previousLocalStorage = (globalThis as { localStorage?: unknown }).localStorage
+
+afterEach(() => {
+  ;(globalThis as { window?: unknown }).window = previousWindow
+  ;(globalThis as { localStorage?: unknown }).localStorage = previousLocalStorage
+})
+
+function location(input: { origin: string; pathname: string; protocol?: string }) {
+  return {
+    origin: input.origin,
+    pathname: input.pathname,
+    protocol: input.protocol ?? "https:",
+  } as Location
+}
+
+test("browser default server follows the public overlay prefix", () => {
+  expect(serverUrlFromOverlayLocation(location({ origin: "https://example.com", pathname: "/ui/" }))).toBe(
+    "https://example.com",
+  )
+  expect(serverUrlFromOverlayLocation(location({ origin: "https://example.com", pathname: "/opencorvus/ui/" }))).toBe(
+    "https://example.com/opencorvus",
+  )
+  expect(
+    serverUrlFromOverlayLocation(location({ origin: "https://example.com", pathname: "/opencorvus/ui/task/abc" })),
+  ).toBe("https://example.com/opencorvus")
+  expect(serverUrlFromOverlayLocation(location({ origin: "file://", pathname: "/ui/", protocol: "file:" }))).toBeNull()
+  expect(serverUrlFromOverlayLocation(location({ origin: "https://example.com", pathname: "/not-ui/" }))).toBeNull()
+})
+
+test("browser settings migrate the old local default when served under a public prefix", async () => {
+  const localStorage = new MemoryStorage()
+  localStorage.setItem("oc_server_url", DEFAULT_LOCAL_SERVER_URL)
+  ;(globalThis as { window?: unknown }).window = {
+    location: location({ origin: "https://mirror-test.myhexin.com", pathname: "/opencorvus/ui/" }),
+    localStorage,
+  }
+
+  const module = await import(`../src/services/overlay-settings-storage.ts?public-prefix-test=${Date.now()}`)
+  const settings = module.loadBrowserOverlaySettings()
+  expect(settings.serverUrl).toBe("https://mirror-test.myhexin.com/opencorvus")
+  expect(settings.autoServer).toBe(true)
+})
+
+test("browser settings keep an explicit custom server under a public prefix", async () => {
+  const localStorage = new MemoryStorage()
+  localStorage.setItem("oc_server_url", "https://api.example.com")
+  ;(globalThis as { window?: unknown }).window = {
+    location: location({ origin: "https://mirror-test.myhexin.com", pathname: "/opencorvus/ui/" }),
+    localStorage,
+  }
+
+  const module = await import(`../src/services/overlay-settings-storage.ts?custom-server-test=${Date.now()}`)
+  const settings = module.loadBrowserOverlaySettings()
+  expect(settings.serverUrl).toBe("https://api.example.com")
+  expect(settings.autoServer).toBe(false)
+})
