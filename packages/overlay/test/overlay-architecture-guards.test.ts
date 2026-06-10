@@ -6,6 +6,34 @@ const OVERLAY_ROOT = join(import.meta.dir, "..")
 const REPO_ROOT = join(OVERLAY_ROOT, "..", "..")
 const GOD_CSS_ARCHIVE_DIR = join(REPO_ROOT, "docs/archive/overlay-god-css")
 const THIS_FILE = join(import.meta.dir, "overlay-architecture-guards.test.ts")
+const SURFACE_DUPLICATE_SELECTOR_LIMITS = new Map<string, number>([
+  ["activity.css", 15],
+  ["agent-card.css", 0],
+  ["card.css", 6],
+  ["changes.css", 3],
+  ["chat-bubble.css", 0],
+  ["cmdk.css", 0],
+  ["composer.css", 0],
+  ["conn-banner.css", 0],
+  ["conversation.css", 21],
+  ["dialog.css", 2],
+  ["diff.css", 7],
+  ["empty-state.css", 5],
+  ["field.css", 3],
+  ["header.css", 1],
+  ["inline-pill.css", 1],
+  ["inspector.css", 6],
+  ["markdown.css", 22],
+  ["messages.css", 5],
+  ["mission.css", 10],
+  ["ndjson-log.css", 0],
+  ["notifications.css", 0],
+  ["settings.css", 11],
+  ["sidebar.css", 7],
+  ["titlebar.css", 11],
+  ["workspace-onboarding.css", 4],
+  ["workspace.css", 10],
+])
 
 function readText(path: string): string {
   return readFileSync(path, "utf8")
@@ -46,15 +74,39 @@ function count(pattern: RegExp, text: string): number {
 }
 
 function countDuplicateSelectors(css: string): number {
+  const stack: Array<{ kind: "at-rule" | "keyframes" | "rule"; head: string }> = []
   const selectorCounts = new Map<string, number>()
-  for (const match of withoutComments(css).matchAll(/([^{}]+)\{[^{}]*\}/g)) {
-    const head = (match[1] ?? "").trim()
-    if (head.includes("@")) continue
-    for (const selector of head
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)) {
-      selectorCounts.set(selector, (selectorCounts.get(selector) ?? 0) + 1)
+  const text = withoutComments(css)
+  let segmentStart = 0
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index]
+    if (character === "{") {
+      const head = text.slice(segmentStart, index).trim()
+      if (head.startsWith("@")) {
+        stack.push({
+          kind: /^@(?:-[\w-]+-)?keyframes\b/.test(head) ? "keyframes" : "at-rule",
+          head,
+        })
+      } else {
+        if (!stack.some((item) => item.kind === "keyframes")) {
+          const scope = stack
+            .filter((item) => item.kind === "at-rule")
+            .map((item) => item.head)
+            .join(" | ")
+          for (const selector of head
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)) {
+            const key = `${scope}\0${selector}`
+            selectorCounts.set(key, (selectorCounts.get(key) ?? 0) + 1)
+          }
+        }
+        stack.push({ kind: "rule", head })
+      }
+      segmentStart = index + 1
+    } else if (character === "}") {
+      stack.pop()
+      segmentStart = index + 1
     }
   }
   return Array.from(selectorCounts.values()).filter((value) => value > 1).length
@@ -275,10 +327,19 @@ describe("overlay architecture guards", () => {
     }
   })
 
-  test("card stylesheet duplicate selector debt cannot increase", () => {
-    const card = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
+  test("surface stylesheet duplicate selector debt cannot increase", () => {
+    const surfaceRoot = join(OVERLAY_ROOT, "src/styles/surfaces")
+    const surfaceFiles = walkFiles(surfaceRoot, (path) => path.endsWith(".css"))
+      .map((path) => path.slice(surfaceRoot.length + 1).replace(/\\/g, "/"))
+      .sort()
+    expect(surfaceFiles).toEqual(Array.from(SURFACE_DUPLICATE_SELECTOR_LIMITS.keys()).sort())
 
-    expect(countDuplicateSelectors(card)).toBeLessThanOrEqual(6)
+    const overBudget: string[] = []
+    for (const [file, limit] of SURFACE_DUPLICATE_SELECTOR_LIMITS) {
+      const debt = countDuplicateSelectors(readText(join(surfaceRoot, file)))
+      if (debt > limit) overBudget.push(`${file}: ${debt} > ${limit}`)
+    }
+    expect(overBudget).toEqual([])
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
