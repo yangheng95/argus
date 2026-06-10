@@ -139,21 +139,40 @@ function bootstrapExecutorWithManyCards(extraCards: number): void {
         channel: "assistant",
         time: { created: baseTime + i },
       },
-      parts: [],
+      parts: [
+        {
+          id: `noise_part_${i}`,
+          messageID: `noise_msg_${i}`,
+          sessionID: `noise_${i}`,
+          resolvedRole: "assistant",
+          channel: "assistant",
+          type: "text",
+          text: `noise ${i}`,
+        },
+      ],
     })
   }
-  transcript.push({
-    info: {
-      id: EXECUTOR_MSG_ID,
-      sessionID: EXECUTOR_SID,
-      role: "assistant",
-      resolvedRole: "executor",
-      agent: "executor",
-      channel: "executor",
-      time: { created: baseTime + extraCards + 1 },
+  hydrateConversationView({ sessions: [] }, transcript)
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: EXECUTOR_MSG_ID,
+        sessionID: EXECUTOR_SID,
+        role: "assistant",
+        resolvedRole: "executor",
+        agent: "executor",
+        channel: "executor",
+        time: { created: baseTime + extraCards + 1 },
+      },
     },
-    parts: [
-      {
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
         id: EXECUTOR_PART_ID,
         messageID: EXECUTOR_MSG_ID,
         sessionID: EXECUTOR_SID,
@@ -162,9 +181,8 @@ function bootstrapExecutorWithManyCards(extraCards: number): void {
         type: "reasoning",
         text: "",
       },
-    ],
+    },
   })
-  hydrateConversationView({ sessions: [] }, transcript)
 }
 
 function runExecutorDeltaBurstWithManyCards(

@@ -16,7 +16,7 @@ const { appStore, setAppStore } = await import("../src/store/app")
 const { resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
 const { sessionConfigRefreshToken } = await import("../src/services/config")
-const { __setHostTransportForTest } = await import("../src/services/host-transport")
+const { HOST_CAPABILITIES, __setHostTransportForTest } = await import("../src/services/host-transport")
 const { resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor")
 
 if (typeof globalThis.requestAnimationFrame === "undefined") {
@@ -27,6 +27,7 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
 function fakeConfigTransport(paths: string[]): HostTransport {
   return {
     kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       paths.push(req.path)
       if (req.path === "config") {
@@ -61,6 +62,7 @@ function fakeRecoveryTransport(
 ): HostTransport {
   return {
     kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       if (req.path === "global/tasks") {
         return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T }
@@ -826,6 +828,7 @@ test("task-list lifecycle notifications still reload global tasks", async () => 
   const paths: string[] = []
   __setHostTransportForTest({
     kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       paths.push(req.path)
       return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T }
@@ -861,6 +864,7 @@ test("task-list reloads are single-flight across refresh triggers", async () => 
   const paths: string[] = []
   const transport = {
     kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       paths.push(req.path)
       await pending
