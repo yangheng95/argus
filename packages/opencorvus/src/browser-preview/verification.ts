@@ -45,7 +45,7 @@ export type BrowserPreviewVerification = z.infer<typeof BrowserPreviewVerificati
 
 type CaptureRuntimePage = (input: RuntimeCaptureInput) => Promise<RuntimeCaptureResult>
 
-export async function verifyBrowserPreview(input: {
+type BrowserPreviewVerificationInput = {
   projectRoot: string
   target: BrowserPreviewTarget
   viewportIDs: BrowserPreviewViewportID[]
@@ -53,8 +53,25 @@ export async function verifyBrowserPreview(input: {
   targetID: string
   signal?: AbortSignal
   outDir?: string
-  captureForTest?: CaptureRuntimePage
-}): Promise<BrowserPreviewVerification> {
+}
+
+type BrowserPreviewVerificationTestInput = BrowserPreviewVerificationInput & {
+  captureForTest: CaptureRuntimePage
+}
+
+export async function verifyBrowserPreview(input: BrowserPreviewVerificationInput): Promise<BrowserPreviewVerification> {
+  return verifyBrowserPreviewInternal(input)
+}
+
+export async function verifyBrowserPreviewForTest(
+  input: BrowserPreviewVerificationTestInput,
+): Promise<BrowserPreviewVerification> {
+  return verifyBrowserPreviewInternal(input)
+}
+
+async function verifyBrowserPreviewInternal(
+  input: BrowserPreviewVerificationInput & { captureForTest?: CaptureRuntimePage },
+): Promise<BrowserPreviewVerification> {
   const projectRoot = path.resolve(input.projectRoot)
   const viewportIDs = dedupeViewportIDs(input.viewportIDs)
   const viewports = viewportIDs.map((id) => browserPreviewViewportByID(id))
