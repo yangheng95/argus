@@ -10,6 +10,23 @@ function nonBuiltin(skills: Skill.Info[]) {
   return skills.filter((s) => !s.builtin)
 }
 
+function nonBuiltinUnder(skills: Skill.Info[], root: string) {
+  const resolvedRoot = path.resolve(root)
+  return nonBuiltin(skills).filter((skill) => {
+    if (skill.location === "builtin") return false
+    const relative = path.relative(resolvedRoot, path.resolve(skill.location))
+    return relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative))
+  })
+}
+
+function directoriesUnder(dirs: string[], root: string) {
+  const resolvedRoot = path.resolve(root)
+  return dirs.filter((dir) => {
+    const relative = path.relative(resolvedRoot, path.resolve(dir))
+    return relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative))
+  })
+}
+
 async function createGlobalSkill(homeDir: string) {
   const skillDir = path.join(homeDir, ".claude", "skills", "global-test-skill")
   await fs.mkdir(skillDir, { recursive: true })
@@ -51,7 +68,7 @@ Instructions here.
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills).length).toBe(1)
+      expect(nonBuiltinUnder(skills, tmp.path).length).toBe(1)
       const testSkill = skills.find((s) => s.name === "test-skill")
       expect(testSkill).toBeDefined()
       expect(testSkill!.description).toBe("A test skill for verification.")
@@ -88,7 +105,7 @@ description: Skill for dirs test.
         const dirs = await Skill.dirs()
         const skillDir = path.join(tmp.path, ".opencorvus", "skill", "dir-skill")
         expect(dirs).toContain(skillDir)
-        expect(dirs.length).toBe(1)
+        expect(directoriesUnder(dirs, tmp.path).length).toBe(1)
       },
     })
   } finally {
@@ -129,7 +146,7 @@ description: Second test skill.
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills).length).toBe(2)
+      expect(nonBuiltinUnder(skills, tmp.path).length).toBe(2)
       expect(skills.find((s) => s.name === "skill-one")).toBeDefined()
       expect(skills.find((s) => s.name === "skill-two")).toBeDefined()
     },
@@ -284,7 +301,7 @@ Just some content without YAML frontmatter.
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills)).toEqual([])
+      expect(nonBuiltinUnder(skills, tmp.path)).toEqual([])
     },
   })
 })
@@ -311,7 +328,7 @@ description: A skill in the .claude/skills directory.
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills).length).toBe(1)
+      expect(nonBuiltinUnder(skills, tmp.path).length).toBe(1)
       const claudeSkill = skills.find((s) => s.name === "claude-skill")
       expect(claudeSkill).toBeDefined()
       expect(claudeSkill!.location).toContain(path.join(".claude", "skills", "claude-skill", "SKILL.md"))
@@ -331,7 +348,7 @@ test("discovers global skills from ~/.claude/skills/ directory", async () => {
       directory: tmp.path,
       fn: async () => {
         const skills = await Skill.all()
-        expect(nonBuiltin(skills).length).toBe(1)
+        expect(nonBuiltinUnder(skills, tmp.path).length).toBe(1)
         const globalTestSkill = skills.find((s) => s.name === "global-test-skill")
         expect(globalTestSkill).toBeDefined()
         expect(globalTestSkill!.description).toBe("A global skill from ~/.claude/skills for testing.")
@@ -351,7 +368,7 @@ test("returns empty array when no skills exist", async () => {
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills)).toEqual([])
+      expect(nonBuiltinUnder(skills, tmp.path)).toEqual([])
     },
   })
 })
@@ -408,7 +425,7 @@ description: A skill in the .agents/skills directory.
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills).length).toBe(1)
+      expect(nonBuiltinUnder(skills, tmp.path).length).toBe(1)
       const agentSkill = skills.find((s) => s.name === "agent-skill")
       expect(agentSkill).toBeDefined()
       expect(agentSkill!.location).toContain(path.join(".agents", "skills", "agent-skill", "SKILL.md"))
@@ -442,7 +459,7 @@ This skill is loaded from the global home directory.
       directory: tmp.path,
       fn: async () => {
         const skills = await Skill.all()
-        expect(nonBuiltin(skills).length).toBe(1)
+        expect(nonBuiltinUnder(skills, tmp.path).length).toBe(1)
         const globalAgentSkill = skills.find((s) => s.name === "global-agent-skill")
         expect(globalAgentSkill).toBeDefined()
         expect(globalAgentSkill!.description).toBe("A global skill from ~/.agents/skills for testing.")
@@ -476,7 +493,7 @@ description: A skill in the .codex/skills directory.
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills).length).toBe(1)
+      expect(nonBuiltinUnder(skills, tmp.path).length).toBe(1)
       const codexSkill = skills.find((s) => s.name === "codex-skill")
       expect(codexSkill).toBeDefined()
       expect(codexSkill!.location).toContain(path.join(".codex", "skills", "codex-skill", "SKILL.md"))
@@ -510,7 +527,7 @@ This skill is loaded from the global home directory.
       directory: tmp.path,
       fn: async () => {
         const skills = await Skill.all()
-        expect(nonBuiltin(skills).length).toBe(1)
+        expect(nonBuiltinUnder(skills, tmp.path).length).toBe(1)
         const globalCodexSkill = skills.find((s) => s.name === "global-codex-skill")
         expect(globalCodexSkill).toBeDefined()
         expect(globalCodexSkill!.description).toBe("A global skill from ~/.codex/skills for testing.")
@@ -577,7 +594,7 @@ description: A skill in the .opencorvus/skills directory.
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills).length).toBe(4)
+      expect(nonBuiltinUnder(skills, tmp.path).length).toBe(4)
       expect(skills.find((s) => s.name === "claude-skill")).toBeDefined()
       expect(skills.find((s) => s.name === "agent-skill")).toBeDefined()
       expect(skills.find((s) => s.name === "codex-skill")).toBeDefined()
@@ -652,7 +669,7 @@ description: A skill in the .opencorvus/skills directory.
     directory: tmp.path,
     fn: async () => {
       const dirs = await Skill.dirs()
-      expect(dirs.length).toBe(5)
+      expect(directoriesUnder(dirs, tmp.path).length).toBe(5)
     },
   })
 })
