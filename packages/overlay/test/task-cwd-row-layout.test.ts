@@ -132,10 +132,16 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(STYLES).not.toContain(".project-worktree-main")
   })
 
-  test("recent directory popup is portalled above page stacking contexts", () => {
-    expect(TASK_DIR_BAR).toContain('import { Portal } from "solid-js/web"')
-    expect(TASK_DIR_BAR).toContain("<Portal mount={document.body}>")
+  test("recent directory popup delegates menu semantics and positioning to Kobalte", () => {
+    expect(TASK_DIR_BAR).toContain('import * as DropdownMenu from "@kobalte/core/dropdown-menu"')
+    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Root")
+    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Trigger")
+    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Content")
+    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Item")
+    expect(TASK_DIR_BAR).toContain("sameWidth")
+    expect(TASK_DIR_BAR).toContain("fitViewport")
     expect(TASK_DIR_BAR).toContain('class="recent-dir-panel"')
+    expect(TASK_DIR_BAR).not.toContain('class="recent-dir-panel" style={panelStyle()} role="listbox"')
   })
 
   test("path breadcrumb markup does not nest a second task-dir shell", () => {
