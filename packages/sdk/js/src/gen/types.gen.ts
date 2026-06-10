@@ -14094,6 +14094,139 @@ export type GlobalDbResetResponses = {
 
 export type GlobalDbResetResponse = GlobalDbResetResponses[keyof GlobalDbResetResponses]
 
+export type GlobalDbMysqlSchemaData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/db/mysql/schema"
+}
+
+export type GlobalDbMysqlSchemaResponses = {
+  /**
+   * MySQL transfer schema
+   */
+  200: {
+    format: "opencorvus.mysql-transfer.v1"
+    schemaFingerprint: string
+    mysqlDDL: string
+    tables: Array<{
+      name: string
+      columns: Array<string>
+    }>
+    derivedTables: Array<string>
+    skippedIndexes: Array<{
+      table: string
+      index: string
+      reason: string
+    }>
+  }
+}
+
+export type GlobalDbMysqlSchemaResponse = GlobalDbMysqlSchemaResponses[keyof GlobalDbMysqlSchemaResponses]
+
+export type GlobalDbMysqlExportData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/db/mysql/export"
+}
+
+export type GlobalDbMysqlExportResponses = {
+  /**
+   * MySQL transfer package
+   */
+  200: {
+    schema: {
+      format: "opencorvus.mysql-transfer.v1"
+      schemaFingerprint: string
+      mysqlDDL: string
+      tables: Array<{
+        name: string
+        columns: Array<string>
+      }>
+      derivedTables: Array<string>
+      skippedIndexes: Array<{
+        table: string
+        index: string
+        reason: string
+      }>
+    }
+    snapshot: {
+      format: "opencorvus.mysql-transfer.v1"
+      schemaFingerprint: string
+      tables: Array<{
+        name: string
+        columns: Array<string>
+        rows: Array<{
+          [key: string]: unknown
+        }>
+      }>
+    }
+  }
+}
+
+export type GlobalDbMysqlExportResponse = GlobalDbMysqlExportResponses[keyof GlobalDbMysqlExportResponses]
+
+export type GlobalDbMysqlImportData = {
+  body: {
+    snapshot: {
+      format: "opencorvus.mysql-transfer.v1"
+      schemaFingerprint: string
+      tables: Array<{
+        name: string
+        columns: Array<string>
+        rows: Array<{
+          [key: string]: unknown
+        }>
+      }>
+    }
+  }
+  path?: never
+  query?: never
+  url: "/global/db/mysql/import"
+}
+
+export type GlobalDbMysqlImportErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancelledMessageError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type GlobalDbMysqlImportError = GlobalDbMysqlImportErrors[keyof GlobalDbMysqlImportErrors]
+
+export type GlobalDbMysqlImportResponses = {
+  /**
+   * Import result
+   */
+  200: {
+    ok: boolean
+    schemaFingerprint: string
+    tables: Array<{
+      name: string
+      rows: number
+    }>
+  }
+}
+
+export type GlobalDbMysqlImportResponse = GlobalDbMysqlImportResponses[keyof GlobalDbMysqlImportResponses]
+
 export type AuthRemoveData = {
   body?: never
   path: {

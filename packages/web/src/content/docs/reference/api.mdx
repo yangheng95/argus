@@ -18,6 +18,9 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/event` | Subscribe to events | `event.subscribe` |
 | GET | `/global/config` | Get global configuration | `global.config.get` |
 | PATCH | `/global/config` | Update global configuration | `global.config.update` |
+| GET | `/global/db/mysql/export` | Export MySQL transfer snapshot | `global.db.mysql.export` |
+| POST | `/global/db/mysql/import` | Import MySQL transfer snapshot | `global.db.mysql.import` |
+| GET | `/global/db/mysql/schema` | Export MySQL staging schema | `global.db.mysql.schema` |
 | POST | `/global/db/reset` | Reset database | `global.db.reset` |
 | POST | `/global/dispose` | Dispose instance | `global.dispose` |
 | GET | `/global/event` | Get global events | `global.event` |

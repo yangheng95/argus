@@ -76,6 +76,30 @@ describe("project-scope middleware: directory required", () => {
     expect(body.healthy).toBe(true)
   })
 
+  test("cross-project MySQL transfer routes work without ?directory=", async () => {
+    const app = Server.App()
+
+    const schema = await app.request("/global/db/mysql/schema", { method: "GET" })
+    expect(schema.status).toBe(200)
+    const schemaBody = (await schema.json()) as { format: string; mysqlDDL: string }
+    expect(schemaBody.format).toBe("opencorvus.mysql-transfer.v1")
+    expect(schemaBody.mysqlDDL).toContain("CREATE TABLE IF NOT EXISTS `project`")
+
+    const exported = await app.request("/global/db/mysql/export", { method: "GET" })
+    expect(exported.status).toBe(200)
+    const exportedBody = (await exported.json()) as { snapshot: unknown }
+
+    const imported = await app.request("/global/db/mysql/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ snapshot: exportedBody.snapshot }),
+    })
+    expect(imported.status).toBe(200)
+    const importedBody = (await imported.json()) as { ok: boolean; tables: unknown[] }
+    expect(importedBody.ok).toBe(true)
+    expect(importedBody.tables.length).toBeGreaterThan(0)
+  })
+
   test("cross-project GET /global/tasks works without ?directory=", async () => {
     const now = Date.now()
     Database.use((db) => {

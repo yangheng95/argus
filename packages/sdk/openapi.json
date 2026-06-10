@@ -30899,6 +30899,433 @@
         ]
       }
     },
+    "/global/db/mysql/schema": {
+      "get": {
+        "operationId": "global.db.mysql.schema",
+        "summary": "Export MySQL staging schema",
+        "description": "Export the current OpenCorvus SQLite table shape as MySQL-compatible staging DDL plus the strict transfer schema fingerprint used by /global/db/mysql/import.",
+        "responses": {
+          "200": {
+            "description": "MySQL transfer schema",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "format": {
+                      "type": "string",
+                      "const": "opencorvus.mysql-transfer.v1"
+                    },
+                    "schemaFingerprint": {
+                      "type": "string"
+                    },
+                    "mysqlDDL": {
+                      "type": "string"
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "columns"
+                        ]
+                      }
+                    },
+                    "derivedTables": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "skippedIndexes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "table": {
+                            "type": "string"
+                          },
+                          "index": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "index",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "format",
+                    "schemaFingerprint",
+                    "mysqlDDL",
+                    "tables",
+                    "derivedTables",
+                    "skippedIndexes"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.db.mysql.schema({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/global/db/mysql/export": {
+      "get": {
+        "operationId": "global.db.mysql.export",
+        "summary": "Export MySQL transfer snapshot",
+        "description": "Export MySQL-compatible staging DDL and a strict JSON snapshot of the current SQLite data. The snapshot can be posted back to /global/db/mysql/import to rebuild the local DB.",
+        "responses": {
+          "200": {
+            "description": "MySQL transfer package",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "format": {
+                          "type": "string",
+                          "const": "opencorvus.mysql-transfer.v1"
+                        },
+                        "schemaFingerprint": {
+                          "type": "string"
+                        },
+                        "mysqlDDL": {
+                          "type": "string"
+                        },
+                        "tables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "columns": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "columns"
+                            ]
+                          }
+                        },
+                        "derivedTables": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "skippedIndexes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "table": {
+                                "type": "string"
+                              },
+                              "index": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "table",
+                              "index",
+                              "reason"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "format",
+                        "schemaFingerprint",
+                        "mysqlDDL",
+                        "tables",
+                        "derivedTables",
+                        "skippedIndexes"
+                      ]
+                    },
+                    "snapshot": {
+                      "type": "object",
+                      "properties": {
+                        "format": {
+                          "type": "string",
+                          "const": "opencorvus.mysql-transfer.v1"
+                        },
+                        "schemaFingerprint": {
+                          "type": "string"
+                        },
+                        "tables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "columns": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "rows": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                }
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "columns",
+                              "rows"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "format",
+                        "schemaFingerprint",
+                        "tables"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "schema",
+                    "snapshot"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.db.mysql.export({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/global/db/mysql/import": {
+      "post": {
+        "operationId": "global.db.mysql.import",
+        "summary": "Import MySQL transfer snapshot",
+        "description": "DESTRUCTIVE. Rebuild the local SQLite DB from a strict MySQL transfer snapshot. This does not make MySQL a runtime DB; it is a one-shot transfer/import surface.",
+        "responses": {
+          "200": {
+            "description": "Import result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "schemaFingerprint": {
+                      "type": "string"
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "rows": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "rows"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "schemaFingerprint",
+                    "tables"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "ReplyTargetEnvelopeMissingError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "TaskCancelledMessageError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "snapshot": {
+                    "type": "object",
+                    "properties": {
+                      "format": {
+                        "type": "string",
+                        "const": "opencorvus.mysql-transfer.v1"
+                      },
+                      "schemaFingerprint": {
+                        "type": "string"
+                      },
+                      "tables": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "columns": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "rows": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "columns",
+                            "rows"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "format",
+                      "schemaFingerprint",
+                      "tables"
+                    ]
+                  }
+                },
+                "required": [
+                  "snapshot"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.db.mysql.import({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/auth/{providerID}": {
       "put": {
         "operationId": "auth.set",

@@ -80,6 +80,10 @@ import type {
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
+  GlobalDbMysqlExportResponses,
+  GlobalDbMysqlImportErrors,
+  GlobalDbMysqlImportResponses,
+  GlobalDbMysqlSchemaResponses,
   GlobalDbResetErrors,
   GlobalDbResetResponses,
   GlobalDisposeResponses,
@@ -8347,6 +8351,68 @@ export class Config3 extends HeyApiClient {
   }
 }
 
+export class Mysql extends HeyApiClient {
+  /**
+   * Export MySQL staging schema
+   *
+   * Export the current OpenCorvus SQLite table shape as MySQL-compatible staging DDL plus the strict transfer schema fingerprint used by /global/db/mysql/import.
+   */
+  public schema<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalDbMysqlSchemaResponses, unknown, ThrowOnError>({
+      url: "/global/db/mysql/schema",
+      ...options,
+    })
+  }
+
+  /**
+   * Export MySQL transfer snapshot
+   *
+   * Export MySQL-compatible staging DDL and a strict JSON snapshot of the current SQLite data. The snapshot can be posted back to /global/db/mysql/import to rebuild the local DB.
+   */
+  public export<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalDbMysqlExportResponses, unknown, ThrowOnError>({
+      url: "/global/db/mysql/export",
+      ...options,
+    })
+  }
+
+  /**
+   * Import MySQL transfer snapshot
+   *
+   * DESTRUCTIVE. Rebuild the local SQLite DB from a strict MySQL transfer snapshot. This does not make MySQL a runtime DB; it is a one-shot transfer/import surface.
+   */
+  public import<ThrowOnError extends boolean = false>(
+    parameters?: {
+      snapshot: {
+        format: "opencorvus.mysql-transfer.v1"
+        schemaFingerprint: string
+        tables: Array<{
+          name: string
+          columns: Array<string>
+          rows: Array<{
+            [key: string]: unknown
+          }>
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "snapshot" }] }])
+    return (options?.client ?? this.client).post<GlobalDbMysqlImportResponses, GlobalDbMysqlImportErrors, ThrowOnError>(
+      {
+        url: "/global/db/mysql/import",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+}
+
 export class Db extends HeyApiClient {
   /**
    * Reset database
@@ -8370,6 +8436,11 @@ export class Db extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _mysql?: Mysql
+  get mysql(): Mysql {
+    return (this._mysql ??= new Mysql({ client: this.client }))
   }
 }
 

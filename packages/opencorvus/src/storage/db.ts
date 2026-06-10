@@ -103,6 +103,24 @@ function removeDatabaseFiles(dbPath: string) {
   rmSync(`${dbPath}-shm`, { force: true })
 }
 
+function dropCurrentSchema(sqlite: BunDatabase) {
+  const triggers = sqlite
+    .query<{ name: string }, []>("SELECT name FROM sqlite_schema WHERE type = 'trigger' AND name NOT LIKE 'sqlite_%'")
+    .all()
+  for (const trigger of triggers) {
+    sqlite.run(`DROP TRIGGER IF EXISTS ${quoteIdentifier(trigger.name)}`)
+  }
+
+  const tables = sqlite
+    .query<{ name: string }, []>(
+      "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY CASE WHEN name = 'memory_fts' THEN 0 ELSE 1 END, name",
+    )
+    .all()
+  for (const table of tables) {
+    sqlite.run(`DROP TABLE IF EXISTS ${quoteIdentifier(table.name)}`)
+  }
+}
+
 function openSqlite(dbPath: string) {
   const sqlite = new BunDatabase(dbPath, { create: true })
   configureSqlite(sqlite)
@@ -225,6 +243,33 @@ export namespace Database {
       }
     }
     return results
+  }
+
+  export function rebuildSqlite(callback: (sqlite: BunDatabase) => void) {
+    close()
+    const dbPath = Path()
+    mkdirSync(path.dirname(dbPath), { recursive: true })
+    const sqlite = openSqlite(dbPath)
+    try {
+      sqlite.run("PRAGMA foreign_keys = OFF")
+      sqlite.run("BEGIN")
+      dropCurrentSchema(sqlite)
+      sqlite.exec(SCHEMA_DDL)
+      callback(sqlite)
+      sqlite.run("COMMIT")
+      sqlite.run("PRAGMA foreign_keys = ON")
+    } catch (err) {
+      try {
+        sqlite.run("ROLLBACK")
+      } catch {}
+      throw err
+    } finally {
+      if (state.sqlite === sqlite) state.sqlite = undefined
+      try {
+        sqlite.close()
+      } catch {}
+      Client.reset()
+    }
   }
 
   /**
