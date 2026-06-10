@@ -10,7 +10,7 @@ export type EngineBudget = {
 export type EngineMetadata = Record<string, unknown>
 
 export type AcceptanceResult = {
-  diffs?: Array<{ file: string; status?: string; before?: string; after?: string; diff?: string }>
+  diffs?: Array<{ file: string; status?: string; additions?: number; deletions?: number }>
   changed_files?: string[]
   commit_ref?: string
   [key: string]: unknown
