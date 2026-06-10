@@ -1276,7 +1276,7 @@ if (boardMountEl) {
   )
 }
 
-// ── Mount: LogViewer (renders its own <dialog id="logDialog">) ──
+// ── Mount: LogViewer dialog host ──
 
 const logViewerEl = document.getElementById("solidLogViewer")
 if (logViewerEl) {

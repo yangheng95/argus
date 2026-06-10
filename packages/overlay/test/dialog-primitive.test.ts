@@ -30,6 +30,25 @@ function componentSources(): Array<{ rel: string; text: string }> {
   return out
 }
 
+function sourceFiles(): Array<{ rel: string; text: string }> {
+  const root = join(OVERLAY_ROOT, "src")
+  const out: Array<{ rel: string; text: string }> = []
+  const visit = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry)
+      if (statSync(full).isDirectory()) {
+        visit(full)
+        continue
+      }
+      if (!/\.(ts|tsx)$/.test(full)) continue
+      const rel = relative(OVERLAY_ROOT, full).replace(/\\/g, "/")
+      out.push({ rel, text: readText(full) })
+    }
+  }
+  visit(root)
+  return out
+}
+
 describe("Dialog primitive", () => {
   const source = readText(DIALOG_SOURCE)
 
@@ -136,6 +155,14 @@ describe("Dialog primitive adoption", () => {
       expect(text).not.toContain("querySelectorAll(\"dialog.dialog\")")
       expect(text).not.toContain('querySelector("dialog[open]")')
       expect(text).not.toContain("dataset.backdropClose")
+    }
+  })
+
+  test("overlay source no longer documents retired native dialog wiring", () => {
+    for (const { rel, text } of sourceFiles()) {
+      expect(text, rel).not.toMatch(/<dialog\b/)
+      expect(text, rel).not.toContain("showModal")
+      expect(text, rel).not.toContain("renderSkillMarket")
     }
   })
 })
