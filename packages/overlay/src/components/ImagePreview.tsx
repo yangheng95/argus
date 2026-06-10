@@ -39,6 +39,7 @@ export function PreviewableImage(props: { src: string; alt?: string; triggerClas
 export function ImagePreviewHost() {
   const [scale, setScale] = createSignal(1)
   const [imageSize, setImageSize] = createSignal<ImagePreviewSize>({ width: 0, height: 0 })
+  const [copyInFlight, setCopyInFlight] = createSignal(false)
   const [panStart, setPanStart] = createSignal<{
     pointerID: number
     x: number
@@ -55,6 +56,7 @@ export function ImagePreviewHost() {
     if (!state.open) return
     setScale(1)
     setImageSize({ width: 0, height: 0 })
+    setCopyInFlight(false)
     setPanStart(null)
     queueMicrotask(() => {
       if (imageRef?.complete) measureLoadedImage(imageRef)
@@ -175,6 +177,36 @@ export function ImagePreviewHost() {
     applyScale(scale() + delta)
   }
 
+  async function copyPreviewImage(): Promise<void> {
+    const image = imageRef
+    const clipboardWrite = navigator.clipboard?.write
+    if (!image || !image.complete || imageSize().width <= 0 || imageSize().height <= 0 || !clipboardWrite) return
+
+    setCopyInFlight(true)
+    try {
+      const canvas = document.createElement("canvas")
+      canvas.width = image.naturalWidth || image.width
+      canvas.height = image.naturalHeight || image.height
+      const context = canvas.getContext("2d")
+      if (!context) throw new Error("Image copy failed: canvas context unavailable")
+      context.drawImage(image, 0, 0)
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((nextBlob) => {
+          if (!nextBlob) {
+            reject(new Error("Image copy failed: canvas blob unavailable"))
+            return
+          }
+          resolve(nextBlob)
+        }, "image/png")
+      })
+      await clipboardWrite.call(navigator.clipboard, [new ClipboardItem({ "image/png": blob })])
+    } catch (error) {
+      console.error("[image-preview] copy image failed", error)
+    } finally {
+      setCopyInFlight(false)
+    }
+  }
+
   function handleWheel(event: WheelEvent): void {
     if (!event.ctrlKey) return
     const body = bodyRef
@@ -291,6 +323,19 @@ export function ImagePreviewHost() {
             1:1
           </Button>
           <span class="image-preview-dialog__separator" aria-hidden="true" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-chrome="icon-action"
+            title="Copy image"
+            aria-label="Copy image"
+            disabled={copyInFlight()}
+            onClick={() => void copyPreviewImage()}
+          >
+            <Icon name="copy" size={13} />
+          </Button>
           <Button
             type="button"
             variant="ghost"
