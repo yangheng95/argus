@@ -1,27 +1,29 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
+import { Config } from "../../src/config/config"
 import { EffectiveConfig } from "../../src/config/effective"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
 import { Database } from "../../src/storage/db"
+import { resolveAgentModelRef, resolveConfiguredModelRef } from "../../src/agent/model"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
-describe("task config isolation", () => {
+describe("task config live overrides", () => {
   afterEach(async () => {
     Agent.resetAll()
     Provider.resetAll()
     await resetDatabase()
   })
 
-  test("task model resolution reads the task root config snapshot, not the live project config", async () => {
-    await using tmp = await tmpdir({ config: { model: "live/project" } })
+  test("task model resolution reads live project config instead of stale task root snapshot", async () => {
+    await using tmp = await tmpdir({ config: { model: "stale/snapshot" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ kind: "root", title: "isolated config" })
+        const session = await Session.create({ kind: "root", title: "live config" })
         await Session.mergeMetadata({
           sessionID: session.id,
           patch: {
@@ -44,34 +46,45 @@ describe("task config isolation", () => {
             .run(),
         )
 
-        const { resolveConfiguredModelRef } = await import("../../src/agent/model")
+        await Config.update({ model: "live/project" } as never)
+        Agent.resetAll()
+        Provider.resetAll()
+
         await expect(resolveConfiguredModelRef({ taskID })).resolves.toEqual({
-          providerID: "task",
-          modelID: "snapshot",
+          providerID: "live",
+          modelID: "project",
         })
       },
     })
   })
 
-  test("agent config resolves from the task root snapshot", async () => {
-    await using tmp = await tmpdir()
+  test("task agent model override takes effect immediately over stale per-agent snapshot", async () => {
+    await using tmp = await tmpdir({
+      config: {
+        model: "kimik26/kimik26",
+        agent: {
+          integrity: { model: "hexin/cy-claude-sonnet-4-6" },
+        },
+      },
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ kind: "root", title: "isolated agent config" })
+        const session = await Session.create({ kind: "root", title: "live agent config" })
         await Session.mergeMetadata({
           sessionID: session.id,
           patch: {
             [EffectiveConfig.TASK_SNAPSHOT_KEY]: {
+              model: "hexin/cy-claude-sonnet-4-6",
               agent: {
-                coding: {
-                  prompt: "task snapshot prompt",
+                integrity: {
+                  model: "hexin/cy-claude-sonnet-4-6",
                 },
               },
             },
           },
         })
-        const taskID = "task-agent-config-snapshot"
+        const taskID = "task-agent-config-live-override"
         Database.use((db) =>
           db
             .insert(EngineTaskTable)
@@ -85,9 +98,14 @@ describe("task config isolation", () => {
             .run(),
         )
 
-        const scoped = await Agent.get("coding", { config: await EffectiveConfig.effective({ taskID }) })
+        await Config.update({ agent: { integrity: { model: "kimik26/kimik26" } } } as never)
+        Agent.resetAll()
+        Provider.resetAll()
 
-        expect(scoped.prompt).toBe("task snapshot prompt")
+        await expect(resolveAgentModelRef("integrity", { taskID })).resolves.toEqual({
+          providerID: "kimik26",
+          modelID: "kimik26",
+        })
       },
     })
   })

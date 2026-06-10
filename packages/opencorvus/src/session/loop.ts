@@ -2303,7 +2303,6 @@ export namespace SessionLoop {
 
           const model = await resolveAgentModel(lastUser.agent, {
             sessionID,
-            explicitModel: lastUser.model,
           }).catch((e) => {
             if (Provider.ModelNotFoundError.isInstance(e)) {
               const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""

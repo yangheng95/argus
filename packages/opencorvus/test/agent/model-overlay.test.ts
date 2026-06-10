@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, mock } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { Config } from "../../src/config/config"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
@@ -21,7 +21,6 @@ function withSession<R>(overlay: unknown, fn: () => R): R {
 
 describe("resolveAgentModelRef — single source + session overlay", () => {
   afterEach(async () => {
-    mock.restore()
     await resetDatabase()
   })
 
@@ -59,10 +58,7 @@ describe("resolveAgentModelRef — single source + session overlay", () => {
   })
 
   test("explicitModel wins over everything (incl. session overlay)", async () => {
-    await using tmp = await tmpdir()
-    mock.module("../../src/config/config", () => ({
-      Config: { ...Config, get: async () => ({ model: "base/m" }) as never },
-    }))
+    await using tmp = await tmpdir({ config: { model: "base/m" } })
     await Instance.provide({
       directory: tmp.path,
       fn: () =>
@@ -77,10 +73,7 @@ describe("resolveAgentModelRef — single source + session overlay", () => {
   })
 
   test("session overlay agent.<name>.model beats overlay top-level and base", async () => {
-    await using tmp = await tmpdir()
-    mock.module("../../src/config/config", () => ({
-      Config: { ...Config, get: async () => ({ model: "base/top" }) as never },
-    }))
+    await using tmp = await tmpdir({ config: { model: "base/top" } })
     await Instance.provide({
       directory: tmp.path,
       fn: () =>
@@ -93,10 +86,7 @@ describe("resolveAgentModelRef — single source + session overlay", () => {
   })
 
   test("no session: falls to project base (no overlay, no fallback default)", async () => {
-    await using tmp = await tmpdir()
-    mock.module("../../src/config/config", () => ({
-      Config: { ...Config, get: async () => ({ model: "base/top" }) as never },
-    }))
+    await using tmp = await tmpdir({ config: { model: "base/top" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -277,15 +267,25 @@ describe("resolveAgentModelRef — single source + session overlay", () => {
 
   test("no model anywhere → MissingModelConfigError (no DEFAULT_MODEL / history fallback)", async () => {
     await using tmp = await tmpdir()
-    mock.module("../../src/config/config", () => ({
-      Config: { ...Config, get: async () => ({}) as never },
-    }))
+    await using globalConfig = await tmpdir()
+    const previousGlobalConfigDir = process.env.OPENCORVUS_GLOBAL_CONFIG_DIR
+    process.env.OPENCORVUS_GLOBAL_CONFIG_DIR = globalConfig.path
+    Config.global.reset()
     await Instance.provide({
       directory: tmp.path,
       fn: () =>
         withSession(undefined, async () => {
-          const { resolveConfiguredModelRef } = await import("../../src/agent/model")
-          await expect(resolveConfiguredModelRef()).rejects.toThrow("MissingModelConfigError")
+          try {
+            Config.global.reset()
+            await Config.state.reset()
+            const { resolveConfiguredModelRef } = await import("../../src/agent/model")
+            await expect(resolveConfiguredModelRef()).rejects.toThrow("MissingModelConfigError")
+          } finally {
+            if (previousGlobalConfigDir === undefined) delete process.env.OPENCORVUS_GLOBAL_CONFIG_DIR
+            else process.env.OPENCORVUS_GLOBAL_CONFIG_DIR = previousGlobalConfigDir
+            Config.global.reset()
+            await Config.state.reset()
+          }
         }),
     })
   })
