@@ -1,6 +1,8 @@
 import { test, expect } from "bun:test"
-
+import { installRealOverlayI18n } from "./fixtures/i18n"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+
+installRealOverlayI18n()
 
 const { applyEvent, resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
@@ -192,7 +194,7 @@ test("integrity review progress reconstructs running card when started is outsid
   const card = cardTreeStore.cards["integrity:session:ses_late_progress"]
   expect(card?.status).toBe("running")
   expect(card?.sessionID).toBe("ses_late_progress")
-  expect(card?.subtitle).toContain("integrity.attempt_label")
+  expect(card?.subtitle).toContain("attempt 2")
   expect(card?.reviewStream).toMatchObject({
     phase: "integrity",
     currentStep: "agent",
