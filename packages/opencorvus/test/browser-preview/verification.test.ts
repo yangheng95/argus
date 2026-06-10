@@ -5,7 +5,7 @@ import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sq
 import { Instance } from "../../src/project/instance"
 import { findReadableBrowserPreviewEvidenceByID, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
-import { verifyBrowserPreview } from "../../src/browser-preview/verification"
+import { verifyBrowserPreview, verifyBrowserPreviewForTest } from "../../src/browser-preview/verification"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -46,7 +46,7 @@ describe("browser preview verification", () => {
     const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
     let capturedInput: RuntimeCaptureInput | undefined
 
-    const result = await verifyBrowserPreview({
+    const result = await verifyBrowserPreviewForTest({
       projectRoot: tmp.path,
       taskID,
       targetID: target.id!,
@@ -96,7 +96,7 @@ describe("browser preview verification", () => {
     const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
     const capturedInputs: RuntimeCaptureInput[] = []
 
-    const result = await verifyBrowserPreview({
+    const result = await verifyBrowserPreviewForTest({
       projectRoot: tmp.path,
       taskID,
       targetID: target.id!,
@@ -150,9 +150,6 @@ describe("browser preview verification", () => {
       targetID: "art_missing_browser_preview_target",
       target,
       viewportIDs: ["desktop"],
-      async captureForTest() {
-        throw new Error("capture should not run")
-      },
     })
 
     expect(result.status).toBe("failed")
@@ -166,7 +163,6 @@ describe("browser preview verification", () => {
     const taskID = await seedTask(tmp.path)
     await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
     const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
-    let captureRan = false
 
     const result = await verifyBrowserPreview({
       projectRoot: tmp.path,
@@ -174,17 +170,12 @@ describe("browser preview verification", () => {
       targetID: "",
       target,
       viewportIDs: ["desktop"],
-      async captureForTest() {
-        captureRan = true
-        throw new Error("capture should not run")
-      },
     })
 
     expect(result.status).toBe("failed")
     expect(result.captures).toEqual({})
     expect(result.evidenceIDs).toEqual({})
     expect(result.diagnostics.join("\n")).toContain("requires a task ID and persisted browser preview target ID")
-    expect(captureRan).toBe(false)
   })
 
   test("fails before capture when no viewport is requested", async () => {
@@ -192,7 +183,6 @@ describe("browser preview verification", () => {
     const taskID = await seedTask(tmp.path)
     await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
     const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
-    let captureRan = false
 
     const result = await verifyBrowserPreview({
       projectRoot: tmp.path,
@@ -200,10 +190,6 @@ describe("browser preview verification", () => {
       targetID: target.id!,
       target,
       viewportIDs: [],
-      async captureForTest() {
-        captureRan = true
-        throw new Error("capture should not run")
-      },
     })
 
     expect(result.status).toBe("failed")
@@ -211,7 +197,6 @@ describe("browser preview verification", () => {
     expect(result.captures).toEqual({})
     expect(result.evidenceIDs).toEqual({})
     expect(result.diagnostics.join("\n")).toContain("requires at least one browser preview viewport")
-    expect(captureRan).toBe(false)
   })
 
   test("persists task-scoped browser preview evidence from capture result", async () => {
@@ -220,7 +205,7 @@ describe("browser preview verification", () => {
     const persisted = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
     const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
 
-    const result = await verifyBrowserPreview({
+    const result = await verifyBrowserPreviewForTest({
       projectRoot: tmp.path,
       taskID,
       targetID: persisted.id,
@@ -265,8 +250,15 @@ describe("browser preview verification", () => {
 
   test("product verification path does not import direct runtime page capture", () => {
     const source = readFileSync(new URL("../../src/browser-preview/verification.ts", import.meta.url), "utf8")
+    const routeSource = readFileSync(new URL("../../src/server/routes/browser-preview.ts", import.meta.url), "utf8")
 
     expect(source).toContain("runBrowserPreviewEvidenceJob")
+    expect(source).toContain("export async function verifyBrowserPreview(input: BrowserPreviewVerificationInput)")
+    expect(source).toContain("export async function verifyBrowserPreviewForTest")
+    expect(source).toContain("captureForTest: CaptureRuntimePage")
+    expect(source).toContain("verifyBrowserPreviewInternal")
+    expect(routeSource).toContain("verifyBrowserPreview")
+    expect(routeSource).not.toContain("verifyBrowserPreviewForTest")
     expect(source).not.toContain("captureRuntimePage")
     expect(source).not.toContain('"no-task"')
     expect(source).not.toContain("targetID?:")
