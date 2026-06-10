@@ -8,6 +8,7 @@ import { startBrowserFixture } from "./http-fixture.ts"
 await ensureOverlayDist()
 
 const WORKSPACE_DIR = "D:/overlay/workspace/app"
+const TASK_ID = "tsk_left_tool_panels"
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -23,7 +24,7 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
-test("left Skill and MCP panels load from the active directory without a selected task", async () => {
+test("left Skill, MCP, and Memory panels load from the active task directory", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
@@ -36,7 +37,59 @@ test("left Skill and MCP panels load from the active directory without a selecte
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/tasks" || path === "/global/tasks")
+      return send({
+        tasks: [
+          {
+            task: {
+              id: TASK_ID,
+              title: "Left tool panels task",
+              status: "active",
+              directory: WORKSPACE_DIR,
+              sessionID: "ses_left_tool_panels",
+              time: { created: 1, updated: 2 },
+            },
+          },
+        ],
+      })
+    if (path === `/task/${TASK_ID}/conversation`)
+      return send({
+        lastSequence: 1,
+        board: {
+          snapshotVersion: "board:left-tool-panels",
+          task: {
+            id: TASK_ID,
+            title: "Left tool panels task",
+            status: "active",
+            directory: WORKSPACE_DIR,
+            sessionID: "ses_left_tool_panels",
+            time: { created: 1, updated: 2 },
+          },
+          goalWorkflows: [],
+          interactions: [],
+        },
+        transcript: [],
+        timeline: [],
+        events: [],
+        eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
+        history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+        view: { sessions: [] },
+        agentView: { sessions: [] },
+      })
+    if (path === `/task/${TASK_ID}/board`)
+      return send({
+        snapshotVersion: "board:left-tool-panels",
+        task: {
+          id: TASK_ID,
+          title: "Left tool panels task",
+          status: "active",
+          directory: WORKSPACE_DIR,
+          sessionID: "ses_left_tool_panels",
+          time: { created: 1, updated: 2 },
+        },
+        goalWorkflows: [],
+        interactions: [],
+      })
     if (path === "/path") return send({ directory: WORKSPACE_DIR })
     if (path === "/vcs")
       return send({
@@ -70,6 +123,20 @@ test("left Skill and MCP panels load from the active directory without a selecte
         },
       ])
     if (path === "/mcp") return send({ docs: { status: "connected" } })
+    if (path === "/panel/knowledge/memory") {
+      if (url.searchParams.get("directory") !== WORKSPACE_DIR || url.searchParams.get("taskID") !== TASK_ID) {
+        return send({ error: "memory requires taskID and directory" }, { status: 400 })
+      }
+      return send([
+        {
+          id: "mem_left_tool_panels",
+          title: "Left panel memory loaded from selected task",
+          scope: "cwd",
+          source: "memory.md",
+          timeUpdated: 1,
+        },
+      ])
+    }
     if (path === "/panel/knowledge/preference") return send([])
     if (path === "/file") return send({ entries: [] })
     if (path === "/find/file") return send({ entries: [] })
@@ -86,7 +153,7 @@ test("left Skill and MCP panels load from the active directory without a selecte
       localStorage.setItem("oc_directory", directory)
       localStorage.setItem("oc_workspace_directory", directory)
       localStorage.setItem("oc_server_url", serverUrl)
-      localStorage.removeItem("oc_workspace_task")
+      localStorage.setItem("oc_workspace_task", TASK_ID)
       localStorage.setItem("oc_right_panel_collapsed", "false")
     }, { serverUrl: server.origin, directory: WORKSPACE_DIR })
 
@@ -117,14 +184,16 @@ test("left Skill and MCP panels load from the active directory without a selecte
       '[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]',
       (node) => (node as HTMLButtonElement).click(),
     )
-    await page.waitForSelector("#leftPanelMemory[data-active='true'] .empty-hint")
-    const memoryHint = await page.$eval("#leftPanelMemory .empty-hint", (node) => node.textContent || "")
-    assert.equal(memoryHint, "Select a task to view its context")
+    await page.waitForSelector("#leftPanelMemory[data-active='true'] .knowledge-item")
+    const memoryName = await page.$eval("#leftPanelMemory .knowledge-item-title", (node) => node.textContent || "")
+    assert.equal(memoryName, "Left panel memory loaded from selected task")
 
     const skillRequest = requestLog.find((item) => item.path === "/skill/installed")
     const mcpRequest = requestLog.find((item) => item.path === "/mcp")
+    const memoryRequest = requestLog.find((item) => item.path === "/panel/knowledge/memory")
     assert.equal(skillRequest?.directory, WORKSPACE_DIR)
     assert.equal(mcpRequest?.directory, WORKSPACE_DIR)
+    assert.equal(memoryRequest?.directory, WORKSPACE_DIR)
   } finally {
     await browser.close()
     await server.close()
