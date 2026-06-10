@@ -3,7 +3,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { PNG } from "pngjs"
 import { finalizeBrowserPreviewSidecarCapture, writeBrowserEvidenceManifest } from "../../src/browser-preview/evidence-runner"
-import type { RuntimeCaptureSuccess } from "../../src/runtime/page-capture"
+import type { RuntimeCaptureSuccess } from "../../src/runtime/capture-contract"
 import { tmpdir } from "../fixture/fixture"
 
 describe("browser preview evidence runner contract", () => {

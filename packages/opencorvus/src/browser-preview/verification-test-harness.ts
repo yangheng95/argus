@@ -1,5 +1,5 @@
 import { Identifier } from "@/id/id"
-import type { RuntimeCaptureInput, RuntimeCaptureResult } from "@/runtime/page-capture"
+import type { RuntimeCaptureInput, RuntimeCaptureResult } from "@/runtime/capture-contract"
 import { writeBrowserEvidenceManifest } from "./evidence-runner"
 import {
   runBrowserPreviewVerification,

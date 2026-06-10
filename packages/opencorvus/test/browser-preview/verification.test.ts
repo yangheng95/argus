@@ -10,7 +10,7 @@ import { verifyBrowserPreviewForTest } from "../../src/browser-preview/verificat
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import type { RuntimeCaptureInput, RuntimeCaptureResult, RuntimeCaptureSuccess } from "../../src/runtime/page-capture"
+import type { RuntimeCaptureInput, RuntimeCaptureResult, RuntimeCaptureSuccess } from "../../src/runtime/capture-contract"
 
 describe("browser preview verification", () => {
   afterEach(async () => {
@@ -281,8 +281,10 @@ describe("browser preview verification", () => {
       expect(productSource).not.toContain("renderPage")
       expect(productSource).not.toContain("@/browser/webpage")
       expect(productSource).not.toContain("@/runtime/visual-page")
+      expect(productSource).not.toContain("@/runtime/page-capture")
     }
     expect(evidenceRunnerSource).toContain("@/runtime/png-metrics")
+    expect(evidenceRunnerSource).toContain("@/runtime/capture-contract")
     expect(source).not.toContain('"no-task"')
     expect(source).not.toContain("targetID?:")
   })

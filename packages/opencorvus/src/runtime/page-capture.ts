@@ -1,105 +1,16 @@
 import fs from "fs/promises"
 import path from "path"
 import crypto from "node:crypto"
-import { renderPage, type RenderPageCapture, type RuntimeInteractionProbe } from "@/runtime/visual-page"
+import { renderPage } from "@/runtime/visual-page"
+import {
+  normalizeRuntimeCaptureRequest,
+  normalizeRuntimeCaptureViewport,
+  runtimeCaptureFailedLayers,
+  type RuntimeCaptureInput,
+  type RuntimeCaptureResult,
+} from "@/runtime/capture-contract"
 
-export const RUNTIME_CAPTURE_VIEWPORT_MAX = { width: 1440, height: 1080 } as const
-export const RUNTIME_CAPTURE_DEFAULTS = {
-  viewport_width: 1440,
-  viewport_height: 1080,
-  min_dom_descendants: 20,
-  wait_timeout_ms: 30_000,
-  settle_ms: 2_500,
-} as const
-
-export type RuntimeCaptureRequest = {
-  url: string
-  viewport_width?: number
-  viewport_height?: number
-  min_dom_descendants?: number
-  expect_selectors?: string[]
-  expect_texts?: string[]
-  wait_for_selector?: string
-  wait_timeout_ms?: number
-  settle_ms?: number
-}
-
-export type NormalizedRuntimeCaptureRequest = Required<Omit<RuntimeCaptureRequest, "wait_for_selector">> & {
-  wait_for_selector?: string
-}
-
-export type RuntimeCaptureInput = RuntimeCaptureRequest & {
-  outDir: string
-  referenceForViewport?: string
-  browserExecutable?: string
-  headless?: boolean
-  probeInteractions?: boolean
-  fileLabel?: string
-  signal?: AbortSignal
-}
-
-export type RuntimeCaptureFailure = {
-  captured: false
-  passed: false
-  url: string
-  requested_viewport: { width: number; height: number }
-  viewport: { width: number; height: number; capped: boolean }
-  capture_error: { kind: "capture_failed"; message: string }
-  summary: string
-}
-
-export type RuntimeCaptureSuccess = {
-  captured: true
-  passed: boolean
-  url: string
-  target_url: string
-  path: string
-  sha: string
-  bytes: number
-  size: { width: number; height: number }
-  requested_viewport: { width: number; height: number }
-  viewport: { width: number; height: number; capped: boolean }
-  layers: RenderPageCapture["layers"]
-  dom: {
-    textLength: number
-    nodeCount: number
-    bodyDescendantCount: number
-    hasBodyChildren: boolean
-    isEmptyRootShell: boolean
-  }
-  interaction?: RuntimeInteractionProbe
-  summary: string
-}
-
-export type RuntimeCaptureResult = RuntimeCaptureSuccess | RuntimeCaptureFailure
-
-export function normalizeRuntimeCaptureViewport(input: { width: number; height: number }): {
-  width: number
-  height: number
-  capped: boolean
-} {
-  const width = Math.min(input.width, RUNTIME_CAPTURE_VIEWPORT_MAX.width)
-  const height = Math.min(input.height, RUNTIME_CAPTURE_VIEWPORT_MAX.height)
-  return {
-    width,
-    height,
-    capped: width !== input.width || height !== input.height,
-  }
-}
-
-export function normalizeRuntimeCaptureRequest(args: RuntimeCaptureRequest): NormalizedRuntimeCaptureRequest {
-  return {
-    url: args.url,
-    viewport_width: args.viewport_width ?? RUNTIME_CAPTURE_DEFAULTS.viewport_width,
-    viewport_height: args.viewport_height ?? RUNTIME_CAPTURE_DEFAULTS.viewport_height,
-    min_dom_descendants: args.min_dom_descendants ?? RUNTIME_CAPTURE_DEFAULTS.min_dom_descendants,
-    expect_selectors: args.expect_selectors ?? [],
-    expect_texts: args.expect_texts ?? [],
-    wait_timeout_ms: args.wait_timeout_ms ?? RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms,
-    settle_ms: args.settle_ms ?? RUNTIME_CAPTURE_DEFAULTS.settle_ms,
-    ...(args.wait_for_selector ? { wait_for_selector: args.wait_for_selector } : {}),
-  }
-}
+export * from "@/runtime/capture-contract"
 
 export async function captureRuntimePage(input: RuntimeCaptureInput): Promise<RuntimeCaptureResult> {
   const args = normalizeRuntimeCaptureRequest(input)
@@ -173,12 +84,6 @@ export async function captureRuntimePage(input: RuntimeCaptureInput): Promise<Ru
       summary: `runtime capture failed: ${message}`,
     }
   }
-}
-
-export function runtimeCaptureFailedLayers(layers: RenderPageCapture["layers"]): string[] {
-  return Object.entries(layers)
-    .filter(([, value]) => !value.passed)
-    .map(([name]) => name)
 }
 
 function sanitizeCaptureLabel(label: string): string {

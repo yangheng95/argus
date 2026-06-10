@@ -26,6 +26,7 @@ import ssim from "ssim.js"
 import { BrowserNodeSidecarError, runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
 import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
 import { BrowserRuntime } from "@/browser/runtime"
+import type { RuntimeCaptureLayers, RuntimeInteractionProbe } from "@/runtime/capture-contract"
 import { pngLuminanceVariance } from "@/runtime/png-metrics"
 
 export interface VisualDiffOptions {
@@ -75,14 +76,7 @@ async function decodePNG(filePath: string): Promise<PNG> {
 
 export interface RenderPageCapture {
   targetUrl: string
-  layers: {
-    http: { passed: boolean; status: number; content_type: string; body_length: number; reason: string }
-    asset: { passed: boolean; total: number; failed: Array<{ url: string; status: number; reason: string }> }
-    dom: { passed: boolean; body_descendants: number; required: number }
-    js: { passed: boolean; console_errors: string[]; page_errors: string[] }
-    pixel: { passed: boolean; variance: number; floor: number; screenshot_path: string }
-    expected: { passed: boolean; missing_selectors: string[]; missing_texts: string[] }
-  }
+  layers: RuntimeCaptureLayers
 }
 
 /** Pure-render API — renders an HTML/URL target into `<outDir>/rendered.png`
@@ -515,17 +509,6 @@ async function main() {
 
 main();
 `
-
-export type RuntimeInteractionProbe = {
-  visibleControlCount: number
-  textInputCount: number
-  fileInputCount: number
-  attemptedInteractionCount: number
-  textChanged: boolean
-  htmlChanged: boolean
-  errorCount: number
-  errors: string[]
-}
 
 /** SSIM visual diff — retained for the external benchmark CLI and operator
  *  verification workflows only. The workflow no longer gates on

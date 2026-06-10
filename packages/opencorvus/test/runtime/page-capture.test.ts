@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { normalizeRuntimeCaptureRequest, normalizeRuntimeCaptureViewport } from "../../src/runtime/page-capture"
+import { normalizeRuntimeCaptureRequest, normalizeRuntimeCaptureViewport } from "../../src/runtime/capture-contract"
 
 describe("runtime page capture", () => {
   test("keeps normal captures inside the defensive viewport", () => {
