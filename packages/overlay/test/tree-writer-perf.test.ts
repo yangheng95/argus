@@ -11,8 +11,11 @@
 // message.part.delta; if that invariant ever regresses, this catches it.
 
 import { test, expect } from "bun:test"
+import { installRealOverlayI18n } from "./fixtures/i18n"
 
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+installRealOverlayI18n()
+
 if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).requestAnimationFrame = (() => 1) as any
   ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
