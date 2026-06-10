@@ -67,10 +67,10 @@ export const ERRORS = {
     },
   },
   409: {
-    description: "Reply target not ready",
+    description: "Conflict",
     content: {
       "application/json": {
-        schema: namedErrorSchema("ReplyTargetEnvelopeMissingError"),
+        schema: namedErrorUnionSchema("ReplyTargetEnvelopeMissingError", "TaskCancelledMessageError"),
       },
     },
   },

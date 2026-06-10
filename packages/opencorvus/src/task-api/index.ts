@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import z from "zod"
 import { Output } from "ai"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { streamText } from "@/llm/api"
 import { Agent } from "@/agent/agent"
 import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
@@ -147,6 +148,22 @@ import { SessionWake } from "@/session/wake"
 import { withTaskCreationOwnerLock } from "@/engine/task-creation-owner"
 
 const log = Log.create({ service: "assistant" })
+
+export const TaskCancelledMessageError = NamedError.create(
+  "TaskCancelledMessageError",
+  z.object({
+    message: z.string(),
+    taskID: z.string(),
+  }),
+)
+
+export const TaskEmptyMessageError = NamedError.create(
+  "TaskEmptyMessageError",
+  z.object({
+    message: z.string(),
+    taskID: z.string(),
+  }),
+)
 
 /**
  * Per-call deadline for `executor.abort()` during cancelTask / abortRun.
@@ -431,18 +448,12 @@ async function appendAndWakeTaskOperatorMessage(input: {
   attachmentSummary?: string
 }): Promise<{ task: TaskRow; userMessage: { info: Message.User; parts: Message.Part[] }; resumed: boolean }> {
   const task = requireTask(input.taskID)
+  assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
 
   // Append the user message to session history. The describe layer and
   // orchestrator prompt both read session messages, so this is the single
   // task-level operator-message owner for /message and /inject.
   const userMessage = await appendTaskSessionMessage(task, input.text, input.attachments ?? [])
-  if (isTaskCancelled(task)) {
-    return {
-      task,
-      userMessage,
-      resumed: false,
-    }
-  }
   const wakeTask = isTaskCompleted(task)
     ? await reopenCompletedTaskFromOperatorMessage(task)
     : isTaskFailed(task)
@@ -469,6 +480,21 @@ async function appendAndWakeTaskOperatorMessage(input: {
     task: requireTask(input.taskID),
     userMessage,
     resumed: true,
+  }
+}
+
+function assertTaskOperatorMessageAccepted(task: TaskRow, text: string, attachments: readonly unknown[] = []) {
+  if (isTaskCancelled(task)) {
+    throw new TaskCancelledMessageError({
+      message: `Task ${task.id} is cancelled and cannot accept task-level messages; retry the task before sending more input.`,
+      taskID: task.id,
+    })
+  }
+  if (text.trim().length === 0 && attachments.length === 0) {
+    throw new TaskEmptyMessageError({
+      message: `Task ${task.id} cannot accept an empty task-level message.`,
+      taskID: task.id,
+    })
   }
 }
 
@@ -1746,7 +1772,8 @@ export namespace EngineService {
 
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
     const input = TaskMessageInput.parse(raw)
-    requireTask(taskID)
+    const task = requireTask(taskID)
+    assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
 
     // Decode base64 attachments once, write bytes to AttachmentStore, and carry
     // references downstream. Mirrors createTask so that follow-up messages and

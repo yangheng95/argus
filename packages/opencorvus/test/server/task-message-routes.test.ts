@@ -474,12 +474,14 @@ describe("task message routes", () => {
           }),
         })
 
-        expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string; should_resume: boolean }
+        expect(response.status).toBe(409)
+        const body = (await response.json()) as { name: string; data: { taskID: string; message: string } }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(false)
+        expect(body.name).toBe("TaskCancelledMessageError")
+        expect(body.data.taskID).toBe(taskID)
+        expect(body.data.message).toContain("retry the task")
         expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(1)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
@@ -489,7 +491,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/message records on a cancelled task without reopening it", async () => {
+  test("POST /task/:taskID/message rejects a cancelled task without appending a user message", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -535,12 +537,14 @@ describe("task message routes", () => {
           }),
         })
 
-        expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string; should_resume: boolean }
+        expect(response.status).toBe(409)
+        const body = (await response.json()) as { name: string; data: { taskID: string; message: string } }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(false)
+        expect(body.name).toBe("TaskCancelledMessageError")
+        expect(body.data.taskID).toBe(taskID)
+        expect(body.data.message).toContain("retry the task")
         expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(1)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
@@ -548,6 +552,61 @@ describe("task message routes", () => {
         expect(row?.error).toBe("task cancelled")
         expect((row?.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBe(true)
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
+      },
+    })
+  })
+
+  test("POST /task/:taskID/message rejects empty text without attachments before creating a message card", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "empty input task" })
+        await seedRootSession(root.id)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "empty input task",
+              request: "empty input task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "   ",
+            source: "panel",
+          }),
+        })
+
+        expect(response.status).toBe(400)
+        const body = (await response.json()) as { name: string; data: { taskID: string; message: string } }
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(body.name).toBe("TaskEmptyMessageError")
+        expect(body.data.taskID).toBe(taskID)
+        expect(body.data.message).toContain("empty task-level message")
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(1)
       },
     })
   })
