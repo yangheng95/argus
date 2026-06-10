@@ -2,9 +2,8 @@
 // TypeScript port of skill/extension and MCP functions
 // loadExtensions, loadSkillMarket, installSkill,
 // removeSkillSource, deleteSkill, deleteAllSkills.
-// DOM-rendering functions (renderExtensions, renderSkillMarket,
-// renderConfigToggleMeta) are intentionally NOT ported here — they are dead
-// code in the Solid.js world and are superseded by declarative components.
+// Retired DOM-rendering functions are intentionally not ported here; Solid
+// components own rendering, while this service only updates store data.
 
 import { appStore, setSkills, setMcp, setSkillMarket } from "../store/app"
 import { apiJson } from "./api"
@@ -51,38 +50,41 @@ export function skillRemovable(item: SkillDescriptor): boolean {
  * NOTE: renderExtensions() DOM call is omitted — callers should
  * react to store updates via Solid reactivity.
  */
-export async function loadExtensions(): Promise<void> {
-  await Promise.all([loadInstalledSkills(), loadMcpStatus()])
+export async function loadExtensions(): Promise<{ skills: SkillDescriptor[]; mcp: Record<string, any> }> {
+  const [skills, mcp] = await Promise.all([loadInstalledSkills(), loadMcpStatus()])
+  return { skills, mcp }
 }
 
-export async function loadInstalledSkills(): Promise<void> {
+export async function loadInstalledSkills(): Promise<SkillDescriptor[]> {
   const skills = await apiJson("skill/installed")
   if (!Array.isArray(skills)) {
     throw new Error("skill/installed returned a non-array payload")
   }
   setSkills(skills)
+  return skills
 }
 
-export async function loadMcpStatus(): Promise<void> {
+export async function loadMcpStatus(): Promise<Record<string, any>> {
   const mcp = await apiJson("mcp")
   if (!mcp || typeof mcp !== "object" || Array.isArray(mcp)) {
     throw new Error("mcp returned a non-object payload")
   }
   setMcp(mcp)
+  return mcp
 }
 
 /**
  * Fetches the skill marketplace catalogue from the server and updates the app
  * store.
- * NOTE: The manipulation (showModal, renderSkillMarket) is omitted
- * — callers should open the marketplace dialog and react to store updates.
+ * NOTE: This only refreshes store data; callers own dialog visibility.
  */
-export async function loadSkillMarket(): Promise<void> {
+export async function loadSkillMarket(): Promise<any[]> {
   const items = await apiJson("skill/market")
   if (!Array.isArray(items)) {
     throw new Error("skill/market returned a non-array payload")
   }
   setSkillMarket(items)
+  return items
 }
 
 // ── Mutations ──

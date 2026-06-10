@@ -205,7 +205,18 @@ test(
               status: "connected",
             },
           })
-        if (path === "/panel/knowledge/memory")
+        if (path === "/panel/knowledge/memory") {
+          if (
+            url.searchParams.get("directory") !== SIDE_ACTIVITY_TASK.directory ||
+            url.searchParams.get("taskID") !== SIDE_ACTIVITY_TASK.id
+          ) {
+            return send(
+              {
+                error: "memory panel must send the selected task and project directory",
+              },
+              { status: 400 },
+            )
+          }
           return send([
             {
               id: "mem_side_activity_context",
@@ -216,6 +227,7 @@ test(
               snippet: "Remember that the left tool panels use the selected project directory.",
             },
           ])
+        }
         if (path === "/panel/knowledge/preference") return send([])
         if (path === "/file") return send({ entries: [{ path: "src/main.tsx", name: "main.tsx", type: "file" }] })
         if (path === "/find/file") return send({ entries: [] })

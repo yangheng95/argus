@@ -19,7 +19,6 @@ import { getHostTransport } from "../../services/host-transport"
 import { nativeOpen } from "../../utils/native"
 import { createVisibilityInterval } from "../../utils/visibility-interval"
 import {
-  loadExtensions,
   loadInstalledSkills,
   loadMcpStatus,
   loadSkillMarket,
@@ -125,9 +124,11 @@ function dataTransferEntries(dataTransfer: DataTransfer | null): WebkitFileSyste
   if (!dataTransfer?.items?.length) return []
   const entries: WebkitFileSystemEntry[] = []
   for (const item of Array.from(dataTransfer.items)) {
-    const entry = (item as DataTransferItem & {
-      webkitGetAsEntry?: () => unknown
-    }).webkitGetAsEntry?.() as WebkitFileSystemEntry | null | undefined
+    const entry = (
+      item as DataTransferItem & {
+        webkitGetAsEntry?: () => unknown
+      }
+    ).webkitGetAsEntry?.() as WebkitFileSystemEntry | null | undefined
     if (entry) entries.push(entry)
   }
   return entries
@@ -357,6 +358,8 @@ function ExtensionSettingsPanel(props: {
   const [loading, setLoading] = createSignal(false)
   const [loadedMarketDirectory, setLoadedMarketDirectory] = createSignal("")
   const [skillDragActive, setSkillDragActive] = createSignal(false)
+  const [panelSkills, setPanelSkills] = createSignal<SkillItem[] | null>(null)
+  const [panelMcp, setPanelMcp] = createSignal<Record<string, McpItem> | null>(null)
 
   function setPanelNotice(message: string, status: "active" | "error" | "warn" = "error") {
     setNotice(message)
@@ -379,12 +382,17 @@ function ExtensionSettingsPanel(props: {
     return false
   }
 
-  // Reactive data from appStore (populated by loadExtensions/loadSkillMarket after connect)
+  // Each mounted panel keeps the response it just loaded while still falling
+  // back to global store data populated by the shared extension loaders.
   const skills = createMemo((): SkillItem[] => {
+    const local = panelSkills()
+    if (local) return local
     const raw = appStore.skills
     return Array.isArray(raw) ? (raw as SkillItem[]) : []
   })
   const mcp = createMemo((): Record<string, McpItem> => {
+    const local = panelMcp()
+    if (local) return local
     const raw = appStore.mcp
     return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, McpItem>) : {}
   })
@@ -398,12 +406,24 @@ function ExtensionSettingsPanel(props: {
   const builtinCount = createMemo(() => skills().length - customSkills().length)
   const mcpEntries = createMemo(() => Object.entries(mcp()))
 
+  async function refreshInstalledSkills() {
+    const items = await loadInstalledSkills()
+    setPanelSkills(items as SkillItem[])
+    return items
+  }
+
+  async function refreshMcpStatus() {
+    const status = await loadMcpStatus()
+    setPanelMcp(status as Record<string, McpItem>)
+    return status
+  }
+
   async function reloadAll() {
     if (!requireActiveDirectory()) return
     setLoading(true)
     setNotice("")
     try {
-      await Promise.all([loadExtensions(), loadSkillMarket()])
+      await Promise.all([refreshInstalledSkills(), refreshMcpStatus(), loadSkillMarket()])
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
@@ -609,7 +629,7 @@ function ExtensionSettingsPanel(props: {
     }
 
     setNotice("")
-    loadInstalledSkills().catch((e) => {
+    refreshInstalledSkills().catch((e) => {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     })
   })
@@ -623,7 +643,7 @@ function ExtensionSettingsPanel(props: {
     }
 
     const refresh = () => {
-      loadMcpStatus().catch((e) => {
+      refreshMcpStatus().catch((e) => {
         setPanelNotice(e instanceof Error ? e.message : String(e))
       })
     }
@@ -771,10 +791,7 @@ function ExtensionSettingsPanel(props: {
             </div>
           </Show>
           <div class="ext-group-body">
-            <div
-              class="skill-drop-zone"
-              data-active={skillDragActive() ? "true" : "false"}
-            >
+            <div class="skill-drop-zone" data-active={skillDragActive() ? "true" : "false"}>
               <span class="skill-drop-zone__icon" aria-hidden="true">
                 <Icon name="upload" />
               </span>

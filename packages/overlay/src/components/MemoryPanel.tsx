@@ -73,6 +73,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
   const [searchMode, setSearchMode] = createSignal(false)
   const [searchQuery, setSearchQuery] = createSignal("")
   const [loading, setLoading] = createSignal(false)
+  const [errorMessage, setErrorMessage] = createSignal("")
   const [expandedFileId, setExpandedFileId] = createSignal<string | null>(null)
   const [detailStates, setDetailStates] = createSignal<Record<string, MemoryDetailState>>({})
   const currentTaskID = () => (typeof props.taskID === "function" ? props.taskID() : props.taskID)
@@ -87,6 +88,16 @@ export function MemoryPanel(props: MemoryPanelProps) {
     return syncActiveDirectoryApiContext().trim()
   }
 
+  function memoryPath(path: string, directory: string, params: Record<string, string> = {}): string {
+    const query = new URLSearchParams()
+    if (directory) query.set("directory", directory)
+    for (const [key, value] of Object.entries(params)) {
+      if (value) query.set(key, value)
+    }
+    const suffix = query.toString()
+    return suffix ? `${path}?${suffix}` : path
+  }
+
   // ── Data loading ──
 
   const loadMemory = async (taskID = currentTaskID(), directory = currentDirectory()) => {
@@ -94,19 +105,21 @@ export function MemoryPanel(props: MemoryPanelProps) {
       setFiles([])
       setSearchMode(false)
       setExpandedFileId(null)
+      setErrorMessage("")
       return
     }
     setLoading(true)
     try {
-      const query = `?taskID=${encodeURIComponent(taskID)}`
-      const data = await apiJson(`panel/knowledge/memory${query}`)
+      const data = await apiJson(memoryPath("panel/knowledge/memory", directory, { taskID }))
       setFiles(Array.isArray(data) ? data : [])
       setSearchMode(false)
       setExpandedFileId(null)
-    } catch {
+      setErrorMessage("")
+    } catch (err) {
       setFiles([])
       setSearchMode(false)
       setExpandedFileId(null)
+      setErrorMessage(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }
@@ -124,7 +137,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
     try {
       // Body-only branch — no implicit fallback to old results, every search
       // call either succeeds or surfaces the error to the operator below.
-      const results = await apiJson("panel/knowledge/memory/search", {
+      const results = await apiJson(memoryPath("panel/knowledge/memory/search", directory), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,8 +158,10 @@ export function MemoryPanel(props: MemoryPanelProps) {
       setFiles(mapped)
       setSearchMode(true)
       setExpandedFileId(null)
+      setErrorMessage("")
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      setErrorMessage(msg)
       console.error("[MemoryPanel] search failed", err)
       void nativeMessage(t("memory.search_failed", { error: msg }), {
         title: t("memory.search_failed_title"),
@@ -168,7 +183,9 @@ export function MemoryPanel(props: MemoryPanelProps) {
 
   const handleDeleteInline = async (fileId: string) => {
     try {
-      await apiJson(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, { method: "DELETE" })
+      await apiJson(memoryPath(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, currentDirectory()), {
+        method: "DELETE",
+      })
       await loadMemory()
       setDetailStates((current) => {
         const next = { ...current }
@@ -190,7 +207,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
       [fileId]: { loading: true, error: "", detail: current[fileId]?.detail ?? null },
     }))
     try {
-      const data = await apiJson(`panel/knowledge/memory/${encodeURIComponent(fileId)}`)
+      const data = await apiJson(memoryPath(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, currentDirectory()))
       const f = data.file
       setDetailStates((current) => ({
         ...current,
@@ -239,6 +256,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
   })
 
   const emptyHint = createMemo(() => {
+    if (errorMessage()) return errorMessage()
     if (searchMode()) return t("memory.no_results")
     if (currentTaskID()) return t("memory.none")
     return t("memory.none_unselected")
