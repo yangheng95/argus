@@ -1,8 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { loadAgentModelsData, requireAgentModelsDirectory } from "../src/components/settings/agent-models-data"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import { applySettings, DEFAULT_SETTINGS, setSettingsStore } from "../src/store/settings"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
+
+const OVERLAY_ROOT = join(import.meta.dir, "..")
+
+function readText(rel: string): string {
+  return readFileSync(join(OVERLAY_ROOT, rel), "utf8")
+}
 
 function fakeTransport(
   responder: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>,
@@ -30,6 +38,19 @@ afterEach(() => {
 })
 
 describe("agent model panel data loading", () => {
+  test("model picker delegates listbox semantics to Kobalte Select", () => {
+    const source = readText("src/components/settings/AgentModelsPanel.tsx")
+
+    expect(source).toContain('import * as Select from "@kobalte/core/select"')
+    expect(source).toContain("<Select.Root<ModelSelectOption>")
+    expect(source).toContain("<Select.Trigger")
+    expect(source).toContain("<Select.HiddenSelect")
+    expect(source).toContain("function ModelSelectOptionItem")
+    expect(source).not.toContain("<select")
+    expect(source).not.toContain("<option")
+    expect(source).not.toContain("<optgroup")
+  })
+
   test("rejects before project-scoped requests when no working directory is selected", async () => {
     let calls = 0
     __setHostTransportForTest(
