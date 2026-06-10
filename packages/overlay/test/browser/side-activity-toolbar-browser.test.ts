@@ -40,6 +40,45 @@ function conversationPayload(sessionID: string) {
   }
 }
 
+const SIDE_ACTIVITY_TASK = {
+  id: "tsk_side_activity",
+  title: "Side activity task",
+  status: "active",
+  directory: "D:/overlay/workspace/app",
+  sessionID: "ses_side_activity",
+  time: { created: 1_735_689_600_000, updated: 1_735_689_660_000 },
+}
+
+function taskListPayload() {
+  return {
+    tasks: [
+      {
+        task: SIDE_ACTIVITY_TASK,
+      },
+    ],
+  }
+}
+
+function taskConversationPayload() {
+  return {
+    lastSequence: 1,
+    board: {
+      snapshotVersion: "board:tsk_side_activity",
+      task: SIDE_ACTIVITY_TASK,
+      goalWorkflows: [],
+      interactions: [],
+    },
+    transcript: [],
+    timeline: [],
+    events: [],
+    eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
+    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    view: { rootID: "root", cards: {}, order: [] },
+    agentView: { rootID: "root", cards: {}, order: [] },
+    messageWatermark: 0,
+  }
+}
+
 function assertMatchObject(actual: Record<string, unknown>, expected: Record<string, unknown>) {
   for (const [key, value] of Object.entries(expected)) {
     assert.deepEqual(actual[key], value, key)
@@ -61,7 +100,11 @@ test(
         const staticResponse = await overlayStaticResponse(path)
         if (staticResponse) return staticResponse
         if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+        if (path === "/tasks" || path === "/global/tasks") return send(taskListPayload())
+        if (path === "/task/tsk_side_activity/conversation") return send(taskConversationPayload())
+        if (path === "/task/tsk_side_activity/events") {
+          return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+        }
         if (path === "/session") return send([])
         if (path === "/coding/sessions") {
           return send({
@@ -169,7 +212,17 @@ test(
               status: "connected",
             },
           })
-        if (path === "/panel/knowledge/memory") return send([])
+        if (path === "/panel/knowledge/memory")
+          return send([
+            {
+              id: "mem_side_activity_context",
+              title: "Project decision memory",
+              scope: "cwd",
+              source: "memory.md",
+              timeUpdated: 1_735_689_660_000,
+              snippet: "Remember that the left tool panels use the selected project directory.",
+            },
+          ])
         if (path === "/panel/knowledge/preference") return send([])
         if (path === "/file") return send({ entries: [{ path: "src/main.tsx", name: "main.tsx", type: "file" }] })
         if (path === "/find/file") return send({ entries: [] })
@@ -184,6 +237,8 @@ test(
         ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_server_url", serverUrl)
+        localStorage.setItem("oc_workspace_task", "tsk_side_activity")
+        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_right_panel_collapsed", "false")
       }, server.origin)
 
@@ -403,6 +458,30 @@ test(
         detail: "Connected",
         status: "Connected",
       })
+
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
+      await page.waitForFunction(
+        () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
+      )
+
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]')
+      await page.waitForSelector("#leftPanelMemory[data-active='true'] .knowledge-item")
+      const memoryPanelState = await page.evaluate(() => {
+        const panel = document.querySelector<HTMLElement>("#leftPanelMemory")!
+        const item = panel.querySelector<HTMLElement>(".knowledge-item")!
+        return {
+          active: panel.dataset.active,
+          title: item.querySelector<HTMLElement>(".knowledge-item-title")?.textContent || "",
+          meta: item.querySelector<HTMLElement>(".knowledge-item-meta")?.textContent || "",
+          scope: item.querySelector<HTMLElement>(".knowledge-scope")?.textContent || "",
+          empty: panel.querySelector<HTMLElement>(".empty-hint")?.textContent || "",
+        }
+      })
+      assert.equal(memoryPanelState.active, "true")
+      assert.equal(memoryPanelState.title, "Project decision memory")
+      assert.equal(memoryPanelState.meta.startsWith("memory.md"), true)
+      assert.equal(memoryPanelState.scope.length > 0, true)
+      assert.equal(memoryPanelState.empty, "")
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
       await page.waitForFunction(

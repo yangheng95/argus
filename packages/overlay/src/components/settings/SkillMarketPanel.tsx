@@ -11,8 +11,8 @@ import { createEffect, createSignal, createMemo, For, onCleanup, Show } from "so
 import type { JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { t } from "../../utils/i18n"
-import { apiJson } from "../../services/api"
-import { activeDirectory, pickDirectory } from "../../services/workspace"
+import { apiJson, configure as configureApi } from "../../services/api"
+import { pickDirectory, syncActiveDirectoryApiContext } from "../../services/workspace"
 import { appStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
 import { getHostTransport } from "../../services/host-transport"
@@ -317,7 +317,14 @@ function FormSelect(props: {
   )
 }
 
-function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: boolean; compact?: boolean }) {
+type DirectoryProp = string | (() => string | undefined)
+
+function ExtensionSettingsPanel(props: {
+  mode: ExtensionPanelMode
+  active?: boolean
+  compact?: boolean
+  directory?: DirectoryProp
+}) {
   const nativeCommands = getHostTransport().capabilities.nativeCommands
   const canOpenLocalPath = createMemo(() => nativeCommands["open-path"])
   const canOpenRemoteUrl = createMemo(() => nativeCommands["open-url"])
@@ -347,6 +354,22 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
     setNoticeStatus(status)
   }
 
+  function currentDirectory(): string {
+    if (props.directory !== undefined) {
+      const value = typeof props.directory === "function" ? props.directory() : props.directory
+      const directory = String(value || "").trim()
+      configureApi({ directory })
+      return directory
+    }
+    return syncActiveDirectoryApiContext().trim()
+  }
+
+  function requireActiveDirectory(): boolean {
+    if (currentDirectory()) return true
+    setPanelNotice(t("workspace.no_directory"), "warn")
+    return false
+  }
+
   // Reactive data from appStore (populated by loadExtensions/loadSkillMarket after connect)
   const skills = createMemo((): SkillItem[] => {
     const raw = appStore.skills
@@ -367,6 +390,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   const mcpEntries = createMemo(() => Object.entries(mcp()))
 
   async function reloadAll() {
+    if (!requireActiveDirectory()) return
     setLoading(true)
     setNotice("")
     try {
@@ -484,6 +508,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   async function handleAddSkill() {
     const value = skillForm.value.trim()
     if (!value) return
+    if (!requireActiveDirectory()) return
     try {
       await apiJson("skill/install", {
         method: "POST",
@@ -503,7 +528,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   }
 
   async function handleDroppedSkillDrop(event: DragEvent) {
-    if (!activeDirectory()) {
+    if (!currentDirectory()) {
       setPanelNotice(t("workspace.no_directory"), "warn")
       return
     }
@@ -551,8 +576,8 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
 
   // Ensure market data is loaded once per active project directory.
   createEffect(() => {
-    const directory = activeDirectory()
     if (props.mode !== "skill-market" || props.active !== true) return
+    const directory = currentDirectory()
     if (!directory) {
       setLoadedMarketDirectory("")
       setPanelNotice(t("workspace.no_directory"), "warn")
@@ -568,7 +593,13 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
 
   createEffect(() => {
     if (props.mode !== "skill" || props.active !== true) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
 
+    setNotice("")
     loadInstalledSkills().catch((e) => {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     })
@@ -576,12 +607,18 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
 
   createEffect(() => {
     if (props.mode !== "mcp" || props.active !== true) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
 
     const refresh = () => {
       loadMcpStatus().catch((e) => {
         setPanelNotice(e instanceof Error ? e.message : String(e))
       })
     }
+    setNotice("")
     const interval = createVisibilityInterval(refresh, MCP_STATUS_REFRESH_INTERVAL_MS, {
       onVisible: refresh,
     })
@@ -617,6 +654,7 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   })
 
   async function handleAddMcp() {
+    if (!requireActiveDirectory()) return
     try {
       await addMcpServer({
         name: mcpForm.name,
@@ -1069,16 +1107,25 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: bool
   )
 }
 
-export function SkillsPanel(props: { active?: boolean; compact?: boolean } = {}) {
-  return <ExtensionSettingsPanel mode="skill" active={props.active ?? true} compact={props.compact} />
+export function SkillsPanel(props: { active?: boolean; compact?: boolean; directory?: DirectoryProp } = {}) {
+  return (
+    <ExtensionSettingsPanel
+      mode="skill"
+      active={props.active ?? true}
+      compact={props.compact}
+      directory={props.directory}
+    />
+  )
 }
 
-export function McpPanel(props: { compact?: boolean } = {}) {
-  return <ExtensionSettingsPanel mode="mcp" active={true} compact={props.compact} />
+export function McpPanel(props: { active?: boolean; compact?: boolean; directory?: DirectoryProp } = {}) {
+  return (
+    <ExtensionSettingsPanel mode="mcp" active={props.active ?? true} compact={props.compact} directory={props.directory} />
+  )
 }
 
-export function SkillMarketPanel(props: { active?: boolean }) {
-  return <ExtensionSettingsPanel mode="skill-market" active={props.active} />
+export function SkillMarketPanel(props: { active?: boolean; directory?: DirectoryProp }) {
+  return <ExtensionSettingsPanel mode="skill-market" active={props.active} directory={props.directory} />
 }
 
 export default SkillMarketPanel

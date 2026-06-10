@@ -1,7 +1,7 @@
 // ── Config Service ──
 // Check config accessors, config update helpers, project scaffold, prompt catalog.
 
-import { apiJson } from "./api"
+import { apiJson, configure as configureApi } from "./api"
 import { appStore, setAppStore } from "../store/app"
 import { settingsStore } from "../store/settings"
 import { AppLog } from "../utils/log"
@@ -10,7 +10,7 @@ import { loadConfigInfo } from "./init"
 import { loadExtensions } from "./extensions"
 import { loadMeta } from "./meta"
 import { loadExecutors } from "./executor"
-import { restoreWorkspaceDirectory } from "./workspace"
+import { activeDirectory, restoreWorkspaceDirectory } from "./workspace"
 import { loadTasks, clearTasksForMissingDirectory } from "../store/board"
 import { getHostTransport } from "./host-transport"
 import { sanitizeLocale } from "../utils/i18n"
@@ -300,10 +300,12 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
  * port available for post-migration use.
  */
 export async function reloadProjectScope(options: { restoreWorkspace?: boolean } = {}): Promise<void> {
-  if (!settingsStore.directory.trim()) {
+  const directory = activeDirectory().trim()
+  if (!directory) {
     clearTasksForMissingDirectory()
     return
   }
+  configureApi({ directory })
   // Mirrors loadInitialData's parallel reload — must load all project-scope
   // data including tasks and executors so the UI fully reflects the new directory.
   await Promise.all([
