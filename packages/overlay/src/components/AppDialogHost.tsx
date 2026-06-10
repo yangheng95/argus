@@ -1,16 +1,32 @@
+import * as Select from "@kobalte/core/select"
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js"
+import type { JSX } from "solid-js"
 import { dialogStore, setDialogStore } from "../store/dialog"
 import { dismissAppDialog, settleAppDialog } from "../services/app-dialog"
 import { t } from "../utils/i18n"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
+import { Icon } from "./Icon"
 
 const TASK_DECISION_COUNTDOWN_TICK_MS = 250
+type AppDialogSelectOption = { value: string; label?: string }
+
+function AppDialogSelectOptionItem(props: Select.SelectRootItemComponentProps<AppDialogSelectOption>): JSX.Element {
+  const option = () => props.item.rawValue
+  return (
+    <Select.Item item={props.item} class="oc-select-option app-dialog-select-option">
+      <Select.ItemLabel>{option().label || option().value}</Select.ItemLabel>
+      <Select.ItemIndicator class="oc-select-indicator">
+        <Icon name="status-completed" size={12} />
+      </Select.ItemIndicator>
+    </Select.Item>
+  )
+}
 
 export function AppDialogHost() {
   let okButtonRef: HTMLButtonElement | undefined
   let inputRef: HTMLInputElement | undefined
-  let selectRef: HTMLSelectElement | undefined
+  let selectRef: HTMLButtonElement | undefined
   const [remainingSeconds, setRemainingSeconds] = createSignal(0)
 
   const isTaskQueueDecision = () => dialogStore.app.kind === "task-queue-decision"
@@ -26,6 +42,13 @@ export function AppDialogHost() {
   }
   const chooseTaskDecision = (value: string) => {
     settleAppDialog(true, dialogStore.app.epoch, value)
+  }
+  const selectOptions = () => (dialogStore.app.selectOptions || []) as AppDialogSelectOption[]
+  const selectedOption = () =>
+    selectOptions().find((item) => item.value === dialogStore.app.selectValue) ?? selectOptions()[0] ?? null
+  const setSelectOption = (option: AppDialogSelectOption | null) => {
+    if (!option) return
+    setDialogStore("app", "selectValue", option.value)
   }
 
   createEffect(() => {
@@ -181,21 +204,43 @@ export function AppDialogHost() {
         <span class="field-label" id="appDialogSelectLabel">
           {dialogStore.app.selectLabel || t("dialog.input")}
         </span>
-        <select
-          class="field-input app-dialog-input custom-select"
-          id="appDialogSelect"
-          ref={(el) => {
-            selectRef = el
-          }}
-          value={dialogStore.app.selectValue || ""}
-          onChange={(event) => {
-            setDialogStore("app", "selectValue", event.currentTarget.value)
-          }}
+        <Select.Root<AppDialogSelectOption>
+          class="app-dialog-select"
+          options={selectOptions()}
+          optionValue="value"
+          optionTextValue="label"
+          value={selectedOption()}
+          onChange={setSelectOption}
+          itemComponent={AppDialogSelectOptionItem}
+          disallowEmptySelection
+          gutter={4}
+          sameWidth
         >
-          {(dialogStore.app.selectOptions || []).map((item) => (
-            <option value={item.value}>{item.label || item.value}</option>
-          ))}
-        </select>
+          <Select.Trigger
+            id="appDialogSelect"
+            class="field-input app-dialog-input custom-select app-dialog-select-trigger"
+            aria-labelledby="appDialogSelectLabel"
+            ref={(el) => {
+              selectRef = el
+            }}
+          >
+            <Select.Value<AppDialogSelectOption>>
+              {(state) => {
+                const option = state.selectedOption()
+                return <span>{option?.label || option?.value || ""}</span>
+              }}
+            </Select.Value>
+            <Select.Icon>
+              <Icon name="caret-down" size={12} />
+            </Select.Icon>
+          </Select.Trigger>
+          <Select.HiddenSelect aria-labelledby="appDialogSelectLabel" />
+          <Select.Portal>
+            <Select.Content class="oc-select-content app-dialog-select-content">
+              <Select.Listbox class="oc-select-listbox app-dialog-select-listbox" />
+            </Select.Content>
+          </Select.Portal>
+        </Select.Root>
       </label>
     </Dialog>
   )
