@@ -3084,6 +3084,8 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
  * source. The font-size from the base rule is preserved because the
  * deeper rule never set it. */
 .task-actions-buttons .oc-button {
+  --oc-button-height: auto;
+
   min-height: auto;
   padding: 0 0 0 var(--ui-btn-mini-padding-x);
   border: none;
