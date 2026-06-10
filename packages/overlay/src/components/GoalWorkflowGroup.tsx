@@ -12,6 +12,7 @@ import { goalRevisionLabelFromIndexes } from "../utils/goal-label"
 import { goalStatusToTaskStatus, statusIconName } from "../utils/status-mapping"
 import { relativePathFrom } from "../utils/path"
 import { activeDirectory, openDirectory } from "../services/workspace"
+import { getHostTransport } from "../services/host-transport"
 import { StaticTextPart } from "./TextPart"
 import { Icon } from "./Icon"
 
@@ -96,6 +97,7 @@ interface GoalWorkflowGroupProps {
 // ── Main GoalWorkflowGroup ──
 
 export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
+  const canOpenWorktreeDirectory = getHostTransport().capabilities.nativeCommands["open-path"]
   // Default expanded when active (running/failed); manual overrides discarded
   // on goalStatus transitions via the unified card-fold store.
   // Key is namespaced with "gwg:" so it never collides with conversation-panel keys.
@@ -116,6 +118,15 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
     const base = activeDirectory()
     return relativePathFrom(base, wt)
   }
+  const worktreeContent = () => (
+    <>
+      <span class="gwg-worktree-label">{t("goal.field.worktree")}</span>
+      <span class="gwg-worktree-path">{worktreeLabel()}</span>
+      <Show when={props.goal.workspaceBranch}>
+        <span class="gwg-worktree-branch">⎇ {props.goal.workspaceBranch}</span>
+      </Show>
+    </>
+  )
 
   return (
     <div class="gwg" data-goal-status={props.goal.goalStatus} classList={{ "gwg--expanded": expanded() }}>
@@ -182,21 +193,26 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
             </div>
           </Show>
           <Show when={worktreeLabel()}>
-            <button
-              type="button"
-              class="gwg-worktree"
-              data-ui="goal-worktree-open"
-              title={props.goal.workspaceDir}
-              aria-label={`${t("cwd.open")}: ${props.goal.workspaceDir ?? ""}`}
-              onClick={() => void openDirectory(props.goal.workspaceDir!)}
-              data-card-dblclick-ignore="true"
+            <Show
+              when={canOpenWorktreeDirectory}
+              fallback={
+                <div class="gwg-worktree" title={props.goal.workspaceDir} data-card-dblclick-ignore="true">
+                  {worktreeContent()}
+                </div>
+              }
             >
-              <span class="gwg-worktree-label">{t("goal.field.worktree")}</span>
-              <span class="gwg-worktree-path">{worktreeLabel()}</span>
-              <Show when={props.goal.workspaceBranch}>
-                <span class="gwg-worktree-branch">⎇ {props.goal.workspaceBranch}</span>
-              </Show>
-            </button>
+              <button
+                type="button"
+                class="gwg-worktree"
+                data-ui="goal-worktree-open"
+                title={props.goal.workspaceDir}
+                aria-label={`${t("cwd.open")}: ${props.goal.workspaceDir ?? ""}`}
+                onClick={() => void openDirectory(props.goal.workspaceDir!)}
+                data-card-dblclick-ignore="true"
+              >
+                {worktreeContent()}
+              </button>
+            </Show>
           </Show>
         </div>
       </Show>
