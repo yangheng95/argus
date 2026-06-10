@@ -76,6 +76,7 @@ export type BrowserPreviewFinalizedSidecarCapture = {
 export async function runBrowserPreviewEvidenceJob(
   input: BrowserPreviewEvidenceRunnerInput,
 ): Promise<BrowserPreviewEvidenceRunnerResult> {
+  requireBrowserEvidenceIdentity(input)
   const executablePath = await BrowserRuntime.findBrowserExecutable()
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(undefined)
   const navigationTimeoutMs = RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms
@@ -163,6 +164,7 @@ export async function writeBrowserEvidenceManifest(input: {
   captures: Record<string, RuntimeCaptureResult>
   diagnostics: string[]
 }): Promise<BrowserEvidenceManifestSummary> {
+  requireBrowserEvidenceIdentity(input)
   const diagnosticsPath = path.join(input.outDir, "diagnostics.json")
   const manifest: BrowserEvidenceManifestSummary = {
     manifestPath: path.join(input.outDir, "manifest.json"),
@@ -210,6 +212,17 @@ export async function writeBrowserEvidenceManifest(input: {
     ),
   )
   return manifest
+}
+
+function requireBrowserEvidenceIdentity(input: { jobID: string; taskID: string; targetID: string }): void {
+  const missing = [
+    input.jobID.trim() ? undefined : "jobID",
+    input.taskID.trim() ? undefined : "taskID",
+    input.targetID.trim() ? undefined : "targetID",
+  ].filter((item): item is string => Boolean(item))
+  if (missing.length > 0) {
+    throw new Error(`Browser preview evidence runner requires non-empty ${missing.join(", ")}.`)
+  }
 }
 
 export async function finalizeBrowserPreviewSidecarCapture(input: {
