@@ -367,14 +367,14 @@ test(
         active: "true",
         hasToolbar: true,
         hasInternalHeader: false,
-        buttonTexts: ["", "", "", ""],
+        buttonTexts: ["", "", ""],
         rowDisplay: "grid",
         descClamp: "3",
         descOverflow: "hidden",
         titleWhiteSpace: "nowrap",
         pathWhiteSpace: "nowrap",
       })
-      assert.deepEqual(skillPanelState.buttonTitles, ["Reload", "Open Dir", "Add Skill", "Delete All"])
+      assert.deepEqual(skillPanelState.buttonTitles, ["Reload", "Add Skill", "Delete All"])
       assert.equal(skillPanelState.buttonWidths.every((width) => width <= 32), true)
       assert.ok(skillPanelState.rowColumns.includes("px"))
       assert.ok(skillPanelState.actionsWidth < 140)

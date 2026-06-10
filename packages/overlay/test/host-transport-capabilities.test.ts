@@ -73,6 +73,7 @@ describe("HostTransport capability contract", () => {
     const taskDirBar = read("src/components/TaskDirBar.tsx")
     const titlebar = read("src/components/titlebar/TitlebarMenubar.tsx")
     const channelsPanel = read("src/components/settings/ChannelsPanel.tsx")
+    const skillMarketPanel = read("src/components/settings/SkillMarketPanel.tsx")
     const onboarding = read("src/components/WorkspaceOnboardingDialog.tsx")
     const windowControls = read("src/components/WindowControls.tsx")
     const editorLaunchers = read("src/components/WorkspaceEditorLaunchers.tsx")
@@ -90,6 +91,14 @@ describe("HostTransport capability contract", () => {
     expect(channelsPanel).toContain("const nativeCommands = getHostTransport().capabilities.nativeCommands")
     expect(channelsPanel).toContain('nativeCommands["open-url"]')
     expect(channelsPanel).toContain("canOpenTutorialDocs()")
+
+    expect(skillMarketPanel).toContain("const nativeCommands = getHostTransport().capabilities.nativeCommands")
+    expect(skillMarketPanel).toContain('nativeCommands["workspace.pickDir"]')
+    expect(skillMarketPanel).toContain('nativeCommands["open-path"]')
+    expect(skillMarketPanel).toContain('nativeCommands["open-url"]')
+    expect(skillMarketPanel).toContain("canPickSkillDirectory()")
+    expect(skillMarketPanel).toContain("canOpenLocalPath()")
+    expect(skillMarketPanel).toContain("canOpenRemoteUrl()")
 
     expect(titlebar).toContain('nativeCommands["workspace.pickDir"]')
     expect(titlebar).toContain('nativeCommands["open-path"]')
