@@ -21,7 +21,6 @@ import path from "path"
  */
 
 const CLI_ENTRY = path.resolve(__dirname, "../../src/index.ts")
-const PRELOAD = ["--preload", "@opentui/solid/preload", "--conditions=browser"] as const
 
 interface SpawnedSidecar {
   proc: ReturnType<typeof Bun.spawn>
@@ -43,7 +42,6 @@ async function spawnSidecar(opts: {
   const proc = Bun.spawn(
     [
       "bun",
-      ...PRELOAD,
       CLI_ENTRY,
       "sidecar",
       "--project-dir",

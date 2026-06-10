@@ -34,9 +34,6 @@ describe("opencorvus sidecar contention (audit W2-G5 / F2)", () => {
       Bun.spawn(
         [
           "bun",
-          "--preload",
-          "@opentui/solid/preload",
-          "--conditions=browser",
           cliEntry,
           "sidecar",
           "--project-dir",
