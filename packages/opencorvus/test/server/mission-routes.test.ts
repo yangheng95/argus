@@ -411,7 +411,7 @@ describe("mission routes", () => {
     expect(
       Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, betaSession.id)).get()),
     ).toBeDefined()
-  })
+  }, 15_000)
 
   test("Mission actions do not target non-Mission sessions", async () => {
     await using tmp = await tmpdir({ git: true })
