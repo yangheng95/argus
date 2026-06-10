@@ -526,10 +526,11 @@
 }
 
 .dialog .image-preview-dialog__form {
-  width: calc(100vw - calc(16px * var(--ui-scale)));
-  max-width: calc(100vw - calc(16px * var(--ui-scale)));
-  height: calc(100vh - calc(16px * var(--ui-scale)));
-  max-height: calc(100vh - calc(16px * var(--ui-scale)));
+  width: min(calc(1040px * var(--ui-scale)), calc(100vw - calc(72px * var(--ui-scale))));
+  max-width: calc(100vw - calc(32px * var(--ui-scale)));
+  height: min(calc(760px * var(--ui-scale)), calc(78vh));
+  max-height: calc(100vh - calc(72px * var(--ui-scale)));
+  min-height: min(calc(420px * var(--ui-scale)), calc(100vh - calc(96px * var(--ui-scale))));
   padding: 0;
   gap: 0;
   overflow: hidden;
@@ -566,6 +567,8 @@
 .image-preview-dialog__toolbar {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: calc(4px * var(--ui-scale));
 }
 
