@@ -18,6 +18,9 @@ test("root user message → channel=main (only path that leaves a card)", async 
       const meta = overlayMeta(root.id, root.id, { role: "user" })
       expect(meta.resolvedRole).toBe("user")
       expect(meta.channel).toBe("main")
+      const standaloneHydrateMeta = overlayMeta(root.id, "", { role: "user" })
+      expect(standaloneHydrateMeta.resolvedRole).toBe("user")
+      expect(standaloneHydrateMeta.channel).toBe("main")
     },
   })
 })
@@ -109,6 +112,24 @@ test("assistant on a sub-agent session → channel/resolvedRole = its kind", asy
       const em = overlayMeta(exec.id, root.id, { role: "assistant" })
       expect(em.resolvedRole).toBe("executor")
       expect(em.channel).toBe("executor")
+    },
+  })
+})
+
+test("standalone assistant session routes user input to main and assistant output to assistant", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const agent = await Session.create({ kind: "assistant", title: "right sidebar assistant" })
+
+      const user = overlayMeta(agent.id, "", { role: "user" })
+      expect(user.resolvedRole).toBe("user")
+      expect(user.channel).toBe("main")
+
+      const assistant = overlayMeta(agent.id, "", { role: "assistant" })
+      expect(assistant.resolvedRole).toBe("assistant")
+      expect(assistant.channel).toBe("assistant")
     },
   })
 })

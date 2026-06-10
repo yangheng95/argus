@@ -25,7 +25,7 @@ import { Log } from "../../util/log"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { ProtocolStore } from "@/protocol/store"
-import { enrichMissionSessionTranscript, subscribeSessionMirror } from "@/protocol/session-mirror"
+import { enrichStandaloneSessionTranscript, subscribeSessionMirror } from "@/protocol/session-mirror"
 import { BusEvent } from "@/bus/bus-event"
 import { SessionConversationHydration, SessionEvent } from "@/engine/model"
 import {
@@ -334,7 +334,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const session = await Session.get(sessionID)
-        const transcript = enrichMissionSessionTranscript(await Session.messages({ sessionID })).filter(
+        const transcript = enrichStandaloneSessionTranscript(await Session.messages({ sessionID })).filter(
           conversationMessageHasDisplay,
         )
         const board = {

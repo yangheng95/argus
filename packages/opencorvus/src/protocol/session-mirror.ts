@@ -5,6 +5,9 @@ import { Question } from "@/question"
 import { Message, Session, SessionStatus } from "@/session"
 import { sessionGoalID, sessionRole } from "@/orchestrator/task-event"
 import { isRightSidebarCodingAssistantSession } from "@/coding-assistant/session"
+import { overlayMeta } from "@/orchestrator/protocol/message-bridge"
+import { Database, eq } from "@/storage/db"
+import { MessageTable } from "@/session/session.sql"
 
 export type SessionBusEvent = {
   type: string
@@ -31,53 +34,110 @@ export function sessionBusEventSessionID(event: SessionBusEvent): string | undef
   return undefined
 }
 
-function stampMissionPayload(type: string, props: Record<string, unknown>): Record<string, unknown> {
+type MessageOverlayInfo = {
+  role: string
+  extra?: Record<string, unknown>
+}
+
+function persistedMessageOverlayInfo(messageID: string): MessageOverlayInfo {
+  const row = Database.use((db) =>
+    db.select({ data: MessageTable.data }).from(MessageTable).where(eq(MessageTable.id, messageID)).get(),
+  )
+  const data = row?.data as Record<string, unknown> | undefined
+  const role = data?.role
+  if (!data || typeof role !== "string" || role.length === 0) {
+    throw new Error(`session-mirror: message ${messageID} missing persisted role for overlay enrichment`)
+  }
+  const extra = data.extra
+  return {
+    role,
+    ...(extra && typeof extra === "object" && !Array.isArray(extra) ? { extra: extra as Record<string, unknown> } : {}),
+  }
+}
+
+function messageIDFromPayload(props: Record<string, unknown>): string {
+  const part = props.part
+  if (part && typeof part === "object" && typeof (part as Record<string, unknown>).messageID === "string") {
+    return String((part as Record<string, unknown>).messageID)
+  }
+  if (typeof props.messageID === "string") return props.messageID
+  return ""
+}
+
+function overlayInfoForPayload(props: Record<string, unknown>): MessageOverlayInfo {
+  const info = props.info
+  if (info && typeof info === "object") {
+    const record = info as Record<string, unknown>
+    if (typeof record.role === "string" && record.role.length > 0) {
+      const extra = record.extra
+      return {
+        role: record.role,
+        ...(extra && typeof extra === "object" && !Array.isArray(extra)
+          ? { extra: extra as Record<string, unknown> }
+          : {}),
+      }
+    }
+  }
+  const messageID = messageIDFromPayload(props)
+  if (!messageID) throw new Error("session-mirror: message event missing role and messageID")
+  return persistedMessageOverlayInfo(messageID)
+}
+
+function sessionEventMeta(sessionID: string): { channel: string; resolvedRole: string } {
+  const kind = sessionRole(sessionID)
+  if (!kind) throw new Error(`session-mirror: session ${sessionID} has no kind for overlay enrichment`)
+  if (kind === "root") return { channel: "main", resolvedRole: "user" }
+  return { channel: kind, resolvedRole: kind }
+}
+
+function stampPayloadWithMeta(
+  props: Record<string, unknown>,
+  meta: { channel: string; resolvedRole: string },
+): Record<string, unknown> {
   const payload = { ...props }
   const info = payload.info
   const part = payload.part
-  const infoRole =
-    info && typeof info === "object" && typeof (info as Record<string, unknown>).role === "string"
-      ? String((info as Record<string, unknown>).role)
-      : ""
-  const isUser = infoRole === "user"
-  const channel = isUser ? "main" : "mission"
-  const resolvedRole = isUser ? "user" : "mission"
   if (info && typeof info === "object") {
     payload.info = {
       ...(info as Record<string, unknown>),
-      channel,
-      resolvedRole,
+      channel: meta.channel,
+      resolvedRole: meta.resolvedRole,
     }
   }
   if (part && typeof part === "object") {
     payload.part = {
       ...(part as Record<string, unknown>),
-      channel: type === "message.part.delta" ? channel : ((part as Record<string, unknown>).channel ?? "mission"),
-      resolvedRole:
-        type === "message.part.delta" ? resolvedRole : ((part as Record<string, unknown>).resolvedRole ?? "mission"),
+      channel: meta.channel,
+      resolvedRole: meta.resolvedRole,
     }
   }
-  payload.channel = channel
-  payload.resolvedRole = resolvedRole
+  payload.channel = meta.channel
+  payload.resolvedRole = meta.resolvedRole
   return payload
 }
 
-export function enrichMissionSessionTranscript(messages: Message.WithParts[]): Message.WithParts[] {
+function stampSessionPayload(sessionID: string, props: Record<string, unknown>): Record<string, unknown> {
+  return stampPayloadWithMeta(props, overlayMeta(sessionID, "", overlayInfoForPayload(props)))
+}
+
+function stampSessionEventPayload(sessionID: string, props: Record<string, unknown>): Record<string, unknown> {
+  return stampPayloadWithMeta(props, sessionEventMeta(sessionID))
+}
+
+export function enrichStandaloneSessionTranscript(messages: Message.WithParts[]): Message.WithParts[] {
   return messages.map((message) => {
-    const isUser = message.info.role === "user"
-    const channel = isUser ? "main" : "mission"
-    const resolvedRole = isUser ? "user" : "mission"
+    const meta = overlayMeta(message.info.sessionID, "", message.info)
     return {
       ...message,
       info: {
         ...message.info,
-        channel,
-        resolvedRole,
+        channel: meta.channel,
+        resolvedRole: meta.resolvedRole,
       } as unknown as Message.Info,
       parts: message.parts.map((part) => ({
         ...part,
-        channel,
-        resolvedRole,
+        channel: meta.channel,
+        resolvedRole: meta.resolvedRole,
       })),
     }
   })
@@ -113,7 +173,7 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === Message.Event.Updated.type) {
-    const payload = sessionRole(sessionID) === "mission" ? stampMissionPayload("message.updated", props) : { ...props }
+    const payload = stampSessionPayload(sessionID, props)
     const info = payload.info as Record<string, unknown>
     if (!info.agent) info.agent = "executor"
     return {
@@ -123,8 +183,7 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === Message.Event.PartUpdated.type) {
-    const payload =
-      sessionRole(sessionID) === "mission" ? stampMissionPayload("message.part.updated", props) : { ...props }
+    const payload = stampSessionPayload(sessionID, props)
     const part = payload.part as Record<string, unknown>
     return {
       type: "message.part.updated",
@@ -133,24 +192,27 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === Message.Event.PartDelta.type) {
+    const payload = stampSessionPayload(sessionID, props)
     return {
       type: "message.part.delta",
       summary: typeof props.field === "string" ? `Delta: ${props.field}` : "Message delta",
-      payload: sessionRole(sessionID) === "mission" ? stampMissionPayload("message.part.delta", props) : props,
+      payload,
     }
   }
   if (event.type === Message.Event.Removed.type) {
+    const payload = stampSessionEventPayload(sessionID, props)
     return {
       type: "message.removed",
       summary: "Message removed",
-      payload: sessionRole(sessionID) === "mission" ? stampMissionPayload("message.removed", props) : props,
+      payload,
     }
   }
   if (event.type === Message.Event.PartRemoved.type) {
+    const payload = stampSessionEventPayload(sessionID, props)
     return {
       type: "message.part.removed",
       summary: "Part removed",
-      payload: sessionRole(sessionID) === "mission" ? stampMissionPayload("message.part.removed", props) : props,
+      payload,
     }
   }
   if (event.type === Session.Event.Error.type) {
