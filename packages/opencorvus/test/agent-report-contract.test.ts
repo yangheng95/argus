@@ -101,6 +101,13 @@ test("agent output toolkits build explicit non-empty reports", async () => {
         },
       ],
       material_inventory: "Trace report payload samples.",
+      material_inventory_items: [
+        {
+          title: "Trace payload samples",
+          detail: "Use trace report payload samples to verify report card rendering.",
+          source_refs: ["packages/overlay/src/components/Card.tsx"],
+        },
+      ],
       visual_consistency_contract: "Keep cards compact and readable.",
       ui_data_contract: "Consume trace report payloads.",
       template_iteration_notes: ["Checked report cards.", "Checked popover scroll."],
@@ -204,5 +211,5 @@ test("runner report call sites pass explicit report payloads", () => {
   expect(source).toContain('kind: "agent_report"')
   expect(source).toContain('kind: "agent_report_retry_final"')
   expect(source.match(/report: buildTraceReport/g)?.length).toBeGreaterThanOrEqual(3)
-  expect(source).toContain("report: lastReport")
+  expect(source).toMatch(/report:\s*lastReport\s*\?\?\s*errorReport/)
 })
