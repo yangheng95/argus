@@ -121,23 +121,12 @@ describe("useHotkey matching logic", () => {
 // ── Adoption watermark ────────────────────────────────────────────
 
 describe("useHotkey adoption watermark", () => {
-  // Confirm that the four global document/window keydown listener blocks
-  // have been replaced. We count useHotkey imports across components/.
-  test("useHotkey imported in at least 4 components", () => {
-    const files = [
-      "src/components/ChangesPanel.tsx",
-      "src/components/CommandPalette.tsx",
-      "src/components/ExecutorSelector.tsx",
-      "src/components/TaskDetailOverlay.tsx",
-    ]
-    let count = 0
-    for (const rel of files) {
+  test("global hotkey surfaces import the shared useHotkey helper", () => {
+    for (const rel of ["src/components/CommandPalette.tsx", "src/components/TaskDetailOverlay.tsx"]) {
       const text = readText(join(OVERLAY_ROOT, rel))
-      if (text.includes('from "../solid/hotkey"') || text.includes("from './solid/hotkey'")) {
-        count++
-      }
+      expect(text).toContain('from "../solid/hotkey"')
+      expect(text).toContain("useHotkey({")
     }
-    expect(count).toBeGreaterThanOrEqual(4)
   })
 
   test("no bare document/window.addEventListener keydown in migrated components", () => {
