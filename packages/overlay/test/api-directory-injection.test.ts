@@ -95,6 +95,9 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("global/config", () => expectDoesNotInject("global/config"))
     test("global/dispose", () => expectDoesNotInject("global/dispose"))
     test("global/db/reset", () => expectDoesNotInject("global/db/reset"))
+    test("global/db/mysql/schema", () => expectDoesNotInject("global/db/mysql/schema"))
+    test("global/db/mysql/export", () => expectDoesNotInject("global/db/mysql/export"))
+    test("global/db/mysql/import", () => expectDoesNotInject("global/db/mysql/import"))
     test("global/tasks", () => expectDoesNotInject("global/tasks"))
     test("mission ledger", () => expectDoesNotInject("mission"))
   })
@@ -151,6 +154,9 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "global/config",
       "global/dispose",
       "global/db/reset",
+      "global/db/mysql/schema",
+      "global/db/mysql/export",
+      "global/db/mysql/import",
       "global/tasks",
       "mission",
       "auth",

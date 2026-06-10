@@ -16,7 +16,7 @@ function quoteLiteral(value: string) {
   return `'${value.replaceAll("'", "''")}'`
 }
 
-function tableName(table: unknown) {
+export function tableName(table: unknown) {
   return getTableConfig(table as never).name
 }
 
@@ -114,7 +114,7 @@ function renderTable(table: unknown) {
   return [tableSql, ...indexSql].join("\n")
 }
 
-function collectTables() {
+export function collectTables() {
   const tables: unknown[] = []
   const seen = new Set<string>()
 

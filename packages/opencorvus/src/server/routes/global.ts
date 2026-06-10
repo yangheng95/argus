@@ -11,6 +11,15 @@ import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { Database } from "../../storage/db"
 import { errors } from "../error"
+import {
+  MysqlTransferFullExport,
+  MysqlTransferImportResult,
+  MysqlTransferSchemaExport,
+  MysqlTransferSnapshot,
+  exportMysqlTransferPackage,
+  importMysqlTransferSnapshot,
+  mysqlSchemaExport,
+} from "@/storage/mysql-transfer"
 
 const log = Log.create({ service: "server" })
 
@@ -258,6 +267,93 @@ export const GlobalRoutes = lazy(() =>
         const targets = await Database.reset(projectDir)
         log.warn("db reset via /global/db/reset", { projectDir, targets })
         return c.json({ ok: targets.every((t) => t.ok), targets })
+      },
+    )
+    .get(
+      "/db/mysql/schema",
+      describeRoute({
+        summary: "Export MySQL staging schema",
+        description:
+          "Export the current OpenCorvus SQLite table shape as MySQL-compatible staging DDL plus the strict transfer schema fingerprint used by /global/db/mysql/import.",
+        operationId: "global.db.mysql.schema",
+        responses: {
+          200: {
+            description: "MySQL transfer schema",
+            content: {
+              "application/json": {
+                schema: resolver(MysqlTransferSchemaExport),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => c.json(mysqlSchemaExport()),
+    )
+    .get(
+      "/db/mysql/export",
+      describeRoute({
+        summary: "Export MySQL transfer snapshot",
+        description:
+          "Export MySQL-compatible staging DDL and a strict JSON snapshot of the current SQLite data. The snapshot can be posted back to /global/db/mysql/import to rebuild the local DB.",
+        operationId: "global.db.mysql.export",
+        responses: {
+          200: {
+            description: "MySQL transfer package",
+            content: {
+              "application/json": {
+                schema: resolver(MysqlTransferFullExport),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => c.json(exportMysqlTransferPackage()),
+    )
+    .post(
+      "/db/mysql/import",
+      describeRoute({
+        summary: "Import MySQL transfer snapshot",
+        description:
+          "DESTRUCTIVE. Rebuild the local SQLite DB from a strict MySQL transfer snapshot. This does not make MySQL a runtime DB; it is a one-shot transfer/import surface.",
+        operationId: "global.db.mysql.import",
+        responses: {
+          200: {
+            description: "Import result",
+            content: {
+              "application/json": {
+                schema: resolver(MysqlTransferImportResult),
+              },
+            },
+          },
+          ...errors(400, 409),
+        },
+      }),
+      validator("json", z.object({ snapshot: MysqlTransferSnapshot })),
+      async (c) => {
+        const { hasActiveSessions } = await import("@/engine/runtime")
+        if (hasActiveSessions()) {
+          return c.json({ error: "Active executor sessions exist, refusing DB import" }, 409)
+        }
+        await Instance.disposeAll().catch(() => undefined)
+        const { snapshot } = c.req.valid("json")
+        let result: MysqlTransferImportResult
+        try {
+          result = importMysqlTransferSnapshot(snapshot)
+        } catch (err) {
+          return c.json(
+            {
+              success: false as const,
+              data: { message: err instanceof Error ? err.message : String(err) },
+              errors: [],
+            },
+            400,
+          )
+        }
+        log.warn("db import via /global/db/mysql/import", {
+          schemaFingerprint: result.schemaFingerprint,
+          tables: result.tables.length,
+        })
+        return c.json(result)
       },
     ),
 )
