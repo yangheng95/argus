@@ -5,7 +5,7 @@
 
 import { createMemo, createSignal, For, Show } from "solid-js"
 import { t } from "../../utils/i18n"
-import { appStore, setAppStore } from "../../store/app"
+import { appStore, dismissProviderAuth, setAppStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
 import { apiJson, ApiError } from "../../services/api"
 import { loadProviderInfo } from "../../services/init"
@@ -160,6 +160,7 @@ export default function ProvidersPanel() {
     showLlmNotice: (message, tone = "info") => {
       void nativeMessage(message, { title: t("llm.title"), kind: tone })
     },
+    onAuthCancelled: dismissProviderAuth,
   }
 
   async function refreshAuthState() {
