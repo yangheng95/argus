@@ -69,10 +69,22 @@ describe("HostTransport capability contract", () => {
   })
 
   test("visible controls read HostTransport capabilities instead of host kind checks", () => {
+    const topbar = read("src/components/TopBar.tsx")
+    const taskDirBar = read("src/components/TaskDirBar.tsx")
     const titlebar = read("src/components/titlebar/TitlebarMenubar.tsx")
     const onboarding = read("src/components/WorkspaceOnboardingDialog.tsx")
     const windowControls = read("src/components/WindowControls.tsx")
     const editorLaunchers = read("src/components/WorkspaceEditorLaunchers.tsx")
+
+    expect(topbar).toContain('nativeCommands["workspace.pickDir"]')
+    expect(topbar).toContain("Hosts without workspace.pickDir do not render this")
+    expect(topbar).not.toContain("UnsupportedNativeCommandError")
+
+    expect(taskDirBar).toContain("const nativeCommands = getHostTransport().capabilities.nativeCommands")
+    expect(taskDirBar).toContain('browseDirectory: nativeCommands["workspace.pickDir"]')
+    expect(taskDirBar).toContain('openDirectory: nativeCommands["open-path"]')
+    expect(taskDirBar).toContain('if (!nativeCommands["workspace.pickDir"]) return')
+    expect(taskDirBar).toContain('if (!nativeCommands["open-path"]) return')
 
     expect(titlebar).toContain('nativeCommands["workspace.pickDir"]')
     expect(titlebar).toContain('nativeCommands["open-path"]')

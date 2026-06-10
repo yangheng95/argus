@@ -96,7 +96,7 @@ test("cwd breadcrumb keeps editor launchers out of the directory control", () =>
     "cwd.choose_level": "Use this folder",
   })
 
-  const html = pathBreadcrumb("D:/workspace/app")
+  const html = pathBreadcrumb("D:/workspace/app", { browseDirectory: true, openDirectory: true })
 
   expect(html).not.toContain("data-path-editor")
   expect(html).not.toContain("Open in VS Code")
@@ -104,4 +104,23 @@ test("cwd breadcrumb keeps editor launchers out of the directory control", () =>
   expect(html).not.toContain(">VS<")
   expect(html).not.toContain(">Py<")
   expect(html).not.toContain('data-path-action="create"')
+})
+
+test("cwd breadcrumb renders only host-supported native path actions", () => {
+  setLocaleData("en-US", {
+    "cwd.browse": "Switch Folder…",
+    "cwd.open": "Reveal in File Manager",
+    "cwd.choose_level": "Use this folder",
+  })
+
+  const supported = pathBreadcrumb("D:/workspace/app", { browseDirectory: true, openDirectory: true })
+  expect(supported).toContain('data-path-action="browse"')
+  expect(supported).toContain("data-path-open=")
+  expect(supported).toContain("data-path-set=")
+
+  const unsupported = pathBreadcrumb("D:/workspace/app", { browseDirectory: false, openDirectory: false })
+  expect(unsupported).not.toContain('data-path-action="browse"')
+  expect(unsupported).not.toContain("data-path-open=")
+  expect(unsupported).toContain("data-path-set=")
+  expect(unsupported).toContain('class="task-dir-node"')
 })

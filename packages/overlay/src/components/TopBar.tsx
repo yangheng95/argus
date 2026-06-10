@@ -10,6 +10,7 @@
 import { Show } from "solid-js"
 import { settingsStore } from "../store/settings"
 import { applyDirectory, pickDirectory } from "../services/workspace"
+import { getHostTransport } from "../services/host-transport"
 import { Icon } from "./Icon"
 
 export interface TopBarProps {
@@ -27,33 +28,45 @@ function shortenPath(p: string, max = 64): string {
 }
 
 async function switchCwd(): Promise<void> {
-  // Routes through HostTransport so the same call works under Tauri,
-  // VS Code (M5 will wire it to vscode.window.showOpenDialog), and
-  // throws UnsupportedNativeCommandError everywhere else (CLAUDE.md
-  // §一-7: no silent prompt fallback — vite-preview users can supply
-  // a directory via settings instead).
+  // Routes through HostTransport so the same call works under Tauri
+  // and VS Code. Hosts without workspace.pickDir do not render this
+  // as a clickable control.
   const next = await pickDirectory(settingsStore.directory ?? undefined)
   if (!next) return
   await applyDirectory(next, {})
 }
 
 export function TopBar(props: TopBarProps) {
-  return (
-    <div class="top-bar" role="banner">
-      <button
-        type="button"
-        class="top-bar-cwd"
-        title={settingsStore.directory || "Choose project directory"}
-        onClick={switchCwd}
-      >
-        <span class="top-bar-cwd-icon" aria-hidden="true">
-          <Icon name="folder" />
-        </span>
-        <span class="top-bar-cwd-path">{shortenPath(settingsStore.directory ?? "", 56) || "Choose project…"}</span>
+  const canPickDirectory = getHostTransport().capabilities.nativeCommands["workspace.pickDir"]
+  const directoryLabel = () => shortenPath(settingsStore.directory ?? "", 56) || "Choose project…"
+  const directoryTitle = () => settingsStore.directory || "Choose project directory"
+  const directoryContent = () => (
+    <>
+      <span class="top-bar-cwd-icon" aria-hidden="true">
+        <Icon name="folder" />
+      </span>
+      <span class="top-bar-cwd-path">{directoryLabel()}</span>
+      <Show when={canPickDirectory}>
         <span class="top-bar-cwd-caret" aria-hidden="true">
           <Icon name="caret-down" />
         </span>
-      </button>
+      </Show>
+    </>
+  )
+  return (
+    <div class="top-bar" role="banner">
+      <Show
+        when={canPickDirectory}
+        fallback={
+          <div class="top-bar-cwd" title={directoryTitle()} aria-label={directoryTitle()}>
+            {directoryContent()}
+          </div>
+        }
+      >
+        <button type="button" class="top-bar-cwd" title={directoryTitle()} onClick={switchCwd}>
+          {directoryContent()}
+        </button>
+      </Show>
       <div class="top-bar-spacer" />
       <Show when={props.rightSlot}>
         <div class="top-bar-right">{props.rightSlot!()}</div>

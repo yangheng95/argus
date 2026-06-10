@@ -21,6 +21,7 @@ import { t } from "../utils/i18n"
 import { AppLog } from "../utils/log"
 import { deleteProjectWorktree, loadProjectWorktrees, type ProjectWorktreeInfo } from "../services/worktree"
 import { showAppDialog } from "../services/app-dialog"
+import { getHostTransport } from "../services/host-transport"
 import { Icon } from "./Icon"
 import { WorkspaceCodingCliLaunchers } from "./WorkspaceCodingCliLaunchers"
 import { WorkspaceEditorLaunchers } from "./WorkspaceEditorLaunchers"
@@ -44,8 +45,14 @@ function worktreeStateLabel(item: ProjectWorktreeInfo): string {
 }
 
 export function TaskDirContent() {
+  const nativeCommands = getHostTransport().capabilities.nativeCommands
   const dir = createMemo(directoryMemo)
-  const breadcrumbHtml = createMemo(() => pathBreadcrumb(dir()))
+  const breadcrumbHtml = createMemo(() =>
+    pathBreadcrumb(dir(), {
+      browseDirectory: nativeCommands["workspace.pickDir"],
+      openDirectory: nativeCommands["open-path"],
+    }),
+  )
   const dirTitle = createMemo(() => dir() || t("cwd.unavailable"))
   const dirEmpty = createMemo(() => (dir() ? "false" : "true"))
   const [open, setOpen] = createSignal(false)
@@ -85,11 +92,13 @@ export function TaskDirContent() {
     event.stopPropagation()
     const action = button.dataset.pathAction || ""
     if (action === "browse") {
+      if (!nativeCommands["workspace.pickDir"]) return
       await browseDirectory()
       syncRecentDirs()
       return
     }
     if (button.dataset.pathOpen) {
+      if (!nativeCommands["open-path"]) return
       await openDirectory(button.dataset.pathOpen)
       return
     }
