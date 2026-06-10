@@ -45,10 +45,13 @@ describe("message image preview", () => {
 
   test("markdown delegated clicks open the shared image preview", () => {
     const source = read("src/main.tsx")
+    const app = read("src/components/App.tsx")
 
     expect(source).toContain('target.closest<HTMLElement>("[data-image-preview-trigger]")')
     expect(source).toContain("openImagePreview(src, alt)")
-    expect(source).toContain("<ImagePreviewHost />")
+    expect(source).not.toContain("<ImagePreviewHost />")
+    expect(app).toContain("<ImagePreviewHost />")
+    expect(app).toContain('id="imagePreviewHost"')
   })
 
   test("message thumbnails keep intrinsic size while capped by max bounds", () => {
