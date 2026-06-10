@@ -45,6 +45,19 @@ function normalizeOverlayReqPath(reqPath: string): string | null {
   return normalized
 }
 
+function normalizePublicPrefix(prefix: string | undefined): string {
+  const firstPrefix = prefix?.split(",")[0]?.trim()
+  if (!firstPrefix || firstPrefix === "/") return ""
+  if (/[<>"'\0]/.test(firstPrefix)) return ""
+  const withLeadingSlash = firstPrefix.startsWith("/") ? firstPrefix : `/${firstPrefix}`
+  return withLeadingSlash.replace(/\/+/g, "/").replace(/\/$/, "")
+}
+
+function overlayPublicBase(c: Context): string {
+  const prefix = normalizePublicPrefix(c.req.header("x-forwarded-prefix"))
+  return `${prefix}/ui`
+}
+
 export namespace OverlayUI {
   /**
    * Validate that a `/ui/...` request path stays inside the overlay
@@ -106,9 +119,10 @@ export namespace OverlayUI {
     const app = new Hono()
 
     // vite builds HTML with absolute asset paths (e.g. `/assets/...`).
-    // When served under `/ui/`, those paths miss the mount point. Rewrite
-    // them so links resolve under the overlay route.
-    const rewriteHtmlAssets = (html: string): string => html.replace(/(src|href)="\/(assets|i18n)\//g, '$1="/ui/$2/')
+    // When served under `/ui/` or a reverse-proxied prefix such as
+    // `/opencorvus/ui/`, those paths miss the public mount point.
+    const rewriteHtmlAssets = (c: Context, html: string): string =>
+      html.replace(/(src|href)="\/(assets|i18n)\//g, `$1="${overlayPublicBase(c)}/$2/`)
 
     const serveEmbedded = async (c: Context) => {
       const requested = normalizeOverlayReqPath(c.req.path.replace(/^\/ui/, "") || "/")
@@ -122,7 +136,7 @@ export namespace OverlayUI {
       const file = Bun.file(entry.file)
       if (ext === ".html") {
         const html = await file.text()
-        return c.body(rewriteHtmlAssets(html), 200, {
+        return c.body(rewriteHtmlAssets(c, html), 200, {
           "Content-Type": contentType,
           "Cache-Control": "no-cache",
         })
@@ -159,7 +173,7 @@ export namespace OverlayUI {
         if (!(await file.exists())) {
           // SPA fallback — always serves the (rewritten) index.html
           const indexHtml = await Bun.file(path.join(dir, "index.html")).text()
-          return c.body(rewriteHtmlAssets(indexHtml), 200, {
+          return c.body(rewriteHtmlAssets(c, indexHtml), 200, {
             "Content-Type": "text/html; charset=utf-8",
           })
         }
@@ -167,7 +181,7 @@ export namespace OverlayUI {
         const contentType = MIME[ext] || "application/octet-stream"
         if (ext === ".html") {
           const html = await file.text()
-          return c.body(rewriteHtmlAssets(html), 200, {
+          return c.body(rewriteHtmlAssets(c, html), 200, {
             "Content-Type": contentType,
             "Cache-Control": "no-cache",
           })
