@@ -18,6 +18,7 @@ import {
   DEFAULT_BASH_TIMEOUT_MS,
 } from "@/shell/timeout"
 import { ProcessSupervisor } from "@/shell/process-supervisor"
+import { createBrowserPreviewProcessOutputMaterializer } from "@/browser-preview/extract"
 
 import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncation"
@@ -211,6 +212,7 @@ export const BashTool = Tool.define("bash", async () => {
             pid: null as number | null,
             background: false,
             description: params.description,
+            browserPreviewOutputScanned: true,
           },
         }
       }
@@ -316,6 +318,9 @@ export const BashTool = Tool.define("bash", async () => {
       })
 
       let output = ""
+      const previewTargetMaterializer = createBrowserPreviewProcessOutputMaterializer({
+        taskID: typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined,
+      })
 
       // Initialize metadata with empty output
       ctx.metadata({
@@ -326,7 +331,9 @@ export const BashTool = Tool.define("bash", async () => {
       })
 
       const append = (chunk: Buffer) => {
-        output += chunk.toString()
+        const text = chunk.toString()
+        output += text
+        void previewTargetMaterializer.ingest(text)
         ctx.metadata({
           metadata: {
             // truncate the metadata to avoid GIANT blobs of data (has nothing to do w/ what agent can access)
@@ -378,6 +385,7 @@ export const BashTool = Tool.define("bash", async () => {
             resolve()
           })
         })
+        await previewTargetMaterializer.flush()
         const resultMetadata: string[] = [
           `bash tool returned while command continues running in background (pid=${supervisor.pid ?? "unknown"})`,
           `background process lease timeout: ${backgroundLease} ms`,
@@ -397,6 +405,7 @@ export const BashTool = Tool.define("bash", async () => {
             pid: supervisor.pid ?? null,
             background: true,
             description: params.description,
+            browserPreviewOutputScanned: true,
           },
           output,
         }
@@ -420,6 +429,7 @@ export const BashTool = Tool.define("bash", async () => {
       } finally {
         clearTimeout(timeoutTimer)
         ctx.abort.removeEventListener("abort", abortHandler)
+        await previewTargetMaterializer.flush()
         await supervisor.dispose()
       }
 
@@ -451,6 +461,7 @@ export const BashTool = Tool.define("bash", async () => {
           pid: null as number | null,
           background: false,
           description: params.description,
+          browserPreviewOutputScanned: true,
         },
         output,
       }

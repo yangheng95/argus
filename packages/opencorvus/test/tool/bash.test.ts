@@ -58,6 +58,15 @@ async function startReachablePreviewServer(): Promise<{ url: string; close: () =
   }
 }
 
+async function waitForBrowserPreviewTarget(taskID: string, url: string): Promise<void> {
+  const deadline = Date.now() + 5_000
+  while (Date.now() <= deadline) {
+    if (findLatestBrowserPreviewTarget(taskID)?.url === url) return
+    await Bun.sleep(25)
+  }
+  throw new Error(`Browser preview target was not persisted for ${taskID}: ${url}`)
+}
+
 function isPidAlive(pid: number) {
   try {
     process.kill(pid, 0)
@@ -322,6 +331,68 @@ describe("tool.bash", () => {
 
             const persisted = findLatestBrowserPreviewTarget(taskID)
             expect(persisted?.url).toBe(preview.url)
+          } finally {
+            restore()
+          }
+        },
+      })
+    } finally {
+      await preview.close()
+      await resetDatabase()
+    }
+  })
+
+  test("background process output persists task browser preview target after tool return", async () => {
+    await resetDatabase()
+    const preview = await startReachablePreviewServer()
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = `tsk_bashpreviewlate${Date.now()}`
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          Database.use((db) =>
+            db
+              .insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                title: "Preview task",
+                request: "Preview task",
+                source: "api",
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
+              .run(),
+          )
+
+          const stdout = new PassThrough()
+          const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+            pid: 9013,
+            stdin: null,
+            stdout,
+            stderr: new PassThrough(),
+            exited: new Promise<number>(() => {}),
+            terminate: async () => {},
+            dispose: async () => {},
+            unref: () => {},
+          }))
+          try {
+            const bash = await BashTool.init()
+            await bash.execute(
+              {
+                command: "npm run dev",
+                description: "Start frontend dev server",
+                background: true,
+                timeout: 20,
+                leaseTimeout: 500,
+              },
+              { ...ctx, extra: { taskID } },
+            )
+
+            expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
+            stdout.write(`\n  ➜  Local:   ${preview.url}\n`)
+            await waitForBrowserPreviewTarget(taskID, preview.url)
           } finally {
             restore()
           }
