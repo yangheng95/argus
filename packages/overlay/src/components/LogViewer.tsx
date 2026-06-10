@@ -5,7 +5,9 @@
 // supporting helpers (parseServerLogLine, stringifyLogValue, etc., lines
 // 10795–10926).
 
+import * as Select from "@kobalte/core/select"
 import { createEffect, createSignal, createMemo, For, Show } from "solid-js"
+import type { JSX } from "solid-js"
 import { VList, type VListHandle } from "virtua/solid"
 import { appStore, setAppStore, filteredLogEntries } from "../store/app"
 import type { LogEntry, LogLevel, LogSource } from "../store/app"
@@ -14,6 +16,7 @@ import { apiJson } from "../services/api"
 import { useAsyncAction } from "../solid/async-action"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
+import { Icon } from "./Icon"
 import { fmtElapsed, logDetailFields, parseServerLogLine, stringifyLogValue } from "../utils/log"
 
 // ── Re-export types so callers can use them without importing store/app ──
@@ -41,6 +44,8 @@ const NDJSON_TOOL_COLORS: Record<string, string> = {
   run_command: "#E8644A",
   bash: "#E74C3C",
 }
+
+const LOG_LEVEL_OPTIONS: LogLevel[] = ["debug", "info", "warn", "error"]
 
 function ndjsonToolColor(name: string): string {
   return NDJSON_TOOL_COLORS[name] ?? "#95A5A6"
@@ -79,6 +84,18 @@ function logSourceLabel(source: LogSource): string {
   if (source === "server") return "Server"
   if (source === "pipeline") return "Pipeline"
   return "Overlay"
+}
+
+function LogLevelOption(props: Select.SelectRootItemComponentProps<LogLevel>): JSX.Element {
+  const level = () => props.item.rawValue
+  return (
+    <Select.Item item={props.item} class="oc-select-option log-level-select-option">
+      <Select.ItemLabel>{level().toUpperCase()}</Select.ItemLabel>
+      <Select.ItemIndicator class="oc-select-indicator">
+        <Icon name="status-completed" size={12} />
+      </Select.ItemIndicator>
+    </Select.Item>
+  )
 }
 
 // ── Merge all log sources (
@@ -280,9 +297,9 @@ export function LogViewer(props: LogViewerProps) {
     setServerLogsSeq((value) => value + 1)
   }
 
-  const handleLevelChange = (e: Event) => {
-    const select = e.target as HTMLSelectElement
-    setAppStore("logFilterLevel", select.value as LogLevel)
+  const setLogLevel = (level: LogLevel | null) => {
+    if (!level) return
+    setAppStore("logFilterLevel", level)
   }
 
   createEffect(() => {
@@ -308,18 +325,32 @@ export function LogViewer(props: LogViewerProps) {
       onClose={() => props.onClose?.()}
       headerActions={
         <>
-          <select
+          <Select.Root<LogLevel>
             id="logLevelFilter"
-            class="select select-sm"
+            class="log-level-select"
+            options={LOG_LEVEL_OPTIONS}
             value={appStore.logFilterLevel}
-            onChange={handleLevelChange}
-            aria-label={t("log.filter_level")}
+            onChange={setLogLevel}
+            itemComponent={LogLevelOption}
+            disallowEmptySelection
+            gutter={4}
+            sameWidth
           >
-            <option value="debug">DEBUG</option>
-            <option value="info">INFO</option>
-            <option value="warn">WARN</option>
-            <option value="error">ERROR</option>
-          </select>
+            <Select.Trigger class="field-input log-level-select-trigger" aria-label={t("log.filter_level")}>
+              <Select.Value<LogLevel>>
+                {(state) => <span>{(state.selectedOption() ?? "debug").toUpperCase()}</span>}
+              </Select.Value>
+              <Select.Icon>
+                <Icon name="caret-down" size={12} />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.HiddenSelect aria-label={t("log.filter_level")} />
+            <Select.Portal>
+              <Select.Content class="oc-select-content log-level-select-content">
+                <Select.Listbox class="oc-select-listbox log-level-select-listbox" />
+              </Select.Content>
+            </Select.Portal>
+          </Select.Root>
           <Button
             type="button"
             id="btnLogServerLogs"
