@@ -13,7 +13,7 @@ import {
   type RuntimeCaptureResult,
   type RuntimeCaptureSuccess,
 } from "@/runtime/page-capture"
-import { pngLuminanceVariance } from "@/runtime/visual-page"
+import { pngLuminanceVariance } from "@/runtime/png-metrics"
 import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./viewport"
 
 export type BrowserEvidenceManifestSummary = {

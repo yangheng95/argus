@@ -40,6 +40,6 @@ test("runtime visual render source has no package-manager or static-server path"
 test("runtime visual render uses the shared browser launch timeout resolver", async () => {
   const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/runtime/visual-page.ts"), "utf8")
 
-  expect(source).toContain("BrowserRuntime.resolveBrowserLaunchTimeoutMs(opts.browserLaunchTimeoutMs)")
+  expect(source).toContain("BrowserRuntime.resolveBrowserLaunchTimeoutMs(input.browserLaunchTimeoutMs)")
   expect(source).not.toContain("OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000")
 })
