@@ -31,6 +31,8 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   expect(pkg.scripts["test:browser"]).toBe("node test/browser-runner.mjs")
   expect(pkg.scripts["test:unit"]).not.toContain("test/browser")
   expect(runner).toContain("process.execPath")
+  expect(runner).toContain("process.argv.slice(2)")
+  expect(runner).toContain("explicitFiles.length > 0")
   expect(runner).toContain('"--test"')
   expect(runner).toContain("--test-concurrency=1")
   expect(runner).toContain(".test.ts")
