@@ -14,9 +14,6 @@ import { pageMode, setPageMode } from "./store/page-mode"
 import { TaskStatusHeader } from "./components/TaskStatusHeader"
 import { ProjectDirectoryBar } from "./components/TaskDirBar"
 import { ChatComposer } from "./components/ChatComposer"
-import { WindowControls } from "./components/WindowControls"
-import { TitlebarMenubar } from "./components/titlebar/TitlebarMenubar"
-import { ConnectionBadge } from "./components/ConnectionBadge"
 import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
@@ -1156,20 +1153,6 @@ if (btnTerminateRun) {
   })
 }
 
-// ── Mount: WindowControls ──
-
-const windowControlsEl = document.getElementById("solidWindowControls")
-if (windowControlsEl) {
-  render(() => <WindowControls />, windowControlsEl)
-}
-
-// ── Mount: TitlebarMenubar ──
-
-const titlebarMenuEl = document.getElementById("solidTitlebarMenu")
-if (titlebarMenuEl) {
-  render(() => <TitlebarMenubar />, titlebarMenuEl)
-}
-
 const projectDirectoryBarEl = document.getElementById("solidProjectDirectoryBarMount")
 if (projectDirectoryBarEl) {
   render(() => <ProjectDirectoryBar />, projectDirectoryBarEl)
@@ -1238,13 +1221,6 @@ if (browserPreviewEl) {
     ),
     browserPreviewEl,
   )
-}
-
-// ── Mount: ConnectionBadge ──
-
-const connBadgeEl = document.getElementById("solidConnBadge")
-if (connBadgeEl) {
-  render(() => <ConnectionBadge />, connBadgeEl)
 }
 
 // ── Mount: TaskStatusHeader ──
