@@ -621,6 +621,24 @@ function ExtensionSettingsPanel(props: {
   })
 
   createEffect(() => {
+    if (!props.compact) return
+    const directory = currentDirectory()
+    if (!directory) return
+
+    if (props.mode === "skill") {
+      refreshInstalledSkills().catch((e) => {
+        setPanelNotice(e instanceof Error ? e.message : String(e))
+      })
+      return
+    }
+    if (props.mode === "mcp") {
+      refreshMcpStatus().catch((e) => {
+        setPanelNotice(e instanceof Error ? e.message : String(e))
+      })
+    }
+  })
+
+  createEffect(() => {
     if (props.mode !== "skill" || props.active !== true) return
     const directory = currentDirectory()
     if (!directory) {

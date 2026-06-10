@@ -36,6 +36,8 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain('mode="mcp" active={props.active ?? true}')
     expect(source).toContain("refreshMcpStatus().catch")
     expect(source).toContain("setPanelMcp(status as Record<string, McpItem>)")
+    expect(source).toContain("if (!props.compact) return")
+    expect(source).toContain('if (props.mode === "mcp")')
     expect(source).toContain("interval.dispose()")
     expect(source).not.toContain("hasConnectingMcp")
   })
@@ -48,6 +50,7 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain('setPanelNotice(t("workspace.no_directory"), "warn")')
     expect(source).toContain("refreshInstalledSkills().catch")
     expect(source).toContain("setPanelSkills(items as SkillItem[])")
+    expect(source).toContain('if (props.mode === "skill")')
     expect(source).toContain('mode="skill"')
     expect(source).toContain("active={props.active ?? true}")
     expect(main).toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />')
@@ -64,6 +67,7 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain('apiJson(memoryPath("panel/knowledge/memory/search", directory)')
     expect(source).toContain("memoryPath(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, currentDirectory())")
     expect(source).toContain("if (errorMessage()) return errorMessage()")
+    expect(source).toContain("if (!isActive() && !props.compact) return")
   })
 
   test("extension loaders surface request failures instead of rewriting stores to empty values", () => {
