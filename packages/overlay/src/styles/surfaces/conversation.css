@@ -933,24 +933,17 @@
 }
 
 /* Project worktree dropdown: compact row sibling of cwd + VCS. */
-.project-worktree-dropdown {
-  appearance: none;
+.oc-button[data-ui="project-worktree-dropdown"] {
+  --oc-button-height: calc(24px * var(--ui-scale));
+  --oc-button-padding-x: calc(5px * var(--ui-scale));
+  --oc-button-gap: calc(4px * var(--ui-scale));
+  --oc-button-border: var(--oc-border-width) solid var(--oc-control-border);
+  --oc-button-bg: var(--oc-control-bg);
+  --oc-button-color: var(--text-soft);
+  --oc-button-shadow: var(--oc-control-shadow);
+
   min-width: 0;
-  height: calc(24px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(3px * var(--ui-scale));
-  padding: 0 calc(6px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--oc-control-border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--oc-control-bg);
-  box-shadow: var(--oc-control-shadow);
-  color: var(--text-soft);
-  font-family: var(--font);
   font-size: var(--ui-font-meta);
-  line-height: 1;
-  cursor: pointer;
   flex-shrink: 0;
   transition:
     background var(--ui-duration-fast),
@@ -958,19 +951,35 @@
     color var(--ui-duration-fast);
 }
 
-.project-worktree-dropdown:hover,
-.project-worktree-dropdown:focus-visible,
-.project-worktree-dropdown[data-open="true"] {
-  background: var(--oc-control-bg-hover);
-  border-color: var(--oc-control-border-hover);
-  color: var(--text-strong);
+.oc-button[data-ui="project-worktree-dropdown"]:hover,
+.oc-button[data-ui="project-worktree-dropdown"]:focus-visible,
+.oc-button[data-ui="project-worktree-dropdown"][data-open="true"] {
+  --oc-button-bg: var(--oc-control-bg-hover);
+  --oc-button-border: var(--oc-border-width) solid var(--oc-control-border-hover);
+  --oc-button-color: var(--text-strong);
+
   outline: none;
 }
 
 .project-worktree-count {
-  min-width: calc(12px * var(--ui-scale));
+  min-width: calc(20px * var(--ui-scale));
+  padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-1);
   font-variant-numeric: tabular-nums;
   font-weight: var(--ui-font-weight-strong);
+}
+
+.project-worktree-count[data-kind="active"] {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+.project-worktree-count[data-kind="expired"] {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 34%, var(--border));
+  background: var(--warn-dim);
 }
 
 .project-worktree-caret {
@@ -980,7 +989,7 @@
     color var(--ui-duration-fast);
 }
 
-.project-worktree-dropdown[data-open="true"] .project-worktree-caret {
+.oc-button[data-ui="project-worktree-dropdown"][data-open="true"] .project-worktree-caret {
   transform: rotate(180deg);
   color: var(--text-strong);
 }
@@ -988,12 +997,12 @@
 .project-worktree-panel {
   position: fixed;
   z-index: var(--ui-z-titlebar);
-  max-width: min(calc(520px * var(--ui-scale)), calc(100vw - 16px));
+  max-width: min(calc(460px * var(--ui-scale)), calc(100vw - 16px));
 }
 
 .project-worktree-panel-shell {
   display: grid;
-  gap: calc(5px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
@@ -1002,24 +1011,51 @@
 }
 
 .project-worktree-panel-head {
-  display: grid;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(3px * var(--ui-scale));
 }
 
 .project-worktree-panel-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-strong);
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
 }
 
-.project-worktree-panel-meta {
+.project-worktree-head-count,
+.project-worktree-cleanup-hint {
+  flex-shrink: 0;
+  padding: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-1);
+  font-size: var(--ui-font-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+.project-worktree-head-count[data-kind="active"] {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+.project-worktree-head-count[data-kind="expired"],
+.project-worktree-cleanup-hint {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 34%, var(--border));
+  background: var(--warn-dim);
+}
+
+.project-worktree-cleanup-hint {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
 }
 
 .project-worktree-list {
@@ -1039,12 +1075,16 @@
 .project-worktree-item {
   appearance: none;
   min-width: 0;
-  min-height: calc(34px * var(--ui-scale));
+  min-height: calc(28px * var(--ui-scale));
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  grid-template-columns:
+    minmax(calc(72px * var(--ui-scale)), 1fr)
+    minmax(calc(74px * var(--ui-scale)), max-content)
+    minmax(0, calc(136px * var(--ui-scale)))
+    minmax(0, calc(128px * var(--ui-scale)));
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(5px * var(--ui-scale));
   border: 0;
   border-radius: var(--oc-radius-soft);
   background: transparent;
@@ -1061,14 +1101,10 @@
   outline: none;
 }
 
-.project-worktree-main {
-  min-width: 0;
-  display: grid;
-  gap: calc(1px * var(--ui-scale));
-}
-
 .project-worktree-name,
-.project-worktree-path {
+.project-worktree-path,
+.project-worktree-branch,
+.project-worktree-state {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1088,11 +1124,6 @@
 
 .project-worktree-state,
 .project-worktree-branch {
-  min-width: 0;
-  max-width: calc(150px * var(--ui-scale));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   padding: calc(2px * var(--ui-scale)) calc(5px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--border);
@@ -1111,12 +1142,6 @@
   color: var(--warn);
   border-color: color-mix(in srgb, var(--warn) 34%, var(--border));
   background: var(--warn-dim);
-}
-
-.project-worktree-row[data-status="primary"] .project-worktree-state {
-  color: var(--good);
-  border-color: color-mix(in srgb, var(--good) 34%, var(--border));
-  background: var(--good-dim);
 }
 
 .project-worktree-remove {
@@ -1140,6 +1165,10 @@
   outline: none;
 }
 
+.project-worktree-row[data-status="expired"] .project-worktree-remove {
+  color: var(--warn);
+}
+
 .project-worktree-remove:disabled {
   cursor: default;
   opacity: var(--ui-opacity-disabled);
@@ -1157,6 +1186,8 @@
    and a caret. The shell already routes through `--oc-control-*`
    tokens — just relocating. */
 .task-dir-shell {
+  box-sizing: border-box;
+  height: calc(24px * var(--ui-scale));
   display: flex;
   align-items: center;
   gap: calc(2px * var(--ui-scale));
