@@ -82,6 +82,8 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("browser-preview-evidence-facts")
   expect(component).not.toContain("<select")
   expect(component).not.toContain("<iframe")
+  expect(component).not.toContain("frameUrl")
+  expect(component).toContain("const targetUrl = createMemo(() => currentTarget()?.url)")
   expect(component).not.toMatch(/src=\{?frameUrl/)
   expect(component).not.toContain("window.open")
   expect(component).not.toContain("data-frame-token")
