@@ -26,9 +26,6 @@ describe("opencorvus sidecar (managed mode)", () => {
     const proc = Bun.spawn(
       [
         "bun",
-        "--preload",
-        "@opentui/solid/preload",
-        "--conditions=browser",
         cliEntry,
         "sidecar",
         "--project-dir",
@@ -130,9 +127,6 @@ describe("opencorvus sidecar (managed mode)", () => {
     const proc = Bun.spawn(
       [
         "bun",
-        "--preload",
-        "@opentui/solid/preload",
-        "--conditions=browser",
         cliEntry,
         "sidecar",
         "--project-dir",
