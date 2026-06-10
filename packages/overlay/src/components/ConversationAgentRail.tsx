@@ -175,7 +175,7 @@ function AgentRailRow(props: {
     <div
       class="conversation-agent-rail__row"
       data-status={record().status}
-      style={{ "--card-stage": stageAccent(avatarRole(record().agentName)) }}
+      style={{ "--card-stage": stageAccent(avatarRole(record().stage)) }}
     >
       <button
         type="button"
@@ -183,7 +183,7 @@ function AgentRailRow(props: {
         title={compactLabel(record())}
         onClick={() => props.onLocate(record())}
       >
-        <Avatar role={record().agentName} status={record().status} />
+        <Avatar role={record().stage} status={record().status} />
       </button>
     </div>
   )

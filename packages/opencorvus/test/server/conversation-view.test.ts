@@ -110,7 +110,7 @@ test("projectConversationView tracks the last message with displayable content",
   )
 })
 
-test("projectConversationView includes lifecycle-only frontend agent sessions", () => {
+test("projectConversationView keeps lifecycle-only events out of display sessions", () => {
   const view = projectConversationView(
     {},
     [],
@@ -132,18 +132,8 @@ test("projectConversationView includes lifecycle-only frontend agent sessions", 
     ],
   )
 
-  expect(view.topLevelSessionIDs).toEqual(["ses_frontend_research_failed"])
-  expect(view.sessions[0]).toEqual(
-    expect.objectContaining({
-      sessionID: "ses_frontend_research_failed",
-      stage: "frontend-research",
-      parentSessionID: "ses_orchestrator",
-      messageIDs: [],
-      firstMessageTime: 1_776_000_010_000,
-      lastMessageTime: 1_776_000_010_000,
-      placement: "top_level",
-    }),
-  )
+  expect(view.topLevelSessionIDs).toEqual([])
+  expect(view.sessions).toEqual([])
 })
 
 test("conversationMessageHasDisplay rejects envelope-only and control-only messages", () => {

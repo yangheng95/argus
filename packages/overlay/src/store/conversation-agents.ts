@@ -54,7 +54,7 @@ function targetMessageID(session: ConversationAgentSessionView): string {
 function renderedTargetForSession(
   session: ConversationAgentSessionView,
   stage: string,
-): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID"> {
+): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID"> | null {
   const goalID = String(session?.goalID || "")
   const stepID = String(session?.phase?.stepID || "")
   const phaseID = String(session?.phase?.phaseID || "")
@@ -66,12 +66,8 @@ function renderedTargetForSession(
     }
   }
   const messageID = targetMessageID(session)
-  if (stage === "integrity") {
-    return { renderedCardID: `integrity:session:${session.sessionID}` }
-  }
-  return messageID
-    ? { renderedCardID: `${stage}:session:${session.sessionID}:message:${messageID}` }
-    : { renderedCardID: `${stage}:session:${session.sessionID}` }
+  if (!messageID) return null
+  return { renderedCardID: `${stage}:session:${session.sessionID}:message:${messageID}` }
 }
 
 function agentRecordFromSession(session: ConversationAgentSessionView): AgentWorkflowRecord | null {
@@ -90,6 +86,8 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
   ) {
     return null
   }
+  const target = renderedTargetForSession(session, stage)
+  if (!target) return null
   const lastObservedAt = Math.max(startedAt, Number(session?.lastMessageTime || 0))
   return {
     id: sessionID,
@@ -107,7 +105,7 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     goalID: session?.goalID,
     stepID: session?.phase?.stepID,
     phaseID: session?.phase?.phaseID,
-    ...renderedTargetForSession(session, stage),
+    ...target,
   }
 }
 
