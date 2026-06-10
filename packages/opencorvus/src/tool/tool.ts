@@ -105,10 +105,12 @@ export namespace Tool {
             throw new Error(`Tool ${id} failed: ${asError(e).message}`)
           }
           const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined
-          await persistBrowserPreviewTargetFromProcessOutput({
-            taskID,
-            output: result.output,
-          })
+          if (result.metadata.browserPreviewOutputScanned !== true) {
+            await persistBrowserPreviewTargetFromProcessOutput({
+              taskID,
+              output: result.output,
+            })
+          }
           // skip truncation for tools that handle it themselves
           if (result.metadata.truncated !== undefined) {
             return result

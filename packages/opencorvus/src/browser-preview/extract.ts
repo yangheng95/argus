@@ -41,17 +41,60 @@ export function persistBrowserPreviewTargetFromProcessOutput(input: {
   if (!taskID) return Promise.resolve([])
   const urls = extractBrowserPreviewUrlsFromText(input.output)
   if (urls.length === 0) return Promise.resolve([])
+  return persistBrowserPreviewUrls({ taskID, urls, probe: input.probe })
+}
+
+export function createBrowserPreviewProcessOutputMaterializer(input: {
+  taskID?: string
+  probe?: (url: string) => Promise<boolean>
+}): {
+  ingest(chunk: string): Promise<PersistedBrowserPreviewTarget[]>
+  flush(): Promise<void>
+} {
+  const taskID = input.taskID?.trim()
+  const seen = new Set<string>()
+  let tail = ""
+  let pending = Promise.resolve()
+  const ingest = (chunk: string): Promise<PersistedBrowserPreviewTarget[]> => {
+    if (!taskID || !chunk) return Promise.resolve([])
+    const scan = tail + chunk
+    tail = scan.slice(-MAX_PREVIEW_OUTPUT_SCAN_CHARS)
+    const urls = extractBrowserPreviewUrlsFromText(scan).filter((url) => {
+      const key = url.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    if (urls.length === 0) return Promise.resolve([])
+    const next = pending.then(() => persistBrowserPreviewUrls({ taskID, urls, probe: input.probe }))
+    pending = next.then(
+      () => undefined,
+      () => undefined,
+    )
+    return next
+  }
+  return {
+    ingest,
+    flush: () => pending,
+  }
+}
+
+function persistBrowserPreviewUrls(input: {
+  taskID: string
+  urls: string[]
+  probe?: (url: string) => Promise<boolean>
+}): Promise<PersistedBrowserPreviewTarget[]> {
   const probe = input.probe ?? waitForBrowserPreviewUrlReachable
   return Promise.all(
-    urls.map(async (url) => {
+    input.urls.map(async (url) => {
       try {
         if (!(await probe(url))) {
-          log.warn("skipped unreachable browser preview target from process output", { taskID, url })
+          log.warn("skipped unreachable browser preview target from process output", { taskID: input.taskID, url })
           return undefined
         }
-        return persistBrowserPreviewTarget({ taskID, url })
+        return persistBrowserPreviewTarget({ taskID: input.taskID, url })
       } catch (error) {
-        log.warn("failed to persist browser preview target from process output", { taskID, url, error })
+        log.warn("failed to persist browser preview target from process output", { taskID: input.taskID, url, error })
         return undefined
       }
     }),
