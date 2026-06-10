@@ -1062,7 +1062,7 @@ export const EngineRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400, 404),
+          ...errors(400, 404, 409),
         },
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
