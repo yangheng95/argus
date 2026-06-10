@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeAll, describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { createRoot } from "solid-js"
 import {
   TASK_LIST_REFRESH_INTERVAL_MS,
@@ -24,6 +26,7 @@ import { messageStore } from "../src/store/messages"
 import { setSettingsStore } from "../src/store/settings"
 import { resetSelectedLiveCursor } from "../src/services/selected-stream-cursor"
 import { selectTask } from "../src/services/task"
+import { setLocale, setLocaleData } from "../src/utils/i18n"
 
 /**
  * Reconnect policy regression tests.
@@ -44,6 +47,16 @@ interface Spy {
   retryCalls: number
   consoleErrors: unknown[][]
 }
+
+const ROOT = path.resolve(import.meta.dir, "..")
+const REAL_EN_US = JSON.parse(readFileSync(path.join(ROOT, "src/i18n/en-US.json"), "utf8")) as Record<string, unknown>
+const REAL_ZH_CN = JSON.parse(readFileSync(path.join(ROOT, "src/i18n/zh-CN.json"), "utf8")) as Record<string, unknown>
+
+beforeAll(async () => {
+  setLocaleData("en-US", REAL_EN_US)
+  setLocaleData("zh-CN", REAL_ZH_CN)
+  await setLocale("en-US")
+})
 
 function makeDeps(opts: {
   taskID: string
