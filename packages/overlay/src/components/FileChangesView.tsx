@@ -1,3 +1,4 @@
+import * as Listbox from "@kobalte/core/listbox"
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import {
   Virtualizer,
@@ -43,6 +44,18 @@ interface VisibleGroup {
   label: string
   title: string
   rows: ChangeRowModel[]
+}
+
+interface ChangeRowCollectionNode {
+  type: "item" | "section"
+  key: string
+  rawValue: ChangeRowModel
+  textValue: string
+  disabled: boolean
+  level: number
+  index: number
+  prevKey?: string
+  nextKey?: string
 }
 
 function splitFilePath(file: string): { fileName: string; directory: string } {
@@ -100,22 +113,23 @@ function ChangeRowContent(props: { row: ChangeRowModel; showScope: boolean }) {
 }
 
 function ChangeRow(props: {
+  node: ChangeRowCollectionNode
   row: ChangeRowModel
   selected: boolean
   expanded: boolean
   showScope: boolean
-  onSelect: (key: string) => void
   onToggleDiff: (row: ChangeRowModel) => void
   onRowClick?: (group: ChangeGroup, item: FileChange) => void
 }) {
   const open = () => {
-    props.onSelect(props.row.key)
     props.onToggleDiff(props.row)
     props.onRowClick?.(props.row.group, props.row.item)
   }
 
   return (
-    <button
+    <Listbox.Item
+      item={props.node}
+      as="button"
       type="button"
       class="change-row"
       data-clickable="true"
@@ -124,13 +138,15 @@ function ChangeRow(props: {
       aria-current={props.selected ? "true" : undefined}
       title={props.row.item.file}
       id={`change-row-${props.row.index}`}
-      role="option"
-      aria-selected={props.selected}
       aria-expanded={props.expanded}
       onClick={open}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return
+        open()
+      }}
     >
       <ChangeRowContent row={props.row} showScope={props.showScope} />
-    </button>
+    </Listbox.Item>
   )
 }
 
@@ -162,22 +178,22 @@ function InlineDiffPanel(props: { row: ChangeRowModel }) {
 }
 
 function ChangeRowWithInlineDiff(props: {
+  node: ChangeRowCollectionNode
   row: ChangeRowModel
   selected: boolean
   expanded: boolean
   showScope: boolean
-  onSelect: (key: string) => void
   onToggleDiff: (row: ChangeRowModel) => void
   onRowClick?: (group: ChangeGroup, item: FileChange) => void
 }) {
   return (
     <div class="change-row-shell" data-expanded={props.expanded ? "true" : "false"}>
       <ChangeRow
+        node={props.node}
         row={props.row}
         selected={props.selected}
         expanded={props.expanded}
         showScope={props.showScope}
-        onSelect={props.onSelect}
         onToggleDiff={props.onToggleDiff}
         onRowClick={props.onRowClick}
       />
@@ -213,7 +229,7 @@ function ChangesVirtualItem(props: CustomItemComponentProps) {
 export function FileChangesView(props: FileChangesViewProps) {
   let rowVirtualizer: VirtualizerHandle | undefined
   let filterInputEl: HTMLInputElement | undefined
-  let listEl: HTMLDivElement | undefined
+  let listEl: HTMLUListElement | undefined
   const [selectedRowKey, setSelectedRowKey] = createSignal("")
   const [expandedRowKey, setExpandedRowKey] = createSignal("")
   const [filterQuery, setFilterQuery] = createSignal("")
@@ -299,11 +315,7 @@ export function FileChangesView(props: FileChangesViewProps) {
   })
   const shouldShowFilter = createMemo(() => allRows().length > 8)
   const shouldVirtualizeRows = createMemo(() => filteredRows().length > VIRTUAL_CHANGE_ROW_THRESHOLD)
-  const selectedRowPosition = createMemo(() => filteredRows().findIndex((row) => row.key === selectedRowKey()))
-  const selectedRowID = createMemo(() => {
-    const row = filteredRows()[selectedRowPosition()]
-    return row ? `change-row-${row.index}` : undefined
-  })
+  const selectedKeys = createMemo(() => (selectedRowKey() ? [selectedRowKey()] : []))
   const statusFilterLabel = (status: ChangeStatusFilter): string =>
     status === "all" ? t("files.status.all") : changeStatusLabel(status)
 
@@ -318,22 +330,6 @@ export function FileChangesView(props: FileChangesViewProps) {
     setSelectedRowKey(rows[0]!.key)
   })
 
-  const selectRowAt = (position: number) => {
-    const rows = filteredRows()
-    if (rows.length === 0) return
-    const next = Math.max(0, Math.min(rows.length - 1, position))
-    setSelectedRowKey(rows[next]!.key)
-    if (shouldVirtualizeRows()) rowVirtualizer?.scrollToIndex(next)
-  }
-
-  const openSelectedRow = () => {
-    const row = filteredRows()[Math.max(0, selectedRowPosition())]
-    if (!row) return
-    setSelectedRowKey(row.key)
-    toggleInlineDiff(row)
-    props.onRowClick?.(row.group, row.item)
-  }
-
   const toggleInlineDiff = (row: ChangeRowModel) => {
     setExpandedRowKey((current) => (current === row.key ? "" : row.key))
   }
@@ -345,31 +341,15 @@ export function FileChangesView(props: FileChangesViewProps) {
     return true
   }
 
-  const onListKeyDown = (event: KeyboardEvent) => {
+  const onListShortcutKeyDown = (event: KeyboardEvent) => {
     if (event.key === "/" || (event.key.toLowerCase() === "f" && (event.ctrlKey || event.metaKey))) {
       if (focusFilterInput()) event.preventDefault()
-      return
     }
-    const rows = filteredRows()
-    if (rows.length === 0) return
-    const current = selectedRowPosition()
-    const position = current >= 0 ? current : 0
-    if (event.key === "ArrowDown") {
-      event.preventDefault()
-      selectRowAt(position + 1)
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault()
-      selectRowAt(position - 1)
-    } else if (event.key === "Home") {
-      event.preventDefault()
-      selectRowAt(0)
-    } else if (event.key === "End") {
-      event.preventDefault()
-      selectRowAt(rows.length - 1)
-    } else if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault()
-      openSelectedRow()
-    }
+  }
+
+  const scrollToSelectedItem = (key: string) => {
+    const position = filteredRows().findIndex((row) => row.key === key)
+    if (position >= 0 && shouldVirtualizeRows()) rowVirtualizer?.scrollToIndex(position)
   }
 
   const onFilterKeyDown = (event: KeyboardEvent) => {
@@ -487,83 +467,105 @@ export function FileChangesView(props: FileChangesViewProps) {
           </div>
         </Show>
 
-        <div
+        <Listbox.Root<ChangeRowModel>
           ref={listEl}
           class="changes-list"
           data-grouped={hasGroupLabels() ? "true" : "false"}
           data-virtualized={shouldVirtualizeRows() ? "true" : "false"}
-          role="listbox"
           aria-label={t("section.files")}
-          aria-activedescendant={selectedRowID()}
-          tabIndex={0}
-          onKeyDown={onListKeyDown}
+          options={filteredRows()}
+          optionValue={(row) => row.key}
+          optionTextValue={(row) => row.searchText}
+          value={selectedKeys()}
+          onChange={(keys) => setSelectedRowKey([...keys][0] ?? "")}
+          disallowEmptySelection={filteredRows().length > 0}
+          virtualized
+          scrollToItem={scrollToSelectedItem}
+          onKeyDown={onListShortcutKeyDown}
         >
-          <Show
-            when={filteredRows().length > 0}
-            fallback={<p class="empty-hint changes-empty-hint">{t("files.no_matches")}</p>}
-          >
-            <Show
-              when={shouldVirtualizeRows()}
-              fallback={
-                <For each={visibleGroups()}>
-                  {(entry) => (
-                    <div class="changes-list-group" data-group-id={entry.group.id}>
-                      <Show when={hasGroupLabels()}>
-                        <div class="changes-group-header" title={entry.title}>
-                          <span class="changes-group-label">{entry.label}</span>
-                          <span class="changes-group-meta">
-                            <Show when={entry.group.commitRef}>
-                              <span class="changes-group-commit">{shortCommit(entry.group.commitRef)}</span>
-                            </Show>
-                            <span>{entry.rows.length}</span>
-                          </span>
-                        </div>
-                      </Show>
-                      <div class="changes-list-chunk" data-group-id={entry.group.id} data-active="true">
-                        <For each={entry.rows}>
-                          {(row) => (
-                            <ChangeRowWithInlineDiff
-                              row={row}
-                              selected={selectedRowKey() === row.key}
-                              expanded={expandedRowKey() === row.key}
-                              showScope={false}
-                              onSelect={setSelectedRowKey}
-                              onToggleDiff={toggleInlineDiff}
-                              onRowClick={props.onRowClick}
-                            />
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  )}
-                </For>
+          {(collection) => {
+            const nodeByKey = createMemo(() => {
+              const map = new Map<string, ChangeRowCollectionNode>()
+              for (const node of collection()) {
+                if (node.type === "item") map.set(node.key, node as ChangeRowCollectionNode)
               }
-            >
-              <Virtualizer
-                ref={(handle) => {
-                  rowVirtualizer = handle
-                }}
-                data={filteredRows()}
-                overscan={VIRTUAL_CHANGE_ROW_OVERSCAN}
-                itemSize={ESTIMATED_CHANGE_ROW_HEIGHT}
-                as={ChangesVirtualWindow}
-                item={ChangesVirtualItem}
+              return map
+            })
+            const nodeForRow = (row: ChangeRowModel): ChangeRowCollectionNode => {
+              const node = nodeByKey().get(row.key)
+              if (!node) throw new Error(`missing file change row node: ${row.key}`)
+              return node
+            }
+
+            return (
+              <Show
+                when={filteredRows().length > 0}
+                fallback={<p class="empty-hint changes-empty-hint">{t("files.no_matches")}</p>}
               >
-                {(row) => (
-                  <ChangeRowWithInlineDiff
-                    row={row}
-                    selected={selectedRowKey() === row.key}
-                    expanded={expandedRowKey() === row.key}
-                    showScope={hasGroupLabels()}
-                    onSelect={setSelectedRowKey}
-                    onToggleDiff={toggleInlineDiff}
-                    onRowClick={props.onRowClick}
-                  />
-                )}
-              </Virtualizer>
-            </Show>
-          </Show>
-        </div>
+                <Show
+                  when={shouldVirtualizeRows()}
+                  fallback={
+                    <For each={visibleGroups()}>
+                      {(entry) => (
+                        <div class="changes-list-group" data-group-id={entry.group.id}>
+                          <Show when={hasGroupLabels()}>
+                            <div class="changes-group-header" title={entry.title}>
+                              <span class="changes-group-label">{entry.label}</span>
+                              <span class="changes-group-meta">
+                                <Show when={entry.group.commitRef}>
+                                  <span class="changes-group-commit">{shortCommit(entry.group.commitRef)}</span>
+                                </Show>
+                                <span>{entry.rows.length}</span>
+                              </span>
+                            </div>
+                          </Show>
+                          <div class="changes-list-chunk" data-group-id={entry.group.id} data-active="true">
+                            <For each={entry.rows}>
+                              {(row) => (
+                                <ChangeRowWithInlineDiff
+                                  node={nodeForRow(row)}
+                                  row={row}
+                                  selected={selectedRowKey() === row.key}
+                                  expanded={expandedRowKey() === row.key}
+                                  showScope={false}
+                                  onToggleDiff={toggleInlineDiff}
+                                  onRowClick={props.onRowClick}
+                                />
+                              )}
+                            </For>
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  }
+                >
+                  <Virtualizer
+                    ref={(handle) => {
+                      rowVirtualizer = handle
+                    }}
+                    data={filteredRows()}
+                    overscan={VIRTUAL_CHANGE_ROW_OVERSCAN}
+                    itemSize={ESTIMATED_CHANGE_ROW_HEIGHT}
+                    as={ChangesVirtualWindow}
+                    item={ChangesVirtualItem}
+                  >
+                    {(row) => (
+                      <ChangeRowWithInlineDiff
+                        node={nodeForRow(row)}
+                        row={row}
+                        selected={selectedRowKey() === row.key}
+                        expanded={expandedRowKey() === row.key}
+                        showScope={hasGroupLabels()}
+                        onToggleDiff={toggleInlineDiff}
+                        onRowClick={props.onRowClick}
+                      />
+                    )}
+                  </Virtualizer>
+                </Show>
+              </Show>
+            )
+          }}
+        </Listbox.Root>
       </Show>
       <Show when={files().length === 0}>
         <p class="empty-hint">{props.hasSelectedTask ? t("files.none") : t("files.select_target")}</p>
