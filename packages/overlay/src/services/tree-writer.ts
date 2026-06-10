@@ -200,8 +200,9 @@ interface SessionInfo {
   messageModels: Map<string, MessageModelProjection | undefined>
   /** part id → its exact {cardID,index} target — O(1) lookup for updates. */
   partIndex: Map<string, PartTarget>
-  /** Last known executor top-level visibility; gates expensive order rebuilds. */
-  executorTopLevelVisible: boolean
+  /** Last known top-level visibility; avoids rebuilding order when content
+   *  changes do not alter whether this session has a visible turn card. */
+  topLevelVisible: boolean
 }
 
 interface MessageInfo {
@@ -890,7 +891,7 @@ function handlePartUpdated(event: any): void {
       message?.time || Date.now(),
     )
   }
-  syncExecutorTopLevelVisibility(session)
+  syncSessionTopLevelVisibility(session)
 }
 
 function handlePartDelta(event: any): void {
@@ -931,7 +932,7 @@ function handlePartDelta(event: any): void {
     )
   }
   markCardStatsDirty(target.cardID)
-  syncExecutorTopLevelVisibility(session)
+  syncSessionTopLevelVisibility(session)
 }
 
 function removeCardReferences(cardID: string): void {
@@ -1020,7 +1021,7 @@ function handleMessageRemoved(event: any): void {
     if (session.activeCardID === cardID) session.activeCardID = undefined
   }
   regroupTimelineSegments()
-  syncExecutorTopLevelVisibility(session)
+  syncSessionTopLevelVisibility(session)
 }
 
 function handlePartRemoved(event: any): void {
@@ -1033,7 +1034,7 @@ function handlePartRemoved(event: any): void {
   const target = requirePartProjection(session, partID, "message.part.removed")
 
   removeIndexedParts(session, target.cardID, (_part, index) => index === target.index)
-  syncExecutorTopLevelVisibility(session)
+  syncSessionTopLevelVisibility(session)
 }
 
 function handleTaskChanged(event: any): void {
@@ -1907,7 +1908,7 @@ function ensureSessionProjection(sessionID: string, opts: EnsureSessionOpts): Se
     messageIDs: new Set(),
     messageCardIDs: new Map(),
     partIndex: new Map(),
-    executorTopLevelVisible: false,
+    topLevelVisible: false,
     messageUsage: new Map(),
     messageModels: new Map(),
   }
@@ -2883,19 +2884,22 @@ function cardHasDisplayPart(card: CardNode | undefined): boolean {
   return false
 }
 
-function syncExecutorTopLevelVisibility(session: SessionInfo | undefined): void {
-  if (!session || session.stage !== "executor") return
-  // Executor container session has no LLM of its own; surface only the
-  // turn cards that actually received visible parts (spec §4.3).
+function shouldHideSessionCard(card: CardNode | undefined): boolean {
+  return Boolean(card?.messageID && !cardHasDisplayPart(card))
+}
+
+function syncSessionTopLevelVisibility(session: SessionInfo | undefined): void {
+  if (!session) return
   let visible = false
   for (const cid of sessionOwnedCardIDs(session)) {
-    if (cardHasDisplayPart(cardTreeStore.cards[cid])) {
+    const card = cardTreeStore.cards[cid]
+    if (card && !shouldHideSessionCard(card)) {
       visible = true
       break
     }
   }
-  if (session.executorTopLevelVisible === visible) return
-  session.executorTopLevelVisible = visible
+  if (session.topLevelVisible === visible) return
+  session.topLevelVisible = visible
   rebuildTopLevelOrder()
 }
 
@@ -3117,15 +3121,14 @@ function rebuildTopLevelOrder(): void {
     for (const childID of node.childIDs || []) claimedChildIDs.add(childID)
   }
 
-  // Hide path: only the executor container's empty turn cards. Phase-
-  // absorbed sessions never produce a top-level turn card (their parts
-  // accumulate on the phase card, a step child); goalID threading at the
-  // source keeps build/planner parts off any orphan top-level card.
+  // Hide message-backed agent turn cards until they have displayable content.
+  // `message.updated` may arrive before the first visible part; it may create
+  // the stable card id for later part routing, but that routing shell is not
+  // a conversation item yet.
   const hiddenSessionCardIDs = new Set<string>()
   for (const info of sessions.values()) {
-    if (info.stage !== "executor") continue
     for (const cid of sessionOwnedCardIDs(info)) {
-      if (!cardHasDisplayPart(cardTreeStore.cards[cid])) hiddenSessionCardIDs.add(cid)
+      if (shouldHideSessionCard(cardTreeStore.cards[cid])) hiddenSessionCardIDs.add(cid)
     }
   }
 
