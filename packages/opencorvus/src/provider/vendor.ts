@@ -5,7 +5,6 @@ import { iife } from "@/util/iife"
 import { Installation } from "../installation"
 import os from "os"
 import { GoogleAuth } from "google-auth-library"
-import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import type { AmazonBedrockProviderSettings } from "@ai-sdk/amazon-bedrock"
 import { createGitLab, VERSION as GITLAB_PROVIDER_VERSION } from "@gitlab/gitlab-ai-provider"
 import type { Provider } from "./provider"
@@ -132,6 +131,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       providerOptions.apiKey = awsBearerToken
     } else {
       const credentialProviderOptions = profile ? { profile } : {}
+      const { fromNodeProviderChain } = await import("@aws-sdk/credential-providers")
 
       providerOptions.credentialProvider = fromNodeProviderChain(credentialProviderOptions)
     }
