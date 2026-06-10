@@ -326,7 +326,7 @@ test("returns empty array when no skills exist", async () => {
   })
 })
 
-test("does not expose removed builtin plan, coding, panel-control, or webpage-generate skills", async () => {
+test("does not expose removed builtin plan, coding, panel-control, webpage-generate, or ainvest design system skills", async () => {
   await using tmp = await tmpdir({ git: true })
 
   await Instance.provide({
@@ -336,28 +336,7 @@ test("does not expose removed builtin plan, coding, panel-control, or webpage-ge
       expect(await Skill.get("coding")).toBeUndefined()
       expect(await Skill.get("panel-control")).toBeUndefined()
       expect(await Skill.get("webpage-generate")).toBeUndefined()
-    },
-  })
-})
-
-test("registers builtin ainvest design system skill with bundled resources", async () => {
-  await using tmp = await tmpdir({ git: true })
-
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const skill = await Skill.get("ainvest-design-system")
-      expect(skill).toBeDefined()
-      expect(skill!.builtin).toBe(true)
-      expect(skill!.content).toContain("Closed-System Rule")
-      expect(skill!.location).toContain(path.join("builtin-skills", "ainvest-design-system", "SKILL.md"))
-
-      const dir = path.dirname(skill!.location)
-      const colorJson = await fs.readFile(path.join(dir, "assets", "tokens", "color.json"), "utf8")
-      expect(colorJson).toContain("color")
-
-      const avatar = await fs.readFile(path.join(dir, "assets", "avatars", "politicians", "Cleo_Fields.png"))
-      expect(Array.from(avatar.subarray(0, 8))).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+      expect(await Skill.get("ainvest-design-system")).toBeUndefined()
     },
   })
 })
