@@ -17,7 +17,7 @@
 // command is highlighted via aria-selected for screen readers and via
 // the .cmdk-item--active class for the eye.
 
-import * as Dialog from "@kobalte/core/dialog"
+import * as KobalteDialog from "@kobalte/core/dialog"
 import { For, Show, createMemo, createSignal, createEffect } from "solid-js"
 import { boardStore } from "../store/board"
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
@@ -284,7 +284,7 @@ export function CommandPalette() {
   })
 
   return (
-    <Dialog.Root
+    <KobalteDialog.Root
       open={palette.open()}
       onOpenChange={(open) => {
         if (!open && palette.open()) close()
@@ -292,9 +292,9 @@ export function CommandPalette() {
       modal
     >
       <Show when={palette.open()}>
-        <Dialog.Portal>
+        <KobalteDialog.Portal>
           <div class="cmdk-backdrop" role="presentation" onClick={close}>
-            <Dialog.Content
+            <KobalteDialog.Content
               class="cmdk-panel"
               aria-modal="true"
               aria-label={t("command_palette.label")}
@@ -345,10 +345,10 @@ export function CommandPalette() {
                 <kbd>↑↓</kbd> {t("cmdk.foot.navigate")} · <kbd>↵</kbd> {t("cmdk.foot.run")} · <kbd>esc</kbd>{" "}
                 {t("cmdk.foot.close")}
               </div>
-            </Dialog.Content>
+            </KobalteDialog.Content>
           </div>
-        </Dialog.Portal>
+        </KobalteDialog.Portal>
       </Show>
-    </Dialog.Root>
+    </KobalteDialog.Root>
   )
 }
