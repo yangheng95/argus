@@ -85,6 +85,47 @@ async function waitForPidExit(pid: number, timeoutMs: number) {
   return !isPidAlive(pid)
 }
 
+async function executeWithMockedForegroundCommand(command: string) {
+  let disposeCalls = 0
+  const restore = ProcessSupervisor.setFactoryForTest(async () => {
+    const stdout = new PassThrough()
+    let resolveExit!: (code: number) => void
+    const exited = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    queueMicrotask(() => {
+      stdout.write("mocked-command-output\n")
+      stdout.end()
+      setTimeout(() => resolveExit(0), 0)
+    })
+    return {
+      pid: 9001,
+      stdin: null,
+      stdout,
+      stderr: new PassThrough(),
+      exited,
+      terminate: async () => {},
+      dispose: async () => {
+        disposeCalls++
+      },
+      unref: () => {},
+    }
+  })
+  try {
+    const bash = await BashTool.init()
+    const result = await bash.execute(
+      {
+        command,
+        description: "Run mocked command",
+      },
+      ctx,
+    )
+    return { result, disposeCalls }
+  } finally {
+    restore()
+  }
+}
+
 describe("tool.bash", () => {
   test("disposes parser syntax trees after extracting permission metadata", () => {
     let disposed = false
@@ -194,46 +235,37 @@ describe("tool.bash", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        let disposeCalls = 0
-        const restore = ProcessSupervisor.setFactoryForTest(async () => {
-          const stdout = new PassThrough()
-          let resolveExit!: (code: number) => void
-          const exited = new Promise<number>((resolve) => {
-            resolveExit = resolve
-          })
-          queueMicrotask(() => {
-            stdout.write("shell-cleanup\n")
-            stdout.end()
-            setTimeout(() => resolveExit(0), 0)
-          })
-          return {
-            pid: 9001,
-            stdin: null,
-            stdout,
-            stderr: new PassThrough(),
-            exited,
-            terminate: async () => {},
-            dispose: async () => {
-              disposeCalls++
-            },
-            unref: () => {},
-          }
-        })
-        try {
-          const bash = await BashTool.init()
-          const result = await bash.execute(
-            {
-              command: "echo shell-cleanup",
-              description: "Echo cleanup marker",
-            },
-            ctx,
-          )
-          expect(disposeCalls).toBe(1)
+        const { result, disposeCalls } = await executeWithMockedForegroundCommand("echo shell-cleanup")
+        expect(disposeCalls).toBe(1)
+        expect(result.output).not.toContain("foreground command lifecycle")
+        expect(result.output).not.toContain("background: true instead of shell '&'")
+      },
+    })
+  })
+
+  test("foreground lifecycle hint is scoped to frontend server commands", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        for (const command of [
+          "npm run dev",
+          "npm start",
+          "pnpm preview",
+          "bun run --cwd packages/overlay dev",
+          "yarn run serve",
+          "npx vite --host 127.0.0.1",
+          "vite --host 127.0.0.1",
+        ]) {
+          const { result } = await executeWithMockedForegroundCommand(command)
           expect(result.output).toContain("foreground command lifecycle")
           expect(result.output).toContain("OpenCorvus disposed its process tree")
           expect(result.output).toContain("background: true instead of shell '&'")
-        } finally {
-          restore()
+        }
+
+        for (const command of ["npm install", "pnpm test", "bun run typecheck", "yarn lint", "npx vite build", "git status"]) {
+          const { result } = await executeWithMockedForegroundCommand(command)
+          expect(result.output).not.toContain("foreground command lifecycle")
+          expect(result.output).not.toContain("background: true instead of shell '&'")
         }
       },
     })
@@ -990,7 +1022,7 @@ describe("tool.bash truncation", () => {
         expect((result.metadata as any).truncated).toBe(false)
         // MSYS/Git Bash on Windows outputs LF, not CRLF
         expect(result.output).toContain("hello")
-        expect(result.output).toContain("foreground command lifecycle")
+        expect(result.output).not.toContain("foreground command lifecycle")
       },
     })
   })
