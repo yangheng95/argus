@@ -13,8 +13,6 @@ export namespace EffectiveConfig {
     if (!opts?.taskID && !opts?.sessionID) {
       const ambient = SessionContext.tryUse()
       if (ambient && !ambient.parentID) {
-        const snapshot = ambient.metadata?.[TASK_SNAPSHOT_KEY]
-        if (snapshot !== undefined) return Config.Info.parse(snapshot)
         return Config.get()
       }
     }
@@ -24,9 +22,6 @@ export namespace EffectiveConfig {
 
     const { Session } = await import("@/session")
     const session = await Session.get(sessionID)
-    const snapshot = session.metadata?.[TASK_SNAPSHOT_KEY]
-    if (snapshot !== undefined) return Config.Info.parse(snapshot)
-
     return Instance.provide({
       directory: session.directory,
       fn: () => Config.get(),

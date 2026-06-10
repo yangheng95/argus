@@ -644,16 +644,10 @@ export namespace ACP {
           | (Record<string, unknown> & {
               id: string
               role: string
-              model?: { providerID: string; modelID: string }
               agent?: string
             })
           | undefined
-        if (lastUser?.role === "user" && lastUser.model) {
-          result.models.currentModelId = `${lastUser.model.providerID}/${lastUser.model.modelID}`
-          this.sessionManager.setModel(sessionId, {
-            providerID: lastUser.model.providerID,
-            modelID: lastUser.model.modelID,
-          })
+        if (lastUser?.role === "user") {
           if (result.modes?.availableModes.some((m) => m.id === lastUser.agent)) {
             result.modes.currentModeId = lastUser.agent as string
             this.sessionManager.setMode(sessionId, lastUser.agent as string)
