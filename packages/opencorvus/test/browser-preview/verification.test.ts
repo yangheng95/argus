@@ -256,6 +256,10 @@ describe("browser preview verification", () => {
       new URL("../../src/browser-preview/verification-test-harness.ts", import.meta.url),
       "utf8",
     )
+    const evidenceRunnerSource = readFileSync(
+      new URL("../../src/browser-preview/evidence-runner.ts", import.meta.url),
+      "utf8",
+    )
     const routeSource = readFileSync(new URL("../../src/server/routes/browser-preview.ts", import.meta.url), "utf8")
 
     expect(source).toContain("runBrowserPreviewEvidenceJob")
@@ -272,6 +276,13 @@ describe("browser preview verification", () => {
     expect(routeSource).not.toContain("verifyBrowserPreviewForTest")
     expect(routeSource).not.toContain("verification-test-harness")
     expect(source).not.toContain("captureRuntimePage")
+    for (const productSource of [source, coreSource, evidenceRunnerSource, routeSource]) {
+      expect(productSource).not.toContain("captureRuntimePage")
+      expect(productSource).not.toContain("renderPage")
+      expect(productSource).not.toContain("@/browser/webpage")
+      expect(productSource).not.toContain("@/runtime/visual-page")
+    }
+    expect(evidenceRunnerSource).toContain("@/runtime/png-metrics")
     expect(source).not.toContain('"no-task"')
     expect(source).not.toContain("targetID?:")
   })
