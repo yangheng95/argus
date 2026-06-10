@@ -696,6 +696,20 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
+  test("task action buttons opt out of fixed primitive height inside inspector", () => {
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+    const boardSource = readText(join(OVERLAY_ROOT, "src/components/Board.tsx"))
+
+    const body = soloRuleBody(inspectorSurface, ".task-actions-buttons .oc-button")
+
+    expect(boardSource).toContain('class="task-actions-buttons"')
+    expect(boardSource).toContain("<Button")
+    expect(body).toContain("--oc-button-height: auto")
+    expect(body).toContain("min-height: auto")
+    expect(body).toContain("background: transparent")
+    expect(body).not.toMatch(/height:\s*calc\(/)
+  })
+
   test("task dir bar (TaskDirBar) is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
