@@ -74,6 +74,7 @@ describe("HostTransport capability contract", () => {
     const titlebar = read("src/components/titlebar/TitlebarMenubar.tsx")
     const channelsPanel = read("src/components/settings/ChannelsPanel.tsx")
     const skillMarketPanel = read("src/components/settings/SkillMarketPanel.tsx")
+    const main = read("src/main.tsx")
     const onboarding = read("src/components/WorkspaceOnboardingDialog.tsx")
     const windowControls = read("src/components/WindowControls.tsx")
     const editorLaunchers = read("src/components/WorkspaceEditorLaunchers.tsx")
@@ -99,6 +100,10 @@ describe("HostTransport capability contract", () => {
     expect(skillMarketPanel).toContain("canPickSkillDirectory()")
     expect(skillMarketPanel).toContain("canOpenLocalPath()")
     expect(skillMarketPanel).toContain("canOpenRemoteUrl()")
+
+    expect(main).toContain('getHostTransport().capabilities.nativeCommands["open-url"]')
+    expect(main).toContain("if (!previewUrl && !canOpenExternalUrl) return")
+    expect(main).toContain("if (!canOpenExternalUrl) return")
 
     expect(titlebar).toContain('nativeCommands["workspace.pickDir"]')
     expect(titlebar).toContain('nativeCommands["open-path"]')
