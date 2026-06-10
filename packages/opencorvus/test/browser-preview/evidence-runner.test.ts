@@ -52,6 +52,26 @@ describe("browser preview evidence runner contract", () => {
     })
   })
 
+  test("manifest writing rejects missing target identity before evidence files are created", async () => {
+    await using tmp = await tmpdir()
+
+    await expect(
+      writeBrowserEvidenceManifest({
+        outDir: tmp.path,
+        jobID: "art_preview_job",
+        taskID: "tsk_preview",
+        targetID: "",
+        url: "http://127.0.0.1:5173/",
+        viewportIDs: ["desktop"],
+        artifactPaths: [],
+        captures: {},
+        diagnostics: [],
+      }),
+    ).rejects.toThrow(/targetID/)
+    await expect(fs.stat(path.join(tmp.path, "manifest.json"))).rejects.toThrow()
+    await expect(fs.stat(path.join(tmp.path, "diagnostics.json"))).rejects.toThrow()
+  })
+
   test("does not synthesize passed layers when the sidecar omits structured evidence", async () => {
     await using tmp = await tmpdir()
     const screenshotPath = path.join(tmp.path, "desktop.png")
