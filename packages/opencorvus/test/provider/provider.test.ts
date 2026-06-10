@@ -35,6 +35,40 @@ test("stable providers retain the five minute minimum fetch inactivity timeout",
   expect(Provider.resolveFetchInactivityMs("anthropic", false)).toBe(0)
 })
 
+test("provider fetch init injects configured Bun proxy", () => {
+  const proxy = Provider.resolveFetchProxy({
+    network: {
+      proxy: {
+        enabled: true,
+        url: "http://127.0.0.1:7890",
+      },
+    },
+  })
+  const init = Provider.providerFetchInit({ method: "POST" }, proxy)
+
+  expect(proxy).toBe("http://127.0.0.1:7890")
+  expect(init.method).toBe("POST")
+  expect(init.proxy).toBe("http://127.0.0.1:7890")
+  expect(init.timeout).toBe(false)
+})
+
+test("disabled network proxy leaves provider fetch direct", () => {
+  const proxy = Provider.resolveFetchProxy({
+    network: {
+      proxy: {
+        enabled: false,
+        url: "http://127.0.0.1:7890",
+      },
+    },
+  })
+  const init = Provider.providerFetchInit({ method: "GET" }, proxy)
+
+  expect(proxy).toBeUndefined()
+  expect(init.method).toBe("GET")
+  expect(init.proxy).toBeUndefined()
+  expect(init.timeout).toBe(false)
+})
+
 test("provider loaded from env variable", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

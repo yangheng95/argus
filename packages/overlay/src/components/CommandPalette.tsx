@@ -46,6 +46,7 @@ const SETTINGS_TABS: Array<{ tab: string; labelKey: string; group: string }> = [
   { tab: "prompt", labelKey: "prompt.title", group: "settings" },
   { tab: "channel", labelKey: "channel.title", group: "settings" },
   { tab: "memory", labelKey: "memory.title", group: "settings" },
+  { tab: "network", labelKey: "network.title", group: "settings" },
   { tab: "providers", labelKey: "common.cancel", group: "settings" }, // providers has no i18n title; fall back below
   { tab: "agent-models", labelKey: "common.cancel", group: "settings" }, // same
   { tab: "about", labelKey: "about.title", group: "settings" },

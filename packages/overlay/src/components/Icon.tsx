@@ -171,6 +171,7 @@ export type IconName =
   | "config-skill-market"
   | "config-mcp"
   | "config-memory"
+  | "config-network"
   | "config-providers"
   | "config-agent-models"
   | "config-about"
@@ -243,6 +244,7 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   "config-skill-market": { component: ShoppingBag },
   "config-mcp": { component: Cable },
   "config-memory": { component: BrainCircuit },
+  "config-network": { component: Globe },
   "config-providers": { component: Layers },
   "config-agent-models": { component: Bot },
   "config-about": { component: Info },

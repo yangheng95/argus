@@ -18,6 +18,8 @@ describe("app/session dialog single source", () => {
   const sessionHost = readText("src/components/SessionDialogHost.tsx")
   const goalHost = readText("src/components/GoalDialogHost.tsx")
   const configHost = readText("src/components/ConfigDialogHost.tsx")
+  const dialogStore = readText("src/store/dialog.ts")
+  const networkPanel = readText("src/components/settings/NetworkPanel.tsx")
 
   test("app dialog service is store-backed, not bridge-backed DOM mutation", () => {
     expect(appDialogService).not.toContain("installAppDialogBridge")
@@ -117,6 +119,17 @@ describe("app/session dialog single source", () => {
       "<ProvidersPanel />\n            </div>\n          </div>\n          <div classList",
     )
     expect(configHost).not.toContain("<AgentModelsPanel />\n            </div>\n          </div>")
+  })
+
+  test("network settings tab is a first-class config section and writes only network.proxy", () => {
+    expect(dialogStore).toContain('| "network"')
+    expect(dialogStore).toContain('{ id: "network", labelKey: "network.title" }')
+    expect(configHost).toContain('network: "config-network"')
+    expect(configHost).toContain('case "network":')
+    expect(configHost).toContain("<NetworkPanel />")
+    expect(networkPanel).toContain("patchConfig({ network: { proxy: nextProxy } })")
+    expect(networkPanel).not.toContain('apiJson("config")')
+    expect(networkPanel).not.toContain("updateConfig(")
   })
 
   test("task route and queue decisions use card choices instead of select UI", () => {

@@ -68,6 +68,22 @@ export namespace Provider {
     return Math.max(selectedTimeout, DEFAULT_INACTIVITY_TIMEOUT_MS)
   }
 
+  export function resolveFetchProxy(config: Config.Info): string | undefined {
+    const proxy = config.network?.proxy
+    if (!proxy || proxy.enabled === false) return
+    const url = proxy.url?.trim()
+    return url || undefined
+  }
+
+  export function providerFetchInit(opts: BunFetchRequestInit, proxyUrl?: string): BunFetchRequestInit {
+    return {
+      ...opts,
+      ...(proxyUrl ? { proxy: proxyUrl } : {}),
+      // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
+      timeout: false,
+    }
+  }
+
   function googleVertexVars(options: Record<string, any>) {
     const project =
       options["project"] ?? Env.get("GOOGLE_CLOUD_PROJECT") ?? Env.get("GCP_PROJECT") ?? Env.get("GCLOUD_PROJECT")
@@ -726,6 +742,7 @@ export namespace Provider {
         providerID: model.providerID,
       })
       const s = await stateFor(opts?.config)
+      const config = opts?.config ?? (await Config.get())
       const provider = s.providers[model.providerID]
       const options = { ...provider.options }
       if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key
@@ -752,6 +769,7 @@ export namespace Provider {
       if (existing) return existing
 
       const customFetch = options["fetch"]
+      const proxyUrl = customFetch ? undefined : resolveFetchProxy(config)
 
       options["fetch"] = async (input: any, init?: BunFetchRequestInit) => {
         // Preserve custom fetch if it exists, wrap it with timeout logic
@@ -821,11 +839,7 @@ export namespace Provider {
           if (normalized !== body) opts.body = JSON.stringify(normalized)
         }
 
-        const response = await fetchFn(input, {
-          ...opts,
-          // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
-          timeout: false,
-        })
+        const response = await fetchFn(input, providerFetchInit(opts, proxyUrl))
 
         // Response received — reset timer (server is alive)
         resetInactivityTimer?.()

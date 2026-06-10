@@ -30,6 +30,13 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
   "$schema": "https://opencorvus.ai/config.json",
   "model": "github-copilot/claude-haiku-4.5",
 
+  "network": {
+    "proxy": {
+      "enabled": true,
+      "url": "http://127.0.0.1:7890",
+    },
+  },
+
   "skills": {
     "paths": ["<abs-path>/skills-market/github.com-anthropics-skills"],
     "urls": [],
@@ -70,6 +77,21 @@ Lightweight model used for summary / title generation and similar low-stakes tas
 ### `locale`
 
 `"en-US" | "zh-CN"` — operator-selected system language; influences LLM reply language and SDK pass-through. Distinct from the Overlay UI locale preference (localStorage, front-end text only).
+
+### `network.proxy`
+
+HTTP(S) proxy for model provider requests. `enabled: false` or an empty `url` means direct fetch. `url` supports `http://` and `https://`.
+
+```jsonc
+{
+  "network": {
+    "proxy": {
+      "enabled": true,
+      "url": "http://127.0.0.1:7890",
+    },
+  },
+}
+```
 
 ### `skills.paths` / `skills.urls`
 

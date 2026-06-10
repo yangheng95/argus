@@ -6,6 +6,7 @@ import { McpPanel, SkillMarketPanel, SkillsPanel } from "./settings/SkillMarketP
 import ProvidersPanel from "./settings/ProvidersPanel"
 import GeneralPanel from "./settings/GeneralPanel"
 import AgentModelsPanel from "./settings/AgentModelsPanel"
+import NetworkPanel from "./settings/NetworkPanel"
 import { PermissionsPanel } from "./settings/PermissionsPanel"
 import { MemoryPanel } from "./MemoryPanel"
 import { Dialog } from "./primitives/Dialog"
@@ -39,6 +40,7 @@ const SECTION_ICONS: Record<ConfigDialogTab, IconName> = {
   "skill-market": "config-skill-market",
   mcp: "config-mcp",
   memory: "config-memory",
+  network: "config-network",
   providers: "config-providers",
   "agent-models": "config-agent-models",
   about: "config-about",
@@ -77,6 +79,8 @@ function activePanelBodyID(tab: ConfigDialogTab): string {
       return "mcpConfigBody"
     case "memory":
       return "memoryBody"
+    case "network":
+      return "networkBody"
     case "providers":
       return "providersConfigBody"
     case "agent-models":
@@ -180,6 +184,8 @@ export function ConfigDialogHost() {
         return <McpPanel />
       case "memory":
         return <MemoryPanel taskID={() => activeTaskID() || undefined} />
+      case "network":
+        return <NetworkPanel />
       case "providers":
         return <ProvidersPanel />
       case "agent-models":
