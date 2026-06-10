@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { ensureMissionSession } from "../../src/mission/session"
@@ -140,6 +140,196 @@ describe("mission routes", () => {
           completed: 1,
           failed: 0,
           cancelled: 0,
+        })
+      },
+    })
+  })
+
+  test("GET /mission/:missionID/status and /task/:taskID/status expose normalized progress details", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const session = await ensureMissionSession({ missionID: "m-status", defaultCwd: tmp.path })
+        const now = Date.now()
+
+        function insertTask(input: { title: string; started?: number | null; completed?: number | null }) {
+          const id = Identifier.ascending("task")
+          Database.use((db) =>
+            db
+              .insert(EngineTaskTable)
+              .values({
+                id,
+                project_id: Instance.project.id,
+                source: "mission",
+                title: input.title,
+                request: input.title,
+                metadata: { actor: "mission", mission: { id: session.missionID, session_id: session.id } },
+                time_started: input.started ?? null,
+                time_completed: input.completed ?? null,
+                time_created: now,
+                time_updated: now + id.length,
+              })
+              .run(),
+          )
+          return id
+        }
+
+        const activeTaskID = insertTask({ title: "Mission active status task", started: now - 2000 })
+        const completedTaskID = insertTask({
+          title: "Mission completed status task",
+          started: now - 4000,
+          completed: now - 1000,
+        })
+        const goalID = Identifier.ascending("goal")
+        const runID = Identifier.ascending("run")
+        const goalRunID = Identifier.ascending("goal_run")
+        Database.use((db) => {
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: activeTaskID,
+              title: "Implement status API",
+              slug: "implement-status-api",
+              objective: "Expose detailed mission and task status snapshots.",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: goalRunID,
+              task_id: activeTaskID,
+              run_id: runID,
+              goal_run_id: goalRunID,
+              kind: "goal_run_attempt",
+              label: "running-goal",
+              payload: {
+                goal_id: goalID,
+                status: "running",
+                retry_count: 0,
+                time_started: now - 1500,
+              },
+              time_created: now - 1500,
+              time_updated: now - 1500,
+            })
+            .run()
+        })
+
+        const missionResponse = await app.request("/mission/m-status/status", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(missionResponse.status).toBe(200)
+        const mission = (await missionResponse.json()) as any
+        expect(mission).toMatchObject({
+          missionID: "m-status",
+          sessionID: session.id,
+          status: "running",
+          taskCounts: {
+            total: 2,
+            success: 1,
+            failed: 0,
+            running: 1,
+          },
+          progress: {
+            total: 2,
+            completed: 1,
+            failed: 0,
+            running: 1,
+            pending: 0,
+            percent: 50,
+          },
+        })
+        const activeTask = mission.tasks.find((task: any) => task.taskID === activeTaskID)
+        expect(activeTask).toMatchObject({
+          taskID: activeTaskID,
+          status: "running",
+          lifecycleStatus: "active",
+          goals: [
+            {
+              goalID,
+              title: "Implement status API",
+              status: "running",
+              rawStatus: "running",
+              progress: {
+                running: 1,
+              },
+            },
+          ],
+        })
+        expect(mission.tasks.find((task: any) => task.taskID === completedTaskID)).toMatchObject({
+          status: "success",
+          lifecycleStatus: "completed",
+        })
+
+        const taskResponse = await app.request(`/task/${activeTaskID}/status`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(taskResponse.status).toBe(200)
+        const task = (await taskResponse.json()) as any
+        expect(task).toMatchObject({
+          taskID: activeTaskID,
+          status: "running",
+          lifecycleStatus: "active",
+        })
+        expect(task.goals[0]).toMatchObject({
+          goalID,
+          status: "running",
+          steps: [
+            {
+              status: "running",
+              rawStatus: "running",
+            },
+          ],
+        })
+      },
+    })
+  })
+
+  test("GET /mission/:missionID/status reports zero progress for a Mission without tasks", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const session = await ensureMissionSession({ missionID: "m-empty-status", defaultCwd: tmp.path })
+
+        const response = await app.request("/mission/m-empty-status/status", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject({
+          missionID: "m-empty-status",
+          sessionID: session.id,
+          status: "running",
+          taskCounts: {
+            total: 0,
+            success: 0,
+            failed: 0,
+            running: 0,
+          },
+          progress: {
+            total: 0,
+            completed: 0,
+            failed: 0,
+            running: 0,
+            pending: 0,
+            percent: 0,
+          },
+          tasks: [],
         })
       },
     })

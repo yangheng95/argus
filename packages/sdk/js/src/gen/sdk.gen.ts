@@ -120,6 +120,7 @@ import type {
   MissionDeleteResponses,
   MissionListResponses,
   MissionRenameResponses,
+  MissionStatusResponses,
   MissionWakeResponses,
   OutputFormat,
   PanelCapabilitiesResponses,
@@ -310,6 +311,8 @@ import type {
   TaskSessionCancelResponses,
   TaskSessionReplyErrors,
   TaskSessionReplyResponses,
+  TaskStatusErrors,
+  TaskStatusResponses,
   TaskTraceErrors,
   TaskTraceResponses,
   TaskTranscriptErrors,
@@ -4815,6 +4818,36 @@ export class Mission extends HeyApiClient {
   }
 
   /**
+   * Get Mission status
+   *
+   * Collect the current Mission status from its tasks and each task's workflow/goal progress. The top-level and nested detail `status` fields are normalized to "success", "failed", or "running"; raw lifecycle states remain available as lifecycleStatus/rawStatus fields.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters: {
+      missionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "missionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<MissionStatusResponses, unknown, ThrowOnError>({
+      url: "/mission/{missionID}/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Rename a Mission
    *
    * Rename the Mission session title. The Mission record remains backed by the same mission session.
@@ -6071,6 +6104,36 @@ export class Task extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<TaskGetResponses, TaskGetErrors, ThrowOnError>({
       url: "/task/{taskID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get task status
+   *
+   * Collect the current task status from the task board projection, including workflow progress and per-goal details. The response `status` field is normalized to "success", "failed", or "running"; raw task lifecycle and step states remain available as lifecycleStatus/rawStatus fields.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskStatusResponses, TaskStatusErrors, ThrowOnError>({
+      url: "/task/{taskID}/status",
       ...options,
       ...params,
     })
