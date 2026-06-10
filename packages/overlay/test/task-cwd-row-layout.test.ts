@@ -42,7 +42,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function soloRuleBody(selector: string): string {
@@ -77,6 +79,9 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const body = soloRuleBody(".task-cwd-dropdown")
     expect(body).toMatch(/flex:\s*1\s+1\s+auto/)
     expect(body).toMatch(/min-width:\s*0/)
+    const shell = soloRuleBody(".task-dir-shell")
+    expect(shell).toMatch(/box-sizing:\s*border-box/)
+    expect(shell).toMatch(/height:\s*calc\(24px \* var\(--ui-scale\)\)/)
   })
 
   test("project directory bar owns cwd dropdown and branch badge from one Solid mount", () => {
@@ -96,13 +101,35 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const taskCluster = soloRuleBody(".task-project-cluster")
     expect(taskCluster).toMatch(/display:\s*flex/)
     expect(taskCluster).toMatch(/align-items:\s*center/)
-    const button = soloRuleBody(".project-worktree-dropdown")
-    expect(button).toMatch(/display:\s*inline-flex/)
-    expect(button).toMatch(/height:\s*calc\(24px \* var\(--ui-scale\)\)/)
+    const button = soloRuleBody('.oc-button[data-ui="project-worktree-dropdown"]')
+    expect(button).toMatch(/--oc-button-height:\s*calc\(24px \* var\(--ui-scale\)\)/)
     expect(button).toMatch(/flex-shrink:\s*0/)
-    expect(TASK_DIR_BAR).toContain('class="project-worktree-dropdown"')
+    expect(soloRuleBody(".oc-button")).toMatch(/display:\s*inline-flex/)
+    expect(TASK_DIR_BAR).toContain('import { Button } from "./ui/Button"')
+    expect(TASK_DIR_BAR).toContain('data-ui="project-worktree-dropdown"')
+    expect(TASK_DIR_BAR).toContain('size="sm"')
+    expect(TASK_DIR_BAR).not.toContain('class="project-worktree-dropdown"')
     expect(TASK_DIR_BAR).toContain('class="project-worktree-panel"')
     expect(TASK_DIR_BAR).toContain('class="project-worktree-remove"')
+    expect(TASK_DIR_BAR).toContain('data-kind="active"')
+    expect(TASK_DIR_BAR).toContain('data-kind="expired"')
+    expect(TASK_DIR_BAR).toContain('t("worktree.active")')
+    expect(TASK_DIR_BAR).toContain('t("worktree.expired")')
+    expect(TASK_DIR_BAR).not.toContain("active_short")
+    expect(TASK_DIR_BAR).not.toContain("expired_short")
+    expect(TASK_DIR_BAR).toContain(
+      'const visibleWorktrees = createMemo(() => worktrees().filter((item) => item.status !== "primary"))',
+    )
+    expect(TASK_DIR_BAR).toContain("compactPath(item.directory)")
+    expect(TASK_DIR_BAR).toContain('compactBranch(item.branch ?? "")')
+    expect(TASK_DIR_BAR).toContain("const panelMinWidth = 340")
+    expect(TASK_DIR_BAR).toContain("const panelViewportGap = 4")
+    expect(TASK_DIR_BAR).toContain("viewportWidth - panelViewportGap * 2")
+    expect(TASK_DIR_BAR).toContain("viewportWidth - width - panelViewportGap")
+    const row = soloRuleBody(".project-worktree-item")
+    expect(row).toMatch(/grid-template-columns:/)
+    expect(row).toMatch(/min-height:\s*calc\(28px \* var\(--ui-scale\)\)/)
+    expect(STYLES).not.toContain(".project-worktree-main")
   })
 
   test("recent directory popup is portalled above page stacking contexts", () => {

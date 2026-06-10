@@ -23,6 +23,7 @@ import { deleteProjectWorktree, loadProjectWorktrees, type ProjectWorktreeInfo }
 import { showAppDialog } from "../services/app-dialog"
 import { getHostTransport } from "../services/host-transport"
 import { Icon } from "./Icon"
+import { Button } from "./ui/Button"
 import { WorkspaceCodingCliLaunchers } from "./WorkspaceCodingCliLaunchers"
 import { WorkspaceEditorLaunchers } from "./WorkspaceEditorLaunchers"
 import { WorkspaceLayoutControls } from "./WorkspaceLayoutControls"
@@ -42,6 +43,20 @@ function worktreeStateLabel(item: ProjectWorktreeInfo): string {
   if (item.status === "primary") return t("worktree.primary")
   if (item.status === "active" && item.goalID) return item.goalID
   return t("worktree.expired")
+}
+
+function compactPath(value: string): string {
+  const normalized = value.replace(/\\/g, "/")
+  const parts = normalized.split("/").filter(Boolean)
+  if (parts.length <= 2) return value
+  return `.../${parts.slice(-2).join("/")}`
+}
+
+function compactBranch(value: string): string {
+  if (value.length <= 26) return value
+  const parts = value.split("/").filter(Boolean)
+  if (parts.length >= 2) return `.../${parts.slice(-2).join("/")}`
+  return `${value.slice(0, 23)}...`
 }
 
 export function TaskDirContent() {
@@ -252,11 +267,16 @@ export function TaskDirContent() {
 }
 
 export function ProjectWorktreeDropdown() {
+  const panelMinWidth = 340
+  const panelViewportGap = 4
   const dir = createMemo(directoryMemo)
   const [open, setOpen] = createSignal(false)
   const [panelStyle, setPanelStyle] = createSignal<Record<string, string>>({})
   const [worktrees, setWorktrees] = createSignal<ProjectWorktreeInfo[]>([])
   const [error, setError] = createSignal("")
+  const visibleWorktrees = createMemo(() => worktrees().filter((item) => item.status !== "primary"))
+  const activeWorktrees = createMemo(() => worktrees().filter((item) => item.status === "active"))
+  const expiredWorktrees = createMemo(() => worktrees().filter((item) => item.status === "expired"))
   let dropdownRef: HTMLButtonElement | undefined
 
   async function syncWorktrees(): Promise<void> {
@@ -279,10 +299,16 @@ export function ProjectWorktreeDropdown() {
   function openPanel(): void {
     if (dropdownRef) {
       const rect = dropdownRef.getBoundingClientRect()
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth
+      const width = Math.min(Math.max(rect.width, panelMinWidth), Math.max(0, viewportWidth - panelViewportGap * 2))
+      const left = Math.min(
+        Math.max(panelViewportGap, rect.left),
+        Math.max(panelViewportGap, viewportWidth - width - panelViewportGap),
+      )
       setPanelStyle({
         top: `${Math.round(rect.bottom + 6)}px`,
-        left: `${Math.round(Math.max(4, rect.left))}px`,
-        width: `${Math.round(Math.max(rect.width, 340))}px`,
+        left: `${Math.round(left)}px`,
+        width: `${Math.round(width)}px`,
       })
     }
     setOpen(true)
@@ -322,7 +348,7 @@ export function ProjectWorktreeDropdown() {
   onMount(() => {
     const onDocumentClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
-      if (target?.closest?.(".project-worktree-dropdown,.project-worktree-panel")) return
+      if (target?.closest?.('[data-ui="project-worktree-dropdown"],.project-worktree-panel')) return
       closePanel()
     }
     const onDocumentKeyDown = (event: KeyboardEvent) => {
@@ -341,15 +367,18 @@ export function ProjectWorktreeDropdown() {
 
   return (
     <>
-      <button
+      <Button
         ref={(el) => {
           dropdownRef = el
         }}
         type="button"
-        class="project-worktree-dropdown"
+        variant="outline"
+        size="sm"
+        tone="neutral"
+        data-ui="project-worktree-dropdown"
         data-open={open() ? "true" : "false"}
-        title={t("worktree.title")}
-        aria-label={t("worktree.title")}
+        title={t("worktree.summary", { active: activeWorktrees().length, expired: expiredWorktrees().length })}
+        aria-label={t("worktree.summary", { active: activeWorktrees().length, expired: expiredWorktrees().length })}
         aria-haspopup="listbox"
         aria-expanded={open() ? "true" : "false"}
         onClick={(event) => {
@@ -358,28 +387,39 @@ export function ProjectWorktreeDropdown() {
         }}
       >
         <Icon name="folder-open" size={14} />
-        <span class="project-worktree-count">{worktrees().length}</span>
+        <span class="project-worktree-count" data-kind="active">
+          {t("worktree.active")} {activeWorktrees().length}
+        </span>
+        <Show when={expiredWorktrees().length > 0}>
+          <span class="project-worktree-count" data-kind="expired">
+            {t("worktree.expired")} {expiredWorktrees().length}
+          </span>
+        </Show>
         <Icon name="caret-down" size={12} class="project-worktree-caret" />
-      </button>
+      </Button>
       <Portal mount={document.body}>
         <Show when={open()}>
           <div class="project-worktree-panel" style={panelStyle()} role="listbox">
             <div class="project-worktree-panel-shell">
               <div class="project-worktree-panel-head">
                 <div class="project-worktree-panel-title">{t("worktree.title")}</div>
-                <Show when={dir()}>
-                  <div class="project-worktree-panel-meta" title={dir()}>
-                    {dir()}
-                  </div>
+                <span class="project-worktree-head-count" data-kind="active">
+                  {t("worktree.active")} {activeWorktrees().length}
+                </span>
+                <span class="project-worktree-head-count" data-kind="expired">
+                  {t("worktree.expired")} {expiredWorktrees().length}
+                </span>
+                <Show when={expiredWorktrees().length > 0}>
+                  <span class="project-worktree-cleanup-hint">{t("worktree.cleanup_expired")}</span>
                 </Show>
               </div>
               <Show when={!error()} fallback={<div class="project-worktree-empty">{error()}</div>}>
                 <Show
-                  when={worktrees().length > 0}
+                  when={visibleWorktrees().length > 0}
                   fallback={<div class="project-worktree-empty">{t("worktree.empty")}</div>}
                 >
                   <div class="project-worktree-list">
-                    <For each={worktrees()}>
+                    <For each={visibleWorktrees()}>
                       {(item) => (
                         <div class="project-worktree-row" data-status={item.status}>
                           <button
@@ -388,20 +428,24 @@ export function ProjectWorktreeDropdown() {
                             title={item.directory}
                             onClick={() => void openDirectory(item.directory)}
                           >
-                            <span class="project-worktree-main">
-                              <span class="project-worktree-name">{item.name}</span>
-                              <span class="project-worktree-path">{item.directory}</span>
-                            </span>
+                            <span class="project-worktree-name">{item.name}</span>
                             <span class="project-worktree-state">{worktreeStateLabel(item)}</span>
                             <Show when={item.branch}>
-                              <span class="project-worktree-branch">⎇ {item.branch}</span>
+                              <span class="project-worktree-branch" title={item.branch}>
+                                ⎇ {compactBranch(item.branch ?? "")}
+                              </span>
                             </Show>
+                            <span class="project-worktree-path" title={item.directory}>
+                              {compactPath(item.directory)}
+                            </span>
                           </button>
                           <button
                             type="button"
                             class="project-worktree-remove"
-                            title={t("worktree.delete")}
-                            aria-label={t("worktree.delete")}
+                            title={item.status === "expired" ? t("worktree.cleanup_expired") : t("worktree.delete")}
+                            aria-label={
+                              item.status === "expired" ? t("worktree.cleanup_expired") : t("worktree.delete")
+                            }
                             disabled={!item.removable}
                             onClick={(event) => void removeWorktree(item, event)}
                           >
