@@ -183,7 +183,7 @@ describe("task conversation routes", () => {
     })
   })
 
-  test("GET /task/:taskID/conversation/session/:sessionID returns lifecycle-only agent sessions", async () => {
+  test("GET /task/:taskID/conversation/session/:sessionID returns lifecycle events without blank sessions", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -253,13 +253,7 @@ describe("task conversation routes", () => {
         expect(body.history?.limit).toBe(1)
         expect(body.events?.map((event) => event.type)).toEqual(["session.status"])
         expect(body.events?.[0]?.payload?.sessionID).toBe(frontendResearch.id)
-        expect(body.view?.sessions).toEqual([
-          expect.objectContaining({
-            sessionID: frontendResearch.id,
-            stage: "frontend-research",
-            messageIDs: [],
-          }),
-        ])
+        expect(body.view?.sessions).toEqual([])
       },
     })
   })
@@ -390,13 +384,7 @@ describe("task conversation routes", () => {
         expect(body.transcript.map((message) => message.info?.id)).toEqual(["msg_history_old"])
         expect(body.events?.map((event) => event.type)).toEqual(["session.status"])
         expect(body.events?.[0]?.payload?.sessionID).toBe(frontendResearch.id)
-        expect(body.view?.sessions).toContainEqual(
-          expect.objectContaining({
-            sessionID: frontendResearch.id,
-            stage: "frontend-research",
-            messageIDs: [],
-          }),
-        )
+        expect(body.view?.sessions?.some((session) => session.sessionID === frontendResearch.id)).toBe(false)
       },
     })
   })

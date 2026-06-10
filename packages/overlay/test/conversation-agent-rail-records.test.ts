@@ -47,6 +47,30 @@ test("ConversationAgentRail keeps hydrated sessions with deterministic rendered 
   expect(merged[1]?.goalID).toBe("goal_a")
 })
 
+test("ConversationAgentRail merge keeps hydrated canonical identity over live card labels", () => {
+  const merged = mergeAgentRecords(
+    [
+      {
+        ...record("ses_architect", 100, "architect:session:ses_architect:message:msg_architect"),
+        agentName: "architect",
+        stage: "architect",
+      },
+    ],
+    [
+      {
+        ...record("ses_architect", 110, "assistant:session:ses_architect:message:msg_architect"),
+        agentName: "assistant",
+        stage: "assistant",
+      },
+    ],
+  )
+
+  expect(merged).toHaveLength(1)
+  expect(merged[0]?.agentName).toBe("architect")
+  expect(merged[0]?.stage).toBe("architect")
+  expect(merged[0]?.renderedCardID).toBe("assistant:session:ses_architect:message:msg_architect")
+})
+
 test("ConversationAgentRail records stay in global chronological order", () => {
   const sorted = sortAgentWorkflowRecordsChronologically([
     record("later_parent_a", 300, "card:later_parent_a"),
@@ -110,7 +134,7 @@ test("hydrated agent records fall back to the latest message without a display m
   expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_latest")
 })
 
-test("hydrated lifecycle-only agent records target the message-less session card", () => {
+test("hydrated lifecycle-only agent records do not create blank session cards", () => {
   resetConversationAgentView()
   hydrateConversationAgentView("task:tsk", {
     sessions: [
@@ -125,9 +149,28 @@ test("hydrated lifecycle-only agent records target the message-less session card
     ],
   })
 
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(
-    "frontend-research:session:ses_frontend_research_failed",
-  )
+  expect(conversationAgentStore.records).toEqual([])
+})
+
+test("hydrated goal-phase agent records may target the phase card without a display message", () => {
+  resetConversationAgentView()
+  hydrateConversationAgentView("task:tsk", {
+    sessions: [
+      {
+        sessionID: "ses_build_goal",
+        stage: "build",
+        parentSessionID: "ses_root",
+        goalID: "goal_a",
+        messageIDs: [],
+        firstMessageTime: 100,
+        lastMessageTime: 110,
+        placement: "goal_phase",
+        phase: { stepID: "build", phaseID: "build" },
+      },
+    ],
+  })
+
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("step:goal_a:build")
   expect(conversationAgentStore.records[0]?.targetMessageID).toBe("")
 })
 

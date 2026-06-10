@@ -10,6 +10,17 @@ export function sortAgentWorkflowRecordsChronologically(records: AgentWorkflowRe
   })
 }
 
+function mergeAgentRecord(base: AgentWorkflowRecord | undefined, live: AgentWorkflowRecord): AgentWorkflowRecord {
+  if (!base) return { ...live }
+  return {
+    ...base,
+    ...live,
+    agentName: base.agentName,
+    stage: base.stage,
+    parentSessionID: base.parentSessionID || live.parentSessionID,
+  }
+}
+
 export function mergeAgentRecords(
   baseRecords: AgentWorkflowRecord[],
   liveRecords: AgentWorkflowRecord[],
@@ -25,7 +36,7 @@ export function mergeAgentRecords(
   for (const record of liveRecords) {
     if (!record.renderedCardID) continue
     const base = baseBySession.get(record.sessionID)
-    merged.set(record.sessionID, base ? { ...base, ...record } : { ...record })
+    merged.set(record.sessionID, mergeAgentRecord(base, record))
   }
   return sortAgentWorkflowRecordsChronologically([...merged.values()])
 }
