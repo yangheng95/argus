@@ -459,15 +459,12 @@ export function ExecutorSelector() {
             onValueChange={changeExternalTab}
             data-ui="executor-popover-tabs"
           >
-            {/* Popover tabs switch the in-popover view; they should not take focus
-                away from Kobalte's dismissable layer and close the popover. */}
             <Tab
               value={EXTERNAL_DISABLED_TAB_ID}
               active={!isExternalActive()}
               size="sm"
               tone="neutral"
               data-ui="executor-popover-tab"
-              onMouseDown={(event) => event.preventDefault()}
             >
               {t("executor.external_disabled")}
             </Tab>
@@ -481,7 +478,6 @@ export function ExecutorSelector() {
                   data-ui="executor-popover-tab"
                   disabled={!tab.selectable}
                   title={tab.title}
-                  onMouseDown={(event) => event.preventDefault()}
                 >
                   {tab.label}
                 </Tab>
