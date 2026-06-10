@@ -206,6 +206,60 @@ test("executor sessions surface when they contain visible reasoning", () => {
   ).toBe(true)
 })
 
+test("non-goal agent message shells stay hidden until display content arrives", () => {
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "hide blank architect shell",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  })
+  setBoardStore("selectedTaskID", TASK_ID)
+  resetWriter()
+
+  const architectCardID = "architect:session:ses_architect_blank:message:msg_architect_blank"
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("architect", {
+        id: "msg_architect_blank",
+        sessionID: "ses_architect_blank",
+        role: "assistant",
+        resolvedRole: "architect",
+        agent: "architect",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_001_000 },
+      }),
+    },
+  })
+
+  expect(cardTreeStore.cards[architectCardID]).toBeDefined()
+  expect(cardTreeStore.order).not.toContain(architectCardID)
+
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("architect", {
+        id: "part_architect_visible",
+        messageID: "msg_architect_blank",
+        sessionID: "ses_architect_blank",
+        type: "text",
+        text: "Architect produced a visible plan.",
+      }),
+    },
+  })
+
+  expect(cardTreeStore.order).toContain(architectCardID)
+  expect(cardTreeStore.order.filter((id) => id === architectCardID)).toHaveLength(1)
+})
+
 test("non-goal sub-agent sessions surface at top level, not under their parent session", () => {
   setBoardStore("board", {
     task: {
@@ -248,6 +302,32 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
         agent: "architect",
         parentSessionID: ROOT_SID,
         time: { created: 1_776_000_001_000 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "part_root",
+        messageID: "msg_root",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "Root response.",
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("architect", {
+        id: "part_architect",
+        messageID: "msg_architect",
+        sessionID: "ses_architect",
+        type: "text",
+        text: "Architect response.",
       }),
     },
   })
@@ -568,6 +648,19 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
       }),
     },
   })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_root",
+        messageID: "msg_root",
+        sessionID: ROOT_ASSISTANT_SID,
+        type: "text",
+        text: "root assistant visible content",
+      }),
+    },
+  })
 
   const rootCardID = `assistant:session:${ROOT_ASSISTANT_SID}:message:msg_root`
   expect(cardTreeStore.cards[rootCardID]).toBeDefined()
@@ -648,6 +741,20 @@ test("channel-stamped part.updated materializes the correct session card immedia
   const rootCardID = `assistant:session:${ROOT_SID}:message:msg_root`
   expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined()
   expect(cardTreeStore.cards[plannerRaceCardID]).toBeDefined()
+  expect(cardTreeStore.order).not.toContain(rootCardID)
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_root_race",
+        messageID: "msg_root",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "root stream after race",
+      }),
+    },
+  })
   expect(cardTreeStore.order).toContain(rootCardID)
   // Planner is now a top-level sibling of the root assistant, not a child.
   expect(cardTreeStore.order).toContain(plannerRaceCardID)
@@ -1203,6 +1310,20 @@ test("message arrival migrates lifecycle-only frontend card without leaving a du
   expect(cardTreeStore.cards[messageCardID]?.sessionID).toBe(sessionID)
   expect(cardTreeStore.cards[messageCardID]?.messageID).toBe("msg_frontend_design_lifecycle")
   expect(cardTreeStore.order).not.toContain(lifecycleCardID)
+  expect(cardTreeStore.order).not.toContain(messageCardID)
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("frontend-design", {
+        id: "prt_frontend_design_lifecycle",
+        messageID: "msg_frontend_design_lifecycle",
+        sessionID,
+        type: "text",
+        text: "frontend design produced visible content",
+      }),
+    },
+  })
   expect(cardTreeStore.order).toContain(messageCardID)
 })
 
@@ -1359,6 +1480,19 @@ test("orchestrator turns stay in one complete session card around child agents",
       }),
     },
   })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("architect", {
+        id: "prt_child",
+        messageID: "msg_child",
+        sessionID: "ses_child",
+        type: "text",
+        text: "child agent visible content",
+      }),
+    },
+  })
 
   applyEvent({
     type: "message.updated",
@@ -1479,6 +1613,19 @@ test("late child agent event does not split an already-arrived orchestrator sess
         agent: "architect",
         parentSessionID: ROOT_SID,
         time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("architect", {
+        id: "prt_late_child",
+        messageID: "msg_late_child",
+        sessionID: "ses_late_child",
+        type: "text",
+        text: "late child visible content",
       }),
     },
   })
@@ -1790,6 +1937,19 @@ test("phase-absorbed agent does not split a later orchestrator turn", () => {
         resolvedRole: "assistant",
         agent: "assistant",
         time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("assistant", {
+        id: "prt_phase_i1",
+        messageID: "msg_phase_i1",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "orchestrator before phase",
       }),
     },
   })
