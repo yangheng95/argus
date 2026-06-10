@@ -1,0 +1,57 @@
+import { Identifier } from "@/id/id"
+import type { RuntimeCaptureInput, RuntimeCaptureResult } from "@/runtime/page-capture"
+import { writeBrowserEvidenceManifest } from "./evidence-runner"
+import {
+  runBrowserPreviewVerification,
+  type BrowserPreviewVerification,
+  type BrowserPreviewVerificationCaptureJobInput,
+  type BrowserPreviewVerificationCaptureJobResult,
+  type BrowserPreviewVerificationInput,
+} from "./verification-core"
+
+type CaptureRuntimePage = (input: RuntimeCaptureInput) => Promise<RuntimeCaptureResult>
+
+type BrowserPreviewVerificationTestInput = BrowserPreviewVerificationInput & {
+  captureForTest: CaptureRuntimePage
+}
+
+export async function verifyBrowserPreviewForTest(
+  input: BrowserPreviewVerificationTestInput,
+): Promise<BrowserPreviewVerification> {
+  return runBrowserPreviewVerification(input, (jobInput) =>
+    captureWithTestHarness({ ...jobInput, captureForTest: input.captureForTest }),
+  )
+}
+
+async function captureWithTestHarness(
+  input: BrowserPreviewVerificationCaptureJobInput & { captureForTest: CaptureRuntimePage },
+): Promise<BrowserPreviewVerificationCaptureJobResult> {
+  const captures: Record<string, RuntimeCaptureResult> = {}
+  const artifactPaths: string[] = []
+  const diagnostics: string[] = []
+  for (const viewport of input.viewports) {
+    const result = await input.captureForTest({
+      url: input.url,
+      outDir: input.outDir,
+      viewport_width: viewport.width,
+      viewport_height: viewport.height,
+      fileLabel: viewport.id,
+      signal: input.signal,
+    })
+    captures[viewport.id] = result
+    if (result.captured && result.path) artifactPaths.push(result.path)
+    diagnostics.push(result.summary)
+  }
+  const manifest = await writeBrowserEvidenceManifest({
+    outDir: input.outDir,
+    jobID: Identifier.ascending("artifact"),
+    taskID: input.taskID,
+    targetID: input.targetID,
+    url: input.url,
+    viewportIDs: input.viewportIDs,
+    artifactPaths,
+    captures,
+    diagnostics,
+  })
+  return { captures, manifest }
+}
