@@ -238,6 +238,47 @@ describe("Worktree.mergeSafely", () => {
     expect(tracked.trim()).toBe("")
   })
 
+  test("preserves dirty primary worktree without committing tracked evidence input changes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
+
+    await fs.mkdir(path.join(tmp.path, "webpage-evidence"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, "kept.txt"), "base\n")
+    await fs.writeFile(path.join(tmp.path, "webpage-evidence", "source.html"), "<html>seed</html>\n")
+    await $`git add kept.txt webpage-evidence/source.html`.cwd(tmp.path).quiet()
+    await $`git ${gitEnv} commit -m "seed"`.cwd(tmp.path).quiet()
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `safe-primary-tracked-evidence-${Date.now().toString(36)}` }),
+    })
+    await fs.writeFile(path.join(info.directory, "feature.ts"), "feature\n")
+    await $`git add feature.ts`.cwd(info.directory).quiet()
+    await $`git ${gitEnv} commit -m "goal feature"`.cwd(info.directory).quiet()
+
+    await fs.writeFile(path.join(tmp.path, "kept.txt"), "primary dirty\n")
+    await fs.writeFile(path.join(tmp.path, "webpage-evidence", "source.html"), "<html>dirty evidence</html>\n")
+
+    const outcome = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.mergeSafely({ branch: info.branch, worktreeDir: info.directory }),
+    })
+
+    expect(outcome.status).toBe("merged")
+    if (outcome.status !== "merged") throw new Error(`unexpected outcome ${outcome.status}`)
+    expect((await fs.readFile(path.join(tmp.path, "feature.ts"), "utf8")).replace(/\r\n/g, "\n")).toBe("feature\n")
+    expect((await fs.readFile(path.join(tmp.path, "kept.txt"), "utf8")).replace(/\r\n/g, "\n")).toBe("primary dirty\n")
+    expect(
+      (await fs.readFile(path.join(tmp.path, "webpage-evidence", "source.html"), "utf8")).replace(/\r\n/g, "\n"),
+    ).toBe("<html>dirty evidence</html>\n")
+
+    expect(outcome.primaryRecoveryCommit).toMatch(/^[0-9a-f]{40}$/)
+    const recoveryFiles = await $`git show --name-only --format= ${outcome.primaryRecoveryCommit}`.cwd(tmp.path).text()
+    expect(recoveryFiles.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)).toEqual(["kept.txt"])
+    const status = (await $`git status --porcelain -- webpage-evidence/source.html`.cwd(tmp.path).text()).trim()
+    expect(status).toBe("M webpage-evidence/source.html")
+  })
+
   test("blocks host merge when goal worktree git linkage is missing", async () => {
     await using tmp = await tmpdir({ git: true })
     await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()

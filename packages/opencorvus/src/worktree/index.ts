@@ -707,13 +707,12 @@ export namespace Worktree {
       .split("\n")
       .map((line) => line.trimEnd())
       .filter(Boolean)
-      .filter((line) => !isUntrackedEvidenceInputStatusLine(line))
+      .filter((line) => !isEvidenceInputStatusLine(line))
   }
 
-  function isUntrackedEvidenceInputStatusLine(line: string): boolean {
-    if (!line.startsWith("?? ")) return false
-    const file = line.slice(3).trim()
-    return ProjectRuntimePaths.isEvidenceInputRelativePath(file)
+  function isEvidenceInputStatusLine(line: string): boolean {
+    const paths = statusLinePaths(line)
+    return paths.length > 0 && paths.every((file) => ProjectRuntimePaths.isEvidenceInputRelativePath(file))
   }
 
   async function committedEvidenceInputDiffs(worktreeDir: string, primaryBranch: string, branch: string): Promise<string[]> {
@@ -750,19 +749,8 @@ export namespace Worktree {
   }
 
   async function commitPrimaryDirtyWorktree(input: { branch: string; primaryDir: string; dirtyPaths: string[] }) {
-    await runGit(["reset", "--", "web-clone-source", "webpage-evidence"], { cwd: input.primaryDir, timeoutProfile: "fast" })
-    const trackedAdd = await runGit(["add", "-u", "--", "."], { cwd: input.primaryDir, timeoutProfile: "default" })
-    if (trackedAdd.exitCode !== 0) {
-      throw new MergeFailedError({
-        message:
-          `mergeWithMerge(${input.branch}): primary worktree is dirty but could not be staged ` +
-          `for merge_back recovery: ${errorText(trackedAdd)}`,
-        branch: input.branch,
-        stderr: errorText(trackedAdd),
-      })
-    }
-    const untracked = untrackedStatusPaths(input.dirtyPaths)
-    for (const chunk of chunks(untracked, 50)) {
+    const changedPaths = dirtyStatusPaths(input.dirtyPaths)
+    for (const chunk of chunks(changedPaths, 50)) {
       const add = await runGit(["add", "--", ...chunk], { cwd: input.primaryDir, timeoutProfile: "default" })
       if (add.exitCode !== 0) {
         throw new MergeFailedError({
@@ -806,19 +794,30 @@ export namespace Worktree {
     return outputText(head.stdout)
   }
 
-  function untrackedStatusPaths(lines: string[]): string[] {
-    return uniqueStrings(lines
-      .filter((line) => line.startsWith("?? "))
-      .flatMap((line) => statusLinePaths(line))
-      .filter((file) => !ProjectRuntimePaths.isEvidenceInputRelativePath(file)))
+  function dirtyStatusPaths(lines: string[]): string[] {
+    return uniqueStrings(
+      lines
+        .flatMap((line) => statusLinePaths(line))
+        .filter((file) => !ProjectRuntimePaths.isEvidenceInputRelativePath(file)),
+    )
   }
 
   function statusLinePaths(line: string): string[] {
-    const file = line.slice(3).trim()
+    const file = statusLinePathPayload(line).trim()
     if (!file) return []
     const renameArrow = " -> "
     if (!file.includes(renameArrow)) return [file]
-    return file.split(renameArrow).map((part) => part.trim()).filter(Boolean)
+    return file
+      .split(renameArrow)
+      .map((part) => part.trim())
+      .filter(Boolean)
+  }
+
+  function statusLinePathPayload(line: string): string {
+    if (line.startsWith("?? ")) return line.slice(3)
+    if (line.length >= 3 && line[2] === " ") return line.slice(3)
+    if (line.length >= 2 && line[1] === " ") return line.slice(2)
+    return line.slice(3)
   }
 
   function uniqueStrings(input: string[]): string[] {
