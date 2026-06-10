@@ -4,7 +4,7 @@ import { isLoopbackBrowserPreviewUrl, waitForBrowserPreviewUrlReachable } from "
 import { Log } from "@/util/log"
 
 const LOCAL_URL_TOKEN =
-  /(?:^|[\s(<])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/[^\s<>"'`]*)?)/gi
+  /(?:^|[\s(<"'=])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/[^\s<>"'`]*)?)/gi
 const ANSI_ESCAPE = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g
 const MAX_PREVIEW_OUTPUT_SCAN_CHARS = 65_536
 const MAX_EXTRACTED_PREVIEW_URLS = 16
