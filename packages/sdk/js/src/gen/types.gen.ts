@@ -6578,6 +6578,8 @@ export type AppSkillsResponses = {
     }
     priority?: number
     required_tools?: Array<string>
+    expires_at?: string
+    duplicate_locations?: Array<string>
   }>
 }
 
@@ -6618,6 +6620,9 @@ export type SkillInstalledResponses = {
       }
     }
     priority?: number
+    required_tools?: Array<string>
+    expires_at?: string
+    duplicate_locations?: Array<string>
     dir?: string
     source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
     source?: string
@@ -11395,6 +11400,22 @@ export type TaskMessageErrors = {
    * Not found
    */
   404: NotFoundError
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancelledMessageError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskMessageError = TaskMessageErrors[keyof TaskMessageErrors]
@@ -11441,6 +11462,22 @@ export type TaskInjectErrors = {
    * Not found
    */
   404: NotFoundError
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancelledMessageError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskInjectError = TaskInjectErrors[keyof TaskInjectErrors]
