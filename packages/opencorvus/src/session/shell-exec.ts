@@ -175,6 +175,7 @@ export namespace SessionShell {
     let output = ""
     const previewTargetMaterializer = createBrowserPreviewProcessOutputMaterializer({
       taskID: taskIDForSession(input.sessionID),
+      command: input.command,
     })
 
     supervisor.stdout?.on("data", (chunk) => {

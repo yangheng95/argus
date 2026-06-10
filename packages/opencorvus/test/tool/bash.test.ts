@@ -253,6 +253,7 @@ describe("tool.bash", () => {
           "pnpm preview",
           "bun run --cwd packages/overlay dev",
           "yarn run serve",
+          "npx rsbuild dev --port 5173",
           "npx vite --host 127.0.0.1",
           "vite --host 127.0.0.1",
         ]) {
@@ -269,7 +270,7 @@ describe("tool.bash", () => {
         }
       },
     })
-  })
+  }, 10_000)
 
   test("background lease survives early shell exit for cleanup", async () => {
     await Instance.provide({
@@ -435,6 +436,66 @@ describe("tool.bash", () => {
       await resetDatabase()
     }
   })
+
+  test("background frontend command port materializes task browser preview target without URL output", async () => {
+    await resetDatabase()
+    const preview = await startReachablePreviewServer()
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = `tsk_bashpreviewport${Date.now()}`
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          Database.use((db) =>
+            db
+              .insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                title: "Preview task",
+                request: "Preview task",
+                source: "api",
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
+              .run(),
+          )
+
+          const port = new URL(preview.url).port
+          const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+            pid: 9014,
+            stdin: null,
+            stdout: new PassThrough(),
+            stderr: new PassThrough(),
+            exited: new Promise<number>(() => {}),
+            terminate: async () => {},
+            dispose: async () => {},
+            unref: () => {},
+          }))
+          try {
+            const bash = await BashTool.init()
+            await bash.execute(
+              {
+                command: `npx rsbuild dev --port ${port}`,
+                description: "Start frontend dev server",
+                background: true,
+                timeout: 20,
+                leaseTimeout: 200,
+              },
+              { ...ctx, extra: { taskID } },
+            )
+
+            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+          } finally {
+            restore()
+          }
+        },
+      })
+    } finally {
+      await preview.close()
+      await resetDatabase()
+    }
+  }, 10_000)
 
   test("background process output persists multiple task browser preview candidates", async () => {
     await resetDatabase()

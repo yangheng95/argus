@@ -1,6 +1,7 @@
 import { persistBrowserPreviewTarget, type PersistedBrowserPreviewTarget } from "./persist"
 import { normalizeBrowserPreviewUrl } from "./target"
 import { isLoopbackBrowserPreviewUrl, waitForBrowserPreviewUrlReachable } from "./liveness"
+import { deriveBrowserPreviewUrlsFromDevServerCommand } from "./dev-server-command"
 import { Log } from "@/util/log"
 
 const LOCAL_URL_TOKEN =
@@ -46,37 +47,59 @@ export function persistBrowserPreviewTargetFromProcessOutput(input: {
 
 export function createBrowserPreviewProcessOutputMaterializer(input: {
   taskID?: string
+  command?: string
   probe?: (url: string) => Promise<boolean>
 }): {
   ingest(chunk: string): Promise<PersistedBrowserPreviewTarget[]>
   flush(): Promise<void>
 } {
   const taskID = input.taskID?.trim()
-  const seen = new Set<string>()
+  const persisted = new Set<string>()
+  const commandUrls = input.command ? deriveBrowserPreviewUrlsFromDevServerCommand(input.command) : []
   let tail = ""
   let pending = Promise.resolve()
-  const ingest = (chunk: string): Promise<PersistedBrowserPreviewTarget[]> => {
-    if (!taskID || !chunk) return Promise.resolve([])
-    const scan = tail + chunk
-    tail = scan.slice(-MAX_PREVIEW_OUTPUT_SCAN_CHARS)
-    const urls = extractBrowserPreviewUrlsFromText(scan).filter((url) => {
-      const key = url.toLowerCase()
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-    if (urls.length === 0) return Promise.resolve([])
-    const next = pending.then(() => persistBrowserPreviewUrls({ taskID, urls, probe: input.probe }))
+  const enqueue = (urls: string[]): Promise<PersistedBrowserPreviewTarget[]> => {
+    if (!taskID || urls.length === 0) return Promise.resolve([])
+    const next = pending.then(() => persistRetryableBrowserPreviewUrls({ taskID, urls, persisted, probe: input.probe }))
     pending = next.then(
       () => undefined,
       () => undefined,
     )
     return next
   }
+  const ingest = (chunk: string): Promise<PersistedBrowserPreviewTarget[]> => {
+    if (!taskID || !chunk) return Promise.resolve([])
+    const scan = tail + chunk
+    tail = scan.slice(-MAX_PREVIEW_OUTPUT_SCAN_CHARS)
+    const urls = [...extractBrowserPreviewUrlsFromText(scan), ...commandUrls]
+    if (urls.length === 0) return Promise.resolve([])
+    return enqueue(urls)
+  }
   return {
     ingest,
-    flush: () => pending,
+    flush: () => enqueue(commandUrls).then(() => pending),
   }
+}
+
+function persistRetryableBrowserPreviewUrls(input: {
+  taskID: string
+  urls: string[]
+  persisted: Set<string>
+  probe?: (url: string) => Promise<boolean>
+}): Promise<PersistedBrowserPreviewTarget[]> {
+  const urls: string[] = []
+  const queued = new Set<string>()
+  for (const url of input.urls) {
+    const key = url.toLowerCase()
+    if (input.persisted.has(key) || queued.has(key)) continue
+    queued.add(key)
+    urls.push(url)
+  }
+  if (urls.length === 0) return Promise.resolve([])
+  return persistBrowserPreviewUrls({ taskID: input.taskID, urls, probe: input.probe }).then((targets) => {
+    for (const target of targets) input.persisted.add(target.url.toLowerCase())
+    return targets
+  })
 }
 
 function persistBrowserPreviewUrls(input: {
