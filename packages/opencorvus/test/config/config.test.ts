@@ -79,6 +79,52 @@ test("loads JSON config file", async () => {
   })
 })
 
+test("loads network proxy config", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        network: {
+          proxy: {
+            enabled: true,
+            url: "http://127.0.0.1:7890",
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.network?.proxy?.enabled).toBe(true)
+      expect(config.network?.proxy?.url).toBe("http://127.0.0.1:7890")
+    },
+  })
+})
+
+test("rejects unsupported network proxy URL scheme", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        network: {
+          proxy: {
+            enabled: true,
+            url: "socks5://127.0.0.1:1080",
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow("network.proxy.url must use http:// or https://")
+    },
+  })
+})
+
 test("rejects bare model IDs at config load time", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

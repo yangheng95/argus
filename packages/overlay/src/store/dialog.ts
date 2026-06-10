@@ -10,6 +10,7 @@ export type ConfigDialogTab =
   | "skill-market"
   | "mcp"
   | "memory"
+  | "network"
   | "providers"
   | "agent-models"
   | "about"
@@ -34,6 +35,7 @@ export const CONFIG_SECTIONS: readonly ConfigSection[] = [
   { id: "skill-market", labelKey: "skill.market.title" },
   { id: "mcp", labelKey: "mcp.title" },
   { id: "memory", labelKey: "memory.title" },
+  { id: "network", labelKey: "network.title" },
   { id: "providers", labelKey: "cmdk.settings.providers" },
   { id: "agent-models", labelKey: "cmdk.settings.agent_models" },
   { id: "about", labelKey: "about.title" },

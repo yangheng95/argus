@@ -25,7 +25,7 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 ```
 顶层：
-  $schema · logLevel · server · share · autoupdate · snapshot · watcher
+  $schema · logLevel · server · network · share · autoupdate · snapshot · watcher
   disabled_providers · enabled_providers · tool_permissions
   provider · model · small_model · default_agent · agent · mcp · lsp
   formatter · permission · compaction · terminal
@@ -61,6 +61,13 @@ experimental:
   "$schema": "https://opencorvus.ai/config.json",
   "model": "github-copilot/claude-haiku-4.5",
   "locale": "zh-CN",
+
+  "network": {
+    "proxy": {
+      "enabled": true,
+      "url": "http://127.0.0.1:7890",
+    },
+  },
 
   "skills": {
     "paths": [
@@ -108,6 +115,21 @@ experimental:
 ### `locale`
 
 `"en-US" | "zh-CN"`，operator 选定的系统语言，影响 LLM 回复语言与 SDK 透传。**与 Overlay UI 偏好的 `locale`（localStorage，仅控制前端文案）是两件事**——前者属配置（行为），后者属 UI 偏好。
+
+### `network.proxy`
+
+模型 Provider 请求的 HTTP(S) 代理。`enabled: false` 或空 `url` 表示直连；`url` 仅支持 `http://` / `https://`。
+
+```jsonc
+{
+  "network": {
+    "proxy": {
+      "enabled": true,
+      "url": "http://127.0.0.1:7890",
+    },
+  },
+}
+```
 
 ### `skills.paths` / `skills.urls`
 

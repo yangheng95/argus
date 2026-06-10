@@ -1125,11 +1125,67 @@ export namespace Config {
     })
   export type Terminal = z.infer<typeof Terminal>
 
+  export const NetworkProxy = z
+    .object({
+      enabled: z.boolean().optional().describe("Enable the configured HTTP(S) proxy for provider fetch requests"),
+      url: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe("HTTP(S) proxy URL, e.g. http://127.0.0.1:7890"),
+    })
+    .strict()
+    .superRefine((proxy, ctx) => {
+      if (proxy.enabled === true && !proxy.url) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["url"],
+          message: "network.proxy.url is required when network.proxy.enabled is true.",
+        })
+        return
+      }
+      if (!proxy.url) return
+      let parsed: URL
+      try {
+        parsed = new URL(proxy.url)
+      } catch {
+        ctx.addIssue({
+          code: "custom",
+          path: ["url"],
+          message: "network.proxy.url must be a valid URL.",
+        })
+        return
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["url"],
+          message: "network.proxy.url must use http:// or https://.",
+        })
+      }
+    })
+    .meta({
+      ref: "NetworkProxyConfig",
+    })
+  export type NetworkProxy = z.infer<typeof NetworkProxy>
+
+  export const Network = z
+    .object({
+      proxy: NetworkProxy.optional().describe("Provider HTTP proxy configuration"),
+    })
+    .strict()
+    .meta({
+      ref: "NetworkConfig",
+    })
+  export type Network = z.infer<typeof Network>
+
   export const Info = z
     .object({
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
       logLevel: Log.Level.optional().describe("Log level"),
       server: Server.optional().describe("Server configuration for opencorvus serve"),
+      network: Network.optional().describe("Network transport configuration"),
       channel: Channel.optional().describe("Channel integration configuration"),
       command: z
         .record(z.string(), Command)

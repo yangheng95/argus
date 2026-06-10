@@ -33,6 +33,13 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
   "$schema": "https://opencorvus.ai/config.json",
   "model": "github-copilot/claude-haiku-4.5",
 
+  "network": {
+    "proxy": {
+      "enabled": true,
+      "url": "http://127.0.0.1:7890",
+    },
+  },
+
   "skills": {
     "paths": [
       "<abs-path>/skills-market/github.com-openai-skills",
@@ -63,6 +70,10 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 ### `model`
 
 默认 LLM。格式 `<providerId>/<modelId>`，provider 需在 `provider` 块或内置列表里注册。
+
+### `network.proxy`
+
+模型 Provider 请求的 HTTP(S) 代理。`enabled: false` 或空 `url` 表示直连；`url` 仅支持 `http://` / `https://`。
 
 ### `skills.paths` / `skills.urls`
 

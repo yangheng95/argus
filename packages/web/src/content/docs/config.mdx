@@ -33,6 +33,13 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
   "$schema": "https://opencorvus.ai/config.json",
   "model": "github-copilot/claude-haiku-4.5",
 
+  "network": {
+    "proxy": {
+      "enabled": true,
+      "url": "http://127.0.0.1:7890",
+    },
+  },
+
   "skills": {
     "paths": ["<abs-path>/skills-market/github.com-anthropics-skills"],
     "urls": [],
@@ -59,6 +66,10 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
 ### `model`
 
 Default LLM. Format `<providerId>/<modelId>`; provider must be registered in `provider` or built-in.
+
+### `network.proxy`
+
+HTTP(S) proxy for model provider requests. `enabled: false` or an empty `url` means direct fetch. `url` supports `http://` and `https://`.
 
 ### `skills.paths` / `skills.urls`
 
