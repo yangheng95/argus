@@ -19,7 +19,10 @@ const requestedCommand = argv.find((arg) => !arg.startsWith("-"))
 const commands: CommandModule<any, any>[] =
   requestedCommand === "mcp"
     ? [(await import("./cli/cmd/mcp")).McpCommand]
-    : [(await import("./cli/cmd/serve")).ServeCommand]
+    : [
+        (await import("./cli/cmd/serve")).DefaultServeCommand,
+        (await import("./cli/cmd/serve")).ServeCommand,
+      ]
 
 const cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })
