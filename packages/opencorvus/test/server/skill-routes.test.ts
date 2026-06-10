@@ -307,6 +307,121 @@ describe("skill routes", () => {
     })
   }, 20000)
 
+  test("GET /skill/installed classifies .codex skills as external", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const skillDir = path.join(dir, ".codex", "skills", "codex-review")
+        await Filesystem.write(
+          path.join(skillDir, "SKILL.md"),
+          [
+            "---",
+            "name: codex-review",
+            "description: Codex external review skill",
+            "---",
+            "",
+            "Use this skill from a Codex-compatible external directory.",
+          ].join("\n"),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const listed = await app.request("/skill/installed", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(listed.status).toBe(200)
+        const body = (await listed.json()) as Array<{
+          name: string
+          source_type: string
+          trust: string
+          recommended_policy: string
+        }>
+        const item = body.find((entry) => entry.name === "codex-review")
+        expect(item).toBeDefined()
+        expect(item?.source_type).toBe("external")
+        expect(item?.trust).toBe("external")
+        expect(item?.recommended_policy).toBe("ask")
+      },
+    })
+  }, 20000)
+
+  test("GET /skill/installed returns duplicate skill locations and filters expired duplicates", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Filesystem.write(
+          path.join(dir, ".claude", "skills", "route-review", "SKILL.md"),
+          [
+            "---",
+            "name: route-review",
+            "description: Route review skill from Claude directory",
+            "---",
+            "",
+            "Use this skill from Claude.",
+          ].join("\n"),
+        )
+        await Filesystem.write(
+          path.join(dir, ".opencorvus", "skill", "route-review", "SKILL.md"),
+          [
+            "---",
+            "name: route-review",
+            "description: Route review skill from OpenCorvus directory",
+            "---",
+            "",
+            "Use this skill from OpenCorvus.",
+          ].join("\n"),
+        )
+        await Filesystem.write(
+          path.join(dir, ".agents", "skills", "route-review-expired", "SKILL.md"),
+          [
+            "---",
+            "name: route-review",
+            "description: Expired route review skill",
+            `expires_at: ${new Date(Date.now() - 60_000).toISOString()}`,
+            "---",
+            "",
+            "This duplicate is expired.",
+          ].join("\n"),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const listed = await app.request("/skill/installed", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(listed.status).toBe(200)
+        const body = (await listed.json()) as Array<{
+          name: string
+          location: string
+          duplicate_locations: string[]
+        }>
+        const matches = body.filter((entry) => entry.name === "route-review")
+        const claudeLocation = path.join(tmp.path, ".claude", "skills", "route-review", "SKILL.md")
+        const opencorvusLocation = path.join(tmp.path, ".opencorvus", "skill", "route-review", "SKILL.md")
+        const expiredLocation = path.join(tmp.path, ".agents", "skills", "route-review-expired", "SKILL.md")
+        expect(matches.length).toBe(1)
+        expect(matches[0]?.duplicate_locations).toContain(claudeLocation)
+        expect(matches[0]?.duplicate_locations).toContain(opencorvusLocation)
+        expect(matches[0]?.duplicate_locations).not.toContain(expiredLocation)
+        expect(matches[0]?.duplicate_locations.length).toBe(2)
+      },
+    })
+  }, 20000)
+
   // After /skill/remove, /skill/installed still surfaces the skill — Config layer caches
   // skills.paths even after Skill.state.reset()/Config.state.reset(). Pending a deeper
   // cache invalidation fix in the manager.

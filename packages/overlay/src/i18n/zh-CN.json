@@ -712,6 +712,8 @@
   "skill.delete_all_confirm_partial": "将删除 {{removable}} 个可移除技能（另有 {{blocked}} 个不可移除）。",
   "skill.delete_button_title": "移除该自定义技能。",
   "skill.delete_confirm": "确认删除技能「{{name}}」？",
+  "skill.duplicate": "重复",
+  "skill.duplicate_locations_title": "重复 Skill 位置：\n{{locations}}",
   "skill.drop_confirm": "将 {{name}} 安装到当前项目的 .opencorvus/skill 目录？",
   "skill.drop_hint": "把 SKILL.md、skill 文件夹或 .zip 包拖到这个面板任意位置。",
   "skill.drop_success": "已将 {{name}} 安装到当前项目的 .opencorvus/skill。",

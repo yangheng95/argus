@@ -98,3 +98,22 @@ test("skill panel imports dropped files, directories, and zip archives through t
   expect(en).toContain("SKILL.md file, skill folder, or .zip")
   expect(zh).toContain("SKILL.md、skill 文件夹或 .zip")
 })
+
+test("skill panel surfaces duplicate skill locations from installed skill metadata", () => {
+  const panel = read("src/components/settings/SkillMarketPanel.tsx")
+  const inlinePill = read("src/styles/surfaces/inline-pill.css")
+  const en = read("src/i18n/en-US.json")
+  const zh = read("src/i18n/zh-CN.json")
+
+  expect(panel).toContain("duplicate_locations?: string[]")
+  expect(panel).toContain("function skillDuplicateLocations")
+  expect(panel).toContain('data-state="warn"')
+  expect(panel).toContain('title={skillDuplicateTitle(item)}')
+  expect(panel).toContain('t("skill.duplicate")')
+  expect(panel).toContain('t("skill.duplicate_locations_title"')
+  expect(inlinePill).toContain('.extension-status[data-state="warn"]')
+  expect(en).toContain('"skill.duplicate"')
+  expect(en).toContain('"skill.duplicate_locations_title"')
+  expect(zh).toContain('"skill.duplicate"')
+  expect(zh).toContain('"skill.duplicate_locations_title"')
+})

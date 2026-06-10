@@ -42,6 +42,7 @@ interface SkillItem {
   source?: string
   source_type?: string
   builtin?: boolean
+  duplicate_locations?: string[]
 }
 
 interface McpItem {
@@ -100,6 +101,14 @@ function skillRemoveKind(item: SkillItem): string {
 
 function skillRemovable(item: SkillItem): boolean {
   return !item.builtin && !!item.source && !!skillRemoveKind(item)
+}
+
+function skillDuplicateLocations(item: SkillItem): string[] {
+  return Array.isArray(item.duplicate_locations) ? item.duplicate_locations.filter(Boolean) : []
+}
+
+function skillDuplicateTitle(item: SkillItem): string {
+  return t("skill.duplicate_locations_title", { locations: skillDuplicateLocations(item).join("\n") })
 }
 
 function mcpStatusLabel(status: string): string {
@@ -836,7 +845,14 @@ function ExtensionSettingsPanel(props: {
                   {(item) => (
                     <div class="extension-row">
                       <div class="extension-row-main">
-                        <strong>{item.name}</strong>
+                        <strong>
+                          {item.name}
+                          <Show when={skillDuplicateLocations(item).length > 1}>
+                            <span class="extension-status" data-state="warn" title={skillDuplicateTitle(item)}>
+                              {t("skill.duplicate")}
+                            </span>
+                          </Show>
+                        </strong>
                         <span>{item.description || ""}</span>
                         <small>{item.location || ""}</small>
                       </div>

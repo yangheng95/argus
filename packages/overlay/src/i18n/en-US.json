@@ -712,6 +712,8 @@
   "skill.delete_all_confirm_partial": "Delete {{removable}} removable skills? ({{blocked}} cannot be removed)",
   "skill.delete_button_title": "Delete this custom skill.",
   "skill.delete_confirm": "Delete skill \"{{name}}\"?",
+  "skill.duplicate": "Duplicate",
+  "skill.duplicate_locations_title": "Duplicate skill locations:\n{{locations}}",
   "skill.drop_confirm": "Install {{name}} into this project's .opencorvus/skill directory?",
   "skill.drop_hint": "Drop a SKILL.md file, skill folder, or .zip package anywhere on this panel.",
   "skill.drop_success": "Installed {{name}} into this project's .opencorvus/skill directory.",

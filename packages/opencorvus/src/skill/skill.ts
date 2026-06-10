@@ -19,6 +19,18 @@ import researchReportMd from "./builtin/research-report.md" with { type: "text" 
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
+  const ExpirationTimestamp = z
+    .preprocess((value) => {
+      if (value instanceof Date) return Number.isNaN(value.getTime()) ? value : value.toISOString()
+      if (typeof value === "number" && Number.isFinite(value)) {
+        const date = new Date(value)
+        return Number.isNaN(date.getTime()) ? value : date.toISOString()
+      }
+      if (typeof value === "string") return value.trim()
+      return value
+    }, z.string().refine((value) => !Number.isNaN(Date.parse(value)), "expires_at must be a valid timestamp"))
+    .optional()
+
   export const Info = z.object({
     name: z.string(),
     description: z.string(),
@@ -72,6 +84,8 @@ export namespace Skill {
     /** Descriptive tool hints for agents that load this skill. Empty or
      *  omitted = no tool hints. */
     required_tools: z.array(z.string()).optional().default([]),
+    expires_at: ExpirationTimestamp,
+    duplicate_locations: z.array(z.string()).optional().default([]),
   })
   export type Info = z.infer<typeof Info>
 
@@ -94,8 +108,8 @@ export namespace Skill {
   )
 
   // External skill directories to search for (project-level and global)
-  // These follow the directory layout used by Claude Code and other agents.
-  const EXTERNAL_DIRS = [".claude", ".agents"]
+  // These follow the directory layout used by Claude Code, Codex, and other agents.
+  const EXTERNAL_DIRS = [".claude", ".agents", ".codex"]
   const EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"
   const OPENCORVUS_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
   const SKILL_PATTERN = "**/SKILL.md"
@@ -112,6 +126,27 @@ export namespace Skill {
     { skill: ainvestDesignSystemMd, files: ainvestDesignSystemFiles },
     { skill: researchReportMd, files: {} },
   ] as const
+
+  function isExpired(info: Pick<Info, "expires_at">) {
+    return info.expires_at !== undefined && Date.parse(info.expires_at) <= Date.now()
+  }
+
+  function registerSkill(skills: Record<string, Info>, locations: Map<string, string[]>, skill: Info) {
+    const existingLocations = locations.get(skill.name) ?? []
+    const seenLocation = existingLocations.includes(skill.location)
+    const duplicateLocations = seenLocation ? existingLocations : [...existingLocations, skill.location]
+    locations.set(skill.name, duplicateLocations)
+    if (!seenLocation && existingLocations.length > 0) {
+      log.warn("duplicate skill name", {
+        name: skill.name,
+        locations: duplicateLocations,
+      })
+    }
+    skills[skill.name] = {
+      ...skill,
+      duplicate_locations: duplicateLocations.length > 1 ? duplicateLocations : [],
+    }
+  }
 
   function decodeBuiltinFile(file: BuiltinFile) {
     if (typeof file === "string") return file
@@ -132,6 +167,7 @@ export namespace Skill {
 
   export const state = lazyInstanceState(async () => {
     const skills: Record<string, Info> = {}
+    const skillLocations = new Map<string, string[]>()
     const dirs = new Set<string>()
 
     // Register built-in skills (lowest priority — user skills with same name override)
@@ -144,11 +180,13 @@ export namespace Skill {
         auto_detect: true,
         priority: true,
         required_tools: true,
+        expires_at: true,
       }).safeParse(md.data)
       if (!parsed.success) continue
+      if (isExpired(parsed.data)) continue
       const location =
         Object.keys(raw.files).length === 0 ? "builtin" : await install(parsed.data.name, raw.skill, raw.files)
-      skills[parsed.data.name] = {
+      registerSkill(skills, skillLocations, {
         name: parsed.data.name,
         description: parsed.data.description,
         platforms: parsed.data.platforms,
@@ -158,7 +196,9 @@ export namespace Skill {
         auto_detect: parsed.data.auto_detect,
         priority: parsed.data.priority,
         required_tools: parsed.data.required_tools,
-      }
+        expires_at: parsed.data.expires_at,
+        duplicate_locations: [],
+      })
     }
 
     const addSkill = async (match: string) => {
@@ -180,21 +220,14 @@ export namespace Skill {
         auto_detect: true,
         priority: true,
         required_tools: true,
+        expires_at: true,
       }).safeParse(md.data)
       if (!parsed.success) return
-
-      // Warn on duplicate skill names
-      if (skills[parsed.data.name]) {
-        log.warn("duplicate skill name", {
-          name: parsed.data.name,
-          existing: skills[parsed.data.name].location,
-          duplicate: match,
-        })
-      }
+      if (isExpired(parsed.data)) return
 
       dirs.add(path.dirname(match))
 
-      skills[parsed.data.name] = {
+      registerSkill(skills, skillLocations, {
         name: parsed.data.name,
         description: parsed.data.description,
         platforms: parsed.data.platforms,
@@ -204,7 +237,9 @@ export namespace Skill {
         auto_detect: parsed.data.auto_detect,
         priority: parsed.data.priority,
         required_tools: parsed.data.required_tools,
-      }
+        expires_at: parsed.data.expires_at,
+        duplicate_locations: [],
+      })
     }
 
     const scanExternal = async (root: string, scope: "global" | "project") => {
@@ -221,7 +256,7 @@ export namespace Skill {
         })
     }
 
-    // Scan external skill directories (.claude/skills/, .agents/skills/, etc.)
+    // Scan external skill directories (.claude/skills/, .agents/skills/, .codex/skills/, etc.)
     // Load global (home) first, then project-level (so project-level overwrites)
     if (!Flag.OPENCORVUS_DISABLE_EXTERNAL_SKILLS) {
       for (const dir of EXTERNAL_DIRS) {
