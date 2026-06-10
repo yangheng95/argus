@@ -4,11 +4,14 @@ import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 
 const browserTestDir = new URL("./browser/", import.meta.url)
-const entries = await readdir(browserTestDir, { withFileTypes: true })
-const files = entries
-  .filter((entry) => entry.isFile() && (entry.name.endsWith(".test.mjs") || entry.name.endsWith(".test.ts")))
-  .map((entry) => fileURLToPath(new URL(entry.name, browserTestDir)))
-  .sort()
+const explicitFiles = process.argv.slice(2)
+const files =
+  explicitFiles.length > 0
+    ? explicitFiles
+    : (await readdir(browserTestDir, { withFileTypes: true }))
+        .filter((entry) => entry.isFile() && (entry.name.endsWith(".test.mjs") || entry.name.endsWith(".test.ts")))
+        .map((entry) => fileURLToPath(new URL(entry.name, browserTestDir)))
+        .sort()
 
 if (files.length === 0) {
   throw new Error("No Node browser tests found under packages/overlay/test/browser")
