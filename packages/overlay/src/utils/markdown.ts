@@ -1,6 +1,7 @@
 // ── Markdown Renderer (powered by marked + highlight.js) ──
 
 import { marked } from "marked"
+import LinkifyIt from "linkify-it"
 import hljs from "highlight.js/lib/core"
 import langTS from "highlight.js/lib/languages/typescript"
 import langJS from "highlight.js/lib/languages/javascript"
@@ -25,6 +26,7 @@ export const CODE_BLOCK_RENDER_LINE_LIMIT = 2_000
 export const MARKDOWN_DATA_IMAGE_CHAR_LIMIT = 120_000
 const RENDER_CLIP_NOTICE = "\n\n[Overlay display clipped; full content remains available in the task trace.]"
 const DATA_IMAGE_MARKDOWN_RE = /!\[([^\]]*)\]\((data:image\/(?:png|jpe?g|gif|webp|avif);base64,[^)]+)\)/gi
+const plainUrlLinkifier = new LinkifyIt({ fuzzyEmail: false, fuzzyIP: false })
 
 // Register languages (selective import keeps bundle small)
 const LANGUAGES: [string, any][] = [
@@ -121,6 +123,34 @@ function wrapCodeBlock(rawText: string, language: string, highlightedHtml: strin
 }
 
 marked.use({
+  tokenizer: {
+    url() {
+      return false
+    },
+  },
+  extensions: [
+    {
+      name: "plainUrl",
+      level: "inline",
+      start(src: string) {
+        return plainUrlLinkifier.match(src)?.[0]?.index
+      },
+      tokenizer(src: string) {
+        const match = plainUrlLinkifier.match(src)?.[0]
+        if (!match || match.index !== 0) return undefined
+        const plainUrl = normalizePlainUrlMatch(match.raw)
+        if (!plainUrl) return undefined
+        return {
+          type: "link",
+          raw: plainUrl.raw,
+          href: plainUrl.href,
+          title: null,
+          text: plainUrl.raw,
+          tokens: [{ type: "text", raw: plainUrl.raw, text: plainUrl.raw }],
+        }
+      },
+    },
+  ],
   renderer: {
     code({ text, lang }: { text: string; lang?: string }) {
       const language = lang && hljs.getLanguage(lang) ? lang : ""
@@ -158,6 +188,40 @@ marked.use({
     },
   },
 })
+
+function normalizePlainUrlMatch(raw: string): { raw: string; href: string } | null {
+  const bounded = trimPlainUrlBoundary(raw)
+  if (!bounded) return null
+  const href = /^www\./i.test(bounded) ? `http://${bounded}` : bounded
+  return safeMarkdownHref(href) ? { raw: bounded, href } : null
+}
+
+function trimPlainUrlBoundary(raw: string): string {
+  let url = raw
+  const delimiterIndex = url.search(/["'`<>]/)
+  if (delimiterIndex >= 0) url = url.slice(0, delimiterIndex)
+  url = url.replace(/[.,;:!?]+$/g, "")
+  url = trimUnbalancedClosing(url, "(", ")")
+  url = trimUnbalancedClosing(url, "[", "]")
+  url = trimUnbalancedClosing(url, "{", "}")
+  return url
+}
+
+function trimUnbalancedClosing(value: string, open: string, close: string): string {
+  let output = value
+  while (output.endsWith(close) && countChar(output, close) > countChar(output, open)) {
+    output = output.slice(0, -1)
+  }
+  return output
+}
+
+function countChar(value: string, char: string): number {
+  let count = 0
+  for (const item of value) {
+    if (item === char) count++
+  }
+  return count
+}
 
 function escapeAttr(s: string): string {
   return escapeHtml(s).replace(/'/g, "&#39;")

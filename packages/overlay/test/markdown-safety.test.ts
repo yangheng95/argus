@@ -28,13 +28,30 @@ test("renderMarkdown keeps safe http links", () => {
   expect(html).toContain('rel="noopener noreferrer"')
 })
 
-test("renderMarkdown uses marked url matching for bare urls and routes them to browser preview", () => {
+test("renderMarkdown uses bounded bare urls and routes them to browser preview", () => {
   const html = renderMarkdown("open https://example.com/path?x=1 and www.example.org/docs")
 
   expect(html).toContain('href="https://example.com/path?x=1"')
   expect(html).toContain('data-browser-preview-url="https://example.com/path?x=1"')
   expect(html).toContain('href="http://www.example.org/docs"')
   expect(html).toContain('data-browser-preview-url="http://www.example.org/docs"')
+})
+
+test("renderMarkdown does not include adjacent JSON fields in bare url links", () => {
+  const html = renderMarkdown('{"url":"http://localhost:3006/world-economy/","title":"World Economy","loadStatus":"full"}')
+
+  expect(html).toContain('href="http://localhost:3006/world-economy/"')
+  expect(html).toContain('data-browser-preview-url="http://localhost:3006/world-economy/"')
+  expect(html).not.toContain('href="http://localhost:3006/world-economy/,&quot;title')
+  expect(html).not.toContain('data-browser-preview-url="http://localhost:3006/world-economy/,&quot;title')
+})
+
+test("renderMarkdown leaves urls inside code blocks as code text", () => {
+  const html = renderMarkdown("```json\n{\"url\":\"http://localhost:3006/world-economy/\",\"title\":\"World Economy\"}\n```")
+
+  expect(html).toContain("&quot;url&quot;")
+  expect(html).not.toContain("<a ")
+  expect(html).not.toContain("data-browser-preview-url")
 })
 
 test("renderMarkdown does not route mailto links to browser preview", () => {
