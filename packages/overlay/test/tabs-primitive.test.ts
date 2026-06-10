@@ -8,6 +8,7 @@ const WORKSPACE_PANEL_SOURCE = join(import.meta.dir, "../src/components/Workspac
 const EXECUTOR_SELECTOR_SOURCE = join(import.meta.dir, "../src/components/ExecutorSelector.tsx")
 const PROMPT_CATALOG_SOURCE = join(import.meta.dir, "../src/components/settings/PromptCatalog.tsx")
 const FILE_CHANGES_PANEL_SOURCE = join(import.meta.dir, "../src/components/FileChangesPanel.tsx")
+const BROWSER_PREVIEW_PANEL_SOURCE = join(import.meta.dir, "../src/components/BrowserPreviewPanel.tsx")
 // 2026-05-04: `src/styles.css` was decomposed into `src/styles/...`. The
 // "only one chrome owner" check walks the new tree to confirm no rule
 // for the retired `.right-panel-tab*` class survives anywhere.
@@ -47,7 +48,9 @@ test("Tabs primitive exposes the canonical data-attribute contract", () => {
   expect(source).toContain('export const TABS_TONES = ["neutral"] as const')
   expect(source).toContain('import { Tabs as KobalteTabs } from "@kobalte/core/tabs"')
   expect(source).toContain('Omit<JSX.HTMLAttributes<HTMLDivElement>, "class" | "classList" | "role" | "onChange">')
-  expect(source).toContain('Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList" | "role" | "type">')
+  expect(source).toContain(
+    'Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList" | "role" | "type" | "onClick">',
+  )
   expect(source).toContain('class="oc-tabs"')
   expect(source).toContain('class="oc-tab"')
   expect(source).toContain("<KobalteTabs.List")
@@ -78,15 +81,26 @@ test("Workspace panel current view label does not claim tab behavior", () => {
 })
 
 test("Feature tab surfaces use the Tabs primitive instead of hand-written ARIA", () => {
-  for (const sourcePath of [EXECUTOR_SELECTOR_SOURCE, PROMPT_CATALOG_SOURCE, FILE_CHANGES_PANEL_SOURCE]) {
+  for (const sourcePath of [
+    EXECUTOR_SELECTOR_SOURCE,
+    PROMPT_CATALOG_SOURCE,
+    FILE_CHANGES_PANEL_SOURCE,
+    BROWSER_PREVIEW_PANEL_SOURCE,
+  ]) {
     const source = readFileSync(sourcePath, "utf8")
 
     expect(source).toContain("<Tabs")
     expect(source).toContain("<Tab")
+    expect(source).toContain("onValueChange")
     expect(source).not.toContain('role="tablist"')
     expect(source).not.toContain('role="tab"')
     expect(source).not.toContain("aria-selected")
     expect(source).not.toContain("file-changes-tab")
+    const tabOpenTags = source.match(/<Tab\b[^>]*>/g) ?? []
+    expect(tabOpenTags.length).toBeGreaterThan(0)
+    for (const tag of tabOpenTags) {
+      expect(tag).not.toContain("onClick=")
+    }
   }
 })
 
