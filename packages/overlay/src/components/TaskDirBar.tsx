@@ -5,6 +5,7 @@
 // workspace launchers are siblings in the same project bar so there is one
 // workspace chrome implementation.
 
+import * as DropdownMenu from "@kobalte/core/dropdown-menu"
 import { createEffect, createMemo, createSignal, For, Show, onCleanup, onMount } from "solid-js"
 import { Portal } from "solid-js/web"
 import { boardStore, loadBoard } from "../store/board"
@@ -71,9 +72,7 @@ export function TaskDirContent() {
   const dirTitle = createMemo(() => dir() || t("cwd.unavailable"))
   const dirEmpty = createMemo(() => (dir() ? "false" : "true"))
   const [open, setOpen] = createSignal(false)
-  const [panelStyle, setPanelStyle] = createSignal<Record<string, string>>({})
   const [recentDirs, setRecentDirs] = createSignal<string[]>([])
-  let dropdownRef: HTMLDivElement | undefined
 
   function syncRecentDirs(): void {
     setRecentDirs(loadRecentDirectories())
@@ -83,22 +82,9 @@ export function TaskDirContent() {
     setOpen(false)
   }
 
-  function openRecentPanel(): void {
-    syncRecentDirs()
-    if (dropdownRef) {
-      const rect = dropdownRef.getBoundingClientRect()
-      setPanelStyle({
-        top: `${Math.round(rect.bottom + 6)}px`,
-        left: `${Math.round(Math.max(4, rect.left))}px`,
-        width: `${Math.round(rect.width)}px`,
-      })
-    }
-    setOpen(true)
-  }
-
-  function toggleRecentPanel(): void {
-    if (open()) closeRecentPanel()
-    else openRecentPanel()
+  function setRecentPanelOpen(nextOpen: boolean): void {
+    if (nextOpen) syncRecentDirs()
+    setOpen(nextOpen)
   }
 
   async function handlePathAction(event: MouseEvent): Promise<void> {
@@ -143,51 +129,21 @@ export function TaskDirContent() {
     if (!loadRecentDirectories().length) closeRecentPanel()
   }
 
-  onMount(() => {
-    const onDocumentClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null
-      if (target?.closest?.(".task-cwd-dropdown,.recent-dir-panel")) return
-      closeRecentPanel()
-    }
-    const onDocumentKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return
-      if (!open()) return
-      event.preventDefault()
-      closeRecentPanel()
-    }
-    document.addEventListener("click", onDocumentClick)
-    document.addEventListener("keydown", onDocumentKeyDown)
-    onCleanup(() => {
-      document.removeEventListener("click", onDocumentClick)
-      document.removeEventListener("keydown", onDocumentKeyDown)
-    })
-  })
-
   return (
-    <>
-      <div
-        ref={(el) => {
-          dropdownRef = el
-        }}
+    <DropdownMenu.Root
+      open={open()}
+      onOpenChange={setRecentPanelOpen}
+      placement="bottom-start"
+      gutter={6}
+      sameWidth
+      fitViewport
+    >
+      <DropdownMenu.Trigger
+        as="div"
         class="task-dir-shell task-cwd-dropdown"
         data-open={open() ? "true" : "false"}
-        role="button"
-        tabindex={0}
-        aria-haspopup="listbox"
-        aria-expanded={open() ? "true" : "false"}
         aria-label={t("cwd.recent")}
         title={t("cwd.recent")}
-        onClick={(event) => {
-          if (actionTarget(event)) return
-          event.stopPropagation()
-          toggleRecentPanel()
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" && event.key !== " ") return
-          if (actionTarget(event)) return
-          event.preventDefault()
-          toggleRecentPanel()
-        }}
       >
         <span
           class="task-dir"
@@ -201,68 +157,67 @@ export function TaskDirContent() {
             ▾
           </span>
         </div>
-      </div>
-      <Portal mount={document.body}>
-        <Show when={open()}>
-          <div class="recent-dir-panel" style={panelStyle()} role="listbox">
-            <div class="recent-dir-panel-shell">
-              <div class="recent-dir-panel-head">
-                <div class="recent-dir-panel-title">{t("cwd.recent")}</div>
-                <Show when={dir()}>
-                  <div class="recent-dir-panel-meta" title={dir()}>
-                    {recentPathLabel(dir())}
-                  </div>
-                </Show>
-              </div>
-              <Show
-                when={recentDirs().length > 0}
-                fallback={<div class="recent-dir-empty">{t("cwd.recent_empty")}</div>}
-              >
-                <div class="recent-dir-list">
-                  <For each={recentDirs()}>
-                    {(recent) => {
-                      const isActive = () => !!dir() && recent.toLowerCase() === dir().toLowerCase()
-                      return (
-                        <div class="recent-dir-row" data-active={isActive() ? "true" : "false"}>
-                          <button
-                            type="button"
-                            class="recent-dir-item"
-                            title={recent}
-                            onClick={() => void chooseRecentDirectory(recent)}
-                          >
-                            <span class="recent-dir-copy">
-                              <span class="recent-dir-label">{recentPathLabel(recent)}</span>
-                              <span class="recent-dir-path">{recent}</span>
-                            </span>
-                            <Show when={isActive()}>
-                              <span class="recent-dir-state" aria-hidden="true">
-                                •
-                              </span>
-                            </Show>
-                          </button>
-                          <button
-                            type="button"
-                            class="recent-dir-remove"
-                            title={t("common.delete")}
-                            aria-label={t("common.delete")}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              removeRecent(recent)
-                            }}
-                          >
-                            <Icon name="close" size={11} />
-                          </button>
-                        </div>
-                      )
-                    }}
-                  </For>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content class="recent-dir-panel">
+          <div class="recent-dir-panel-shell">
+            <div class="recent-dir-panel-head">
+              <div class="recent-dir-panel-title">{t("cwd.recent")}</div>
+              <Show when={dir()}>
+                <div class="recent-dir-panel-meta" title={dir()}>
+                  {recentPathLabel(dir())}
                 </div>
               </Show>
             </div>
+            <Show
+              when={recentDirs().length > 0}
+              fallback={<div class="recent-dir-empty">{t("cwd.recent_empty")}</div>}
+            >
+              <div class="recent-dir-list">
+                <For each={recentDirs()}>
+                  {(recent) => {
+                    const isActive = () => !!dir() && recent.toLowerCase() === dir().toLowerCase()
+                    return (
+                      <div class="recent-dir-row" data-active={isActive() ? "true" : "false"}>
+                        <DropdownMenu.Item
+                          as="button"
+                          type="button"
+                          class="recent-dir-item"
+                          title={recent}
+                          onSelect={() => void chooseRecentDirectory(recent)}
+                        >
+                          <span class="recent-dir-copy">
+                            <span class="recent-dir-label">{recentPathLabel(recent)}</span>
+                            <span class="recent-dir-path">{recent}</span>
+                          </span>
+                          <Show when={isActive()}>
+                            <span class="recent-dir-state" aria-hidden="true">
+                              •
+                            </span>
+                          </Show>
+                        </DropdownMenu.Item>
+                        <button
+                          type="button"
+                          class="recent-dir-remove"
+                          title={t("common.delete")}
+                          aria-label={t("common.delete")}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            removeRecent(recent)
+                          }}
+                        >
+                          <Icon name="close" size={11} />
+                        </button>
+                      </div>
+                    )
+                  }}
+                </For>
+              </div>
+            </Show>
           </div>
-        </Show>
-      </Portal>
-    </>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   )
 }
 
