@@ -992,26 +992,45 @@ test(
     }, app)
     try {
       const waitEnabled = async (selector: string) => {
-        await page.waitForFunction(
-          (value) => {
+        for (let i = 0; i < 50; i += 1) {
+          const enabled = await page.evaluate((value) => {
             const node = document.querySelector(value)
             if (!(node instanceof HTMLElement)) return false
             return !("disabled" in node) || (node as HTMLButtonElement | HTMLInputElement).disabled !== true
-          },
-          {},
-          selector,
-        )
+          }, selector)
+          if (enabled) return
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        const node = await page.evaluate((value) => document.querySelector<HTMLElement>(value)?.outerHTML || "", selector)
+        assert.fail(`Timed out waiting for enabled control ${selector}\n${node}`)
       }
       const tap = async (selector: string) => {
         for (let i = 0; i < 5; i += 1) {
-          await page.waitForFunction((value) => !!document.querySelector(value), {}, selector)
-          if (!(await page.evaluate((value) => !!document.querySelector(value), selector))) continue
-          await waitEnabled(selector)
           try {
+            await page.waitForSelector(selector, { timeout: 5_000 })
+            if (!(await page.evaluate((value) => !!document.querySelector(value), selector))) continue
+            await waitEnabled(selector)
             await page.locator(selector).click()
             return
           } catch (error) {
-            if (i === 4) throw error
+            if (i === 4) {
+              const snapshot = await page.evaluate((value) => {
+                const node = document.querySelector<HTMLElement>(value)
+                return {
+                  selector: value,
+                  node: node?.outerHTML.slice(0, 800) || "",
+                  activeTask: document.querySelector<HTMLElement>(".task-row-main[data-active='true']")?.dataset.taskId || "",
+                  bodyText: document.body.textContent?.slice(0, 1200) || "",
+                }
+              }, selector)
+              assert.fail(
+                `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(
+                  { requests, errors, snapshot },
+                  null,
+                  2,
+                )}`,
+              )
+            }
           }
         }
       }
@@ -1076,13 +1095,50 @@ test(
       }
 
       await page.goto(`${app}/ui/index.html`, { waitUntil: "load" })
-      await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
+      try {
+        await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
+      } catch (error) {
+        const snapshot = await page.evaluate(() => ({
+          badgeStatus: document.querySelector<HTMLElement>("#connBadge")?.dataset.status || "",
+          badgeText: document.querySelector<HTMLElement>("#connBadge")?.textContent || "",
+          bannerStatus: document.querySelector<HTMLElement>(".conn-banner")?.dataset.status || "",
+          bannerText: document.querySelector<HTMLElement>(".conn-banner")?.textContent || "",
+          bodyText: document.body.textContent?.slice(0, 1200) || "",
+        }))
+        assert.fail(
+          `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(
+            { requests, errors, snapshot },
+            null,
+            2,
+          )}`,
+        )
+      }
       await page.waitForSelector(".task-row-main[data-task-id='task-1']")
       await page.click(".task-row-main[data-task-id='task-1']")
       await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-      await page.waitForFunction(
-        () => document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active === "true",
-      )
+      try {
+        await page.waitForFunction(
+          () => document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active === "true",
+        )
+      } catch (error) {
+        const snapshot = await page.evaluate(() => ({
+          activeTask: document.querySelector<HTMLElement>(".task-row-main[data-active='true']")?.dataset.taskId || "",
+          inspectorButton:
+            document.querySelector<HTMLElement>(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+            )?.outerHTML || "",
+          centerWorkbench: document.querySelector<HTMLElement>("#centerWorkbench")?.outerHTML.slice(0, 1200) || "",
+          inspectorActive: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
+          bodyText: document.body.textContent?.slice(0, 1200) || "",
+        }))
+        assert.fail(
+          `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(
+            { requests, errors, snapshot },
+            null,
+            2,
+          )}`,
+        )
+      }
       try {
         await page.waitForSelector(".req-item")
       } catch (error) {
@@ -1142,7 +1198,7 @@ test(
       assert.equal(await page.$("[data-testid^='titlebar-menu-']"), null)
       await page.click('[data-menu-trigger="help"]')
       await page.waitForSelector('[data-testid="titlebar-menu-help"]')
-      await page.click('[data-menu-trigger="help"]')
+      await page.keyboard.press("Escape")
       await page.waitForFunction(() => !document.querySelector('[data-testid="titlebar-menu-help"]'))
 
       await ensureMenuOpen("settings")

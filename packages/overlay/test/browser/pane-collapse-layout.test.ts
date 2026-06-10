@@ -117,6 +117,36 @@ test(
       await page.setViewport({ width: 1440, height: 900 })
       await page.evaluateOnNewDocument((serverUrl) => {
         ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        ;(window as any).__TAURI__ = {
+          core: {
+            invoke: async (command: string, args: Record<string, unknown> = {}) => {
+              if (command === "overlay_settings_load") {
+                return {
+                  serverUrl,
+                  autoServer: false,
+                  locale: "en-US",
+                  directory: "D:/overlay/workspace/app",
+                  directoryMode: "custom",
+                }
+              }
+              if (command === "overlay_settings_save") return true
+              if (command === "overlay_open_project_editor") return true
+              if (command === "overlay_open_path") return true
+              if (command === "overlay_open_url") return true
+              return null
+            },
+          },
+          window: {
+            getCurrentWindow() {
+              return {
+                close: async () => undefined,
+                hide: async () => undefined,
+                startDragging: async () => undefined,
+                minimize: async () => undefined,
+              }
+            },
+          },
+        }
         localStorage.setItem("oc_locale", "en-US")
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
         localStorage.setItem(
