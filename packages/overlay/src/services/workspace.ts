@@ -413,6 +413,12 @@ export function activeDirectory(): string {
   return boardStore.board?.task?.directory || settingsStore.directory || ""
 }
 
+export function syncActiveDirectoryApiContext(): string {
+  const directory = activeDirectory()
+  configureApi({ directory })
+  return directory
+}
+
 // ── Recent directories ──
 
 const RECENT_DIRS_KEY = "oc_recent_directories"

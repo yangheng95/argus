@@ -7,8 +7,9 @@
 
 import { createSignal, createMemo, createEffect, For, Show } from "solid-js"
 import { t } from "../utils/i18n"
-import { apiJson } from "../services/api"
+import { apiJson, configure as configureApi } from "../services/api"
 import { nativeMessage } from "../services/app-dialog"
+import { syncActiveDirectoryApiContext } from "../services/workspace"
 import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
 
@@ -62,6 +63,8 @@ function formatDateTime(ts: number): string {
 
 export interface MemoryPanelProps {
   taskID?: string | (() => string | undefined)
+  directory?: string | (() => string | undefined)
+  active?: boolean
   compact?: boolean
 }
 
@@ -73,14 +76,24 @@ export function MemoryPanel(props: MemoryPanelProps) {
   const [expandedFileId, setExpandedFileId] = createSignal<string | null>(null)
   const [detailStates, setDetailStates] = createSignal<Record<string, MemoryDetailState>>({})
   const currentTaskID = () => (typeof props.taskID === "function" ? props.taskID() : props.taskID)
+  const isActive = () => props.active ?? true
+  const currentDirectory = () => {
+    if (props.directory !== undefined) {
+      const value = typeof props.directory === "function" ? props.directory() : props.directory
+      const directory = String(value || "").trim()
+      configureApi({ directory })
+      return directory
+    }
+    return syncActiveDirectoryApiContext().trim()
+  }
 
   // ── Data loading ──
 
-  const loadMemory = async () => {
-    const taskID = currentTaskID()
-    if (!taskID) {
+  const loadMemory = async (taskID = currentTaskID(), directory = currentDirectory()) => {
+    if (!taskID || !directory) {
       setFiles([])
       setSearchMode(false)
+      setExpandedFileId(null)
       return
     }
     setLoading(true)
@@ -102,6 +115,10 @@ export function MemoryPanel(props: MemoryPanelProps) {
   const doSearch = async (q: string) => {
     if (!q || !q.trim()) {
       return loadMemory()
+    }
+    const directory = currentDirectory()
+    if (!currentTaskID() || !directory) {
+      return loadMemory(currentTaskID(), directory)
     }
     setLoading(true)
     try {
@@ -210,8 +227,10 @@ export function MemoryPanel(props: MemoryPanelProps) {
 
   // Reload when taskID changes (reactive)
   createEffect(() => {
-    const _ = currentTaskID()
-    void loadMemory()
+    if (!isActive()) return
+    const taskID = currentTaskID()
+    const directory = currentDirectory()
+    void loadMemory(taskID, directory)
   })
 
   const badge = createMemo(() => {

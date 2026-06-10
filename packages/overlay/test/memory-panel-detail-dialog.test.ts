@@ -20,8 +20,21 @@ describe("MemoryPanel inline detail lifecycle", () => {
 
   test("memory panel reads task identifier through a reactive accessor", () => {
     expect(source).toContain("taskID?: string | (() => string | undefined)")
-    expect(source).toContain('const currentTaskID = () => (typeof props.taskID === "function" ? props.taskID() : props.taskID)')
+    expect(source).toContain(
+      'const currentTaskID = () => (typeof props.taskID === "function" ? props.taskID() : props.taskID)',
+    )
     expect(source).toContain("const taskID = currentTaskID()")
     expect(source).toContain("taskID: currentTaskID() || undefined")
+  })
+
+  test("memory panel reloads when the active task directory becomes available", () => {
+    expect(source).toContain('import { syncActiveDirectoryApiContext } from "../services/workspace"')
+    expect(source).toContain("directory?: string | (() => string | undefined)")
+    expect(source).toContain("const currentDirectory = () =>")
+    expect(source).toContain("configureApi({ directory })")
+    expect(source).toContain("const directory = currentDirectory()")
+    expect(source).toContain("if (!isActive()) return")
+    expect(source).toContain("void loadMemory(taskID, directory)")
+    expect(source).toContain("if (!taskID || !directory)")
   })
 })
