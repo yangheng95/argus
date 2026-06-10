@@ -118,6 +118,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("config", () => expectInjects("config"))
     test("config/providers", () => expectInjects("config/providers"))
     test("session config", () => expectInjects("session/session_123/config"))
+    test("session conversation", () => expectInjects("session/session_123/conversation"))
     test("config/auth", () => expectInjects("config/auth"))
     test("config/mcp", () => expectInjects("config/mcp"))
     test("config/skill", () => expectInjects("config/skill"))
@@ -173,6 +174,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "path",
       "vcs",
       "config",
+      "session/session_123/conversation",
       "mission/wake",
       "task/tsk_browserpreview0001/browser-preview",
     ]) {

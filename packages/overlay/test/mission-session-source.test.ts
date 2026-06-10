@@ -14,9 +14,15 @@ const MAIN_TSX = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
 
 test("session source hydrates from session conversation and submits to prompt_async", () => {
   expect(CONVERSATION_SERVICE).toContain('const prefix = source.kind === "task" ? "task" : "session"')
-  expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit)")
+  expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit, options.directory)")
   expect(TASK_SERVICE).toContain('selectedSource?.kind === "session"')
   expect(TASK_SERVICE).toContain("`session/${encodeURIComponent(selectedSource.id)}/prompt_async`")
+})
+
+test("Mission session hydrate uses the selected row directory", () => {
+  expect(MISSION_TSX).toContain("openMissionSession(mission.sessionID, mission.directory)")
+  expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit, options.directory)")
+  expect(CONVERSATION_SERVICE).toContain('params.set("directory", trimmedDirectory)')
 })
 
 test("session source cannot page older task conversation history", () => {

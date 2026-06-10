@@ -326,7 +326,7 @@ function MissionContent(props: MissionProps) {
     }
   }
 
-  async function openMissionSession(sessionID: string): Promise<void> {
+  async function openMissionSession(sessionID: string, directory?: string): Promise<void> {
     const source = { kind: "session" as const, id: sessionID }
     stopSSE()
     clearMessages()
@@ -337,13 +337,14 @@ function MissionContent(props: MissionProps) {
     await loadConversation(source, {
       scrollIntent: "bottom",
       resetCause: "mission-session-hydrate",
+      directory,
     })
     startSSE(source, 0)
   }
 
   async function handleMissionSelect(mission: MissionRecord): Promise<void> {
     await withBusy(`mission:${mission.sessionID}`, async () => {
-      await openMissionSession(mission.sessionID)
+      await openMissionSession(mission.sessionID, mission.directory)
     })
   }
 
@@ -379,7 +380,8 @@ function MissionContent(props: MissionProps) {
 
   async function handleMissionAwake(result: { missionID: string; sessionID: string; created: boolean }): Promise<void> {
     await missionRecordsCtl.refetch()
-    await openMissionSession(result.sessionID)
+    const mission = (missionRecords()?.records ?? []).find((record) => record.sessionID === result.sessionID)
+    await openMissionSession(result.sessionID, mission?.directory ?? activeProjectDirectory())
     setComposerOpen(false)
   }
 

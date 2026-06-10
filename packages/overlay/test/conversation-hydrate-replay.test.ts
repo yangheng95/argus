@@ -1,4 +1,5 @@
 import { afterAll, afterEach, expect, test } from "bun:test"
+import { installRealOverlayI18n } from "./fixtures/i18n"
 import { setBoardStore } from "../src/store/board"
 import { cardTreeStore } from "../src/store/card-tree"
 import { conversationAgentStore, hydrateConversationAgentView } from "../src/store/conversation-agents"
@@ -6,6 +7,7 @@ import {
   cancelConversationReplay,
   conversationCardContainsMessage,
   hydrateTaskConversation,
+  loadConversation,
   loadConversationHistoryUntilCard,
 } from "../src/services/conversation"
 import { replayTaskEventToTree } from "../src/services/events"
@@ -21,6 +23,8 @@ import { flushBufferedPartDeltas, resetWriter } from "../src/services/tree-write
 
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+
+installRealOverlayI18n()
 
 globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
   callback(0)
@@ -59,6 +63,51 @@ afterEach(() => {
 afterAll(() => {
   globalThis.requestAnimationFrame = originalRequestAnimationFrame
   globalThis.cancelAnimationFrame = originalCancelAnimationFrame
+})
+
+test("session conversation hydrate carries the explicit Mission row directory", async () => {
+  resetWriter()
+  setBoardStore("selectedSource", { kind: "session", id: "ses_mission" })
+
+  let captured: TransportRequest | undefined
+  __setHostTransportForTest(
+    fakeTransport((req) => {
+      captured = req
+      if (req.path !== "session/ses_mission/conversation") {
+        throw new Error(`unexpected request path: ${req.path}`)
+      }
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: {
+          board: {
+            kind: "session",
+            sessionID: "ses_mission",
+            status: "active",
+            title: "Mission Control",
+            directory: "D:/mission-project",
+          },
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { sessions: [] },
+          agentView: { sessions: [] },
+          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+        },
+      }
+    }),
+  )
+
+  await loadConversation(
+    { kind: "session", id: "ses_mission" },
+    {
+      directory: "D:/mission-project",
+    },
+  )
+
+  expect(captured?.query?.directory).toBe("D:/mission-project")
+  expect(captured?.query?.tail_limit).toBe("80")
 })
 
 test("hydration replay projects persisted executor output into the card tree", () => {
