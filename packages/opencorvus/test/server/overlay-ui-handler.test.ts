@@ -5,6 +5,7 @@ import path from "path"
 import { Hono } from "hono"
 import { OverlayUI } from "../../src/server/overlay-ui"
 import { Log } from "../../src/util/log"
+import { ensureOverlayDist } from "../../../overlay/test/overlay-dist"
 
 Log.init({ print: false })
 
@@ -63,6 +64,19 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
     expect(body).toContain('src="https://cdn.example.com/keep.js"')
   })
 
+  test("GET /ui/ preserves reverse-proxy public prefix in rewritten asset paths", async () => {
+    const res = await app.request("http://localhost/ui/", {
+      headers: {
+        "x-forwarded-prefix": "/opencorvus",
+      },
+    })
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    expect(body).toContain('href="/opencorvus/ui/assets/main.css"')
+    expect(body).toContain('src="/opencorvus/ui/assets/app.js"')
+    expect(body).toContain('src="/opencorvus/ui/i18n/zh-CN.json"')
+  })
+
   test("GET /ui/assets/app.js serves with the JS MIME and no-cache", async () => {
     const res = await app.request("http://localhost/ui/assets/app.js")
     expect(res.status).toBe(200)
@@ -119,5 +133,29 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
         fs.unlinkSync(outsideSecret)
       } catch {}
     }
+  })
+})
+
+describe("OverlayUI built bundle", () => {
+  test("serves the current Skill, MCP, and Memory panel bundle under /ui", async () => {
+    await ensureOverlayDist()
+    const distDir = path.resolve(import.meta.dir, "../../../overlay/dist-vite")
+    const app = new Hono().route("/ui", OverlayUI.routes(distDir) as unknown as Hono)
+
+    const indexRes = await app.request("http://localhost/ui/index.html")
+    expect(indexRes.status).toBe(200)
+    const indexHtml = await indexRes.text()
+    const scriptMatch = indexHtml.match(/src="\/ui\/assets\/([^"]+\.js)"/)
+    expect(scriptMatch?.[1]).toBeDefined()
+
+    const scriptRes = await app.request(`http://localhost/ui/assets/${scriptMatch![1]}`)
+    expect(scriptRes.status).toBe(200)
+    const script = await scriptRes.text()
+    expect(script).toContain("skill/installed")
+    expect(script).toContain("panel/knowledge/memory")
+    expect(script).toContain("x-opencorvus-directory")
+    expect(script).toContain("duplicate_locations")
+    expect(script).toContain("workspace.no_directory")
+    expect(script).toContain("directory:Tt")
   })
 })
