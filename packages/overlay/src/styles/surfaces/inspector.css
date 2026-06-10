@@ -160,7 +160,7 @@
   border: var(--oc-border-width) solid var(--border);
   background: var(--dialog-bg);
   color: var(--text);
-  box-shadow: 0 calc(12px * var(--ui-scale)) calc(28px * var(--ui-scale)) rgba(0, 0, 0, 0.24);
+  box-shadow: 0 calc(12px * var(--ui-scale)) calc(28px * var(--ui-scale)) var(--ui-shadow-tone);
 }
 
 .browser-preview-candidate-listbox {
@@ -260,8 +260,16 @@
   place-items: center;
   overflow: auto;
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--border) 13%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--border) 13%, transparent) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--border) 13%, transparent) calc(1px * var(--ui-scale)),
+      transparent calc(1px * var(--ui-scale))
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--border) 13%, transparent) calc(1px * var(--ui-scale)),
+      transparent calc(1px * var(--ui-scale))
+    ),
     var(--surface-inset);
   background-size: calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale));
 }
