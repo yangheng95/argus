@@ -70,6 +70,7 @@ import { waitForLogDrain, AppLog } from "./utils/log"
 import { teardownApp } from "./services/init"
 import { stopTimers } from "./services/sync"
 import { nativeOpen } from "./utils/native"
+import { getHostTransport } from "./services/host-transport"
 import { hydrateIconPlaceholders } from "./utils/icon-html"
 import { installNativeContextMenuSuppression } from "./utils/context-menu"
 import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
@@ -736,10 +737,13 @@ document.addEventListener(
     const previewUrl = anchor.getAttribute("data-browser-preview-url") || ""
     const href = previewUrl || anchor.getAttribute("href") || ""
     if (!/^https?:\/\//i.test(href)) return
+    const canOpenExternalUrl = getHostTransport().capabilities.nativeCommands["open-url"]
+    if (!previewUrl && !canOpenExternalUrl) return
     ev.preventDefault()
     void (async () => {
       try {
         if (previewUrl && openBrowserPreviewFromMessage()) return
+        if (!canOpenExternalUrl) return
         await nativeOpen(href)
       } catch (error) {
         console.error("[ui] Failed to open external link", error)
