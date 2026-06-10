@@ -353,15 +353,20 @@ export function pathIcon(kind: string): string {
   return iconHtml("close", 13)
 }
 
+export interface PathBreadcrumbCapabilities {
+  readonly browseDirectory: boolean
+  readonly openDirectory: boolean
+}
+
 /**
  * Build the HTML string for the directory breadcrumb bar shown in the task
- * header. Reads the current directory from `settingsStore.directory`.
+ * header.
  */
-export function pathBreadcrumb(value: string): string {
+export function pathBreadcrumb(value: string, capabilities: PathBreadcrumbCapabilities): string {
   const browse = escapeHtml(t("cwd.browse"))
-  const actions = [
-    `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
-  ].join("")
+  const actions = capabilities.browseDirectory
+    ? `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`
+    : ""
   if (!value) {
     return `
       <span class="task-dir-empty">${escapeHtml(t("cwd.unavailable"))}</span>
@@ -377,6 +382,9 @@ export function pathBreadcrumb(value: string): string {
       const step = index
         ? `<button type="button" class="task-dir-step" data-path-set=${jsonAttr(items[index - 1].path)} title="${escapeHtml(`${choose}: ${items[index - 1].path}`)}" aria-label="${escapeHtml(`${choose}: ${items[index - 1].path}`)}">/</button>`
         : ""
+      if (!capabilities.openDirectory) {
+        return `${step}<span class="task-dir-node" title="${escapeHtml(item.path)}"${current}>${escapeHtml(item.label)}</span>`
+      }
       return `${step}<button type="button" class="task-dir-node" data-path-open=${jsonAttr(item.path)} title="${escapeHtml(`${open}: ${item.path}`)}" aria-label="${escapeHtml(`${open}: ${item.path}`)}"${current}>${escapeHtml(item.label)}</button>`
     })
     .join("")
