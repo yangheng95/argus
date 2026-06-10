@@ -89,6 +89,14 @@
   background: color-mix(in srgb, var(--text-muted) 72%, transparent);
 }
 
+.extension-status[data-state="warn"] {
+  color: var(--warn);
+}
+
+.extension-status[data-state="warn"]::before {
+  background: color-mix(in srgb, var(--warn) 82%, transparent);
+}
+
 .gwg-priority-badge::before {
   background: color-mix(in srgb, var(--warn) 82%, transparent);
 }

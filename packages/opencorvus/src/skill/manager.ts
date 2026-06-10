@@ -15,6 +15,17 @@ import { which } from "@/util/which"
 import { Uint8ArrayReader, Uint8ArrayWriter, ZipReader } from "@zip.js/zip.js"
 
 const MANIFEST = ".opencorvus-skill-source.json"
+const ExpirationTimestamp = z
+  .preprocess((value) => {
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? value : value.toISOString()
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const date = new Date(value)
+      return Number.isNaN(date.getTime()) ? value : date.toISOString()
+    }
+    if (typeof value === "string") return value.trim()
+    return value
+  }, z.string().refine((value) => !Number.isNaN(Date.parse(value)), "expires_at must be a valid timestamp"))
+  .optional()
 const SkillInfo = z.object({
   name: z.string(),
   description: z.string(),
@@ -41,6 +52,9 @@ const SkillInfo = z.object({
     })
     .optional(),
   priority: z.number().optional().default(0),
+  required_tools: z.array(z.string()).optional().default([]),
+  expires_at: ExpirationTimestamp,
+  duplicate_locations: z.array(z.string()).optional().default([]),
 })
 
 export namespace SkillManager {
@@ -521,7 +535,12 @@ function sourceTypeFor(dir: string, configuredPaths: string[], cache: string, ki
   if (Filesystem.contains(SkillManager.managedRoot(), dir)) return "managed_git"
   if (Filesystem.contains(cache, dir)) return "config_url"
   if (configuredPaths.some((item) => Filesystem.contains(item, dir))) return "config_path"
-  if (dir.includes(`${path.sep}.claude${path.sep}`) || dir.includes(`${path.sep}.agents${path.sep}`)) return "external"
+  if (
+    dir.includes(`${path.sep}.claude${path.sep}`) ||
+    dir.includes(`${path.sep}.agents${path.sep}`) ||
+    dir.includes(`${path.sep}.codex${path.sep}`)
+  )
+    return "external"
   return "unknown"
 }
 
@@ -534,7 +553,8 @@ function trustFor(skill: z.infer<typeof SkillInfo>, source?: string) {
   if (source?.includes("skills.pub")) return "community" as const
   if (
     skill.location.includes(`${path.sep}.claude${path.sep}`) ||
-    skill.location.includes(`${path.sep}.agents${path.sep}`)
+    skill.location.includes(`${path.sep}.agents${path.sep}`) ||
+    skill.location.includes(`${path.sep}.codex${path.sep}`)
   ) {
     return "external" as const
   }

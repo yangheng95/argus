@@ -136,6 +136,105 @@ description: Second test skill.
   })
 })
 
+test("filters expired skills by expires_at frontmatter", async () => {
+  const past = new Date(Date.now() - 60_000).toISOString()
+  const future = new Date(Date.now() + 60_000).toISOString()
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, ".opencorvus", "skill", "expired-skill", "SKILL.md"),
+        `---
+name: expired-skill
+description: Expired skill should not load.
+expires_at: ${past}
+---
+
+# Expired Skill
+`,
+      )
+      await Bun.write(
+        path.join(dir, ".opencorvus", "skill", "active-skill", "SKILL.md"),
+        `---
+name: active-skill
+description: Active skill should load.
+expires_at: ${future}
+---
+
+# Active Skill
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(skills.find((s) => s.name === "expired-skill")).toBeUndefined()
+      const active = skills.find((s) => s.name === "active-skill")
+      expect(active).toBeDefined()
+      expect(active!.expires_at).toBe(future)
+    },
+  })
+})
+
+test("records duplicate skill locations after expiry filtering", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, ".claude", "skills", "shared-review", "SKILL.md"),
+        `---
+name: shared-review
+description: Shared review skill from Claude directory.
+---
+
+# Shared Review
+`,
+      )
+      await Bun.write(
+        path.join(dir, ".agents", "skills", "shared-review", "SKILL.md"),
+        `---
+name: shared-review
+description: Shared review skill from Agents directory.
+---
+
+# Shared Review
+`,
+      )
+      await Bun.write(
+        path.join(dir, ".codex", "skills", "expired-shared-review", "SKILL.md"),
+        `---
+name: shared-review
+description: Expired duplicate should not be reported.
+expires_at: ${new Date(Date.now() - 60_000).toISOString()}
+---
+
+# Expired Shared Review
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = nonBuiltin(await Skill.all())
+      const shared = skills.find((s) => s.name === "shared-review")
+      const claudeLocation = path.join(tmp.path, ".claude", "skills", "shared-review", "SKILL.md")
+      const agentsLocation = path.join(tmp.path, ".agents", "skills", "shared-review", "SKILL.md")
+      const expiredLocation = path.join(tmp.path, ".codex", "skills", "expired-shared-review", "SKILL.md")
+      expect(skills.filter((s) => s.name === "shared-review").length).toBe(1)
+      expect(shared).toBeDefined()
+      expect(shared!.duplicate_locations).toContain(claudeLocation)
+      expect(shared!.duplicate_locations).toContain(agentsLocation)
+      expect(shared!.duplicate_locations).not.toContain(expiredLocation)
+      expect(shared!.duplicate_locations.length).toBe(2)
+    },
+  })
+})
+
 test("skips skills with missing frontmatter", async () => {
   await using tmp = await tmpdir({
     git: true,
@@ -207,6 +306,7 @@ test("discovers global skills from ~/.claude/skills/ directory", async () => {
         expect(globalTestSkill).toBeDefined()
         expect(globalTestSkill!.description).toBe("A global skill from ~/.claude/skills for testing.")
         expect(globalTestSkill!.location).toContain(path.join(".claude", "skills", "global-test-skill", "SKILL.md"))
+        expect(globalTestSkill!.duplicate_locations).toEqual([])
       },
     })
   } finally {
@@ -345,12 +445,81 @@ This skill is loaded from the global home directory.
   }
 })
 
-test("discovers skills from both .claude/skills/ and .agents/skills/", async () => {
+test("discovers skills from .codex/skills/ directory", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".codex", "skills", "codex-skill")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: codex-skill
+description: A skill in the .codex/skills directory.
+---
+
+# Codex Skill
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(nonBuiltin(skills).length).toBe(1)
+      const codexSkill = skills.find((s) => s.name === "codex-skill")
+      expect(codexSkill).toBeDefined()
+      expect(codexSkill!.location).toContain(path.join(".codex", "skills", "codex-skill", "SKILL.md"))
+    },
+  })
+})
+
+test("discovers global skills from ~/.codex/skills/ directory", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  const originalHome = process.env.OPENCORVUS_TEST_HOME
+  process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+  try {
+    const skillDir = path.join(tmp.path, ".codex", "skills", "global-codex-skill")
+    await fs.mkdir(skillDir, { recursive: true })
+    await Bun.write(
+      path.join(skillDir, "SKILL.md"),
+      `---
+name: global-codex-skill
+description: A global skill from ~/.codex/skills for testing.
+---
+
+# Global Codex Skill
+
+This skill is loaded from the global home directory.
+`,
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const skills = await Skill.all()
+        expect(nonBuiltin(skills).length).toBe(1)
+        const globalCodexSkill = skills.find((s) => s.name === "global-codex-skill")
+        expect(globalCodexSkill).toBeDefined()
+        expect(globalCodexSkill!.description).toBe("A global skill from ~/.codex/skills for testing.")
+        expect(globalCodexSkill!.location).toContain(path.join(".codex", "skills", "global-codex-skill", "SKILL.md"))
+      },
+    })
+  } finally {
+    process.env.OPENCORVUS_TEST_HOME = originalHome
+  }
+})
+
+test("discovers skills from .claude/skills/, .agents/skills/, and .codex/skills/", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
       const claudeDir = path.join(dir, ".claude", "skills", "claude-skill")
       const agentDir = path.join(dir, ".agents", "skills", "agent-skill")
+      const codexDir = path.join(dir, ".codex", "skills", "codex-skill")
       await Bun.write(
         path.join(claudeDir, "SKILL.md"),
         `---
@@ -371,6 +540,16 @@ description: A skill in the .agents/skills directory.
 # Agent Skill
 `,
       )
+      await Bun.write(
+        path.join(codexDir, "SKILL.md"),
+        `---
+name: codex-skill
+description: A skill in the .codex/skills directory.
+---
+
+# Codex Skill
+`,
+      )
     },
   })
 
@@ -378,9 +557,10 @@ description: A skill in the .agents/skills directory.
     directory: tmp.path,
     fn: async () => {
       const skills = await Skill.all()
-      expect(nonBuiltin(skills).length).toBe(2)
+      expect(nonBuiltin(skills).length).toBe(3)
       expect(skills.find((s) => s.name === "claude-skill")).toBeDefined()
       expect(skills.find((s) => s.name === "agent-skill")).toBeDefined()
+      expect(skills.find((s) => s.name === "codex-skill")).toBeDefined()
     },
   })
 })
@@ -393,6 +573,7 @@ test("properly resolves directories that skills live in", async () => {
       const opencorvusSkillsDir = path.join(dir, ".opencorvus", "skills", "agent-skill")
       const claudeDir = path.join(dir, ".claude", "skills", "claude-skill")
       const agentDir = path.join(dir, ".agents", "skills", "agent-skill")
+      const codexDir = path.join(dir, ".codex", "skills", "codex-skill")
       await Bun.write(
         path.join(claudeDir, "SKILL.md"),
         `---
@@ -411,6 +592,16 @@ description: A skill in the .agents/skills directory.
 ---
 
 # Agent Skill
+`,
+      )
+      await Bun.write(
+        path.join(codexDir, "SKILL.md"),
+        `---
+name: codex-skill
+description: A skill in the .codex/skills directory.
+---
+
+# Codex Skill
 `,
       )
       await Bun.write(
@@ -440,7 +631,7 @@ description: A skill in the .opencorvus/skills directory.
     directory: tmp.path,
     fn: async () => {
       const dirs = await Skill.dirs()
-      expect(dirs.length).toBe(4)
+      expect(dirs.length).toBe(5)
     },
   })
 })
