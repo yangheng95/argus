@@ -166,9 +166,12 @@ function sourceMatches(left: BoardSource | null, right: BoardSource | null): boo
   return !!left && !!right && left.kind === right.kind && left.id === right.id
 }
 
-function conversationHydratePath(source: BoardSource, tailLimit: number): string {
+function conversationHydratePath(source: BoardSource, tailLimit: number, directory?: string): string {
   const prefix = source.kind === "task" ? "task" : "session"
-  return `${prefix}/${encodeURIComponent(source.id)}/conversation?tail_limit=${encodeURIComponent(String(tailLimit))}`
+  const params = new URLSearchParams({ tail_limit: String(tailLimit) })
+  const trimmedDirectory = String(directory || "").trim()
+  if (trimmedDirectory) params.set("directory", trimmedDirectory)
+  return `${prefix}/${encodeURIComponent(source.id)}/conversation?${params.toString()}`
 }
 
 function assertActiveReplay(source: BoardSource, epoch: number, signal: AbortSignal): void {
@@ -274,6 +277,7 @@ export async function loadConversation(
     scrollIntent?: "preserve" | "bottom"
     resetCause?: string
     tailLimit?: number
+    directory?: string
   } = {},
 ): Promise<number> {
   return hydrateConversation(source, options)
@@ -286,6 +290,7 @@ export async function hydrateConversation(
     scrollIntent?: "preserve" | "bottom"
     resetCause?: string
     tailLimit?: number
+    directory?: string
   } = {},
 ): Promise<number> {
   cancelConversationReplay({ preserveAgentView: true })
@@ -299,7 +304,7 @@ export async function hydrateConversation(
       1,
       Math.floor(Number(options.tailLimit ?? INITIAL_CONVERSATION_TAIL_LIMIT) || INITIAL_CONVERSATION_TAIL_LIMIT),
     )
-    const data = await apiJson(conversationHydratePath(source, tailLimit), { signal })
+    const data = await apiJson(conversationHydratePath(source, tailLimit, options.directory), { signal })
     assertActiveReplay(source, epoch, signal)
     const board = requireObject(data?.board, "board")
     const transcript = requireArray(data?.transcript, "transcript")
