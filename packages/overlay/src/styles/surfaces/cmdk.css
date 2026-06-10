@@ -120,13 +120,16 @@
 }
 
 .cmdk-foot {
+  min-width: 0;
   border-top: var(--oc-border-width) solid var(--border);
   padding: var(--ui-gap-sm) calc(var(--ui-gap-lg) * 1.2);
   font-size: var(--ui-font-meta);
   color: var(--text-muted);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--ui-gap-md);
+  overflow-wrap: anywhere;
 }
 
 .cmdk-foot kbd {

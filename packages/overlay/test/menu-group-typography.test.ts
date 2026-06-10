@@ -64,6 +64,15 @@ describe("picker-surface group labels render Title Case", () => {
   }
 })
 
+describe("command palette responsive footer", () => {
+  test(".cmdk-foot wraps shortcut help instead of overflowing narrow panels", () => {
+    const body = ruleBody(".cmdk-foot")
+    expect(body).toMatch(/min-width:\s*0/)
+    expect(body).toMatch(/flex-wrap:\s*wrap/)
+    expect(body).toMatch(/overflow-wrap:\s*anywhere/)
+  })
+})
+
 describe("tier-3 status pills keep uppercase (negative control)", () => {
   for (const sel of [".verdict-pill", ".req-status", ".reasoning-label"]) {
     test(`${sel} stays uppercase`, () => {
