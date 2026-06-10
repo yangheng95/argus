@@ -97,14 +97,19 @@ test(
     const now = Date.now()
     const taskID = "tsk_browserpreview_e2e"
     const targetID = "art_previewtarget_e2e"
+    const alternateTargetID = "art_previewtarget_alt_e2e"
     const evidenceID = "art_previewevidence_desktop"
     const projectRoot = "D:/overlay/workspace/app"
     const captureBodies: unknown[] = []
+    const selectedTargets: unknown[] = []
     const errors: string[] = []
     const requestLog: string[] = []
+    let selectedTargetID = targetID
 
     let serverOrigin = ""
     const previewTarget = () => `${serverOrigin}/preview-target`
+    const alternatePreviewTarget = () => `${serverOrigin}/preview-target-alt`
+    const selectedPreviewTarget = () => (selectedTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget())
     const viewports = [
       { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1440, height: 900 },
       { id: "tablet", labelKey: "browser_preview.viewport.tablet", width: 834, height: 1112 },
@@ -138,6 +143,9 @@ test(
       requestLog.push(`${req.method} ${url.pathname}${url.search}`)
       if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
       if (path === "/preview-target") return new Response("<main>Preview target is live</main>", {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      })
+      if (path === "/preview-target-alt") return new Response("<main>Alternate preview target is live</main>", {
         headers: { "content-type": "text/html; charset=utf-8" },
       })
       const staticResponse = await overlayStaticResponse(path)
@@ -196,12 +204,12 @@ test(
       }
       if (path === `/task/${taskID}/browser-preview`) {
         return send({
-          id: targetID,
+          id: selectedTargetID,
           taskID,
           kind: "task-url",
           status: "ready",
           projectRoot,
-          url: previewTarget(),
+          url: selectedPreviewTarget(),
           viewports,
           diagnostics: ["Resolved saved browser preview target."],
           candidates: [
@@ -209,8 +217,49 @@ test(
               id: targetID,
               url: previewTarget(),
               source: "task-artifact",
-              selected: true,
+              selected: selectedTargetID === targetID,
               timeUpdated: now - 500,
+            },
+            {
+              id: alternateTargetID,
+              url: alternatePreviewTarget(),
+              source: "task-artifact",
+              selected: selectedTargetID === alternateTargetID,
+              timeUpdated: now - 250,
+            },
+          ],
+          source: "task-artifact",
+        })
+      }
+      if (path === `/task/${taskID}/browser-preview/target` && req.method === "PUT") {
+        const body = await req.json()
+        selectedTargets.push(body)
+        if (body?.targetID === alternateTargetID || body?.targetID === targetID) {
+          selectedTargetID = body.targetID
+        }
+        return send({
+          id: selectedTargetID,
+          taskID,
+          kind: "task-url",
+          status: "ready",
+          projectRoot,
+          url: selectedPreviewTarget(),
+          viewports,
+          diagnostics: [`Selected task browser preview target ${selectedTargetID}.`],
+          candidates: [
+            {
+              id: targetID,
+              url: previewTarget(),
+              source: "task-artifact",
+              selected: selectedTargetID === targetID,
+              timeUpdated: now - 500,
+            },
+            {
+              id: alternateTargetID,
+              url: alternatePreviewTarget(),
+              source: "task-artifact",
+              selected: selectedTargetID === alternateTargetID,
+              timeUpdated: now - 250,
             },
           ],
           source: "task-artifact",
@@ -223,13 +272,13 @@ test(
           status: "passed",
           projectRoot,
           target: {
-            id: targetID,
+            id: selectedTargetID,
             taskID,
             latestEvidenceID: evidenceID,
             kind: "task-url",
             status: "ready",
             projectRoot,
-            url: previewTarget(),
+            url: selectedPreviewTarget(),
             viewports,
             diagnostics: ["Resolved saved browser preview target."],
             candidates: [],
@@ -240,7 +289,7 @@ test(
             desktop: {
               captured: true,
               passed: true,
-              url: previewTarget(),
+              url: selectedPreviewTarget(),
               requested_viewport: { width: 1440, height: 900 },
               viewport: { width: 1440, height: 900, capped: false },
               summary: "manifest-backed desktop capture passed",
@@ -252,7 +301,7 @@ test(
             tablet: {
               captured: true,
               passed: true,
-              url: previewTarget(),
+              url: selectedPreviewTarget(),
               requested_viewport: { width: 834, height: 1112 },
               viewport: { width: 834, height: 1112, capped: false },
               summary: "manifest-backed tablet capture passed",
@@ -264,7 +313,7 @@ test(
             mobile: {
               captured: true,
               passed: true,
-              url: previewTarget(),
+              url: selectedPreviewTarget(),
               requested_viewport: { width: 390, height: 844 },
               viewport: { width: 390, height: 844, capped: false },
               summary: "manifest-backed mobile capture passed",
@@ -366,6 +415,10 @@ test(
       )
       await page.waitForSelector('[data-ui="browser-preview-evidence-missing"]', { state: "attached" })
       await waitForPageText(page, previewTarget(), "preview target text")
+      await page.click('[data-ui="browser-preview-candidate-trigger"]')
+      await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
+      await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
+      await waitForPageText(page, alternatePreviewTarget(), "alternate preview target text")
 
       await page.click('button[aria-label="Capture Playwright evidence from the saved backend preview target."]')
       await page.waitForSelector('[data-ui="browser-preview-evidence"][data-status="passed"]')
@@ -381,8 +434,9 @@ test(
       assert.match(evidence.text, /manifest-backed desktop capture passed/)
       assert.match(evidence.text, new RegExp(evidenceID))
       assert.match(evidence.text, /desktop\.png/)
-      assert.match(evidence.text, new RegExp(previewTarget().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
-      assert.deepEqual(captureBodies, [{ targetID, viewportIDs: ["desktop", "tablet", "mobile"] }])
+      assert.match(evidence.text, new RegExp(alternatePreviewTarget().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+      assert.deepEqual(selectedTargets, [{ targetID: alternateTargetID }])
+      assert.deepEqual(captureBodies, [{ targetID: alternateTargetID, viewportIDs: ["desktop", "tablet", "mobile"] }])
       assert.ok(
         requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/capture`)),
         "capture route should be called through the task-scoped backend",

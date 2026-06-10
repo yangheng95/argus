@@ -1,4 +1,6 @@
+import * as Select from "@kobalte/core/select"
 import { createEffect, createMemo, createResource, createSignal, For, Match, Show, Switch } from "solid-js"
+import type { JSX } from "solid-js"
 import {
   captureTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewTarget,
@@ -12,6 +14,8 @@ import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { Tab, Tabs } from "./ui/Tabs"
+
+type BrowserPreviewCandidate = BrowserPreviewTarget["candidates"][number]
 
 export interface BrowserPreviewPanelProps {
   active: () => boolean
@@ -61,16 +65,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   )
   const currentTargetError = createMemo(() => (props.taskID() && props.directory() ? target.error : undefined))
   const candidates = createMemo(() => currentTarget()?.candidates ?? [])
-  const selectedCandidateID = createMemo(
-    () => candidates().find((item) => item.selected)?.id ?? currentTarget()?.id ?? "",
+  const selectedCandidate = createMemo(
+    () =>
+      candidates().find((item) => item.selected) ??
+      candidates().find((item) => item.id === currentTarget()?.id) ??
+      candidates()[0] ??
+      null,
   )
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
-  const viewportByID = createMemo(
-    () =>
-      Object.fromEntries(viewports().map((item) => [item.id, item])) as Partial<
-        Record<BrowserPreviewViewportID, BrowserPreviewTarget["viewports"][number]>
-      >,
-  )
   const frameUrl = createMemo(() => currentTarget()?.url)
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
     const verified = verification()
@@ -99,10 +101,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     setViewportID(ids.includes(viewportID()) ? viewportID() : ids[0])
   })
 
-  const selectCandidate = (event: Event) => {
+  const selectCandidate = (candidate: BrowserPreviewCandidate | null) => {
     const taskID = props.taskID()
-    const candidateID = (event.currentTarget as HTMLSelectElement).value
-    const candidate = candidates().find((item) => item.id === candidateID)
     if (!taskID || !candidate || candidate.selected) return
     void selectTaskBrowserPreviewTarget({ taskID, targetID: candidate.id }).then(() =>
       setRefreshToken((value) => value + 1),
@@ -174,17 +174,39 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             </Switch>
           </div>
 
-          <label class="browser-preview-candidate-select">
+          <Select.Root<BrowserPreviewCandidate>
+            class="browser-preview-candidate-select"
+            options={candidates()}
+            optionValue="id"
+            optionTextValue="url"
+            value={selectedCandidate()}
+            onChange={selectCandidate}
+            itemComponent={BrowserPreviewCandidateOption}
+            disabled={candidates().length <= 1}
+            disallowEmptySelection
+            gutter={4}
+            sameWidth
+          >
             <Icon name="external-link" size={13} />
-            <select
-              value={selectedCandidateID()}
-              onChange={selectCandidate}
-              disabled={candidates().length <= 1}
+            <Select.Trigger
+              class="browser-preview-candidate-trigger"
               aria-label={t("browser_preview.candidates.label")}
+              data-ui="browser-preview-candidate-trigger"
             >
-              <For each={candidates()}>{(candidate) => <option value={candidate.id}>{candidate.url}</option>}</For>
-            </select>
-          </label>
+              <Select.Value<BrowserPreviewCandidate>>
+                {(state) => <span>{state.selectedOption()?.url ?? frameUrl() ?? ""}</span>}
+              </Select.Value>
+              <Select.Icon>
+                <Icon name="caret-down" size={12} />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.HiddenSelect aria-label={t("browser_preview.candidates.label")} />
+            <Select.Portal>
+              <Select.Content class="browser-preview-candidate-content">
+                <Select.Listbox class="browser-preview-candidate-listbox" />
+              </Select.Content>
+            </Select.Portal>
+          </Select.Root>
 
           <Show when={viewports().length > 0}>
             <div class="browser-preview-viewport-controls">
@@ -337,6 +359,23 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         </Switch>
       </div>
     </section>
+  )
+}
+
+function BrowserPreviewCandidateOption(props: Select.SelectRootItemComponentProps<BrowserPreviewCandidate>): JSX.Element {
+  const candidate = () => props.item.rawValue
+  return (
+    <Select.Item
+      item={props.item}
+      class="browser-preview-candidate-option"
+      data-ui="browser-preview-candidate-option"
+      data-target-id={candidate().id}
+    >
+      <Select.ItemLabel>{candidate().url}</Select.ItemLabel>
+      <Select.ItemIndicator class="browser-preview-candidate-indicator">
+        <Icon name="status-completed" size={12} />
+      </Select.ItemIndicator>
+    </Select.Item>
   )
 }
 
