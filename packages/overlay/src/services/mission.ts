@@ -125,6 +125,22 @@ export interface MissionRecord {
   taskStats: MissionTaskStats
 }
 
+export interface MissionPage {
+  records: MissionRecord[]
+  hasMore: boolean
+  cursor: { updated: number; sessionID: string } | null
+}
+
+export function missionPage(records: MissionRecord[], visibleLimit: number): MissionPage {
+  const visible = records.slice(0, visibleLimit)
+  const last = visible.at(-1)
+  return {
+    records: visible,
+    hasMore: records.length > visibleLimit,
+    cursor: last ? { updated: last.updated, sessionID: last.sessionID } : null,
+  }
+}
+
 export interface MissionActionTarget {
   missionID: string
   directory: string

@@ -39,6 +39,7 @@ import {
   abortMission,
   deleteMission,
   renameMission,
+  missionPage,
   type ChannelInfo,
   type ChannelRuntimeStatus,
   type MissionRecord,
@@ -116,6 +117,8 @@ function emptyMissionTaskStats(): MissionTaskStats {
   return { total: 0, queued: 0, active: 0, completed: 0, failed: 0, cancelled: 0 }
 }
 
+const MISSION_LIST_PAGE_SIZE = 10
+
 function aggregateMissionTaskStats(missions: MissionRecord[]): MissionTaskStats {
   return missions.reduce((stats, mission) => {
     stats.total += mission.taskStats.total
@@ -151,6 +154,7 @@ function MissionContent(props: MissionProps) {
   const [composerOpen, setComposerOpen] = createSignal(false)
   const [actionBusy, setActionBusy] = createSignal<string>("")
   const [actionError, setActionError] = createSignal<{ action: string; error: string } | null>(null)
+  const [missionsLoadingMore, setMissionsLoadingMore] = createSignal(false)
   // Channel-restart errors get their own surface so they're visible
   // inside the channel side panel even when no task is selected and
   // the workbench-side actionError block isn't rendered (codex review:
@@ -198,14 +202,16 @@ function MissionContent(props: MissionProps) {
     },
     async (input) => {
       try {
-        return await loadMissions({
+        const records = await loadMissions({
           search: input.search || undefined,
+          limit: MISSION_LIST_PAGE_SIZE + 1,
         })
+        return missionPage(records, MISSION_LIST_PAGE_SIZE)
       } catch (err) {
         throw new Error(errorMessage(err))
       }
     },
-    { initialValue: [] },
+    { initialValue: { records: [], hasMore: false, cursor: null } },
   )
 
   const [channels, channelsCtl] = createResource(
@@ -294,10 +300,10 @@ function MissionContent(props: MissionProps) {
   const selectedMissionRecord = createMemo(() => {
     const selected = selectedMissionSessionID()
     if (!selected) return undefined
-    return (missionRecords() ?? []).find((mission) => mission.sessionID === selected)
+    return (missionRecords()?.records ?? []).find((mission) => mission.sessionID === selected)
   })
   const missionChannelTaskStats = createMemo(
-    () => selectedMissionRecord()?.taskStats ?? aggregateMissionTaskStats(missionRecords() ?? []),
+    () => selectedMissionRecord()?.taskStats ?? aggregateMissionTaskStats(missionRecords()?.records ?? []),
   )
 
   // ── Refresh / actions ──────────────────────────────────────────────
@@ -381,6 +387,35 @@ function MissionContent(props: MissionProps) {
     setMissionRefreshToken((value) => value + 1)
   }
 
+  async function handleMissionLoadMore(): Promise<void> {
+    if (missionsLoadingMore()) return
+    const current = missionRecords()
+    const cursor = current?.cursor
+    if (!current?.hasMore || !cursor) return
+    const search = searchQuery().trim()
+    setMissionsLoadingMore(true)
+    try {
+      const records = await loadMissions({
+        search: search || undefined,
+        limit: MISSION_LIST_PAGE_SIZE + 1,
+        cursorUpdated: cursor.updated,
+        cursorSessionID: cursor.sessionID,
+      })
+      const nextPage = missionPage(records, MISSION_LIST_PAGE_SIZE)
+      const bySession = new Map(current.records.map((mission) => [mission.sessionID, mission]))
+      for (const mission of nextPage.records) bySession.set(mission.sessionID, mission)
+      missionRecordsCtl.mutate({
+        records: [...bySession.values()].sort((a, b) => b.updated - a.updated || b.sessionID.localeCompare(a.sessionID)),
+        hasMore: nextPage.hasMore,
+        cursor: nextPage.cursor,
+      })
+    } catch (err) {
+      reportActionError("load_more", err)
+    } finally {
+      setMissionsLoadingMore(false)
+    }
+  }
+
   const missionLauncherDraftKey = () => {
     const directory = activeProjectDirectory()
     return directory ? composerDraftKey("mission", "new", directory) : composerDraftKey("mission", "new")
@@ -401,7 +436,7 @@ function MissionContent(props: MissionProps) {
     if (searchQuery().trim()) return
     const selected = selectedMissionSessionID()
     if (!selected || missionRecords.loading) return
-    const rows = missionRecords() ?? []
+    const rows = missionRecords()?.records ?? []
     if (!rows.some((mission) => mission.sessionID === selected)) {
       handleCloseMission()
     }
@@ -433,7 +468,7 @@ function MissionContent(props: MissionProps) {
       <div class="mission-body" id="missionBody">
         <Show when={isMissionPage()}>
           <MissionList
-            missions={missionRecords() ?? []}
+            missions={missionRecords()?.records ?? []}
             selectedSessionID={selectedMissionSessionID()}
             loading={missionRecords.loading}
             error={
@@ -450,6 +485,9 @@ function MissionContent(props: MissionProps) {
             onBackToPanel={() => setPageMode("panel")}
             onCreateMission={handleNewMission}
             onRetry={() => void missionRecordsCtl.refetch()}
+            hasMore={missionRecords()?.hasMore}
+            loadingMore={missionsLoadingMore()}
+            onLoadMore={() => void handleMissionLoadMore()}
           />
         </Show>
 

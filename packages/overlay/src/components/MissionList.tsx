@@ -23,6 +23,9 @@ export interface MissionListProps {
   onBackToPanel: () => void
   onCreateMission: () => void
   onRetry: () => void
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
   actionBusy?: string
 }
 
@@ -434,6 +437,21 @@ export function MissionList(props: MissionListProps) {
             )
           }}
         </LedgerList>
+        <Show when={props.hasMore}>
+          <div class="project-group-show-more mission-ledger-load-more">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
+              data-ui="mission-ledger-load-more"
+              disabled={props.loadingMore}
+              onClick={() => props.onLoadMore?.()}
+            >
+              {props.loadingMore ? t("common.loading") : t("acceptance.show_more")}
+            </Button>
+          </div>
+        </Show>
       </div>
     </aside>
   )

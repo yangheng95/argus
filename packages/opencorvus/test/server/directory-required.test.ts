@@ -129,6 +129,58 @@ describe("project-scope middleware: directory required", () => {
     expect(body.tasks.map((item) => item.task.directory).sort()).toEqual(["C:/work/alpha", "C:/work/beta"])
   })
 
+  test("cross-project GET /global/tasks uses a compound cursor for equal updated timestamps", async () => {
+    const now = Date.now()
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: "project-pagination",
+          name: "Pagination",
+          worktree: "C:/work/pagination",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values(
+          ["page-a", "page-b", "page-c"].map((id) => ({
+            id,
+            project_id: "project-pagination",
+            title: `Compound cursor ${id}`,
+            request: id,
+            time_created: now,
+            time_updated: now,
+          })),
+        )
+        .run()
+    })
+
+    const app = Server.App()
+    const first = await app.request("/global/tasks?limit=2&q=Compound%20cursor", { method: "GET" })
+    expect(first.status).toBe(200)
+    const firstBody = (await first.json()) as { tasks: Array<{ task: { id: string; time: { updated: number } } }> }
+    expect(firstBody.tasks.map((item) => item.task.id)).toEqual(["page-c", "page-b"])
+
+    const cursor = firstBody.tasks.at(-1)!.task
+    const next = await app.request(
+      `/global/tasks?limit=2&q=Compound%20cursor&cursor=${cursor.time.updated}&cursorTaskID=${cursor.id}`,
+      {
+        method: "GET",
+      },
+    )
+    expect(next.status).toBe(200)
+    const nextBody = (await next.json()) as { tasks: Array<{ task: { id: string } }> }
+    expect(nextBody.tasks.map((item) => item.task.id)).toEqual(["page-a"])
+  })
+
+  test("cross-project GET /global/tasks rejects incomplete compound cursor query", async () => {
+    const app = Server.App()
+    const response = await app.request("/global/tasks?cursor=100", { method: "GET" })
+    expect(response.status).toBeGreaterThanOrEqual(400)
+    expect(response.status).toBeLessThan(500)
+  })
+
   test("cross-project DELETE /auth/:providerID works without ?directory=", async () => {
     const app = Server.App()
     const response = await app.request("/auth/test-provider", { method: "DELETE" })

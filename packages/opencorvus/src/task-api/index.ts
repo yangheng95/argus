@@ -1229,10 +1229,12 @@ export namespace EngineService {
     status?: string
     directory?: string
     cursor?: number
+    cursorTaskID?: string
   }) {
     const rows = listGlobalTasks({
       directory: opts?.directory,
       cursor: opts?.cursor,
+      cursorTaskID: opts?.cursorTaskID,
       query: opts?.query,
       status: opts?.status,
       limit: opts?.limit ?? 100,
