@@ -59,13 +59,6 @@ function currentTaskSessionID(): string {
   )
 }
 
-function selectedTaskStatus(): string {
-  const taskID = activeTaskID()
-  if (!taskID) return ""
-  if (boardStore.board?.task?.id === taskID) return String(boardStore.board.task.status || "")
-  return String(boardStore.tasks.find((item: any) => item?.task?.id === taskID)?.task?.status || "")
-}
-
 export function classifyPanelMessageTarget(input: {
   selectedTaskID?: string
   boardTaskID?: string
@@ -154,7 +147,6 @@ export function panelResultNavigates(result: any): boolean {
 export function canComposeChat(): boolean {
   if (!appStore.connected) return false
   if (activeSessionID()) return true
-  if (selectedTaskStatus() === "cancelled") return false
   // Derive workspace mode from store state.
   // "task" mode: a task is selected.
   // "empty" mode: no task selected, no session-only workspace.

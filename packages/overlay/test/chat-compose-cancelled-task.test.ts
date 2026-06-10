@@ -11,11 +11,11 @@ beforeEach(() => {
 })
 
 describe("canComposeChat task terminal states", () => {
-  test("cancelled tasks disable task-level compose because retry is the continuation path", () => {
+  test("cancelled tasks remain composeable for same-task operator follow-up", () => {
     setBoardStore("selectedSource", { kind: "task", id: "tsk_cancelled" })
     setBoardStore("tasks", [{ task: { id: "tsk_cancelled", status: "cancelled" }, pending_interactions: 0 }])
 
-    expect(canComposeChat()).toBe(false)
+    expect(canComposeChat()).toBe(true)
   })
 
   test("failed and completed tasks remain composeable for operator-message reopen", () => {

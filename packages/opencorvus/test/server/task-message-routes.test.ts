@@ -474,24 +474,25 @@ describe("task message routes", () => {
           }),
         })
 
-        expect(response.status).toBe(409)
-        const body = (await response.json()) as { name: string; data: { taskID: string; message: string } }
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(body.name).toBe("TaskCancelledMessageError")
-        expect(body.data.taskID).toBe(taskID)
-        expect(body.data.message).toContain("retry the task")
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
-        expect(await Session.messages({ sessionID: root.id })).toHaveLength(1)
+        expect(body.kind).toBe("note")
+        expect(body.should_resume).toBe(true)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(2)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row?.time_completed).toBeNull()
+        expect(row?.error).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
-        expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBe(true)
+        expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBeUndefined()
       },
     })
   })
 
-  test("POST /task/:taskID/message rejects a cancelled task without appending a user message", async () => {
+  test("POST /task/:taskID/message accepts a cancelled task and requeues it with the operator message", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -537,20 +538,19 @@ describe("task message routes", () => {
           }),
         })
 
-        expect(response.status).toBe(409)
-        const body = (await response.json()) as { name: string; data: { taskID: string; message: string } }
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(body.name).toBe("TaskCancelledMessageError")
-        expect(body.data.taskID).toBe(taskID)
-        expect(body.data.message).toContain("retry the task")
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
-        expect(await Session.messages({ sessionID: root.id })).toHaveLength(1)
+        expect(body.kind).toBe("note")
+        expect(body.should_resume).toBe(true)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(2)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
-        expect(row?.time_completed).not.toBeNull()
-        expect(row?.error).toBe("task cancelled")
-        expect((row?.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBe(true)
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row?.time_completed).toBeNull()
+        expect(row?.error).toBeNull()
+        expect((row?.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBeUndefined()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })

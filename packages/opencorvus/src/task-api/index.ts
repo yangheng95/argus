@@ -149,14 +149,6 @@ import { withTaskCreationOwnerLock } from "@/engine/task-creation-owner"
 
 const log = Log.create({ service: "assistant" })
 
-export const TaskCancelledMessageError = NamedError.create(
-  "TaskCancelledMessageError",
-  z.object({
-    message: z.string(),
-    taskID: z.string(),
-  }),
-)
-
 export const TaskEmptyMessageError = NamedError.create(
   "TaskEmptyMessageError",
   z.object({
@@ -458,7 +450,9 @@ async function appendAndWakeTaskOperatorMessage(input: {
     ? await reopenCompletedTaskFromOperatorMessage(task)
     : isTaskFailed(task)
       ? await reopenFailedTaskFromOperatorMessage(task)
-      : task
+      : isTaskCancelled(task)
+        ? await reopenCancelledTaskFromOperatorMessage(task)
+        : task
   await reopenActiveRunForOperatorWake(wakeTask)
 
   void dispatchTaskLoop({
@@ -484,12 +478,6 @@ async function appendAndWakeTaskOperatorMessage(input: {
 }
 
 function assertTaskOperatorMessageAccepted(task: TaskRow, text: string, attachments: readonly unknown[] = []) {
-  if (isTaskCancelled(task)) {
-    throw new TaskCancelledMessageError({
-      message: `Task ${task.id} is cancelled and cannot accept task-level messages; retry the task before sending more input.`,
-      taskID: task.id,
-    })
-  }
   if (text.trim().length === 0 && attachments.length === 0) {
     throw new TaskEmptyMessageError({
       message: `Task ${task.id} cannot accept an empty task-level message.`,
@@ -505,6 +493,15 @@ async function reopenFailedTaskFromOperatorMessage(task: TaskRow): Promise<TaskR
       : {}
   delete metadata.cancelled
   return updateTask(task, { status: "queued", error: null, metadata }, "Operator message reopened failed task")
+}
+
+async function reopenCancelledTaskFromOperatorMessage(task: TaskRow): Promise<TaskRow> {
+  const metadata =
+    task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+      ? { ...(task.metadata as Record<string, unknown>) }
+      : {}
+  delete metadata.cancelled
+  return updateTask(task, { status: "queued", error: null, metadata }, "Operator message reopened cancelled task")
 }
 
 async function reopenCompletedTaskFromOperatorMessage(task: TaskRow): Promise<TaskRow> {
