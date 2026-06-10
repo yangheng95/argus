@@ -286,6 +286,9 @@ function selectLeftActivity(activity: LeftActivity): void {
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
   setCenterWorkbenchPanels((current) => (current.includes(panel) ? current : [...current, panel]))
   if (panel !== "file") setSelectedRightActivity(panel)
+  queueMicrotask(() => {
+    getCenterWorkbenchViews()[panel]?.scrollIntoView({ block: "nearest", inline: "nearest" })
+  })
 }
 
 function closeCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
@@ -1273,7 +1276,6 @@ if (boardMountEl) {
   )
 }
 
-
 // ── Mount: LogViewer (renders its own <dialog id="logDialog">) ──
 
 const logViewerEl = document.getElementById("solidLogViewer")
@@ -1466,6 +1468,7 @@ disposers.push(
       if (notificationsTitle) notificationsTitle.textContent = t("notify.center_label")
       if (inspectorBody) inspectorBody.dataset.active = String(panels.includes("inspector"))
       if (notificationsBody) notificationsBody.dataset.active = String(panels.includes("notifications"))
+      document.body.dataset.notificationsPanelOpen = String(panels.includes("notifications"))
     })
 
     createEffect(() => {

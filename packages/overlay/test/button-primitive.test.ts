@@ -80,6 +80,13 @@ test("Button mini size owns the retired compact-button padding contract", () => 
   expect(css).toMatch(/\.oc-button\[data-size="mini"\]\s*\{[^}]*font-size:\s*var\(--ui-font-small\);/s)
 })
 
+test("Button primitive size owns actual control height, not only minimum height", () => {
+  const css = readFileSync(BUTTON_CSS, "utf8")
+
+  expect(css).toMatch(/\.oc-button\s*\{[^}]*height:\s*var\(--oc-button-height\);/s)
+  expect(css).toMatch(/\.oc-button\s*\{[^}]*min-height:\s*var\(--oc-button-height\);/s)
+})
+
 test("Button primitive owns the canonical keyboard focus ring", () => {
   const css = readFileSync(BUTTON_CSS, "utf8")
 

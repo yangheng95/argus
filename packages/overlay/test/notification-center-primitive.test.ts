@@ -33,6 +33,12 @@ test("NotificationCenter exposes a copy control whenever details exist", () => {
   expect(copyIndex).toBeLessThan(detailsBodyIndex)
 })
 
+test("NotificationCenter details actions wrap inside narrow panels", () => {
+  expect(STYLES).toMatch(/\.app-notification__details-actions\s*\{[\s\S]*min-width:\s*0;/)
+  expect(STYLES).toMatch(/\.app-notification__details-actions\s*\{[\s\S]*flex-wrap:\s*wrap;/)
+  expect(STYLES).toMatch(/\.app-notification__details-actions \.oc-button\s*\{[\s\S]*max-width:\s*100%;/)
+})
+
 test("NotificationCenter separates toast visibility from task-grouped panel history", () => {
   expect(SOURCE).toContain('type NotificationSurface = "toast" | "panel"')
   expect(SOURCE).toContain("visibleNotificationItems()")
@@ -77,6 +83,14 @@ test("main keeps the early toast root and App owns the workbench notification ce
   expect(MAIN).toContain('icon: "notifications"')
   expect(MAIN).toContain('labelKey: "notify.center_label"')
   expect(MAIN).toContain('notifications: document.getElementById("centerWorkbenchNotifications")')
+})
+
+test("toast surface is hidden while the notification panel is open", () => {
+  expect(MAIN).toContain("document.body.dataset.notificationsPanelOpen")
+  expect(STYLES).toContain('body[data-notifications-panel-open="true"] .app-notifications[data-surface="toast"]')
+  expect(STYLES).toMatch(
+    /body\[data-notifications-panel-open="true"\] \.app-notifications\[data-surface="toast"\]\s*\{[\s\S]*display:\s*none;/,
+  )
 })
 
 test("foregrounding the overlay recomputes the notification projection", () => {

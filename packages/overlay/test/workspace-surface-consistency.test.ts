@@ -25,3 +25,11 @@ test("workspace panels share a neutral surface family", () => {
   expect(emptyBody).toContain("color-mix(in srgb, var(--surface-inset) 92%, transparent)")
   expect(WORKSPACE_CSS).not.toContain("file-view")
 })
+
+test("compact center workbench scrolls open panels instead of crushing them", () => {
+  expect(WORKSPACE_CSS).toContain("@media (max-width: 1120px)")
+  expect(WORKSPACE_CSS).toContain(".center-workbench-body {\n    overflow-x: auto;")
+  expect(WORKSPACE_CSS).toContain("overscroll-behavior-x: contain;")
+  expect(WORKSPACE_CSS).toContain('.center-workbench-view[data-open="true"]')
+  expect(WORKSPACE_CSS).toContain("max(calc(280px * var(--ui-scale)), calc(50vw))")
+})

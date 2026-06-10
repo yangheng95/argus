@@ -779,6 +779,16 @@ body[data-resizing="true"] .pane-resizer::after {
     border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
   }
 
+  .center-workbench-body {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+  }
+
+  .center-workbench-view[data-open="true"] {
+    flex: 0 0 min(100%, max(calc(280px * var(--ui-scale)), calc(50vw)));
+  }
+
   .center-workbench-resizer {
     flex: 0 0 var(--ui-resizer-width);
     width: 100%;

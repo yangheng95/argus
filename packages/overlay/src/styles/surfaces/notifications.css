@@ -14,6 +14,10 @@
   pointer-events: none;
 }
 
+body[data-notifications-panel-open="true"] .app-notifications[data-surface="toast"] {
+  display: none;
+}
+
 .app-notifications[data-surface="panel"] {
   position: relative;
   min-height: 0;
@@ -228,9 +232,16 @@
 }
 
 .app-notification__details-actions {
+  min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   gap: calc(6px * var(--ui-scale));
   align-items: center;
+}
+
+.app-notification__details-actions .oc-button {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .app-notification__details-body {
