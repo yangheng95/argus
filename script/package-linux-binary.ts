@@ -4,8 +4,8 @@
  *
  * This script must run on a Linux x64 host, including WSL. It builds the
  * overlay UI (User Interface), generates a temporary Bun file-embedding
- * module, compiles the native and baseline Linux CLI executables, then removes
- * obsolete sidecar UI directories from the output.
+ * module, compiles the native and baseline Linux overlay-server executables,
+ * then removes obsolete sidecar UI directories from the output.
  *
  * Output:
  *   packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus
@@ -61,7 +61,7 @@ export function resolveLinuxBinaryArtifacts(repoRoot: string): LinuxBinaryArtifa
   const outputDir = path.join(opencorvusDist, "binary")
   return LINUX_BINARY_TARGETS.map((target) => ({
     target,
-    source: path.join(opencorvusDist, target.distDirName, "opencorvus"),
+    source: path.join(opencorvusDist, `opencorvus-overlay-server-${target.distDirName.replace(/^opencorvus-/, "")}`, "opencorvus"),
     output: path.join(outputDir, target.outputName, "opencorvus"),
     bundleDir: path.join(outputDir, target.outputName),
   }))
@@ -254,7 +254,7 @@ export async function packageLinuxBinary(
     }
 
     if (!opts.skipBuild) {
-      await $`bun run script/build.ts --single --baseline`.cwd(opencorvusRoot).env(env)
+      await $`bun run script/build.ts --overlay-server --single --baseline`.cwd(opencorvusRoot).env(env)
     }
   } finally {
     if (embeddedUiModuleWritten) {

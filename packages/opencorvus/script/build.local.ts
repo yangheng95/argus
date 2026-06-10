@@ -25,6 +25,7 @@ import {
 } from "./build-artifact"
 import { detectArtifactNodeRuntimeHost } from "./build-host-runtime"
 import { copyRuntimeNodeModules } from "./build-runtime-node-modules"
+import { cleanBuildDist } from "./build-clean"
 
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 const modelsSnapshotPath = path.join(dir, "src/provider/models-snapshot.ts")
@@ -222,7 +223,7 @@ const targets = single
     })
   : allTargets
 
-await $`rm -rf dist`
+await cleanBuildDist(path.join(dir, "dist"))
 
 const binaries: Record<string, string> = {}
 let windowsSupervisorHelper: string | undefined
