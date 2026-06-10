@@ -13,13 +13,14 @@ function namedErrorSchema(name: string) {
   )
 }
 
-function namedErrorUnionSchema(first: string, second: string, ...rest: string[]) {
+function namedErrorUnionSchema(first: string, ...rest: string[]) {
   const branch = (name: string) =>
     z.object({
       name: z.literal(name),
       data: z.record(z.string(), z.any()),
     })
-  return resolver(z.union([branch(first), branch(second), ...rest.map(branch)]))
+  if (rest.length === 0) return resolver(branch(first))
+  return resolver(z.union([branch(first), ...rest.map(branch)]))
 }
 
 /** Reply route 400 — three NamedError subclasses can land here. The
@@ -70,7 +71,7 @@ export const ERRORS = {
     description: "Conflict",
     content: {
       "application/json": {
-        schema: namedErrorUnionSchema("ReplyTargetEnvelopeMissingError", "TaskCancelledMessageError"),
+        schema: namedErrorUnionSchema("ReplyTargetEnvelopeMissingError"),
       },
     },
   },

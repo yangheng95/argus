@@ -58,7 +58,6 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
       else if (err.name === "ChildSessionConfigError") status = 400
       else if (err.name === "WorktreeNotGitError") status = 412
       else if (err.name.startsWith("Worktree")) status = 400
-      else if (err.name === "TaskCancelledMessageError") status = 409
       else if (err.name === "TaskEmptyMessageError") status = 400
       else if (err.name === "PtyCreateFailedError") status = 400
       else status = 500
@@ -187,20 +186,6 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       400,
       "PtyCreateFailedError",
-    )
-  })
-
-  test("TaskCancelledMessageError maps to 409", async () => {
-    const TaskCancelledMessageError = NamedError.create(
-      "TaskCancelledMessageError",
-      z.object({ message: z.string(), taskID: z.string() }),
-    )
-    await expectMapping(
-      () => {
-        throw new TaskCancelledMessageError({ message: "retry first", taskID: "task_cancelled" })
-      },
-      409,
-      "TaskCancelledMessageError",
     )
   })
 
