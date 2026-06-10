@@ -49,6 +49,96 @@ function canAppendForegroundLifecycleHint(output: string) {
   return lineCount < Truncate.MAX_LINES
 }
 
+const FRONTEND_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "bun", "yarn"])
+const FRONTEND_EXEC_COMMANDS = new Set(["npx", "bunx"])
+const PACKAGE_MANAGER_EXEC_SUBCOMMANDS = new Set(["exec", "dlx", "x"])
+const FRONTEND_SERVER_SCRIPTS = new Set(["dev", "start", "serve", "preview"])
+const DIRECT_FRONTEND_SERVER_COMMANDS = new Set([
+  "astro",
+  "next",
+  "nuxt",
+  "remix",
+  "svelte-kit",
+  "vite",
+  "vitepress",
+  "webpack-dev-server",
+])
+const DIRECT_FRONTEND_SERVE_ONLY_COMMANDS = new Set(["angular", "ng"])
+const DIRECT_FRONTEND_NON_SERVER_SUBCOMMANDS = new Set(["build", "check", "info", "lint", "test", "typecheck"])
+const DIRECT_FRONTEND_INFORMATION_FLAGS = new Set(["--help", "--version", "-h", "-v"])
+const OPTION_TAKES_VALUE = new Set([
+  "-c",
+  "-C",
+  "-w",
+  "--cwd",
+  "--dir",
+  "--filter",
+  "--prefix",
+  "--scope",
+  "--workspace",
+])
+
+function normalizeCommandToken(value: string) {
+  const stripped = stripShellQuotes(value).split(/[\\/]/).pop() ?? ""
+  return stripped.replace(/\.(?:cmd|exe|ps1)$/i, "").toLowerCase()
+}
+
+function firstCommandArgumentIndex(tokens: string[], start: number) {
+  for (let index = start; index < tokens.length; index++) {
+    const token = tokens[index]
+    if (!token || token === "--") continue
+    if (!token.startsWith("-")) return index
+    const normalized = normalizeCommandToken(token)
+    if (!token.includes("=") && OPTION_TAKES_VALUE.has(normalized)) index++
+  }
+  return -1
+}
+
+function commandArgument(tokens: string[], start: number) {
+  const index = firstCommandArgumentIndex(tokens, start)
+  return index === -1 ? undefined : normalizeCommandToken(tokens[index])
+}
+
+function isDirectFrontendServerCommand(tokens: string[]) {
+  const executable = normalizeCommandToken(tokens[0] ?? "")
+  if (!executable) return false
+  if (tokens.slice(1).some((token) => DIRECT_FRONTEND_INFORMATION_FLAGS.has(normalizeCommandToken(token)))) return false
+  const subcommand = commandArgument(tokens, 1)
+  if (DIRECT_FRONTEND_SERVE_ONLY_COMMANDS.has(executable)) return subcommand === "serve"
+  if (!DIRECT_FRONTEND_SERVER_COMMANDS.has(executable)) return false
+  if (!subcommand) return true
+  return !DIRECT_FRONTEND_NON_SERVER_SUBCOMMANDS.has(subcommand)
+}
+
+function isFrontendLifecycleHintCommand(tokens: string[]) {
+  const executable = normalizeCommandToken(tokens[0] ?? "")
+  if (!executable) return false
+
+  if (FRONTEND_EXEC_COMMANDS.has(executable)) {
+    const targetIndex = firstCommandArgumentIndex(tokens, 1)
+    return targetIndex !== -1 && isDirectFrontendServerCommand(tokens.slice(targetIndex))
+  }
+
+  if (isDirectFrontendServerCommand(tokens)) return true
+  if (!FRONTEND_PACKAGE_MANAGERS.has(executable)) return false
+
+  const subcommandIndex = firstCommandArgumentIndex(tokens, 1)
+  if (subcommandIndex === -1) return false
+  const subcommand = normalizeCommandToken(tokens[subcommandIndex])
+
+  if (subcommand === "run") {
+    const script = commandArgument(tokens, subcommandIndex + 1)
+    return script !== undefined && FRONTEND_SERVER_SCRIPTS.has(script)
+  }
+
+  if (PACKAGE_MANAGER_EXEC_SUBCOMMANDS.has(subcommand)) {
+    const targetIndex = firstCommandArgumentIndex(tokens, subcommandIndex + 1)
+    return targetIndex !== -1 && isDirectFrontendServerCommand(tokens.slice(targetIndex))
+  }
+
+  return FRONTEND_SERVER_SCRIPTS.has(subcommand)
+}
+
 // Commands that kill processes by name — can destroy the host process (benchmark,
 // server, other executors) when run inside an isolated worktree. Worktree isolation
 // protects the filesystem but NOT the process namespace.
@@ -221,6 +311,7 @@ export const BashTool = Tool.define("bash", async () => {
       if (!Instance.containsPath(cwd)) directories.add(cwd)
       const patterns = new Set<string>()
       const always = new Set<string>()
+      let shouldAppendForegroundLifecycleHint = false
 
       const tree = await parser().then((p) => p.parse(params.command))
       if (!tree) {
@@ -247,6 +338,10 @@ export const BashTool = Tool.define("bash", async () => {
               continue
             }
             command.push(child.text)
+          }
+
+          if (isFrontendLifecycleHintCommand(command)) {
+            shouldAppendForegroundLifecycleHint = true
           }
 
           // not an exhaustive list, but covers most common cases
@@ -435,7 +530,7 @@ export const BashTool = Tool.define("bash", async () => {
 
       const resultMetadata: string[] = []
 
-      if (canAppendForegroundLifecycleHint(output)) {
+      if (shouldAppendForegroundLifecycleHint && canAppendForegroundLifecycleHint(output)) {
         resultMetadata.push(...foregroundLifecycleHint(timeout))
       }
 
