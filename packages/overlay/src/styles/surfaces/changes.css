@@ -195,7 +195,6 @@
   width: calc(13px * var(--ui-scale));
   height: calc(13px * var(--ui-scale));
   margin: 0;
-  accent-color: var(--accent);
 }
 
 .changes-list {

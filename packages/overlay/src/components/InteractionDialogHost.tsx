@@ -1,9 +1,10 @@
 // ── InteractionDialogHost ──
-// Pops the oldest pending permission/question interaction into a modal so the
-// user never has to hunt for the answer surface inside the conversation
-// timeline or workflow sidebar. The inline <InteractionCard> still renders in
-// both surfaces as the persistent record; replies funnel through the same
-// services/interaction-reply mutex, so submitting in either surface is safe.
+// Pops the oldest pending permission/question interaction into a dismissible
+// overlay so the user never has to hunt for the answer surface inside the
+// conversation timeline or workflow sidebar. The inline <InteractionCard>
+// still renders in both surfaces as the persistent record; replies funnel
+// through the same services/interaction-reply mutex, so submitting in either
+// surface is safe.
 //
 // Behavior:
 //   • Reactively reads boardStore.board.interactions, picks the oldest pending
@@ -48,6 +49,7 @@ export function InteractionDialogHost() {
       id="interactionDialog"
       open={current() !== null}
       backdropClose={true}
+      modal={false}
       title={<span>{titleText()}</span>}
       formClass="interaction-dialog-form"
       onClose={() => {
