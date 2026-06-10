@@ -84,6 +84,16 @@ describe("app/session dialog single source", () => {
     expect(configHost).toContain('id="btnCloseConfigDialog"')
   })
 
+  test("app dialog select input delegates listbox semantics to Kobalte", () => {
+    expect(appHost).toContain('import * as Select from "@kobalte/core/select"')
+    expect(appHost).toContain("<Select.Root<AppDialogSelectOption>")
+    expect(appHost).toContain("<Select.Trigger")
+    expect(appHost).toContain("<Select.HiddenSelect")
+    expect(appHost).toContain("function AppDialogSelectOptionItem")
+    expect(appHost).not.toContain("<select")
+    expect(appHost).not.toContain("<option")
+  })
+
   test("config dialog mounts only the active settings tab body", () => {
     expect(configHost).toContain("<Show when={dialogStore.config.open}>")
     expect(configHost).toContain("renderActivePanel")
