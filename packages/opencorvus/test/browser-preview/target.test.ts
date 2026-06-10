@@ -3,7 +3,11 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { extractBrowserPreviewUrlFromText, extractBrowserPreviewUrlsFromText } from "../../src/browser-preview/extract"
+import {
+  createBrowserPreviewProcessOutputMaterializer,
+  extractBrowserPreviewUrlFromText,
+  extractBrowserPreviewUrlsFromText,
+} from "../../src/browser-preview/extract"
 import { findRecentBrowserPreviewTargets, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { Tool } from "../../src/tool/tool"
@@ -148,6 +152,26 @@ describe("browser preview target resolver", () => {
     } finally {
       preview.stop(true)
     }
+  })
+
+  test("streaming process output materializer persists URLs split across chunks once", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const materializer = createBrowserPreviewProcessOutputMaterializer({
+      taskID,
+      probe: async () => true,
+    })
+
+    expect(await materializer.ingest("dev server ready at http://127.0.")).toEqual([])
+    const persisted = await materializer.ingest("0.1:5173/app\n")
+    await materializer.flush()
+    await materializer.ingest("again http://127.0.0.1:5173/app\n")
+    await materializer.flush()
+
+    expect(persisted.map((target) => target.url)).toEqual(["http://127.0.0.1:5173/app"])
+    expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([
+      "http://127.0.0.1:5173/app",
+    ])
   })
 
   test("persisting a preview target emits a task update event for overlay refresh", async () => {
