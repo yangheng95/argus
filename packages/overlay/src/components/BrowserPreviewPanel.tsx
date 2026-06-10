@@ -76,7 +76,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const targetUrl = createMemo(() => currentTarget()?.url)
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
     const verified = verification()
-    if (verified) return evidenceFromVerification(verified, viewportID())
+    const request = verificationRequest()
+    if (verified && request) {
+      return evidenceFromVerification(verified, viewportID(), {
+        taskID: request.taskID,
+        targetID: request.targetID,
+      })
+    }
     return latestEvidence()
   })
 
@@ -411,14 +417,15 @@ function emptyMessage(status: string): string {
 function evidenceFromVerification(
   input: ReturnType<typeof captureTaskBrowserPreviewEvidence> extends Promise<infer T> ? T : never,
   viewportID: BrowserPreviewViewportID,
+  scope: { taskID: string; targetID: string },
 ): BrowserPreviewEvidence {
   const capture = input.captures[viewportID]
   const evidenceID = input.evidenceIDs[viewportID]
   const summary = capture?.summary ?? input.diagnostics.join(" ")
   return {
-    id: evidenceID ?? `${input.target.id ?? "target"}:${viewportID}`,
-    taskID: input.target.taskID ?? "",
-    targetID: input.target.id ?? "",
+    id: evidenceID ?? `${scope.targetID}:${viewportID}`,
+    taskID: scope.taskID,
+    targetID: scope.targetID,
     viewportID,
     status: capture?.captured && capture.passed ? "passed" : "failed",
     summary,
