@@ -177,6 +177,34 @@ export function ImagePreviewHost() {
     applyScale(scale() + delta)
   }
 
+  async function fetchPreviewImageBlob(): Promise<Blob | undefined> {
+    const src = imagePreviewState().src
+    if (!src) return undefined
+    const response = await fetch(src)
+    if (!response.ok) throw new Error(`Image copy failed: fetch returned ${response.status}`)
+    const blob = await response.blob()
+    if (blob.type === "image/png") return blob
+    return undefined
+  }
+
+  async function canvasPreviewImageBlob(image: HTMLImageElement): Promise<Blob> {
+    const canvas = document.createElement("canvas")
+    canvas.width = image.naturalWidth || image.width
+    canvas.height = image.naturalHeight || image.height
+    const context = canvas.getContext("2d")
+    if (!context) throw new Error("Image copy failed: canvas context unavailable")
+    context.drawImage(image, 0, 0)
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((nextBlob) => {
+        if (!nextBlob) {
+          reject(new Error("Image copy failed: canvas blob unavailable"))
+          return
+        }
+        resolve(nextBlob)
+      }, "image/png")
+    })
+  }
+
   async function copyPreviewImage(): Promise<void> {
     const image = imageRef
     const clipboardWrite = navigator.clipboard?.write
@@ -184,21 +212,7 @@ export function ImagePreviewHost() {
 
     setCopyInFlight(true)
     try {
-      const canvas = document.createElement("canvas")
-      canvas.width = image.naturalWidth || image.width
-      canvas.height = image.naturalHeight || image.height
-      const context = canvas.getContext("2d")
-      if (!context) throw new Error("Image copy failed: canvas context unavailable")
-      context.drawImage(image, 0, 0)
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((nextBlob) => {
-          if (!nextBlob) {
-            reject(new Error("Image copy failed: canvas blob unavailable"))
-            return
-          }
-          resolve(nextBlob)
-        }, "image/png")
-      })
+      const blob = (await fetchPreviewImageBlob().catch(() => undefined)) ?? (await canvasPreviewImageBlob(image))
       await clipboardWrite.call(navigator.clipboard, [new ClipboardItem({ "image/png": blob })])
     } catch (error) {
       console.error("[image-preview] copy image failed", error)

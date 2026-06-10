@@ -102,8 +102,10 @@ describe("message image preview", () => {
     expect(component).toContain("calculateImagePreviewFitScale")
     expect(component).toContain("onPointerDown={startPan}")
     expect(component).toContain("onWheel={handleWheel}")
-    expect(form).toContain("width: calc(100vw - calc(16px * var(--ui-scale)));")
-    expect(form).toContain("height: calc(100vh - calc(16px * var(--ui-scale)));")
+    expect(form).toContain("width: min(calc(1040px * var(--ui-scale)), calc(100vw - calc(72px * var(--ui-scale))));")
+    expect(form).toContain("height: min(calc(760px * var(--ui-scale)), calc(78vh));")
+    expect(form).toContain("max-height: calc(100vh - calc(72px * var(--ui-scale)));")
+    expect(form).not.toContain("width: calc(100vw - calc(16px * var(--ui-scale)));")
     expect(body).toContain("overflow: auto;")
     expect(body).toContain("cursor: grab;")
     expect(body).toContain("scrollbar-gutter: stable both-edges;")
@@ -115,12 +117,15 @@ describe("message image preview", () => {
     expect(image).not.toContain("transform: scale")
   })
 
-  test("modal preview copies image bytes instead of the image url", () => {
+  test("modal preview copies fetched image bytes instead of the image url", () => {
     const component = read("src/components/ImagePreview.tsx")
 
     expect(component).toContain("navigator.clipboard?.write")
     expect(component).not.toContain("navigator.clipboard?.writeText")
-    expect(component).toContain('canvas.toBlob')
+    expect(component).toContain("fetchPreviewImageBlob")
+    expect(component).toContain("fetch(src)")
+    expect(component).toContain("canvasPreviewImageBlob")
+    expect(component).toContain("canvas.toBlob")
     expect(component).toContain('"image/png"')
     expect(component).toContain("new ClipboardItem")
     expect(component).toContain("onClick={() => void copyPreviewImage()}")

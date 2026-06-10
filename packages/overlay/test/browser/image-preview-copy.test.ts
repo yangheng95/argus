@@ -130,7 +130,11 @@ test(
       if (path === `/task/${taskID}/operator-model-context`) return send({ selected: null, candidates: [] })
       if (path === `/task/${taskID}/browser-preview`) return send({ status: "missing", diagnostics: [] })
       if (path === "/log" && req.method === "POST") return send({ ok: true })
-      if (path === "/task/events" || path === `/task/${taskID}/events` || path === `/task/${taskID}/conversation/events`) {
+      if (
+        path === "/task/events" ||
+        path === `/task/${taskID}/events` ||
+        path === `/task/${taskID}/conversation/events`
+      ) {
         return eventStream()
       }
       if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
@@ -201,6 +205,7 @@ test(
 
     try {
       const page = await browser.newPage()
+      await page.setViewportSize({ width: 1280, height: 800 })
       page.on("pageerror", (error) => {
         errors.push(`pageerror: ${error.message}`)
       })
@@ -216,10 +221,19 @@ test(
       })
       await page.evaluateOnNewDocument((serverUrl) => {
         ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
-        const state = { writes: [] as string[][] }
+        const state = { writes: [] as string[][], fetches: [] as string[] }
         Object.defineProperty(window, "__imageCopyTest", {
           configurable: true,
           value: state,
+        })
+        const realFetch = window.fetch.bind(window)
+        Object.defineProperty(window, "fetch", {
+          configurable: true,
+          value: async (input: RequestInfo | URL, init?: RequestInit) => {
+            const value = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
+            if (value.includes("/attachment/project/tiny.png")) state.fetches.push(value)
+            return realFetch(input, init)
+          },
         })
         Object.defineProperty(navigator, "clipboard", {
           configurable: true,
@@ -296,17 +310,42 @@ test(
         const image = document.querySelector<HTMLImageElement>(".image-preview-dialog__image")
         return Boolean(image?.complete && image.naturalWidth > 0)
       })
+      const dialogMetrics = await page.evaluate(() => {
+        const form = document.querySelector<HTMLElement>(".image-preview-dialog__form")
+        if (!form) throw new Error("image preview dialog form missing")
+        const rect = form.getBoundingClientRect()
+        return {
+          width: rect.width,
+          height: rect.height,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        }
+      })
+      assert.ok(
+        dialogMetrics.viewportWidth - dialogMetrics.width >= 72,
+        `expected horizontal backdrop close area, got ${JSON.stringify(dialogMetrics)}`,
+      )
+      assert.ok(
+        dialogMetrics.viewportHeight - dialogMetrics.height >= 72,
+        `expected vertical backdrop close area, got ${JSON.stringify(dialogMetrics)}`,
+      )
       await page.click('button[aria-label="Copy image"]')
       await page.waitForFunction(() => {
-        const state = (window as typeof window & { __imageCopyTest?: { writes: string[][] } }).__imageCopyTest
+        const state = (window as typeof window & { __imageCopyTest?: { writes: string[][]; fetches: string[] } })
+          .__imageCopyTest
         return (state?.writes.length ?? 0) > 0
       })
 
       const writes = await page.evaluate(() => {
-        const state = (window as typeof window & { __imageCopyTest: { writes: string[][] } }).__imageCopyTest
-        return state.writes
+        const state = (window as typeof window & { __imageCopyTest: { writes: string[][]; fetches: string[] } })
+          .__imageCopyTest
+        return { writes: state.writes, fetches: state.fetches }
       })
-      assert.deepEqual(writes, [["image/png"]])
+      assert.deepEqual(writes.writes, [["image/png"]])
+      assert.ok(
+        writes.fetches.some((value) => value.includes("/attachment/project/tiny.png")),
+        `expected copy to fetch screenshot bytes, got ${JSON.stringify(writes.fetches)}`,
+      )
       assert.deepEqual(errors, [])
     } finally {
       await browser.close().catch(() => undefined)
