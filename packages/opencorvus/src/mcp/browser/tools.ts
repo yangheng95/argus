@@ -145,14 +145,47 @@ const failJson = <T extends Record<string, unknown>>(data: T) => ({
   structuredContent: data,
 })
 
-// 图片响应：content 放 image 类型（LLM 可视化）+ 原始尺寸文本（防止模型压缩图片后坐标失准），structuredContent 放 base64 数据（script.ts 可编程访问）
-const okImage = (base64: string, width: number, height: number) => ({
-  content: [
-    { type: "image" as const, data: base64, mimeType: "image/png" as const },
-    { type: "text" as const, text: `screenshot size: ${width}x${height}` },
-  ],
-  structuredContent: { data: base64, mimeType: "image/png", width, height },
+const SCREENSHOT_MODEL_PIXEL_BUDGET = 1_048_576
+const SCREENSHOT_COMPRESSION_WARNING_RATIO = 2
+
+const screenshotPixelSummarySchema = z.object({
+  currentPixels: z.number(),
+  compressedPixels: z.number(),
+  compressionRatio: z.number(),
+  preferPartialScreenshot: z.boolean(),
+  text: z.string(),
 })
+
+type ScreenshotPixelSummary = z.infer<typeof screenshotPixelSummarySchema>
+
+export const screenshotPixelSummary = (width: number, height: number): ScreenshotPixelSummary => {
+  const currentPixels = width * height
+  const compressedPixels = Math.min(currentPixels, SCREENSHOT_MODEL_PIXEL_BUDGET)
+  const compressionRatio = compressedPixels > 0 ? Number((currentPixels / compressedPixels).toFixed(2)) : 1
+  const preferPartialScreenshot = compressionRatio >= SCREENSHOT_COMPRESSION_WARNING_RATIO
+  return {
+    currentPixels,
+    compressedPixels,
+    compressionRatio,
+    preferPartialScreenshot,
+    text:
+      `当前像素: ${currentPixels} (${width}x${height}); 压缩后像素: ${compressedPixels}; ` +
+      `压缩率: ${compressionRatio.toFixed(2)}x` +
+      (preferPartialScreenshot ? "; 压缩率过大，请优先使用 selector 或 clip 做局部截图。" : ""),
+  }
+}
+
+// 图片响应：content 放 image 类型（模型可视化）+ 像素摘要文本（防止模型压缩图片后坐标失准），structuredContent 放 base64 数据（script.ts 可编程访问）
+const okImage = (base64: string, width: number, height: number) => {
+  const pixelSummary = screenshotPixelSummary(width, height)
+  return {
+    content: [
+      { type: "image" as const, data: base64, mimeType: "image/png" as const },
+      { type: "text" as const, text: pixelSummary.text },
+    ],
+    structuredContent: { data: base64, mimeType: "image/png", width, height, pixelSummary },
+  }
+}
 
 const diagnosticsSchema = {
   consoleErrors: z.array(
@@ -840,6 +873,7 @@ export const registerTools = (server: McpServer) => {
         mimeType: z.string().describe("MIME 类型，固定为 image/png"),
         width: z.number().describe("截图原始宽度（像素）"),
         height: z.number().describe("截图原始高度（像素）"),
+        pixelSummary: screenshotPixelSummarySchema.describe("截图像素与模型压缩压力摘要。"),
       },
     },
     async ({ sessionId, selector, clip, hideCursor, fullPage }) => {
@@ -912,6 +946,7 @@ export const registerTools = (server: McpServer) => {
             mimeType: z.string(),
             width: z.number(),
             height: z.number(),
+            pixelSummary: screenshotPixelSummarySchema,
           })
           .optional(),
         dom: z
@@ -936,7 +971,13 @@ export const registerTools = (server: McpServer) => {
               try {
                 const { data } = (await cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string }
                 const { width, height } = pngDimensions(Buffer.from(data, "base64"))
-                return { data, mimeType: "image/png" as const, width, height }
+                return {
+                  data,
+                  mimeType: "image/png" as const,
+                  width,
+                  height,
+                  pixelSummary: screenshotPixelSummary(width, height),
+                }
               } finally {
                 await cdp.detach().catch(() => {})
               }
@@ -956,7 +997,12 @@ export const registerTools = (server: McpServer) => {
         text: JSON.stringify({
           ...result,
           screenshot: screenshot
-            ? { mimeType: screenshot.mimeType, width: screenshot.width, height: screenshot.height }
+            ? {
+                mimeType: screenshot.mimeType,
+                width: screenshot.width,
+                height: screenshot.height,
+                pixelSummary: screenshot.pixelSummary,
+              }
             : undefined,
         }),
       })

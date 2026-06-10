@@ -302,7 +302,12 @@ describe("built-in browser MCP stdio", () => {
       const observeData = observed.structuredContent as {
         url?: string
         title?: string
-        screenshot?: { data?: string; width?: number; height?: number }
+        screenshot?: {
+          data?: string
+          width?: number
+          height?: number
+          pixelSummary?: { currentPixels?: number; compressedPixels?: number; preferPartialScreenshot?: boolean }
+        }
         dom?: { visibleText?: string; interactive?: unknown[] }
         diagnostics?: { consoleErrors?: unknown[]; httpErrors?: unknown[] }
       }
@@ -312,6 +317,11 @@ describe("built-in browser MCP stdio", () => {
       expect(observeData.dom?.interactive?.length ?? 0).toBeGreaterThanOrEqual(2)
       expect(observeData.screenshot?.width).toBe(640)
       expect(observeData.screenshot?.height).toBe(480)
+      expect(observeData.screenshot?.pixelSummary).toMatchObject({
+        currentPixels: 307_200,
+        compressedPixels: 307_200,
+        preferPartialScreenshot: false,
+      })
       expect(observeData.screenshot?.data?.length ?? 0).toBeGreaterThan(100)
 
       const screenshot = await mcp.callTool(
@@ -319,9 +329,24 @@ describe("built-in browser MCP stdio", () => {
         undefined,
         { timeout: 30_000 },
       )
-      const shotData = screenshot.structuredContent as { data?: string; width?: number; height?: number }
+      const shotData = screenshot.structuredContent as {
+        data?: string
+        width?: number
+        height?: number
+        pixelSummary?: { currentPixels?: number; compressedPixels?: number; preferPartialScreenshot?: boolean }
+      }
       expect(shotData.width).toBe(640)
       expect(shotData.height).toBe(480)
+      expect(shotData.pixelSummary).toMatchObject({
+        currentPixels: 307_200,
+        compressedPixels: 307_200,
+        preferPartialScreenshot: false,
+      })
+      const shotText = screenshot.content.find(
+        (item): item is { type: "text"; text: string } => item.type === "text",
+      )?.text
+      expect(shotText).toContain("当前像素: 307200 (640x480)")
+      expect(shotText).toContain("压缩后像素: 307200")
       const shotBytes = Buffer.from(shotData.data ?? "", "base64")
       expect([...shotBytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
@@ -337,9 +362,19 @@ describe("built-in browser MCP stdio", () => {
         undefined,
         { timeout: 30_000 },
       )
-      const clippedData = clippedScreenshot.structuredContent as { data?: string; width?: number; height?: number }
+      const clippedData = clippedScreenshot.structuredContent as {
+        data?: string
+        width?: number
+        height?: number
+        pixelSummary?: { currentPixels?: number; compressedPixels?: number; preferPartialScreenshot?: boolean }
+      }
       expect(clippedData.width).toBe(120)
       expect(clippedData.height).toBe(80)
+      expect(clippedData.pixelSummary).toMatchObject({
+        currentPixels: 9_600,
+        compressedPixels: 9_600,
+        preferPartialScreenshot: false,
+      })
       const clippedBytes = Buffer.from(clippedData.data ?? "", "base64")
       expect([...clippedBytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
@@ -379,5 +414,5 @@ describe("built-in browser MCP stdio", () => {
         .callTool({ name: "session_destroy", arguments: { sessionId } }, undefined, { timeout: 30_000 })
         .catch(() => undefined)
     }
-  })
+  }, 30_000)
 })
