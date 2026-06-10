@@ -90,6 +90,36 @@ describe("tauri HostTransport stream branch coverage", () => {
     expect(closes).toEqual(["client-close"])
   })
 
+  test("auth changes close native EventSource streams so business reconnect can reopen them", () => {
+    globalThis.fetch = (async () => {
+      throw new Error("native EventSource branch must not fetch")
+    }) as typeof fetch
+    globalThis.EventSource = FakeEventSource as unknown as typeof EventSource
+    configure({ serverUrl: "http://overlay.test", username: "opencorvus", password: "", directory: "" })
+
+    const errors: string[] = []
+    const closes: string[] = []
+    createTauriTransport().openStream(
+      { path: "task/tsk_stream/events", query: { after: "9" } },
+      {
+        onError: (error) => errors.push(error.message),
+        onClose: (reason) => closes.push(reason ?? ""),
+        onEvent: () => undefined,
+      },
+    )
+
+    expect(createdSources).toHaveLength(1)
+    createdSources[0]!.emit("open")
+    configure({ password: "rotated" })
+
+    expect(errors).toEqual(["event-source auth-changed"])
+    expect(closes).toEqual(["auth-changed"])
+    expect(createdSources[0]!.closed).toBe(true)
+
+    configure({ password: "rotated-again" })
+    expect(closes).toEqual(["auth-changed"])
+  })
+
   test("authenticated GET streams use fetch SSE so Authorization headers are sent", async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     globalThis.EventSource = FakeEventSource as unknown as typeof EventSource
@@ -120,6 +150,51 @@ describe("tauri HostTransport stream branch coverage", () => {
     expect((requests[0]!.init?.headers as Record<string, string>).Authorization).toBe("Basic b3BlbmNvcnZ1czpzZWNyZXQ=")
     expect(opens).toEqual(["open"])
     expect(events).toEqual(["first", "second"])
+  })
+
+  test("auth changes abort authenticated fetch SSE streams and report auth-changed once", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = []
+    let aborted = false
+    globalThis.EventSource = FakeEventSource as unknown as typeof EventSource
+    globalThis.fetch = ((input, init) => {
+      requests.push({ url: String(input), init })
+      return new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => {
+            aborted = true
+            reject(new DOMException("Aborted", "AbortError"))
+          },
+          { once: true },
+        )
+      })
+    }) as typeof fetch
+    configure({ serverUrl: "http://overlay.test", username: "opencorvus", password: "secret", directory: "" })
+
+    const errors: string[] = []
+    const closes: string[] = []
+    createTauriTransport().openStream(
+      { path: "task/tsk_stream/events", query: { after: "11" } },
+      {
+        onError: (error) => errors.push(error.message),
+        onClose: (reason) => closes.push(reason ?? ""),
+        onEvent: () => undefined,
+      },
+    )
+    await Promise.resolve()
+
+    configure({ password: "rotated" })
+    await Promise.resolve()
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.url).toBe("http://overlay.test/task/tsk_stream/events?after=11")
+    expect((requests[0]!.init?.headers as Record<string, string>).Authorization).toBe("Basic b3BlbmNvcnZ1czpzZWNyZXQ=")
+    expect(aborted).toBe(true)
+    expect(errors).toEqual([])
+    expect(closes).toEqual(["auth-changed"])
+
+    configure({ password: "rotated-again" })
+    expect(closes).toEqual(["auth-changed"])
   })
 
   test("POST streams use fetch SSE with the JSON request body", async () => {
