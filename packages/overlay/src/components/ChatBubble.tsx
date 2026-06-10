@@ -18,7 +18,7 @@ import { stageAccent } from "../utils/card-color"
 import { formatDuration, fullStampWithRelative, stamp } from "../utils/time"
 import { useNowTick } from "../services/clock"
 import { apiRequest } from "../services/api"
-import { cancelAgentSession, replyToAgentSession } from "../services/task"
+import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
 import { t } from "../utils/i18n"
 import { formatCostUSD, formatTokenCount } from "../utils/format-usage"
 import { useCardHeadActions } from "../hooks/use-card-head-actions"
@@ -197,6 +197,9 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     if (!sessionID || sessionID === rootTaskSessionID()) return undefined
     return sessionID
   })
+  const directAgentReplyMode = createMemo<"session" | "task">(() =>
+    normalizeAgentRole(props.node.stage || props.node.role || "") === "build" ? "task" : "session",
+  )
 
   const onTraceToggle = () => {
     if (!traceSessionID()) return
@@ -230,6 +233,19 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   const onAgentReply = async (sessionID: string, message: string) => {
     const taskID = activeTaskID()
     if (!taskID) return
+    if (directAgentReplyMode() === "task") {
+      const context = [
+        "Build session steering from overlay.",
+        `Target build session: ${sessionID}.`,
+        props.node.goalID ? `Target goal: ${props.node.goalID}.` : "",
+        "",
+        message,
+      ]
+        .filter((line) => line.length > 0)
+        .join("\n")
+      await sendTaskOperatorMessage(taskID, context, { source: "overlay_build_steer" })
+      return
+    }
     await replyToAgentSession(taskID, sessionID, message)
   }
 

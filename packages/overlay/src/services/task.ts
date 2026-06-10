@@ -690,6 +690,30 @@ export async function replyToAgentSession(taskID: string, sessionID: string, mes
   })
 }
 
+// ── Public: sendTaskOperatorMessage ──
+
+/**
+ * Record visible operator guidance on the task root and wake the orchestrator.
+ * Build cards use this instead of direct session reply because build sessions
+ * require goal_run/runtime ownership handling before another build attempt.
+ */
+export async function sendTaskOperatorMessage(
+  taskID: string,
+  message: string,
+  options: { source?: string } = {},
+): Promise<void> {
+  const text = message.trim()
+  if (!taskID || !text) return
+  await apiJson(taskPath(taskID, "/message"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text,
+      source: options.source ?? "overlay_operator_message",
+    }),
+  })
+}
+
 // ── Public: cancelAgentSession ──
 
 /**

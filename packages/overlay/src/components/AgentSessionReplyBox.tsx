@@ -1,17 +1,17 @@
 // ── AgentSessionReplyBox ──
-// Inline textarea + steer button rendered at the END of every agent
-// session card. The user can reply directly to a sub-agent session
-// without going through the main composer at the bottom of the overlay.
+// Inline textarea + steer button rendered at the END of an agent/session
+// card. Most cards reply directly to a sub-agent session; build cards route
+// through task-level operator guidance because build runtime ownership is
+// managed by the orchestrator/build attempt lifecycle.
 //
 // Replaces the previous CardHeader collapsible toggle (a hidden button
 // in the top-right of the card that expanded a form). Always visible at
 // the bottom of the card body — matches the user's "末尾的文本回复框和
 // 确认按钮" intent.
 //
-// Backend: POST /task/:taskID/session/:sessionID/reply via existing
-// replyToAgentSession() in services/task.ts. The reply lands in the
-// session's message stream and the orchestrator's loop picks it up on
-// the next iteration (no FSM gate; rule 23).
+// Backend routing is supplied by the caller. Non-build cards use
+// POST /task/:taskID/session/:sessionID/reply via replyToAgentSession().
+// Build cards use POST /task/:taskID/message via sendTaskOperatorMessage().
 //
 // Error handling: the backend returns structured NamedError objects
 // (see orchestrator/direct-reply.ts) that the API layer surfaces as
