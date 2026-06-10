@@ -192,13 +192,6 @@ test(
         if (path === "/skill/installed" || path === "/skill")
           return send([
             {
-              name: "aivest-design-system",
-              description:
-                "Aivest financial product design system. Use this skill whenever the user asks to generate, design, optimize, adjust, or add anything for the Aivest platform.",
-              location: "C:\\Users\\hengu\\.cache\\opencorvus\\builtin-skills\\aivest-design-system\\SKILL.md",
-              builtin: true,
-            },
-            {
               name: "research-report",
               description:
                 "Produce a multi-source research report, comparison matrix, capability survey, market analysis, and recommendation document backed by web research.",

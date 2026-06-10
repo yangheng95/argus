@@ -131,7 +131,7 @@ Use this skill.
     }
   })
 
-  test("removed webpage-generate skill is not visible and ainvest design system loads for build", async () => {
+  test("removed webpage-generate and ainvest design system builtins are not visible or loadable", async () => {
     await using tmp = await tmpdir({ git: true })
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
@@ -153,17 +153,17 @@ Use this skill.
             { query: "webpage" },
             { ...baseCtx, agent: "frontend-design", ask: async () => {} },
           )
-          const ainvestResult = await buildSkill.execute(
-            { name: "ainvest-design-system" },
+          const ainvestSearchResult = await buildSkill.execute(
+            { query: "ainvest" },
             { ...baseCtx, ask: async () => {} },
           )
 
           expect(buildResult.output).not.toContain("<name>webpage-generate</name>")
           expect(frontendDesignResult.output).not.toContain("<name>webpage-generate</name>")
-          expect(ainvestResult.output).toContain('<skill_content name="ainvest-design-system">')
-          expect(ainvestResult.output).toContain("Closed-System Rule")
-          expect(ainvestResult.output).toContain("Base directory for this skill:")
-          expect(ainvestResult.output).toContain("assets/tokens/color.json")
+          expect(ainvestSearchResult.output).not.toContain("<name>ainvest-design-system</name>")
+          await expect(
+            buildSkill.execute({ name: "ainvest-design-system" }, { ...baseCtx, ask: async () => {} }),
+          ).rejects.toThrow('Skill "ainvest-design-system" not found or not allowed')
         },
       })
     } finally {

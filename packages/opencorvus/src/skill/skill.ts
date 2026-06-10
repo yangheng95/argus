@@ -14,7 +14,6 @@ import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
-import { ainvestDesignSystemFiles, ainvestDesignSystemMd } from "./builtin/ainvest-design-system"
 import researchReportMd from "./builtin/research-report.md" with { type: "text" }
 
 export namespace Skill {
@@ -123,7 +122,6 @@ export namespace Skill {
       }
 
   const builtins = [
-    { skill: ainvestDesignSystemMd, files: ainvestDesignSystemFiles },
     { skill: researchReportMd, files: {} },
   ] as const
 
