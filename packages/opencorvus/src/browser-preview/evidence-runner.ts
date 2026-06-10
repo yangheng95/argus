@@ -12,7 +12,7 @@ import {
   type RuntimeCaptureFailure,
   type RuntimeCaptureResult,
   type RuntimeCaptureSuccess,
-} from "@/runtime/page-capture"
+} from "@/runtime/capture-contract"
 import { pngLuminanceVariance } from "@/runtime/png-metrics"
 import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./viewport"
 

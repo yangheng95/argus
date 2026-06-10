@@ -1,6 +1,6 @@
 import path from "node:path"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
-import type { RuntimeCaptureResult } from "@/runtime/page-capture"
+import type { RuntimeCaptureResult } from "@/runtime/capture-contract"
 import { Identifier } from "@/id/id"
 import z from "zod"
 import type { BrowserEvidenceManifestSummary } from "./evidence-runner"
