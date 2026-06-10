@@ -10,6 +10,7 @@ import { FileEditorPane } from "./FileEditorPane"
 import { GoalDialogHost } from "./GoalDialogHost"
 import { ImagePreviewHost } from "./ImagePreview"
 import { InteractionDialogHost } from "./InteractionDialogHost"
+import { NotificationCenter } from "./NotificationCenter"
 import { SessionDialogHost } from "./SessionDialogHost"
 import { ProjectDirectoryBar } from "./TaskDirBar"
 import { TaskStatusHeader } from "./TaskStatusHeader"
@@ -54,6 +55,9 @@ export function App() {
       </StaticMountPortal>
       <StaticMountPortal id="solidFileEditorMount">
         <FileEditorPane />
+      </StaticMountPortal>
+      <StaticMountPortal id="solidNotificationCenterMount">
+        <NotificationCenter surface="panel" />
       </StaticMountPortal>
       <div id="connectionBannerHost">
         <ConnectionBanner />
