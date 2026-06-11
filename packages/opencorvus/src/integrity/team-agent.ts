@@ -96,6 +96,7 @@ const ADVERSARIAL_INVESTIGATION_PROMPT = [
   "Adversarial investigation discipline:",
   "- Start each reviewer perspective by deriving concrete failure hypotheses from the original request, REQ rows, goal contracts, acceptance specs, changed directories, prior findings, and runtime/visual evidence. Do not start from executor self-assessment.",
   "- Treat executor reports, goal reports, build/typecheck success, grep output, and file listings as leads, not proof. A pass claim needs scoped evidence that could have disproved it.",
+  "- Every reviewer report must include `investigationPlan` with `requestPromise`, `hypothesis`, `evidencePlan[]`, and `passCriteria[]`; `requestPromise` is the concrete original user/REQ/spec promise being falsified.",
   "- A pass reviewer report still needs `investigationPlan`, `drilldowns[]`, `coverage[]`, and `evidence[]` showing what was inspected and why that inspection would expose the scoped failure.",
   "- If tools are available but a high-risk surface was not inspected, record `coverage` as `inconclusive` or `missing` and include `uninspectedRisks`; do not turn an inspection gap into praise.",
   "- Do not write congratulatory or effort-focused summaries. Summaries should say which request promises survived falsification, which did not, and what remains uninspected.",
@@ -364,7 +365,7 @@ function createSingleSessionIntegrityToolKit(input: {
     tools: {
       ...evidenceTools,
       submit_integrity_consensus: tool({
-        description: `Submit the final integrity review. Produce multiple independent reviewer reports inside reviewers[] without spawning reviewer sessions. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
+        description: `Submit the final integrity review. Produce multiple independent reviewer reports inside reviewers[] without spawning reviewer sessions. Every reviewers[] entry must include investigationPlan.requestPromise, investigationPlan.hypothesis, investigationPlan.evidencePlan[], and investigationPlan.passCriteria[]. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
         inputSchema: IntegrityTeamReportSchema,
         execute: async (raw) => {
           const parsed = IntegrityTeamReportSchema.safeParse(raw)
@@ -447,7 +448,7 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
     renderSeverityNewEvidenceSection(input),
     [
-      "Before deep evidence reads, form an investigation plan for your scope: request promise, risk hypothesis, evidence plan, and pass/finding criteria. Include it in `investigationPlan` in submit_reviewer_report.",
+      "Before deep evidence reads, form an investigation plan for your scope: request promise, risk hypothesis, evidence plan, and pass/finding criteria. Include it in `investigationPlan` in submit_reviewer_report with `requestPromise`, `hypothesis`, `evidencePlan[]`, and `passCriteria[]`.",
       "Actively try to falsify your scoped pass story before writing it. Record scoped tool work in `drilldowns[]`, and record request/REQ/spec coverage in `coverage[]`. A pass report still needs coverage evidence.",
       "Use scoped drilldown. Prefer `inspect_integrity_evidence` sections such as overview, changed_directories, changed_files_in_directory, diff_for_file, goal_summary, goal_detail, frontend_design_contract, and visual_qa_report when visual/reference fidelity matters. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps.",
       "Explore independently, gather evidence, and call submit_reviewer_report once.",
@@ -1012,6 +1013,12 @@ function createNoGoalsResult(): IntegrityResult {
       scope: "Goal graph existence",
       verdict: "needs_correction",
       summary: "No goal contracts exist.",
+      investigationPlan: {
+        requestPromise: "Active task has goal contracts before integrity review.",
+        hypothesis: "The task cannot be reviewed because no goal contract exists.",
+        evidencePlan: ["Inspect the active goal contract list."],
+        passCriteria: ["At least one goal contract exists for the active task."],
+      },
       drilldowns: [],
       coverage: [],
       evidence: ["goals.length=0"],
@@ -1023,6 +1030,12 @@ function createNoGoalsResult(): IntegrityResult {
       scope: "User request completion",
       verdict: "needs_correction",
       summary: "Completion cannot be reviewed without goals.",
+      investigationPlan: {
+        requestPromise: "The requested work is represented by reviewable goal contracts.",
+        hypothesis: "No goal accepts ownership of the user request, so completion cannot be verified.",
+        evidencePlan: ["Inspect goal ownership for the user request."],
+        passCriteria: ["A goal contract owns the user request and can be reviewed."],
+      },
       drilldowns: [],
       coverage: [],
       evidence: ["No goal accepts ownership of the user request."],
@@ -1193,17 +1206,15 @@ function renderReviewerReportForConsensusPrompt(report: IntegrityReviewerReport)
     `Scope: ${sanitizePromptBlock(report.scope, limits.fieldChars)}`,
     `Summary: ${sanitizePromptBlock(report.summary, limits.summaryChars)}`,
   ]
-  if (report.investigationPlan) {
-    lines.push(
-      [
-        "Investigation plan:",
-        `- request promise: ${sanitizePromptBlock(report.investigationPlan.requestPromise, limits.fieldChars)}`,
-        `- hypothesis: ${sanitizePromptBlock(report.investigationPlan.hypothesis, limits.fieldChars)}`,
-        `- evidence plan: ${boundedPromptList(report.investigationPlan.evidencePlan, 6, limits.fieldChars).join(" | ")}`,
-        `- pass criteria: ${boundedPromptList(report.investigationPlan.passCriteria, 6, limits.fieldChars).join(" | ")}`,
-      ].join("\n"),
-    )
-  }
+  lines.push(
+    [
+      "Investigation plan:",
+      `- request promise: ${sanitizePromptBlock(report.investigationPlan.requestPromise, limits.fieldChars)}`,
+      `- hypothesis: ${sanitizePromptBlock(report.investigationPlan.hypothesis, limits.fieldChars)}`,
+      `- evidence plan: ${boundedPromptList(report.investigationPlan.evidencePlan, 6, limits.fieldChars).join(" | ")}`,
+      `- pass criteria: ${boundedPromptList(report.investigationPlan.passCriteria, 6, limits.fieldChars).join(" | ")}`,
+    ].join("\n"),
+  )
   if ((report.drilldowns ?? []).length > 0) {
     const items = report.drilldowns.map(
       (drilldown) => `${drilldown.kind}:${drilldown.target} - ${drilldown.purpose} => ${drilldown.result}`,

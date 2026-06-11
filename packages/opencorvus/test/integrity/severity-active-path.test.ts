@@ -2,6 +2,13 @@ import { afterEach, expect, mock, test } from "bun:test"
 
 let capturedPrompts: string[] = []
 
+const investigationPlan = {
+  requestPromise: "ship the scoped chat behavior",
+  hypothesis: "the scoped evidence may not satisfy the requested chat behavior",
+  evidencePlan: ["inspect prompt capture evidence"],
+  passCriteria: ["prompt capture preserves severity and lineage discipline"],
+}
+
 mock.module("@/agent/runner", () => ({
   runAgentSession: async (input: any) => {
     capturedPrompts.push([input.core, input.buildUserPrompt()].filter(Boolean).join("\n\n"))
@@ -40,6 +47,7 @@ mock.module("@/agent/runner", () => ({
         scope: reviewerID === "rev_storage" ? "Storage quota advisory replay" : "Scope-bounded maturity evidence",
         verdict: reviewerID === "rev_storage" ? "needs_correction" : "concerns",
         summary: `${reviewerID} submitted a canned report.`,
+        investigationPlan,
         evidence: ["prompt capture test"],
         findings:
           reviewerID === "rev_storage"
@@ -75,6 +83,7 @@ mock.module("@/agent/runner", () => ({
             scope: "Storage quota advisory replay",
             verdict: "needs_correction",
             summary: "rev_storage submitted a canned report.",
+            investigationPlan,
             evidence: ["prompt capture test"],
             findings: [],
             openQuestions: [],
@@ -84,6 +93,7 @@ mock.module("@/agent/runner", () => ({
             scope: "Scope-bounded maturity evidence",
             verdict: "concerns",
             summary: "rev_scope submitted a canned report.",
+            investigationPlan,
             evidence: ["prompt capture test"],
             findings: [],
             openQuestions: [],

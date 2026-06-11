@@ -90,13 +90,22 @@ export const IntegrityReviewerReportSchema = z
     summary: z.string().min(1),
     investigationPlan: z
       .object({
-        requestPromise: z.string().min(1),
-        hypothesis: z.string().min(1),
-        evidencePlan: z.array(z.string().min(1)).min(1),
-        passCriteria: z.array(z.string().min(1)).min(1),
+        requestPromise: z
+          .string()
+          .min(1)
+          .describe("Concrete original user, REQ, or acceptance-spec promise this reviewer is falsifying."),
+        hypothesis: z.string().min(1).describe("Concrete way the scoped promise could fail."),
+        evidencePlan: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe("Evidence this reviewer planned to inspect before passing or filing a finding."),
+        passCriteria: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe("Concrete evidence threshold for pass versus finding."),
       })
       .strict()
-      .optional(),
+      .describe("Required falsification plan for this reviewer report."),
     drilldowns: z
       .array(
         z
