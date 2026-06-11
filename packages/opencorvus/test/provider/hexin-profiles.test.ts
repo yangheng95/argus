@@ -73,9 +73,18 @@ test("hexin glm-5 profile family uses the same single transform contract", () =>
   })
 })
 
+test("hexin qwen3.7-max profile marks Hexin thinking mode as reasoning", () => {
+  const profile = profileFor("qwen3.7-max")
+
+  expect(profile.family).toBe("qwen")
+  expect(profile.reasoning).toBe(true)
+  expect(profile.toolcall).toBe(true)
+  expect(profile.interleaved).toEqual({ field: "reasoning_content" })
+})
+
 test("hexin interleaved reasoning profiles have explicit transform contracts", () => {
   expect(interleavedReasoningProfileContractGaps()).toEqual([])
-  expect(interleavedReasoningProfileContractIDs().sort()).toEqual(["glm-5", "glm-5.1", "kimi-k2.6"])
+  expect(interleavedReasoningProfileContractIDs().sort()).toEqual(["glm-5", "glm-5.1", "kimi-k2.6", "qwen3.7-max"])
 
   for (const id of interleavedReasoningProfileContractIDs()) {
     const profile = profileFor(id)

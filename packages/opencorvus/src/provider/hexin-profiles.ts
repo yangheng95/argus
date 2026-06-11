@@ -258,6 +258,24 @@ const MATCHERS: Matcher[] = [
       output: 16_384,
     },
   },
+  // Qwen 3.7 Max runs in thinking mode behind Hexin/LiteLLM and rejects
+  // required/object tool_choice. Mark it as reasoning so SessionLoop uses
+  // soft tool choice for terminal and structured-output turns.
+  {
+    test: (id) => /(^|\/)qwen3\.7-max$/i.test(id),
+    contractIDs: ["qwen3.7-max"],
+    profile: {
+      family: "qwen",
+      reasoning: true,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+      context: 128_000,
+      output: 16_384,
+    },
+  },
   // Qwen
   {
     test: (id) => /qwen/i.test(id),
