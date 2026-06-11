@@ -693,7 +693,13 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        SessionPrompt.cancel(c.req.valid("param").sessionID)
+        const sessionID = c.req.valid("param").sessionID
+        SessionPrompt.cancel(sessionID)
+        TaskQueueService.cancelSessionPrompts({
+          sessionIDs: [sessionID],
+          reason: "session aborted",
+          source: "session.prompt_async",
+        })
         return c.json(true)
       },
     )

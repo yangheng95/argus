@@ -2,11 +2,13 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "@/session"
+import { SessionPrompt } from "@/session/prompt"
 import { CodingCli } from "@/coding-cli"
 import { SystemTerminal } from "@/system-terminal"
 import { HTTPException } from "hono/http-exception"
 import { Instance } from "@/project/instance"
 import { EngineService } from "@/task-api"
+import { TaskQueueService } from "@/scheduler/task-queue-service"
 import {
   RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
   isRightSidebarCodingAssistantSession,
@@ -17,6 +19,9 @@ import {
 const CodingSessionQuery = z.object({
   directory: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursorUpdated: z.coerce.number().int().positive().optional(),
+  cursorSessionID: z.string().optional(),
+  search: z.string().optional(),
 })
 
 const CodingSessionResponse = z.object({
@@ -27,8 +32,18 @@ const CodingSessionSelectionInput = z.object({
   taskID: z.string().nullable(),
 })
 
+const CodingSessionUpdateInput = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+})
+
 const CodingSessionsResponse = z.object({
   sessions: Session.Info.array(),
+  nextCursor: z
+    .object({
+      updated: z.number(),
+      sessionID: z.string(),
+    })
+    .optional(),
 })
 
 async function assertRightSidebarCodingSession(sessionID: string) {
@@ -147,8 +162,7 @@ export function CodingRoutes() {
       validator("query", CodingSessionQuery),
       async (c) => {
         const input = c.req.valid("query")
-        const sessions = listRightSidebarCodingAssistantSessions(input)
-        return c.json({ sessions })
+        return c.json(listRightSidebarCodingAssistantSessions(input))
       },
     )
     .get(
@@ -172,6 +186,91 @@ export function CodingRoutes() {
       async (c) => {
         const session = await assertRightSidebarCodingSession(c.req.valid("param").sessionID)
         return c.json({ session })
+      },
+    )
+    .patch(
+      "/session/:sessionID",
+      describeRoute({
+        summary: "Update right sidebar coding assistant session",
+        description: "Update a project-bound right sidebar coding assistant session.",
+        operationId: "coding.session.update",
+        responses: {
+          200: {
+            description: "Updated coding assistant session",
+            content: {
+              "application/json": {
+                schema: resolver(CodingSessionResponse),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string() })),
+      validator("json", CodingSessionUpdateInput),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        await assertRightSidebarCodingSession(sessionID)
+        const updates = c.req.valid("json")
+        let session = await Session.get(sessionID)
+        if (updates.title !== undefined) {
+          session = await Session.setTitle({ sessionID, title: updates.title })
+        }
+        return c.json({ session })
+      },
+    )
+    .delete(
+      "/session/:sessionID",
+      describeRoute({
+        summary: "Delete right sidebar coding assistant session",
+        description: "Delete a project-bound right sidebar coding assistant session and its canonical history.",
+        operationId: "coding.session.delete",
+        responses: {
+          200: {
+            description: "Deleted coding assistant session",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string() })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        await assertRightSidebarCodingSession(sessionID)
+        await EngineService.deleteSession(sessionID)
+        return c.json(true)
+      },
+    )
+    .post(
+      "/session/:sessionID/abort",
+      describeRoute({
+        summary: "Abort right sidebar coding assistant session",
+        description: "Stop active and queued processing for a project-bound right sidebar coding assistant session.",
+        operationId: "coding.session.abort",
+        responses: {
+          200: {
+            description: "Aborted coding assistant session",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string() })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        await assertRightSidebarCodingSession(sessionID)
+        SessionPrompt.cancel(sessionID)
+        TaskQueueService.cancelSessionPrompts({
+          sessionIDs: [sessionID],
+          reason: "coding assistant stopped",
+          source: "session.prompt_async",
+        })
+        return c.json(true)
       },
     )
     .patch(

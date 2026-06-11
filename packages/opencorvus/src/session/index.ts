@@ -364,7 +364,7 @@ export namespace Session {
       return Database.use((db) => {
         const row = db
           .update(SessionTable)
-          .set({ title: input.title })
+          .set({ title: input.title, time_updated: Date.now() })
           .where(eq(SessionTable.id, input.sessionID))
           .returning()
           .get()
@@ -491,7 +491,7 @@ export namespace Session {
       return Database.use((db) => {
         const row = db
           .update(SessionTable)
-          .set({ time_archived: input.time })
+          .set({ time_archived: input.time, time_updated: Date.now() })
           .where(eq(SessionTable.id, input.sessionID))
           .returning()
           .get()

@@ -5,6 +5,7 @@ import { Instance } from "../../src/project/instance"
 import { Database, eq } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
+import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS } from "../../src/coding-assistant/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -85,6 +86,70 @@ describe("coding assistant routes", () => {
         expect(ids).toContain(listedID)
         expect(ids).not.toContain(otherDirectoryID)
         expect(body.sessions.every((session) => session.metadata?.codingAssistant)).toBe(true)
+      },
+    })
+  })
+
+  test("lists right sidebar assistant sessions with search and cursor pagination", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const first = await Session.create({
+          kind: "assistant",
+          title: "Alpha assistant",
+          metadata: { codingAssistant: { surface: "right-sidebar" } },
+        })
+        const second = await Session.create({
+          kind: "assistant",
+          title: "Beta assistant",
+          metadata: { codingAssistant: { surface: "right-sidebar" } },
+        })
+        const app = Server.App()
+
+        const searched = await app.request("/coding/sessions?search=Beta", {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(searched.status).toBe(200)
+        const searchedBody = (await searched.json()) as { sessions: Session.Info[] }
+        expect(searchedBody.sessions.map((session) => session.id)).toEqual([second.id])
+
+        const firstPage = await app.request("/coding/sessions?limit=1", {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(firstPage.status).toBe(200)
+        const firstBody = (await firstPage.json()) as {
+          sessions: Session.Info[]
+          nextCursor?: { updated: number; sessionID: string }
+        }
+        expect(firstBody.sessions).toHaveLength(1)
+        expect(firstBody.sessions[0].id).toBe(second.id)
+        expect(firstBody.nextCursor).toEqual({
+          updated: second.time.updated,
+          sessionID: second.id,
+        })
+
+        const cursor = new URLSearchParams({
+          limit: "1",
+          cursorUpdated: String(firstBody.nextCursor!.updated),
+          cursorSessionID: firstBody.nextCursor!.sessionID,
+        })
+        const secondPage = await app.request(`/coding/sessions?${cursor.toString()}`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(secondPage.status).toBe(200)
+        const secondBody = (await secondPage.json()) as { sessions: Session.Info[] }
+        expect(secondBody.sessions.map((session) => session.id)).toEqual([first.id])
       },
     })
   })
@@ -202,6 +267,84 @@ describe("coding assistant routes", () => {
           },
         })
         expect(messages.status).toBe(404)
+      },
+    })
+  })
+
+  test("updates, stops, and deletes only project-bound right sidebar sessions", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/coding/session", {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        const { session } = (await created.json()) as { session: Session.Info }
+        const beforeUpdated = session.time.updated
+        const plain = await Session.create({ kind: "assistant", title: "plain assistant" })
+
+        const renamed = await app.request(`/coding/session/${session.id}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ title: "Renamed assistant" }),
+        })
+        expect(renamed.status).toBe(200)
+        const renamedBody = (await renamed.json()) as { session: Session.Info }
+        expect(renamedBody.session.title).toBe("Renamed assistant")
+        expect(renamedBody.session.time.updated).toBeGreaterThanOrEqual(beforeUpdated)
+
+        const taskID = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          source: "session.prompt_async",
+          prompt: {
+            parts: [{ type: "text", text: "queued assistant work" }],
+          },
+        })
+        const stopped = await app.request(`/coding/session/${session.id}/abort`, {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(stopped.status).toBe(200)
+        const queueRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get())
+        expect(queueRow?.status).toBe("failed")
+        expect(queueRow?.error_message).toBe("coding assistant stopped")
+
+        const plainRename = await app.request(`/coding/session/${plain.id}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ title: "Should not rename" }),
+        })
+        expect(plainRename.status).toBe(404)
+        expect((await Session.get(plain.id)).title).toBe("plain assistant")
+
+        const deleted = await app.request(`/coding/session/${session.id}`, {
+          method: "DELETE",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(deleted.status).toBe(200)
+
+        const claimDeleted = await app.request(`/coding/session/${session.id}`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(claimDeleted.status).toBe(404)
       },
     })
   })

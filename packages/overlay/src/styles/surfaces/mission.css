@@ -124,6 +124,102 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
   margin: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
 }
 
+.coding-assistant-ledger {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.coding-assistant-ledger-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
+}
+
+.coding-assistant-ledger-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.coding-assistant-ledger-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--ui-gap-sm) var(--ui-gap-md);
+}
+
+.oc-button[data-ui="coding-assistant-new"][data-variant="solid"] {
+  --oc-button-height: calc(28px * var(--ui-scale));
+  --oc-button-padding-x: calc(10px * var(--ui-scale));
+  --oc-button-gap: calc(2px * var(--ui-scale));
+  --oc-button-bg: var(--accent);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--surface);
+  flex: 0 0 auto;
+  letter-spacing: var(--ui-letter-spacing-normal);
+  box-shadow: none;
+}
+
+.oc-button[data-ui="coding-assistant-new"] .sidebar-btn-icon {
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.oc-button[data-ui="coding-assistant-new"]:hover,
+.oc-button[data-ui="coding-assistant-new"]:focus-visible {
+  --oc-button-bg: var(--accent-hover);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--surface);
+}
+
+.coding-assistant-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(2px * var(--ui-scale));
+  opacity: var(--ui-opacity-hidden);
+  pointer-events: none;
+  transition: opacity var(--ui-duration-fast) var(--ui-timing-standard);
+}
+
+.ledger-row:hover .coding-assistant-row-actions,
+.ledger-row:focus-within .coding-assistant-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.coding-assistant-row-stop-icon[data-icon="confirm"],
+.coding-assistant-row-delete-icon[data-icon="confirm"] {
+  display: none;
+}
+
+.oc-button[data-ui="coding-assistant-row-stop"][data-confirm="true"] .coding-assistant-row-stop-icon[data-icon="stop"],
+.oc-button[data-ui="coding-assistant-row-delete"][data-confirm="true"] .coding-assistant-row-delete-icon[data-icon="delete"] {
+  display: none;
+}
+
+.oc-button[data-ui="coding-assistant-row-stop"][data-confirm="true"] .coding-assistant-row-stop-icon[data-icon="confirm"],
+.oc-button[data-ui="coding-assistant-row-delete"][data-confirm="true"] .coding-assistant-row-delete-icon[data-icon="confirm"] {
+  display: inline-flex;
+}
+
+.coding-assistant-row-rename-input {
+  width: 100%;
+  min-width: 0;
+  border: var(--oc-border-width) solid var(--accent);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-hover);
+  color: var(--text-strong);
+  padding: calc(2px * var(--ui-scale)) var(--ui-gap-xs);
+  font: inherit;
+}
+
 .mission-ledger-header-actions {
   flex-wrap: nowrap;
   justify-content: flex-end;

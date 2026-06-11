@@ -22,6 +22,7 @@ import { Project } from "@/project/project"
 import { Worktree } from "@/worktree"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
+import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { Session } from "@/session"
 import { SessionContext } from "@/session/context"
 import { Message } from "@/session/message"
@@ -1688,6 +1689,13 @@ export namespace EngineService {
 
   export async function deleteSession(sessionID: string, input?: { deleteTasks?: boolean }) {
     const ids = await Session.tree(sessionID)
+    for (const id of ids) {
+      SessionPrompt.cancel(id)
+    }
+    TaskQueueService.cancelSessionPrompts({
+      sessionIDs: ids,
+      reason: "session deleted",
+    })
     if (input?.deleteTasks) {
       const tasks = Database.use((db) =>
         db

@@ -6,7 +6,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionTable } from "@/session/session.sql"
 import { Message } from "@/session/message"
-import { Database, and, eq, sql } from "@/storage/db"
+import { Database, and, eq, inArray, sql, type SQL } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { EngineConfig } from "@/engine/config"
@@ -154,6 +154,32 @@ export namespace TaskQueueService {
     )
     log.info("task queued", { id, sessionID: input.sessionID, source: input.source ?? "api" })
     return id
+  }
+
+  export function cancelSessionPrompts(input: { sessionIDs: string[]; reason?: string; source?: string }): number {
+    const sessionIDs = [...new Set(input.sessionIDs.map((id) => String(id || "").trim()).filter(Boolean))]
+    if (sessionIDs.length === 0) return 0
+    const now = Date.now()
+    const reason = input.reason || "task cancelled"
+    return Database.use((db) => {
+      const where: SQL[] = [
+        inArray(TaskQueueTable.session_id, sessionIDs),
+        inArray(TaskQueueTable.status, ["queued", "retrying", "running"]),
+      ]
+      if (input.source) where.push(eq(TaskQueueTable.source, input.source))
+      const rows = db
+        .update(TaskQueueTable)
+        .set({
+          status: "failed",
+          time_completed: now,
+          error_message: reason,
+          time_updated: now,
+        })
+        .where(and(...where))
+        .returning({ id: TaskQueueTable.id })
+        .all()
+      return rows.length
+    })
   }
 
   async function poll() {
