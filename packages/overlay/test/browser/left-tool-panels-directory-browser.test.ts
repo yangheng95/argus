@@ -146,7 +146,7 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    await page.setViewport({ width: 1280, height: 760 })
+    await page.setViewport({ width: 1280, height: 365 })
     await page.evaluateOnNewDocument((input) => {
       const { serverUrl, directory } = input as { serverUrl: string; directory: string }
       ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
