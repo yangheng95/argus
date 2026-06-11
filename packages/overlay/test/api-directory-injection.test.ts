@@ -143,6 +143,9 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("coding assistant session list", () => expectInjects("coding/sessions"))
     test("coding assistant session create", () => expectInjects("coding/session"))
     test("coding assistant session claim", () => expectInjects("coding/session/ses_123"))
+    test("coding assistant session update", () => expectInjects("coding/session/ses_123"))
+    test("coding assistant session delete", () => expectInjects("coding/session/ses_123"))
+    test("coding assistant session abort", () => expectInjects("coding/session/ses_123/abort"))
   })
 
   test("enumerated route expectations agree with the shared policy function", () => {
@@ -178,6 +181,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "config",
       "session/session_123/conversation",
       "mission/wake",
+      "coding/session/ses_123/abort",
       "task/tsk_browserpreview0001/browser-preview",
       "task/tsk_browserpreview0001/browser-preview/evidence/art_previewevidence00000001/capture.png",
     ]) {

@@ -8,6 +8,7 @@ import { createEffect, createRoot, createSignal, untrack } from "solid-js"
 import { App } from "./components/App"
 import { Conversation } from "./components/Conversation"
 import { TaskList } from "./components/TaskList"
+import { CodingAssistantSessionList } from "./components/CodingAssistantSessionList"
 import { Board } from "./components/Board"
 import { Mission } from "./components/Mission"
 import { pageMode, setPageMode } from "./store/page-mode"
@@ -64,7 +65,17 @@ import { applyDirectory, activeDirectory, openPathInSelectedEditor } from "./ser
 import { openConfigDialog, openGoalDialog, renderAboutVersion } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
-import { isCodingAssistantSource, selectCodingAssistantSession } from "./services/coding-assistant"
+import { codingAssistantStore } from "./store/coding-assistant"
+import {
+  createCodingAssistantSession,
+  deleteCodingAssistantSession,
+  isCodingAssistantSource,
+  loadCodingAssistantSessions,
+  renameCodingAssistantSession,
+  selectCodingAssistantSession,
+  setCodingAssistantSearchQuery,
+  stopCodingAssistantSession,
+} from "./services/coding-assistant"
 import { openImagePreview } from "./services/image-preview"
 
 // ── Module teardown ──
@@ -198,8 +209,7 @@ const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWor
 const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>("workflow")
 const activeRightActivity = () => selectedRightActivity()
 const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
-const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] =
-  createSignal<Exclude<LeftActivity, "assistant">>("tasks")
+const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("tasks")
 const activeLeftActivity = () => selectedLeftActivity()
 let codingAssistantActivationController: AbortController | null = null
 
@@ -214,16 +224,17 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError"
 }
 
-function activateCodingAssistantSession(): void {
+function activateCodingAssistantSessionList(): void {
   abortCodingAssistantActivation()
   const controller = new AbortController()
   codingAssistantActivationController = controller
   openCenterWorkbenchPanel("workflow")
   setSelectedLeftActivity("assistant")
-  void selectCodingAssistantSession({ signal: controller.signal })
+  setSelectedLeftPanelActivity("assistant")
+  void loadCodingAssistantSessions({ signal: controller.signal })
     .catch((error) => {
       if (isAbortError(error)) return
-      reportOverlayRuntimeError("coding-assistant.select", error)
+      reportOverlayRuntimeError("coding-assistant.sessions", error)
     })
     .finally(() => {
       if (codingAssistantActivationController === controller) codingAssistantActivationController = null
@@ -296,7 +307,7 @@ function openBrowserPreviewFromMessage(): boolean {
 
 function selectLeftActivity(activity: LeftActivity): void {
   if (activity === "assistant") {
-    activateCodingAssistantSession()
+    activateCodingAssistantSessionList()
     return
   }
   abortCodingAssistantActivation()
@@ -1013,15 +1024,17 @@ if (sidebarTitleEl) {
 
 // ── Mount: TaskList ──
 
-const LEFT_ACTIVITY_BODY_IDS: Record<Exclude<LeftActivity, "assistant">, string> = {
+const LEFT_ACTIVITY_BODY_IDS: Record<LeftActivity, string> = {
   tasks: "leftPanelTasks",
+  assistant: "leftPanelAssistant",
   memory: "leftPanelMemory",
   skill: "leftPanelSkills",
   mcp: "leftPanelMcp",
 }
 
-const LEFT_ACTIVITY_TITLE_KEYS: Record<Exclude<LeftActivity, "assistant">, string> = {
+const LEFT_ACTIVITY_TITLE_KEYS: Record<LeftActivity, string> = {
   tasks: "sidebar.title",
+  assistant: "coding_assistant.title",
   memory: "memory.title",
   skill: "skill.title",
   mcp: "mcp.title",
@@ -1031,9 +1044,7 @@ disposers.push(
   createRoot((dispose) => {
     createEffect(() => {
       const activity = selectedLeftPanelActivity()
-      for (const [id, elementID] of Object.entries(LEFT_ACTIVITY_BODY_IDS) as Array<
-        [Exclude<LeftActivity, "assistant">, string]
-      >) {
+      for (const [id, elementID] of Object.entries(LEFT_ACTIVITY_BODY_IDS) as Array<[LeftActivity, string]>) {
         const element = document.getElementById(elementID)
         if (element) element.dataset.active = id === activity ? "true" : "false"
       }
@@ -1059,6 +1070,81 @@ if (taskListEl) {
       />
     ),
     taskListEl,
+  )
+}
+
+const codingAssistantListEl = document.getElementById("codingAssistantSessionListPanel")
+if (codingAssistantListEl) {
+  codingAssistantListEl.innerHTML = ""
+  render(
+    () => (
+      <CodingAssistantSessionList
+        sessions={codingAssistantStore.sessions}
+        selectedSessionID={codingAssistantStore.selectedSessionID}
+        loading={codingAssistantStore.loading}
+        loadingMore={codingAssistantStore.loadingMore}
+        error={codingAssistantStore.error}
+        searchQuery={codingAssistantStore.searchQuery}
+        hasMore={!!codingAssistantStore.nextCursor}
+        actionBusyID={codingAssistantStore.actionBusyID}
+        onSearchChange={(query) => {
+          setCodingAssistantSearchQuery(query)
+          void loadCodingAssistantSessions().catch((error) => {
+            reportOverlayRuntimeError("coding-assistant.search", error)
+          })
+        }}
+        onSelectSession={(session) => {
+          openCenterWorkbenchPanel("workflow")
+          void selectCodingAssistantSession({ sessionID: session.id }).catch((error) => {
+            reportOverlayRuntimeError("coding-assistant.select", error)
+          })
+        }}
+        onCreateSession={() => {
+          openCenterWorkbenchPanel("workflow")
+          void createCodingAssistantSession().catch((error) => {
+            reportOverlayRuntimeError("coding-assistant.create", error)
+          })
+        }}
+        onRenameSession={(session, title) =>
+          void renameCodingAssistantSession(session.id, title)
+            .then((ok) => {
+              if (!ok) throw new Error("Coding assistant rename failed")
+            })
+            .catch((error) => {
+              reportOverlayRuntimeError("coding-assistant.rename", error)
+            })
+        }
+        onDeleteSession={(session) =>
+          void deleteCodingAssistantSession(session.id)
+            .then((ok) => {
+              if (!ok) throw new Error("Coding assistant delete failed")
+            })
+            .catch((error) => {
+              reportOverlayRuntimeError("coding-assistant.delete", error)
+            })
+        }
+        onStopSession={(session) =>
+          void stopCodingAssistantSession(session.id)
+            .then((ok) => {
+              if (!ok) throw new Error("Coding assistant stop failed")
+            })
+            .catch((error) => {
+              reportOverlayRuntimeError("coding-assistant.stop", error)
+            })
+        }
+        onRetry={() =>
+          void loadCodingAssistantSessions().catch((error) => {
+            reportOverlayRuntimeError("coding-assistant.retry", error)
+          })
+        }
+        onLoadMore={() =>
+          void loadCodingAssistantSessions({ append: true }).catch((error) => {
+            reportOverlayRuntimeError("coding-assistant.more", error)
+          })
+        }
+      />
+    ),
+    codingAssistantListEl,
   )
 }
 

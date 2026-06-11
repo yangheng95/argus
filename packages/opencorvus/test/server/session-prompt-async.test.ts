@@ -246,4 +246,44 @@ describe("session prompt_async route", () => {
       },
     })
   })
+
+  test("session abort cancels queued prompt_async work", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const app = Server.App()
+        const created = await app.request(`/session/${session.id}/prompt_async`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            parts: [
+              {
+                type: "text",
+                text: "queued prompt",
+              },
+            ],
+          }),
+        })
+
+        expect(created.status).toBe(202)
+        const { taskID } = (await created.json()) as { taskID: string }
+        const aborted = await app.request(`/session/${session.id}/abort`, {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(aborted.status).toBe(200)
+
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get())
+        expect(row?.status).toBe("failed")
+        expect(row?.error_message).toBe("session aborted")
+      },
+    })
+  })
 })

@@ -133,6 +133,17 @@ test(
             { status: 201 },
           )
         }
+        if (path === "/coding/session/ses_right_sidebar_assistant") {
+          return send({
+            session: {
+              id: "ses_right_sidebar_assistant",
+              kind: "assistant",
+              title: "Coding assistant",
+              directory: "D:/overlay/workspace/app",
+              metadata: { codingAssistant: { surface: "right-sidebar" } },
+            },
+          })
+        }
         if (path === "/session/ses_right_sidebar_assistant/conversation") {
           return send({
             board: {
@@ -261,6 +272,7 @@ test(
           const display = (selector: string) => getComputedStyle(document.querySelector<HTMLElement>(selector)!).display
           return {
             leftTasks: active("#leftPanelTasks"),
+            leftAssistant: active("#leftPanelAssistant"),
             rightInspector: active("#rightPanelInspector"),
             centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open ?? "",
             centerWorkflow: active("#centerWorkbenchWorkflow"),
@@ -356,6 +368,7 @@ test(
 
       assertMatchObject(await activeState(), {
         leftTasks: "true",
+        leftAssistant: "false",
         rightInspector: "false",
         centerOpen: "true",
         centerWorkflow: "true",
@@ -634,9 +647,22 @@ test(
             '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
           )?.dataset.active === "true",
       )
+      await page.waitForSelector(
+        '[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]',
+      )
+      assertMatchObject(await activeState(), {
+        leftAssistant: "true",
+        leftAssistantButton: "true",
+        chatTitle: "Workflow",
+        selectedSourceKind: "task",
+        selectedSourceID: "tsk_side_activity",
+      })
+      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
+      await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
       assertMatchObject(await activeState(), {
         centerPreview: "true",
         centerWorkflow: "true",
+        leftAssistant: "true",
         leftAssistantButton: "true",
         rightPreviewButton: "true",
         chatTitle: "Assistant",
@@ -702,8 +728,13 @@ test(
         () =>
           document.querySelector<HTMLElement>(
             '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
-          )?.dataset.active === "true" && (window as any).boardStore?.selectedSource?.kind === "session",
+          )?.dataset.active === "true",
       )
+      await page.waitForSelector(
+        '[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]',
+      )
+      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
+      await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
       await page.waitForFunction(
         () =>

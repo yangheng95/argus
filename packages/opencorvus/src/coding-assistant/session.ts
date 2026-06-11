@@ -3,7 +3,7 @@ import type { SessionPrompt } from "@/session/prompt"
 import { Instance } from "@/project/instance"
 import { Session as SessionApi } from "@/session"
 import { SessionTable } from "@/session/session.sql"
-import { Database, and, desc, eq, isNull, sql } from "@/storage/db"
+import { Database, and, desc, eq, isNull, like, or, sql, type SQL } from "@/storage/db"
 
 export const RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA = {
   codingAssistant: {
@@ -78,23 +78,69 @@ export async function setRightSidebarCodingAssistantSelectedTask(input: {
   })
 }
 
-export function listRightSidebarCodingAssistantSessions(input: { directory?: string; limit: number }): Session.Info[] {
+export type RightSidebarCodingAssistantSessionListInput = {
+  directory?: string
+  limit: number
+  cursorUpdated?: number
+  cursorSessionID?: string
+  search?: string
+}
+
+export type RightSidebarCodingAssistantSessionList = {
+  sessions: Session.Info[]
+  nextCursor?: {
+    updated: number
+    sessionID: string
+  }
+}
+
+export function listRightSidebarCodingAssistantSessions(
+  input: RightSidebarCodingAssistantSessionListInput,
+): RightSidebarCodingAssistantSessionList {
+  const conditions: SQL[] = [
+    eq(SessionTable.project_id, Instance.project.id),
+    eq(SessionTable.directory, input.directory ?? Instance.directory),
+    eq(SessionTable.kind, "assistant" as const),
+    isNull(SessionTable.time_archived),
+    sql`json_extract(${SessionTable.metadata}, '$.codingAssistant.surface') = 'right-sidebar'`,
+  ]
+  const search = input.search?.trim()
+  if (search) {
+    conditions.push(or(like(SessionTable.title, `%${search}%`), like(SessionTable.id, `%${search}%`))!)
+  }
+  if (input.cursorUpdated !== undefined) {
+    const cursorUpdated = input.cursorUpdated
+    const cursorSessionID = input.cursorSessionID ?? ""
+    conditions.push(
+      or(
+        sql`${SessionTable.time_updated} < ${cursorUpdated}`,
+        cursorSessionID
+          ? sql`${SessionTable.time_updated} = ${cursorUpdated} AND ${SessionTable.id} < ${cursorSessionID}`
+          : sql`${SessionTable.time_updated} = ${cursorUpdated} AND ${SessionTable.id} < ''`,
+      )!,
+    )
+  }
+  const visibleLimit = input.limit
   const rows = Database.use((db) =>
     db
       .select()
       .from(SessionTable)
-      .where(
-        and(
-          eq(SessionTable.project_id, Instance.project.id),
-          eq(SessionTable.directory, input.directory ?? Instance.directory),
-          eq(SessionTable.kind, "assistant"),
-          isNull(SessionTable.time_archived),
-          sql`json_extract(${SessionTable.metadata}, '$.codingAssistant.surface') = 'right-sidebar'`,
-        ),
-      )
+      .where(and(...conditions))
       .orderBy(desc(SessionTable.time_updated), desc(SessionTable.id))
-      .limit(input.limit)
+      .limit(visibleLimit + 1)
       .all(),
   )
-  return rows.map(SessionApi.fromRow)
+  const visible = rows.slice(0, visibleLimit).map(SessionApi.fromRow)
+  const last = visible.at(-1)
+  return {
+    sessions: visible,
+    ...(rows.length > visibleLimit && last
+      ? {
+          nextCursor: {
+            updated: last.time.updated,
+            sessionID: last.id,
+          },
+        }
+      : {}),
+  }
 }
