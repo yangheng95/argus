@@ -36,12 +36,6 @@ export interface OverlaySettings {
   sectionsWidth: number | null
   centerWorkbenchWidth: number | null
   centerWorkbenchPanelWeights: Record<string, number> | null
-  /** Mission page column widths — persisted independently of the Panel's
-   *  sidebarWidth/sectionsWidth so resizing one mode never moves the other
-   *  (the ledger/channels content differs from the Panel's chat list /
-   *  inspector, so their ideal widths differ too). */
-  missionLedgerWidth: number | null
-  missionChannelsWidth: number | null
   opacity: number
   zoom: number
   theme: string
@@ -160,8 +154,6 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   sectionsWidth: null,
   centerWorkbenchWidth: null,
   centerWorkbenchPanelWeights: null,
-  missionLedgerWidth: null,
-  missionChannelsWidth: null,
   opacity: 0.99,
   zoom: 1,
   theme: DEFAULT_THEME,
@@ -222,8 +214,6 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
     centerWorkbenchWidth: sanitizePaneWidth(input?.centerWorkbenchWidth),
     centerWorkbenchPanelWeights: sanitizePanelWeights(input?.centerWorkbenchPanelWeights),
-    missionLedgerWidth: sanitizePaneWidth(input?.missionLedgerWidth),
-    missionChannelsWidth: sanitizePaneWidth(input?.missionChannelsWidth),
     opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
     theme: settingsTheme(input ?? {}),
@@ -302,8 +292,6 @@ export function bootstrapOverlaySettings(input: Partial<OverlaySettings> = setti
   sectionsWidth?: number
   centerWorkbenchWidth?: number
   centerWorkbenchPanelWeights?: Record<string, number>
-  missionLedgerWidth?: number
-  missionChannelsWidth?: number
   preferredProjectEditor?: ProjectEditorID
   workspaceTaskID?: string
   workspaceTaskId?: string
@@ -324,8 +312,6 @@ export function bootstrapOverlaySettings(input: Partial<OverlaySettings> = setti
     sectionsWidth: input.sectionsWidth || undefined,
     centerWorkbenchWidth: input.centerWorkbenchWidth || undefined,
     centerWorkbenchPanelWeights: input.centerWorkbenchPanelWeights || undefined,
-    missionLedgerWidth: input.missionLedgerWidth || undefined,
-    missionChannelsWidth: input.missionChannelsWidth || undefined,
     opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
     zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,
     theme: input.theme ?? DEFAULT_SETTINGS.theme,

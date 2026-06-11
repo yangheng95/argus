@@ -16,7 +16,6 @@ import {
   type NativeCommand,
 } from "../src/services/host-transport"
 import { setBoardStore } from "../src/store/board"
-import { setPageMode } from "../src/store/page-mode"
 import { setSettingsStore } from "../src/store/settings"
 ;(globalThis as any).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
@@ -127,7 +126,6 @@ function taskItem(input: {
 beforeEach(() => {
   installTransport()
   setSettingsStore("desktopNotifications", true)
-  setPageMode("panel")
   setFocus(false)
   clearNotifications()
   setBoardStore("selectedSource", null)
@@ -140,7 +138,6 @@ afterEach(() => {
   clearNotifications()
   setBoardStore("selectedSource", null)
   setBoardStore("tasks", [])
-  setPageMode("panel")
   replaceBadgeAcksForTest([])
   Object.defineProperty(globalThis, "document", {
     configurable: true,

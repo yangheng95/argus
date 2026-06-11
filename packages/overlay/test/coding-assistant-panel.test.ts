@@ -28,6 +28,7 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(html).toContain('id="centerWorkbenchWorkflow"')
   expect(html).toContain('id="centerWorkbenchInspector"')
   expect(html).toContain('id="centerWorkbenchNotifications"')
+  expect(html).toContain('id="leftPanelMissions"')
   expect(html).toContain('id="leftPanelAssistant"')
   expect(html).toContain('id="codingAssistantSessionListPanel"')
   expect(html).not.toContain('id="centerWorkbenchAssistant"')
@@ -41,14 +42,17 @@ test("coding assistant activity selects an independent session in the shared mes
     'type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"',
   )
   expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchPanel, "file">')
-  expect(main).toContain('type LeftActivity = "tasks" | "assistant" | "memory" | "skill" | "mcp"')
+  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
+  expect(main).toContain(
+    'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
+  )
   expect(main).toContain(
     'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
   )
   expect(main).toContain('setSelectedLeftActivity("assistant")')
   expect(main).toContain('openCenterWorkbenchPanel("workflow")')
   expect(main).toContain("abortCodingAssistantActivation()")
-  expect(main).toContain('if (isCodingAssistantSource()) void selectTask("")')
+  expect(main).toContain('boardStore.selectedSource?.kind === "session" && activity !== "mission"')
   expect(main).toContain('isCodingAssistantSource() ? t("chat.assistant_title") : t("chat.title")')
   expect(main).toContain("<CodingAssistantSessionList")
   expect(main).toContain("activateCodingAssistantSessionList")

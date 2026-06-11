@@ -11,7 +11,6 @@ import { TaskList } from "./components/TaskList"
 import { CodingAssistantSessionList } from "./components/CodingAssistantSessionList"
 import { Board } from "./components/Board"
 import { Mission } from "./components/Mission"
-import { pageMode, setPageMode } from "./store/page-mode"
 import { ChatComposer } from "./components/ChatComposer"
 import { LogViewer } from "./components/LogViewer"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
@@ -169,7 +168,7 @@ const [browserPreviewLinkRefresh, setBrowserPreviewLinkRefresh] = createSignal(0
 
 type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"
 type RightActivity = Exclude<CenterWorkbenchPanel, "file">
-type LeftActivity = "tasks" | "assistant" | "memory" | "skill" | "mcp"
+type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"
 
 const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
 const CENTER_WORKBENCH_MIN_PANEL_WIDTH = 128
@@ -199,6 +198,7 @@ const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
 
 const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
   { id: "tasks", icon: "tasks", labelKey: "sidebar.title", tooltipKey: "activity.tooltip.tasks" },
+  { id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission" },
   { id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant" },
   { id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory" },
   { id: "skill", icon: "config-skill", labelKey: "skill.title", tooltipKey: "activity.tooltip.skill" },
@@ -210,6 +210,7 @@ const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActi
 const activeRightActivity = () => selectedRightActivity()
 const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
 const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("tasks")
+const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
 const activeLeftActivity = () => selectedLeftActivity()
 let codingAssistantActivationController: AbortController | null = null
 
@@ -226,6 +227,7 @@ function isAbortError(error: unknown): boolean {
 
 function activateCodingAssistantSessionList(): void {
   abortCodingAssistantActivation()
+  if (isMissionSessionSource()) void selectTask("")
   const controller = new AbortController()
   codingAssistantActivationController = controller
   openCenterWorkbenchPanel("workflow")
@@ -311,10 +313,21 @@ function selectLeftActivity(activity: LeftActivity): void {
     return
   }
   abortCodingAssistantActivation()
-  if (isCodingAssistantSource()) void selectTask("")
+  if (boardStore.selectedSource?.kind === "session" && activity !== "mission") void selectTask("")
   openCenterWorkbenchPanel("workflow")
   setSelectedLeftActivity(activity)
   setSelectedLeftPanelActivity(activity)
+}
+
+function isMissionSessionSource(): boolean {
+  return boardStore.selectedSource?.kind === "session" && !isCodingAssistantSource()
+}
+
+function selectMissionTask(taskID: string): void {
+  openCenterWorkbenchPanel("workflow")
+  setSelectedLeftActivity("tasks")
+  setSelectedLeftPanelActivity("tasks")
+  void selectTask(taskID)
 }
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
@@ -859,7 +872,6 @@ function installGlobalBridges(): void {
   ;(window as any).loadTasks = loadTasks
   ;(window as any).selectTask = selectTask
   ;(window as any).loadBoard = loadBoard
-  ;(window as any).setPageMode = setPageMode
 }
 
 installGlobalBridges()
@@ -906,31 +918,6 @@ document.addEventListener(
     if (document.visibilityState !== "hidden") recomputeNotificationsOnForeground()
   },
   { signal: moduleTeardown.signal },
-)
-
-// ── Mount: Mission page ──
-// The Mission page mode lives next to the default panel. The CSS
-// (`body[data-page-mode="mission"]`) flips visibility between Panel
-// and Mission without unmounting either side, so returning to Panel
-// preserves selected task / conversation state (template §6.3).
-const missionMountEl = document.getElementById("solidMissionMount")
-if (missionMountEl) {
-  missionMountEl.innerHTML = ""
-  render(
-    () => <Mission workspaceTarget={workspaceTarget} workspaceOpen={workspaceOpen} closeWorkspace={closeWorkspace} />,
-    missionMountEl,
-  )
-}
-
-// Reflect the active page mode onto <body> so the surface CSS in
-// mission.css can hide the panel chrome when Mission is active.
-disposers.push(
-  createRoot((dispose) => {
-    createEffect(() => {
-      document.body.dataset.pageMode = pageMode()
-    })
-    return dispose
-  }),
 )
 
 // ── Mount: Conversation ──
@@ -1026,6 +1013,7 @@ if (sidebarTitleEl) {
 
 const LEFT_ACTIVITY_BODY_IDS: Record<LeftActivity, string> = {
   tasks: "leftPanelTasks",
+  mission: "leftPanelMissions",
   assistant: "leftPanelAssistant",
   memory: "leftPanelMemory",
   skill: "leftPanelSkills",
@@ -1034,6 +1022,7 @@ const LEFT_ACTIVITY_BODY_IDS: Record<LeftActivity, string> = {
 
 const LEFT_ACTIVITY_TITLE_KEYS: Record<LeftActivity, string> = {
   tasks: "sidebar.title",
+  mission: "mission.title",
   assistant: "coding_assistant.title",
   memory: "memory.title",
   skill: "skill.title",
@@ -1148,6 +1137,21 @@ if (codingAssistantListEl) {
   )
 }
 
+const missionListEl = document.getElementById("missionListPanel")
+if (missionListEl) {
+  missionListEl.innerHTML = ""
+  render(
+    () => (
+      <Mission
+        active={selectedLeftPanelActivity() === "mission"}
+        refreshToken={missionSharedRefreshToken()}
+        onSelectTask={selectMissionTask}
+      />
+    ),
+    missionListEl,
+  )
+}
+
 function retrySelectedTask(): void {
   const id = activeTaskID()
   if (!id) return
@@ -1218,9 +1222,12 @@ if (composerEl) {
         draftKey={panelComposerDraftKey()}
         pendingSuggestion={pendingSuggestion()}
         onSuggestionConsumed={() => setPendingSuggestion("")}
-        onSubmit={(text, attachments, webSearch) =>
-          panelMessage(text, attachments, webSearch ? { web_search: true } : {})
-        }
+        onSubmit={async (text, attachments, webSearch) => {
+          const refreshMissionLedger = isMissionSessionSource()
+          const result = await panelMessage(text, attachments, webSearch ? { web_search: true } : {})
+          if (refreshMissionLedger) setMissionSharedRefreshToken((value) => value + 1)
+          return result
+        }}
         onStop={() => {
           // Abort the in-flight send request ONLY — no remote cancel. Task-level
           // interrupt is an explicit action on the task row's CancelButton so a
@@ -1405,22 +1412,9 @@ function bindSidebarStaticControls(): void {
   document.getElementById("btnCreateTask")?.addEventListener("click", () => {
     // Deselect current task and focus the composer — the user types their
     // request directly in the ChatComposer, no modal dialog needed.
-    setPageMode("panel")
     void selectTask("")
     const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
     textarea?.focus()
-  })
-
-  // Mission entry: switch to the Mission page mode. The mount itself
-  // lives in the static layout (#solidMissionMount); show/hide is
-  // governed by body[data-page-mode] (see styles/surfaces/mission.css).
-  document.getElementById("btnMission")?.addEventListener("click", () => {
-    if (pageMode() === "mission") {
-      setPageMode("panel")
-      void selectTask("")
-      return
-    }
-    setPageMode("mission")
   })
 
   // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer

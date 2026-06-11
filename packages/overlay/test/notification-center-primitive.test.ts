@@ -70,7 +70,7 @@ test("NotificationCenter waits for the loaded i18n bundle before translating", (
 test("main preloads i18n before mounting translated Solid surfaces", () => {
   expect(MAIN).toContain('import { loadAllLocales, localeTag, setLocale } from "./utils/i18n"')
   expect(MAIN.indexOf("await loadAllLocales()")).toBeLessThan(MAIN.indexOf('render(() => <NotificationCenter surface="toast" />'))
-  expect(MAIN.indexOf("await setLocale(localeTag())")).toBeLessThan(MAIN.indexOf('document.getElementById("solidMissionMount")'))
+  expect(MAIN.indexOf("await setLocale(localeTag())")).toBeLessThan(MAIN.indexOf('document.getElementById("missionListPanel")'))
 })
 
 test("main keeps the early toast root and App owns the workbench notification center", () => {
