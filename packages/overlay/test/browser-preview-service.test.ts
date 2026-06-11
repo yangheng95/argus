@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
 import {
   captureTaskBrowserPreviewEvidence,
+  loadTaskBrowserPreviewEvidenceCaptureObjectUrl,
   loadTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewTarget,
   selectTaskBrowserPreviewTarget,
@@ -218,5 +219,35 @@ test("browser preview service loads persisted evidence through the task-scoped a
   expect(evidence.status).toBe("passed")
   expect(evidence.capture?.path).toContain("desktop.png")
   expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/evidence/art_previewevidence00000001`)
+  expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
+})
+
+test("browser preview service loads persisted evidence screenshot bytes through HostTransport", async () => {
+  let captured: TransportRequest | undefined
+  __setHostTransportForTest({
+    ...fakePreviewTransport((req) => {
+      captured = req
+    }),
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      captured = req
+      return {
+        status: 200,
+        ok: true,
+        headers: { "content-type": "image/png" },
+        body: new Uint8Array([137, 80, 78, 71]) as T,
+      }
+    },
+  })
+
+  const objectUrl = await loadTaskBrowserPreviewEvidenceCaptureObjectUrl({
+    taskID: TASK_ID,
+    evidenceID: "art_previewevidence00000001",
+  })
+
+  expect(objectUrl).toStartWith("blob:")
+  URL.revokeObjectURL(objectUrl)
+  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/evidence/art_previewevidence00000001/capture.png`)
+  expect(captured?.method).toBe("GET")
+  expect(captured?.responseKind).toBe("binary")
   expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
 })

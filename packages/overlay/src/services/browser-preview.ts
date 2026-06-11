@@ -1,4 +1,4 @@
-import { apiJson } from "./api"
+import { ApiError, apiJson, apiRequest } from "./api"
 
 export interface BrowserPreviewViewport {
   id: "desktop" | "tablet" | "mobile"
@@ -118,4 +118,19 @@ export async function loadTaskBrowserPreviewEvidence(input: {
     `task/${encodeURIComponent(input.taskID)}/browser-preview/evidence/${encodeURIComponent(input.evidenceID)}`,
     { signal: input.signal },
   )) as BrowserPreviewEvidence
+}
+
+export async function loadTaskBrowserPreviewEvidenceCaptureObjectUrl(input: {
+  taskID: string
+  evidenceID: string
+  signal?: AbortSignal
+}): Promise<string> {
+  const path = `task/${encodeURIComponent(input.taskID)}/browser-preview/evidence/${encodeURIComponent(input.evidenceID)}/capture.png`
+  const response = await apiRequest<Uint8Array>(path, {
+    responseKind: "binary",
+    signal: input.signal,
+  })
+  if (!response.ok) throw new ApiError(response.status, path, response.body)
+  const contentType = response.headers["content-type"] || response.headers["Content-Type"] || "image/png"
+  return URL.createObjectURL(new Blob([response.body], { type: contentType }))
 }

@@ -1,10 +1,11 @@
 import * as Select from "@kobalte/core/select"
-import { createEffect, createMemo, createResource, createSignal, For, Match, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import type { JSX } from "solid-js"
 import {
   captureTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewTarget,
   loadTaskBrowserPreviewEvidence,
+  loadTaskBrowserPreviewEvidenceCaptureObjectUrl,
   selectTaskBrowserPreviewTarget,
   type BrowserPreviewEvidence,
   type BrowserPreviewTarget,
@@ -30,6 +31,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [viewportScopeKey, setViewportScopeKey] = createSignal("")
   const [refreshToken, setRefreshToken] = createSignal(0)
   const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
+  const [lastAutoCapturedPreviewKey, setLastAutoCapturedPreviewKey] = createSignal("")
   const [verificationRequest, setVerificationRequest] = createSignal<{
     taskID: string
     targetID: string
@@ -85,6 +87,25 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     }
     return latestEvidence()
   })
+  const [captureImageUrl] = createResource(
+    () => {
+      const evidence = renderedEvidence()
+      if (!evidence?.capture?.captured || !evidence.capture.path) return undefined
+      return { taskID: evidence.taskID, evidenceID: evidence.id, viewportID: evidence.viewportID }
+    },
+    (scope) => loadTaskBrowserPreviewEvidenceCaptureObjectUrl(scope),
+  )
+
+  createEffect<string | undefined>((previous) => {
+    const current = captureImageUrl()
+    if (previous && previous !== current) URL.revokeObjectURL(previous)
+    return current
+  })
+
+  onCleanup(() => {
+    const current = captureImageUrl()
+    if (current) URL.revokeObjectURL(current)
+  })
 
   createEffect(() => {
     const resolved = currentTarget()
@@ -105,6 +126,18 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (viewportScopeKey() === key) return
     setViewportScopeKey(key)
     setViewportID(ids.includes(viewportID()) ? viewportID() : ids[0])
+  })
+
+  createEffect(() => {
+    const taskID = props.taskID()
+    const resolved = currentTarget()
+    const viewportIDs = viewports().map((viewport) => viewport.id)
+    if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.url || !resolved.id) return
+    if (viewportIDs.length === 0 || resolved.latestEvidenceID || verification.loading) return
+    const key = `${taskID}:${resolved.id}:${viewportIDs.join(",")}`
+    if (lastAutoCapturedPreviewKey() === key) return
+    setLastAutoCapturedPreviewKey(key)
+    setVerificationRequest({ taskID, targetID: resolved.id, viewportIDs, token: Date.now() })
   })
 
   const selectCandidate = (candidate: BrowserPreviewCandidate | null) => {
@@ -310,6 +343,18 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                   <code>{evidence().id}</code>
                 </div>
                 <p>{evidence().summary}</p>
+                <Show when={captureImageUrl()}>
+                  {(url) => (
+                    <figure class="browser-preview-evidence-shot">
+                      <img
+                        src={url()}
+                        alt={evidence().summary}
+                        data-ui="browser-preview-screenshot"
+                        decoding="async"
+                      />
+                    </figure>
+                  )}
+                </Show>
                 <dl class="browser-preview-evidence-facts">
                   <div>
                     <dt>{t("browser_preview.viewport.label")}</dt>

@@ -8489,6 +8489,31 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
 export type BrowserPreviewReadTaskEvidenceResponse =
   BrowserPreviewReadTaskEvidenceResponses[keyof BrowserPreviewReadTaskEvidenceResponses]
 
+export type BrowserPreviewReadTaskEvidenceCaptureData = {
+  body?: never
+  path: {
+    taskID: string
+    evidenceID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png"
+}
+
+export type BrowserPreviewReadTaskEvidenceCaptureResponses = {
+  /**
+   * Persisted browser preview PNG screenshot
+   */
+  200: Blob | File
+}
+
+export type BrowserPreviewReadTaskEvidenceCaptureResponse =
+  BrowserPreviewReadTaskEvidenceCaptureResponses[keyof BrowserPreviewReadTaskEvidenceCaptureResponses]
+
 export type BrowserPreviewSelectTaskTargetData = {
   body: {
     targetID: string
