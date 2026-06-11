@@ -6,6 +6,7 @@ import path from "node:path"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { closeBrowserPreviewLiveSessions } from "../../src/browser-preview/live"
 import { persistBrowserPreviewEvidence, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
@@ -18,6 +19,7 @@ const ROUTE_TEST_TIMEOUT_MILLISECONDS = 20_000
 
 describe("browser preview routes", () => {
   afterEach(async () => {
+    await closeBrowserPreviewLiveSessions()
     mock.restore()
     await resetDatabase()
   })
@@ -50,7 +52,7 @@ describe("browser preview routes", () => {
       hostname: "127.0.0.1",
       port: 0,
       fetch() {
-        return new Response("<!doctype html><title>Preview</title>", {
+        return new Response(`<!doctype html><html><head><title>Preview</title></head><body><button>Open</button><main>${"Preview ".repeat(80)}</main></body></html>`, {
           headers: { "content-type": "text/html" },
         })
       },
@@ -70,7 +72,7 @@ describe("browser preview routes", () => {
         }),
       )
       const app = Server.App()
-      const liveUrl = `http://127.0.0.1:${preview.port}/task`
+      const liveUrl = "https://preview.example/task"
 
       await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead" })
       await persistBrowserPreviewTarget({ taskID, url: liveUrl })
@@ -350,6 +352,64 @@ describe("browser preview routes", () => {
     expect(response.status).toBe(400)
     const body = await response.json()
     expect(JSON.stringify(body)).toContain("targetID")
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
+
+  test("POST /task/:taskID/browser-preview/live/snapshot returns a PNG from the persisted target", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const target = await persistBrowserPreviewTarget({
+      taskID,
+      url: `data:text/html,${encodeURIComponent(`<!doctype html><html><body><button>Live</button><main>${"Preview ".repeat(80)}</main></body></html>`)}`,
+    })
+    const app = Server.App()
+    const response = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ targetID: target.id, viewportID: "mobile" }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get("content-type")).toBe("image/png")
+    const bytes = Buffer.from(await response.arrayBuffer())
+    expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+  }, { timeout: 60_000 })
+
+  test("POST /task/:taskID/browser-preview/live/input requires persisted target IDs", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const app = Server.App()
+
+    const missingTargetID = await app.request(`/task/${taskID}/browser-preview/live/input`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({
+        url: "http://127.0.0.1:5173/",
+        viewportID: "desktop",
+        input: { kind: "click", x: 1, y: 1 },
+      }),
+    })
+    expect(missingTargetID.status).toBe(400)
+    expect(JSON.stringify(await missingTargetID.json())).toContain("targetID")
+
+    const unknownTarget = await app.request(`/task/${taskID}/browser-preview/live/input`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({
+        targetID: "art_previewtarget_missing",
+        viewportID: "desktop",
+        input: { kind: "click", x: 1, y: 1 },
+      }),
+    })
+    expect(unknownTarget.status).toBe(404)
   }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
   test("POST /task/:taskID/browser-preview/capture does not replace an unknown targetID with the latest target", async () => {

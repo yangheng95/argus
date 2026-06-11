@@ -3,11 +3,14 @@ import { createEffect, createMemo, createResource, createSignal, For, Match, onC
 import type { JSX } from "solid-js"
 import {
   captureTaskBrowserPreviewEvidence,
+  loadTaskBrowserPreviewLiveSnapshotObjectUrl,
   loadTaskBrowserPreviewTarget,
   loadTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewEvidenceCaptureObjectUrl,
   selectTaskBrowserPreviewTarget,
+  sendTaskBrowserPreviewLiveInputObjectUrl,
   type BrowserPreviewEvidence,
+  type BrowserPreviewLiveInput,
   type BrowserPreviewTarget,
   type BrowserPreviewViewportID,
 } from "../services/browser-preview"
@@ -32,6 +35,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [refreshToken, setRefreshToken] = createSignal(0)
   const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
   const [lastAutoCapturedPreviewKey, setLastAutoCapturedPreviewKey] = createSignal("")
+  const [liveImageUrl, setLiveImageUrl] = createSignal("")
+  const [liveError, setLiveError] = createSignal("")
+  const [liveLoading, setLiveLoading] = createSignal(false)
   const [verificationRequest, setVerificationRequest] = createSignal<{
     taskID: string
     targetID: string
@@ -75,7 +81,15 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       null,
   )
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
+  const selectedViewport = createMemo(() => viewports().find((viewport) => viewport.id === viewportID()))
   const targetUrl = createMemo(() => currentTarget()?.url)
+  const liveScope = createMemo(() => {
+    const taskID = props.taskID()
+    const resolved = currentTarget()
+    const viewport = selectedViewport()
+    if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.id || !viewport) return undefined
+    return { taskID, targetID: resolved.id, viewportID: viewport.id, viewport }
+  })
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
     const verified = verification()
     const request = verificationRequest()
@@ -105,6 +119,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   onCleanup(() => {
     const current = captureImageUrl()
     if (current) URL.revokeObjectURL(current)
+    const live = liveImageUrl()
+    if (live) URL.revokeObjectURL(live)
   })
 
   createEffect(() => {
@@ -156,6 +172,95 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (viewportIDs.length === 0) return
     setVerificationRequest({ taskID, targetID: resolved.id, viewportIDs, token: Date.now() })
   }
+
+  let liveFrameRequestSequence = 0
+
+  const replaceLiveImageUrl = (next: string) => {
+    const previous = liveImageUrl()
+    setLiveImageUrl(next)
+    if (previous && previous !== next) URL.revokeObjectURL(previous)
+  }
+
+  const clearLiveImageUrl = () => {
+    const previous = liveImageUrl()
+    if (!previous) return
+    setLiveImageUrl("")
+    URL.revokeObjectURL(previous)
+  }
+
+  const loadLiveFrame = async (
+    scope: NonNullable<ReturnType<typeof liveScope>>,
+    input?: BrowserPreviewLiveInput,
+  ) => {
+    const sequence = ++liveFrameRequestSequence
+    setLiveLoading(true)
+    setLiveError("")
+    try {
+      const next = input
+        ? await sendTaskBrowserPreviewLiveInputObjectUrl({ ...scope, input })
+        : await loadTaskBrowserPreviewLiveSnapshotObjectUrl(scope)
+      if (sequence !== liveFrameRequestSequence) {
+        URL.revokeObjectURL(next)
+        return
+      }
+      replaceLiveImageUrl(next)
+    } catch (error) {
+      if (sequence === liveFrameRequestSequence) setLiveError(String(error))
+    } finally {
+      if (sequence === liveFrameRequestSequence) setLiveLoading(false)
+    }
+  }
+
+  const livePoint = (event: MouseEvent | WheelEvent, element: HTMLElement) => {
+    const viewport = selectedViewport()
+    const image = element.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
+    if (!viewport || !image) return undefined
+    const rect = image.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return undefined
+    return {
+      x: Math.max(0, Math.min(viewport.width, ((event.clientX - rect.left) / rect.width) * viewport.width)),
+      y: Math.max(0, Math.min(viewport.height, ((event.clientY - rect.top) / rect.height) * viewport.height)),
+    }
+  }
+
+  const sendLiveInput = (input: BrowserPreviewLiveInput) => {
+    const scope = liveScope()
+    if (!scope) return
+    void loadLiveFrame(scope, input)
+  }
+
+  const handleLivePointerDown: JSX.EventHandlerUnion<HTMLElement, PointerEvent> = (event) => {
+    if (event.button > 2) return
+    const point = livePoint(event, event.currentTarget)
+    if (!point) return
+    event.currentTarget.focus()
+    event.preventDefault()
+    const button = event.button === 1 ? "middle" : event.button === 2 ? "right" : "left"
+    sendLiveInput({ kind: "click", ...point, button })
+  }
+
+  const handleLiveWheel: JSX.EventHandlerUnion<HTMLElement, WheelEvent> = (event) => {
+    const point = livePoint(event, event.currentTarget)
+    if (!point) return
+    event.preventDefault()
+    sendLiveInput({ kind: "wheel", ...point, deltaX: event.deltaX, deltaY: event.deltaY })
+  }
+
+  const handleLiveKeyDown: JSX.EventHandlerUnion<HTMLElement, KeyboardEvent> = (event) => {
+    if (event.key === "Shift" || event.key === "Control" || event.key === "Alt" || event.key === "Meta") return
+    event.preventDefault()
+    sendLiveInput({ kind: "key", key: event.key })
+  }
+
+  createEffect(() => {
+    const scope = liveScope()
+    if (!scope) {
+      clearLiveImageUrl()
+      setLiveError("")
+      return
+    }
+    void loadLiveFrame(scope)
+  })
 
   return (
     <section class="browser-preview-panel" aria-label={t("browser_preview.title")} data-active={String(panelActive())}>
@@ -330,6 +435,33 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             </div>
           }
         >
+          <Match when={liveImageUrl()}>
+            {(url) => (
+              <section
+                class="browser-preview-live"
+                data-ui="browser-preview-live"
+                data-status={liveError() ? "failed" : liveLoading() ? "loading" : "ready"}
+              >
+                <figure
+                  class="browser-preview-live-frame"
+                  tabIndex={0}
+                  onPointerDown={handleLivePointerDown}
+                  onWheel={handleLiveWheel}
+                  onKeyDown={handleLiveKeyDown}
+                  aria-label={t("browser_preview.title")}
+                >
+                  <img
+                    src={url()}
+                    alt={targetUrl() ?? t("browser_preview.title")}
+                    data-ui="browser-preview-live-screenshot"
+                    decoding="async"
+                    draggable={false}
+                  />
+                </figure>
+                <Show when={liveError()}>{(error) => <code>{error()}</code>}</Show>
+              </section>
+            )}
+          </Match>
           <Match when={renderedEvidence()}>
             {(evidence) => (
               <section

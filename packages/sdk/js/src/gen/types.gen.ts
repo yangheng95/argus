@@ -8757,6 +8757,77 @@ export type BrowserPreviewCaptureTaskTargetResponses = {
 export type BrowserPreviewCaptureTaskTargetResponse =
   BrowserPreviewCaptureTaskTargetResponses[keyof BrowserPreviewCaptureTaskTargetResponses]
 
+export type BrowserPreviewLiveSnapshotData = {
+  body: {
+    targetID: string
+    viewportID: "desktop" | "tablet" | "mobile"
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/live/snapshot"
+}
+
+export type BrowserPreviewLiveSnapshotResponses = {
+  /**
+   * Interactive browser preview PNG frame
+   */
+  200: Blob | File
+}
+
+export type BrowserPreviewLiveSnapshotResponse =
+  BrowserPreviewLiveSnapshotResponses[keyof BrowserPreviewLiveSnapshotResponses]
+
+export type BrowserPreviewLiveInputData = {
+  body: {
+    targetID: string
+    viewportID: "desktop" | "tablet" | "mobile"
+    input:
+      | {
+          kind: "click"
+          x: number
+          y: number
+          button?: "left" | "middle" | "right"
+        }
+      | {
+          kind: "wheel"
+          x: number
+          y: number
+          deltaX: number
+          deltaY: number
+        }
+      | {
+          kind: "key"
+          key: string
+        }
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/live/input"
+}
+
+export type BrowserPreviewLiveInputResponses = {
+  /**
+   * Interactive browser preview PNG frame after input
+   */
+  200: Blob | File
+}
+
+export type BrowserPreviewLiveInputResponse = BrowserPreviewLiveInputResponses[keyof BrowserPreviewLiveInputResponses]
+
 export type ServerShutdownData = {
   body?: never
   path?: never
