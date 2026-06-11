@@ -161,7 +161,9 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(css).toContain(".browser-preview-evidence-header")
   expect(css).toContain(".browser-preview-evidence-facts")
   expect(css).toContain(".browser-preview-evidence-status")
-  expect(css).toContain("place-items: center")
+  expect(css).toContain("overflow-y: auto")
+  expect(css).toContain(".browser-preview-stage > .browser-preview-empty")
+  expect(css).not.toContain("place-items: center")
 })
 
 test("VS Code preview contract is evidence-backed under frame-src none", () => {

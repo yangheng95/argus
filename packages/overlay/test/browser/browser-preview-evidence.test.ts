@@ -107,7 +107,7 @@ test(
     let selectedTargetID = targetID
 
     const pngBytes = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/abL9ZsAAAAASUVORK5CYII=",
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAABACAYAAADbER1AAAAAdElEQVR4AQXBAQ3AIAADsGaqEDMxFzMvyOKt892XqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZ+SrVB/bxIzVQAAAAASUVORK5CYII=",
       "base64",
     )
     let serverOrigin = ""
@@ -437,6 +437,17 @@ test(
           return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
         },
         "loaded browser preview screenshot",
+        () => ({ errors, requestLog }),
+      )
+      await waitForPageState(
+        page,
+        () => {
+          const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
+          if (!stage || stage.scrollHeight <= stage.clientHeight + 1) return false
+          stage.scrollTop = 160
+          return stage.scrollTop > 0
+        },
+        "scrollable full-page browser preview evidence",
         () => ({ errors, requestLog }),
       )
 
