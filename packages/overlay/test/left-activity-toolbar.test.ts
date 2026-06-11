@@ -50,6 +50,9 @@ test("left activity toolbar owns task, assistant, memory, skill, and MCP control
   expect(toolbar).toContain("title={tooltip()}")
   expect(toolbar).toContain("aria-label={tooltip()}")
   expect(activityCss).toContain(".sidebar-tool-panel .ext-group")
+  expect(activityCss).toMatch(
+    /\.sidebar-tool-panel \.ext-group-body,\s*\.sidebar-tool-panel \.memory-panel\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s,
+  )
   expect(activityCss).toContain(".sidebar-tool-panel .tool-panel-toolbar")
   expect(activityCss).toContain('.sidebar-tool-panel .oc-button[data-ui="tool-panel-action"]')
   expect(activityCss).toContain('.sidebar-tool-panel .memory-panel[data-compact="true"] .knowledge-toolbar')

@@ -209,6 +209,8 @@
 .sidebar-tool-panel .ext-group-body,
 .sidebar-tool-panel .memory-panel {
   display: flex;
+  flex: 1 1 0;
+  min-height: 0;
   flex-direction: column;
   gap: calc(8px * var(--ui-scale));
   padding: calc(8px * var(--ui-scale));
