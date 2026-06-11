@@ -109,7 +109,7 @@ export default defineConfig({
         {
           label: "Usage",
           translations: { en: "Usage", "zh-CN": "使用" },
-          items: ["tui", "cli"],
+          items: ["cli"],
         },
         {
           label: "Configure",
@@ -119,8 +119,6 @@ export default defineConfig({
             "rules",
             "agents",
             "models",
-            "themes",
-            "keybinds",
             "commands",
             "formatters",
             "permissions",
@@ -170,7 +168,14 @@ export default defineConfig({
         {
           label: "Reference",
           translations: { en: "Reference", "zh-CN": "参考" },
-          items: ["reference/api", "reference/cli", "reference/sdk", "reference/env", "reference/evaluator"],
+          items: [
+            "reference/mission-task",
+            "reference/api",
+            "reference/cli",
+            "reference/sdk",
+            "reference/env",
+            "reference/evaluator",
+          ],
         },
       ],
       components: {
