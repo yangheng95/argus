@@ -47,6 +47,21 @@ describe("SDK OpenCorvus client contract", () => {
     expect(source).not.toContain("createOpencode")
   })
 
+  test("API-mode bootstrap initializes git only through the canonical project endpoint", () => {
+    const client = readRepoFile("packages", "sdk", "js", "src", "client.ts")
+    const index = readRepoFile("packages", "sdk", "js", "src", "index.ts")
+    const source = `${client}\n${index}`
+
+    expect(index).toContain("export type OpenCorvusOptions")
+    expect(index).toContain("initGit?: boolean")
+    expect(index).toContain('throw new Error("createOpenCorvus initGit=true requires a directory")')
+    expect(index).toContain("client.project.current2.initGit({ directory }, { responseStyle: \"fields\" })")
+    expect(index).toContain("server.close()")
+    expect(index).toContain("directory,")
+    expect(source).not.toContain("WorktreeNotGitError")
+    expect(client).not.toContain("createTask")
+  })
+
   test(
     "production code no longer imports deprecated SDK symbols",
     () => {
