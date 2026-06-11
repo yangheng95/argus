@@ -5,9 +5,9 @@
 // the parsed JSON body and lets failures propagate as ApiError; the page
 // renders explicit error states (template §14 — no silent fallbacks).
 //
-// The Mission page reads the same task sources as the panel — boardStore for
-// tasks, settingsStore for the active directory — so this service does not
-// duplicate task storage.
+// The Mission activity reads the same task sources as the panel — boardStore
+// for tasks, settingsStore for the active directory — so this service does
+// not duplicate task storage.
 
 import { apiJson } from "./api"
 
