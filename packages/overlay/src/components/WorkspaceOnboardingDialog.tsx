@@ -1,10 +1,16 @@
-import { createMemo, createSignal, For, Show } from "solid-js"
+import { createMemo, createSignal, For, onMount, Show } from "solid-js"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
 import { settingsStore } from "../store/settings"
 import { useAsyncAction } from "../solid/async-action"
-import { browseDirectory, loadRecentDirectories, setDirectory } from "../services/workspace"
+import {
+  browseDirectory,
+  loadDiscoveredProjects,
+  loadRecentDirectories,
+  setDirectory,
+  type DiscoveredProject,
+} from "../services/workspace"
 import { getHostTransport } from "../services/host-transport"
 import { t } from "../utils/i18n"
 
@@ -16,6 +22,8 @@ function leafName(value: string): string {
 export function WorkspaceOnboardingDialog() {
   const [activeAction, setActiveAction] = createSignal<string>("")
   const [browserPathDraft, setBrowserPathDraft] = createSignal("")
+  const [discoveredRoot, setDiscoveredRoot] = createSignal("")
+  const [discoveredProjects, setDiscoveredProjects] = createSignal<DiscoveredProject[]>([])
   const open = createMemo(() => !settingsStore.directory)
   const manualWorkspacePathEntry = createMemo(() => getHostTransport().capabilities.ui.manualWorkspacePathEntry)
   const recentDirectories = createMemo(() => {
@@ -43,6 +51,18 @@ export function WorkspaceOnboardingDialog() {
     if (!next) return
     await runAction("browser-path", () => setDirectory(next))
   }
+
+  onMount(() => {
+    void loadDiscoveredProjects()
+      .then((discovery) => {
+        setDiscoveredRoot(discovery.root)
+        setDiscoveredProjects(discovery.projects)
+      })
+      .catch(() => {
+        setDiscoveredRoot("")
+        setDiscoveredProjects([])
+      })
+  })
 
   return (
     <Dialog
@@ -138,6 +158,43 @@ export function WorkspaceOnboardingDialog() {
             </Show>
           </article>
         </section>
+
+        <Show when={discoveredProjects().length > 0}>
+          <section class="workspace-onboarding-recent" data-kind="discovered">
+            <div class="workspace-onboarding-section-head">
+              <h3 class="workspace-onboarding-section-title">{t("cwd.detected_projects")}</h3>
+              <p class="workspace-onboarding-section-text" title={discoveredRoot()}>
+                {t("cwd.detected_projects_hint", { root: discoveredRoot() })}
+              </p>
+            </div>
+            <div class="workspace-onboarding-recent-list">
+              <For each={discoveredProjects().slice(0, 6)}>
+                {(project, index) => (
+                  <button
+                    type="button"
+                    class="workspace-onboarding-recent-item"
+                    data-testid={`workspace-onboarding-detected-${index()}`}
+                    data-busy={activeAction() === `detected:${project.directory}` ? "true" : "false"}
+                    disabled={actionRunner.pending()}
+                    aria-busy={activeAction() === `detected:${project.directory}` ? "true" : "false"}
+                    onClick={() => void runAction(`detected:${project.directory}`, () => setDirectory(project.directory))}
+                  >
+                    <span class="workspace-onboarding-recent-icon" aria-hidden="true">
+                      <Icon name="folder" />
+                    </span>
+                    <span class="workspace-onboarding-recent-copy">
+                      <span class="workspace-onboarding-recent-name">{project.name}</span>
+                      <span class="workspace-onboarding-recent-path">{project.directory}</span>
+                    </span>
+                    <span class="workspace-onboarding-recent-open">
+                      <Icon name="chevron" />
+                    </span>
+                  </button>
+                )}
+              </For>
+            </div>
+          </section>
+        </Show>
 
         <Show when={recentDirectories().length > 0}>
           <section class="workspace-onboarding-recent">

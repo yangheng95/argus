@@ -34,6 +34,17 @@ export interface ProjectEditor {
   label: string
 }
 
+export interface DiscoveredProject {
+  directory: string
+  name: string
+  marker: string
+}
+
+export interface ProjectDiscovery {
+  root: string
+  projects: DiscoveredProject[]
+}
+
 // IDE means Integrated Development Environment; these IDs are the public
 // choices surfaced by the workspace UI and handled by the native host.
 export const PROJECT_EDITORS: ProjectEditor[] = [
@@ -471,6 +482,21 @@ export function removeRecentDirectory(dir: string): void {
   if (!dir) return
   const normalized = dir.trim().toLowerCase()
   saveRecentDirectories(loadRecentDirectories().filter((d) => d.toLowerCase() !== normalized))
+}
+
+export async function loadDiscoveredProjects(): Promise<ProjectDiscovery> {
+  const result = await apiJson("global/projects/discover")
+  const root = typeof result?.root === "string" ? result.root : ""
+  const projects = Array.isArray(result?.projects)
+    ? result.projects
+        .filter((item: any) => item && typeof item.directory === "string" && typeof item.name === "string")
+        .map((item: any) => ({
+          directory: String(item.directory),
+          name: String(item.name),
+          marker: typeof item.marker === "string" ? item.marker : "",
+        }))
+    : []
+  return { root, projects }
 }
 
 // ── applyDirectory ──

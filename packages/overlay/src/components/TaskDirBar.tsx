@@ -12,10 +12,12 @@ import { pathBreadcrumb } from "../utils/dom-utils"
 import {
   activeDirectory,
   browseDirectory,
+  loadDiscoveredProjects,
   loadRecentDirectories,
   openDirectory,
   removeRecentDirectory,
   setDirectory,
+  type DiscoveredProject,
 } from "../services/workspace"
 import { t } from "../utils/i18n"
 import { AppLog } from "../utils/log"
@@ -72,9 +74,30 @@ export function TaskDirContent() {
   const dirEmpty = createMemo(() => (dir() ? "false" : "true"))
   const [open, setOpen] = createSignal(false)
   const [recentDirs, setRecentDirs] = createSignal<string[]>([])
+  const [discoveredRoot, setDiscoveredRoot] = createSignal("")
+  const [discoveredProjects, setDiscoveredProjects] = createSignal<DiscoveredProject[]>([])
+  const [pathDraft, setPathDraft] = createSignal("")
 
   function syncRecentDirs(): void {
     setRecentDirs(loadRecentDirectories())
+  }
+
+  async function syncDiscoveredProjects(): Promise<void> {
+    try {
+      const discovery = await loadDiscoveredProjects()
+      setDiscoveredRoot(discovery.root)
+      setDiscoveredProjects(discovery.projects)
+    } catch (err) {
+      setDiscoveredRoot("")
+      setDiscoveredProjects([])
+      AppLog.warn("ui", "Failed to discover local OpenCorvus projects", { error: String(err) })
+    }
+  }
+
+  function syncPanelData(): void {
+    syncRecentDirs()
+    setPathDraft(dir())
+    void syncDiscoveredProjects()
   }
 
   function closeRecentPanel(): void {
@@ -82,7 +105,7 @@ export function TaskDirContent() {
   }
 
   function setRecentPanelOpen(nextOpen: boolean): void {
-    if (nextOpen) syncRecentDirs()
+    if (nextOpen) syncPanelData()
     setOpen(nextOpen)
   }
 
@@ -128,6 +151,20 @@ export function TaskDirContent() {
     if (!loadRecentDirectories().length) closeRecentPanel()
   }
 
+  async function submitPath(event: Event): Promise<void> {
+    event.preventDefault()
+    event.stopPropagation()
+    const next = pathDraft().trim()
+    if (!next) return
+    try {
+      await setDirectory(next)
+      syncPanelData()
+      closeRecentPanel()
+    } catch (err) {
+      AppLog.error("ui", "Failed to set working directory from cwd editor", { directory: next, error: String(err) })
+    }
+  }
+
   return (
     <DropdownMenu.Root
       open={open()}
@@ -168,11 +205,61 @@ export function TaskDirContent() {
                 </div>
               </Show>
             </div>
+            <form class="recent-dir-edit-form" onSubmit={(event) => void submitPath(event)}>
+              <label class="recent-dir-edit-label">
+                <span>{t("cwd.path_label")}</span>
+                <input
+                  value={pathDraft()}
+                  onInput={(event) => setPathDraft(event.currentTarget.value)}
+                  placeholder={t("workspace_onboarding.browser_path_placeholder")}
+                  autocomplete="off"
+                  spellcheck={false}
+                />
+              </label>
+              <button type="submit" class="recent-dir-edit-submit" disabled={!pathDraft().trim()}>
+                <Icon name="folder-open" size={14} />
+              </button>
+            </form>
+            <Show when={discoveredProjects().length > 0}>
+              <div class="recent-dir-section">
+                <div class="recent-dir-section-title" title={discoveredRoot()}>
+                  {t("cwd.detected_projects")}
+                </div>
+                <div class="recent-dir-list">
+                  <For each={discoveredProjects()}>
+                    {(project) => {
+                      const isActive = () => !!dir() && project.directory.toLowerCase() === dir().toLowerCase()
+                      return (
+                        <div class="recent-dir-row" data-active={isActive() ? "true" : "false"}>
+                          <DropdownMenu.Item
+                            as="button"
+                            type="button"
+                            class="recent-dir-item"
+                            title={project.directory}
+                            onSelect={() => void chooseRecentDirectory(project.directory)}
+                          >
+                            <span class="recent-dir-copy">
+                              <span class="recent-dir-label">{project.name}</span>
+                              <span class="recent-dir-path">{project.directory}</span>
+                            </span>
+                            <Show when={isActive()}>
+                              <span class="recent-dir-state" aria-hidden="true">
+                                •
+                              </span>
+                            </Show>
+                          </DropdownMenu.Item>
+                        </div>
+                      )
+                    }}
+                  </For>
+                </div>
+              </div>
+            </Show>
             <Show
               when={recentDirs().length > 0}
               fallback={<div class="recent-dir-empty">{t("cwd.recent_empty")}</div>}
             >
-              <div class="recent-dir-list">
+              <div class="recent-dir-list" data-kind="recent">
                 <For each={recentDirs()}>
                   {(recent) => {
                     const isActive = () => !!dir() && recent.toLowerCase() === dir().toLowerCase()

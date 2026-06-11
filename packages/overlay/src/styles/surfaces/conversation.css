@@ -1483,7 +1483,7 @@
   position: fixed;
   min-width: calc(260px * var(--ui-scale));
   max-width: calc(460px * var(--ui-scale));
-  max-height: calc(320px * var(--ui-scale));
+  max-height: calc(420px * var(--ui-scale));
   overflow: hidden;
   background: var(--menu-panel-bg);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border-strong) 88%, transparent);
@@ -1529,6 +1529,84 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.recent-dir-edit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(30px * var(--ui-scale));
+  gap: calc(6px * var(--ui-scale));
+  align-items: end;
+  padding: 0 calc(2px * var(--ui-scale));
+}
+
+.recent-dir-edit-label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  color: var(--text-soft);
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-medium);
+}
+
+.recent-dir-edit-label input {
+  width: 100%;
+  min-width: 0;
+  height: calc(30px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  color: var(--text-strong);
+  font: inherit;
+}
+
+.recent-dir-edit-label input:focus {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  outline: none;
+}
+
+.recent-dir-edit-submit {
+  appearance: none;
+  width: calc(30px * var(--ui-scale));
+  height: calc(30px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--oc-border-width) solid var(--oc-control-border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--oc-control-bg);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.recent-dir-edit-submit:hover,
+.recent-dir-edit-submit:focus-visible {
+  background: var(--oc-control-bg-hover);
+  color: var(--text-strong);
+  outline: none;
+}
+
+.recent-dir-edit-submit:disabled {
+  cursor: default;
+  opacity: var(--ui-opacity-disabled);
+}
+
+.recent-dir-section {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.recent-dir-section-title {
+  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: var(--ui-letter-spacing-loose);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .recent-dir-list {
