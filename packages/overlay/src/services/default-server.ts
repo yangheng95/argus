@@ -2,13 +2,19 @@ import serverDefaults from "../../../opencorvus/server-defaults.json"
 
 export const DEFAULT_LOCAL_SERVER_URL = `http://${serverDefaults.host}:${serverDefaults.port}`
 
-export function serverUrlFromOverlayLocation(location: Pick<Location, "origin" | "pathname" | "protocol">): string | null {
+export function legacyPrefixedServerUrlFromOverlayLocation(
+  location: Pick<Location, "origin" | "pathname" | "protocol">,
+): string | null {
   if (!location.protocol.startsWith("http")) return null
   const segments = location.pathname.split("/").filter(Boolean)
   const uiIndex = segments.indexOf("ui")
   if (uiIndex < 0) return null
   const prefix = segments.slice(0, uiIndex).join("/")
   return prefix ? `${location.origin}/${prefix}` : location.origin
+}
+
+export function serverUrlFromOverlayLocation(location: Pick<Location, "origin" | "pathname" | "protocol">): string | null {
+  return legacyPrefixedServerUrlFromOverlayLocation(location)
 }
 
 export function currentDefaultServer(): string {
