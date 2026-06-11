@@ -1202,7 +1202,7 @@ if (leftActivityToolbarEl) {
 const leftSkillsPanelEl = document.getElementById("solidLeftSkillsPanel")
 if (leftSkillsPanelEl) {
   render(
-    () => <SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />,
+    () => <SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />,
     leftSkillsPanelEl,
   )
 }
@@ -1210,7 +1210,7 @@ if (leftSkillsPanelEl) {
 const leftMcpPanelEl = document.getElementById("solidLeftMcpPanel")
 if (leftMcpPanelEl) {
   render(
-    () => <McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />,
+    () => <McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />,
     leftMcpPanelEl,
   )
 }
