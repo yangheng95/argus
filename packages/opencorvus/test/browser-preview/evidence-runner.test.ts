@@ -7,6 +7,14 @@ import type { RuntimeCaptureSuccess } from "../../src/runtime/capture-contract"
 import { tmpdir } from "../fixture/fixture"
 
 describe("browser preview evidence runner contract", () => {
+  test("sidecar captures full-page screenshots instead of viewport clips", async () => {
+    const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/browser-preview/evidence-runner.ts"), "utf8")
+
+    expect(source).toContain("collectPageSize(page)")
+    expect(source).toContain("fullPage: true")
+    expect(source).not.toContain("clip: { x: 0, y: 0")
+  })
+
   test("manifest records viewport IDs and diagnostics path as runner evidence metadata", async () => {
     await using tmp = await tmpdir()
     const desktopPath = path.join(tmp.path, "desktop.png")
@@ -116,6 +124,27 @@ describe("browser preview evidence runner contract", () => {
     expect(capture?.captured && capture.layers.pixel.variance).toBe(0)
     expect(result.artifactPath).toBe(capture?.captured && capture.path)
   })
+
+  test("uses decoded PNG dimensions for scrollable full-page evidence size", async () => {
+    await using tmp = await tmpdir()
+    const screenshotPath = path.join(tmp.path, "desktop.png")
+    await writePng(screenshotPath, "noise", { width: 12, height: 96 })
+
+    const result = await finalizeBrowserPreviewSidecarCapture({
+      capture: sidecarCapture({
+        path: screenshotPath,
+        layers: passedLayers(screenshotPath),
+        dom: populatedDom(),
+      }),
+      url: "http://127.0.0.1:5173/",
+      outDir: tmp.path,
+    })
+
+    expect(result.capture.captured).toBe(true)
+    if (!result.capture.captured) return
+    expect(result.capture.size).toEqual({ width: 12, height: 96 })
+    expect(result.capture.viewport).toEqual({ width: 1440, height: 1080, capped: false })
+  })
 })
 
 function sidecarCapture(input: {
@@ -189,8 +218,8 @@ function populatedDom(): RuntimeCaptureSuccess["dom"] {
   }
 }
 
-async function writePng(filePath: string, mode: "solid" | "noise") {
-  const png = new PNG({ width: 16, height: 16 })
+async function writePng(filePath: string, mode: "solid" | "noise", size = { width: 16, height: 16 }) {
+  const png = new PNG(size)
   for (let y = 0; y < png.height; y += 1) {
     for (let x = 0; x < png.width; x += 1) {
       const i = (png.width * y + x) << 2

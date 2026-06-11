@@ -292,7 +292,7 @@ export async function finalizeBrowserPreviewSidecarCapture(input: {
       path: finalPath,
       sha,
       bytes: bytes.length,
-      size: capture.size ?? { width: capture.viewport.width, height: capture.viewport.height },
+      size: { width: png.width, height: png.height },
       requested_viewport: capture.requested_viewport,
       viewport: capture.viewport,
       layers: capture.layers,
@@ -337,6 +337,28 @@ async function collectDom(page) {
       return sole.querySelectorAll("*").length <= 1;
     })();
     return { textLength: text.length, nodeCount, bodyDescendantCount, hasBodyChildren, isEmptyRootShell };
+  });
+}
+
+async function collectPageSize(page) {
+  return page.evaluate(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    const width = Math.max(
+      window.innerWidth,
+      root ? root.scrollWidth : 0,
+      body ? body.scrollWidth : 0,
+      root ? root.offsetWidth : 0,
+      body ? body.offsetWidth : 0,
+    );
+    const height = Math.max(
+      window.innerHeight,
+      root ? root.scrollHeight : 0,
+      body ? body.scrollHeight : 0,
+      root ? root.offsetHeight : 0,
+      body ? body.offsetHeight : 0,
+    );
+    return { width, height };
   });
 }
 
@@ -390,10 +412,11 @@ async function captureViewport(browser, input, viewport) {
     else if (bodyBuf.length < 200) httpReason = "body=" + bodyBuf.length + "B - too small to be an app shell";
     await new Promise((resolve) => setTimeout(resolve, input.settleMs));
     const dom = await collectDom(page);
+    const pageSize = await collectPageSize(page);
     await page.screenshot({
       path: viewport.screenshotPath,
       type: "png",
-      clip: { x: 0, y: 0, width: viewport.width, height: viewport.height },
+      fullPage: true,
     });
     const passed =
       status >= 200 &&
@@ -415,7 +438,7 @@ async function captureViewport(browser, input, viewport) {
       passed,
       target_url: input.url,
       path: viewport.screenshotPath,
-      size: { width: viewport.width, height: viewport.height },
+      size: pageSize,
       requested_viewport: { width: viewport.width, height: viewport.height },
       viewport: { width: viewport.width, height: viewport.height, capped: false },
       layers: {
