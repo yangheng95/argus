@@ -97,7 +97,7 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 | 命令                                              | 用途                                                                                                  |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `overlay_server_info` / `overlay_server_restart`  | 嵌入的 opencorvus 后端进程管理                                                                        |
-| `overlay_settings_load` / `overlay_settings_save` | 设置持久化到 `.opencorvus/overlay.json`                                                               |
+| `overlay_settings_load` / `overlay_settings_save` | 设置持久化到 `.opencorvus/overlay.jsonc`                                                              |
 | `overlay_pick_dir` / `overlay_pick_files`         | 目录 / 文件选择对话框                                                                                 |
 | `overlay_open_url` / `overlay_open_path`          | 外部打开                                                                                              |
 | `overlay_attention_set`                           | 托盘闪烁提示                                                                                          |
@@ -115,4 +115,4 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 
 ## 配置
 
-`~/.opencorvus/overlay.json` 存 UI 偏好（主题、位置、缩放、server URL override）；托盘菜单的 **Restart** 会重启后端并 `location.reload()` 前端。
+`~/.opencorvus/overlay.jsonc` 存 UI 偏好（主题、位置、缩放、server URL override）；托盘菜单的 **Restart** 会重启后端并 `location.reload()` 前端。
