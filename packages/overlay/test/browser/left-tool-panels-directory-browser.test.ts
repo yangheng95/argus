@@ -171,6 +171,12 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
       (node) => node.textContent || "",
     )
     assert.equal(skillName, "project-review")
+    const skillListMetrics = await page.$eval("#leftPanelSkills .extension-list", (node) => {
+      const rect = node.getBoundingClientRect()
+      return { height: rect.height, text: node.textContent || "" }
+    })
+    assert.ok(skillListMetrics.height > 24)
+    assert.match(skillListMetrics.text, /project-review/)
 
     await page.$eval(
       '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]',
@@ -179,6 +185,12 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-row")
     const mcpName = await page.$eval("#leftPanelMcp .extension-row .extension-row-main > strong", (node) => node.textContent || "")
     assert.equal(mcpName, "docs")
+    const mcpListMetrics = await page.$eval("#leftPanelMcp .extension-list", (node) => {
+      const rect = node.getBoundingClientRect()
+      return { height: rect.height, text: node.textContent || "" }
+    })
+    assert.ok(mcpListMetrics.height > 24)
+    assert.match(mcpListMetrics.text, /docs/)
 
     await page.$eval(
       '[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]',
