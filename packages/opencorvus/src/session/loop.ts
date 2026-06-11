@@ -1348,6 +1348,7 @@ export namespace SessionLoop {
       },
       cost: 0,
       tokens: {
+        total: 0,
         input: 0,
         output: 0,
         reasoning: 0,
@@ -1542,6 +1543,7 @@ export namespace SessionLoop {
         },
         cost: 0,
         tokens: {
+          total: 0,
           input: 0,
           output: 0,
           reasoning: 0,
@@ -2346,6 +2348,7 @@ export namespace SessionLoop {
                 },
                 cost: 0,
                 tokens: {
+                  total: 0,
                   input: 0,
                   output: 0,
                   reasoning: 0,

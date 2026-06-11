@@ -134,6 +134,7 @@ async function createToolContext(agent: Agent.Info) {
     },
     cost: 0,
     tokens: {
+      total: 0,
       input: 0,
       output: 0,
       reasoning: 0,
