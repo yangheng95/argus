@@ -11,6 +11,13 @@ import type { IntegrityReplayContext } from "../../src/integrity/replay-context"
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const teamCorePath = path.join(repoRoot, "packages/opencorvus/src/prompt/core/integrity-team-core.txt")
 
+const investigationPlan = {
+  requestPromise: "show the requested error behavior",
+  hypothesis: "a concern may be outside the scoped requirements",
+  evidencePlan: ["inspect traceability anchors"],
+  passCriteria: ["every reported finding has a REQ, AS, or user quote anchor"],
+}
+
 async function readTeamCore() {
   return await Bun.file(teamCorePath).text()
 }
@@ -139,6 +146,7 @@ describe("integrity finding traceability discipline", () => {
           scope: "Scope reviewer",
           verdict: "concerns",
           summary: "Bundle concern is untraced and should be dropped.",
+          investigationPlan,
           evidence: ["No REQ or AS names bundle size."],
           findings: [],
           openQuestions: [],
@@ -148,6 +156,7 @@ describe("integrity finding traceability discipline", () => {
           scope: "Runtime reviewer",
           verdict: "pass",
           summary: "Runtime behavior is covered.",
+          investigationPlan,
           evidence: ["acc-errors names 401 Chinese error."],
           findings: [],
           openQuestions: [],

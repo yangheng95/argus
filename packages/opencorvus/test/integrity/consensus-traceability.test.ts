@@ -4,6 +4,13 @@ import type { IntegrityReplayContext } from "../../src/integrity/replay-context"
 let sessionCounter = 0
 let capturedConsensusPrompt = ""
 
+const investigationPlan = {
+  requestPromise: "render assistant replies",
+  hypothesis: "the scoped behavior may be unanchored or unverified",
+  evidencePlan: ["inspect scoped traceability evidence"],
+  passCriteria: ["findings are anchored to REQ, AS, or a user quote"],
+}
+
 const untracedReviewerFinding = {
   id: "untraced-bundle-size",
   severity: "blocking",
@@ -25,6 +32,7 @@ const untracedReviewerReport = {
   scope: "Scope reviewer",
   verdict: "needs_correction",
   summary: "Bundle size concern is untraced.",
+  investigationPlan,
   evidence: ["Reviewer intentionally returned one untraced finding."],
   findings: [untracedReviewerFinding],
   openQuestions: [],
@@ -35,6 +43,7 @@ const runtimeReviewerReport = {
   scope: "Runtime reviewer",
   verdict: "pass",
   summary: "Runtime evidence is scoped and passes.",
+  investigationPlan,
   evidence: ["REQ-1 and acc-chat both name the chat response behavior."],
   findings: [],
   openQuestions: [],

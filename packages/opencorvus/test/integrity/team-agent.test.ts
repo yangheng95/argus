@@ -16,6 +16,13 @@ let slowReviewerReports = false
 let activeReviewerAgents = 0
 let maxActiveReviewerAgents = 0
 
+const investigationPlan = {
+  requestPromise: "ship settings validation",
+  hypothesis: "the scoped settings behavior may be incomplete",
+  evidencePlan: ["inspect scoped settings evidence"],
+  passCriteria: ["settings evidence satisfies the scoped request"],
+}
+
 mock.module("@/agent/runner", () => ({
   runAgentSession: async (input: any) => {
     runnerCalls.push(input)
@@ -65,6 +72,7 @@ mock.module("@/agent/runner", () => ({
         scope: reviewerID === "rev_a" ? "Surface A" : "Surface B",
         verdict: "pass",
         summary: `${reviewerID} passed`,
+        investigationPlan,
         evidence: [],
         findings: [],
         openQuestions: [],
@@ -80,6 +88,7 @@ mock.module("@/agent/runner", () => ({
             scope: "Surface A",
             verdict: "pass",
             summary: "rev_a passed",
+            investigationPlan,
             evidence: [],
             findings: [],
             openQuestions: [],
@@ -89,6 +98,7 @@ mock.module("@/agent/runner", () => ({
             scope: "Surface B",
             verdict: "pass",
             summary: "rev_b passed",
+            investigationPlan,
             evidence: [],
             findings: [],
             openQuestions: [],
@@ -443,6 +453,7 @@ describe("integrity team-agent replay attempts", () => {
           scope: "API authority",
           verdict: "concerns",
           summary: "API status has concerns.",
+          investigationPlan,
           drilldowns: [],
           coverage: [
             {
@@ -460,6 +471,7 @@ describe("integrity team-agent replay attempts", () => {
           scope: "Flow behavior",
           verdict: "pass",
           summary: "Flow checked.",
+          investigationPlan,
           drilldowns: [],
           coverage: [
             {
@@ -524,6 +536,7 @@ describe("integrity team-agent replay attempts", () => {
           scope: "Large report",
           verdict: "needs_correction",
           summary: "Important finding survives while raw dumps are summarized.",
+          investigationPlan,
           drilldowns: Array.from({ length: 40 }, (_value, index) => ({
             kind: "command",
             target: `target-${index}`,

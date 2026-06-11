@@ -104,12 +104,20 @@ const plan: IntegrityReviewerPlan = {
   ],
 }
 
+const investigationPlan = {
+  requestPromise: "Normal chat conversations persist after refresh.",
+  hypothesis: "quota handling may be misclassified across the same storage defect surface",
+  evidencePlan: ["inspect storage quota evidence"],
+  passCriteria: ["the same defect surface has one reconciled severity"],
+}
+
 const reports: IntegrityReviewerReport[] = [
   {
     reviewerID: "rev_advisory",
     scope: "Storage quota warning",
     verdict: "concerns",
     summary: "Quota issue remains advisory.",
+    investigationPlan,
     evidence: ["src/services/storage.ts safeSetItem"],
     findings: [
       {
@@ -135,6 +143,7 @@ const reports: IntegrityReviewerReport[] = [
     scope: "Storage quota loss",
     verdict: "needs_correction",
     summary: "Quota issue was described as blocking.",
+    investigationPlan,
     evidence: ["src/services/storage.ts safeSetItem"],
     findings: [
       {

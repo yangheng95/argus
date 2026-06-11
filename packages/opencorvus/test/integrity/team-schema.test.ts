@@ -1,10 +1,18 @@
 import { expect, test } from "bun:test"
+import { asSchema } from "ai"
 import {
   IntegrityReviewCompletedPayloadSchema,
   IntegrityReviewerPlanSchema,
   IntegrityReviewerReportSchema,
   IntegrityTeamReportSchema,
 } from "../../src/integrity"
+
+const reviewerInvestigationPlan = {
+  requestPromise: "ship the requested behavior",
+  hypothesis: "the scoped behavior may be incomplete",
+  evidencePlan: ["inspect scoped evidence"],
+  passCriteria: ["scoped evidence proves the requested behavior"],
+}
 
 const basePayload = {
   taskID: "tsk_schema",
@@ -18,6 +26,7 @@ const basePayload = {
       scope: "A",
       verdict: "pass",
       summary: "A",
+      investigationPlan: reviewerInvestigationPlan,
       evidence: [],
       findings: [],
       openQuestions: [],
@@ -27,6 +36,7 @@ const basePayload = {
       scope: "B",
       verdict: "pass",
       summary: "B",
+      investigationPlan: reviewerInvestigationPlan,
       evidence: [],
       findings: [],
       openQuestions: [],
@@ -175,6 +185,71 @@ test("integrity schemas carry dynamic audit strategy and coverage evidence", () 
   expect(teamWithoutFactCheckItems.fact_check_items).toEqual([])
 })
 
+test("integrity reviewer report requires a complete investigation plan", () => {
+  const validReport = {
+    reviewerID: "reviewer-a",
+    scope: "API authority",
+    verdict: "pass",
+    summary: "API authority was inspected.",
+    investigationPlan: reviewerInvestigationPlan,
+    drilldowns: [
+      {
+        kind: "diff_for_file",
+        target: "src/api.ts",
+        purpose: "Check dispatch authority",
+        result: "Dispatch uses SdkAdapter.",
+      },
+    ],
+    coverage: [
+      {
+        requirementID: "REQ-1",
+        status: "covered",
+        evidence: "Dispatch authority inspected.",
+      },
+    ],
+    evidence: ["Inspected changed files."],
+    findings: [],
+    openQuestions: [],
+  }
+
+  expect(IntegrityReviewerReportSchema.safeParse(validReport).success).toBe(true)
+
+  const withoutPlan = IntegrityReviewerReportSchema.safeParse({
+    ...validReport,
+    investigationPlan: undefined,
+  })
+  expect(withoutPlan.success).toBe(false)
+  if (!withoutPlan.success) {
+    expect(withoutPlan.error.issues.some((issue) => issue.path.join(".") === "investigationPlan")).toBe(true)
+  }
+
+  const withoutRequestPromise = IntegrityReviewerReportSchema.safeParse({
+    ...validReport,
+    investigationPlan: {
+      hypothesis: "the scoped behavior may be incomplete",
+      evidencePlan: ["inspect scoped evidence"],
+      passCriteria: ["scoped evidence proves the requested behavior"],
+    },
+  })
+  expect(withoutRequestPromise.success).toBe(false)
+  if (!withoutRequestPromise.success) {
+    expect(
+      withoutRequestPromise.error.issues.some((issue) => issue.path.join(".") === "investigationPlan.requestPromise"),
+    ).toBe(true)
+  }
+})
+
+test("integrity team JSON schema exposes reviewer investigation plan as required", () => {
+  const schema = asSchema(IntegrityTeamReportSchema as never).jsonSchema as any
+  const reviewerSchema = schema.properties.reviewers.items
+
+  expect(reviewerSchema.required).toContain("investigationPlan")
+  expect(reviewerSchema.properties.investigationPlan.required).toContain("requestPromise")
+  expect(reviewerSchema.properties.investigationPlan.properties.requestPromise.description).toContain(
+    "Concrete original user",
+  )
+})
+
 test("integrity coverage audit status rejects verdict enums such as concerns", () => {
   const payload = {
     verdict: "concerns",
@@ -211,6 +286,7 @@ test("integrity reviewer coverage rejects finding traceability field names", () 
     scope: "API authority",
     verdict: "concerns",
     summary: "API authority has a gap.",
+    investigationPlan: reviewerInvestigationPlan,
     drilldowns: [],
     coverage: [
       {
@@ -237,6 +313,7 @@ test("integrity reviewer drilldowns reject finding-only fields", () => {
     scope: "API authority",
     verdict: "pass",
     summary: "API authority was inspected.",
+    investigationPlan: reviewerInvestigationPlan,
     drilldowns: [
       {
         kind: "diff_for_file",

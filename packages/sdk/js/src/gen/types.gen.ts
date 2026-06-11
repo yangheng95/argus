@@ -2750,7 +2750,7 @@ export type EventIntegrityReviewCompleted = {
       scope: string
       verdict: "pass" | "concerns" | "needs_correction"
       summary: string
-      investigationPlan?: {
+      investigationPlan: {
         requestPromise: string
         hypothesis: string
         evidencePlan: Array<string>

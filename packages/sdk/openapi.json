@@ -39207,17 +39207,21 @@
                       "minLength": 1
                     },
                     "investigationPlan": {
+                      "description": "Required falsification plan for this reviewer report.",
                       "type": "object",
                       "properties": {
                         "requestPromise": {
+                          "description": "Concrete original user, REQ, or acceptance-spec promise this reviewer is falsifying.",
                           "type": "string",
                           "minLength": 1
                         },
                         "hypothesis": {
+                          "description": "Concrete way the scoped promise could fail.",
                           "type": "string",
                           "minLength": 1
                         },
                         "evidencePlan": {
+                          "description": "Evidence this reviewer planned to inspect before passing or filing a finding.",
                           "minItems": 1,
                           "type": "array",
                           "items": {
@@ -39226,6 +39230,7 @@
                           }
                         },
                         "passCriteria": {
+                          "description": "Concrete evidence threshold for pass versus finding.",
                           "minItems": 1,
                           "type": "array",
                           "items": {
@@ -39495,7 +39500,8 @@
                     "reviewerID",
                     "scope",
                     "verdict",
-                    "summary"
+                    "summary",
+                    "investigationPlan"
                   ],
                   "additionalProperties": false
                 }
