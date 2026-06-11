@@ -61,6 +61,35 @@ test("browser settings migrate the old local default when served under a public 
   expect(settings.autoServer).toBe(true)
 })
 
+test("browser settings keep the prefixed public default", async () => {
+  const localStorage = new MemoryStorage()
+  localStorage.setItem("oc_server_url", "https://mirror-test.myhexin.com/opencorvus")
+  ;(globalThis as { window?: unknown }).window = {
+    location: location({ origin: "https://mirror-test.myhexin.com", pathname: "/opencorvus/ui/" }),
+    localStorage,
+  }
+
+  const module = await import(`../src/services/overlay-settings-storage.ts?legacy-prefix-test=${Date.now()}`)
+  const settings = module.loadBrowserOverlaySettings()
+  expect(settings.serverUrl).toBe("https://mirror-test.myhexin.com/opencorvus")
+  expect(settings.autoServer).toBe(true)
+})
+
+test("browser settings keep an explicit prefixed custom server under a public prefix", async () => {
+  const localStorage = new MemoryStorage()
+  localStorage.setItem("oc_server_url", "https://mirror-test.myhexin.com/opencorvus")
+  localStorage.setItem("oc_auto_server", "false")
+  ;(globalThis as { window?: unknown }).window = {
+    location: location({ origin: "https://mirror-test.myhexin.com", pathname: "/opencorvus/ui/" }),
+    localStorage,
+  }
+
+  const module = await import(`../src/services/overlay-settings-storage.ts?explicit-prefix-test=${Date.now()}`)
+  const settings = module.loadBrowserOverlaySettings()
+  expect(settings.serverUrl).toBe("https://mirror-test.myhexin.com/opencorvus")
+  expect(settings.autoServer).toBe(false)
+})
+
 test("browser settings keep an explicit custom server under a public prefix", async () => {
   const localStorage = new MemoryStorage()
   localStorage.setItem("oc_server_url", "https://api.example.com")

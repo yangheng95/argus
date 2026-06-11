@@ -1,4 +1,9 @@
-import { currentDefaultServer, DEFAULT_LOCAL_SERVER_URL, DEFAULT_SERVER } from "./default-server"
+import {
+  currentDefaultServer,
+  DEFAULT_LOCAL_SERVER_URL,
+  DEFAULT_SERVER,
+  legacyPrefixedServerUrlFromOverlayLocation,
+} from "./default-server"
 
 export type BrowserOverlaySettings = Record<string, unknown>
 
@@ -52,12 +57,19 @@ function writeOptionalJSON(key: string, value: unknown): void {
 
 export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
   const storedServerUrl = read("oc_server_url")
+  const autoServerRaw = read("oc_auto_server")
   const defaultServer = currentDefaultServer()
+  const legacyPrefixedServer =
+    typeof window !== "undefined" && window.location ? legacyPrefixedServerUrlFromOverlayLocation(window.location) : null
+  const autoServer = autoServerRaw === null ? undefined : autoServerRaw !== "false"
+  const storedServerIsMigratedDefault =
+    autoServer !== false &&
+    (storedServerUrl === DEFAULT_LOCAL_SERVER_URL ||
+      (!!legacyPrefixedServer && legacyPrefixedServer !== defaultServer && storedServerUrl === legacyPrefixedServer))
   const serverUrl =
-    storedServerUrl && !(storedServerUrl === DEFAULT_LOCAL_SERVER_URL && defaultServer !== DEFAULT_LOCAL_SERVER_URL)
+    storedServerUrl && !(storedServerIsMigratedDefault && defaultServer !== DEFAULT_LOCAL_SERVER_URL)
       ? storedServerUrl
       : defaultServer
-  const autoServerRaw = read("oc_auto_server")
   const rightPanelCollapsedRaw = read("oc_right_panel_collapsed")
   return {
     serverUrl,
