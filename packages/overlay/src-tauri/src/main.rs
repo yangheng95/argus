@@ -235,10 +235,22 @@ struct OverlaySettings {
     desktop_notifications: Option<bool>,
 }
 
+fn overlay_settings_filename() -> &'static str {
+    "overlay.jsonc"
+}
+
+fn parse_overlay_settings_text(text: &str) -> Result<OverlaySettings, String> {
+    json5::from_str(text).map_err(|err| err.to_string())
+}
+
+fn format_overlay_settings_text(settings: &OverlaySettings) -> Result<String, String> {
+    serde_json::to_string_pretty(settings).map_err(|err| err.to_string())
+}
+
 fn overlay_settings_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
-        .map(|dir| dir.join("overlay.json"))
+        .map(|dir| dir.join(overlay_settings_filename()))
         .map_err(|err| err.to_string())
 }
 
@@ -249,7 +261,7 @@ fn overlay_settings_load<R: Runtime>(app: AppHandle<R>) -> Result<OverlaySetting
         return Ok(OverlaySettings::default());
     }
     let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
-    serde_json::from_str(&text).map_err(|err| err.to_string())
+    parse_overlay_settings_text(&text)
 }
 
 #[tauri::command]
@@ -261,7 +273,7 @@ fn overlay_settings_save<R: Runtime>(
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
-    let text = serde_json::to_string_pretty(&settings).map_err(|err| err.to_string())?;
+    let text = format_overlay_settings_text(&settings)?;
     fs::write(&path, text).map_err(|err| err.to_string())?;
     Ok(true)
 }
@@ -1689,6 +1701,54 @@ mod tests {
     use super::*;
     use std::path::Path;
 
+    #[test]
+    fn overlay_settings_filename_is_jsonc() {
+        assert_eq!(overlay_settings_filename(), "overlay.jsonc");
+    }
+
+    #[test]
+    fn overlay_settings_parser_accepts_jsonc_connection_settings() {
+        let parsed = parse_overlay_settings_text(
+            r#"
+            {
+              // Desktop overlay connection settings.
+              serverUrl: "https://mirror-test.myhexin.com/opencorvus",
+              username: "opencorvus",
+              password: "secret",
+              autoServer: false,
+            }
+            "#,
+        )
+        .expect("overlay JSONC settings should parse");
+
+        assert_eq!(
+            parsed.server_url.as_deref(),
+            Some("https://mirror-test.myhexin.com/opencorvus")
+        );
+        assert_eq!(parsed.username.as_deref(), Some("opencorvus"));
+        assert_eq!(parsed.password.as_deref(), Some("secret"));
+        assert_eq!(parsed.auto_server, Some(false));
+    }
+
+    #[test]
+    fn overlay_settings_saved_text_round_trips_through_jsonc_parser() {
+        let settings = OverlaySettings {
+            server_url: Some("http://127.0.0.1:7878".to_string()),
+            username: Some("opencorvus".to_string()),
+            password: Some("secret".to_string()),
+            auto_server: Some(false),
+            ..OverlaySettings::default()
+        };
+
+        let text = format_overlay_settings_text(&settings).expect("settings should serialize");
+        let parsed = parse_overlay_settings_text(&text).expect("serialized settings should parse");
+
+        assert_eq!(parsed.server_url, settings.server_url);
+        assert_eq!(parsed.username, settings.username);
+        assert_eq!(parsed.password, settings.password);
+        assert_eq!(parsed.auto_server, settings.auto_server);
+    }
+
     /// W2-V35 — `sidecar_cwd_dir()` MUST never resolve to `/` (macOS app
     /// bundle launch default) or any other read-only root. Pre-fix, the
     /// Tauri sidecar inherited cwd from Finder, which is `/` on macOS;
@@ -1895,15 +1955,15 @@ mod tests {
         }
 
         let native_package = if cfg!(windows) {
-            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-win32-x64/package.json"
+            "node_modules/@parcel/watcher-win32-x64/package.json"
         } else if cfg!(target_os = "macos") && cfg!(target_arch = "x86_64") {
-            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-darwin-x64/package.json"
+            "node_modules/@parcel/watcher-darwin-x64/package.json"
         } else if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
-            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-darwin-arm64/package.json"
+            "node_modules/@parcel/watcher-darwin-arm64/package.json"
         } else if cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") {
-            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-linux-x64-glibc/package.json"
+            "node_modules/@parcel/watcher-linux-x64-glibc/package.json"
         } else if cfg!(target_os = "linux") && cfg!(target_arch = "aarch64") {
-            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-linux-arm64-glibc/package.json"
+            "node_modules/@parcel/watcher-linux-arm64-glibc/package.json"
         } else {
             return;
         };

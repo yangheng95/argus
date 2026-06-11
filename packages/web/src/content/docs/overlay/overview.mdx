@@ -94,7 +94,7 @@ Settings (sidebar): General / Providers / Channels / Orchestration / Permissions
 | Command                                           | Role                                                                                                           |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `overlay_server_info` / `overlay_server_restart`  | Embedded opencorvus process management                                                                         |
-| `overlay_settings_load` / `overlay_settings_save` | Persists to `.opencorvus/overlay.json`                                                                         |
+| `overlay_settings_load` / `overlay_settings_save` | Persists to `.opencorvus/overlay.jsonc`                                                                        |
 | `overlay_pick_dir` / `overlay_pick_files`         | File/dir dialogs                                                                                               |
 | `overlay_open_url` / `overlay_open_path`          | External open                                                                                                  |
 | `overlay_attention_set`                           | Tray blink                                                                                                     |
@@ -112,4 +112,4 @@ Process cleanup: Windows uses a Job Object + `KILL_ON_JOB_CLOSE`; Unix uses SIGK
 
 ## Configuration
 
-`~/.opencorvus/overlay.json` stores UI preferences (theme, position, zoom, server URL override). The tray **Restart** menu restarts the backend process and reloads the frontend.
+`~/.opencorvus/overlay.jsonc` stores UI preferences (theme, position, zoom, server URL override). The tray **Restart** menu restarts the backend process and reloads the frontend.
