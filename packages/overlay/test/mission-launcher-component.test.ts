@@ -67,7 +67,8 @@ test("Mission left activity retires the Channel rail and task bindings surface",
   expect(MISSION_TSX).not.toContain("activeTaskID")
   expect(MISSION_TSX).not.toContain("bindings_empty_no_task")
   expect(MISSION_TSX).not.toContain("MissionChannelPanel")
-  expect(SERVICES_MISSION).toContain("export async function loadTaskBindings")
+  expect(SERVICES_MISSION).not.toContain("export async function loadTaskBindings")
+  expect(SERVICES_MISSION).not.toContain("ChannelBindingRow")
 })
 
 test("Mission left activity loads and paginates Mission records only while active", () => {

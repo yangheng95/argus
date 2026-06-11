@@ -52,7 +52,7 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(main).toContain('setSelectedLeftActivity("assistant")')
   expect(main).toContain('openCenterWorkbenchPanel("workflow")')
   expect(main).toContain("abortCodingAssistantActivation()")
-  expect(main).toContain('if (isCodingAssistantSource()) void selectTask("")')
+  expect(main).toContain('boardStore.selectedSource?.kind === "session" && activity !== "mission"')
   expect(main).toContain('isCodingAssistantSource() ? t("chat.assistant_title") : t("chat.title")')
   expect(main).toContain("<CodingAssistantSessionList")
   expect(main).toContain("activateCodingAssistantSessionList")

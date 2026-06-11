@@ -210,6 +210,7 @@ const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActi
 const activeRightActivity = () => selectedRightActivity()
 const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
 const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("tasks")
+const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
 const activeLeftActivity = () => selectedLeftActivity()
 let codingAssistantActivationController: AbortController | null = null
 
@@ -226,6 +227,7 @@ function isAbortError(error: unknown): boolean {
 
 function activateCodingAssistantSessionList(): void {
   abortCodingAssistantActivation()
+  if (isMissionSessionSource()) void selectTask("")
   const controller = new AbortController()
   codingAssistantActivationController = controller
   openCenterWorkbenchPanel("workflow")
@@ -311,10 +313,21 @@ function selectLeftActivity(activity: LeftActivity): void {
     return
   }
   abortCodingAssistantActivation()
-  if (isCodingAssistantSource()) void selectTask("")
+  if (boardStore.selectedSource?.kind === "session" && activity !== "mission") void selectTask("")
   openCenterWorkbenchPanel("workflow")
   setSelectedLeftActivity(activity)
   setSelectedLeftPanelActivity(activity)
+}
+
+function isMissionSessionSource(): boolean {
+  return boardStore.selectedSource?.kind === "session" && !isCodingAssistantSource()
+}
+
+function selectMissionTask(taskID: string): void {
+  openCenterWorkbenchPanel("workflow")
+  setSelectedLeftActivity("tasks")
+  setSelectedLeftPanelActivity("tasks")
+  void selectTask(taskID)
 }
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
@@ -1129,7 +1142,11 @@ if (missionListEl) {
   missionListEl.innerHTML = ""
   render(
     () => (
-      <Mission active={selectedLeftPanelActivity() === "mission"} onSelectTask={(taskID) => void selectTask(taskID)} />
+      <Mission
+        active={selectedLeftPanelActivity() === "mission"}
+        refreshToken={missionSharedRefreshToken()}
+        onSelectTask={selectMissionTask}
+      />
     ),
     missionListEl,
   )
@@ -1205,9 +1222,12 @@ if (composerEl) {
         draftKey={panelComposerDraftKey()}
         pendingSuggestion={pendingSuggestion()}
         onSuggestionConsumed={() => setPendingSuggestion("")}
-        onSubmit={(text, attachments, webSearch) =>
-          panelMessage(text, attachments, webSearch ? { web_search: true } : {})
-        }
+        onSubmit={async (text, attachments, webSearch) => {
+          const refreshMissionLedger = isMissionSessionSource()
+          const result = await panelMessage(text, attachments, webSearch ? { web_search: true } : {})
+          if (refreshMissionLedger) setMissionSharedRefreshToken((value) => value + 1)
+          return result
+        }}
         onStop={() => {
           // Abort the in-flight send request ONLY — no remote cancel. Task-level
           // interrupt is an explicit action on the task row's CancelButton so a
