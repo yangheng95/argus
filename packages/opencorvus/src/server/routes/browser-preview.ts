@@ -20,6 +20,34 @@ import {
 } from "../../browser-preview/target"
 import { BrowserPreviewVerification, verifyBrowserPreview } from "../../browser-preview/verification"
 import { BrowserPreviewViewportID } from "../../browser-preview/viewport"
+import { captureBrowserPreviewLiveSnapshot, interactBrowserPreviewLive } from "../../browser-preview/live"
+
+const BrowserPreviewLiveRequest = z.object({
+  targetID: z.string().min(1),
+  viewportID: BrowserPreviewViewportID,
+})
+
+const BrowserPreviewLiveInputRequest = BrowserPreviewLiveRequest.extend({
+  input: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("click"),
+      x: z.number().finite().nonnegative(),
+      y: z.number().finite().nonnegative(),
+      button: z.enum(["left", "middle", "right"]).optional(),
+    }),
+    z.object({
+      kind: z.literal("wheel"),
+      x: z.number().finite().nonnegative(),
+      y: z.number().finite().nonnegative(),
+      deltaX: z.number().finite(),
+      deltaY: z.number().finite(),
+    }),
+    z.object({
+      kind: z.literal("key"),
+      key: z.string().min(1).max(80),
+    }),
+  ]),
+})
 
 export const BrowserPreviewRoutes = lazy(() =>
   new Hono()
@@ -213,6 +241,89 @@ export const BrowserPreviewRoutes = lazy(() =>
           signal: c.req.raw.signal,
         })
         return c.json(verification)
+      },
+    )
+    .post(
+      "/task/:taskID/browser-preview/live/snapshot",
+      describeRoute({
+        summary: "Capture interactive browser preview snapshot",
+        description:
+          "Return a PNG frame from the task-scoped Playwright live preview session for a persisted browser preview target.",
+        operationId: "browserPreview.liveSnapshot",
+        responses: {
+          200: {
+            description: "Interactive browser preview PNG frame",
+            content: {
+              "image/png": {
+                schema: resolver(z.string().meta({ format: "binary" })),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ taskID: z.string().min(1) })),
+      validator("json", BrowserPreviewLiveRequest),
+      async (c) => {
+        const { taskID } = c.req.valid("param")
+        const body = c.req.valid("json")
+        requireTask(taskID)
+        const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
+        if (!target) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        const bytes = await captureBrowserPreviewLiveSnapshot({
+          taskID,
+          targetID: body.targetID,
+          url: target.url,
+          viewportID: body.viewportID,
+          signal: c.req.raw.signal,
+        })
+        return new Response(bytes, {
+          headers: {
+            "content-type": "image/png",
+            "cache-control": "no-store",
+          },
+        })
+      },
+    )
+    .post(
+      "/task/:taskID/browser-preview/live/input",
+      describeRoute({
+        summary: "Send input to interactive browser preview",
+        description:
+          "Apply pointer, wheel, or keyboard input to the task-scoped Playwright live preview session and return the next PNG frame.",
+        operationId: "browserPreview.liveInput",
+        responses: {
+          200: {
+            description: "Interactive browser preview PNG frame after input",
+            content: {
+              "image/png": {
+                schema: resolver(z.string().meta({ format: "binary" })),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ taskID: z.string().min(1) })),
+      validator("json", BrowserPreviewLiveInputRequest),
+      async (c) => {
+        const { taskID } = c.req.valid("param")
+        const body = c.req.valid("json")
+        requireTask(taskID)
+        const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
+        if (!target) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        const bytes = await interactBrowserPreviewLive({
+          taskID,
+          targetID: body.targetID,
+          url: target.url,
+          viewportID: body.viewportID,
+          input: body.input,
+          signal: c.req.raw.signal,
+        })
+        return new Response(bytes, {
+          headers: {
+            "content-type": "image/png",
+            "cache-control": "no-store",
+          },
+        })
       },
     ),
 )

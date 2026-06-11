@@ -13434,6 +13434,237 @@
         ]
       }
     },
+    "/task/{taskID}/browser-preview/live/input": {
+      "post": {
+        "operationId": "browserPreview.liveInput",
+        "summary": "Send input to interactive browser preview",
+        "description": "Apply pointer, wheel, or keyboard input to the task-scoped Playwright live preview session and return the next PNG frame.",
+        "responses": {
+          "200": {
+            "description": "Interactive browser preview PNG frame after input",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetID": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "viewportID": {
+                    "type": "string",
+                    "enum": [
+                      "desktop",
+                      "tablet",
+                      "mobile"
+                    ]
+                  },
+                  "input": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "click"
+                          },
+                          "x": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "y": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "button": {
+                            "type": "string",
+                            "enum": [
+                              "left",
+                              "middle",
+                              "right"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "x",
+                          "y"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "wheel"
+                          },
+                          "x": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "y": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "deltaX": {
+                            "type": "number"
+                          },
+                          "deltaY": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "x",
+                          "y",
+                          "deltaX",
+                          "deltaY"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "key"
+                          },
+                          "key": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 80
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "key"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "targetID",
+                  "viewportID",
+                  "input"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.liveInput({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/task/{taskID}/browser-preview/live/snapshot": {
+      "post": {
+        "operationId": "browserPreview.liveSnapshot",
+        "summary": "Capture interactive browser preview snapshot",
+        "description": "Return a PNG frame from the task-scoped Playwright live preview session for a persisted browser preview target.",
+        "responses": {
+          "200": {
+            "description": "Interactive browser preview PNG frame",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetID": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "viewportID": {
+                    "type": "string",
+                    "enum": [
+                      "desktop",
+                      "tablet",
+                      "mobile"
+                    ]
+                  }
+                },
+                "required": [
+                  "targetID",
+                  "viewportID"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.liveSnapshot({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/browser-preview/target": {
       "put": {
         "operationId": "browserPreview.selectTaskTarget",

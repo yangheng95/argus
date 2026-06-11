@@ -366,7 +366,7 @@ function defaultArchiveFilename(taskID: string): string {
 }
 
 function saveBytesAsDownload(bytes: Uint8Array, filename: string): void {
-  const blob = new Blob([bytes], { type: "application/zip" })
+  const blob = new Blob([bytes.slice().buffer], { type: "application/zip" })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
