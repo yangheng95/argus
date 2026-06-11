@@ -11,7 +11,7 @@
  *   • launches Chrome/Edge through the Node-sidecar Playwright runtime;
  *   • intercepts every server-bound HTTP request and returns deterministic
  *     mock payloads, so we don't need the opencorvus sidecar running;
- *   • drives the overlay through the Mission page-mode transitions and
+ *   • drives the overlay through the Mission left-activity transitions and
  *     captures one PNG per surface state under
  *     `tmp/mission-visual-loop/<state>.png`.
  *
@@ -252,7 +252,6 @@ const DECOMPOSE_FIXTURE = {
 const SETTINGS_FIXTURE = {
   directory: FIXTURE_DIR,
   serverUrl: `http://127.0.0.1:7878`,
-  pageMode: "panel",
   theme: "dark",
   locale: "zh-CN",
 }
@@ -493,7 +492,7 @@ async function applyMocks(page: OverlayPage): Promise<void> {
 async function bootstrapOverlay(page: OverlayPage): Promise<void> {
   // Surface anything that lands in the page console while we wait for
   // overlay init — without this, a syntax error or thrown import in
-  // main.tsx silently turns into "setPageMode never appears" with no
+  // main.tsx silently turns into "Mission activity never appears" with no
   // hint of why.
   page.on("console", (msg) => {
     const type = msg.type()
@@ -509,44 +508,39 @@ async function bootstrapOverlay(page: OverlayPage): Promise<void> {
     console.error(`[overlay/requestfailed] ${req.method()} ${req.url()} — ${failure}`)
   })
   await page.goto(`http://localhost:${VITE_PORT}/`, { waitUntil: "domcontentloaded", timeout: 30_000 })
-  // Wait until main.tsx finishes its async init — that is when both the
-  // `applyDirectory` / `setPageMode` window globals exist and the page-mode
-  // createEffect is wired. Setting body[data-page-mode] before that effect
-  // is established would be overwritten the moment the signal fires, which
-  // is exactly the bug round-2 hit (screenshot 01 showed the Panel chrome
-  // even though we'd flipped the attribute).
+  // Wait until main.tsx finishes enough async init for global directory
+  // helpers and left activity toolbar DOM to exist.
   // Wait for the window-side helpers main.tsx publishes from
   // installGlobalBridges(). We deliberately do NOT wait on
   // __overlayInitSettled — overlay init blocks on workspace / config
   // round-trips that are happy to hang under our mocked transport
-  // (capabilities, session, etc.). setPageMode / applyDirectory are
-  // installed at module load, well before init's network work, so they
-  // are the right "ready" signal for headed visual capture.
+  // (capabilities, session, etc.).
   await page.waitForFunction(
     () => {
       const w = window as unknown as {
-        setPageMode?: (mode: "panel" | "mission") => void
         applyDirectory?: unknown
       }
-      return typeof w.setPageMode === "function" && typeof w.applyDirectory === "function"
+      return (
+        typeof w.applyDirectory === "function" &&
+        !!document.querySelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      )
     },
     { timeout: 20_000 },
   )
-  // Apply the fixture directory + switch into Mission mode via the
-  // app-store helpers the overlay deliberately exposes on `window`
-  // for headed automation.
+  // Apply the fixture directory, then open Mission through the same left
+  // activity toolbar the operator uses.
   await page.evaluate((directory: string) => {
     const w = window as unknown as {
       applyDirectory: (dir: string, opts: { save: boolean; temp: boolean; restoreWorkspace: boolean }) => void
-      setPageMode: (mode: "panel" | "mission") => void
     }
     w.applyDirectory(directory, { save: false, temp: true, restoreWorkspace: false })
-    w.setPageMode("mission")
+    document
+      .querySelector<HTMLButtonElement>('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      ?.click()
   }, FIXTURE_DIR)
-  // One frame for the page-mode createEffect to write body[data-page-mode]
-  // and for Mission's channel / binding resources to fire their mocked
-  // requests.
-  await page.waitForFunction(() => document.body.getAttribute("data-page-mode") === "mission", { timeout: 5_000 })
+  await page.waitForFunction(() => document.querySelector<HTMLElement>("#leftPanelMissions")?.dataset.active === "true", {
+    timeout: 5_000,
+  })
   await new Promise((r) => setTimeout(r, 800))
 }
 
@@ -576,9 +570,7 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
   }
 
   await step("01-empty-default-wide", async () => {
-    await page.evaluate(() => {
-      document.body.setAttribute("data-page-mode", "mission")
-    })
+    await page.waitForSelector("#leftPanelMissions[data-active='true']", { timeout: 5_000 })
     await new Promise((r) => setTimeout(r, 400))
   })
 
@@ -615,7 +607,7 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
     const row = await page.$('[data-ui="mission-row"]')
     if (!row) throw new Error("mission row missing")
     await row.click()
-    await page.waitForSelector('[data-ui="mission-conversation"]', { timeout: 5_000 })
+    await page.waitForSelector("#chatScroll", { timeout: 5_000 })
     await page.waitForFunction(
       () => document.body.textContent?.includes("Mission history loaded from the selected record."),
       { timeout: 5_000 },
@@ -660,13 +652,10 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
 
   await step("07-ledger-header-actions", async () => {
     await page.evaluate(() => {
-      const panel = document.querySelector('[data-ui="mission-back-panel"]')
       const create = document.querySelector('[data-ui="mission-new"]')
       const refresh = document.querySelector('[data-ui="mission-refresh"]')
-      if (!panel) throw new Error("missing Mission Task button")
-      if (panel.querySelector("[data-oc-icon], svg")) throw new Error("Mission Task button should not render an icon")
-      if (panel.textContent?.trim() !== "Task")
-        throw new Error(`Mission Task button label mismatch: ${panel.textContent}`)
+      const panel = document.querySelector('[data-ui="mission-back-panel"]')
+      if (panel) throw new Error("Mission back-to-panel button should be retired")
       if (!create) throw new Error("missing Mission create button")
       if (refresh) throw new Error("Mission refresh button should be removed")
     })

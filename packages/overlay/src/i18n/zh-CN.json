@@ -39,6 +39,7 @@
   "activity.tooltip.inspector": "检查需求、方案、目标、验收证据和任务诊断。",
   "activity.tooltip.mcp": "管理 Agent 可用的 MCP 服务和工具连接。",
   "activity.tooltip.memory": "查看当前任务和会话关联的记忆条目。",
+  "activity.tooltip.mission": "查看 Mission 及其创建的任务。",
   "activity.tooltip.notifications": "打开任务和系统通知。",
   "activity.tooltip.skill": "管理已安装 Skill。把 SKILL.md、skill 文件夹或 .zip 拖到整个面板任意位置，即可安装到当前项目的 .opencorvus/skill。",
   "activity.tooltip.tasks": "查看并切换最近任务对话。",

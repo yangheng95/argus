@@ -4,75 +4,66 @@ import { join } from "node:path"
 
 const HTML = readFileSync(join(import.meta.dir, "../src/index.html"), "utf8")
 const MAIN = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
+const MISSION = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
+const MISSION_LIST = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
 
-test("Sidebar exposes a Mission entry button (template §6.2)", () => {
-  expect(HTML).toContain('id="btnMission"')
-  expect(HTML).toContain('data-ui="sidebar-mission-button"')
-  expect(HTML).toContain('data-i18n="mission.open"')
-})
-
-test("Index links the mission surface CSS so the new page styles ship", () => {
+test("index.html exposes Mission as a left activity body and removes the standalone Mission page", () => {
+  expect(HTML).toContain('id="solidLeftActivityToolbar"')
+  expect(HTML).toContain('id="leftPanelMissions"')
+  expect(HTML).toContain('data-side-activity="mission"')
+  expect(HTML).toContain('id="missionListPanel"')
   expect(HTML).toContain('href="styles/surfaces/mission.css"')
+  expect(HTML).not.toContain('id="btnMission"')
+  expect(HTML).not.toContain('data-ui="sidebar-mission-button"')
+  expect(HTML).not.toContain('id="solidMissionMount"')
 })
 
-test("Index ships a dedicated Mission mount node outside the conversation panel", () => {
-  expect(HTML).toContain('id="solidMissionMount"')
-})
-
-test("Project directory bar is page-level chrome, not hidden inside panel or Mission", () => {
+test("project directory bar remains page-level chrome above the panel", () => {
   const projectBarIndex = HTML.indexOf('id="solidProjectDirectoryBarMount"')
   const mainIndex = HTML.indexOf('<main class="panel">')
-  const missionMountIndex = HTML.indexOf('id="solidMissionMount"')
   expect(projectBarIndex).toBeGreaterThan(0)
   expect(projectBarIndex).toBeLessThan(mainIndex)
-  expect(projectBarIndex).toBeLessThan(missionMountIndex)
 })
 
-test("main.tsx wires the Mission button and mounts the Mission component", () => {
-  expect(MAIN).toContain('document.getElementById("btnMission")?.addEventListener("click"')
-  expect(MAIN).toContain('if (pageMode() === "mission")')
-  expect(MAIN).toContain('void selectTask("")')
-  expect(MAIN).toContain('setPageMode("mission")')
-  expect(MAIN).toContain("function bindSidebarStaticControls()")
-  expect(MAIN).toContain("onDocumentReady(bindSidebarStaticControls)")
-  expect(MAIN).toContain('document.getElementById("solidMissionMount")')
-  expect(MAIN).toContain("<Mission")
-  expect(MAIN).toContain("workspaceTarget={workspaceTarget}")
-  expect(MAIN).toContain("workspaceOpen={workspaceOpen}")
-  expect(MAIN).toContain("closeWorkspace={closeWorkspace}")
+test("main.tsx mounts Mission through the left activity system", () => {
+  expect(MAIN).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
+  expect(MAIN).toContain(
+    'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
+  )
+  expect(MAIN).toContain('mission: "leftPanelMissions"')
+  expect(MAIN).toContain('mission: "mission.title"')
+  expect(MAIN).toContain('document.getElementById("missionListPanel")')
+  expect(MAIN).toContain('<Mission active={selectedLeftPanelActivity() === "mission"}')
+  expect(MAIN).toContain("onSelectTask={(taskID) => void selectTask(taskID)}")
+  expect(MAIN).not.toContain('document.getElementById("btnMission")')
+  expect(MAIN).not.toContain('document.getElementById("solidMissionMount")')
+  expect(MAIN).not.toContain("setPageMode")
+  expect(MAIN).not.toContain("pageMode()")
+  expect(MAIN).not.toContain("document.body.dataset.pageMode")
 })
 
-test("main.tsx binds static sidebar controls even when async startup misses DOMContentLoaded", () => {
-  const readyHelper = MAIN.match(/function onDocumentReady[\s\S]*?\n}\n\nfunction bindSidebarStaticControls/)?.[0] ?? ""
-  expect(readyHelper).toContain('document.readyState === "loading"')
-  expect(readyHelper).toContain('document.addEventListener("DOMContentLoaded", callback, { once: true })')
-  expect(readyHelper).toContain("callback()")
-  expect(MAIN).not.toContain('document.addEventListener("DOMContentLoaded", () =>')
+test("Mission activity opens session conversations through the shared center chat", () => {
+  expect(MISSION).toContain('setBoardStore("selectedSource", source)')
+  expect(MISSION).toContain('setBoardStore("board", null)')
+  expect(MISSION).toContain("loadConversation(source")
+  expect(MISSION).toContain("startSSE(source")
+  expect(MISSION).not.toContain("function MissionConversation")
+  expect(MISSION).not.toContain("<Conversation")
+  expect(MISSION).not.toContain("<ConversationAgentRail")
+  expect(MISSION).not.toContain("<WorkspacePanel")
 })
 
-test("Mission page exposes an in-page Back to Panel action", () => {
-  const mission = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
-  const missionList = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
-  expect(missionList).toContain('data-ui="mission-back-panel"')
-  expect(missionList).toContain('data-ui="mission-new"')
-  expect(missionList).not.toContain('data-ui="mission-refresh"')
-  expect(mission).not.toContain("ProjectDirectoryBar")
-  expect(mission).not.toContain('data-ui="mission-project-directory-bar"')
-  expect(mission).toContain("function handleBackToPanel(): void")
-  expect(mission).toContain("handleCloseMission()")
-  expect(mission).toContain('onBackToPanel={handleBackToPanel}')
+test("Mission-created task rows select the task panel instead of rendering task chat inside Mission", () => {
+  expect(MISSION_LIST).toContain('data-ui="mission-task-projection-select"')
+  expect(MISSION_LIST).toContain("props.onSelectTask(props.task.id)")
+  expect(MISSION_LIST).not.toContain('data-ui="mission-back-panel"')
+  expect(MISSION_LIST).not.toContain("onBackToPanel")
 })
 
-test("main.tsx reflects pageMode onto body[data-page-mode] (drives mission.css visibility)", () => {
-  expect(MAIN).toContain("document.body.dataset.pageMode = pageMode()")
-})
-
-test("New chat button switches back to panel mode before focusing the composer (template §6.3)", () => {
-  // Operator clicking +New Chat from inside Mission should not get stuck on
-  // an invisible composer — the page must flip back to panel first.
-  const sidebarBinding =
-    MAIN.match(/function bindSidebarStaticControls\(\): void \{[\s\S]*?\n}\n\nonDocumentReady/)?.[0] ?? ""
-  expect(sidebarBinding).toMatch(/btnCreateTask[\s\S]*setPageMode\("panel"\)[\s\S]*selectTask\(""\)/)
-  expect(sidebarBinding).toMatch(/btnMission[\s\S]*if \(pageMode\(\) === "mission"\)[\s\S]*setPageMode\("panel"\)[\s\S]*selectTask\(""\)/)
-  expect(sidebarBinding).toMatch(/btnMission[\s\S]*setPageMode\("mission"\)/)
+test("Mission no longer loads or renders the retired Channel panel", () => {
+  expect(MISSION).not.toContain("loadChannelList")
+  expect(MISSION).not.toContain("loadChannelRuntime")
+  expect(MISSION).not.toContain("restartChannelRuntime")
+  expect(MISSION).not.toContain("MissionChannelPanel")
+  expect(MISSION).not.toContain('data-ui="mission-channels"')
 })

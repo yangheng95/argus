@@ -1,8 +1,8 @@
 // ── Pane Resizer Service ──
-// Config-driven three-column resizer shared by every horizontal pane layout
-// (default Panel + Mission). The hardcoded element ids / CSS variables that
-// used to be baked in now live in a `PaneConfig` so the same drag logic can
-// drive multiple independent layouts without a second implementation
+// Config-driven pane resizer for the default task Panel layout. The hardcoded
+// element ids / CSS variables that used to be baked in now live in a
+// `PaneConfig` so the drag logic stays layout-agnostic without duplicating
+// DOM-specific resize code
 // (CLAUDE.md rule 8 — single source, rule 9 — abstract the pattern once).
 //
 // references covered:
@@ -27,8 +27,8 @@
 
 /**
  * Describes the DOM handles and CSS custom properties that back one
- * horizontal three-column layout. The default Panel and the Mission page
- * each supply their own so the shared drag logic stays layout-agnostic.
+ * horizontal layout. The default Panel supplies the DOM ids and CSS variables
+ * so the shared drag logic stays layout-agnostic.
  */
 export interface PaneConfig {
   /** Element whose clientWidth bounds the whole row (left+center+right). */
@@ -50,15 +50,6 @@ export const PANEL_PANE_CONFIG: PaneConfig = {
   rightHandleId: null,
   sidebarVar: "--ui-sidebar-width",
   sectionsVar: "--ui-sections-width",
-}
-
-/** Mission page layout (Mission.tsx `.mission-body`). */
-export const MISSION_PANE_CONFIG: PaneConfig = {
-  bodyId: "missionBody",
-  leftHandleId: "missionLedgerResizer",
-  rightHandleId: "missionChannelsResizer",
-  sidebarVar: "--ui-mission-ledger-width",
-  sectionsVar: "--ui-mission-channels-width",
 }
 
 export interface PaneState {

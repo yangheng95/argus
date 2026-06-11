@@ -17,10 +17,10 @@ export interface MissionListProps {
   searchQuery: string
   onSearchChange: (next: string) => void
   onSelectMission: (mission: MissionRecord) => void
+  onSelectTask: (taskID: string) => void
   onAbortMission: (mission: MissionRecord) => void
   onDeleteMission: (mission: MissionRecord) => void
   onRenameMission: (mission: MissionRecord, title: string) => void | Promise<void>
-  onBackToPanel: () => void
   onCreateMission: () => void
   onRetry: () => void
   hasMore?: boolean
@@ -125,7 +125,7 @@ function missionTaskStatusLabel(status: MissionTaskStatus): string {
   return value === `task.status.${status}` ? status : value
 }
 
-function MissionTaskProjectionRow(props: { task: MissionTaskProjection }) {
+function MissionTaskProjectionRow(props: { task: MissionTaskProjection; onSelectTask: (taskID: string) => void }) {
   return (
     <li
       class="mission-task-projection-row"
@@ -133,16 +133,26 @@ function MissionTaskProjectionRow(props: { task: MissionTaskProjection }) {
       data-task-id={props.task.id}
       data-status={props.task.status}
     >
-      <span class="mission-task-projection-main">
-        <span class="mission-task-projection-title">{props.task.title || props.task.id}</span>
-        <span class="mission-task-projection-meta">
-          <span>{props.task.id}</span>
-          <span>{compactDirectory(props.task.directory)}</span>
+      <button
+        type="button"
+        class="mission-task-projection-button"
+        data-ui="mission-task-projection-select"
+        onClick={(event) => {
+          event.stopPropagation()
+          props.onSelectTask(props.task.id)
+        }}
+      >
+        <span class="mission-task-projection-main">
+          <span class="mission-task-projection-title">{props.task.title || props.task.id}</span>
+          <span class="mission-task-projection-meta">
+            <span>{props.task.id}</span>
+            <span>{compactDirectory(props.task.directory)}</span>
+          </span>
         </span>
-      </span>
-      <span class="mission-task-projection-status" data-status={props.task.status}>
-        {missionTaskStatusLabel(props.task.status)}
-      </span>
+        <span class="mission-task-projection-status" data-status={props.task.status}>
+          {missionTaskStatusLabel(props.task.status)}
+        </span>
+      </button>
     </li>
   )
 }
@@ -151,6 +161,7 @@ function MissionRow(props: {
   mission: MissionRecord
   selected: boolean
   onSelectMission: (mission: MissionRecord) => void
+  onSelectTask: (taskID: string) => void
   onAbortMission: (mission: MissionRecord) => void
   onDeleteMission: (mission: MissionRecord) => void
   onRenameMission: (mission: MissionRecord, title: string) => void | Promise<void>
@@ -265,7 +276,9 @@ function MissionRow(props: {
       </div>
       <Show when={props.mission.tasks.length > 0}>
         <ul class="mission-task-projection-list" aria-label={t("mission.ledger.tasks_label")}>
-          <For each={props.mission.tasks}>{(task) => <MissionTaskProjectionRow task={task} />}</For>
+          <For each={props.mission.tasks}>
+            {(task) => <MissionTaskProjectionRow task={task} onSelectTask={props.onSelectTask} />}
+          </For>
         </ul>
       </Show>
     </div>
@@ -317,18 +330,6 @@ export function MissionList(props: MissionListProps) {
           role="toolbar"
           aria-label={t("mission.ledger.title")}
         >
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            tone="neutral"
-            data-ui="mission-back-panel"
-            title={t("mission.back_title")}
-            aria-label={t("mission.back")}
-            onClick={props.onBackToPanel}
-          >
-            <span>{t("mission.back")}</span>
-          </Button>
           <Button
             type="button"
             variant="solid"
@@ -425,6 +426,7 @@ export function MissionList(props: MissionListProps) {
                           mission={mission}
                           selected={props.selectedSessionID === mission.sessionID}
                           onSelectMission={props.onSelectMission}
+                          onSelectTask={props.onSelectTask}
                           onAbortMission={props.onAbortMission}
                           onDeleteMission={props.onDeleteMission}
                           onRenameMission={props.onRenameMission}

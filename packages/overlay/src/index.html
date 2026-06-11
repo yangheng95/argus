@@ -122,22 +122,6 @@
               <button
                 type="button"
                 class="oc-button"
-                id="btnMission"
-                data-variant="ghost"
-                data-size="md"
-                data-tone="neutral"
-                data-ui="sidebar-mission-button"
-                data-i18n-title="mission.open_title"
-                data-i18n-aria-label="mission.open_title"
-                title="Open Mission"
-                aria-label="Open Mission"
-              >
-                <span class="sidebar-btn-icon" data-oc-icon="mission" data-oc-icon-size="13" aria-hidden="true"></span>
-                <span class="sidebar-btn-label" data-i18n="mission.open">Mission</span>
-              </button>
-              <button
-                type="button"
-                class="oc-button"
                 id="btnCreateTask"
                 data-variant="solid"
                 data-size="md"
@@ -163,6 +147,12 @@
           <div class="side-activity-body sidebar-activity-body" id="leftPanelAssistant" data-side-activity="assistant" data-active="false">
             <div class="sidebar-body">
               <div class="sidebar-list session-list-panel assistant-session-list" id="codingAssistantSessionListPanel"></div>
+            </div>
+          </div>
+
+          <div class="side-activity-body sidebar-activity-body" id="leftPanelMissions" data-side-activity="mission" data-active="false">
+            <div class="sidebar-body">
+              <div class="sidebar-list session-list-panel mission-session-list" id="missionListPanel"></div>
             </div>
           </div>
 
@@ -289,19 +279,13 @@
   <!-- Skill/MCP/Goal/Channel dialogs removed — Phase 4.
        All functionality moved to Solid components:
        - SkillMarketPanel.tsx (inline Add Skill / Add MCP forms)
-       - ChannelsPanel.tsx (inline channel editing)
+       - Settings panels (channel editing)
        - Board.tsx (goal management) -->
 
   <!-- Memory detail/edit dialogs are handled inline by MemoryPanel.tsx. -->
 
   <!-- Log Viewer Dialog (managed by Solid LogViewer component) -->
   <div id="solidLogViewer"></div>
-
-  <!-- Mission page (mounted by Solid Mission component). Shown when
-       body[data-page-mode="mission"]; hidden by default. The default
-       conversation panel and titlebar stay in the DOM, just hidden,
-       so returning to Panel does not lose state (PRD §6.3). -->
-  <div id="solidMissionMount" class="mission-mount"></div>
 
   <script type="module" src="/main.tsx"></script>
 </body>
