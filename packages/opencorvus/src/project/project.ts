@@ -11,6 +11,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { existsSync } from "fs"
+import { readdir } from "fs/promises"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
 import { which } from "@/util/which"
@@ -146,6 +147,25 @@ export namespace Project {
     .meta({
       ref: "ProjectInitGitResult",
     })
+  export const DiscoveredProject = z
+    .object({
+      directory: z.string(),
+      name: z.string(),
+      marker: z.string(),
+    })
+    .meta({
+      ref: "DiscoveredProject",
+    })
+  export type DiscoveredProject = z.infer<typeof DiscoveredProject>
+  export const Discovery = z
+    .object({
+      root: z.string(),
+      projects: DiscoveredProject.array(),
+    })
+    .meta({
+      ref: "ProjectDiscovery",
+    })
+  export type Discovery = z.infer<typeof Discovery>
 
   export const Event = {
     Updated: BusEvent.define("project.updated", Info),
@@ -353,6 +373,41 @@ export namespace Project {
         .all()
         .map((row) => fromRow(row)),
     )
+  }
+
+  function launchDirectory() {
+    return Filesystem.resolve(process.env.OPENCORVUS_PROJECT_DIR || process.cwd())
+  }
+
+  function projectName(directory: string) {
+    return path.basename(directory.replace(/[\\/]+$/, "")) || directory
+  }
+
+  async function hasOpenCorvusMarker(directory: string) {
+    return (await Filesystem.isDir(path.join(directory, ".opencorvus"))) === true
+  }
+
+  async function immediateDirectories(root: string) {
+    const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
+    return entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(root, entry.name))
+      .sort((a, b) => a.localeCompare(b))
+  }
+
+  export async function discoverFromLaunchDirectory(): Promise<Discovery> {
+    const root = launchDirectory()
+    const candidates = [root, ...(await immediateDirectories(root))]
+    const projects: DiscoveredProject[] = []
+    for (const directory of candidates) {
+      if (!(await hasOpenCorvusMarker(directory))) continue
+      projects.push({
+        directory,
+        name: projectName(directory),
+        marker: path.join(directory, ".opencorvus"),
+      })
+    }
+    return Discovery.parse({ root, projects })
   }
 
   export function get(id: string): Info | undefined {
