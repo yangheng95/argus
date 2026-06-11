@@ -79,6 +79,33 @@ function taskConversationPayload() {
   }
 }
 
+function missionListPayload() {
+  return [
+    {
+      missionID: "mis_side_activity",
+      sessionID: "ses_mission_side_activity",
+      title: "Mission side activity",
+      directory: "D:/overlay/workspace/app",
+      created: 1_735_689_600_000,
+      updated: 1_735_689_660_000,
+      taskStats: { total: 1, queued: 0, active: 1, completed: 0, failed: 0, cancelled: 0 },
+      tasks: [
+        {
+          id: SIDE_ACTIVITY_TASK.id,
+          title: SIDE_ACTIVITY_TASK.title,
+          status: "active",
+          executionStatus: "running",
+          priority: "normal",
+          source: "mission",
+          directory: SIDE_ACTIVITY_TASK.directory,
+          created: SIDE_ACTIVITY_TASK.time.created,
+          updated: SIDE_ACTIVITY_TASK.time.updated,
+        },
+      ],
+    },
+  ]
+}
+
 function assertMatchObject(actual: Record<string, unknown>, expected: Record<string, unknown>) {
   for (const [key, value] of Object.entries(expected)) {
     assert.deepEqual(actual[key], value, key)
@@ -101,6 +128,7 @@ test(
         if (staticResponse) return staticResponse
         if (path === "/global/health") return send({ version: "1.2.3" })
         if (path === "/tasks" || path === "/global/tasks") return send(taskListPayload())
+        if (path === "/mission") return send(missionListPayload())
         if (path === "/task/tsk_side_activity/conversation") return send(taskConversationPayload())
         if (path === "/task/tsk_side_activity/events") {
           return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
@@ -272,6 +300,7 @@ test(
           const display = (selector: string) => getComputedStyle(document.querySelector<HTMLElement>(selector)!).display
           return {
             leftTasks: active("#leftPanelTasks"),
+            leftMission: active("#leftPanelMissions"),
             leftAssistant: active("#leftPanelAssistant"),
             rightInspector: active("#rightPanelInspector"),
             centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open ?? "",
@@ -286,6 +315,10 @@ test(
             leftTasksButton:
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
+              )?.dataset.active ?? "",
+            leftMissionButton:
+              document.querySelector<HTMLElement>(
+                '[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]',
               )?.dataset.active ?? "",
             leftAssistantButton:
               document.querySelector<HTMLElement>(
@@ -344,6 +377,8 @@ test(
             chatTitle: document.querySelector<HTMLElement>("#chatViewTitle")?.textContent ?? "",
             selectedSourceKind: (window as any).boardStore?.selectedSource?.kind ?? "",
             selectedSourceID: (window as any).boardStore?.selectedSource?.id ?? "",
+            missionRows: document.querySelectorAll('[data-ui="mission-row"]').length,
+            missionTaskProjectionButtons: document.querySelectorAll('[data-ui="mission-task-projection-select"]').length,
             renderedCardCount: Array.isArray((window as any).renderConversation?.())
               ? (window as any).renderConversation().length
               : -1,
@@ -368,6 +403,7 @@ test(
 
       assertMatchObject(await activeState(), {
         leftTasks: "true",
+        leftMission: "false",
         leftAssistant: "false",
         rightInspector: "false",
         centerOpen: "true",
@@ -378,8 +414,9 @@ test(
         centerDiff: "false",
         centerPreview: "false",
         leftToolbarExists: true,
-        leftActivityButtons: 5,
+        leftActivityButtons: 6,
         leftTasksButton: "true",
+        leftMissionButton: "false",
         leftAssistantButton: "false",
         leftSkillButton: "false",
         leftMcpButton: "false",
@@ -403,6 +440,42 @@ test(
         rightTitle: "Inspector",
         notificationTitle: "Notifications",
         workbenchStartsAtWorkspace: true,
+      })
+
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const state = await activeState()
+        if (state.leftMission === "true" && state.missionRows === 1) break
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      assertMatchObject(await activeState(), {
+        leftTasks: "false",
+        leftMission: "true",
+        leftMissionButton: "true",
+        leftTasksButton: "false",
+        chatTitle: "Workflow",
+        selectedSourceKind: "task",
+        selectedSourceID: "tsk_side_activity",
+        missionRows: 1,
+        missionTaskProjectionButtons: 1,
+      })
+      assert.ok(requestLog.some((entry) => entry.method === "GET" && entry.path === "/mission"))
+
+      await clickButton('[data-ui="mission-task-projection-select"]')
+      await page.waitForFunction(
+        () =>
+          document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true" &&
+          document.querySelector<HTMLElement>(".task-row-main[data-task-id='tsk_side_activity']")?.getAttribute(
+            "aria-current",
+          ) === "page",
+      )
+      assertMatchObject(await activeState(), {
+        leftTasks: "true",
+        leftMission: "false",
+        leftTasksButton: "true",
+        leftMissionButton: "false",
+        selectedSourceKind: "task",
+        selectedSourceID: "tsk_side_activity",
       })
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')

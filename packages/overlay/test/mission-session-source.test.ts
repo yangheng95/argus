@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 ;(globalThis as any).window = globalThis
 ;(globalThis as any).location = { protocol: "http:", host: "localhost", origin: "http://localhost", pathname: "/" }
@@ -37,30 +38,33 @@ test("session source cannot page older task conversation history", () => {
   expect(CONVERSATION_TSX).toContain("loadOlderConversationHistory(source)")
 })
 
-test("Mission workbench mounts the shared Conversation and ChatComposer for mission sessions", () => {
-  expect(MISSION_TSX).toContain("function MissionConversation")
-  expect(MISSION_TSX).toContain("<Conversation container={conversationContainer} />")
-  expect(MISSION_TSX).toContain("<ChatComposer")
-  expect(MISSION_TSX).toContain('composerDraftKey("mission", "session", props.sessionID)')
-  expect(MISSION_TSX).toContain('data-ui="mission-conversation"')
+test("Mission left activity selects session source and leaves chat rendering to main.tsx", () => {
+  expect(MISSION_TSX).toContain('setBoardStore("selectedSource", source)')
+  expect(MISSION_TSX).toContain("loadConversation(source")
+  expect(MISSION_TSX).toContain("startSSE(source")
+  expect(MAIN_TSX).toContain("render(() => <Conversation container={chatScroll} />, chatScroll)")
+  expect(MAIN_TSX).toContain("<ChatComposer")
+  expect(MISSION_TSX).not.toContain("function MissionConversation")
+  expect(MISSION_TSX).not.toContain("<Conversation container=")
+  expect(MISSION_TSX).not.toContain("composerDraftKey(\"mission\", \"session\"")
 })
 
-test("composer draft keys are scoped to selected task and Mission launcher/session", () => {
+test("composer draft keys are scoped to selected task, assistant session, and Mission launcher", () => {
   expect(MAIN_TSX).toContain("const panelComposerDraftKey = () =>")
   expect(MAIN_TSX).toContain('composerDraftKey("task", taskID)')
   expect(MAIN_TSX).toContain('composerDraftKey("task", "new", directory)')
+  expect(MAIN_TSX).toContain('composerDraftKey("session", sessionID)')
   expect(MAIN_TSX).toContain("draftKey={panelComposerDraftKey()}")
   expect(MISSION_TSX).toContain("const missionLauncherDraftKey = () =>")
   expect(MISSION_TSX).toContain('composerDraftKey("mission", "new", directory)')
-  expect(MISSION_TSX).toContain("draftKey={props.missionLauncherDraftKey}")
+  expect(MISSION_TSX).toContain("draftKey={missionLauncherDraftKey()}")
 })
 
 test("Mission ledger uses MissionList and not the task list projection", () => {
   expect(MISSION_TSX).toContain('import { MissionList } from "./MissionList"')
   expect(MISSION_TSX).toContain("<MissionList")
   expect(MISSION_TSX).toContain("loadMissions")
-  expect(MISSION_TSX).toContain("return { search: searchQuery().trim(), refresh: missionRefreshToken() }")
-  expect(MISSION_TSX).not.toContain("directory: input.directory")
+  expect(MISSION_TSX).toContain("sharedRefresh: props.refreshToken ?? 0")
   expect(MISSION_TSX).not.toContain('import { TaskList } from "./TaskList"')
   expect(MISSION_TSX).not.toContain("<TaskList")
   expect(MISSION_TSX).not.toContain("visibleTasks")
@@ -76,11 +80,11 @@ test("Mission ledger groups records by project directory", () => {
   expect(MISSION_LIST_TSX).toContain("<For each={group.items}>")
 })
 
-test("Mission page submits messages tagged with the mission source label", () => {
-  // The message source label sent from the page is now "mission" (was
-  // "gateway") — the squad/team task provenance keys off source==="mission"
-  // (specs/gateway-mission-split-2026-05-28.md §4).
-  expect(MISSION_TSX).toContain('source: "mission"')
+test("Mission launcher submits through wakeMission rather than task composition", () => {
+  expect(MISSION_TSX).toContain("await wakeMission({")
+  expect(MISSION_TSX).toContain("text,")
+  expect(MISSION_TSX).not.toContain('source: "gateway"')
+  expect(MISSION_TSX).not.toContain("composeTaskText")
 })
 
 test("session empty state does not borrow the first task as Mission context", () => {

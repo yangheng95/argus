@@ -70,6 +70,7 @@ test("index.html declares toolbar workbench activities without a separate Inspec
   expect(html).toContain('id="solidRightActivityToolbar"')
   expect(html).toContain('id="chatViewTitle"')
   expect(html).toContain('id="leftPanelTasks"')
+  expect(html).toContain('id="leftPanelMissions"')
   expect(html).toContain('id="leftPanelAssistant"')
   expect(html).toContain('id="codingAssistantSessionListPanel"')
   expect(html).toContain('id="leftPanelSkills"')
@@ -161,7 +162,7 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain("<SideActivityToolbar")
   expect(main).toContain("selectLeftActivity")
   expect(main).toContain("selectRightActivity")
-  expect(main).toContain('type LeftActivity = "tasks" | "assistant" | "memory" | "skill" | "mcp"')
+  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
   expect(main).toContain(
     'type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"',
   )
@@ -186,6 +187,9 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain(
     'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
   )
+  expect(main).toContain(
+    'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
+  )
   expect(main).toContain('id: "tasks", icon: "tasks", labelKey: "sidebar.title", tooltipKey: "activity.tooltip.tasks"')
   expect(main).toContain(
     'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
@@ -208,7 +212,7 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain("<CodingAssistantSessionList")
   expect(main).toContain("loadCodingAssistantSessions({ signal: controller.signal })")
   expect(main).toContain("selectCodingAssistantSession({ sessionID: session.id })")
-  expect(main).toContain('if (isCodingAssistantSource()) void selectTask("")')
+  expect(main).toContain('boardStore.selectedSource?.kind === "session" && activity !== "mission"')
   expect(main).toContain("CENTER_WORKBENCH_PANEL_ORDER")
   expect(main).toContain("startCenterWorkbenchPanelResize")
   expect(main).toContain("centerWorkbenchPanelWeights")

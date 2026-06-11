@@ -12,6 +12,7 @@ import { routeRequiresProjectDirectory } from "@opencorvus-ai/transport-protocol
 import { DEFAULT_SERVER } from "./default-server"
 import { getHostTransport } from "./host-transport"
 import type { ResponseKind, TransportResponse } from "./host-transport"
+import { bytesToArrayBuffer } from "../utils/binary"
 
 export { DEFAULT_SERVER }
 
@@ -502,7 +503,7 @@ export async function fetchResourceAsObjectUrl(raw: string): Promise<string> {
       })
       if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`)
       const ct = res.headers["content-type"] || res.headers["Content-Type"] || "application/octet-stream"
-      const blob = new Blob([(res.body as Uint8Array).slice().buffer], { type: ct })
+      const blob = new Blob([bytesToArrayBuffer(res.body as Uint8Array)], { type: ct })
       const objectUrl = URL.createObjectURL(blob)
       evictToFitOne()
       blobCache.set(raw, objectUrl)

@@ -39,6 +39,7 @@
   "activity.tooltip.inspector": "Inspect requirements, plan, goals, acceptance evidence, and task diagnostics.",
   "activity.tooltip.mcp": "Manage MCP servers and tool connections available to agents.",
   "activity.tooltip.memory": "Inspect memory entries associated with the selected task and session.",
+  "activity.tooltip.mission": "View Missions and the tasks they created.",
   "activity.tooltip.notifications": "Open task and system notifications.",
   "activity.tooltip.skill": "Manage installed Skills. Drop a SKILL.md file, folder, or .zip anywhere on the panel to install it into this project's .opencorvus/skill directory.",
   "activity.tooltip.tasks": "View and switch recent task conversations.",
