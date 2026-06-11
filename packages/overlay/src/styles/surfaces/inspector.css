@@ -2322,13 +2322,29 @@
 .integrity__issue {
   display: flex;
   gap: var(--ui-gap-sm);
-  align-items: baseline;
+  align-items: flex-start;
+}
+
+.integrity__issue-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
 }
 
 .integrity__issue-desc {
-  flex: 1;
-  min-width: 0;
   color: var(--text);
+  overflow-wrap: break-word;
+}
+
+.integrity__issue-title {
+  color: var(--text-strong);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.integrity__issue-title::after {
+  content: ": ";
 }
 
 /* Tag pill: classifies an issue/correction by intent. Default tone
@@ -2367,7 +2383,8 @@
 .integrity__issue[data-type="infeasible_stack"],
 .integrity__issue[data-type="contract_collision"],
 .integrity__issue[data-type="dependency_cycle"],
-.integrity__issue[data-type="invented_artifact"] {
+.integrity__issue[data-type="invented_artifact"],
+.integrity__issue[data-type="blocking"] {
   border-left-color: var(--bad);
 }
 
@@ -2380,7 +2397,8 @@
 .integrity__issue[data-type="granularity_off"],
 .integrity__issue[data-type="weak_acceptance"],
 .integrity__issue[data-type="ownership_overlap"],
-.integrity__issue[data-type="ordering_smell"] {
+.integrity__issue[data-type="ordering_smell"],
+.integrity__issue[data-type="advisory"] {
   border-left-color: var(--warn);
 }
 

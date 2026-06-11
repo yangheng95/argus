@@ -147,13 +147,18 @@ export function IntegrityBody(props: { integrity: Integrity }) {
               {(finding) => (
                 <li class="integrity__issue" data-type={finding.severity}>
                   <span class="integrity__tag">{finding.severity}</span>
-                  <span class="integrity__issue-desc">
-                    {finding.title}: {finding.description}
-                  </span>
-                  <Show when={finding.repair}>
-                    <span class="integrity__missing-reason">{finding.repair}</span>
-                  </Show>
-                  <ManifestMeta item={finding} />
+                  <div class="integrity__issue-body">
+                    <div class="integrity__issue-desc">
+                      <Show when={finding.title}>
+                        <span class="integrity__issue-title">{finding.title}</span>
+                      </Show>
+                      <span>{finding.description}</span>
+                    </div>
+                    <Show when={finding.repair}>
+                      <span class="integrity__missing-reason">{finding.repair}</span>
+                    </Show>
+                    <ManifestMeta item={finding} />
+                  </div>
                 </li>
               )}
             </For>

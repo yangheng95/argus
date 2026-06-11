@@ -26,3 +26,14 @@ test("integrity full team report is mounted only after details opens", () => {
   expect(css).toContain(".integrity__report-detail")
   expect(css).toContain(".integrity__report-summary")
 })
+
+test("integrity findings stack verdict text inside one readable body column", () => {
+  expect(component).toContain('<div class="integrity__issue-body">')
+  expect(component).toContain('<div class="integrity__issue-desc">')
+  expect(component).toContain('<span class="integrity__issue-title">{finding.title}</span>')
+  expect(component).toContain('<ManifestMeta item={finding} />')
+  expect(css).toContain(".integrity__issue-body")
+  expect(css).toContain("flex-direction: column")
+  expect(css).toContain('.integrity__issue[data-type="advisory"]')
+  expect(css).toContain('.integrity__issue[data-type="blocking"]')
+})
