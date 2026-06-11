@@ -134,6 +134,7 @@ function assistantMessage(
       path: { cwd: "/", root: "/" },
       cost: 0,
       tokens: {
+        total: 0,
         input: 0,
         output: 0,
         reasoning: 0,
@@ -258,6 +259,7 @@ describe("CompactionHandoff", () => {
           path: { cwd: "/", root: "/" },
           cost: 0,
           tokens: {
+            total: 0,
             input: 0,
             output: 0,
             reasoning: 0,
@@ -370,6 +372,7 @@ describe("CompactionHandoff", () => {
           path: { cwd: "/", root: "/" },
           cost: 0,
           tokens: {
+            total: 0,
             input: 0,
             output: 0,
             reasoning: 0,
@@ -990,7 +993,7 @@ describe("session.compaction.prune", () => {
           agent: "build",
           path: { cwd: "/", root: "/" },
           cost: 0,
-          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
           modelID: "test-model",
           providerID: "test",
           mode: "",
@@ -1012,7 +1015,7 @@ describe("session.compaction.prune", () => {
           agent: "build",
           path: { cwd: "/", root: "/" },
           cost: 0,
-          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
           modelID: "test-model",
           providerID: "test",
           mode: "",
@@ -1034,7 +1037,7 @@ describe("session.compaction.prune", () => {
           agent: "compaction",
           path: { cwd: "/", root: "/" },
           cost: 0,
-          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
           modelID: "test-model",
           providerID: "test",
           mode: "",
@@ -1314,6 +1317,26 @@ describe("session.getUsage", () => {
     expect(result.tokens.reasoning).toBe(0)
     expect(result.tokens.cache.read).toBe(0)
     expect(result.tokens.cache.write).toBe(0)
+    expect(result.tokens.total).toBe(1500)
+  })
+
+  test("derives total token usage when the provider omits totalTokens", () => {
+    const model = createModel({ context: 100_000, output: 32_000 })
+    const result = Session.getUsage({
+      model,
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 500,
+        reasoningTokens: 100,
+        cachedInputTokens: 200,
+      },
+    })
+
+    expect(result.tokens.input).toBe(800)
+    expect(result.tokens.output).toBe(500)
+    expect(result.tokens.reasoning).toBe(100)
+    expect(result.tokens.cache.read).toBe(200)
+    expect(result.tokens.total).toBe(1600)
   })
 
   test("extracts cached tokens to cache.read", () => {
