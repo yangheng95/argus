@@ -2750,10 +2750,25 @@ export type EventIntegrityReviewCompleted = {
       scope: string
       verdict: "pass" | "concerns" | "needs_correction"
       summary: string
+      /**
+       * Required falsification plan for this reviewer report.
+       */
       investigationPlan: {
+        /**
+         * Concrete original user, REQ, or acceptance-spec promise this reviewer is falsifying.
+         */
         requestPromise: string
+        /**
+         * Concrete way the scoped promise could fail.
+         */
         hypothesis: string
+        /**
+         * Evidence this reviewer planned to inspect before passing or filing a finding.
+         */
         evidencePlan: Array<string>
+        /**
+         * Concrete evidence threshold for pass versus finding.
+         */
         passCriteria: Array<string>
       }
       drilldowns?: Array<{
@@ -3408,6 +3423,17 @@ export type Event =
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
+
+export type DiscoveredProject = {
+  directory: string
+  name: string
+  marker: string
+}
+
+export type ProjectDiscovery = {
+  root: string
+  projects: Array<DiscoveredProject>
+}
 
 export type GlobalEvent = {
   directory: string
@@ -7399,6 +7425,9 @@ export type CodingSessionsListData = {
   query?: {
     directory?: string
     limit?: number
+    cursorUpdated?: number
+    cursorSessionID?: string
+    search?: string
   }
   url: "/coding/sessions"
 }
@@ -7409,10 +7438,37 @@ export type CodingSessionsListResponses = {
    */
   200: {
     sessions: Array<Session>
+    nextCursor?: {
+      updated: number
+      sessionID: string
+    }
   }
 }
 
 export type CodingSessionsListResponse = CodingSessionsListResponses[keyof CodingSessionsListResponses]
+
+export type CodingSessionDeleteData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/session/{sessionID}"
+}
+
+export type CodingSessionDeleteResponses = {
+  /**
+   * Deleted coding assistant session
+   */
+  200: boolean
+}
+
+export type CodingSessionDeleteResponse = CodingSessionDeleteResponses[keyof CodingSessionDeleteResponses]
 
 export type CodingSessionGetData = {
   body?: never
@@ -7438,6 +7494,56 @@ export type CodingSessionGetResponses = {
 }
 
 export type CodingSessionGetResponse = CodingSessionGetResponses[keyof CodingSessionGetResponses]
+
+export type CodingSessionUpdateData = {
+  body?: {
+    title?: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/session/{sessionID}"
+}
+
+export type CodingSessionUpdateResponses = {
+  /**
+   * Updated coding assistant session
+   */
+  200: {
+    session: Session
+  }
+}
+
+export type CodingSessionUpdateResponse = CodingSessionUpdateResponses[keyof CodingSessionUpdateResponses]
+
+export type CodingSessionAbortData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/session/{sessionID}/abort"
+}
+
+export type CodingSessionAbortResponses = {
+  /**
+   * Aborted coding assistant session
+   */
+  200: boolean
+}
+
+export type CodingSessionAbortResponse = CodingSessionAbortResponses[keyof CodingSessionAbortResponses]
 
 export type CodingSessionSelectionUpdateData = {
   body: {
@@ -11491,19 +11597,12 @@ export type TaskOperatorModelContextErrors = {
   /**
    * Conflict
    */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancelledMessageError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+  409: {
+    name: "ReplyTargetEnvelopeMissingError"
+    data: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type TaskOperatorModelContextError = TaskOperatorModelContextErrors[keyof TaskOperatorModelContextErrors]
@@ -11672,19 +11771,12 @@ export type TaskMessageErrors = {
   /**
    * Conflict
    */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancelledMessageError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+  409: {
+    name: "ReplyTargetEnvelopeMissingError"
+    data: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type TaskMessageError = TaskMessageErrors[keyof TaskMessageErrors]
@@ -11734,19 +11826,12 @@ export type TaskInjectErrors = {
   /**
    * Conflict
    */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancelledMessageError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+  409: {
+    name: "ReplyTargetEnvelopeMissingError"
+    data: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type TaskInjectError = TaskInjectErrors[keyof TaskInjectErrors]
@@ -11818,19 +11903,12 @@ export type TaskSessionReplyErrors = {
   /**
    * Conflict
    */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancelledMessageError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+  409: {
+    name: "ReplyTargetEnvelopeMissingError"
+    data: {
+      [key: string]: unknown
+    }
+  }
   /**
    * Session runtime contract no longer present
    */
@@ -14019,6 +14097,31 @@ export type GlobalHealthResponses = {
 
 export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthResponses]
 
+export type GlobalProjectsDiscoverData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/projects/discover"
+}
+
+export type GlobalProjectsDiscoverErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalProjectsDiscoverError = GlobalProjectsDiscoverErrors[keyof GlobalProjectsDiscoverErrors]
+
+export type GlobalProjectsDiscoverResponses = {
+  /**
+   * Discovered projects
+   */
+  200: ProjectDiscovery
+}
+
+export type GlobalProjectsDiscoverResponse = GlobalProjectsDiscoverResponses[keyof GlobalProjectsDiscoverResponses]
+
 export type GlobalEventData = {
   body?: never
   path?: never
@@ -14108,19 +14211,12 @@ export type GlobalDbResetErrors = {
   /**
    * Conflict
    */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancelledMessageError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+  409: {
+    name: "ReplyTargetEnvelopeMissingError"
+    data: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type GlobalDbResetError = GlobalDbResetErrors[keyof GlobalDbResetErrors]
@@ -14242,19 +14338,12 @@ export type GlobalDbMysqlImportErrors = {
   /**
    * Conflict
    */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancelledMessageError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+  409: {
+    name: "ReplyTargetEnvelopeMissingError"
+    data: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type GlobalDbMysqlImportError = GlobalDbMysqlImportErrors[keyof GlobalDbMysqlImportErrors]

@@ -30,10 +30,13 @@ import type {
   ChannelRuntimeRestartResponses,
   CodingCliOpenResponses,
   CodingCliProfilesResponses,
+  CodingSessionAbortResponses,
   CodingSessionCreateResponses,
+  CodingSessionDeleteResponses,
   CodingSessionGetResponses,
   CodingSessionSelectionUpdateResponses,
   CodingSessionsListResponses,
+  CodingSessionUpdateResponses,
   CommandListResponses,
   Config as Config4,
   ConfigGetResponses,
@@ -90,6 +93,8 @@ import type {
   GlobalDisposeResponses,
   GlobalEventResponses,
   GlobalHealthResponses,
+  GlobalProjectsDiscoverErrors,
+  GlobalProjectsDiscoverResponses,
   GoalDeleteErrors,
   GoalDeleteResponses,
   GoalRunAcceptanceErrors,
@@ -4121,6 +4126,36 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
+   * Delete right sidebar coding assistant session
+   *
+   * Delete a project-bound right sidebar coding assistant session and its canonical history.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<CodingSessionDeleteResponses, unknown, ThrowOnError>({
+      url: "/coding/session/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Claim right sidebar coding assistant session
    *
    * Validate and return an existing project-bound right sidebar coding assistant session.
@@ -4150,6 +4185,73 @@ export class Session2 extends HeyApiClient {
     })
   }
 
+  /**
+   * Update right sidebar coding assistant session
+   *
+   * Update a project-bound right sidebar coding assistant session.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      title?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<CodingSessionUpdateResponses, unknown, ThrowOnError>({
+      url: "/coding/session/{sessionID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Abort right sidebar coding assistant session
+   *
+   * Stop active and queued processing for a project-bound right sidebar coding assistant session.
+   */
+  public abort<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CodingSessionAbortResponses, unknown, ThrowOnError>({
+      url: "/coding/session/{sessionID}/abort",
+      ...options,
+      ...params,
+    })
+  }
+
   private _selection?: Selection
   get selection(): Selection {
     return (this._selection ??= new Selection({ client: this.client }))
@@ -4166,6 +4268,9 @@ export class Sessions extends HeyApiClient {
     parameters?: {
       directory?: string
       limit?: number
+      cursorUpdated?: number
+      cursorSessionID?: string
+      search?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4176,6 +4281,9 @@ export class Sessions extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "limit" },
+            { in: "query", key: "cursorUpdated" },
+            { in: "query", key: "cursorSessionID" },
+            { in: "query", key: "search" },
           ],
         },
       ],
@@ -8346,6 +8454,21 @@ export class Event extends HeyApiClient {
   }
 }
 
+export class Projects extends HeyApiClient {
+  /**
+   * Discover local OpenCorvus projects
+   *
+   * Scan the server launch directory and its direct child directories for projects containing a .opencorvus directory. This is a control-plane discovery route and does not require an active project directory.
+   */
+  public discover<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<
+      GlobalProjectsDiscoverResponses,
+      GlobalProjectsDiscoverErrors,
+      ThrowOnError
+    >({ url: "/global/projects/discover", ...options })
+  }
+}
+
 export class Config3 extends HeyApiClient {
   /**
    * Get global configuration
@@ -8512,6 +8635,11 @@ export class Global2 extends HeyApiClient {
       url: "/global/dispose",
       ...options,
     })
+  }
+
+  private _projects?: Projects
+  get projects(): Projects {
+    return (this._projects ??= new Projects({ client: this.client }))
   }
 
   private _config?: Config3

@@ -25,6 +25,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | POST | `/global/dispose` | Dispose instance | `global.dispose` |
 | GET | `/global/event` | Get global events | `global.event` |
 | GET | `/global/health` | Get health | `global.health` |
+| GET | `/global/projects/discover` | Discover local OpenCorvus projects | `global.projects.discover` |
 | GET | `/global/tasks` | List tasks across projects | `task.global.list` |
 | POST | `/instance/dispose` | Dispose instance | `instance.dispose` |
 | GET | `/log` | Read logs | `log.read` |
@@ -171,7 +172,10 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | POST | `/coding/cli/open` | Open coding CLI | `coding.cli.open` |
 | GET | `/coding/cli/profiles` | List installed coding CLIs | `coding.cli.profiles` |
 | POST | `/coding/session` | Create right sidebar coding assistant session | `coding.session.create` |
+| DELETE | `/coding/session/{sessionID}` | Delete right sidebar coding assistant session | `coding.session.delete` |
 | GET | `/coding/session/{sessionID}` | Claim right sidebar coding assistant session | `coding.session.get` |
+| PATCH | `/coding/session/{sessionID}` | Update right sidebar coding assistant session | `coding.session.update` |
+| POST | `/coding/session/{sessionID}/abort` | Abort right sidebar coding assistant session | `coding.session.abort` |
 | PATCH | `/coding/session/{sessionID}/selection` | Update right sidebar coding assistant task selection | `coding.session.selection.update` |
 | GET | `/coding/sessions` | List right sidebar coding assistant sessions | `coding.sessions.list` |
 

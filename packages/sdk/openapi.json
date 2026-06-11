@@ -9344,6 +9344,21 @@
                       "items": {
                         "$ref": "#/components/schemas/Session"
                       }
+                    },
+                    "nextCursor": {
+                      "type": "object",
+                      "properties": {
+                        "updated": {
+                          "type": "number"
+                        },
+                        "sessionID": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "updated",
+                        "sessionID"
+                      ]
                     }
                   },
                   "required": [
@@ -9370,6 +9385,29 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursorUpdated",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursorSessionID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -9429,6 +9467,158 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.session.get({\n  ...\n})"
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "coding.session.update",
+        "summary": "Update right sidebar coding assistant session",
+        "description": "Update a project-bound right sidebar coding assistant session.",
+        "responses": {
+          "200": {
+            "description": "Updated coding assistant session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "session": {
+                      "$ref": "#/components/schemas/Session"
+                    }
+                  },
+                  "required": [
+                    "session"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.session.update({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "coding.session.delete",
+        "summary": "Delete right sidebar coding assistant session",
+        "description": "Delete a project-bound right sidebar coding assistant session and its canonical history.",
+        "responses": {
+          "200": {
+            "description": "Deleted coding assistant session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.session.delete({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/coding/session/{sessionID}/abort": {
+      "post": {
+        "operationId": "coding.session.abort",
+        "summary": "Abort right sidebar coding assistant session",
+        "description": "Stop active and queued processing for a project-bound right sidebar coding assistant session.",
+        "responses": {
+          "200": {
+            "description": "Aborted coding assistant session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.session.abort({\n  ...\n})"
           }
         ]
       }
@@ -24652,47 +24842,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "ReplyTargetEnvelopeMissingError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ReplyTargetEnvelopeMissingError"
                     },
-                    {
+                    "data": {
                       "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "TaskCancelledMessageError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
+                      "propertyNames": {
+                        "type": "string"
                       },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                      "additionalProperties": {}
                     }
+                  },
+                  "required": [
+                    "name",
+                    "data"
                   ]
                 }
               }
@@ -25140,47 +25306,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "ReplyTargetEnvelopeMissingError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ReplyTargetEnvelopeMissingError"
                     },
-                    {
+                    "data": {
                       "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "TaskCancelledMessageError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
+                      "propertyNames": {
+                        "type": "string"
                       },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                      "additionalProperties": {}
                     }
+                  },
+                  "required": [
+                    "name",
+                    "data"
                   ]
                 }
               }
@@ -25330,47 +25472,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "ReplyTargetEnvelopeMissingError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ReplyTargetEnvelopeMissingError"
                     },
-                    {
+                    "data": {
                       "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "TaskCancelledMessageError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
+                      "propertyNames": {
+                        "type": "string"
                       },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                      "additionalProperties": {}
                     }
+                  },
+                  "required": [
+                    "name",
+                    "data"
                   ]
                 }
               }
@@ -25545,47 +25663,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "ReplyTargetEnvelopeMissingError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ReplyTargetEnvelopeMissingError"
                     },
-                    {
+                    "data": {
                       "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "TaskCancelledMessageError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
+                      "propertyNames": {
+                        "type": "string"
                       },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                      "additionalProperties": {}
                     }
+                  },
+                  "required": [
+                    "name",
+                    "data"
                   ]
                 }
               }
@@ -30759,6 +30853,41 @@
         ]
       }
     },
+    "/global/projects/discover": {
+      "get": {
+        "operationId": "global.projects.discover",
+        "summary": "Discover local OpenCorvus projects",
+        "description": "Scan the server launch directory and its direct child directories for projects containing a .opencorvus directory. This is a control-plane discovery route and does not require an active project directory.",
+        "responses": {
+          "200": {
+            "description": "Discovered projects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDiscovery"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.projects.discover({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/global/event": {
       "get": {
         "operationId": "global.event",
@@ -30931,47 +31060,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "ReplyTargetEnvelopeMissingError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ReplyTargetEnvelopeMissingError"
                     },
-                    {
+                    "data": {
                       "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "TaskCancelledMessageError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
+                      "propertyNames": {
+                        "type": "string"
                       },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                      "additionalProperties": {}
                     }
+                  },
+                  "required": [
+                    "name",
+                    "data"
                   ]
                 }
               }
@@ -31313,47 +31418,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "ReplyTargetEnvelopeMissingError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ReplyTargetEnvelopeMissingError"
                     },
-                    {
+                    "data": {
                       "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "TaskCancelledMessageError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
+                      "propertyNames": {
+                        "type": "string"
                       },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                      "additionalProperties": {}
                     }
+                  },
+                  "required": [
+                    "name",
+                    "data"
                   ]
                 }
               }
@@ -41659,6 +41740,43 @@
           {
             "$ref": "#/components/schemas/Event.pty.deleted"
           }
+        ]
+      },
+      "DiscoveredProject": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "marker": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "directory",
+          "name",
+          "marker"
+        ]
+      },
+      "ProjectDiscovery": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string"
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiscoveredProject"
+            }
+          }
+        },
+        "required": [
+          "root",
+          "projects"
         ]
       },
       "GlobalEvent": {

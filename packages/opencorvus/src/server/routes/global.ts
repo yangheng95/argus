@@ -5,6 +5,7 @@ import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
 import { Instance } from "../../project/instance"
+import { Project } from "../../project/project"
 import { Installation } from "@/installation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
@@ -67,6 +68,27 @@ export const GlobalRoutes = lazy(() =>
           },
         })
       },
+    )
+    .get(
+      "/projects/discover",
+      describeRoute({
+        summary: "Discover local OpenCorvus projects",
+        description:
+          "Scan the server launch directory and its direct child directories for projects containing a .opencorvus directory. This is a control-plane discovery route and does not require an active project directory.",
+        operationId: "global.projects.discover",
+        responses: {
+          200: {
+            description: "Discovered projects",
+            content: {
+              "application/json": {
+                schema: resolver(Project.Discovery),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      async (c) => c.json(await Project.discoverFromLaunchDirectory()),
     )
     .get(
       "/event",
