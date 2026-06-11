@@ -64,7 +64,7 @@ test("Mission ledger uses MissionList and not the task list projection", () => {
   expect(MISSION_TSX).toContain('import { MissionList } from "./MissionList"')
   expect(MISSION_TSX).toContain("<MissionList")
   expect(MISSION_TSX).toContain("loadMissions")
-  expect(MISSION_TSX).toContain("return { search: searchQuery().trim(), refresh: missionRefreshToken() }")
+  expect(MISSION_TSX).toContain("sharedRefresh: props.refreshToken ?? 0")
   expect(MISSION_TSX).not.toContain('import { TaskList } from "./TaskList"')
   expect(MISSION_TSX).not.toContain("<TaskList")
   expect(MISSION_TSX).not.toContain("visibleTasks")

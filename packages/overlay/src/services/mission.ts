@@ -215,17 +215,6 @@ export interface MissionActionTarget {
   directory: string
 }
 
-export interface ChannelBindingRow {
-  id: string
-  task_id: string
-  platform: string
-  channel: string
-  thread: string
-  payload?: Record<string, unknown>
-  time_created?: number
-  time_updated?: number
-}
-
 // ── API helpers ──
 
 export async function loadMissionStats(
@@ -276,25 +265,6 @@ export async function loadTaskStatus(taskID: string, signal?: AbortSignal): Prom
   const trimmed = taskID.trim()
   if (!trimmed) throw new Error("loadTaskStatus: taskID is required")
   return (await apiJson(`task/${encodeURIComponent(trimmed)}/status`, { signal })) as TaskStatusDetail
-}
-
-export async function loadTaskBindings(taskID: string, signal?: AbortSignal): Promise<ChannelBindingRow[]> {
-  // Guard against an empty taskID at the call site — it's a programmer
-  // error, not a server response, so don't even hit the network. Empty
-  // bindings for a real task are a legitimate server result and arrive
-  // as `[]` from the API.
-  if (!taskID) return []
-  const data = await apiJson(`task/${encodeURIComponent(taskID)}/bindings`, { signal })
-  // The server route declares the response as an array (TaskBindingList
-  // in orchestrator.ts). A non-array body means contract drift —
-  // surface it as a loud error so the Mission error block fires
-  // instead of silently rendering an empty list (rule 7).
-  if (!Array.isArray(data)) {
-    throw new Error(
-      `loadTaskBindings: server returned non-array body (got ${typeof data}). Server contract has drifted from TaskBindingList.`,
-    )
-  }
-  return data as ChannelBindingRow[]
 }
 
 export async function wakeMission(input: MissionWakeInput): Promise<MissionWakeResult> {

@@ -40,6 +40,7 @@ const MISSION_LIST_PAGE_SIZE = 10
 
 export interface MissionProps {
   active: boolean
+  refreshToken?: number
   onSelectTask: (taskID: string) => void
 }
 
@@ -62,7 +63,7 @@ function MissionContent(props: MissionProps) {
   const [missionRecords, missionRecordsCtl] = createResource(
     () => {
       if (!props.active) return null
-      return { search: searchQuery().trim(), refresh: missionRefreshToken() }
+      return { search: searchQuery().trim(), refresh: missionRefreshToken(), sharedRefresh: props.refreshToken ?? 0 }
     },
     async (input) => {
       try {

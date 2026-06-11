@@ -41,3 +41,28 @@ projection.
 - Mission task projection rows call the same task selection path as the Task
   ledger.
 - Focused overlay tests cover the new source contract.
+
+## Independent Review Feedback
+
+Codex independent review on 2026-06-11 found four issues:
+
+- `P1`: Mission task projection selected the task but did not switch the left
+  activity back to Tasks. Fixed by routing projections through
+  `selectMissionTask`, which opens workflow, activates Tasks, then selects the
+  task.
+- `P1`: Switching from a selected Mission session to Tasks left the Mission
+  session in the center chat. Fixed by clearing selected session sources when
+  selecting non-Mission left activities, and by clearing Mission sessions before
+  activating Coding Assistant.
+- `P2`: Shared center-chat Mission follow-ups no longer refreshed the Mission
+  ledger. Fixed by passing `missionSharedRefreshToken` from `main.tsx` into
+  `Mission` and incrementing it after shared composer submission to a Mission
+  session.
+- `P3`: `loadTaskBindings` / `ChannelBindingRow` remained as dead Mission
+  Channel residue. Fixed by deleting those exports and updating tests to assert
+  their absence.
+
+Additional browser coverage was added in
+`packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` to click
+Mission in the real left activity toolbar, verify the Mission ledger loads, and
+verify a Mission task projection returns to the Tasks activity.
