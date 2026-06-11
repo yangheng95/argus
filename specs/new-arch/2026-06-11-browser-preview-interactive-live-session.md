@@ -52,3 +52,10 @@ Coordinates are browser viewport CSS pixels. The overlay computes them from the 
 2. Overlay static tests prove live preview uses HostTransport API calls and no iframe.
 3. Browser test proves the panel loads a live screenshot and posts pointer/wheel input through task-scoped live routes.
 4. Typecheck both backend and overlay, then push with hooks.
+
+## Resource Lifecycle Audit - 2026-06-11
+
+- Live preview sessions must not remain open indefinitely after interaction stops. Each sidecar arms an unref'd idle close timer after command settlement.
+- Pending command timeout and abort paths must remove AbortSignal listeners by settling through the same pending reject wrapper used by successful responses.
+- Parent/server teardown must explicitly close live preview sessions before instance/global dispose and before the server process exits.
+- The Node sidecar must close Chromium when stdin ends or closes, so a parent pipe shutdown does not leave an orphaned browser process.

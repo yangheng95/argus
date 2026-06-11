@@ -12,6 +12,7 @@ import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { Database } from "../../storage/db"
 import { errors } from "../error"
+import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
 import {
   MysqlTransferFullExport,
   MysqlTransferImportResult,
@@ -227,6 +228,7 @@ export const GlobalRoutes = lazy(() =>
         if (hasActiveSessions()) {
           return c.json({ error: "Active executor sessions exist, skipping dispose" }, 409)
         }
+        await closeBrowserPreviewLiveSessions()
         await Instance.disposeAll()
         GlobalBus.emit("event", {
           directory: "global",

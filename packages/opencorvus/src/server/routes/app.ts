@@ -41,6 +41,7 @@ import { hasServerShutdownHandler, requestServerShutdown } from "../shutdown"
 import { Env } from "@/runtime/env"
 import { AppDocumentation } from "./documentation"
 import { serverErrorResponse } from "../error-handler"
+import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
 
 const log = Log.create({ service: "server" })
 const LogReadResponse = z.object({
@@ -186,6 +187,7 @@ export function AppRoutes(root: Hono) {
         if (hasActiveSessions()) {
           return c.json({ error: "Active executor sessions exist, skipping dispose" }, 409)
         }
+        await closeBrowserPreviewLiveSessions()
         await Instance.dispose()
         return c.json(true)
       },
