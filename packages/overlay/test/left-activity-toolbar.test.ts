@@ -8,7 +8,7 @@ function read(relativePath: string): string {
   return readFileSync(join(OVERLAY_ROOT, relativePath), "utf8")
 }
 
-test("left activity toolbar owns task, assistant, memory, skill, and MCP controls", () => {
+test("left activity toolbar owns task, mission, assistant, memory, skill, and MCP controls", () => {
   const html = read("src/index.html")
   const main = read("src/main.tsx")
   const toolbar = read("src/components/SideActivityToolbar.tsx")
@@ -19,10 +19,11 @@ test("left activity toolbar owns task, assistant, memory, skill, and MCP control
 
   expect(html).toContain('id="solidLeftActivityToolbar"')
   expect(html).toContain('id="leftPanelTasks"')
+  expect(html).toContain('id="leftPanelMissions"')
   expect(html).toContain('id="leftPanelSkills"')
   expect(html).toContain('id="leftPanelMcp"')
   expect(html).toContain('id="leftPanelMemory"')
-  expect(main).toContain('type LeftActivity = "tasks" | "assistant" | "memory" | "skill" | "mcp"')
+  expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
   expect(main).toContain("const LEFT_ACTIVITIES")
   expect(main).toContain("selectLeftActivity")
   expect(main).toContain('setSelectedLeftActivity("assistant")')
@@ -30,6 +31,9 @@ test("left activity toolbar owns task, assistant, memory, skill, and MCP control
   expect(main).toContain('id: "tasks", icon: "tasks", labelKey: "sidebar.title", tooltipKey: "activity.tooltip.tasks"')
   expect(main).toContain(
     'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
+  )
+  expect(main).toContain(
+    'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
   )
   expect(main).toContain(
     'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
@@ -59,6 +63,7 @@ test("left activity toolbar owns task, assistant, memory, skill, and MCP control
   expect(activityCss).toContain(".sidebar-tool-panel .skill-drop-zone__copy strong")
   for (const key of [
     "activity.tooltip.tasks",
+    "activity.tooltip.mission",
     "activity.tooltip.assistant",
     "activity.tooltip.memory",
     "activity.tooltip.skill",

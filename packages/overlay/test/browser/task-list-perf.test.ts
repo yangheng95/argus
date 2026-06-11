@@ -398,12 +398,14 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
     })
 
     const missionRowsMs = await page.evaluate(async (count) => {
-      const mission = document.querySelector<HTMLButtonElement>("#btnMission")
-      if (!mission) throw new Error("missing Mission button")
+      const mission = document.querySelector<HTMLButtonElement>(
+        '[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]',
+      )
+      if (!mission) throw new Error("missing Mission activity button")
       const start = performance.now()
       mission.click()
-      while (document.body.getAttribute("data-page-mode") !== "mission") {
-        if (performance.now() - start > 10_000) throw new Error("Mission page did not open")
+      while (document.querySelector<HTMLElement>("#leftPanelMissions")?.dataset.active !== "true") {
+        if (performance.now() - start > 10_000) throw new Error("Mission activity did not open")
         await new Promise((resolve) => setTimeout(resolve, 16))
       }
       while (document.querySelectorAll('.mission-ledger [data-ui="mission-row"]').length < count) {
@@ -417,13 +419,13 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
     }, PAGE_SIZE)
 
     await page.evaluate(async () => {
-      const waitForMissionConversationInput = async () => {
+      const waitForSharedComposerInput = async () => {
         const start = performance.now()
-        while (!document.querySelector<HTMLTextAreaElement>("#missionConversationChatTextarea")) {
-          if (performance.now() - start > 10_000) throw new Error("Mission session composer did not open")
+        while (!document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")) {
+          if (performance.now() - start > 10_000) throw new Error("shared session composer did not open")
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
-        return document.querySelector<HTMLTextAreaElement>("#missionConversationChatTextarea")!
+        return document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")!
       }
       const missionRows = Array.from(document.querySelectorAll<HTMLElement>('.mission-ledger [data-ui="mission-row"]'))
       const firstSessionID = missionRows.at(0)?.dataset.sessionId
@@ -449,22 +451,22 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
         }
       }
       const setMissionDraft = async (value: string) => {
-        const input = await waitForMissionConversationInput()
+        const input = await waitForSharedComposerInput()
         input.value = value
         input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }))
       }
       const expectMissionDraft = async (value: string) => {
         const start = performance.now()
-        while (document.querySelector<HTMLTextAreaElement>("#missionConversationChatTextarea")?.value !== value) {
+        while (document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.value !== value) {
           if (performance.now() - start > 10_000) {
-            const actual = document.querySelector<HTMLTextAreaElement>("#missionConversationChatTextarea")?.value
+            const actual = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.value
             throw new Error(`Mission session composer draft mismatch; expected=${value}; actual=${actual}`)
           }
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
       }
 
-      await waitForMissionConversationInput()
+      await waitForSharedComposerInput()
       await waitMissionSelected(firstSessionID)
       await setMissionDraft("draft bound to first mission session")
       await clickMissionAndWait(secondSessionID)
@@ -494,23 +496,25 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
       input.value = "preserve composer draft"
       input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: input.value }))
 
-      const backToPanel = document.querySelector<HTMLButtonElement>('[data-ui="mission-back-panel"]')
-      if (!backToPanel) throw new Error("missing Mission back-to-panel button")
-      backToPanel.click()
-      while (document.body.getAttribute("data-page-mode") !== "panel") {
+      const tasks = document.querySelector<HTMLButtonElement>(
+        '[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
+      )
+      if (!tasks) throw new Error("missing Tasks activity button")
+      tasks.click()
+      while (document.querySelector<HTMLElement>("#leftPanelMissions")?.dataset.active === "true") {
         await new Promise((resolve) => setTimeout(resolve, 16))
       }
-      const hiddenRows = document.querySelectorAll('.mission-ledger [data-ui="mission-row"]').length
-      if (hiddenRows !== 0) throw new Error(`hidden Mission ledger still rendered ${hiddenRows} rows`)
 
-      const mission = document.querySelector<HTMLButtonElement>("#btnMission")
-      if (!mission) throw new Error("missing Mission button")
+      const mission = document.querySelector<HTMLButtonElement>(
+        '[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]',
+      )
+      if (!mission) throw new Error("missing Mission activity button")
       mission.click()
-      while (document.body.getAttribute("data-page-mode") !== "mission") {
+      while (document.querySelector<HTMLElement>("#leftPanelMissions")?.dataset.active !== "true") {
         await new Promise((resolve) => setTimeout(resolve, 16))
       }
       const restored = document.querySelector<HTMLTextAreaElement>('[data-ui="mission-composer-input"]')
-      if (!restored) throw new Error("Mission composer unmounted across panel round trip")
+      if (!restored) throw new Error("Mission composer unmounted across activity round trip")
       if (restored.value !== "preserve composer draft") {
         throw new Error(`Mission composer draft was not preserved: ${restored.value}`)
       }

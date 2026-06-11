@@ -1,36 +1,24 @@
-import { afterEach, beforeEach, expect, test } from "bun:test"
-import { isMissionPage, pageMode, setPageMode } from "../src/store/page-mode"
+import { expect, test } from "bun:test"
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 
-// The pageMode signal is module-level state — bun:test runs every file
-// in the same process, so leaving it on "mission" between tests would
-// silently corrupt other test files that read the signal. Reset before
-// AND after each test so an mid-test crash never poisons later tests.
-beforeEach(() => {
-  setPageMode("panel")
-})
-afterEach(() => {
-  setPageMode("panel")
-})
+const ROOT = join(import.meta.dir, "..")
 
-test("page mode defaults to panel", () => {
-  expect(pageMode()).toBe("panel")
-  expect(isMissionPage()).toBe(false)
-})
+function read(relativePath: string): string {
+  return readFileSync(join(ROOT, relativePath), "utf8")
+}
 
-test("setPageMode toggles between panel and mission without losing state", () => {
-  setPageMode("mission")
-  expect(pageMode()).toBe("mission")
-  expect(isMissionPage()).toBe(true)
-
-  setPageMode("panel")
-  expect(pageMode()).toBe("panel")
-  expect(isMissionPage()).toBe(false)
-
-  setPageMode("mission")
-  expect(pageMode()).toBe("mission")
-})
-
-test("setPageMode rejects unknown values (rule 7 — no fallback)", () => {
-  expect(() => setPageMode("settings" as any)).toThrow(/unsupported page mode/)
-  expect(() => setPageMode("" as any)).toThrow(/unsupported page mode/)
+test("Mission page-mode store is retired", () => {
+  expect(existsSync(join(ROOT, "src/store/page-mode.ts"))).toBe(false)
+  for (const source of [
+    read("src/main.tsx"),
+    read("src/services/notify.ts"),
+    read("src/components/Mission.tsx"),
+    read("src/styles/surfaces/mission.css"),
+  ]) {
+    expect(source).not.toContain("pageMode")
+    expect(source).not.toContain("setPageMode")
+    expect(source).not.toContain("isMissionPage")
+    expect(source).not.toContain("data-page-mode")
+  }
 })

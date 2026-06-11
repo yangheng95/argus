@@ -1,229 +1,41 @@
-/* Mission surface — operator control room.
-   Layout: 3 columns (ledger | workbench | channels).
-   Dense, table-leaning. No card-heavy decoration (PRD §13).
+/* Mission left activity surface. Mission is no longer a standalone page:
+   this file styles only the left-panel ledger and inline launcher. */
 
-   Every value here routes through the design tokens declared in
-   styles/tokens/design-language.css and styles/cascade/*.css. Fallback
-   literals are forbidden — the cascade is the single source of theme
-   values, and the flat-redesign coverage tests reject hex / rgba /
-   bare-pixel / bare-duration literals.
-*/
-
-/* Mission is a sibling page mode that layers over the same translucent
-   body backdrop the default Panel uses. `body[data-body-bg]` is the
-   single source of operator-controlled window opacity (cascade/*.css
-   defines `--body-bg` from `--ui-window-opacity`) — DO NOT override
-   it here, just let it show through. The Mission's own surfaces use
-   the existing `--surface*` / `--rail-surface` tokens so the look
-   matches the panel chrome under every theme and opacity setting.
-
-   (Bug fix: pre-fix used a non-existent `--surface-base` token AND
-   overrode `body.background`, which both broke window-opacity and
-   left the Mission visually inconsistent with the panel.) */
-
-/* The titlebar stays visible in BOTH page modes — it owns the Tauri
-   drag region (data-tauri-drag-region on .titlebar-left + spacer) plus
-   the window controls (min / max / close). Hiding it in mission mode
-   strands the operator: the window becomes undraggable and the only
-   way to close it is the OS keyboard shortcut. So we only swap the
-   main work area (.panel ↔ .mission-mount) and leave the chrome alone. */
-
-.mission-mount {
-  display: none;
+.mission-left-panel {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
   flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-}
-
-body[data-page-mode="mission"] .mission-mount {
-  display: flex;
-  flex-direction: column;
-}
-
-body[data-page-mode="mission"] > main.panel {
-  display: none;
-}
-
-body[data-page-mode="mission"] > .workbench-project-bar,
-body:not([data-page-mode="mission"]) > .workbench-project-bar {
-  display: flex;
-}
-
-.mission {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  min-height: 0;
-  min-width: 0;
-  background: transparent;
-  color: var(--text-strong);
-  isolation: isolate;
-}
-
-/* Body ---------------------------------------------------------------- */
-
-/* Three resizable columns mirroring the default Panel's `.panel-body`
-   (flex row: ledger | resizer | workbench | resizer | channels). Column
-   widths come from CSS custom properties driven by services/pane.ts —
-   the SAME drag service the Panel uses — via MISSION_PANE_CONFIG, so there
-   is one resizer implementation, not two (rule 8/9). */
-.mission-body {
-  flex: 1 1 auto;
-  display: flex;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-  background: var(--chat-canvas);
-}
-
-@media (max-width: 1120px) /* breakpoint: --ui-breakpoint-xl */ {
-  /* Hide the channel column AND its resize handle together — an orphaned
-     handle would leave a draggable gap with nothing beside it.
-     `.mission-body …` bumps specificity over the base flex rules below. */
-  .mission-body .mission-channels,
-  .mission-body #missionChannelsResizer {
-    display: none;
-  }
-}
-
-@media (max-width: 760px) /* breakpoint: --ui-breakpoint-md */ {
-  /* Hide the ledger column AND its resize handle together. */
-  .mission-body .mission-ledger,
-  .mission-body #missionLedgerResizer {
-    display: none;
-  }
-}
-
-/* Ledger column ------------------------------------------------------- */
-
-/* Ledger column mirrors the Panel `.sidebar`: width driven by the
-   pane-service CSS variable, rail surface background, flat (no border,
-   no radius). The fallback width applies only on the very first frame
-   before the pane effect sets the variable (Mission is display:none
-   until then anyway). */
-.mission-ledger {
-  width: var(--ui-mission-ledger-width, calc(288px * var(--ui-scale)));
-  min-width: min(100%, var(--ui-rail-min-width));
-  max-width: var(--ui-mission-ledger-width, calc(288px * var(--ui-scale)));
-  flex: 0 1 var(--ui-mission-ledger-width, calc(288px * var(--ui-scale)));
-  display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 0;
-  border-radius: 0;
   background: var(--rail-surface);
 }
 
-/* Header chrome (height / padding / background / border / radius) comes
-   from the shared `.oc-surface-header` primitive — the same one the
-   sidebar/chat/sections headers use. Mission keeps only its own marker
-   class as a hook (no chrome declarations of its own). */
-
-.mission-ledger-search {
-  margin: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
-}
-
-.coding-assistant-ledger {
+.mission-ledger {
   display: flex;
   min-height: 0;
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-}
-
-.coding-assistant-ledger-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  padding: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
-}
-
-.coding-assistant-ledger-search {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.coding-assistant-ledger-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0 var(--ui-gap-sm) var(--ui-gap-md);
-}
-
-.oc-button[data-ui="coding-assistant-new"][data-variant="solid"] {
-  --oc-button-height: calc(28px * var(--ui-scale));
-  --oc-button-padding-x: calc(10px * var(--ui-scale));
-  --oc-button-gap: calc(2px * var(--ui-scale));
-  --oc-button-bg: var(--accent);
-  --oc-button-border: 0 solid transparent;
-  --oc-button-color: var(--surface);
-  flex: 0 0 auto;
-  letter-spacing: var(--ui-letter-spacing-normal);
-  box-shadow: none;
-}
-
-.oc-button[data-ui="coding-assistant-new"] .sidebar-btn-icon {
-  width: calc(16px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 14%, transparent);
-}
-
-.oc-button[data-ui="coding-assistant-new"]:hover,
-.oc-button[data-ui="coding-assistant-new"]:focus-visible {
-  --oc-button-bg: var(--accent-hover);
-  --oc-button-border: 0 solid transparent;
-  --oc-button-color: var(--surface);
-}
-
-.coding-assistant-row-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(2px * var(--ui-scale));
-  opacity: var(--ui-opacity-hidden);
-  pointer-events: none;
-  transition: opacity var(--ui-duration-fast) var(--ui-timing-standard);
-}
-
-.ledger-row:hover .coding-assistant-row-actions,
-.ledger-row:focus-within .coding-assistant-row-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.coding-assistant-row-stop-icon[data-icon="confirm"],
-.coding-assistant-row-delete-icon[data-icon="confirm"] {
-  display: none;
-}
-
-.oc-button[data-ui="coding-assistant-row-stop"][data-confirm="true"] .coding-assistant-row-stop-icon[data-icon="stop"],
-.oc-button[data-ui="coding-assistant-row-delete"][data-confirm="true"] .coding-assistant-row-delete-icon[data-icon="delete"] {
-  display: none;
-}
-
-.oc-button[data-ui="coding-assistant-row-stop"][data-confirm="true"] .coding-assistant-row-stop-icon[data-icon="confirm"],
-.oc-button[data-ui="coding-assistant-row-delete"][data-confirm="true"] .coding-assistant-row-delete-icon[data-icon="confirm"] {
-  display: inline-flex;
-}
-
-.coding-assistant-row-rename-input {
-  width: 100%;
-  min-width: 0;
-  border: var(--oc-border-width) solid var(--accent);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-hover);
-  color: var(--text-strong);
-  padding: calc(2px * var(--ui-scale)) var(--ui-gap-xs);
-  font: inherit;
+  overflow: hidden;
+  background: var(--rail-surface);
 }
 
 .mission-ledger-header-actions {
   flex-wrap: nowrap;
   justify-content: flex-end;
   flex-shrink: 0;
+}
+
+.mission-ledger-search {
+  margin: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
+}
+
+.mission-ledger-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--ui-gap-sm) var(--ui-gap-md);
 }
 
 .oc-button[data-ui="mission-new"][data-variant="solid"] {
@@ -252,99 +64,10 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
   --oc-button-color: var(--surface);
 }
 
-.oc-button[data-ui="mission-new"]:focus-visible {
-  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 28%, transparent);
-}
-
-.mission-ledger-list {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 0 var(--ui-gap-sm) var(--ui-gap-md);
-}
-
-.ledger-list {
-  min-height: 100%;
+.mission-row-shell {
   display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-}
-
-.ledger-row {
-  border: 0;
-  border-radius: 0;
-  width: 100%;
-  min-height: calc(44px * var(--ui-scale));
-  display: grid;
-  grid-template-columns: calc(24px * var(--ui-scale)) minmax(0, 1fr) max-content;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  padding: var(--ui-gap-sm) var(--ui-gap-md);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background-color var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.ledger-row:hover,
-.ledger-row:focus-within {
-  background: var(--surface-hover);
-}
-
-.ledger-row[data-active="true"] {
-  background: var(--accent-dim);
-  color: var(--text-strong);
-}
-
-.ledger-row-icon {
-  width: calc(24px * var(--ui-scale));
-  height: calc(24px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
-}
-
-.ledger-row-main {
   min-width: 0;
-  display: flex;
   flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-}
-
-.ledger-row-title,
-.ledger-row-meta {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ledger-row-title {
-  font-size: var(--ui-font-small);
-  color: var(--text-strong);
-}
-
-.ledger-row-meta {
-  display: flex;
-  gap: var(--ui-gap-sm);
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-}
-
-.ledger-row-stamp {
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-}
-
-.ledger-row-right {
-  min-width: calc(70px * var(--ui-scale));
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--ui-gap-xs);
 }
 
 .mission-row-actions {
@@ -389,537 +112,137 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
   font: inherit;
 }
 
-.mission-row-shell {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .mission-task-projection-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: calc(2px * var(--ui-scale));
-  margin: 0 0 var(--ui-gap-xs) calc(30px * var(--ui-scale));
-  padding: 0 0 0 var(--ui-gap-md);
-  border-left: var(--oc-border-width) solid var(--border);
+  margin: 0 0 var(--ui-gap-xs) calc(26px * var(--ui-scale));
+  padding: 0;
   list-style: none;
 }
 
 .mission-task-projection-row {
+  min-width: 0;
+}
+
+.mission-task-projection-button {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--ui-gap-sm);
-  min-height: calc(30px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale)) var(--ui-gap-sm);
+  gap: var(--ui-gap-xs);
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
   color: var(--text);
+  padding: calc(4px * var(--ui-scale)) var(--ui-gap-xs);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mission-task-projection-button:hover,
+.mission-task-projection-button:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+  outline: none;
 }
 
 .mission-task-projection-main {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex-direction: column;
   gap: calc(1px * var(--ui-scale));
 }
 
-.mission-task-projection-title,
-.mission-task-projection-meta {
+.mission-task-projection-title {
   min-width: 0;
   overflow: hidden;
+  color: var(--text-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mission-task-projection-title {
-  font-size: var(--ui-font-tiny);
-  color: var(--text-strong);
-}
-
 .mission-task-projection-meta {
   display: flex;
-  gap: var(--ui-gap-sm);
-  font-size: var(--ui-font-tiny);
+  min-width: 0;
+  gap: var(--ui-gap-xs);
+  overflow: hidden;
   color: var(--text-muted);
+  font-size: var(--ui-font-size-xs);
+  white-space: nowrap;
+}
+
+.mission-task-projection-meta > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mission-task-projection-status {
-  min-width: calc(54px * var(--ui-scale));
-  text-align: center;
-  padding: 0 var(--ui-gap-xs);
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
   color: var(--text-muted);
-  font-size: var(--ui-font-tiny);
+  font-size: var(--ui-font-size-xs);
+  white-space: nowrap;
 }
 
-.mission-task-projection-status[data-status="active"] {
-  background: var(--accent-dim);
-  color: var(--accent);
+.mission-composer--inline {
+  flex: 0 0 auto;
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: var(--rail-surface);
 }
 
-.mission-task-projection-status[data-status="completed"] {
-  background: var(--good-dim);
-  color: var(--good);
+.mission-composer-header {
+  min-height: calc(38px * var(--ui-scale));
 }
 
-.mission-task-projection-status[data-status="failed"],
-.mission-task-projection-status[data-status="cancelled"] {
-  background: var(--bad-dim);
-  color: var(--bad);
-}
-
-.ledger-empty,
-.ledger-skeleton,
-.ledger-skeleton-row {
-  margin: var(--ui-gap-sm);
-}
-
-.ledger-empty {
-  font-size: var(--ui-font-small);
-  color: var(--text-muted);
-}
-
-.ledger-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-}
-
-.ledger-skeleton-row {
-  height: calc(38px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-hover);
-}
-
-/* Workbench column --------------------------------------------------- */
-
-/* Workbench (center) column mirrors the Panel `.chat`: grows to fill the
-   space between the two rails, chat-canvas background, flat. Column
-   separation comes from the surface-colour contrast + the resizer gap,
-   exactly like the Panel — no inter-column borders. */
-.mission-workbench {
-  flex: 999 1 var(--ui-chat-priority-width);
-  display: flex;
-  flex-direction: column;
-  min-width: min(100%, var(--ui-chat-min-width));
-  min-height: 0;
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  background: var(--chat-canvas);
-  box-shadow: none;
-}
-
-.mission-conversation {
-  display: flex;
-  flex-direction: column;
+.mission-composer-title-block {
+  display: grid;
   min-width: 0;
-  min-height: 0;
-  height: 100%;
-  background: var(--chat-canvas);
+  gap: calc(1px * var(--ui-scale));
 }
 
-/* Title chrome comes from `.oc-surface-header` / `.oc-surface-header__title`
-   (shared with the sidebar/chat/sections headers). The h2 only needs its
-   default heading margin reset so it centres in the fixed-height header. */
-.mission-conversation-title {
-  margin: 0;
-}
-
-.mission-conversation-header-actions {
-  flex: 0 0 calc(96px * var(--ui-scale));
-  width: calc(96px * var(--ui-scale));
-  min-width: calc(96px * var(--ui-scale));
-  justify-content: flex-end;
-}
-
-.mission-conversation-runtime {
-  display: inline-flex;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-  justify-content: flex-end;
+.mission-composer-kicker {
   color: var(--text-muted);
-  font-size: var(--ui-font-small);
-  font-variant-numeric: tabular-nums;
+  font-size: var(--ui-font-size-xs);
+}
+
+.mission-composer-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mission-conversation-body {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.mission-chat-content-frame,
-.mission-chat-message-pane,
-.mission-conversation-body-frame {
-  min-height: 0;
-  min-width: 0;
-}
-
-.mission-chat-content-frame {
-  flex: 1 1 auto;
-}
-
-.mission-chat-message-pane {
-  flex: 1 1 auto;
-}
-
-.mission-agent-rail-host {
-  flex: 0 0 auto;
-}
-
-.mission-workspace-mount {
-  flex: 0 0 auto;
-}
-
-/* The conversation body IS a `.chat-scroll`, so it inherits the Panel's
-   card layout verbatim (conversation.css): full-width cards, user bubbles
-   right-aligned, system cards centred, goal-progress strip identical. No
-   Mission-specific card-width / centering / task-progress overrides — those
-   were the source of the "crooked cards" + misaligned goals strip. */
-
-/* Composer mounts flush like the Panel's `#solidChatComposer`: the
-   `.chat-input` shell owns its own padding + background and spans the
-   column width. No wrapper padding, no max-width centering. */
-.mission-conversation-composer {
-  flex: 0 0 auto;
-}
-
-/* Composer ----------------------------------------------------------- */
-
-.mission-composer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-  min-height: 100%;
-  justify-content: flex-start;
-  padding: 0;
-  background: var(--chat-canvas);
-}
-
-.mission-composer > * {
-  width: 100%;
-}
-
-.mission-composer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-lg);
-}
-
-.mission-composer-title {
-  margin: 0;
-  font-size: var(--ui-font-heading);
-  font-weight: var(--ui-font-weight-strong);
-}
-
-.mission-composer-title-block {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-}
-
-.mission-composer-kicker,
-.mission-composer-input-label {
-  font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  color: var(--text-muted);
-}
-
 .mission-composer-shell {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-  margin-top: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  padding: var(--ui-gap-sm);
 }
 
+.mission-composer-shell .chat-input {
+  min-height: calc(88px * var(--ui-scale));
+}
+
+.mission-error,
+.mission-action-error,
 .mission-launcher-result {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-  padding: var(--ui-gap-md);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--good) 32%, var(--border));
-  border-radius: var(--oc-radius-soft);
-  color: var(--good);
-  background: var(--good-dim);
-  font-size: var(--ui-font-small);
-}
-
-.mission-launcher-result p {
-  margin: 0;
-}
-
-.mission-launcher-result-session {
-  color: var(--text-muted);
-}
-
-/* Channel side panel ------------------------------------------------- */
-
-/* Channels column mirrors the Panel `.sections`: width driven by the
-   pane-service CSS variable, inspector surface background, flat (no border,
-   no radius). Header chrome comes from the shared `.oc-surface-header`. */
-.mission-channels {
-  width: var(--ui-mission-channels-width, calc(248px * var(--ui-scale)));
-  min-width: min(100%, var(--ui-rail-min-width));
-  max-width: var(--ui-mission-channels-width, calc(248px * var(--ui-scale)));
-  flex: 0 1 var(--ui-mission-channels-width, calc(248px * var(--ui-scale)));
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  border: 0;
-  border-radius: 0;
-  background: var(--inspector-surface);
-}
-
-.mission-channels-heading {
-  margin: 0;
-}
-
-.mission-created-task-stats,
-.mission-channels-runtime,
-.mission-channels-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-  padding: var(--ui-gap-md) var(--ui-gap-lg);
-  border-bottom: var(--oc-border-width) dashed var(--border);
-}
-
-.mission-created-task-stats h3,
-.mission-channels-runtime h3 {
-  margin: 0;
-  font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  color: var(--text-muted);
-}
-
-.mission-created-task-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--ui-gap-sm);
-  margin: 0;
-}
-
-.mission-created-task-stats-grid div {
-  min-width: 0;
-}
-
-.mission-created-task-stats-grid dt {
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-}
-
-.mission-created-task-stats-grid dd {
-  margin: calc(2px * var(--ui-scale)) 0 0;
-  color: var(--text-strong);
-  font-size: var(--ui-font-heading);
-  font-variant-numeric: tabular-nums;
-}
-
-.mission-channels-runtime-meta {
-  display: grid;
-  grid-template-columns: minmax(calc(80px * var(--ui-scale)), auto) minmax(0, 1fr);
-  row-gap: var(--ui-gap-xs);
-  column-gap: var(--ui-gap-md);
-  margin: 0;
-  font-size: var(--ui-font-small);
-}
-
-.mission-channels-runtime-meta dt {
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-}
-
-.mission-channels-runtime-meta dd {
-  margin: 0;
-}
-
-.mission-channels-runtime-meta dd[data-status="error"] {
-  color: var(--bad);
-}
-.mission-channels-runtime-meta dd[data-status="running"] {
-  color: var(--good);
-}
-
-.mission-channels-empty {
-  margin: 0;
-  font-size: var(--ui-font-small);
-  color: var(--text-muted);
-}
-
-.mission-channels-rows {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-}
-
-.mission-channel-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-  padding: var(--ui-gap-sm) var(--ui-gap-md);
-  border-radius: var(--oc-radius-soft);
+  margin: var(--ui-gap-sm);
   border: var(--oc-border-width) solid var(--border);
-}
-
-.mission-channel-row-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-sm);
-}
-
-.mission-channel-row-name {
-  font-size: var(--ui-font-small);
-  font-weight: var(--ui-font-weight-strong);
-}
-
-.mission-channel-row-status {
-  font-size: var(--ui-font-tiny);
-  padding: 0 var(--ui-gap-sm);
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
-  color: var(--text-muted);
-}
-
-.mission-channel-row-status[data-status="configured"] {
-  background: var(--good-dim);
-  color: var(--good);
-}
-
-.mission-channel-row-status[data-status="missing"] {
-  background: var(--warn-dim);
-  color: var(--warn);
-}
-
-.mission-channel-row-status[data-status="partial"] {
-  background: var(--warn-dim);
-  color: var(--warn);
-}
-
-.mission-channel-row-summary {
-  margin: 0;
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-}
-
-.mission-channel-row-detail {
-  margin: 0;
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.mission-channels-binding-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-}
-
-.mission-channels-binding {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  padding: var(--ui-gap-xs) var(--ui-gap-sm);
   border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  font-size: var(--ui-font-tiny);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--ui-gap-sm);
+  font-size: var(--ui-font-size-sm);
 }
 
-.mission-channels-binding-channel,
-.mission-channels-binding-thread {
-  color: var(--text-muted);
-  /* design-language.css defines `--mono` as the single source for the
-     monospace stack; pre-fix this duplicated `ui-monospace, …`
-     verbatim and was the only mono-stack literal still left in the
-     overlay surface files (rule 8 single source — caught by round-2
-     design review P1-6). */
-  font-family: var(--mono);
-}
-
-/* Common error block ------------------------------------------------- */
-
-.mission-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-md);
-  padding: var(--ui-gap-md) var(--ui-gap-lg);
-  border: var(--oc-border-width) solid var(--border-hover);
-  background: var(--bad-dim);
-  border-radius: var(--oc-radius-soft);
-  color: var(--bad);
-  font-size: var(--ui-font-small);
-}
-
-/* Page-level action error banner — surfaces ledger / channel / decompose
-   action failures even when no task is selected (codex round-3 P2). */
 .mission-action-error {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--ui-gap-sm);
   align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-md);
-  margin: 0 calc(var(--ui-gap-lg) * 1.5);
-  margin-top: var(--ui-gap-md);
-  padding: var(--ui-gap-sm) var(--ui-gap-lg);
-  border: var(--oc-border-width) solid var(--border-hover);
-  background: var(--bad-dim);
-  border-radius: var(--oc-radius-soft);
-  color: var(--bad);
-  font-size: var(--ui-font-small);
-  flex: 0 0 auto;
 }
 
 .mission-action-error-dismiss {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  padding: var(--ui-gap-xs);
   display: inline-flex;
   align-items: center;
-}
-
-/* ── Keyboard focus rings ──────────────────────────────────────────────
-   The Mission surface had no :focus-visible rules pre-fix. Density and
-   width now match `primitives/button.css:141-144` and `sidebar.css:486`
-   so the operator perceives one consistent focus ring across surfaces:
-   `--oc-border-width` thick (1px scaled), accent colour, offset by
-   `calc(1px * var(--ui-scale))` so it grows with the operator's
-   accessibility zoom (WCAG 2.1 SC 2.4.7 + rule 8 single source). The
-   round-1 version hard-coded `outline: 2px solid` + `outline-offset: 2px`
-   which (a) made Mission the only surface with a 2× thick ring, and (b)
-   ignored `--ui-scale` so the ring stayed 2px at zoom 1.4 while every
-   other surface scaled. Both bugs landed in round-2 P0-2. */
-
-.ledger-row:focus-visible,
-.mission-action-error-dismiss:focus-visible {
-  outline: var(--oc-border-width) solid var(--accent);
-  outline-offset: calc(1px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
 }

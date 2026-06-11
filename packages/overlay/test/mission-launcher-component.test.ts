@@ -2,8 +2,6 @@ import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-// Vite replaces this token at build time; the test runner has to provide
-// a stub before importing any module that transitively depends on it.
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
@@ -13,22 +11,6 @@ const SERVICES_MISSION = readFileSync(join(import.meta.dir, "../src/services/mis
 const HELPERS = readFileSync(join(import.meta.dir, "../src/utils/mission-helpers.ts"), "utf8")
 const I18N_ZH_CN = readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")
 const I18N_EN_US = readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")
-
-/**
- * Spec: gateway-mission-split-2026-05-28.md §3.
- *
- * The Mission page's composer surface is the MissionComposer launcher — it
- * starts or resumes a Mission agent session via POST /mission/wake. The
- * legacy decompose-then-review flow (GatewayComposer +
- * GatewayProposalReview) is intentionally absent (rule 8 + 16 / 17).
- *
- * These structural assertions guard the wiring:
- *   - the source no longer references the dead decompose API surface,
- *   - the new wakeMission client function is reachable from the page,
- *   - both locales carry the launcher.* copy the UI renders.
- */
-
-// ── Dead surfaces purged ─────────────────────────────────────
 
 test("Mission.tsx no longer imports the decompose service surface", () => {
   expect(MISSION_TSX).not.toContain("decomposeRequirement")
@@ -43,61 +25,58 @@ test("Mission.tsx no longer renders the proposal review UI", () => {
   expect(MISSION_TSX).not.toContain("mission-proposal-")
 })
 
-test("services/mission.ts no longer exports decompose API surface", () => {
+test("services/mission.ts no longer exports decompose or channel panel API surfaces", () => {
   expect(SERVICES_MISSION).not.toContain("decomposeRequirement")
   expect(SERVICES_MISSION).not.toContain("MissionTaskCandidate")
   expect(SERVICES_MISSION).not.toContain("MissionTaskDecomposition")
+  expect(SERVICES_MISSION).not.toContain("loadChannelList")
+  expect(SERVICES_MISSION).not.toContain("loadChannelRuntime")
+  expect(SERVICES_MISSION).not.toContain("restartChannelRuntime")
+  expect(SERVICES_MISSION).not.toContain("ChannelRuntimeStatus")
+  expect(SERVICES_MISSION).not.toContain("ChannelInfo")
 })
 
 test("mission-helpers.ts no longer exports composeTaskText", () => {
   expect(HELPERS).not.toContain("composeTaskText")
 })
 
-// ── New mission launcher surface present ─────────────────────
-
-test("Mission.tsx uses wakeMission from the mission service", () => {
-  expect(MISSION_TSX).toContain("wakeMission")
-})
-
 test("Mission waits for i18n readiness before rendering translated content", () => {
   expect(MISSION_TSX).toContain('import { appStore } from "../store/app"')
   expect(MISSION_TSX).toContain("when={appStore.i18nReady}")
-  expect(MISSION_TSX).toContain('fallback={<div class="mission-page" data-i18n-ready="false" />}')
+  expect(MISSION_TSX).toContain('fallback={<div class="mission-left-panel" data-i18n-ready="false" />}')
   expect(MISSION_TSX).toContain("function MissionContent(props: MissionProps)")
   expect(MISSION_TSX.indexOf("when={appStore.i18nReady}")).toBeLessThan(MISSION_TSX.indexOf("function MissionContent"))
 })
 
-test("Mission wake result opens the shared mission conversation surface", () => {
+test("Mission wake result opens the shared center conversation surface", () => {
   expect(MISSION_TSX).toContain("handleMissionAwake")
   expect(MISSION_TSX).toContain("missionRecordsCtl.refetch()")
   expect(MISSION_TSX).toContain('setBoardStore("selectedSource", source)')
   expect(MISSION_TSX).toContain('setBoardStore("board", null)')
   expect(MISSION_TSX).toContain("loadConversation(source")
   expect(MISSION_TSX).toContain("startSSE(source")
-  expect(MISSION_TSX).toContain("MissionConversation")
+  expect(MISSION_TSX).not.toContain("MissionConversation")
+  expect(MISSION_TSX).not.toContain('data-ui="mission-conversation"')
+  expect(MISSION_TSX).not.toContain('data-ui="mission-agent-rail"')
+  expect(MISSION_TSX).not.toContain('data-ui="mission-workspace"')
 })
 
-test("Mission conversation reuses the shared agent rail and workspace components", () => {
-  expect(MISSION_TSX).toContain('import { ConversationAgentRail } from "./ConversationAgentRail"')
-  expect(MISSION_TSX).toContain('import { WorkspacePanel } from "./WorkspacePanel"')
-  expect(MISSION_TSX).toContain("<ConversationAgentRail />")
-  expect(MISSION_TSX).toContain("<WorkspacePanel target={props.workspaceTarget()} onClose={props.closeWorkspace} />")
-  expect(MISSION_TSX).toContain('data-ui="mission-agent-rail"')
-  expect(MISSION_TSX).toContain('data-ui="mission-workspace"')
-})
-
-test("Mission channels do not load or render task-scoped bindings", () => {
+test("Mission left activity retires the Channel rail and task bindings surface", () => {
   expect(MISSION_TSX).not.toContain("loadTaskBindings")
   expect(MISSION_TSX).not.toContain('data-ui="mission-channels-bindings"')
   expect(MISSION_TSX).not.toContain("activeTaskID")
   expect(MISSION_TSX).not.toContain("bindings_empty_no_task")
+  expect(MISSION_TSX).not.toContain("MissionChannelPanel")
   expect(SERVICES_MISSION).toContain("export async function loadTaskBindings")
 })
 
-test("Mission list refreshes after follow-up Mission messages", () => {
-  expect(MISSION_TSX).toContain("handleMissionMessageSubmitted")
-  expect(MISSION_TSX).toContain("setMissionRefreshToken")
-  expect(MISSION_TSX).toContain("onMissionMessageSubmitted")
+test("Mission left activity loads and paginates Mission records only while active", () => {
+  expect(MISSION_TSX).toContain("if (!props.active) return null")
+  expect(MISSION_TSX).toContain("loadMissions({")
+  expect(MISSION_TSX).toContain("limit: MISSION_LIST_PAGE_SIZE + 1")
+  expect(MISSION_TSX).toContain("cursorUpdated: cursor.updated")
+  expect(MISSION_TSX).toContain("cursorSessionID: cursor.sessionID")
+  expect(MISSION_TSX).toContain("missionPage(records, MISSION_LIST_PAGE_SIZE)")
 })
 
 test("services/mission.ts exports wakeMission pointed at /mission/wake", () => {
@@ -116,53 +95,27 @@ test("services/mission.ts exports loadMissions pointed at /mission", () => {
   expect(SERVICES_MISSION).toContain("server returned non-array body")
 })
 
-test("Mission ledger renders mission-created task projections under each mission", () => {
+test("Mission ledger renders mission-created task projections as task selectors", () => {
   expect(MISSION_LIST_TSX).toContain("MissionTaskProjectionRow")
   expect(MISSION_LIST_TSX).toContain('data-ui="mission-task-projection"')
+  expect(MISSION_LIST_TSX).toContain('data-ui="mission-task-projection-select"')
+  expect(MISSION_LIST_TSX).toContain("props.onSelectTask(props.task.id)")
   expect(MISSION_LIST_TSX).toContain("props.mission.tasks")
   expect(MISSION_LIST_TSX).toContain("mission.ledger.tasks_label")
 })
 
-test("Mission ledger back action is a text-only Task button", () => {
-  const backButton = MISSION_LIST_TSX.match(/data-ui="mission-back-panel"[\s\S]*?<\/Button>/)?.[0] ?? ""
-  expect(backButton).toContain('<span>{t("mission.back")}</span>')
-  expect(backButton).not.toContain("<Icon")
-  expect(I18N_EN_US).toContain('"mission.back": "Task"')
-  expect(I18N_ZH_CN).toContain('"mission.back": "Task"')
-})
-
-test("Mission ledger header mirrors Task panel action primitives", () => {
+test("Mission ledger header mirrors Task panel action primitives without a Back button", () => {
   const newButton = MISSION_LIST_TSX.match(/<Button[\s\S]*?data-ui="mission-new"[\s\S]*?<\/Button>/)?.[0] ?? ""
   expect(newButton).toContain('variant="solid"')
   expect(newButton).toContain('size="md"')
   expect(newButton).toContain('tone="accent"')
   expect(newButton).toContain('class="sidebar-btn-icon"')
+  expect(MISSION_LIST_TSX).not.toContain('data-ui="mission-back-panel"')
   expect(MISSION_CSS).toContain('.oc-button[data-ui="mission-new"][data-variant="solid"]')
   expect(MISSION_CSS).toContain("--oc-button-height: calc(28px * var(--ui-scale));")
   expect(MISSION_LIST_TSX).toContain('class="mission-ledger-search search-field"')
   expect(MISSION_LIST_TSX).toContain('class="mission-ledger-search-input search-field-input"')
   expect(MISSION_LIST_TSX).toContain('data-ui="mission-ledger-search-clear"')
-})
-
-test("Mission conversation header shows fixed-position mission start time instead of close", () => {
-  expect(MISSION_TSX).toContain('data-ui="mission-runtime"')
-  expect(MISSION_TSX).toContain("stamp")
-  expect(MISSION_TSX).toContain("missionStartTimeText")
-  expect(MISSION_TSX).not.toContain("formatDuration")
-  expect(MISSION_TSX).not.toContain("useNowTick")
-  expect(MISSION_TSX).not.toContain('data-ui="mission-close"')
-  expect(MISSION_TSX).toContain("mission-conversation-header-actions")
-  expect(MISSION_CSS).toContain(".mission-conversation-header-actions")
-  expect(MISSION_CSS).toContain("flex: 0 0 calc(96px * var(--ui-scale));")
-  expect(MISSION_CSS).toContain("white-space: nowrap;")
-})
-
-test("Mission channel rail shows created task stats before channel runtime", () => {
-  const statsIndex = MISSION_TSX.indexOf('data-ui="mission-created-task-stats"')
-  const runtimeIndex = MISSION_TSX.indexOf('data-ui="mission-channels-runtime"')
-  expect(statsIndex).toBeGreaterThan(0)
-  expect(runtimeIndex).toBeGreaterThan(statsIndex)
-  expect(MISSION_TSX).toContain("missionChannelTaskStats")
 })
 
 test("MissionComposer reuses ChatComposer with mission-scoped DOM ids", () => {
@@ -171,18 +124,15 @@ test("MissionComposer reuses ChatComposer with mission-scoped DOM ids", () => {
   expect(MISSION_TSX).toContain('sendID="missionLauncherChatSend"')
   expect(MISSION_TSX).toContain('textareaDataUI="mission-composer-input"')
   expect(MISSION_TSX).toContain('sendDataUI="mission-composer-submit"')
+  expect(MISSION_TSX).toContain("draftKey={props.draftKey}")
 })
 
 test("MissionComposer exposes the standard data-ui hooks for downstream e2e", () => {
-  // These attributes are part of the mission page contract — the e2e
-  // tests select on them rather than on i18n text.
   expect(MISSION_TSX).toContain('textareaDataUI="mission-composer-input"')
   expect(MISSION_TSX).toContain('sendDataUI="mission-composer-submit"')
   expect(MISSION_TSX).not.toContain('data-ui="mission-composer-mission-id"')
   expect(MISSION_TSX).not.toContain("missionID().trim()")
 })
-
-// ── i18n launcher keys present in both locales ───────────────
 
 const LAUNCHER_KEYS = [
   "mission.launcher.title",
@@ -206,14 +156,11 @@ for (const key of LAUNCHER_KEYS) {
   })
 }
 
-// ── No legacy compose/proposal keys leak through ─────────────
-
 test("legacy gateway.compose.* keys are fully removed from both locales", () => {
   const zh = JSON.parse(I18N_ZH_CN) as Record<string, unknown>
   const en = JSON.parse(I18N_EN_US) as Record<string, unknown>
   for (const map of [zh, en]) {
-    const stragglers = Object.keys(map).filter((k) => k.startsWith("gateway.compose."))
-    expect(stragglers).toEqual([])
+    expect(Object.keys(map).filter((key) => key.startsWith("gateway.compose."))).toEqual([])
   }
 })
 
@@ -221,7 +168,6 @@ test("legacy gateway.proposal.* keys are fully removed from both locales", () =>
   const zh = JSON.parse(I18N_ZH_CN) as Record<string, unknown>
   const en = JSON.parse(I18N_EN_US) as Record<string, unknown>
   for (const map of [zh, en]) {
-    const stragglers = Object.keys(map).filter((k) => k.startsWith("gateway.proposal."))
-    expect(stragglers).toEqual([])
+    expect(Object.keys(map).filter((key) => key.startsWith("gateway.proposal."))).toEqual([])
   }
 })
