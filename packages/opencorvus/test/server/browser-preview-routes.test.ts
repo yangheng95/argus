@@ -232,6 +232,43 @@ describe("browser preview routes", () => {
     expect(missing.status).toBe(404)
   }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
+  test("GET /task/:taskID/browser-preview/evidence/:evidenceID/capture.png returns persisted PNG bytes", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+    const screenshotPath = path.join(tmp.path, "desktop.png")
+    const bytes = Buffer.from("browser-preview-png-bytes")
+    await fs.writeFile(screenshotPath, bytes)
+    const evidenceID = persistBrowserPreviewEvidence({
+      taskID,
+      targetID: target.id,
+      viewportID: "desktop",
+      status: "passed",
+      summary: "all runtime capture layers passed",
+      capture: { captured: true, passed: true, path: screenshotPath, sha: sha16(bytes) },
+      diagnostics: ["all runtime capture layers passed"],
+      now: 1000,
+    })
+    const app = Server.App()
+
+    const response = await app.request(`/task/${taskID}/browser-preview/evidence/${evidenceID}/capture.png`, {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get("content-type")).toBe("image/png")
+    expect(Buffer.from(await response.arrayBuffer()).toString("utf8")).toBe("browser-preview-png-bytes")
+
+    const missing = await app.request(`/task/${taskID}/browser-preview/evidence/art_missing/capture.png`, {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+    expect(missing.status).toBe(404)
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
+
   test("GET /task/:taskID/browser-preview/evidence/:evidenceID rejects missing or mismatched screenshot artifacts", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
@@ -350,6 +387,6 @@ describe("browser preview routes", () => {
   }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 })
 
-function sha16(text: string): string {
-  return crypto.createHash("sha256").update(text).digest("hex").slice(0, 16)
+function sha16(value: string | Uint8Array): string {
+  return crypto.createHash("sha256").update(value).digest("hex").slice(0, 16)
 }

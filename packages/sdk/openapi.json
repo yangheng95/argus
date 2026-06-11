@@ -13189,6 +13189,61 @@
         ]
       }
     },
+    "/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png": {
+      "get": {
+        "operationId": "browserPreview.readTaskEvidenceCapture",
+        "summary": "Read browser preview evidence screenshot",
+        "description": "Return the persisted Playwright PNG screenshot for task-scoped browser preview evidence.",
+        "responses": {
+          "200": {
+            "description": "Persisted browser preview PNG screenshot",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "evidenceID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.readTaskEvidenceCapture({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/browser-preview/target": {
       "put": {
         "operationId": "browserPreview.selectTaskTarget",

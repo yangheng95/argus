@@ -92,6 +92,7 @@ description: "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
 | GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target | `browserPreview.taskTarget` |
 | POST | `/task/{taskID}/browser-preview/capture` | Capture browser preview verification evidence | `browserPreview.captureTaskTarget` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence | `browserPreview.readTaskEvidence` |
+| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png` | Read browser preview evidence screenshot | `browserPreview.readTaskEvidenceCapture` |
 | PUT | `/task/{taskID}/browser-preview/target` | Select task browser preview target | `browserPreview.selectTaskTarget` |
 | PATCH | `/task/{taskID}/budget` | Update task budget | `task.updateBudget` |
 | POST | `/task/{taskID}/cancel` | Cancel task | `task.cancel` |

@@ -106,6 +106,10 @@ test(
     const requestLog: string[] = []
     let selectedTargetID = targetID
 
+    const pngBytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/abL9ZsAAAAASUVORK5CYII=",
+      "base64",
+    )
     let serverOrigin = ""
     const previewTarget = () => `${serverOrigin}/preview-target`
     const alternatePreviewTarget = () => `${serverOrigin}/preview-target-alt`
@@ -335,6 +339,11 @@ test(
           ],
         })
       }
+      if (path === `/task/${taskID}/browser-preview/evidence/${evidenceID}/capture.png`) {
+        return new Response(pngBytes, {
+          headers: { "content-type": "image/png" },
+        })
+      }
       return send({})
     })
     serverOrigin = server.origin
@@ -413,33 +422,53 @@ test(
         "browser workbench active",
         () => ({ errors, requestLog }),
       )
-      await page.waitForSelector('[data-ui="browser-preview-evidence-missing"]', { state: "attached" })
+      await page.waitForSelector('[data-ui="browser-preview-screenshot"]')
       await waitForPageText(page, previewTarget(), "preview target text")
       await page.click('[data-ui="browser-preview-candidate-trigger"]')
       await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await waitForPageText(page, alternatePreviewTarget(), "alternate preview target text")
 
-      await page.click('button[aria-label="Capture Playwright evidence from the saved backend preview target."]')
       await page.waitForSelector('[data-ui="browser-preview-evidence"][data-status="passed"]')
+      await waitForPageState(
+        page,
+        () => {
+          const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-screenshot"]')
+          return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+        },
+        "loaded browser preview screenshot",
+        () => ({ errors, requestLog }),
+      )
 
       const evidence = await page.evaluate(() => {
         const panel = document.querySelector<HTMLElement>('[data-ui="browser-preview-evidence"]')
+        const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-screenshot"]')
         return {
           status: panel?.dataset.status || "",
           text: panel?.textContent || "",
+          imageLoaded: !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0,
         }
       })
       assert.equal(evidence.status, "passed")
+      assert.equal(evidence.imageLoaded, true)
       assert.match(evidence.text, /manifest-backed desktop capture passed/)
       assert.match(evidence.text, new RegExp(evidenceID))
       assert.match(evidence.text, /desktop\.png/)
       assert.match(evidence.text, new RegExp(alternatePreviewTarget().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
       assert.deepEqual(selectedTargets, [{ targetID: alternateTargetID }])
-      assert.deepEqual(captureBodies, [{ targetID: alternateTargetID, viewportIDs: ["desktop", "tablet", "mobile"] }])
+      assert.deepEqual(captureBodies, [
+        { targetID, viewportIDs: ["desktop", "tablet", "mobile"] },
+        { targetID: alternateTargetID, viewportIDs: ["desktop", "tablet", "mobile"] },
+      ])
       assert.ok(
         requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/capture`)),
         "capture route should be called through the task-scoped backend",
+      )
+      assert.ok(
+        requestLog.some((entry) =>
+          entry.startsWith(`GET /task/${taskID}/browser-preview/evidence/${evidenceID}/capture.png`),
+        ),
+        "evidence screenshot route should be loaded through the task-scoped backend",
       )
     } finally {
       await browser.close().catch(() => undefined)

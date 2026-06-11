@@ -2,10 +2,12 @@ import { Instance } from "@/project/instance"
 import { lazy } from "@/util/lazy"
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
+import fs from "node:fs/promises"
 import z from "zod"
 import { requireTask } from "@/engine/store"
 import {
   findReadableBrowserPreviewEvidenceByID,
+  findReadableBrowserPreviewEvidenceCapturePath,
   findBrowserPreviewTargetByID,
   promoteBrowserPreviewTarget,
   PersistedBrowserPreviewEvidence,
@@ -79,6 +81,38 @@ export const BrowserPreviewRoutes = lazy(() =>
         const evidence = await findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID })
         if (!evidence) return c.json({ message: `Browser preview evidence not found: ${evidenceID}` }, 404)
         return c.json(evidence)
+      },
+    )
+    .get(
+      "/task/:taskID/browser-preview/evidence/:evidenceID/capture.png",
+      describeRoute({
+        summary: "Read browser preview evidence screenshot",
+        description: "Return the persisted Playwright PNG screenshot for task-scoped browser preview evidence.",
+        operationId: "browserPreview.readTaskEvidenceCapture",
+        responses: {
+          200: {
+            description: "Persisted browser preview PNG screenshot",
+            content: {
+              "image/png": {
+                schema: resolver(z.string().meta({ format: "binary" })),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ taskID: z.string().min(1), evidenceID: z.string().min(1) })),
+      async (c) => {
+        const { taskID, evidenceID } = c.req.valid("param")
+        requireTask(taskID)
+        const capturePath = await findReadableBrowserPreviewEvidenceCapturePath({ taskID, evidenceID })
+        if (!capturePath) return c.json({ message: `Browser preview evidence capture not found: ${evidenceID}` }, 404)
+        const bytes = await fs.readFile(capturePath)
+        return new Response(bytes, {
+          headers: {
+            "content-type": "image/png",
+            "cache-control": "no-store",
+          },
+        })
       },
     )
     .put(

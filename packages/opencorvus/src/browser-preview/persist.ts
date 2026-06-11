@@ -306,6 +306,15 @@ export async function findReadableBrowserPreviewEvidenceByID(input: {
   return evidence
 }
 
+export async function findReadableBrowserPreviewEvidenceCapturePath(input: {
+  taskID: string
+  evidenceID: string
+}): Promise<string | undefined> {
+  const evidence = await findReadableBrowserPreviewEvidenceByID(input)
+  if (!evidence) return undefined
+  return browserPreviewCaptureArtifacts(evidence.capture)[0]?.path
+}
+
 export function persistBrowserPreviewEvidence(input: {
   taskID: string
   targetID: string
