@@ -99,6 +99,7 @@ export namespace SessionShell {
       },
       role: "assistant",
       tokens: {
+        total: 0,
         input: 0,
         output: 0,
         reasoning: 0,

@@ -157,7 +157,7 @@ describe("structured-output.AssistantMessage", () => {
     agent: "default",
     path: { cwd: "/test", root: "/test" },
     cost: 0.001,
-    tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
+    tokens: { total: 150, input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
     time: { created: Date.now() },
   }
 
@@ -175,6 +175,14 @@ describe("structured-output.AssistantMessage", () => {
   test("assistant message works without structured_output (optional)", () => {
     const result = Message.Assistant.safeParse(baseAssistantMessage)
     expect(result.success).toBe(true)
+  })
+
+  test("assistant message API schema requires total token usage", () => {
+    const result = Message.Assistant.safeParse({
+      ...baseAssistantMessage,
+      tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
+    })
+    expect(result.success).toBe(false)
   })
 })
 

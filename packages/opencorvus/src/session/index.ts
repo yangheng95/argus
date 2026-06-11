@@ -1148,9 +1148,12 @@ export namespace Session {
           input.model.api.npm === "@ai-sdk/amazon-bedrock" ||
           input.model.api.npm === "@ai-sdk/google-vertex/anthropic"
         ) {
-          return adjustedInputTokens + outputTokens + cacheReadInputTokens + cacheWriteInputTokens
+          return adjustedInputTokens + outputTokens + reasoningTokens + cacheReadInputTokens + cacheWriteInputTokens
         }
-        return input.usage.totalTokens
+        return safe(
+          input.usage.totalTokens ??
+            adjustedInputTokens + outputTokens + reasoningTokens + cacheReadInputTokens + cacheWriteInputTokens,
+        )
       })
 
       const tokens = {

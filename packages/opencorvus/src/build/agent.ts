@@ -1625,7 +1625,7 @@ async function runWithExternalProviderImpl(args: {
     agent: "build",
     path: { cwd: args.worktreeDir, root: Instance.worktree },
     cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   }
   await Session.updateMessage(assistantMessage)
   if (!args.resumeExistingProviderSession) {

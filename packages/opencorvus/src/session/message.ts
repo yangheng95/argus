@@ -310,13 +310,9 @@ export namespace Message {
   })
   export type StepStartPart = z.infer<typeof StepStartPart>
 
-  export const StepFinishPart = PartBase.extend({
-    type: z.literal("step-finish"),
-    reason: z.string(),
-    snapshot: z.string().optional(),
-    cost: z.number(),
-    tokens: z.object({
-      total: z.number().optional(),
+  export const TokenUsage = z
+    .object({
+      total: z.number(),
       input: z.number(),
       output: z.number(),
       reasoning: z.number(),
@@ -324,7 +320,18 @@ export namespace Message {
         read: z.number(),
         write: z.number(),
       }),
-    }),
+    })
+    .meta({
+      ref: "TokenUsage",
+    })
+  export type TokenUsage = z.infer<typeof TokenUsage>
+
+  export const StepFinishPart = PartBase.extend({
+    type: z.literal("step-finish"),
+    reason: z.string(),
+    snapshot: z.string().optional(),
+    cost: z.number(),
+    tokens: TokenUsage,
   }).meta({
     ref: "StepFinishPart",
   })
@@ -494,16 +501,7 @@ export namespace Message {
     }),
     summary: z.boolean().optional(),
     cost: z.number(),
-    tokens: z.object({
-      total: z.number().optional(),
-      input: z.number(),
-      output: z.number(),
-      reasoning: z.number(),
-      cache: z.object({
-        read: z.number(),
-        write: z.number(),
-      }),
-    }),
+    tokens: TokenUsage,
     structured: z.any().optional(),
     variant: z.string().optional(),
     finish: z.string().optional(),
