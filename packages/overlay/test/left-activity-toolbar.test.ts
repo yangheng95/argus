@@ -38,8 +38,10 @@ test("left activity toolbar owns task, assistant, memory, skill, and MCP control
     'id: "skill", icon: "config-skill", labelKey: "skill.title", tooltipKey: "activity.tooltip.skill"',
   )
   expect(main).toContain('id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp"')
-  expect(main).toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />')
-  expect(main).toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />')
+  expect(main).toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />')
+  expect(main).toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />')
+  expect(main).not.toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />')
+  expect(main).not.toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />')
   expect(main).toContain('active={selectedLeftPanelActivity() === "memory"}')
   expect(main).toContain("directory={activeDirectory}")
   expect(icons).toContain("ListTodo")
