@@ -1306,7 +1306,12 @@ function bindSidebarStaticControls(): void {
   // lives in the static layout (#solidMissionMount); show/hide is
   // governed by body[data-page-mode] (see styles/surfaces/mission.css).
   document.getElementById("btnMission")?.addEventListener("click", () => {
-    setPageMode(pageMode() === "mission" ? "panel" : "mission")
+    if (pageMode() === "mission") {
+      setPageMode("panel")
+      void selectTask("")
+      return
+    }
+    setPageMode("mission")
   })
 
   // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer

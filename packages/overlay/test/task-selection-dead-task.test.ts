@@ -75,6 +75,20 @@ describe("task selection initial hydrate", () => {
     expect(stoppedStreams).toBe(1)
   })
 
+  test("deselect clears a selected Mission session instead of treating it as an empty task", async () => {
+    setBoardStore("selectEpoch", 7)
+    setBoardStore("selectedSource", { kind: "session", id: "ses_mission" })
+    setBoardStore("board", { title: "Mission session", snapshotVersion: "session-v1" } as any)
+
+    await selectTask("")
+
+    expect(boardStore.selectEpoch).toBe(8)
+    expect(boardStore.selectedSource).toBeNull()
+    expect(boardStore.board).toBeNull()
+    expect(boardStore.taskSwitching).toBe(false)
+    expect(stoppedStreams).toBe(1)
+  })
+
   test("deleting the selected task clears selection before the delete response", async () => {
     setBoardStore("tasks", [
       { task: { id: "tsk_deleted", status: "cancelled", directory: "" }, pending_interactions: 0 },

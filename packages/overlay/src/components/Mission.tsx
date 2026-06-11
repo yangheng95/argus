@@ -433,6 +433,11 @@ function MissionContent(props: MissionProps) {
     setBoardStore("board", null)
   }
 
+  function handleBackToPanel(): void {
+    handleCloseMission()
+    setPageMode("panel")
+  }
+
   createEffect(() => {
     if (!isMissionPage()) return
     if (searchQuery().trim()) return
@@ -484,7 +489,7 @@ function MissionContent(props: MissionProps) {
             onAbortMission={(mission) => void handleMissionAbort(mission)}
             onDeleteMission={(mission) => void handleMissionDelete(mission)}
             onRenameMission={(mission, title) => void handleMissionRename(mission, title)}
-            onBackToPanel={() => setPageMode("panel")}
+            onBackToPanel={handleBackToPanel}
             onCreateMission={handleNewMission}
             onRetry={() => void missionRecordsCtl.refetch()}
             hasMore={missionRecords()?.hasMore}

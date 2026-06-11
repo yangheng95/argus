@@ -195,13 +195,21 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
   // both count as "nothing to do" — without the taskSwitching check a user
   // clicking the same task before the first load finishes would interrupt
   // and restart their own load.
-  if (nextTaskID === activeTaskID() && (boardStore.board || boardStore.taskSwitching)) {
+  if (
+    nextTaskID &&
+    boardStore.selectedSource?.kind === "task" &&
+    boardStore.selectedSource.id === nextTaskID &&
+    (boardStore.board || boardStore.taskSwitching)
+  ) {
     if (nextTaskID && boardStore.board && !boardStore.taskSwitching && !isSelectedTaskSSEConnected(nextTaskID)) {
       startSSE({ kind: "task", id: nextTaskID }, boardStore.taskSequence)
     }
     if (nextTaskID && boardStore.board && !boardStore.taskSwitching) {
       ackTaskNotificationIfPresent(nextTaskID)
     }
+    return
+  }
+  if (!nextTaskID && !boardStore.selectedSource && !boardStore.board && !boardStore.taskSwitching) {
     return
   }
 

@@ -30,7 +30,9 @@ test("Project directory bar is page-level chrome, not hidden inside panel or Mis
 
 test("main.tsx wires the Mission button and mounts the Mission component", () => {
   expect(MAIN).toContain('document.getElementById("btnMission")?.addEventListener("click"')
-  expect(MAIN).toContain('setPageMode(pageMode() === "mission" ? "panel" : "mission")')
+  expect(MAIN).toContain('if (pageMode() === "mission")')
+  expect(MAIN).toContain('void selectTask("")')
+  expect(MAIN).toContain('setPageMode("mission")')
   expect(MAIN).toContain("function bindSidebarStaticControls()")
   expect(MAIN).toContain("onDocumentReady(bindSidebarStaticControls)")
   expect(MAIN).toContain('document.getElementById("solidMissionMount")')
@@ -56,7 +58,9 @@ test("Mission page exposes an in-page Back to Panel action", () => {
   expect(missionList).not.toContain('data-ui="mission-refresh"')
   expect(mission).not.toContain("ProjectDirectoryBar")
   expect(mission).not.toContain('data-ui="mission-project-directory-bar"')
-  expect(mission).toContain('onBackToPanel={() => setPageMode("panel")}')
+  expect(mission).toContain("function handleBackToPanel(): void")
+  expect(mission).toContain("handleCloseMission()")
+  expect(mission).toContain('onBackToPanel={handleBackToPanel}')
 })
 
 test("main.tsx reflects pageMode onto body[data-page-mode] (drives mission.css visibility)", () => {
@@ -69,5 +73,6 @@ test("New chat button switches back to panel mode before focusing the composer (
   const sidebarBinding =
     MAIN.match(/function bindSidebarStaticControls\(\): void \{[\s\S]*?\n}\n\nonDocumentReady/)?.[0] ?? ""
   expect(sidebarBinding).toMatch(/btnCreateTask[\s\S]*setPageMode\("panel"\)[\s\S]*selectTask\(""\)/)
-  expect(sidebarBinding).toMatch(/btnMission[\s\S]*setPageMode\(pageMode\(\) === "mission" \? "panel" : "mission"\)/)
+  expect(sidebarBinding).toMatch(/btnMission[\s\S]*if \(pageMode\(\) === "mission"\)[\s\S]*setPageMode\("panel"\)[\s\S]*selectTask\(""\)/)
+  expect(sidebarBinding).toMatch(/btnMission[\s\S]*setPageMode\("mission"\)/)
 })
