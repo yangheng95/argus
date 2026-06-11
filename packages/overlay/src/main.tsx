@@ -201,13 +201,33 @@ const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivit
 const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] =
   createSignal<Exclude<LeftActivity, "assistant">>("tasks")
 const activeLeftActivity = () => selectedLeftActivity()
+let codingAssistantActivationController: AbortController | null = null
+
+function abortCodingAssistantActivation(): void {
+  codingAssistantActivationController?.abort(
+    new DOMException("Left activity switched away from Coding Assistant", "AbortError"),
+  )
+  codingAssistantActivationController = null
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError"
+}
 
 function activateCodingAssistantSession(): void {
+  abortCodingAssistantActivation()
+  const controller = new AbortController()
+  codingAssistantActivationController = controller
   openCenterWorkbenchPanel("workflow")
   setSelectedLeftActivity("assistant")
-  void selectCodingAssistantSession().catch((error) => {
-    reportOverlayRuntimeError("coding-assistant.select", error)
-  })
+  void selectCodingAssistantSession({ signal: controller.signal })
+    .catch((error) => {
+      if (isAbortError(error)) return
+      reportOverlayRuntimeError("coding-assistant.select", error)
+    })
+    .finally(() => {
+      if (codingAssistantActivationController === controller) codingAssistantActivationController = null
+    })
 }
 
 function isCenterWorkbenchPanelOpen(panel: CenterWorkbenchPanel): boolean {
@@ -279,6 +299,9 @@ function selectLeftActivity(activity: LeftActivity): void {
     activateCodingAssistantSession()
     return
   }
+  abortCodingAssistantActivation()
+  if (isCodingAssistantSource()) void selectTask("")
+  openCenterWorkbenchPanel("workflow")
   setSelectedLeftActivity(activity)
   setSelectedLeftPanelActivity(activity)
 }
