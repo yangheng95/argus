@@ -138,7 +138,6 @@ test("MissionComposer exposes the standard data-ui hooks for downstream e2e", ()
 const LAUNCHER_KEYS = [
   "mission.launcher.title",
   "mission.launcher.error",
-  "mission.launcher.discard",
   "mission.launcher.discard_title",
   "mission.launcher.result_created",
   "mission.launcher.result_resumed",

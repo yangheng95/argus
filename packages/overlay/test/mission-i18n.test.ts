@@ -6,18 +6,10 @@ const ZH = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json
 const EN = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")) as Record<string, unknown>
 
 const REQUIRED_KEYS = [
-  "mission.open",
+  "activity.tooltip.mission",
   "mission.title",
-  "mission.back",
-  "mission.back_title",
   "mission.new",
   "mission.new_title",
-  "mission.runtime.disabled",
-  "mission.runtime.unavailable",
-  "mission.runtime.starting",
-  "mission.runtime.running",
-  "mission.runtime.stopped",
-  "mission.runtime.error",
   "mission.ledger.title",
   "mission.ledger.search_placeholder",
   "mission.ledger.search_clear",
@@ -31,6 +23,31 @@ const REQUIRED_KEYS = [
   "mission.ledger.rename_title",
   "mission.ledger.rename_placeholder",
   "mission.ledger.tasks_label",
+  "mission.workbench.error_action_failed",
+  "mission.launcher.title",
+  "mission.launcher.discard_title",
+  "mission.launcher.error",
+  "mission.launcher.result_created",
+  "mission.launcher.result_resumed",
+  "mission.launcher.attachments_unsupported",
+  "mission.error.action.abort",
+  "mission.error.action.delete",
+  "mission.error.action.mission",
+  "mission.error.action.rename",
+  "mission.error.class.AbortError",
+  "mission.error.class.DirectoryRequiredError",
+  "mission.error.class.HTTPException",
+  "mission.error.class.InvalidDirectoryError",
+  "mission.error.class.TypeError",
+  "mission.error.class.WorktreeNotGitError",
+] as const
+
+const RETIRED_KEYS = [
+  "mission.open",
+  "mission.open_title",
+  "mission.back",
+  "mission.back_title",
+  "mission.refresh_title",
   "mission.tasks.stats_heading",
   "mission.tasks.total",
   "mission.tasks.queued",
@@ -38,20 +55,15 @@ const REQUIRED_KEYS = [
   "mission.tasks.completed",
   "mission.tasks.failed",
   "mission.tasks.cancelled",
-  "mission.launcher.title",
-  "mission.launcher.discard",
-  "mission.launcher.error",
-  "mission.launcher.result_created",
-  "mission.launcher.result_resumed",
-  "mission.launcher.attachments_unsupported",
   "mission.channels.heading",
+  "mission.channels.empty",
   "mission.channels.runtime_heading",
   "mission.channels.restart",
   "mission.error.channel_runtime_failed",
   "mission.error.channels_failed",
   "mission.error.restart_failed",
-  "mission.error.action.delete",
-  "mission.error.action.mission",
+  "mission.launcher.discard",
+  "mission.launcher.conversation_title",
 ] as const
 
 for (const key of REQUIRED_KEYS) {
@@ -76,6 +88,13 @@ test("zh-CN and en-US mission.* coverage matches", () => {
     .sort()
   expect(zhKeys).toEqual(enKeys)
 })
+
+for (const key of RETIRED_KEYS) {
+  test(`retired Mission panel key ${key} is absent`, () => {
+    expect(ZH[key]).toBeUndefined()
+    expect(EN[key]).toBeUndefined()
+  })
+}
 
 test("no legacy gateway.* product control keys leak through", () => {
   // The Gateway operator page was renamed to Mission; only infra gateway
