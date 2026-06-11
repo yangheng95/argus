@@ -149,6 +149,15 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).not.toContain('class="recent-dir-panel" style={panelStyle()} role="listbox"')
   })
 
+  test("cwd popup owns editable path entry and discovered OpenCorvus projects", () => {
+    expect(TASK_DIR_BAR).toContain("loadDiscoveredProjects")
+    expect(TASK_DIR_BAR).toContain('class="recent-dir-edit-form"')
+    expect(TASK_DIR_BAR).toContain('t("cwd.path_label")')
+    expect(TASK_DIR_BAR).toContain('t("cwd.detected_projects")')
+    expect(TASK_DIR_BAR).toContain("setDirectory(next)")
+    expect(TASK_DIR_BAR).toContain("chooseRecentDirectory(project.directory)")
+  })
+
   test("path breadcrumb markup does not nest a second task-dir shell", () => {
     expect(DOM_UTILS).not.toMatch(/<span class="task-dir-shell"/)
     expect(DOM_UTILS).toMatch(/<span class="task-dir-path">/)
