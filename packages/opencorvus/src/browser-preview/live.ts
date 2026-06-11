@@ -6,6 +6,8 @@ import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./vie
 const LIVE_COMMAND_TIMEOUT_MILLISECONDS = 60_000
 const LIVE_NAVIGATION_TIMEOUT_MILLISECONDS = 20_000
 const LIVE_SETTLE_MILLISECONDS = 80
+const LIVE_IDLE_TIMEOUT_MILLISECONDS = 120_000
+const LIVE_CLOSE_TIMEOUT_MILLISECONDS = 5_000
 
 export type BrowserPreviewLiveInput =
   | { kind: "click"; x: number; y: number; button?: "left" | "middle" | "right" }
@@ -116,6 +118,7 @@ class BrowserPreviewLiveSidecar {
       timer: ReturnType<typeof setTimeout>
     }
   >()
+  private idleTimer: ReturnType<typeof setTimeout> | undefined
   private stdoutBuffer = ""
   private stderr = ""
   private sequence = 0
@@ -125,7 +128,7 @@ class BrowserPreviewLiveSidecar {
     runtime: BrowserNodeSidecarRuntime,
     executablePath: string,
     launchTimeoutMs: number,
-    onClose: () => void,
+    private readonly onClose: () => void,
   ) {
     this.child = spawn(runtime.nodeExecutable, ["-e", BROWSER_PREVIEW_LIVE_SCRIPT], {
       cwd: process.cwd(),
@@ -162,24 +165,29 @@ class BrowserPreviewLiveSidecar {
     const line = `${JSON.stringify({ id, command })}\n`
     return new Promise<BrowserPreviewLiveResult>((resolve, reject) => {
       const timer = setTimeout(() => {
+        const pending = this.pending.get(id)
+        if (!pending) return
         this.pending.delete(id)
-        reject(new Error(`Browser preview live command timed out. ${this.stderr}`))
+        pending.reject(new Error(`Browser preview live command timed out. ${this.stderr}`))
       }, LIVE_COMMAND_TIMEOUT_MILLISECONDS)
       const abort = () => {
-        clearTimeout(timer)
+        const pending = this.pending.get(id)
+        if (!pending) return
         this.pending.delete(id)
-        reject(signal?.reason instanceof Error ? signal.reason : new Error("Browser preview live command aborted."))
+        pending.reject(signal?.reason instanceof Error ? signal.reason : new Error("Browser preview live command aborted."))
       }
       signal?.addEventListener("abort", abort, { once: true })
       this.pending.set(id, {
         resolve: (result) => {
           signal?.removeEventListener("abort", abort)
           clearTimeout(timer)
+          this.armIdleTimer()
           resolve(result)
         },
         reject: (error) => {
           signal?.removeEventListener("abort", abort)
           clearTimeout(timer)
+          this.armIdleTimer()
           reject(error)
         },
         timer,
@@ -219,9 +227,25 @@ class BrowserPreviewLiveSidecar {
     }
   }
 
+  private armIdleTimer(): void {
+    if (this.closed) return
+    this.clearIdleTimer()
+    this.idleTimer = setTimeout(() => {
+      void this.close()
+    }, LIVE_IDLE_TIMEOUT_MILLISECONDS)
+    this.idleTimer.unref?.()
+  }
+
+  private clearIdleTimer(): void {
+    if (!this.idleTimer) return
+    clearTimeout(this.idleTimer)
+    this.idleTimer = undefined
+  }
+
   private closeWithError(error: Error, onClose: () => void): void {
     if (this.closed) return
     this.closed = true
+    this.clearIdleTimer()
     for (const [id, pending] of this.pending) {
       this.pending.delete(id)
       clearTimeout(pending.timer)
@@ -233,19 +257,30 @@ class BrowserPreviewLiveSidecar {
   async close(): Promise<void> {
     if (this.closed) return
     this.closed = true
+    this.clearIdleTimer()
     for (const [id, pending] of this.pending) {
       this.pending.delete(id)
       clearTimeout(pending.timer)
       pending.reject(new Error("Browser preview live sidecar closed."))
     }
-    this.child.kill()
-    await new Promise<void>((resolve) => {
+    this.onClose()
+    const exited = new Promise<void>((resolve) => {
       if (this.child.exitCode !== null || this.child.signalCode !== null) {
         resolve()
         return
       }
       this.child.once("exit", () => resolve())
     })
+    this.child.kill("SIGTERM")
+    const forceKillTimer = setTimeout(() => {
+      this.child.kill("SIGKILL")
+    }, LIVE_CLOSE_TIMEOUT_MILLISECONDS)
+    forceKillTimer.unref?.()
+    try {
+      await exited
+    } finally {
+      clearTimeout(forceKillTimer)
+    }
   }
 }
 
@@ -359,11 +394,17 @@ process.stdin.on("data", (chunk) => {
   }
 });
 
+let shuttingDown = false;
+
 async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   if (browser) await browser.close().catch(() => undefined);
   process.exit(0);
 }
 
+process.stdin.on("end", shutdown);
+process.stdin.on("close", shutdown);
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 `
