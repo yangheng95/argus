@@ -330,6 +330,11 @@ test(
             taskStatusInWorkflowHeader: !!document.querySelector("#chatSection .chat-header #solidTaskStatusMount"),
             centerWorkbenchHeaderExists: !!document.querySelector("#solidCenterWorkbenchTabs"),
             chatTitle: document.querySelector<HTMLElement>("#chatViewTitle")?.textContent ?? "",
+            selectedSourceKind: (window as any).boardStore?.selectedSource?.kind ?? "",
+            selectedSourceID: (window as any).boardStore?.selectedSource?.id ?? "",
+            renderedCardCount: Array.isArray((window as any).renderConversation?.())
+              ? (window as any).renderConversation().length
+              : -1,
             rightTitle: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent ?? "",
             notificationTitle: document.querySelector<HTMLElement>("#notificationPanelTitle")?.textContent ?? "",
             workbenchStartsAtWorkspace: (() => {
@@ -635,6 +640,8 @@ test(
         leftAssistantButton: "true",
         rightPreviewButton: "true",
         chatTitle: "Assistant",
+        selectedSourceKind: "session",
+        selectedSourceID: "ses_right_sidebar_assistant",
       })
 
       assert.equal((await activeState()).tabCount, 0)
@@ -672,6 +679,47 @@ test(
         requestLog.some((entry) => entry.path.includes("coding-agent-tui") || entry.path.startsWith("/tui/")),
         false,
       )
+
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
+      await page.waitForFunction(
+        () =>
+          document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true" &&
+          document.querySelector<HTMLElement>("#chatViewTitle")?.textContent === "Workflow" &&
+          !(window as any).boardStore?.selectedSource,
+      )
+      assertMatchObject(await activeState(), {
+        centerWorkflow: "true",
+        leftTasksButton: "true",
+        leftAssistantButton: "false",
+        chatTitle: "Workflow",
+        selectedSourceKind: "",
+        selectedSourceID: "",
+        renderedCardCount: 0,
+      })
+
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
+      await page.waitForFunction(
+        () =>
+          document.querySelector<HTMLElement>(
+            '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
+          )?.dataset.active === "true" && (window as any).boardStore?.selectedSource?.kind === "session",
+      )
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
+      await page.waitForFunction(
+        () =>
+          document.querySelector<HTMLElement>("#leftPanelSkills")?.dataset.active === "true" &&
+          document.querySelector<HTMLElement>("#chatViewTitle")?.textContent === "Workflow" &&
+          !(window as any).boardStore?.selectedSource,
+      )
+      assertMatchObject(await activeState(), {
+        centerWorkflow: "true",
+        leftSkillButton: "true",
+        leftAssistantButton: "false",
+        chatTitle: "Workflow",
+        selectedSourceKind: "",
+        selectedSourceID: "",
+        renderedCardCount: 0,
+      })
 
       assert.equal(await page.$('[data-ui="right-panel-header-collapse-toggle"]'), null)
       assert.equal(await page.$("#rightPaneResizer"), null)
