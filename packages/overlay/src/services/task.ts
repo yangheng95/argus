@@ -10,6 +10,7 @@
 
 import { apiJson, apiRequest, ApiError } from "./api"
 import { getHostTransport } from "./host-transport"
+import { bytesToArrayBuffer } from "../utils/binary"
 import { isSelectedTaskSSEConnected, startSSE, stopSSE } from "./sse"
 import { showAppDialog } from "./app-dialog"
 import { initGitCurrent } from "../utils/git"
@@ -366,7 +367,7 @@ function defaultArchiveFilename(taskID: string): string {
 }
 
 function saveBytesAsDownload(bytes: Uint8Array, filename: string): void {
-  const blob = new Blob([bytes], { type: "application/zip" })
+  const blob = new Blob([bytesToArrayBuffer(bytes)], { type: "application/zip" })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url

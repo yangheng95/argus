@@ -1,4 +1,5 @@
 import { ApiError, apiJson, apiRequest } from "./api"
+import { bytesToArrayBuffer } from "../utils/binary"
 
 export interface BrowserPreviewViewport {
   id: "desktop" | "tablet" | "mobile"
@@ -132,5 +133,5 @@ export async function loadTaskBrowserPreviewEvidenceCaptureObjectUrl(input: {
   })
   if (!response.ok) throw new ApiError(response.status, path, response.body)
   const contentType = response.headers["content-type"] || response.headers["Content-Type"] || "image/png"
-  return URL.createObjectURL(new Blob([response.body], { type: contentType }))
+  return URL.createObjectURL(new Blob([bytesToArrayBuffer(response.body)], { type: contentType }))
 }
