@@ -113,8 +113,9 @@
 
     <!-- Horizontal body: chat left, sections right -->
     <div class="panel-body" id="panelBody">
-      <div id="solidLeftActivityToolbar" class="side-activity-toolbar-mount left-activity-toolbar-mount" data-i18n-aria-label="activity.left"></div>
-      <aside class="sidebar" id="sidebar" data-collapsed="false">
+      <div class="left-activity-shell" id="leftActivityShell">
+        <div id="solidLeftActivityToolbar" class="side-activity-toolbar-mount left-activity-toolbar-mount" data-i18n-aria-label="activity.left"></div>
+        <aside class="sidebar" id="sidebar" data-collapsed="false">
         <div class="side-panel-content sidebar-content">
           <div class="sidebar-header oc-surface-header">
             <div class="sidebar-title oc-surface-header__title" id="leftPanelTitle" data-i18n="sidebar.title">Recent Chats</div>
@@ -174,7 +175,8 @@
             </span>
           </footer>
         </div>
-      </aside>
+        </aside>
+      </div>
       <div class="pane-resizer pane-resizer-left" id="leftPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize tasks panel"></div>
 
       <div class="workspace-main" id="workspaceMain">

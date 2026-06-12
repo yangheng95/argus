@@ -10,6 +10,18 @@
   overflow: hidden;
 }
 
+.left-activity-shell {
+  flex: 0 1 calc(var(--ui-collapsed-pane-width) + var(--ui-sidebar-width));
+  width: calc(var(--ui-collapsed-pane-width) + var(--ui-sidebar-width));
+  min-width: min(100%, calc(var(--ui-collapsed-pane-width) + var(--ui-rail-min-width)));
+  max-width: calc(var(--ui-collapsed-pane-width) + var(--ui-sidebar-width));
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: row;
+  overflow: hidden;
+}
+
 .sidebar[data-collapsed="true"] .side-panel-content,
 .sections[data-collapsed="true"] .side-panel-content {
   display: none;

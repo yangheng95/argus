@@ -798,6 +798,7 @@ body[data-resizing="true"] .pane-resizer::after {
     cursor: row-resize;
   }
 
+  .left-activity-shell,
   .sidebar,
   .sidebar[data-collapsed="true"],
   .sections {
@@ -807,10 +808,21 @@ body[data-resizing="true"] .pane-resizer::after {
     flex-basis: auto;
   }
 
+  .left-activity-shell,
   .sidebar {
     flex: 0 0 min(26vh, calc(240px * var(--ui-scale)));
     min-height: min(18vh, calc(160px * var(--ui-scale)));
     max-height: min(36vh, calc(320px * var(--ui-scale)));
+  }
+
+  .left-activity-shell .sidebar,
+  .left-activity-shell .sidebar[data-collapsed="true"] {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    min-height: 0;
+    max-height: none;
   }
 
   .chat {

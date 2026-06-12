@@ -8,6 +8,14 @@ const MISSION = readFileSync(join(import.meta.dir, "../src/components/Mission.ts
 const MISSION_LIST = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
 
 test("index.html exposes Mission as a left activity body and removes the standalone Mission page", () => {
+  const shellIndex = HTML.indexOf('id="leftActivityShell"')
+  const toolbarIndex = HTML.indexOf('id="solidLeftActivityToolbar"')
+  const sidebarIndex = HTML.indexOf('<aside class="sidebar"')
+  const taskActionsIndex = HTML.indexOf('id="leftPanelTaskActions"')
+  expect(shellIndex).toBeGreaterThan(0)
+  expect(toolbarIndex).toBeGreaterThan(shellIndex)
+  expect(sidebarIndex).toBeGreaterThan(toolbarIndex)
+  expect(taskActionsIndex).toBeGreaterThan(sidebarIndex)
   expect(HTML).toContain('id="solidLeftActivityToolbar"')
   expect(HTML).toContain('id="leftPanelMissions"')
   expect(HTML).toContain('data-side-activity="mission"')
@@ -16,6 +24,15 @@ test("index.html exposes Mission as a left activity body and removes the standal
   expect(HTML).not.toContain('id="btnMission"')
   expect(HTML).not.toContain('data-ui="sidebar-mission-button"')
   expect(HTML).not.toContain('id="solidMissionMount"')
+})
+
+test("Mission activity cannot render as a task header action", () => {
+  const taskActionsIndex = HTML.indexOf('id="leftPanelTaskActions"')
+  const taskActionsEnd = HTML.indexOf("</div>", taskActionsIndex)
+  const taskActions = HTML.slice(taskActionsIndex, taskActionsEnd)
+  expect(taskActions).not.toContain("mission")
+  expect(taskActions).not.toContain("Mission")
+  expect(taskActions).not.toContain('data-activity="mission"')
 })
 
 test("project directory bar remains page-level chrome above the panel", () => {
@@ -60,6 +77,9 @@ test("Mission activity opens session conversations through the shared center cha
 test("Mission-created task rows select the task panel instead of rendering task chat inside Mission", () => {
   expect(MISSION_LIST).toContain('data-ui="mission-task-projection-select"')
   expect(MISSION_LIST).toContain("props.onSelectTask(props.task.id)")
+  expect(MISSION_LIST).not.toContain('class="mission-ledger-header')
+  expect(MISSION_LIST).not.toContain('class="mission-ledger-title')
+  expect(MISSION_LIST).not.toContain('class="mission-ledger-header-actions')
   expect(MISSION_LIST).not.toContain('data-ui="mission-back-panel"')
   expect(MISSION_LIST).not.toContain("onBackToPanel")
 })

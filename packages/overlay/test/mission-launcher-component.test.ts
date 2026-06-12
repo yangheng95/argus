@@ -105,15 +105,18 @@ test("Mission ledger renders mission-created task projections as task selectors"
   expect(MISSION_LIST_TSX).toContain("mission.ledger.tasks_label")
 })
 
-test("Mission ledger header mirrors Task panel action primitives without a Back button", () => {
+test("Mission ledger is embedded in the left task panel without its retired panel header", () => {
   const newButton = MISSION_LIST_TSX.match(/<Button[\s\S]*?data-ui="mission-new"[\s\S]*?<\/Button>/)?.[0] ?? ""
-  expect(newButton).toContain('variant="solid"')
-  expect(newButton).toContain('size="md"')
+  expect(newButton).toContain('variant="ghost"')
+  expect(newButton).toContain('size="sm"')
   expect(newButton).toContain('tone="accent"')
-  expect(newButton).toContain('class="sidebar-btn-icon"')
+  expect(MISSION_LIST_TSX).not.toContain('class="mission-ledger-header')
+  expect(MISSION_LIST_TSX).not.toContain('class="mission-ledger-title')
+  expect(MISSION_LIST_TSX).not.toContain('class="mission-ledger-header-actions')
   expect(MISSION_LIST_TSX).not.toContain('data-ui="mission-back-panel"')
-  expect(MISSION_CSS).toContain('.oc-button[data-ui="mission-new"][data-variant="solid"]')
-  expect(MISSION_CSS).toContain("--oc-button-height: calc(28px * var(--ui-scale));")
+  expect(MISSION_CSS).not.toContain('.oc-button[data-ui="mission-new"][data-variant="solid"]')
+  expect(MISSION_CSS).toContain('.oc-button[data-ui="mission-new"]')
+  expect(MISSION_CSS).toContain("justify-content: flex-start;")
   expect(MISSION_LIST_TSX).toContain('class="mission-ledger-search search-field"')
   expect(MISSION_LIST_TSX).toContain('class="mission-ledger-search-input search-field-input"')
   expect(MISSION_LIST_TSX).toContain('data-ui="mission-ledger-search-clear"')

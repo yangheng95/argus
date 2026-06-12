@@ -442,6 +442,40 @@ test(
         workbenchStartsAtWorkspace: true,
       })
 
+      await page.setViewport({ width: 960, height: 720 })
+      await page.waitForFunction(() => getComputedStyle(document.querySelector<HTMLElement>("#panelBody")!).flexDirection === "column")
+      const narrowLeftActivityLayout = await page.evaluate(() => {
+        const panelBody = document.querySelector<HTMLElement>("#panelBody")!
+        const shell = document.querySelector<HTMLElement>("#leftActivityShell")!
+        const toolbar = document.querySelector<HTMLElement>("#solidLeftActivityToolbar")!
+        const sidebar = document.querySelector<HTMLElement>("#sidebar")!
+        const headerActions = document.querySelector<HTMLElement>("#leftPanelTaskActions")!
+        const toolbarRect = toolbar.getBoundingClientRect()
+        const sidebarRect = sidebar.getBoundingClientRect()
+        const shellRect = shell.getBoundingClientRect()
+        return {
+          panelDirection: getComputedStyle(panelBody).flexDirection,
+          shellDirection: getComputedStyle(shell).flexDirection,
+          toolbarLeftOfSidebar: toolbarRect.right <= sidebarRect.left + 1,
+          toolbarTopAlignedWithSidebar: Math.abs(toolbarRect.top - sidebarRect.top) <= 1,
+          shellContainsToolbar: toolbarRect.left >= shellRect.left - 1 && toolbarRect.right <= shellRect.right + 1,
+          shellContainsSidebar: sidebarRect.left >= shellRect.left - 1 && sidebarRect.right <= shellRect.right + 1,
+          headerActionText: (headerActions.textContent || "").trim(),
+          missionActivityInHeader: !!headerActions.querySelector('[data-activity="mission"]'),
+        }
+      })
+      assertMatchObject(narrowLeftActivityLayout, {
+        panelDirection: "column",
+        shellDirection: "row",
+        toolbarLeftOfSidebar: true,
+        toolbarTopAlignedWithSidebar: true,
+        shellContainsToolbar: true,
+        shellContainsSidebar: true,
+        missionActivityInHeader: false,
+      })
+      assert.equal(narrowLeftActivityLayout.headerActionText.includes("Mission"), false)
+      await page.setViewport({ width: 1440, height: 900 })
+
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
       for (let attempt = 0; attempt < 50; attempt += 1) {
         const state = await activeState()
