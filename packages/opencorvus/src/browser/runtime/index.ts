@@ -41,6 +41,17 @@ export namespace BrowserRuntime {
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   ] as const
 
+  export const DEFAULT_BROWSER_COMMANDS = [
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+    "microsoft-edge",
+    "microsoft-edge-stable",
+    "msedge",
+    "chrome",
+  ] as const
+
   export const RECOVERY_COMMAND =
     "Install Chrome/Edge or set OPENCORVUS_BROWSER_EXECUTABLE to the browser executable path."
   export const DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS = 300_000
@@ -66,8 +77,8 @@ export namespace BrowserRuntime {
       })
       return explicit
     }
-    const checkedCandidates = [...DEFAULT_BROWSER_CANDIDATES]
-    for (const bin of DEFAULT_BROWSER_CANDIDATES) {
+    const checkedCandidates = resolveBrowserExecutableCandidates()
+    for (const bin of checkedCandidates) {
       try {
         await fs.access(bin)
         return bin
@@ -122,6 +133,23 @@ export namespace BrowserRuntime {
     return ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--disable-remote-fonts"]
   }
 
+  export function resolveBrowserExecutableCandidates(input?: {
+    envPath?: string
+    pathExt?: string
+    platform?: NodeJS.Platform
+    defaultCandidates?: readonly string[]
+    browserCommands?: readonly string[]
+  }): string[] {
+    const fixedCandidates = input?.defaultCandidates ?? DEFAULT_BROWSER_CANDIDATES
+    const pathCandidates = resolveBrowserCommandsFromPath({
+      browserCommands: input?.browserCommands,
+      envPath: input?.envPath,
+      pathExt: input?.pathExt,
+      platform: input?.platform,
+    })
+    return uniqueCandidates([...fixedCandidates, ...pathCandidates])
+  }
+
   export async function resolvePlaywrightEntry(): Promise<string> {
     const packaged = path.join(path.dirname(process.execPath), "node_modules", "playwright", "index.mjs")
     if (await exists(packaged)) return packaged
@@ -170,6 +198,58 @@ export namespace BrowserRuntime {
       .access(file)
       .then(() => true)
       .catch(() => false)
+  }
+
+  function resolveBrowserCommandsFromPath(input?: {
+    envPath?: string
+    pathExt?: string
+    platform?: NodeJS.Platform
+    browserCommands?: readonly string[]
+  }): string[] {
+    const envPath = input?.envPath ?? process.env.PATH ?? ""
+    if (!envPath.trim()) return []
+
+    const platform = input?.platform ?? process.platform
+    const browserCommands = input?.browserCommands ?? DEFAULT_BROWSER_COMMANDS
+    const pathEntries = envPath.split(pathListDelimiter(platform)).filter(Boolean)
+    const extensions = platform === "win32" ? windowsPathExtensions(input?.pathExt) : [""]
+
+    const candidates: string[] = []
+    for (const directory of pathEntries) {
+      for (const command of browserCommands) {
+        if (platform === "win32" && path.extname(command)) {
+          candidates.push(path.join(directory, command))
+          continue
+        }
+        for (const extension of extensions) {
+          candidates.push(path.join(directory, `${command}${extension}`))
+        }
+      }
+    }
+    return candidates
+  }
+
+  function windowsPathExtensions(pathExt = process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM"): string[] {
+    const extensions = pathExt
+      .split(";")
+      .map((item) => item.trim())
+      .filter(Boolean)
+    return extensions.length ? extensions : [".EXE", ".CMD", ".BAT", ".COM"]
+  }
+
+  function pathListDelimiter(platform: NodeJS.Platform): string {
+    return platform === "win32" ? ";" : ":"
+  }
+
+  function uniqueCandidates(candidates: readonly string[]): string[] {
+    const seen = new Set<string>()
+    const output: string[] = []
+    for (const candidate of candidates) {
+      if (seen.has(candidate)) continue
+      seen.add(candidate)
+      output.push(candidate)
+    }
+    return output
   }
 }
 

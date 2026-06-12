@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Filesystem } from "../../src/util/filesystem"
@@ -43,6 +44,22 @@ describe("BrowserRuntime", () => {
       if (previous === undefined) delete process.env.OPENCORVUS_BROWSER_EXECUTABLE
       else process.env.OPENCORVUS_BROWSER_EXECUTABLE = previous
     }
+  })
+
+  test("includes standard browser commands discovered from PATH", async () => {
+    await using tmp = await tmpdir()
+    const executable = path.join(tmp.path, "chromium-browser")
+    await Filesystem.write(executable, "")
+    await fs.chmod(executable, 0o755)
+
+    const candidates = BrowserRuntime.resolveBrowserExecutableCandidates({
+      browserCommands: ["chromium-browser"],
+      defaultCandidates: [],
+      envPath: tmp.path,
+      platform: "linux",
+    })
+
+    expect(candidates).toEqual([executable])
   })
 
   test("defines the shared browser launch arguments", () => {
