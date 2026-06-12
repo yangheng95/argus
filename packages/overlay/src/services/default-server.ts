@@ -13,6 +13,14 @@ export function legacyPrefixedServerUrlFromOverlayLocation(
   return prefix ? `${location.origin}/${prefix}` : location.origin
 }
 
+export function originOnlyServerUrlFromOverlayLocation(
+  location: Pick<Location, "origin" | "pathname" | "protocol">,
+): string | null {
+  if (!location.protocol.startsWith("http")) return null
+  const segments = location.pathname.split("/").filter(Boolean)
+  return segments.includes("ui") ? location.origin : null
+}
+
 export function serverUrlFromOverlayLocation(
   location: Pick<Location, "origin" | "pathname" | "protocol">,
 ): string | null {
