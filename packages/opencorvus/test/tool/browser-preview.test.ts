@@ -1,0 +1,198 @@
+import { afterEach, describe, expect, test } from "bun:test"
+import { createServer, type Server } from "node:http"
+import path from "node:path"
+import { PassThrough } from "node:stream"
+import { BrowserPreviewTool } from "../../src/tool/browser-preview"
+import { ToolRegistry } from "../../src/tool/registry"
+import { ProcessSupervisor } from "../../src/shell/process-supervisor"
+import { Instance } from "../../src/project/instance"
+import { Database } from "../../src/storage/db"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { findLatestBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
+
+const baseCtx = {
+  sessionID: "ses_browser_preview_tool",
+  messageID: "msg_browser_preview_tool",
+  callID: "call_browser_preview_tool",
+  agent: "build",
+  abort: AbortSignal.any([]),
+  messages: [],
+  metadata: () => {},
+  ask: async () => {},
+}
+
+afterEach(async () => {
+  await resetDatabase()
+})
+
+async function startReachablePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((_, res) => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end("<!doctype html><title>preview</title><main>ready</main>")
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("preview test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
+async function seedTask(directory: string) {
+  const taskID = `tsk_browserpreviewtool${Date.now()}`
+  await Instance.provide({
+    directory,
+    fn: () => {
+      Database.use((db) =>
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "Preview task",
+            request: "Preview task",
+            source: "api",
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          .run(),
+      )
+    },
+  })
+  return taskID
+}
+
+describe("tool.browser_preview", () => {
+  test("is registered for assistant tool use", async () => {
+    await Instance.provide({
+      directory: path.join(__dirname, "../.."),
+      fn: async () => {
+        await expect(ToolRegistry.ids()).resolves.toContain("browser_preview")
+      },
+    })
+  })
+
+  test("starts a background service and opens preview from printed process URL", async () => {
+    const preview = await startReachablePreviewServer()
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const restore = ProcessSupervisor.setFactoryForTest(async () => {
+            const stdout = new PassThrough()
+            queueMicrotask(() => {
+              stdout.write(`Local: ${preview.url}\n`)
+            })
+            return {
+              pid: 9101,
+              stdin: null,
+              stdout,
+              stderr: new PassThrough(),
+              exited: new Promise<number>(() => {}),
+              terminate: async () => {},
+              dispose: async () => {},
+              unref: () => {},
+            }
+          })
+          try {
+            const tool = await BrowserPreviewTool.init()
+            const result = await tool.execute(
+              {
+                command: "npm run dev",
+                timeout: 20,
+                leaseTimeout: 200,
+              },
+              { ...baseCtx, extra: { taskID } },
+            )
+            const payload = JSON.parse(result.output)
+
+            expect(result.metadata.targetUrl).toBe(preview.url)
+            expect(result.metadata.targetStatus).toBe("ready")
+            expect(payload.target.url).toBe(preview.url)
+            expect(payload.diagnostics.join("\n")).toContain("browser_preview_target")
+            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+          } finally {
+            restore()
+          }
+        },
+      })
+    } finally {
+      await preview.close()
+    }
+  })
+
+  test("starts a background service and opens preview from explicit URL", async () => {
+    const preview = await startReachablePreviewServer()
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+            pid: 9102,
+            stdin: null,
+            stdout: new PassThrough(),
+            stderr: new PassThrough(),
+            exited: new Promise<number>(() => {}),
+            terminate: async () => {},
+            dispose: async () => {},
+            unref: () => {},
+          }))
+          try {
+            const tool = await BrowserPreviewTool.init()
+            const result = await tool.execute(
+              {
+                command: "npm run dev",
+                url: preview.url,
+                timeout: 20,
+                leaseTimeout: 200,
+              },
+              { ...baseCtx, extra: { taskID } },
+            )
+            const payload = JSON.parse(result.output)
+
+            expect(result.metadata.explicitUrlPersisted).toBe(true)
+            expect(result.metadata.targetUrl).toBe(preview.url)
+            expect(payload.explicitUrlPersisted).toBe(true)
+            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+          } finally {
+            restore()
+          }
+        },
+      })
+    } finally {
+      await preview.close()
+    }
+  })
+
+  test("requires a task context before starting a preview service", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await BrowserPreviewTool.init()
+        await expect(
+          tool.execute(
+            {
+              command: "npm run dev",
+              timeout: 20,
+              leaseTimeout: 200,
+            },
+            baseCtx,
+          ),
+        ).rejects.toThrow("requires a task context")
+      },
+    })
+  })
+})
