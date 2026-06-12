@@ -440,7 +440,7 @@ export function createVsCodeTransport(): HostTransport {
           id,
           method,
           path: input.path.replace(/^\/+/, ""),
-          query: buildQuery(queryWithDirectory(input.path, input.query)),
+          query: buildQuery(queryWithDirectory(input.path, input.query, method)),
           headers: input.headers ?? {},
           body: encodeBody(input.body),
           responseKind,
@@ -501,7 +501,7 @@ export function createVsCodeTransport(): HostTransport {
         id,
         method,
         path: input.path.replace(/^\/+/, ""),
-        query: buildQuery(queryWithDirectory(input.path, input.query)),
+        query: buildQuery(queryWithDirectory(input.path, input.query, method)),
         headers: input.headers ?? {},
         body: encodeBody(input.body),
       }

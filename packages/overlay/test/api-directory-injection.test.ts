@@ -73,7 +73,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
     const server = readRepo("packages/opencorvus/src/server/server.ts")
 
     expect(api).toContain('from "@opencorvus-ai/transport-protocol"')
-    expect(api).toContain("routeRequiresProjectDirectory(pathOnly)")
+    expect(api).toContain("routeRequiresProjectDirectory(pathOnly, method)")
     expect(api).not.toContain("NO_DIRECTORY_PATHS")
     expect(api).not.toContain("NO_DIRECTORY_PREFIXES")
     expect(server).toContain('from "@opencorvus-ai/transport-protocol"')
@@ -100,6 +100,10 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("global/db/mysql/import", () => expectDoesNotInject("global/db/mysql/import"))
     test("global/tasks", () => expectDoesNotInject("global/tasks"))
     test("mission ledger", () => expectDoesNotInject("mission"))
+    test("task conversation hydrate", () => expectDoesNotInject("task/abc/conversation"))
+    test("task conversation history", () => expectDoesNotInject("task/abc/conversation/history"))
+    test("task conversation events", () => expectDoesNotInject("task/abc/conversation/events"))
+    test("task conversation session", () => expectDoesNotInject("task/abc/conversation/session/session_123"))
   })
 
   describe("auth routes — no-inject (cross-project by design)", () => {
@@ -165,16 +169,22 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "global/db/mysql/import",
       "global/tasks",
       "mission",
+      "task/abc/conversation",
+      "task/abc/conversation/history",
+      "task/abc/conversation/events",
+      "task/abc/conversation/session/session_123",
       "auth",
       "auth/login",
       "auth/logout",
     ]) {
       expect(routeRequiresProjectDirectory(path)).toBe(false)
     }
+    expect(routeRequiresProjectDirectory("task/abc", "DELETE")).toBe(false)
     for (const path of [
       "tasks",
       "task",
       "task/abc/followup",
+      "task/abc/message",
       "task/abc/operator-model-context",
       "path",
       "vcs",
@@ -187,6 +197,8 @@ describe("apiUrl directory injection (W2-V31)", () => {
     ]) {
       expect(routeRequiresProjectDirectory(path)).toBe(true)
     }
+    expect(routeRequiresProjectDirectory("task/abc", "GET")).toBe(true)
+    expect(routeRequiresProjectDirectory("task/abc/conversation", "POST")).toBe(true)
   })
 
   describe("when no directory is configured, no path receives the query", () => {
@@ -254,6 +266,20 @@ describe("apiUrl directory injection (W2-V31)", () => {
 
       expect(captured?.path).toBe("mission/m-alpha")
       expect(captured?.query?.directory).toBe("/mission-row-project")
+    })
+
+    test("apiJson does not inject directory into task record delete", async () => {
+      let captured: TransportRequest | undefined
+      __setHostTransportForTest(
+        fakeTransport((req) => {
+          captured = req
+        }),
+      )
+
+      await apiJson("task/abc", { method: "DELETE" })
+
+      expect(captured?.path).toBe("task/abc")
+      expect(captured?.query?.directory).toBeUndefined()
     })
   })
 })

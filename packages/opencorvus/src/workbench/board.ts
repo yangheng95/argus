@@ -15,6 +15,7 @@ import {
   findLatestEvaluationForGoalRun,
   findLatestArchitectContractGraph,
   getGoalRetryCount,
+  listTaskRows,
   listGoalRunsByGoal,
   type AcceptanceRow,
   type EvaluationRow,
@@ -37,7 +38,6 @@ import {
   WorkflowRegistry,
 } from "@/engine"
 import { projectGoalSteps, projectTaskSteps, type MiniWorkflowStep } from "@/engine/workflow"
-import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { Database, and, desc, eq, inArray, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
@@ -57,7 +57,7 @@ export function compileBoard(input: { taskID: string }) {
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
   const tag = boardTagForTask(task)
   const lastSequence = latestTaskProtocolSequence(task.id)
-  return buildBoard(task, tag, lastSequence)
+  return buildBoard(task, tag, taskDirectory(task), lastSequence)
 }
 
 export function boardTag(input: { taskID: string }) {
@@ -69,6 +69,7 @@ export function boardTag(input: { taskID: string }) {
 function buildBoard(
   task: typeof EngineTaskTable.$inferSelect,
   snapshotVersion: string,
+  directory: string,
   lastSequence = latestTaskProtocolSequence(task.id),
 ) {
   const run = findActiveRunForTask(task.id)
@@ -203,7 +204,7 @@ function buildBoard(
     task: {
       id: task.id,
       projectID: task.project_id,
-      directory: Instance.directory,
+      directory,
       sessionID: task.session_id ?? undefined,
       activePlanVersionID: plan?.id ?? undefined,
       activeRunID: run?.id ?? undefined,
@@ -339,6 +340,10 @@ function buildBoard(
     // panel only applies to workflow tasks running through acceptance).
     criteriaResults: boardChecks(task.criteria_results),
   }
+}
+
+function taskDirectory(task: typeof EngineTaskTable.$inferSelect) {
+  return listTaskRows([task])[0]?.directory ?? ""
 }
 
 function latestTaskProtocolSequence(taskID: string) {
