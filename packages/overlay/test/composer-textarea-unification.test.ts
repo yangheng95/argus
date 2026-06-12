@@ -42,11 +42,13 @@ describe("goal / mission / chat reuse the AutoGrowTextarea primitive", () => {
     expect(goal).not.toMatch(/<textarea\b/)
   })
 
-  test("mission launcher reuses the default ChatComposer input surface", () => {
+  test("mission launcher reuses the main ChatComposer input surface", () => {
     const mission = read("components/Mission.tsx")
-    expect(mission).toContain("<ChatComposer")
-    expect(mission).toContain('textareaDataUI="mission-composer-input"')
-    expect(mission).toContain("draftKey={props.draftKey}")
+    const main = read("main.tsx")
+    expect(mission).not.toContain("<ChatComposer")
+    expect(main).toContain("<ChatComposer")
+    expect(main).toContain('textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}')
+    expect(main).toContain("draftKey={panelComposerDraftKey()}")
     expect(mission).not.toMatch(/<textarea\b/)
   })
 

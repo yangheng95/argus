@@ -950,6 +950,7 @@
   "mission.error.class.TypeError": "Mission returned an unexpected payload shape. Refresh, and if it persists open the Logs panel.",
   "mission.launcher.title": "New Mission",
   "mission.launcher.error": "Mission wake failed: {{error}}",
+  "mission.launcher.placeholder": "Describe the long-running mission you want OpenCorvus to own...",
   "mission.launcher.discard_title": "Close the launcher",
   "mission.launcher.result_created": "Created mission: {{missionID}}",
   "mission.launcher.result_resumed": "Resumed mission: {{missionID}}",

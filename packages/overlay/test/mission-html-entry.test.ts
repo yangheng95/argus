@@ -52,6 +52,7 @@ test("main.tsx mounts Mission through the left activity system", () => {
   expect(MAIN).toContain('document.getElementById("missionListPanel")')
   expect(MAIN).toContain("<Mission")
   expect(MAIN).toContain("refreshToken={missionSharedRefreshToken()}")
+  expect(MAIN).toContain("onCreateMission={openMissionLauncher}")
   expect(MAIN).toContain("onSelectTask={selectMissionTask}")
   expect(MAIN).toContain('setSelectedLeftPanelActivity("tasks")')
   expect(MAIN).toContain("function isMissionSessionSource(): boolean")
@@ -64,10 +65,12 @@ test("main.tsx mounts Mission through the left activity system", () => {
 })
 
 test("Mission activity opens session conversations through the shared center chat", () => {
+  expect(MISSION).toContain("openMissionSession(mission.sessionID, mission.directory)")
   expect(MISSION).toContain('setBoardStore("selectedSource", source)')
   expect(MISSION).toContain('setBoardStore("board", null)')
   expect(MISSION).toContain("loadConversation(source")
   expect(MISSION).toContain("startSSE(source")
+  expect(MAIN).toContain("async function openMissionSession(result: MissionWakeResult)")
   expect(MISSION).not.toContain("function MissionConversation")
   expect(MISSION).not.toContain("<Conversation")
   expect(MISSION).not.toContain("<ConversationAgentRail")

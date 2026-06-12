@@ -513,12 +513,14 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
       while (document.querySelector<HTMLElement>("#leftPanelMissions")?.dataset.active !== "true") {
         await new Promise((resolve) => setTimeout(resolve, 16))
       }
+      const restoredLauncher = document.querySelector<HTMLButtonElement>('[data-ui="mission-new"]')
+      if (!restoredLauncher) throw new Error("Mission activity did not restore new Mission control")
+      restoredLauncher.click()
       const restored = document.querySelector<HTMLTextAreaElement>('[data-ui="mission-composer-input"]')
-      if (!restored) throw new Error("Mission composer unmounted across activity round trip")
+      if (!restored) throw new Error("Mission composer did not reopen in the shared panel")
       if (restored.value !== "preserve composer draft") {
         throw new Error(`Mission composer draft was not preserved: ${restored.value}`)
       }
-      document.querySelector<HTMLButtonElement>('[data-ui="mission-composer-discard"]')?.click()
     })
 
     const missionSearchMs = await page.evaluate(async () => {

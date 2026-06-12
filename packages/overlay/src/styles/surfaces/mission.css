@@ -344,44 +344,8 @@
   color: color-mix(in srgb, var(--bad) 72%, var(--text-muted));
 }
 
-.mission-composer--inline {
-  flex: 0 0 auto;
-  border-bottom: var(--oc-border-width) solid var(--border);
-  background: var(--rail-surface);
-}
-
-.mission-composer-header {
-  min-height: calc(38px * var(--ui-scale));
-}
-
-.mission-composer-title-block {
-  display: grid;
-  min-width: 0;
-  gap: calc(1px * var(--ui-scale));
-}
-
-.mission-composer-kicker {
-  color: var(--text-muted);
-  font-size: var(--ui-font-size-xs);
-}
-
-.mission-composer-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mission-composer-shell {
-  padding: var(--ui-gap-sm);
-}
-
-.mission-composer-shell .chat-input {
-  min-height: calc(88px * var(--ui-scale));
-}
-
 .mission-error,
-.mission-action-error,
-.mission-launcher-result {
+.mission-action-error {
   margin: var(--ui-gap-sm);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);

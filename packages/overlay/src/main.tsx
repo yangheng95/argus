@@ -22,8 +22,8 @@ import { MemoryPanel } from "./components/MemoryPanel"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
-import { loadTasks, boardStore, loadBoard, activeTaskID, activeSessionID } from "./store/board"
-import { messageStore } from "./store/messages"
+import { loadTasks, boardStore, loadBoard, activeTaskID, activeSessionID, setBoardStore } from "./store/board"
+import { clearMessages, messageStore, setChatAttachments } from "./store/messages"
 import { appStore } from "./store/app"
 import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, renameTask } from "./services/task"
 import { canComposeChat, stopChatRequest } from "./services/chat"
@@ -64,6 +64,7 @@ import { applyDirectory, activeDirectory, openPathInSelectedEditor } from "./ser
 import { openConfigDialog, openGoalDialog, renderAboutVersion } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
+import { loadConversation } from "./services/conversation"
 import { codingAssistantStore } from "./store/coding-assistant"
 import {
   createCodingAssistantSession,
@@ -75,6 +76,9 @@ import {
   setCodingAssistantSearchQuery,
   stopCodingAssistantSession,
 } from "./services/coding-assistant"
+import { wakeMission, type MissionWakeResult } from "./services/mission"
+import { startSSE, stopSSE } from "./services/sse"
+import { resetWriter } from "./services/tree-writer"
 import { openImagePreview } from "./services/image-preview"
 
 // ── Module teardown ──
@@ -211,6 +215,8 @@ const activeRightActivity = () => selectedRightActivity()
 const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
 const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("tasks")
 const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
+const [missionLauncherActive, setMissionLauncherActive] = createSignal(false)
+const [missionLauncherSubmitting, setMissionLauncherSubmitting] = createSignal(false)
 const activeLeftActivity = () => selectedLeftActivity()
 let codingAssistantActivationController: AbortController | null = null
 
@@ -227,6 +233,7 @@ function isAbortError(error: unknown): boolean {
 
 function activateCodingAssistantSessionList(): void {
   abortCodingAssistantActivation()
+  setMissionLauncherActive(false)
   if (isMissionSessionSource()) void selectTask("")
   const controller = new AbortController()
   codingAssistantActivationController = controller
@@ -313,6 +320,7 @@ function selectLeftActivity(activity: LeftActivity): void {
     return
   }
   abortCodingAssistantActivation()
+  if (activity !== "mission") setMissionLauncherActive(false)
   if (boardStore.selectedSource?.kind === "session" && activity !== "mission") void selectTask("")
   openCenterWorkbenchPanel("workflow")
   setSelectedLeftActivity(activity)
@@ -324,10 +332,40 @@ function isMissionSessionSource(): boolean {
 }
 
 function selectMissionTask(taskID: string): void {
+  setMissionLauncherActive(false)
   openCenterWorkbenchPanel("workflow")
   setSelectedLeftActivity("tasks")
   setSelectedLeftPanelActivity("tasks")
   void selectTask(taskID)
+}
+
+function openMissionLauncher(): void {
+  abortCodingAssistantActivation()
+  openCenterWorkbenchPanel("workflow")
+  setSelectedLeftActivity("mission")
+  setSelectedLeftPanelActivity("mission")
+  setMissionLauncherActive(true)
+  void selectTask("")
+  queueMicrotask(() => {
+    document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
+  })
+}
+
+async function openMissionSession(result: MissionWakeResult): Promise<void> {
+  const source = { kind: "session" as const, id: result.sessionID }
+  stopSSE()
+  clearMessages()
+  setChatAttachments([])
+  resetWriter({ scrollIntent: "bottom", cause: "mission-session-switch" })
+  setBoardStore("selectedSource", source)
+  setBoardStore("board", null)
+  await loadConversation(source, {
+    scrollIntent: "bottom",
+    resetCause: "mission-session-hydrate",
+    directory: activeDirectory(),
+  })
+  startSSE(source, 0)
+  setMissionSharedRefreshToken((value) => value + 1)
 }
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
@@ -1144,6 +1182,7 @@ if (missionListEl) {
       <Mission
         active={selectedLeftPanelActivity() === "mission"}
         refreshToken={missionSharedRefreshToken()}
+        onCreateMission={openMissionLauncher}
         onSelectTask={selectMissionTask}
       />
     ),
@@ -1197,6 +1236,10 @@ let lastTaskBusy = false
 let lastSuggestionTaskID: string | null = null
 
 const panelComposerDraftKey = () => {
+  if (missionLauncherActive()) {
+    const directory = activeDirectory()
+    return directory ? composerDraftKey("mission", "new", directory) : composerDraftKey("mission", "new")
+  }
   const taskID = activeTaskID()
   if (taskID) return composerDraftKey("task", taskID)
   const sessionID = activeSessionID()
@@ -1210,7 +1253,7 @@ if (composerEl) {
   render(
     () => (
       <ChatComposer
-        enabled={canComposeChat()}
+        enabled={canComposeChat() && !missionLauncherSubmitting()}
         // Composer busy ≡ a send request is in flight (SSE stream open).
         // A running task no longer disables the composer: the user can queue
         // additional messages; `panelMessage` routes them as operator notes /
@@ -1219,9 +1262,26 @@ if (composerEl) {
         busy={!!messageStore.chatRequest}
         stopping={!!(messageStore.chatRequest as any)?.stopping}
         draftKey={panelComposerDraftKey()}
+        placeholder={missionLauncherActive() ? t("mission.launcher.placeholder") : undefined}
+        textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}
+        sendDataUI={missionLauncherActive() ? "mission-composer-submit" : undefined}
         pendingSuggestion={pendingSuggestion()}
         onSuggestionConsumed={() => setPendingSuggestion("")}
         onSubmit={async (text, attachments, webSearch) => {
+          if (missionLauncherActive()) {
+            if (attachments.length > 0) {
+              throw new Error(t("mission.launcher.attachments_unsupported"))
+            }
+            setMissionLauncherSubmitting(true)
+            try {
+              const result = await wakeMission({ text })
+              await openMissionSession(result)
+              setMissionLauncherActive(false)
+              return result
+            } finally {
+              setMissionLauncherSubmitting(false)
+            }
+          }
           const refreshMissionLedger = isMissionSessionSource()
           const result = await panelMessage(text, attachments, webSearch ? { web_search: true } : {})
           if (refreshMissionLedger) setMissionSharedRefreshToken((value) => value + 1)
@@ -1405,6 +1465,7 @@ function bindSidebarStaticControls(): void {
   document.getElementById("btnCreateTask")?.addEventListener("click", () => {
     // Deselect current task and focus the composer — the user types their
     // request directly in the ChatComposer, no modal dialog needed.
+    setMissionLauncherActive(false)
     void selectTask("")
     const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
     textarea?.focus()
@@ -1514,8 +1575,15 @@ disposers.push(
     createEffect(() => {
       settingsStore.locale
       boardStore.selectedSource
+      missionLauncherActive()
       const title = document.querySelector("#chatViewTitle") as HTMLElement | null
-      if (title) title.textContent = isCodingAssistantSource() ? t("chat.assistant_title") : t("chat.title")
+      if (title) {
+        title.textContent = missionLauncherActive()
+          ? t("mission.launcher.title")
+          : isCodingAssistantSource()
+            ? t("chat.assistant_title")
+            : t("chat.title")
+      }
     })
 
     createEffect(() => {

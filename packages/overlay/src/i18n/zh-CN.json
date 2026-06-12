@@ -950,6 +950,7 @@
   "mission.error.class.TypeError": "Mission 数据格式异常。请刷新；若问题持续，请在「日志」面板查看详细错误。",
   "mission.launcher.title": "新建 Mission",
   "mission.launcher.error": "Mission 唤醒失败：{{error}}",
+  "mission.launcher.placeholder": "描述一个需要 OpenCorvus 长期跟进的 Mission...",
   "mission.launcher.discard_title": "关闭启动器",
   "mission.launcher.result_created": "已创建 Mission：{{missionID}}",
   "mission.launcher.result_resumed": "已恢复 Mission：{{missionID}}",
