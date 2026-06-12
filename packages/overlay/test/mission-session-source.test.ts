@@ -64,10 +64,12 @@ test("composer draft keys are scoped to selected task, assistant session, and Mi
 
 test("Mission launcher and Coding Assistant reuse the main ChatComposer with separate bindings", () => {
   expect(MISSION_TSX).not.toContain("<ChatComposer")
-  expect(MISSION_TSX).toContain("props.onCreateMission()")
+  expect(MISSION_TSX).not.toContain("props.onCreateMission()")
   expect(MISSION_TSX).not.toContain("panelMessage(")
 
   expect(MAIN_TSX).toContain("<ChatComposer")
+  expect(MAIN_TSX).toContain('document.getElementById("btnCreateMission")?.addEventListener("click"')
+  expect(MAIN_TSX).toContain("openMissionLauncher()")
   expect(MAIN_TSX).toContain("draftKey={panelComposerDraftKey()}")
   expect(MAIN_TSX).toContain('placeholder={missionLauncherActive() ? t("mission.launcher.placeholder") : undefined}')
   expect(MAIN_TSX).toContain('textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}')

@@ -1,5 +1,5 @@
 /* Mission left activity surface. Mission is no longer a standalone page:
-   this file styles only the left-panel ledger and inline launcher. */
+   this file styles only the left-panel ledger. */
 
 .mission-left-panel {
   display: flex;
@@ -23,7 +23,7 @@
 
 .mission-ledger-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) calc(30px * var(--ui-scale));
+  grid-template-columns: minmax(0, 1fr);
   gap: calc(4px * var(--ui-scale));
   align-items: center;
   margin: var(--ui-gap-sm) var(--ui-gap-md);
@@ -42,32 +42,6 @@
   flex-direction: column;
   gap: calc(2px * var(--ui-scale));
   padding: 0 var(--ui-gap-sm) var(--ui-gap-md);
-}
-
-.oc-button[data-ui="mission-new"] {
-  --oc-button-height: calc(30px * var(--ui-scale));
-  --oc-button-padding-x: 0;
-
-  width: calc(30px * var(--ui-scale));
-  min-width: calc(30px * var(--ui-scale));
-  justify-content: center;
-  flex: 0 0 auto;
-  border-radius: 0;
-}
-
-.oc-button[data-ui="mission-new"]:hover,
-.oc-button[data-ui="mission-new"]:focus-visible {
-  --oc-button-bg: color-mix(in srgb, var(--accent) 10%, transparent);
-  --oc-button-color: var(--text-strong);
-}
-
-.mission-new-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 .mission-ledger .ledger-list {
@@ -129,90 +103,17 @@
   flex-direction: column;
 }
 
-.mission-row {
-  display: grid;
-  grid-template-columns: calc(16px * var(--ui-scale)) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  min-height: calc(27px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-soft);
-  cursor: pointer;
-  transition:
-    background var(--ui-duration-base),
-    color var(--ui-duration-base);
+.mission-row.task-row-mini {
+  --task-row-actions-width: calc(84px * var(--ui-scale));
 }
 
-.mission-row:hover,
-.mission-row:focus-visible,
-.mission-row:focus-within {
-  background: var(--surface-hover);
-  color: var(--text-strong);
-  outline: none;
-}
-
-.mission-row[data-active="true"] {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--text-strong);
-}
-
-.mission-row .ledger-row-icon {
-  display: inline-flex;
-  align-items: center;
+.mission-row-kind-badge {
   justify-content: center;
   color: color-mix(in srgb, var(--text-muted) 88%, transparent);
 }
 
-.mission-row .ledger-row-main {
-  display: grid;
-  min-width: 0;
-  gap: calc(1px * var(--ui-scale));
-}
-
-.mission-row .ledger-row-title {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-medium);
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mission-row .ledger-row-meta {
-  display: flex;
-  min-width: 0;
-  gap: calc(5px * var(--ui-scale));
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: var(--ui-font-small);
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.mission-row .ledger-row-meta > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mission-row .ledger-row-right {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(2px * var(--ui-scale));
-  min-width: 0;
-}
-
-.mission-row .ledger-row-stamp {
-  color: var(--text-muted);
-  font-size: var(--ui-font-small);
-  line-height: 1;
-  white-space: nowrap;
+.mission-row-kind-badge::before {
+  display: none;
 }
 
 .mission-row-actions {
@@ -225,8 +126,8 @@
   transition: opacity var(--ui-duration-fast) var(--ui-timing-standard);
 }
 
-.ledger-row:hover .mission-row-actions,
-.ledger-row:focus-within .mission-row-actions {
+.task-row-mini:hover .mission-row-actions,
+.task-row-mini:focus-within .mission-row-actions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -307,21 +208,6 @@
   color: var(--text-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.mission-task-projection-meta {
-  display: flex;
-  min-width: 0;
-  gap: var(--ui-gap-xs);
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: var(--ui-font-size-xs);
-  white-space: nowrap;
-}
-
-.mission-task-projection-meta > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .mission-task-projection-status {
