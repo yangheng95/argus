@@ -107,9 +107,11 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(evalPerm(visualQa, "write")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_render")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_vision_judge")).toBe("allow")
+      expect(evalPerm(visualQa, "browser_preview")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_extract")).toBe("deny")
       expect(visualQa?.tools?.include).toEqual([...VISUAL_QA_STATIC_TOOL_IDS])
       expect(visualQa?.tools?.include).not.toContain("webpage_extract")
+      expect(visualQa?.tools?.include).toContain("browser_preview")
       expect(visualQa?.tools?.include).toContain("webpage_render")
       expect(visualQa?.tools?.include).toContain("skill")
 
@@ -274,6 +276,7 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(orchestrator).toBeDefined()
       expect(orchestrator?.tools?.include).toContain("cancel_subagent")
       expect(orchestrator?.tools?.include).toContain("propose_task")
+      expect(orchestrator?.tools?.include).toContain("browser_preview")
       expect(orchestrator?.tools?.include).not.toContain("panel")
       expect(orchestrator?.tools?.include).not.toContain("task")
       expect(orchestrator?.tools?.include).not.toContain("skill")
@@ -476,6 +479,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(visualQa).toBeDefined()
       expect(visualQa?.tools?.include).toEqual([...VISUAL_QA_STATIC_TOOL_IDS])
       expect(visualQa?.tools?.include).toContain("skill")
+      expect(visualQa?.tools?.include).toContain("browser_preview")
       expect(visualQa?.tools?.include).toContain("bash")
       expect(visualQa?.tools?.include).toContain("webpage_render")
       expect(visualQa?.tools?.include).toContain("webpage_evaluate")
@@ -529,7 +533,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
-      expect(integrity?.tools?.include).toEqual([])
+      expect(integrity?.tools?.include).toEqual(["browser_preview"])
       expect(await Agent.get("acceptance")).toBeUndefined()
     },
   })
@@ -619,6 +623,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         expect(include).toContain(tool)
       }
       expect(include).toContain("integrity")
+      expect(include).toContain("browser_preview")
       expect(include).toContain("deep_research")
       expect(include).not.toContain("research")
       expect(include).toContain("frontend_research")
@@ -670,7 +675,7 @@ test("compaction agent exposes no tools while permissions default to allow", asy
   })
 })
 
-test("integrity agent does not expose registry tools", async () => {
+test("integrity agent exposes only the explicit browser preview registry tool", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -678,7 +683,7 @@ test("integrity agent does not expose registry tools", async () => {
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
       expect(integrity?.hidden).toBe(true)
-      expect(integrity?.tools).toEqual({ include: [] })
+      expect(integrity?.tools).toEqual({ include: ["browser_preview"] })
     },
   })
 })

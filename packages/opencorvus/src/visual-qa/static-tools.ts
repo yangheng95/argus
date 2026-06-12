@@ -10,6 +10,7 @@ export const VISUAL_QA_CONTEXT_TOOL_IDS = [
 ] as const
 
 export const VISUAL_QA_IMPLEMENTATION_TOOL_IDS = [
+  "browser_preview",
   "bash",
   "edit",
   "write",

@@ -203,6 +203,7 @@ export namespace Agent {
             webpage_evaluate: "allow",
             webpage_text_diff: "allow",
             webpage_vision_judge: "allow",
+            browser_preview: "allow",
           }),
         ),
         mode: "primary",
@@ -451,6 +452,7 @@ export namespace Agent {
             "read_context",
             "goal_report",
             "analytics",
+            "browser_preview",
             // user interaction
             "question",
             // own bookkeeping
@@ -561,7 +563,7 @@ export namespace Agent {
         prompt: INTEGRITY_RUNTIME_PROMPT,
         steps: 1000,
         // Verdict and acceptance tools are injected per run; registry tools only bloat the schema.
-        tools: { include: [] as string[] },
+        tools: { include: ["browser_preview"] },
         options: {},
         mode: "primary",
         native: true,

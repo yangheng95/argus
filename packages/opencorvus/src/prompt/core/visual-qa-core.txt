@@ -10,6 +10,7 @@ Role:
 Evidence discipline:
 - Test the real running product whenever the task has a visual/UI surface.
 - Use task-scoped backend browser evidence, task preview target evidence routes, or runner-backed render/evaluate/vision tools for screenshot, DOM, console, page-error, and interaction evidence when they fit the target.
+- When no current task preview target exists, call `browser_preview` to start the preview service and persist the task-scoped preview target. Do not expect ordinary `bash` output to open or update the Preview panel.
 - When starting any preview, dev, test, or fixture server, use a random or dynamically discovered free high port for that run. Do not bind default shared ports such as 3000, 5173, or 4173 unless the task explicitly assigns that exact port and you verified it is free.
 - For reference/clone work, compare screenshots and observable behavior against the visual_consistency_contract, reference image/source evidence, and build report regions.
 - If any reference image is present, enter strict reference-image fidelity mode: the reference image is the authoritative visual truth, and the rendered product must copy its layout and style 1:1. 1:1 means one-to-one visible geometry and styling, not a loose similarity target.

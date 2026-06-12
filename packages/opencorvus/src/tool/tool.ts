@@ -4,7 +4,6 @@ import type { Agent } from "../agent/agent"
 import type { PermissionNext } from "../permission/next"
 import type { Config } from "../config/config"
 import { Truncate } from "./truncation"
-import { persistBrowserPreviewTargetFromProcessOutput } from "@/browser-preview/extract"
 
 /**
  * Coerce string values that LLMs sometimes produce for non-string fields.
@@ -105,12 +104,6 @@ export namespace Tool {
             throw new Error(`Tool ${id} failed: ${asError(e).message}`)
           }
           const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined
-          if (result.metadata.browserPreviewOutputScanned !== true) {
-            await persistBrowserPreviewTargetFromProcessOutput({
-              taskID,
-              output: result.output,
-            })
-          }
           // skip truncation for tools that handle it themselves
           if (result.metadata.truncated !== undefined) {
             return result

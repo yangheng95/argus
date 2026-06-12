@@ -24,7 +24,6 @@ import { ContextBudget } from "./context-budget"
 import { Instance } from "../project/instance"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { materializeMcpToolResult } from "@/mcp/materialize"
-import { persistBrowserPreviewTargetFromProcessOutput } from "@/browser-preview/extract"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
 import { SystemPrompt } from "./system"
@@ -66,7 +65,6 @@ import {
   renderPreTerminalReflectionPrompt,
   renderPreTerminalReflectionReminder,
 } from "@/prompt/fragments/pre-terminal-reflection"
-import { taskIDForSession } from "@/orchestrator/task-event"
 
 muteAISdkWarnings()
 
@@ -2649,13 +2647,6 @@ export namespace SessionLoop {
             projectID: Instance.project.id,
             result,
           })
-
-          if (key.startsWith("browser_")) {
-            await persistBrowserPreviewTargetFromProcessOutput({
-              taskID: taskIDForSession(ctx.sessionID),
-              output: materialized.text,
-            })
-          }
 
           const truncated = await Truncate.output(materialized.text, { sessionID: ctx.sessionID }, input.agent)
           const metadata = {

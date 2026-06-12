@@ -1,5 +1,7 @@
 # Browser Preview Start Service Tool
 
+> Superseded in part by `2026-06-12-explicit-browser-preview-agent-tool.md`: the `browser_preview` tool remains, but generic `bash`, generic tool output, user shell output, and browser MCP output no longer auto-materialize preview targets. Preview target inference from process output is owned only by the explicit `browser_preview` tool.
+
 ## Problem
 
 Assistant sessions can start frontend development servers with `bash`, and existing streaming output materialization can persist task-scoped `browser_preview_target` artifacts. The missing surface is a direct assistant tool whose intent is explicit: start a long-lived preview service and open the overlay preview through the existing task artifact source.
@@ -8,8 +10,8 @@ Assistant sessions can start frontend development servers with `bash`, and exist
 
 | Surface | Evidence | Decision |
 | --- | --- | --- |
-| `packages/opencorvus/src/tool/bash.ts` | `BashTool` already supports `background: true`, streams stdout/stderr into `createBrowserPreviewProcessOutputMaterializer`, and passes the command for port-derived candidates. | Reuse it instead of duplicating process lifecycle and permission parsing. |
-| `packages/opencorvus/src/browser-preview/extract.ts` | `createBrowserPreviewProcessOutputMaterializer` and `persistBrowserPreviewTargetFromProcessOutput` normalize/probe/persist task preview URLs. | Keep as the single materialization kernel. |
+| `packages/opencorvus/src/tool/bash.ts` | `BashTool` supports `background: true` and returns startup output / process metadata. | Reuse it for process lifecycle and permission parsing, without automatic preview target side effects. |
+| `packages/opencorvus/src/browser-preview/extract.ts` | `extractBrowserPreviewUrlsFromText` and `persistBrowserPreviewUrls` normalize/probe/persist task preview URLs. | Keep as the explicit `browser_preview` tool's persistence kernel. |
 | `packages/opencorvus/src/browser-preview/persist.ts` | `persistBrowserPreviewTarget` emits `task.updated`. | Reuse for explicit URL inputs so overlay refresh remains event-driven. |
 | `packages/opencorvus/src/browser-preview/target.ts` | `resolveBrowserPreviewTarget` reads only task artifacts. | Keep unchanged; no package metadata or overlay override source. |
 | `packages/opencorvus/src/server/routes/browser-preview.ts` | Task routes read/select/capture/live-snapshot persisted targets. | No route change needed. |

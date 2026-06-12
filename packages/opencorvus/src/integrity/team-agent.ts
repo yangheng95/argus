@@ -1,6 +1,7 @@
-import { tool } from "ai"
+import { tool, type ToolSet } from "ai"
 import TEAM_CORE from "@/prompt/core/integrity-team-core.txt"
 import { runAgentSession } from "@/agent/runner"
+import { BrowserPreviewTool, BrowserPreviewToolParameters } from "@/tool/browser-preview"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { limitSummary, markdownList } from "@/agent/report"
 import type { AcceptanceSpec } from "@/acceptance/types"
@@ -361,9 +362,17 @@ function createSingleSessionIntegrityToolKit(input: {
         signal: input.signal,
       })
     : {}
+  const previewTools: ToolSet = {}
+  if (input.taskID) {
+    previewTools.browser_preview = createIntegrityBrowserPreviewTool({
+      taskID: input.taskID,
+      signal: input.signal,
+    })
+  }
   return {
     tools: {
       ...evidenceTools,
+      ...previewTools,
       submit_integrity_consensus: tool({
         description: `Submit the final integrity review. Produce multiple independent reviewer reports inside reviewers[] without spawning reviewer sessions. Every reviewers[] entry must include investigationPlan.requestPromise, investigationPlan.hypothesis, investigationPlan.evidencePlan[], and investigationPlan.passCriteria[]. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
         inputSchema: IntegrityTeamReportSchema,
@@ -381,6 +390,40 @@ function createSingleSessionIntegrityToolKit(input: {
       detail: input.collector.report?.teamReportMarkdown ?? "No integrity review submitted.",
     }),
   }
+}
+
+function createIntegrityBrowserPreviewTool(input: { taskID: string; signal?: AbortSignal }) {
+  return tool({
+    description:
+      "Explicitly start a long-lived frontend preview service for this task and save the task-scoped browser preview target. Use when integrity needs to inspect a real rendered frontend surface before judging visual or browser-visible behavior. Ordinary command output does not update preview targets.",
+    inputSchema: BrowserPreviewToolParameters,
+    execute: async (params, options) => {
+      const meta = (
+        options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined
+      )?.opencorvus
+      const abort =
+        (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ??
+        input.signal ??
+        new AbortController().signal
+      const initialized = await BrowserPreviewTool.init()
+      const result = await initialized.execute(params, {
+        sessionID: meta?.sessionID ?? "",
+        messageID: meta?.messageID ?? "",
+        callID: meta?.toolCallID,
+        agent: "integrity",
+        abort,
+        messages: [],
+        extra: { taskID: input.taskID },
+        metadata: () => {},
+        ask: async () => {},
+      })
+      return result.output
+    },
+  })
+}
+
+export const IntegrityTestHooks = {
+  createSingleSessionIntegrityToolKit,
 }
 
 export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
