@@ -129,6 +129,30 @@ test(
         if (path === "/global/health") return send({ version: "1.2.3" })
         if (path === "/tasks" || path === "/global/tasks") return send(taskListPayload())
         if (path === "/mission") return send(missionListPayload())
+        if (path === "/session/ses_mission_side_activity/conversation") {
+          return send({
+            board: {
+              kind: "session",
+              sessionID: "ses_mission_side_activity",
+              status: "active",
+              title: "Mission side activity",
+              directory: "D:/overlay/workspace/app",
+            },
+            transcript: [],
+            timeline: [],
+            events: [],
+            view: { rootID: "root", cards: {}, order: [] },
+            agentView: { rootID: "root", cards: {}, order: [] },
+            history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+            messageWatermark: 0,
+          })
+        }
+        if (path === "/session/ses_mission_side_activity/prompt_async") {
+          return send({ taskID: "tsk_mission_continue_prompt" }, { status: 202 })
+        }
+        if (path === "/session/ses_mission_side_activity/events") {
+          return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+        }
         if (path === "/task/tsk_side_activity/conversation") return send(taskConversationPayload())
         if (path === "/task/tsk_side_activity/events") {
           return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
@@ -479,7 +503,13 @@ test(
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
       for (let attempt = 0; attempt < 50; attempt += 1) {
         const state = await activeState()
-        if (state.leftMission === "true" && state.missionRows === 1) break
+        if (
+          state.leftMission === "true" &&
+          state.missionRows === 1 &&
+          state.selectedSourceKind === "session" &&
+          state.selectedSourceID === "ses_mission_side_activity"
+        )
+          break
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
       assertMatchObject(await activeState(), {
@@ -487,13 +517,52 @@ test(
         leftMission: "true",
         leftMissionButton: "true",
         leftTasksButton: "false",
-        chatTitle: "Workflow",
-        selectedSourceKind: "task",
-        selectedSourceID: "tsk_side_activity",
+        selectedSourceKind: "session",
+        selectedSourceID: "ses_mission_side_activity",
         missionRows: 1,
         missionTaskProjectionButtons: 1,
       })
       assert.ok(requestLog.some((entry) => entry.method === "GET" && entry.path === "/mission"))
+      assert.ok(
+        requestLog.some(
+          (entry) => entry.method === "GET" && entry.path === "/session/ses_mission_side_activity/conversation",
+        ),
+      )
+
+      await page.$eval("#chatTextarea", (node) => {
+        const textarea = node as HTMLTextAreaElement
+        textarea.value = "continue mission"
+        textarea.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            inputType: "insertText",
+            data: "continue mission",
+          }),
+        )
+      })
+      await clickButton("#chatSend")
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (
+          requestLog.some(
+            (entry) => entry.method === "POST" && entry.path === "/session/ses_mission_side_activity/prompt_async",
+          )
+        )
+          break
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      assert.deepEqual(
+        requestLog.find(
+          (entry) => entry.method === "POST" && entry.path === "/session/ses_mission_side_activity/prompt_async",
+        ),
+        {
+          method: "POST",
+          path: "/session/ses_mission_side_activity/prompt_async",
+        },
+      )
+      assert.equal(
+        requestLog.some((entry) => entry.method === "POST" && entry.path === "/task/tsk_side_activity/message"),
+        false,
+      )
 
       await clickButton('[data-ui="mission-task-projection-select"]')
       await page.waitForFunction(
