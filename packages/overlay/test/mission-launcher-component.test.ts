@@ -146,11 +146,8 @@ test("main ChatComposer exposes the standard Mission data-ui hooks for downstrea
 
 const LAUNCHER_KEYS = [
   "mission.launcher.title",
-  "mission.launcher.error",
   "mission.launcher.placeholder",
-  "mission.launcher.discard_title",
-  "mission.launcher.result_created",
-  "mission.launcher.result_resumed",
+  "mission.launcher.attachments_unsupported",
 ]
 
 for (const key of LAUNCHER_KEYS) {
