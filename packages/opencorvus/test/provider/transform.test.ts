@@ -1,11 +1,45 @@
 import { describe, expect, test } from "bun:test"
 import { convertToOpenAICompatibleChatMessages } from "@ai-sdk/openai-compatible/internal"
+import z from "zod"
 import { ProviderTransform } from "../../src/provider/transform"
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "../../src/provider/sampling"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { tmpdir } from "../fixture/fixture"
+
+describe("ProviderTransform.schema - GPT strict tool schemas", () => {
+  const hexinGptModel = {
+    id: "hexin/gpt-5.5",
+    providerID: "hexin",
+    api: {
+      id: "gpt-5.5",
+      url: "https://aimemodeldev.myhexin.com/litellm/v1",
+      npm: "@ai-sdk/openai-compatible",
+    },
+  } as any
+
+  test("recursively requires every object property for OpenAI-style GPT routes", () => {
+    const raw = z.toJSONSchema(
+      z.object({
+        chronology: z.array(
+          z.object({
+            event: z.string(),
+            evidence: z.string().optional(),
+          }),
+        ),
+      }),
+    ) as any
+
+    const out = ProviderTransform.schema(hexinGptModel, raw) as any
+    const item = out.properties.chronology.items
+
+    expect(out.required).toEqual(["chronology"])
+    expect(item.required).toEqual(["event", "evidence"])
+    expect(item.properties.evidence.anyOf).toContainEqual({ type: "null" })
+    expect(item.additionalProperties).toBe(false)
+  })
+})
 
 describe("ProviderTransform.options - setCacheKey", () => {
   const sessionID = "test-session-123"
