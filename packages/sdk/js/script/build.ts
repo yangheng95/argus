@@ -220,9 +220,10 @@ const generate = async (output: string) =>
 await generate("./src/gen")
 await waitForGeneratedClient()
 
+const prettierBin = await Bun.resolve("prettier/bin/prettier.cjs", dir)
 for (let attempt = 1; attempt <= 5; attempt++) {
   try {
-    await $`bun prettier --write src`
+    await $`bun ${prettierBin} --write src`
     break
   } catch (error) {
     if (attempt === 5) throw error

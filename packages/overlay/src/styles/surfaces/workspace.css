@@ -355,12 +355,6 @@ body[data-center-workbench-panel-resizing="true"] * {
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
-  padding: var(--ui-gap-sm);
-}
-
-.center-workbench-activity.chat-workflow-activity,
-.center-workbench-activity.file-editor-mount,
-.center-workbench-activity.chat-browser-preview-activity {
   padding: 0;
 }
 

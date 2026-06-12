@@ -15,6 +15,7 @@ import { openFileEditor, selectedFilePath, type FileNode } from "../services/fil
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
+import { SurfaceHeader } from "./ui/SurfaceHeader"
 
 const VIRTUAL_EXPLORER_ROW_THRESHOLD = 120
 const EXPLORER_ROW_HEIGHT = 26
@@ -272,34 +273,38 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
 
   return (
     <section class="file-explorer-panel" aria-label={t("explorer.title")}>
-      <div class="file-explorer-toolbar">
-        <label class="file-explorer-search search-field">
-          <Icon name="search" size={12} class="search-field-icon" />
-          <input
-            class="file-explorer-search-input search-field-input field-input"
-            type="search"
-            value={query()}
-            placeholder={t("explorer.search_placeholder")}
-            aria-label={t("explorer.search_placeholder")}
-            onInput={(event) => setQuery(event.currentTarget.value)}
-          />
-          <Show when={query()}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              tone="neutral"
-              data-chrome="icon-action"
-              data-ui="file-explorer-search-clear"
-              onClick={() => setQuery("")}
-              title={t("common.clear")}
-              aria-label={t("common.clear")}
-            >
-              <Icon name="close" />
-            </Button>
-          </Show>
-        </label>
-      </div>
+      <SurfaceHeader
+        variant="panel"
+        title={t("explorer.title")}
+        actions={
+          <label class="file-explorer-toolbar file-explorer-search search-field">
+            <Icon name="search" size={12} class="search-field-icon" />
+            <input
+              class="file-explorer-search-input search-field-input field-input"
+              type="search"
+              value={query()}
+              placeholder={t("explorer.search_placeholder")}
+              aria-label={t("explorer.search_placeholder")}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+            />
+            <Show when={query()}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-chrome="icon-action"
+                data-ui="file-explorer-search-clear"
+                onClick={() => setQuery("")}
+                title={t("common.clear")}
+                aria-label={t("common.clear")}
+              >
+                <Icon name="close" />
+              </Button>
+            </Show>
+          </label>
+        }
+      />
       <div
         class="file-explorer-list"
         data-virtualized={shouldVirtualize() ? "true" : "false"}
