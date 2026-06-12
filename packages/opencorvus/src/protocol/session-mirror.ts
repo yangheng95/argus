@@ -263,7 +263,7 @@ export function mapSessionBusEvent(
   }
 }
 
-async function shouldMirrorStandaloneSession(sessionID: string): Promise<boolean> {
+async function shouldMirrorSessionScopedStream(sessionID: string): Promise<boolean> {
   const role = sessionRole(sessionID)
   if (role === "mission") return true
   return role === "assistant"
@@ -271,7 +271,7 @@ async function shouldMirrorStandaloneSession(sessionID: string): Promise<boolean
 
 export async function mirrorSessionBusEvent(event: SessionBusEvent, sessionID: string): Promise<void> {
   if (sessionBusEventSessionID(event) !== sessionID) return
-  if (!(await shouldMirrorStandaloneSession(sessionID))) return
+  if (!(await shouldMirrorSessionScopedStream(sessionID))) return
   const mapped = mapSessionBusEvent(event, { sessionID })
   if (!mapped) return
   ProtocolStore.dispatchEphemeral({

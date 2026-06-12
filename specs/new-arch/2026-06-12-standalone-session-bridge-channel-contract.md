@@ -1,4 +1,4 @@
-# Standalone Session Bridge Channel Contract
+# Session-Scoped Assistant Bridge Channel Contract
 
 ## Problem
 
@@ -27,11 +27,10 @@ The observed event is an `ephemeral-*` session event:
 
 ## Fix
 
-Make `session-mirror` treat standalone assistant sessions as valid session
-stream targets, not just sessions with right-sidebar metadata. The route
-already subscribes by exact `sessionID`, so the server should enrich the
-requested assistant session from `session.kind` and message role using the
-existing `overlayMeta()` path.
+Make `session-mirror` treat session-scoped assistant streams as valid targets,
+not just sessions with right-sidebar metadata. The route already subscribes by
+exact `sessionID`, so the server should enrich the requested assistant session
+from `session.kind` and message role using the existing `overlayMeta()` path.
 
 This is not a compatibility fallback: the emitted SSE contract remains
 strictly channel-stamped. The change removes the right-sidebar-only special
@@ -42,5 +41,8 @@ case from the server mirror eligibility decision.
 - Update `session-mirror.test.ts` so a plain assistant session is mirrored and
   its `message.updated` payload includes `info.channel="assistant"` and
   `info.resolvedRole="assistant"`.
+- Add route-level SSE coverage for `GET /session/:sessionID/events` with a
+  plain assistant session, because the original crash was visible only on the
+  real session event stream.
 - Add a regression test using the cloud-container payload shape from the bug
   report to prove raw assistant message info is enriched before reaching SSE.
