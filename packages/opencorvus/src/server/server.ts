@@ -104,10 +104,10 @@ export namespace Server {
 
   function addDirectoryQueryParameter<T extends OpenAPISpecWithPaths>(spec: T) {
     for (const [routePath, pathItem] of Object.entries(spec.paths ?? {})) {
-      if (!routeRequiresProjectDirectory(routePath)) continue
       if (!pathItem || typeof pathItem !== "object") continue
       const operations = pathItem as Record<string, unknown>
       for (const method of OPENAPI_OPERATION_METHODS) {
+        if (!routeRequiresProjectDirectory(routePath, method.toUpperCase())) continue
         const rawOperation = operations[method]
         if (!rawOperation || typeof rawOperation !== "object") continue
         const operation = rawOperation as OpenAPIOperation
@@ -220,7 +220,7 @@ export namespace Server {
           // a real failure for non-Tauri preview windows that have no UI
           // chance to attach the directory header. Falls through to the
           // root router; if no handler matches, the request 404s cleanly.
-          if (!routeRequiresProjectDirectory(c.req.path)) {
+          if (!routeRequiresProjectDirectory(c.req.path, c.req.method)) {
             return next()
           }
           const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory")

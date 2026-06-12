@@ -296,16 +296,22 @@ describe("route directory policy", () => {
       "/auth/login",
       "/ui/index.html",
       "/mission",
+      "/task/abc/conversation",
+      "/task/abc/conversation/history",
+      "/task/abc/conversation/events",
+      "/task/abc/conversation/session/session_123",
       "/favicon.ico",
     ]) {
       expect(routeRequiresProjectDirectory(path)).toBe(false)
     }
+    expect(routeRequiresProjectDirectory("/task/abc", "DELETE")).toBe(false)
   })
 
   test("project routes require directory regardless of leading slash or query", () => {
     for (const path of [
       "tasks",
       "/task/abc/followup",
+      "/task/abc/message",
       "/path",
       "/vcs",
       "/config/providers",
@@ -315,5 +321,7 @@ describe("route directory policy", () => {
     ]) {
       expect(routeRequiresProjectDirectory(path)).toBe(true)
     }
+    expect(routeRequiresProjectDirectory("/task/abc", "GET")).toBe(true)
+    expect(routeRequiresProjectDirectory("/task/abc/conversation", "POST")).toBe(true)
   })
 })

@@ -29,6 +29,14 @@ export const PROJECT_DIRECTORY_BYPASS_PATHS = [
 ] as const
 
 export const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/", "/log/"] as const
+export const REQUEST_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
+export type RequestMethod = (typeof REQUEST_METHODS)[number]
+
+const TASK_ROUTE_ID_SEGMENT = "[^/]+"
+const TASK_CONVERSATION_RECORD_ROUTE = new RegExp(
+  `^/task/${TASK_ROUTE_ID_SEGMENT}/conversation(?:/(?:history|events|session/${TASK_ROUTE_ID_SEGMENT}))?$`,
+)
+const TASK_ROOT_RECORD_ROUTE = new RegExp(`^/task/${TASK_ROUTE_ID_SEGMENT}$`)
 
 export function normalizedServerRoutePath(routePath: string): string {
   const withoutQuery = String(routePath || "").split("?", 1)[0] || "/"
@@ -36,17 +44,22 @@ export function normalizedServerRoutePath(routePath: string): string {
   return withSlash.replace(/\/+$/, "") || "/"
 }
 
-export function routeRequiresProjectDirectory(routePath: string): boolean {
+function normalizedServerRouteMethod(method?: string): RequestMethod {
+  const upper = String(method || "GET").toUpperCase()
+  return (REQUEST_METHODS as readonly string[]).includes(upper) ? (upper as RequestMethod) : "GET"
+}
+
+export function routeRequiresProjectDirectory(routePath: string, method?: string): boolean {
   const pathOnly = normalizedServerRoutePath(routePath)
+  const routeMethod = normalizedServerRouteMethod(method)
   if ((PROJECT_DIRECTORY_BYPASS_PATHS as readonly string[]).includes(pathOnly)) return false
   if (pathOnly === "/global" || pathOnly === "/auth" || pathOnly === "/ui") return false
+  if (routeMethod === "GET" && TASK_CONVERSATION_RECORD_ROUTE.test(pathOnly)) return false
+  if (routeMethod === "DELETE" && TASK_ROOT_RECORD_ROUTE.test(pathOnly)) return false
   return !(PROJECT_DIRECTORY_BYPASS_PREFIXES as readonly string[]).some((prefix) => pathOnly.startsWith(prefix))
 }
 
 // ── Webview → Extension ──
-
-export const REQUEST_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
-export type RequestMethod = (typeof REQUEST_METHODS)[number]
 
 export type RequestBodyEncoding =
   | { kind: "none" }

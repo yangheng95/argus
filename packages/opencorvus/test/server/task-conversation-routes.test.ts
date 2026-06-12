@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import fs from "node:fs/promises"
 import z from "zod"
 import { BusEvent } from "../../src/bus/bus-event"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
@@ -81,6 +82,12 @@ function integrityReviewCompletedPayload(input: { taskID: string; sessionID: str
         scope: "Requirement surface",
         verdict: "pass" as const,
         summary: "Requirements remain covered.",
+        investigationPlan: {
+          requestPromise: "Conversation replay preserves emitted integrity review events.",
+          hypothesis: "The hydrate route could drop or mutate persisted event timestamps.",
+          evidencePlan: ["Inspect the hydrated conversation event payload."],
+          passCriteria: ["The replayed event keeps the original emittedAt timestamp."],
+        },
         evidence: ["The replayed event preserves task/session identity."],
         findings: [],
         openQuestions: [],
@@ -90,6 +97,12 @@ function integrityReviewCompletedPayload(input: { taskID: string; sessionID: str
         scope: "Acceptance surface",
         verdict: "pass" as const,
         summary: "Acceptance remains covered.",
+        investigationPlan: {
+          requestPromise: "Conversation replay preserves emittedAt fidelity for acceptance events.",
+          hypothesis: "The event projection could replace emittedAt with hydrate time.",
+          evidencePlan: ["Compare emittedAt and timestamp on the hydrated event."],
+          passCriteria: ["emittedAt is present and equals timestamp."],
+        },
         evidence: ["The replayed event preserves emittedAt fidelity."],
         findings: [],
         openQuestions: [],
@@ -164,6 +177,9 @@ describe("task conversation routes", () => {
           },
         })
 
+        if (response.status !== 200) {
+          throw new Error(await response.text())
+        }
         expect(response.status).toBe(200)
         const body = (await response.json()) as {
           events?: Array<{
@@ -912,6 +928,85 @@ describe("task conversation routes", () => {
         placement: "top_level",
       }),
     )
+  })
+
+  test("GET /task/:taskID/conversation hydrates a stale record after the project directory is deleted", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    const app = Server.App()
+    const ids = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "deleted project root",
+        })
+        const assistant = await Session.create({
+          kind: "assistant",
+          parentID: root.id,
+          title: "deleted project assistant",
+        })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "deleted project hydrate",
+              request: "deleted project hydrate",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now + 10,
+            })
+            .run(),
+        )
+
+        const messageID = Identifier.ascending("message")
+        await Session.persistMessage({
+          info: {
+            id: messageID,
+            sessionID: assistant.id,
+            role: "user",
+            time: { created: now + 1 },
+            agent: "assistant",
+            model: { providerID: "test-provider", modelID: "test-model" },
+          },
+          parts: [
+            {
+              id: Identifier.ascending("part"),
+              sessionID: assistant.id,
+              messageID,
+              type: "text",
+              text: "stale project record remains readable",
+            },
+          ],
+        })
+
+        return { taskID, messageID, directory: tmp.path }
+      },
+    })
+    await Instance.disposeAll()
+    await fs.rm(ids.directory, { recursive: true, force: true })
+
+    const response = await app.request(`/task/${ids.taskID}/conversation?tail_limit=8`)
+
+    if (response.status !== 200) {
+      throw new Error(await response.text())
+    }
+    const body = (await response.json()) as {
+      board?: { task?: { directory?: string } }
+      transcript?: Array<{ info?: { id?: string }; parts?: Array<{ text?: string }> }>
+    }
+    expect(body.board?.task?.directory).toBe(ids.directory)
+    expect(body.transcript?.map((message) => message.info?.id)).toEqual([ids.messageID])
+    expect(body.transcript?.[0]?.parts?.[0]?.text).toBe("stale project record remains readable")
   })
 
   test("GET /task/:taskID/conversation preserves sub-agent user authorship from persisted extra", async () => {

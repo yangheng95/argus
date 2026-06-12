@@ -85,6 +85,7 @@ function splitPathQuery(path: string): { pathOnly: string; query: Record<string,
 export function queryWithDirectory(
   path: string,
   query?: QueryMap,
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
 ): Record<string, string | number | boolean> | undefined {
   const pathOnly = path.replace(/^\/+/, "")
   const next: Record<string, string | number | boolean> = {}
@@ -94,13 +95,16 @@ export function queryWithDirectory(
       next[k] = v
     }
   }
-  if (routeRequiresProjectDirectory(pathOnly) && directoryContext && next.directory === undefined) {
+  if (routeRequiresProjectDirectory(pathOnly, method) && directoryContext && next.directory === undefined) {
     next.directory = directoryContext
   }
   return Object.keys(next).length > 0 ? next : undefined
 }
 
-function requestTarget(path: string): {
+function requestTarget(
+  path: string,
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+): {
   pathOnly: string
   query: Record<string, string | number | boolean> | undefined
 } {
@@ -108,7 +112,7 @@ function requestTarget(path: string): {
   const { pathOnly, query } = splitPathQuery(url)
   return {
     pathOnly,
-    query: queryWithDirectory(pathOnly, query),
+    query: queryWithDirectory(pathOnly, query, method),
   }
 }
 
@@ -117,7 +121,7 @@ export function apiUrl(path: string): string {
   const next = path.replace(/^\/+/, "")
   const { pathOnly, query } = splitPathQuery(next)
   const url = new URL(`${base}/${pathOnly}`)
-  const nextQuery = queryWithDirectory(pathOnly, query)
+  const nextQuery = queryWithDirectory(pathOnly, query, "GET")
   if (nextQuery) {
     for (const [k, v] of Object.entries(nextQuery)) {
       url.searchParams.set(k, String(v))
@@ -221,11 +225,12 @@ export async function apiRequest<T = unknown>(
   init?: RequestInit & { responseKind?: ResponseKind },
 ): Promise<TransportResponse<T>> {
   const transport = getHostTransport()
-  const { pathOnly, query } = requestTarget(path)
+  const method = methodFromInit(init)
+  const { pathOnly, query } = requestTarget(path, method)
   return transport.request<T>({
     path: pathOnly,
     query,
-    method: methodFromInit(init),
+    method,
     body: bodyFromInit(init),
     headers: headersFromInit(init),
     signal: init?.signal ?? undefined,
@@ -288,11 +293,12 @@ function pickServerErrorDetail(body: unknown): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function apiJson(path: string, init?: RequestInit): Promise<any> {
   const transport = getHostTransport()
-  const { pathOnly, query } = requestTarget(path)
+  const method = methodFromInit(init)
+  const { pathOnly, query } = requestTarget(path, method)
   const res = await transport.request({
     path: pathOnly,
     query,
-    method: methodFromInit(init),
+    method,
     body: bodyFromInit(init),
     headers: headersFromInit(init),
     signal: init?.signal ?? undefined,

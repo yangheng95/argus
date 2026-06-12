@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Server } from "../../src/server/server"
 import { clearServerShutdownHandler } from "../../src/server/shutdown"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 
@@ -38,6 +39,46 @@ describe("project-scope middleware: directory required", () => {
     expect(body.name).toBe("DirectoryRequiredError")
     expect(body.data.message).toContain("/tasks")
     expect(body.data.message).toContain("?directory=")
+  })
+
+  test("record-level DELETE /task/:taskID works without ?directory=", async () => {
+    const now = Date.now()
+    const taskID = Identifier.ascending("task")
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: "project-deleted-record",
+          name: "Deleted record project",
+          worktree: "C:/missing/deleted-record-project",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: "project-deleted-record",
+          title: "Deleted project task",
+          request: "delete stale record",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+          time_completed: now,
+        })
+        .run()
+    })
+
+    const app = Server.App()
+    const response = await app.request(`/task/${taskID}`, { method: "DELETE" })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toBe(true)
+    const row = Database.use((db) =>
+      db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+    )
+    expect(row).toBeUndefined()
   })
 
   test("control-plane POST /shutdown still works without ?directory=", async () => {
