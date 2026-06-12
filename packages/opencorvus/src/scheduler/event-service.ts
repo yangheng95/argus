@@ -169,10 +169,19 @@ export namespace EventService {
   }
 
   async function run(job: typeof EventJobTable.$inferSelect, type: string, now: number) {
+    const fireID = Identifier.ascending("call")
     const sessionID = await SessionWake.wake({
       sessionID: job.session_id ?? undefined,
       prompt: job.prompt,
       agent: job.agent === "default" ? undefined : job.agent,
+      reason: {
+        source: "scheduler.event",
+        jobID: job.id,
+        jobName: job.name,
+        fireID,
+        eventType: type,
+        oneShot: job.one_shot,
+      },
     })
 
     Database.use((db) =>
@@ -189,6 +198,7 @@ export namespace EventService {
 
     log.info("event job triggered session wake", {
       jobId: job.id,
+      fireID,
       name: job.name,
       event: type,
       sessionID,

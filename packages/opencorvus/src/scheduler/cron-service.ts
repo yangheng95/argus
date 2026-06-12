@@ -213,7 +213,8 @@ export namespace CronService {
   }
 
   async function execute(job: typeof CronJobTable.$inferSelect, owner: string, now: number): Promise<void> {
-    log.info("executing cron job", { jobId: job.id, name: job.name, prompt: job.prompt.slice(0, 100) })
+    const fireID = Identifier.ascending("call")
+    log.info("executing cron job", { jobId: job.id, fireID, name: job.name, prompt: job.prompt.slice(0, 100) })
 
     const timer = setInterval(() => {
       try {
@@ -232,6 +233,14 @@ export namespace CronService {
       sessionID: job.session_id ?? undefined,
       prompt: job.prompt,
       agent: job.agent === "default" ? undefined : job.agent,
+      reason: {
+        source: "scheduler.cron",
+        jobID: job.id,
+        jobName: job.name,
+        fireID,
+        expression: job.expression,
+        oneShot: job.one_shot,
+      },
     }).finally(() => {
       clearInterval(timer)
     })
@@ -254,6 +263,7 @@ export namespace CronService {
       )
       log.info("cron job triggered session wake", {
         jobId: job.id,
+        fireID,
         name: job.name,
         sessionID,
         nextRun: "disabled",
@@ -279,6 +289,7 @@ export namespace CronService {
     )
     log.info("cron job triggered session wake", {
       jobId: job.id,
+      fireID,
       name: job.name,
       sessionID,
       nextRun: new Date(nextRun).toISOString(),

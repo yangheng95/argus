@@ -7,6 +7,9 @@ import { Agent } from "@/agent/agent"
 import { SessionContext } from "./context"
 import { EffectiveConfig } from "@/config/effective"
 import { SessionAgentIdentity } from "./agent-identity"
+import { SessionControl } from "./control"
+import { Database } from "@/storage/db"
+import z from "zod"
 
 /**
  * Session wake mechanism.
@@ -21,15 +24,56 @@ import { SessionAgentIdentity } from "./agent-identity"
 export namespace SessionWake {
   const log = Log.create({ service: "session.wake" })
 
+  export const WakeReason = z.discriminatedUnion("source", [
+    z.object({
+      source: z.literal("mission.operator"),
+      missionID: z.string().optional(),
+    }),
+    z.object({
+      source: z.literal("mission.child_task_result"),
+      missionID: z.string().optional(),
+      taskID: z.string(),
+      taskStatus: z.enum(["completed", "failed", "cancelled"]),
+    }),
+    z.object({
+      source: z.literal("scheduler.cron"),
+      jobID: z.string(),
+      jobName: z.string(),
+      fireID: z.string(),
+      expression: z.string(),
+      oneShot: z.boolean(),
+    }),
+    z.object({
+      source: z.literal("scheduler.event"),
+      jobID: z.string(),
+      jobName: z.string(),
+      fireID: z.string(),
+      eventType: z.string(),
+      oneShot: z.boolean(),
+    }),
+    z.object({
+      source: z.literal("scheduler.task_queue"),
+      queueTaskID: z.string().optional(),
+      queueSource: z.string().optional(),
+    }),
+  ])
+  export type WakeReason = z.infer<typeof WakeReason>
+
   export interface WakeInput {
     /** Existing session ID to wake. If omitted, creates a new session. */
     sessionID?: string
     /** The prompt to append as the next session message. */
     prompt: string
+    /** Structured reason used to audit why this session was woken. */
+    reason: WakeReason
     /** Agent name. If omitted, uses Agent.defaultAgent(). */
     agent?: string
     /** Model override. If omitted, uses the configured default model. */
     model?: { providerID: string; modelID: string }
+  }
+
+  export function reasonExtra(reason: WakeReason): { wake_reason: WakeReason } {
+    return { wake_reason: WakeReason.parse(reason) }
   }
 
   /**
@@ -37,6 +81,7 @@ export namespace SessionWake {
    * Returns the session ID (existing or newly created).
    */
   export async function wake(input: WakeInput): Promise<string> {
+    const reason = WakeReason.parse(input.reason)
     // Resolve or create session
     let sessionID = input.sessionID
     let session: Session.Info
@@ -69,28 +114,49 @@ export namespace SessionWake {
 
     return SessionContext.provide(session, async () => {
       const model = await resolveModel(agent, sessionID, input.model)
+      const messageID = Identifier.ascending("message")
+      const partID = Identifier.ascending("part")
 
-      const msg = await Session.updateMessage({
-        id: Identifier.ascending("message"),
+      const msg = {
+        id: messageID,
         role: "user",
         sessionID,
         time: { created: Date.now() },
         agent,
         model,
-      })
-      await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: msg.id,
-        sessionID,
-        type: "text",
-        text: input.prompt,
-        time: {
-          start: Date.now(),
-          end: Date.now(),
-        },
+        extra: reasonExtra(reason),
+      } satisfies Parameters<typeof Session.updateMessage>[0]
+      Database.transaction(() => {
+        Session.persistMessage({
+          info: msg,
+          parts: [
+            {
+              id: partID,
+              messageID,
+              sessionID,
+              type: "text",
+              text: input.prompt,
+              time: {
+                start: Date.now(),
+                end: Date.now(),
+              },
+            },
+          ],
+          touchSessionID: sessionID,
+        })
+        SessionControl.create({
+          sessionID,
+          kind: "wake_reason",
+          status: "consumed",
+          owner: reason.source,
+          payload: {
+            messageID,
+            wake_reason: reason,
+          },
+        })
       })
 
-      log.info("injected wake message", { sessionID, messageID: msg.id })
+      log.info("injected wake message", { sessionID, messageID: msg.id, wakeReason: reason.source })
 
       // Start the session loop.
       //

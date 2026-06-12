@@ -8,6 +8,9 @@ import { SessionWake } from "../../src/session/wake"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Agent } from "../../src/agent/agent"
 import { resetDatabase } from "../fixture/db"
+import { Database, eq } from "../../src/storage/db"
+import { SessionControlRecordTable } from "../../src/session/session.sql"
+import { SessionControl } from "../../src/session/control"
 
 async function seed(sessionID: string) {
   const msg: Message.User = {
@@ -49,6 +52,14 @@ test("wake injects the configured default model instead of inheriting the last s
       await SessionWake.wake({
         sessionID: session.id,
         prompt: "resume scheduled work",
+        reason: {
+          source: "scheduler.cron",
+          jobID: "crn_test",
+          jobName: "test cron",
+          fireID: "cal_test",
+          expression: "1m",
+          oneShot: false,
+        },
       })
 
       expect(loop).toHaveBeenCalled()
@@ -66,6 +77,31 @@ test("wake injects the configured default model instead of inheriting the last s
       expect(text?.type).toBe("text")
       if (text?.type !== "text") throw new Error("expected text part")
       expect(text.text).toBe("resume scheduled work")
+      expect(last.info.extra?.wake_reason).toEqual({
+        source: "scheduler.cron",
+        jobID: "crn_test",
+        jobName: "test cron",
+        fireID: "cal_test",
+        expression: "1m",
+        oneShot: false,
+      })
+      const controls = Database.use((db) =>
+        db
+          .select()
+          .from(SessionControlRecordTable)
+          .where(eq(SessionControlRecordTable.session_id, session.id))
+          .all(),
+      )
+      expect(controls).toHaveLength(1)
+      expect(controls[0]?.kind).toBe("wake_reason")
+      expect(controls[0]?.status).toBe("consumed")
+      expect(controls[0]?.owner).toBe("scheduler.cron")
+      expect(typeof controls[0]?.time_consumed).toBe("number")
+      expect(controls[0]?.payload).toEqual({
+        messageID: last.info.id,
+        wake_reason: last.info.extra?.wake_reason,
+      })
+      expect(SessionControl.pending(session.id)).toEqual([])
     },
   })
 })
@@ -98,6 +134,14 @@ test("wake resolves the session agent model through the single resolver", async 
         sessionID: session.id,
         agent: "explore",
         prompt: "resume explore",
+        reason: {
+          source: "scheduler.event",
+          jobID: "crn_evt",
+          jobName: "event job",
+          fireID: "cal_evt",
+          eventType: "test.event",
+          oneShot: false,
+        },
       })
 
       expect(loop).toHaveBeenCalled()
@@ -133,6 +177,10 @@ test("wake preserves agent-owned mission session identity", async () => {
         sessionID: session.id,
         agent: "coding",
         prompt: "resume mission",
+        reason: {
+          source: "mission.operator",
+          missionID: "mis_test",
+        },
       })
 
       expect(loop).toHaveBeenCalled()
@@ -169,6 +217,14 @@ test("wake rejects runtime-required agents before writing an unresumable message
           sessionID: session.id,
           agent: "build",
           prompt: "resume build",
+          reason: {
+            source: "scheduler.cron",
+            jobID: "crn_reject",
+            jobName: "reject",
+            fireID: "cal_reject",
+            expression: "1m",
+            oneShot: true,
+          },
         }),
       ).rejects.toThrow("runtime-required agent/session")
 

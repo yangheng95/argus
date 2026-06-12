@@ -33,7 +33,7 @@ describe("runAgentSession terminal tool missing detection", () => {
     ).toBeNull()
   })
 
-  test("does not convert missing terminal tool errors into recovery turns", async () => {
+  test("exposes matching terminal misses for visible continuation classification", async () => {
     const err = new Message.TerminalToolMissingError({
       message: "missing report",
       toolName: "report_build_result",
@@ -47,4 +47,5 @@ describe("runAgentSession terminal tool missing detection", () => {
       })?.message,
     ).toBe("missing report")
   })
+
 })

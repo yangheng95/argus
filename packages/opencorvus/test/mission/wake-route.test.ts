@@ -61,6 +61,10 @@ describe("POST /mission/wake — happy path", () => {
         expect(wakeSpy).toHaveBeenCalledTimes(1)
         expect(wakeSpy.mock.calls[0]?.[0]?.agent).toBe("mission")
         expect(wakeSpy.mock.calls[0]?.[0]?.prompt).toBe("kick off the TV replay mission")
+        expect(wakeSpy.mock.calls[0]?.[0]?.reason).toEqual({
+          source: "mission.operator",
+          missionID: body.missionID,
+        })
       },
     })
   })

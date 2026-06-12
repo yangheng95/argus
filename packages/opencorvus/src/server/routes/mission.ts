@@ -315,6 +315,10 @@ export function MissionRoutes() {
           sessionID: session.id,
           prompt: input.text,
           agent: "mission",
+          reason: {
+            source: "mission.operator",
+            missionID,
+          },
         })
         return c.json(
           MissionWakeResult.parse({

@@ -168,6 +168,12 @@ describe("task terminal lineage notifications", () => {
           expect.objectContaining({
             sessionID: mission.id,
             agent: "mission",
+            reason: {
+              source: "mission.child_task_result",
+              missionID: mission.missionID,
+              taskID,
+              taskStatus: "failed",
+            },
             prompt: expect.stringContaining("Mission task terminal update."),
           }),
         )

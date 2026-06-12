@@ -988,6 +988,12 @@ export namespace EngineService {
       await SessionWake.wake({
         sessionID: mission.session_id,
         agent: "mission",
+        reason: {
+          source: "mission.child_task_result",
+          missionID: mission.id,
+          taskID: task.id,
+          taskStatus: input.status,
+        },
         prompt: terminalTaskNotificationText({
           task,
           status: input.status,
