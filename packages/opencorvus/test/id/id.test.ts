@@ -131,6 +131,20 @@ describe("Identifier.schema", () => {
       expect(schema.safeParse(id).success).toBe(true)
     }
   })
+
+  test("validates goal_run as short UUID4-first-8 only", () => {
+    const schema = Identifier.schema("goal_run")
+    expect(schema.safeParse("1234abcd").success).toBe(true)
+    expect(schema.safeParse("glr_000000000000AAAAAAAAAAAAAA").success).toBe(false)
+  })
+})
+
+describe("Identifier.uuid4First8", () => {
+  test("returns exactly the first UUID4 segment shape", () => {
+    const id = Identifier.uuid4First8()
+    expect(id).toMatch(/^[0-9a-f]{8}$/)
+    expect(id).not.toContain("_")
+  })
 })
 
 describe("Identifier.timestamp", () => {

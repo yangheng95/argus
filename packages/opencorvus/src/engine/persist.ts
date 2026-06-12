@@ -1040,7 +1040,7 @@ export function createGoalRun(input: {
   if (liveTips.length > 0) {
     return liveTips[0]!
   }
-  const id = Identifier.ascending("goal_run")
+  const id = Identifier.uuid4First8()
   const now = input.now ?? Date.now()
   const payload = {
     goal_id: input.goalID,
@@ -1327,7 +1327,7 @@ function appendGoalRunArtifact(input: {
     db
       .insert(EngineArtifactTable)
       .values({
-        id: Identifier.ascending("goal_run"),
+        id: Identifier.uuid4First8(),
         task_id: merged.task_id,
         run_id: merged.coordinator_run_id,
         goal_run_id: input.goalRunID,
@@ -2062,7 +2062,7 @@ export function beginBuildAttempt(input: {
   }>
   now?: number
 }): string {
-  const id = Identifier.ascending("goal_run")
+  const id = Identifier.uuid4First8()
   const now = input.now ?? Date.now()
   const goal = findGoal(input.goalID)
   if (!goal) {

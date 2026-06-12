@@ -1,5 +1,5 @@
 import z from "zod"
-import { randomBytes } from "crypto"
+import { randomBytes, randomUUID } from "crypto"
 
 export namespace Identifier {
   const prefixes = {
@@ -53,6 +53,7 @@ export namespace Identifier {
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {
+    if (prefix === "goal_run") return z.string().regex(/^[0-9a-f]{8}$/)
     return z.string().startsWith(prefixes[prefix])
   }
 
@@ -68,6 +69,13 @@ export namespace Identifier {
 
   export function descending(prefix: keyof typeof prefixes, given?: string) {
     return generateID(prefix, true, given)
+  }
+
+  /** UUID means Universally Unique Identifier. UUID4 is random; use its first
+   *  8 hexadecimal characters only where the product contract explicitly asks
+   *  for short opaque ids instead of sortable prefixed ids. */
+  export function uuid4First8(): string {
+    return randomUUID().slice(0, 8)
   }
 
   function generateID(prefix: keyof typeof prefixes, descending: boolean, given?: string): string {
