@@ -65,3 +65,59 @@ not a second launch path and not caller-specific fallback behavior.
 - Run `bun test packages/opencorvus/test/browser/runtime.test.ts`.
 - Manually verify WSL smoke:
   `/home/yangheng/.local/bin/google-chrome --headless=new --no-sandbox --disable-gpu --dump-dom ...`
+
+## 2026-06-13 Proxy Propagation Revision
+
+### Problem
+
+After browser executable discovery was fixed, the first TradingView extraction
+still failed in `phase=navigate`:
+
+`page.goto: Timeout 60000ms exceeded` for
+`https://www.tradingview.com/markets/world-economy/`.
+
+Evidence:
+
+- WSL `curl` with `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY` reached TradingView and
+  returned HTTP 200 quickly.
+- WSL `curl` with those proxy variables removed timed out.
+- The running backend process had no proxy variables in `/proc/<pid>/environ`.
+- Browser MCP / webpage sidecars had independent handwritten Chromium launch
+  args, so even a configured browser proxy was not a shared runtime behavior.
+
+### Call Point Inventory
+
+Browser launch args are centralized through
+`packages/opencorvus/src/browser/runtime/index.ts` and passed into these browser
+sidecars:
+
+- `packages/opencorvus/src/mcp/browser/sessions.ts`
+- `packages/opencorvus/src/browser/webpage/extract.ts`
+- `packages/opencorvus/src/browser/webpage/render.ts`
+- `packages/opencorvus/src/browser/webpage/runtime-state.ts`
+- `packages/opencorvus/src/browser-preview/evidence-runner.ts`
+- `packages/opencorvus/src/browser-preview/live.ts`
+- `packages/opencorvus/src/frontend-design/capture-gate.ts`
+- `packages/opencorvus/src/acceptance/checks/walkthrough/run.ts`
+- `packages/opencorvus/src/runtime/visual-page.ts`
+
+### Decision
+
+Extend the same `BrowserRuntime.defaultLaunchArgs()` single source to include
+Chromium proxy arguments derived from `BROWSER_PROXY`, `HTTPS_PROXY`,
+`HTTP_PROXY`, or `ALL_PROXY`, with `BROWSER_PROXY` taking precedence. Raw Node
+sidecars receive the resolved launch args in their payload instead of rebuilding
+browser args locally.
+
+This is not a fallback path: it is deterministic propagation of the configured
+process proxy into the browser runtime that performs network navigation.
+
+### Verification
+
+- Add unit coverage for proxy launch args and `BROWSER_PROXY` precedence.
+- Run `bun test packages/opencorvus/test/browser/runtime.test.ts`.
+- Run targeted typecheck for `packages/opencorvus`.
+- Rebuild the Linux binary and confirm the bundled browser MCP contains the
+  proxy launch argument logic.
+- Restart the WSL backend from a shell that loads the WSL proxy profile so the
+  server and its browser sidecars inherit `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY`.

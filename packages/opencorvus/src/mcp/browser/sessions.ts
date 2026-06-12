@@ -122,6 +122,7 @@ const acquireBrowser = async (): Promise<Browser> => {
   if (!browserLaunch) {
     browserLaunch = BrowserRuntime.launchPlaywrightBrowserInNodeProcess({
       headless: HEADLESS,
+      proxyServer: PROXY_SERVER,
     })
       .then((launched) => {
         browser = launched

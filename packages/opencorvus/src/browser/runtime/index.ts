@@ -96,6 +96,7 @@ export namespace BrowserRuntime {
     headless: boolean
     executablePath?: string
     args?: string[]
+    proxyServer?: string
     timeoutMs?: number
   }): Promise<any> {
     if (typeof Bun !== "undefined") {
@@ -112,7 +113,7 @@ export namespace BrowserRuntime {
       return await chromium.launch({
         executablePath,
         headless: input.headless,
-        args: input.args ?? defaultLaunchArgs(),
+        args: input.args ?? defaultLaunchArgs({ proxyServer: input.proxyServer }),
         timeout: resolveBrowserLaunchTimeoutMs(input.timeoutMs),
       })
     } catch (error) {
@@ -129,8 +130,56 @@ export namespace BrowserRuntime {
     }
   }
 
-  export function defaultLaunchArgs() {
-    return ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--disable-remote-fonts"]
+  export function defaultLaunchArgs(input?: {
+    env?: NodeJS.ProcessEnv
+    extraArgs?: readonly string[]
+    proxyServer?: string
+  }) {
+    return uniqueCandidates([
+      "--no-sandbox",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--disable-remote-fonts",
+      ...resolveBrowserProxyLaunchArgs({
+        env: input?.env,
+        proxyServer: input?.proxyServer,
+      }),
+      ...(input?.extraArgs ?? []),
+    ])
+  }
+
+  export function resolveBrowserProxyLaunchArgs(input?: { env?: NodeJS.ProcessEnv; proxyServer?: string }): string[] {
+    const env = input?.env ?? process.env
+    const proxyServer = normalizeProxyServer(input?.proxyServer ?? resolveBrowserProxyServer(env))
+    if (!proxyServer) return []
+
+    const args = [`--proxy-server=${proxyServer}`]
+    const bypassList = resolveBrowserProxyBypassList(env)
+    if (bypassList) args.push(`--proxy-bypass-list=${bypassList}`)
+    return args
+  }
+
+  export function resolveBrowserProxyServer(env: NodeJS.ProcessEnv = process.env): string | undefined {
+    return firstNonBlank([
+      env.BROWSER_PROXY,
+      env.HTTPS_PROXY,
+      env.https_proxy,
+      env.HTTP_PROXY,
+      env.http_proxy,
+      env.ALL_PROXY,
+      env.all_proxy,
+    ])
+  }
+
+  export function resolveBrowserProxyBypassList(env: NodeJS.ProcessEnv = process.env): string {
+    const noProxy = firstNonBlank([env.NO_PROXY, env.no_proxy])
+    const tokens = noProxy
+      ? noProxy
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : ["localhost", "127.0.0.1", "::1", "*.local"]
+    return tokens.join(";")
   }
 
   export function resolveBrowserExecutableCandidates(input?: {
@@ -261,6 +310,21 @@ export namespace BrowserRuntime {
 
   function pathListDelimiter(platform: NodeJS.Platform): string {
     return platform === "win32" ? ";" : ":"
+  }
+
+  function normalizeProxyServer(value: string | undefined): string | undefined {
+    const trimmed = value?.trim()
+    if (!trimmed) return undefined
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed
+    return `http://${trimmed}`
+  }
+
+  function firstNonBlank(values: readonly (string | undefined)[]): string | undefined {
+    for (const value of values) {
+      const trimmed = value?.trim()
+      if (trimmed) return trimmed
+    }
+    return undefined
   }
 
   function uniqueCandidates(candidates: readonly string[]): string[] {

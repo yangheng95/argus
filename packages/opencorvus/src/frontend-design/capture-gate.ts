@@ -286,7 +286,7 @@ async function captureBrowserEvidenceViaNode(input: {
   >({
     runtime,
     script: NODE_CAPTURE_SCRIPT,
-    payload: { ...input, executablePath, launchTimeoutMs },
+    payload: { ...input, executablePath, launchArgs: BrowserRuntime.defaultLaunchArgs(), launchTimeoutMs },
     payloadEnvName: "OPENCORVUS_CAPTURE_INPUT",
     hardTimeoutMs,
     label: "Node browser capture",
@@ -338,7 +338,7 @@ async function main() {
       executablePath: input.executablePath,
       headless: true,
       timeout: input.launchTimeoutMs,
-      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+      args: input.launchArgs,
     });
     const context = await browser.newContext({
       viewport: { width: input.viewport.width, height: input.viewport.height },

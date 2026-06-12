@@ -690,6 +690,7 @@ type NodeExtractInput = {
   executablePath: string
   nodeExecutable: string
   playwrightRequirePath: string
+  launchArgs: string[]
   launchTimeoutMs: number
   navigationTimeoutMs: number
   browserExtractSource: string
@@ -760,6 +761,13 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       executablePath: chromePath,
       nodeExecutable: sidecarRuntime.nodeExecutable,
       playwrightRequirePath: sidecarRuntime.playwrightRequirePath,
+      launchArgs: BrowserRuntime.defaultLaunchArgs({
+        extraArgs: [
+          "--disable-extensions",
+          "--disable-background-networking",
+          `--window-size=${viewport.width},${viewport.height}`,
+        ],
+      }),
       launchTimeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(),
       navigationTimeoutMs: 60_000,
       browserExtractSource: browserExtract.toString(),
@@ -923,14 +931,7 @@ async function main() {
       executablePath: input.executablePath,
       headless: true,
       timeout: input.launchTimeoutMs,
-      args: [
-        "--no-sandbox",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "--disable-extensions",
-        "--disable-background-networking",
-        "--window-size=" + input.viewport.width + "," + input.viewport.height,
-      ],
+      args: input.launchArgs,
     });
     const context = await browser.newContext({
       viewport: input.viewport,
