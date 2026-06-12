@@ -185,7 +185,7 @@ describe("mission routes", () => {
         })
         const goalID = Identifier.ascending("goal")
         const runID = Identifier.ascending("run")
-        const goalRunID = Identifier.ascending("goal_run")
+        const goalRunID = Identifier.uuid4First8()
         Database.use((db) => {
           db.insert(EngineGoalTable)
             .values({

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { Database } from "../../src/storage/db"
+import { and, Database, desc, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { beginBuildAttempt, createGoalRun, startNewAttempt } from "../../src/engine/persist"
+import { beginBuildAttempt, createGoalRun, startNewAttempt, updateGoalRun } from "../../src/engine/persist"
 import { goalStatusByID } from "../../src/engine/describe"
 import { processOwner } from "../../src/engine/lease"
 import { findLatestTipGoalRun, findGoalRun, listGoalRunsByGoal } from "../../src/engine/store"
@@ -27,6 +27,7 @@ let projectID = ""
 let taskID = ""
 let runID = ""
 let goalID = ""
+const SHORT_UUID4_FIRST8 = /^[0-9a-f]{8}$/
 
 function seedBaseline() {
   const now = Date.now()
@@ -230,11 +231,56 @@ describe("beginBuildAttempt — supersede_of population", () => {
       sessionID: "ses_bba_first",
     })
 
+    expect(newRunID).toMatch(SHORT_UUID4_FIRST8)
     const newRow = findGoalRun(newRunID)
     expect(newRow?.status).toBe("running")
     expect(newRow?.supersede_of).toBeNull()
     expect(findLatestTipGoalRun(goalID)?.id).toBe(newRunID)
     expect(goalStatusByID(goalID)).toBe("running")
+
+    const artifact = Database.use((db) =>
+      db
+        .select({
+          id: EngineArtifactTable.id,
+          goalRunID: EngineArtifactTable.goal_run_id,
+        })
+        .from(EngineArtifactTable)
+        .where(and(eq(EngineArtifactTable.kind, "goal_run_attempt"), eq(EngineArtifactTable.goal_run_id, newRunID)))
+        .get(),
+    )
+    expect(artifact?.id).toBe(newRunID)
+    expect(artifact?.goalRunID).toBe(newRunID)
+  })
+
+  test("createGoalRun and appendGoalRunArtifact use short UUID4-first-8 ids", () => {
+    const row = createGoalRun({
+      taskID,
+      goalID,
+      coordinatorRunID: runID,
+    })
+
+    expect(row.id).toMatch(SHORT_UUID4_FIRST8)
+    expect(findGoalRun(row.id)?.id).toBe(row.id)
+
+    updateGoalRun(row.id, {
+      status: "completed",
+      time_completed: Date.now(),
+    })
+
+    const artifacts = Database.use((db) =>
+      db
+        .select({
+          id: EngineArtifactTable.id,
+          goalRunID: EngineArtifactTable.goal_run_id,
+        })
+        .from(EngineArtifactTable)
+        .where(and(eq(EngineArtifactTable.kind, "goal_run_attempt"), eq(EngineArtifactTable.goal_run_id, row.id)))
+        .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+        .all(),
+    )
+    expect(artifacts.length).toBeGreaterThanOrEqual(2)
+    expect(artifacts[0]?.id).toMatch(SHORT_UUID4_FIRST8)
+    expect(artifacts[0]?.goalRunID).toBe(row.id)
   })
 
   test("live tip → beginBuildAttempt refuses to supersede or duplicate the running executor", () => {
