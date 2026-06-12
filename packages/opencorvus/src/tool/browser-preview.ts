@@ -1,5 +1,7 @@
 import z from "zod"
 import { persistBrowserPreviewTarget } from "@/browser-preview/persist"
+import { deriveBrowserPreviewUrlsFromDevServerCommand } from "@/browser-preview/dev-server-command"
+import { extractBrowserPreviewUrlsFromText, persistBrowserPreviewUrls } from "@/browser-preview/extract"
 import { waitForBrowserPreviewUrlReachable } from "@/browser-preview/liveness"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "@/browser-preview/target"
 import { Instance } from "@/project/instance"
@@ -8,7 +10,7 @@ import { Tool } from "./tool"
 
 const DEFAULT_PREVIEW_SERVICE_DESCRIPTION = "Start browser preview service"
 
-const BrowserPreviewToolParameters = z.object({
+export const BrowserPreviewToolParameters = z.object({
   command: z
     .string()
     .min(1)
@@ -39,7 +41,7 @@ const BrowserPreviewToolParameters = z.object({
     .describe("Optional concise label for the service startup command.")
     .optional(),
 })
-type BrowserPreviewToolParameters = z.infer<typeof BrowserPreviewToolParameters>
+export type BrowserPreviewToolParameters = z.infer<typeof BrowserPreviewToolParameters>
 
 export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx) => {
   const bash = await BashTool.init(initCtx)
@@ -80,6 +82,14 @@ export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx)
           explicitUrlDiagnostic = `Explicit preview URL was not reachable: ${explicitUrl}`
         }
       }
+      const startupOutput = typeof startup.metadata.output === "string" ? startup.metadata.output : ""
+      const startupTargets = await persistBrowserPreviewUrls({
+        taskID,
+        urls: [
+          ...extractBrowserPreviewUrlsFromText(startupOutput),
+          ...deriveBrowserPreviewUrlsFromDevServerCommand(params.command),
+        ],
+      })
 
       const target = await resolveBrowserPreviewTarget({
         projectRoot: Instance.directory,
@@ -98,6 +108,7 @@ export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx)
           source: target.source,
         },
         explicitUrlPersisted,
+        startupTargets: startupTargets.map((item) => ({ id: item.id, url: item.url })),
         diagnostics: [
           ...target.diagnostics,
           ...(explicitUrlDiagnostic ? [explicitUrlDiagnostic] : []),
@@ -113,11 +124,11 @@ export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx)
           output: startup.metadata.output,
           pid: payload.pid,
           background: true as const,
-          browserPreviewOutputScanned: true as const,
           targetID: target.id,
           targetUrl: target.url,
           targetStatus: target.status,
           explicitUrlPersisted,
+          startupTargets: startupTargets.map((item) => item.id),
         },
       }
     },

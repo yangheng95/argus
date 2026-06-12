@@ -8,6 +8,7 @@ import { renderUserRequestSection } from "@/intent/request-prompt"
 import { Log } from "@/util/log"
 import type { Tool } from "@/tool/tool"
 import { BashTool } from "@/tool/bash"
+import { BrowserPreviewTool } from "@/tool/browser-preview"
 import { EditTool } from "@/tool/edit"
 import { WriteTool } from "@/tool/write"
 import { ApplyPatchTool } from "@/tool/apply_patch"
@@ -171,6 +172,7 @@ async function createVisualQaContextTools(input: { taskID?: string; sessionID?: 
 
 async function createVisualQaImplementationTools(input: { taskID?: string; signal?: AbortSignal }): Promise<ToolSet> {
   const tools = {
+    browser_preview: await createVisualQaTool(BrowserPreviewTool, input),
     bash: await createVisualQaTool(BashTool, input),
     edit: await createVisualQaTool(EditTool, input),
     write: await createVisualQaTool(WriteTool, input),

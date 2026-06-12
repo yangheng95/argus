@@ -22,6 +22,7 @@ const baseCtx = {
   metadata: () => {},
   ask: async () => {},
 }
+const BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS = 30_000
 
 afterEach(async () => {
   await resetDatabase()
@@ -78,7 +79,7 @@ describe("tool.browser_preview", () => {
         await expect(ToolRegistry.ids()).resolves.toContain("browser_preview")
       },
     })
-  })
+  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
 
   test("starts a background service and opens preview from printed process URL", async () => {
     const preview = await startReachablePreviewServer()
@@ -129,7 +130,7 @@ describe("tool.browser_preview", () => {
     } finally {
       await preview.close()
     }
-  })
+  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
 
   test("starts a background service and opens preview from explicit URL", async () => {
     const preview = await startReachablePreviewServer()
@@ -174,7 +175,51 @@ describe("tool.browser_preview", () => {
     } finally {
       await preview.close()
     }
-  })
+  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
+
+  test("starts a background service and opens preview from command port", async () => {
+    const preview = await startReachablePreviewServer()
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const url = new URL(preview.url)
+          const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+            pid: 9103,
+            stdin: null,
+            stdout: new PassThrough(),
+            stderr: new PassThrough(),
+            exited: new Promise<number>(() => {}),
+            terminate: async () => {},
+            dispose: async () => {},
+            unref: () => {},
+          }))
+          try {
+            const tool = await BrowserPreviewTool.init()
+            const result = await tool.execute(
+              {
+                command: `npx vite --host 127.0.0.1 --port ${url.port}`,
+                timeout: 20,
+                leaseTimeout: 200,
+              },
+              { ...baseCtx, extra: { taskID } },
+            )
+            const payload = JSON.parse(result.output)
+
+            expect(result.metadata.targetUrl).toBe(preview.url)
+            expect(payload.startupTargets).toEqual([{ id: result.metadata.targetID, url: preview.url }])
+            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+          } finally {
+            restore()
+          }
+        },
+      })
+    } finally {
+      await preview.close()
+    }
+  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
 
   test("requires a task context before starting a preview service", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -194,5 +239,5 @@ describe("tool.browser_preview", () => {
         ).rejects.toThrow("requires a task context")
       },
     })
-  })
+  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
 })

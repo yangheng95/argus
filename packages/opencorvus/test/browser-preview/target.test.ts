@@ -4,10 +4,9 @@ import path from "node:path"
 import z from "zod"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import {
-  createBrowserPreviewProcessOutputMaterializer,
   extractBrowserPreviewUrlFromText,
   extractBrowserPreviewUrlsFromText,
-  persistBrowserPreviewTargetFromProcessOutput,
+  persistBrowserPreviewUrls,
 } from "../../src/browser-preview/extract"
 import { findRecentBrowserPreviewTargets, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
@@ -109,7 +108,7 @@ describe("browser preview target resolver", () => {
     expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.id)).toEqual([first.id])
   })
 
-  test("generic tool output materializes browser preview candidates", async () => {
+  test("generic tool output does not materialize browser preview candidates", async () => {
     await using tmp = await tmpdir()
     const preview = Bun.serve({
       hostname: "127.0.0.1",
@@ -149,13 +148,13 @@ describe("browser preview target resolver", () => {
         },
       )
 
-      expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([previewUrl])
+      expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([])
     } finally {
       preview.stop(true)
     }
   })
 
-  test("browser MCP navigation result materializes a task preview target", async () => {
+  test("explicit preview URL persistence materializes a task preview target", async () => {
     await using tmp = await tmpdir()
     const preview = Bun.serve({
       hostname: "127.0.0.1",
@@ -170,13 +169,9 @@ describe("browser preview target resolver", () => {
     try {
       const previewUrl = `http://127.0.0.1:${preview.port}/world-economy/`
 
-      await persistBrowserPreviewTargetFromProcessOutput({
+      await persistBrowserPreviewUrls({
         taskID,
-        output: JSON.stringify({
-          url: previewUrl,
-          title: "World Economy",
-          loadStatus: "full",
-        }),
+        urls: [previewUrl],
       })
 
       expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([previewUrl])
@@ -185,72 +180,24 @@ describe("browser preview target resolver", () => {
     }
   })
 
-  test("streaming process output materializer persists URLs split across chunks once", async () => {
-    await using tmp = await tmpdir()
-    const taskID = await seedTask(tmp.path)
-    const materializer = createBrowserPreviewProcessOutputMaterializer({
-      taskID,
-      probe: async () => true,
-    })
-
-    expect(await materializer.ingest("dev server ready at http://127.0.")).toEqual([])
-    const persisted = await materializer.ingest("0.1:5173/app\n")
-    await materializer.flush()
-    await materializer.ingest("again http://127.0.0.1:5173/app\n")
-    await materializer.flush()
-
-    expect(persisted.map((target) => target.url)).toEqual(["http://127.0.0.1:5173/app"])
-    expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([
-      "http://127.0.0.1:5173/app",
-    ])
-  })
-
-  test("streaming process output materializer retries a URL after an unreachable probe", async () => {
+  test("explicit preview URL persistence retries a URL after an unreachable probe", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
     let probeCount = 0
-    const materializer = createBrowserPreviewProcessOutputMaterializer({
+    const input = {
       taskID,
+      urls: ["http://127.0.0.1:5173/app"],
       probe: async () => ++probeCount >= 2,
-    })
+    }
 
-    expect(await materializer.ingest("Local: http://127.0.0.1:5173/app\n")).toEqual([])
-    const persisted = await materializer.ingest("Local: http://127.0.0.1:5173/app\n")
-    await materializer.flush()
+    expect(await persistBrowserPreviewUrls(input)).toEqual([])
+    const persisted = await persistBrowserPreviewUrls(input)
 
     expect(probeCount).toBe(2)
     expect(persisted.map((target) => target.url)).toEqual(["http://127.0.0.1:5173/app"])
     expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([
       "http://127.0.0.1:5173/app",
     ])
-  })
-
-  test("streaming process output materializer derives a reachable target from frontend dev command port", async () => {
-    await using tmp = await tmpdir()
-    const taskID = await seedTask(tmp.path)
-    const materializer = createBrowserPreviewProcessOutputMaterializer({
-      taskID,
-      command: "npx rsbuild dev --port 5173",
-      probe: async () => true,
-    })
-
-    await materializer.flush()
-
-    expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual(["http://127.0.0.1:5173/"])
-  })
-
-  test("streaming process output materializer ignores non-frontend command ports", async () => {
-    await using tmp = await tmpdir()
-    const taskID = await seedTask(tmp.path)
-    const materializer = createBrowserPreviewProcessOutputMaterializer({
-      taskID,
-      command: "pytest --port 5173",
-      probe: async () => true,
-    })
-
-    await materializer.flush()
-
-    expect(findRecentBrowserPreviewTargets(taskID)).toEqual([])
   })
 
   test("persisting a preview target emits a task update event for overlay refresh", async () => {

@@ -13,8 +13,6 @@ import { ProcessSupervisor } from "@/shell/process-supervisor"
 import { SessionPromptState } from "./prompt/state"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 import { SessionContext } from "./context"
-import { createBrowserPreviewProcessOutputMaterializer } from "@/browser-preview/extract"
-import { taskIDForSession } from "@/orchestrator/task-event"
 
 export namespace SessionShell {
   const { log, state, start, cancel } = SessionPromptState
@@ -174,15 +172,9 @@ export namespace SessionShell {
     })
 
     let output = ""
-    const previewTargetMaterializer = createBrowserPreviewProcessOutputMaterializer({
-      taskID: taskIDForSession(input.sessionID),
-      command: input.command,
-    })
-
     supervisor.stdout?.on("data", (chunk) => {
       const text = chunk.toString()
       output += text
-      void previewTargetMaterializer.ingest(text)
       if (part.state.status === "running") {
         part.state.metadata = {
           output: output,
@@ -195,7 +187,6 @@ export namespace SessionShell {
     supervisor.stderr?.on("data", (chunk) => {
       const text = chunk.toString()
       output += text
-      void previewTargetMaterializer.ingest(text)
       if (part.state.status === "running") {
         part.state.metadata = {
           output: output,
@@ -225,7 +216,6 @@ export namespace SessionShell {
       await supervisor.exited
     } finally {
       abort.removeEventListener("abort", abortHandler)
-      await previewTargetMaterializer.flush()
       await supervisor.dispose()
     }
 

@@ -76,7 +76,7 @@ Evidence requirements:
 - Do not pass on intent summaries alone.
 - Do not accept grep/listing-only proof when runtime behavior is material.
 - Do not accept visual/runtime evidence from a localhost server whose current worktree provenance is unproven.
-  If a dev or preview URL may be stale, launch the app from the reviewed repository root and use the URL printed by that process before judging runtime or visual fidelity.
+  If a dev or preview URL may be stale, call `browser_preview` from the reviewed repository root to start the app and persist the task-scoped preview target before judging runtime or visual fidelity. Do not expect ordinary command output to update preview state.
 - If a potentially blocking disagreement remains unresolved, the final verdict
   cannot be pass.
 

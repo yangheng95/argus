@@ -22,6 +22,7 @@ describe("visual-qa agent", () => {
         VisualQaTestHooks.assertVisualQaStaticToolSurface(tools)
         expect(Object.keys(tools).sort()).toEqual([...VISUAL_QA_SESSION_TOOL_IDS].sort())
         expect(Object.keys(tools)).toContain("skill")
+        expect(Object.keys(tools)).toContain("browser_preview")
         expect(Object.keys(tools)).toContain("webpage_render")
         expect(Object.keys(tools)).not.toContain("webpage_extract")
       },

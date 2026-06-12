@@ -73,6 +73,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.visual_qa.description).toContain("webpage_render/evaluate/text_diff/vision_judge")
     expect(tools.visual_qa.description).toContain("does NOT acquire new webpage clone evidence")
     expect(tools.visual_qa.description).toContain("NOT the final acceptance gate")
+
+    expect(tools.browser_preview.description).toContain("Explicitly start a long-lived frontend preview service")
+    expect(tools.browser_preview.description).toContain("ordinary command output does not update preview targets")
   })
 
   test("frontend tool schemas expose one registered field per tool input", () => {
@@ -101,5 +104,16 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(Object.keys(tools.visual_qa.inputSchema!.shape)).toEqual(["reason", "focus", "app_url", "preview_command"])
     expect(tools.visual_qa.inputSchema!.safeParse({ reason: "need fresh visual evidence" }).success).toBe(true)
     expect(tools.visual_qa.inputSchema!.safeParse({ focus: "mobile" }).success).toBe(false)
+
+    expect(Object.keys(tools.browser_preview.inputSchema!.shape)).toEqual([
+      "command",
+      "workdir",
+      "url",
+      "timeout",
+      "leaseTimeout",
+      "description",
+    ])
+    expect(tools.browser_preview.inputSchema!.safeParse({ command: "npm run dev" }).success).toBe(true)
+    expect(tools.browser_preview.inputSchema!.safeParse({ url: "http://127.0.0.1:5173/" }).success).toBe(false)
   })
 })
