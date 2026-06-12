@@ -109,7 +109,7 @@ test("runAgentSession appends config.agent.build.prompt_append after build core"
   expect((promptCalls[0].extra?.workerTurnDescriptor as { id: string }).id).toBe(descriptor?.id)
 })
 
-test("runAgentSession rejects completion when terminal collector is still unsatisfied", async () => {
+test("runAgentSession does not hide-recover when terminal collector is still unsatisfied", async () => {
   mock.module("@/agent/model", () => ({
     resolveAgentModel: async () => ({
       providerID: "test",
@@ -120,10 +120,12 @@ test("runAgentSession rejects completion when terminal collector is still unsati
 
   await using tmp = await tmpdir({ git: true })
 
+  let promptCount = 0
   spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+    promptCount += 1
     return {
       info: {
-        id: "msg_runner_unsatisfied_terminal",
+        id: `msg_runner_unsatisfied_terminal_${promptCount}`,
         sessionID: input.sessionID,
         role: "assistant",
         parentID: input.messageID,
@@ -137,9 +139,9 @@ test("runAgentSession rejects completion when terminal collector is still unsati
       },
       parts: [
         {
-          id: "prt_runner_unsatisfied_terminal",
+          id: `prt_runner_unsatisfied_terminal_${promptCount}`,
           sessionID: input.sessionID,
-          messageID: "msg_runner_unsatisfied_terminal",
+          messageID: `msg_runner_unsatisfied_terminal_${promptCount}`,
           type: "text",
           text: "done without terminal report",
         },
@@ -183,9 +185,265 @@ test("runAgentSession rejects completion when terminal collector is still unsati
       } catch (err) {
         thrown = err
       }
+      expect(promptCount).toBe(1)
       expect(thrown).toBeInstanceOf(AgentRunError)
       expect((thrown as Error).message).toContain("report_build_result")
       expect(Message.TerminalToolMissingError.isInstance((thrown as Error).cause as Error)).toBe(true)
+    },
+  })
+})
+
+test("runAgentSession does not retry terminal protocol misses inside the runner", async () => {
+  mock.module("@/agent/model", () => ({
+    resolveAgentModel: async () => ({
+      providerID: "test",
+      api: { id: "mock" },
+    }),
+  }))
+  const { AgentRunError, runAgentSession } = await import("../../src/agent/runner")
+
+  await using tmp = await tmpdir({ git: true })
+
+  let promptCount = 0
+  spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+    promptCount += 1
+    return {
+      info: {
+        id: `msg_runner_terminal_exhausted_${promptCount}`,
+        sessionID: input.sessionID,
+        role: "assistant",
+        parentID: input.messageID,
+        time: { created: Date.now() },
+        agent: input.agent ?? "build",
+        providerID: input.model?.providerID ?? "test",
+        modelID: input.model?.modelID ?? "mock",
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { cwd: tmp.path, root: tmp.path },
+      },
+      parts: [
+        {
+          id: `prt_runner_terminal_exhausted_${promptCount}`,
+          sessionID: input.sessionID,
+          messageID: `msg_runner_terminal_exhausted_${promptCount}`,
+          type: "text",
+          text: "still no terminal report",
+        },
+      ],
+    } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
+  })
+
+  type Collector = { done?: boolean }
+  const collector: Collector = {}
+  const toolKit: AgentToolKit<Collector> = {
+    tools: {
+      report_build_result: tool({
+        inputSchema: z.object({}),
+        execute: async () => {
+          collector.done = true
+          return "RECORDED"
+        },
+      }),
+    },
+    getCollector: () => collector,
+    buildReport: () => ({ summary: "missing terminal", detail: "missing terminal" }),
+  }
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      let thrown: unknown
+      try {
+        await runAgentSession({
+          kind: "build",
+          core: BUILD_CORE,
+          sessionTitle: "terminal exhausted",
+          toolKit,
+          buildUserPrompt: () => "implement the request",
+          terminalTool: {
+            toolName: "report_build_result",
+            isSatisfied: (value) => value.done === true,
+            shouldExposeOnlyTerminalTool: () => false,
+          },
+        })
+      } catch (err) {
+        thrown = err
+      }
+      expect(promptCount).toBe(1)
+      expect(thrown).toBeInstanceOf(AgentRunError)
+      expect((thrown as Error).message).toContain("report_build_result")
+      expect(Message.TerminalToolMissingError.isInstance((thrown as Error).cause as Error)).toBe(true)
+    },
+  })
+})
+
+test("runAgentSession does not hide-recover when structured output is missing", async () => {
+  mock.module("@/agent/model", () => ({
+    resolveAgentModel: async () => ({
+      providerID: "test",
+      api: { id: "mock" },
+    }),
+  }))
+  const { AgentRunError, runAgentSession } = await import("../../src/agent/runner")
+
+  await using tmp = await tmpdir({ git: true })
+
+  let promptCount = 0
+  spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+    promptCount += 1
+    return {
+      info: {
+        id: `msg_runner_structured_recovery_${promptCount}`,
+        sessionID: input.sessionID,
+        role: "assistant",
+        parentID: input.messageID,
+        time: { created: Date.now() },
+        agent: input.agent ?? "intent-analysis",
+        providerID: input.model?.providerID ?? "test",
+        modelID: input.model?.modelID ?? "mock",
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { cwd: tmp.path, root: tmp.path },
+        error: new Message.StructuredOutputError({
+          message: "Model did not produce structured output before the turn ended",
+          retries: 0,
+        }),
+      },
+      parts: [
+        {
+          id: `prt_runner_structured_recovery_${promptCount}`,
+          sessionID: input.sessionID,
+          messageID: `msg_runner_structured_recovery_${promptCount}`,
+          type: "text",
+          text: "plain text instead of structured output",
+        },
+      ],
+    } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
+  })
+
+  const toolKit: AgentToolKit<Record<string, never>> = {
+    tools: {},
+    getCollector: () => ({}),
+    buildReport: () => ({ summary: "ok", detail: "ok" }),
+  }
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      let thrown: unknown
+      try {
+        await runAgentSession({
+          kind: "intent-analysis",
+          core: "intent core",
+          sessionTitle: "structured recovery",
+          toolKit,
+          buildUserPrompt: () => "classify the request",
+          format: {
+            schema: {
+              type: "object",
+              properties: { intent_class: { type: "string" } },
+              required: ["intent_class"],
+            },
+          },
+        })
+      } catch (err) {
+        thrown = err
+      }
+
+      expect(promptCount).toBe(1)
+      expect(thrown).toBeInstanceOf(AgentRunError)
+      expect((thrown as Error).message).toContain("StructuredOutputError")
+    },
+  })
+})
+
+test("runAgentSession does not recover non-finalizer provider errors", async () => {
+  mock.module("@/agent/model", () => ({
+    resolveAgentModel: async () => ({
+      providerID: "test",
+      api: { id: "mock" },
+    }),
+  }))
+  const { AgentRunError, runAgentSession } = await import("../../src/agent/runner")
+
+  await using tmp = await tmpdir({ git: true })
+
+  let promptCount = 0
+  spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+    promptCount += 1
+    return {
+      info: {
+        id: `msg_runner_provider_error_${promptCount}`,
+        sessionID: input.sessionID,
+        role: "assistant",
+        parentID: input.messageID,
+        time: { created: Date.now() },
+        agent: input.agent ?? "build",
+        providerID: input.model?.providerID ?? "test",
+        modelID: input.model?.modelID ?? "mock",
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { cwd: tmp.path, root: tmp.path },
+        error: {
+          name: "APIError",
+          data: {
+            message: "provider rejected tool_choice",
+            isRetryable: false,
+          },
+        },
+      },
+      parts: [
+        {
+          id: `prt_runner_provider_error_${promptCount}`,
+          sessionID: input.sessionID,
+          messageID: `msg_runner_provider_error_${promptCount}`,
+          type: "text",
+          text: "provider error",
+        },
+      ],
+    } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
+  })
+
+  type Collector = { done?: boolean }
+  const collector: Collector = {}
+  const toolKit: AgentToolKit<Collector> = {
+    tools: {
+      report_build_result: tool({
+        inputSchema: z.object({}),
+        execute: async () => {
+          collector.done = true
+          return "RECORDED"
+        },
+      }),
+    },
+    getCollector: () => collector,
+    buildReport: () => ({ summary: "provider error", detail: "provider error" }),
+  }
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      let thrown: unknown
+      try {
+        await runAgentSession({
+          kind: "build",
+          core: BUILD_CORE,
+          sessionTitle: "provider error",
+          toolKit,
+          buildUserPrompt: () => "implement the request",
+          terminalTool: {
+            toolName: "report_build_result",
+            isSatisfied: (value) => value.done === true,
+            shouldExposeOnlyTerminalTool: () => false,
+          },
+        })
+      } catch (err) {
+        thrown = err
+      }
+
+      expect(promptCount).toBe(1)
+      expect(thrown).toBeInstanceOf(AgentRunError)
+      expect((thrown as Error).message).toContain("provider rejected tool_choice")
     },
   })
 })

@@ -13,6 +13,7 @@ import { EngineConfig } from "@/engine/config"
 import { Scheduler } from "./index"
 import { TaskQueueTable } from "./task-queue.sql"
 import { SessionAgentIdentity } from "@/session/agent-identity"
+import { SessionWake } from "@/session/wake"
 
 export const TaskQueueEvent = {
   Completed: BusEvent.define(
@@ -119,7 +120,10 @@ export namespace TaskQueueService {
         source: z.string().optional(),
       })
       .parse(raw)
-    const prompt = applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt))
+    const prompt = stampTaskQueueWakeReason(
+      applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt)),
+      { queueSource: input.source },
+    )
     return SessionPrompt.prompt({
       sessionID: input.sessionID,
       ...prompt,
@@ -128,9 +132,12 @@ export namespace TaskQueueService {
 
   export function enqueuePrompt(raw: z.input<typeof EnqueuePromptInput>) {
     const input = EnqueuePromptInput.parse(raw)
-    const prompt = applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt))
-    const now = Date.now()
     const id = Identifier.ascending("task")
+    const prompt = stampTaskQueueWakeReason(
+      applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt)),
+      { queueTaskID: id, queueSource: input.source ?? "api" },
+    )
+    const now = Date.now()
     Database.use((db) =>
       db
         .insert(TaskQueueTable)
@@ -534,6 +541,24 @@ function applyStoredSessionPromptIdentity<T extends z.infer<ReturnType<typeof pr
   )
   if (!row) return prompt
   return SessionAgentIdentity.applyToPrompt(row.kind, prompt)
+}
+
+function stampTaskQueueWakeReason<T extends z.infer<ReturnType<typeof promptSchema>>>(
+  prompt: T,
+  reason: { queueTaskID?: string; queueSource?: string },
+): T {
+  const existing = SessionWake.WakeReason.safeParse(prompt.extra?.wake_reason)
+  if (existing.success && existing.data.source === "scheduler.task_queue") return prompt
+  return {
+    ...prompt,
+    extra: {
+      ...(prompt.extra ?? {}),
+      ...SessionWake.reasonExtra({
+        source: "scheduler.task_queue",
+        ...reason,
+      }),
+    },
+  }
 }
 
 type PromptPart = z.infer<ReturnType<typeof promptSchema>>["parts"][number]

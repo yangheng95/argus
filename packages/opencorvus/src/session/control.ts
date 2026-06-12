@@ -50,19 +50,20 @@ export namespace SessionControl {
     status?: Status
   }): Record {
     const now = Date.now()
+    const status = input.status ?? "pending"
     const row = {
       id: Identifier.ascending("session_control"),
       session_id: input.sessionID,
       kind: input.kind,
-      status: input.status ?? "pending",
+      status,
       owner: input.owner,
       payload: input.payload,
       time_created: now,
       time_updated: now,
-      time_consumed: undefined,
+      time_consumed: status === "consumed" ? now : undefined,
     } satisfies typeof SessionControlRecordTable.$inferInsert
     Database.use((db) => db.insert(SessionControlRecordTable).values(row).run())
-    return fromRow({ ...row, owner: row.owner ?? null, time_consumed: null })
+    return fromRow({ ...row, owner: row.owner ?? null, time_consumed: row.time_consumed ?? null })
   }
 
   export function pending(sessionID: string): Record[] {

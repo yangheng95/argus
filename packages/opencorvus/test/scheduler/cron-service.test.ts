@@ -73,6 +73,14 @@ describe("scheduler.cron-service", () => {
         expect((second?.last_run ?? 0) > 0).toBe(true)
         expect(second?.failure_count).toBe(0)
         expect(wake).toHaveBeenCalledTimes(2)
+        expect(wake.mock.calls[0]?.[0]?.reason).toMatchObject({
+          source: "scheduler.cron",
+          jobID: id,
+          jobName: "oneshot",
+          expression: "1m",
+          oneShot: true,
+        })
+        expect(wake.mock.calls[0]?.[0]?.reason?.fireID).toMatch(/^cal_/)
       },
     })
   })

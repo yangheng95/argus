@@ -69,6 +69,14 @@ describe("scheduler.event-service", () => {
 
         const row = Database.use((db) => db.select().from(EventJobTable).where(eq(EventJobTable.id, id)).get())
         expect(wake).toHaveBeenCalledTimes(1)
+        expect(wake.mock.calls[0]?.[0]?.reason).toMatchObject({
+          source: "scheduler.event",
+          jobID: id,
+          jobName: "on-command",
+          eventType: "test.event",
+          oneShot: false,
+        })
+        expect(wake.mock.calls[0]?.[0]?.reason?.fireID).toMatch(/^cal_/)
         expect((row?.last_run ?? 0) > 0).toBe(true)
         expect(row?.last_event).toBe("test.event")
       },

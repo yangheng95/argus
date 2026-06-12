@@ -44,6 +44,11 @@ describe("scheduler.task-queue-service", () => {
         await TaskQueueService.runNow()
         const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
         expect(row?.status).toBe("completed")
+        expect(prompt.mock.calls[0]?.[0]?.extra?.wake_reason).toEqual({
+          source: "scheduler.task_queue",
+          queueTaskID: id,
+          queueSource: "test",
+        })
       },
     })
 
@@ -74,6 +79,10 @@ describe("scheduler.task-queue-service", () => {
     })
 
     expect(prompt).toHaveBeenCalledTimes(1)
+    expect(prompt.mock.calls[0]?.[0]?.extra?.wake_reason).toEqual({
+      source: "scheduler.task_queue",
+      queueSource: "test",
+    })
   })
 
   test("direct queued prompt preserves agent-owned session identity", async () => {
