@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
+import { settingsStore, setSettingsStore } from "../src/store/settings"
 import { __setHostTransportForTest, HOST_CAPABILITIES } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest } from "../src/services/host-transport"
-import { loadDiscoveredProjects } from "../src/services/workspace"
+import { ensureDefaultDirectory, loadDiscoveredProjects } from "../src/services/workspace"
 
 function fakeTransport(requests: TransportRequest[]): HostTransport {
   return {
@@ -17,6 +18,7 @@ function fakeTransport(requests: TransportRequest[]): HostTransport {
           headers: {},
           body: {
             root: "D:/workspace",
+            defaultDirectory: "D:/workspace/1a2b3c4d",
             projects: [
               {
                 directory: "D:/workspace/app",
@@ -41,10 +43,36 @@ function fakeTransport(requests: TransportRequest[]): HostTransport {
   } satisfies HostTransport
 }
 
+function emptyDefaultTransport(requests: TransportRequest[]): HostTransport {
+  return {
+    ...fakeTransport(requests),
+    async request(req) {
+      requests.push(req)
+      if (req.path === "global/projects/discover") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            root: "D:/workspace",
+            defaultDirectory: "",
+            projects: [],
+          },
+        }
+      }
+      return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
+    },
+  } satisfies HostTransport
+}
+
 describe("workspace discovery service", () => {
   afterEach(() => {
     __setHostTransportForTest(undefined)
     configure({ directory: "" })
+    setSettingsStore({
+      directory: "",
+      savedDirectory: "",
+    })
   })
 
   test("loads launch-directory project discovery through the global route", async () => {
@@ -56,6 +84,7 @@ describe("workspace discovery service", () => {
 
     expect(discovery).toEqual({
       root: "D:/workspace",
+      defaultDirectory: "D:/workspace/1a2b3c4d",
       projects: [
         {
           directory: "D:/workspace/app",
@@ -67,5 +96,29 @@ describe("workspace discovery service", () => {
     expect(requests).toHaveLength(1)
     expect(requests[0]!.path).toBe("global/projects/discover")
     expect(requests[0]!.query?.directory).toBeUndefined()
+  })
+
+  test("ensureDefaultDirectory uses backend-created default when no saved directory exists", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(fakeTransport(requests))
+    setSettingsStore({
+      directory: "",
+      savedDirectory: "",
+    })
+
+    await expect(ensureDefaultDirectory()).resolves.toBe(true)
+
+    expect(requests[0]!.path).toBe("global/projects/discover")
+    expect(settingsStore.directory).toBe("D:/workspace/1a2b3c4d")
+  })
+
+  test("ensureDefaultDirectory keeps the workspace empty when backend default is empty", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(emptyDefaultTransport(requests))
+
+    await expect(ensureDefaultDirectory()).resolves.toBe(false)
+
+    expect(requests[0]!.path).toBe("global/projects/discover")
+    expect(settingsStore.directory).toBe("")
   })
 })

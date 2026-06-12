@@ -42,6 +42,7 @@ export interface DiscoveredProject {
 
 export interface ProjectDiscovery {
   root: string
+  defaultDirectory: string
   projects: DiscoveredProject[]
 }
 
@@ -487,6 +488,7 @@ export function removeRecentDirectory(dir: string): void {
 export async function loadDiscoveredProjects(): Promise<ProjectDiscovery> {
   const result = await apiJson("global/projects/discover")
   const root = typeof result?.root === "string" ? result.root : ""
+  const defaultDirectory = typeof result?.defaultDirectory === "string" ? result.defaultDirectory.trim() : ""
   const projects = Array.isArray(result?.projects)
     ? result.projects
         .filter((item: any) => item && typeof item.directory === "string" && typeof item.name === "string")
@@ -496,7 +498,7 @@ export async function loadDiscoveredProjects(): Promise<ProjectDiscovery> {
           marker: typeof item.marker === "string" ? item.marker : "",
         }))
     : []
-  return { root, projects }
+  return { root, defaultDirectory, projects }
 }
 
 // ── applyDirectory ──
@@ -740,6 +742,11 @@ export async function setDirectory(value: string, options: ApplyDirectoryOptions
 export async function ensureDefaultDirectory(): Promise<boolean> {
   if (settingsStore.savedDirectory) {
     setSettingsStore("directory", settingsStore.savedDirectory)
+    return true
+  }
+  const discovery = await loadDiscoveredProjects().catch(() => ({ root: "", defaultDirectory: "", projects: [] }))
+  if (discovery.defaultDirectory) {
+    setSettingsStore("directory", discovery.defaultDirectory)
     return true
   }
   return false

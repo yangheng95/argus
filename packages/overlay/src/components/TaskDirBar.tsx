@@ -212,6 +212,7 @@ export function TaskDirContent() {
                   value={pathDraft()}
                   onInput={(event) => setPathDraft(event.currentTarget.value)}
                   placeholder={t("workspace_onboarding.browser_path_placeholder")}
+                  data-ui="cwd-path-input"
                   autocomplete="off"
                   spellcheck={false}
                 />

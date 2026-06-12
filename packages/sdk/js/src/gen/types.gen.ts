@@ -3432,6 +3432,7 @@ export type DiscoveredProject = {
 
 export type ProjectDiscovery = {
   root: string
+  defaultDirectory: string
   projects: Array<DiscoveredProject>
 }
 

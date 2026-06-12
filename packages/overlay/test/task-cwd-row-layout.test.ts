@@ -152,6 +152,8 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
   test("cwd popup owns editable path entry and discovered OpenCorvus projects", () => {
     expect(TASK_DIR_BAR).toContain("loadDiscoveredProjects")
     expect(TASK_DIR_BAR).toContain('class="recent-dir-edit-form"')
+    expect(TASK_DIR_BAR).toContain('data-ui="cwd-path-input"')
+    expect(TASK_DIR_BAR).toContain("setPathDraft(event.currentTarget.value)")
     expect(TASK_DIR_BAR).toContain('t("cwd.path_label")')
     expect(TASK_DIR_BAR).toContain('t("cwd.detected_projects")')
     expect(TASK_DIR_BAR).toContain("setDirectory(next)")
