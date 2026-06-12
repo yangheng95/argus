@@ -17,6 +17,7 @@ import {
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
+import { SurfaceHeader } from "./ui/SurfaceHeader"
 import { Tab, Tabs } from "./ui/Tabs"
 
 type BrowserPreviewCandidate = BrowserPreviewTarget["candidates"][number]
@@ -262,20 +263,24 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   return (
     <section class="browser-preview-panel" aria-label={t("browser_preview.title")} data-active={String(panelActive())}>
       <div class="browser-preview-command-surface">
-        <div class="browser-preview-toolbar">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            tone="neutral"
-            title={t("browser_preview.refresh_title")}
-            aria-label={t("browser_preview.refresh_title")}
-            disabled={!props.taskID()}
-            onClick={() => setRefreshToken((value) => value + 1)}
-          >
-            <Icon name="refresh" size={13} />
-          </Button>
-        </div>
+        <SurfaceHeader
+          variant="panel"
+          title={t("browser_preview.title")}
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              tone="neutral"
+              title={t("browser_preview.refresh_title")}
+              aria-label={t("browser_preview.refresh_title")}
+              disabled={!props.taskID()}
+              onClick={() => setRefreshToken((value) => value + 1)}
+            >
+              <Icon name="refresh" size={13} />
+            </Button>
+          }
+        />
 
         <div class="browser-preview-controls">
           <div class="browser-preview-status" data-status={currentTarget()?.status ?? "loading"}>

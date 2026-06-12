@@ -93,14 +93,6 @@
   background: var(--surface);
 }
 
-.browser-preview-toolbar {
-  display: grid;
-  grid-template-columns: auto;
-  justify-content: end;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-}
-
 .browser-preview-candidate-select {
   min-width: 0;
   min-height: calc(30px * var(--ui-scale));
@@ -481,10 +473,6 @@
     padding: calc(5px * var(--ui-scale));
   }
 
-  .browser-preview-toolbar {
-    gap: calc(3px * var(--ui-scale));
-  }
-
   .browser-preview-controls {
     align-items: stretch;
     gap: calc(5px * var(--ui-scale));
@@ -508,6 +496,7 @@
 
 .file-explorer-toolbar {
   flex: 0 0 auto;
+  padding: var(--ui-gap-sm);
 }
 
 .file-explorer-search-input.field-input {
