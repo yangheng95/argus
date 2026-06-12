@@ -29,6 +29,14 @@ describe("Filesystem.contains", () => {
     expect(Filesystem.contains("/project", "/project-other/file")).toBe(false)
     expect(Filesystem.contains("/project", "/projectfile")).toBe(false)
   })
+
+  test("treats Windows extended-length namespace paths as the same tree", () => {
+    if (process.platform !== "win32") return
+
+    expect(Filesystem.contains("D:\\repo", "\\\\?\\D:\\repo\\src\\file.ts")).toBe(true)
+    expect(Filesystem.contains("\\\\?\\D:\\repo", "D:\\repo\\src\\file.ts")).toBe(true)
+    expect(Filesystem.contains("\\\\server\\share\\repo", "\\\\?\\UNC\\server\\share\\repo\\src\\file.ts")).toBe(true)
+  })
 })
 
 /*

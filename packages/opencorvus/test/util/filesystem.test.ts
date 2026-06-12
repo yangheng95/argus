@@ -1,8 +1,21 @@
-import { describe, test, expect } from "bun:test"
+import { afterEach, describe, test, expect } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
+
+const ORIGINAL_PLATFORM = process.platform
+
+function setPlatform(value: NodeJS.Platform) {
+  Object.defineProperty(process, "platform", {
+    value,
+    configurable: true,
+  })
+}
+
+afterEach(() => {
+  setPlatform(ORIGINAL_PLATFORM)
+})
 
 describe("filesystem", () => {
   describe("exists()", () => {
@@ -287,6 +300,22 @@ describe("filesystem", () => {
   })
 
   describe("windowsPath()", () => {
+    test("strips Windows extended-length prefixes before exposing paths", () => {
+      expect(Filesystem.normalizeWindowsPath("\\\\?\\D:\\repo\\src\\file.ts")).toBe("D:\\repo\\src\\file.ts")
+      expect(Filesystem.normalizeWindowsPath("\\\\?\\UNC\\server\\share\\src\\file.ts")).toBe(
+        "\\\\server\\share\\src\\file.ts",
+      )
+    })
+
+    test("converts extended-length paths at the Windows boundary", () => {
+      setPlatform("win32")
+
+      expect(Filesystem.windowsPath("\\\\?\\D:\\repo\\src\\file.ts")).toBe("D:\\repo\\src\\file.ts")
+      expect(Filesystem.windowsPath("\\\\?\\UNC\\server\\share\\src\\file.ts")).toBe(
+        "\\\\server\\share\\src\\file.ts",
+      )
+    })
+
     test("converts Git Bash paths", () => {
       if (process.platform === "win32") {
         expect(Filesystem.windowsPath("/c/Users/test")).toBe("C:/Users/test")

@@ -171,10 +171,24 @@ export namespace Filesystem {
       path_len: p.length,
     })
     try {
-      return realpathSync.native(p)
+      return normalizeWindowsPath(realpathSync.native(p))
     } catch {
-      return p
+      return normalizeWindowsPath(p)
     }
+  }
+
+  /**
+   * Remove Windows extended-length namespace prefixes from paths before they
+   * leave the filesystem boundary. `\\?\` is accepted by Windows APIs, but
+   * frontend module resolvers treat it as a literal request string instead of
+   * a normal absolute path. UNC means Universal Naming Convention network path.
+   */
+  export function normalizeWindowsPath(p: string): string {
+    if (p.startsWith("\\\\?\\UNC\\")) return "\\\\" + p.slice("\\\\?\\UNC\\".length)
+    if (p.startsWith("\\\\?\\")) return p.slice("\\\\?\\".length)
+    if (p.startsWith("//?/UNC/")) return "//" + p.slice("//?/UNC/".length)
+    if (p.startsWith("//?/")) return p.slice("//?/".length)
+    return p
   }
 
   /**
@@ -230,6 +244,7 @@ export namespace Filesystem {
 
   export function windowsPath(p: string): string {
     if (process.platform !== "win32") return p
+    p = normalizeWindowsPath(p)
     // UNC paths may come through as //server/share on POSIX-style tools.
     if (p.startsWith("//")) return p.replace(/\//g, "\\")
 
@@ -259,7 +274,7 @@ export namespace Filesystem {
   }
 
   function normalizeForCompare(p: string) {
-    let value = trimTrailingSeparators(normalize(pathResolve(p)))
+    let value = trimTrailingSeparators(normalize(pathResolve(normalizeWindowsPath(p))))
     if (process.platform === "win32") value = value.toLowerCase()
     return value
   }
