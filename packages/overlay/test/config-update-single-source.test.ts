@@ -6,7 +6,6 @@ import {
   type TransportRequest,
   type TransportResponse,
 } from "../src/services/host-transport"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 function isRecord(value: unknown): value is Record<string, unknown> {

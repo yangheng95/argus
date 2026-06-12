@@ -128,7 +128,10 @@ export function statusFromTaskLifecycle(
   return "running"
 }
 
-function progressFromSteps(steps: ProgressInput, lifecycleStatus?: StatusSnapshotState): z.infer<typeof StatusProgress> {
+function progressFromSteps(
+  steps: ProgressInput,
+  lifecycleStatus?: StatusSnapshotState,
+): z.infer<typeof StatusProgress> {
   if (steps.length === 0) {
     const completed = lifecycleStatus === "success" ? 1 : 0
     const failed = lifecycleStatus === "failed" ? 1 : 0
@@ -285,7 +288,11 @@ export function missionStatusSnapshot(input: {
   )
   const progress = progressFromSnapshotStates(input.tasks.map((task) => task.status))
   const status: StatusSnapshotState =
-    taskCounts.failed > 0 ? "failed" : taskCounts.total > 0 && taskCounts.success === taskCounts.total ? "success" : "running"
+    taskCounts.failed > 0
+      ? "failed"
+      : taskCounts.total > 0 && taskCounts.success === taskCounts.total
+        ? "success"
+        : "running"
 
   return MissionStatusSnapshot.parse({
     missionID: input.missionID,

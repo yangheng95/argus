@@ -11,10 +11,10 @@ The overlay sidebar buttons for new task and Mission were wired inside a
 registered. When the document has already fired `DOMContentLoaded`, the callback
 never runs. The visible result is systemic:
 
-| Control | Expected | Broken behavior |
-| --- | --- | --- |
+| Control          | Expected                                      | Broken behavior                                  |
+| ---------------- | --------------------------------------------- | ------------------------------------------------ |
 | `#btnCreateTask` | Deselect task, clear messages, focus composer | Click does nothing, so old messages stay mounted |
-| `#btnMission` | Toggle Mission page | Click does nothing |
+| `#btnMission`    | Toggle Mission page                           | Click does nothing                               |
 
 ## Call-Point Inventory
 
@@ -28,11 +28,11 @@ rg -n -F "btnMission" packages/overlay/src packages/overlay/test
 
 Results:
 
-| Surface | File | Action |
-| --- | --- | --- |
-| Overlay sidebar button binding | `packages/overlay/src/main.tsx` | Replace late bare `DOMContentLoaded` listener with ready-aware initializer |
-| Mission entry structural test | `packages/overlay/test/mission-html-entry.test.ts` | Assert binding uses the ready helper and still clears task state before focusing |
-| Browser MCP script helper | `packages/opencorvus/src/mcp/browser/scripts.ts` | No change; it already uses `document.readyState === "loading" ? ... : attach()` |
+| Surface                        | File                                               | Action                                                                           |
+| ------------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Overlay sidebar button binding | `packages/overlay/src/main.tsx`                    | Replace late bare `DOMContentLoaded` listener with ready-aware initializer       |
+| Mission entry structural test  | `packages/overlay/test/mission-html-entry.test.ts` | Assert binding uses the ready helper and still clears task state before focusing |
+| Browser MCP script helper      | `packages/opencorvus/src/mcp/browser/scripts.ts`   | No change; it already uses `document.readyState === "loading" ? ... : attach()`  |
 
 No other overlay static button uses `DOMContentLoaded`.
 

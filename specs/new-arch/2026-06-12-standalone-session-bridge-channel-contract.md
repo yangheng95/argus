@@ -17,13 +17,13 @@ The observed event is an `ephemeral-*` session event:
 
 ## Grep Coverage
 
-| Surface | Finding |
-| --- | --- |
-| `packages/overlay/src/services/tree-writer.ts` | `deriveSessionStage()` intentionally throws when `info.channel` is missing. No frontend fallback should be added. |
-| `packages/opencorvus/src/protocol/session-mirror.ts` | `mapSessionBusEvent()` already stamps `channel/resolvedRole`, but `shouldMirrorStandaloneSession()` only allows `mission` and right-sidebar metadata assistant sessions. |
-| `packages/opencorvus/src/server/routes/session.ts` | `/session/:sessionID/events` is the session-scoped SSE route and delegates live message mapping to `subscribeSessionMirror()`. |
-| `packages/opencorvus/src/orchestrator/protocol/message-bridge.ts` | Task-scoped message bridge already uses `overlayMeta()` as the single source for channel routing. |
-| `packages/overlay/src/services/sse.ts` and `packages/overlay/src/services/events.ts` | Session SSE events route directly to tree-writer; there is no safe client-side place to infer missing backend metadata. |
+| Surface                                                                              | Finding                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/overlay/src/services/tree-writer.ts`                                       | `deriveSessionStage()` intentionally throws when `info.channel` is missing. No frontend fallback should be added.                                                        |
+| `packages/opencorvus/src/protocol/session-mirror.ts`                                 | `mapSessionBusEvent()` already stamps `channel/resolvedRole`, but `shouldMirrorStandaloneSession()` only allows `mission` and right-sidebar metadata assistant sessions. |
+| `packages/opencorvus/src/server/routes/session.ts`                                   | `/session/:sessionID/events` is the session-scoped SSE route and delegates live message mapping to `subscribeSessionMirror()`.                                           |
+| `packages/opencorvus/src/orchestrator/protocol/message-bridge.ts`                    | Task-scoped message bridge already uses `overlayMeta()` as the single source for channel routing.                                                                        |
+| `packages/overlay/src/services/sse.ts` and `packages/overlay/src/services/events.ts` | Session SSE events route directly to tree-writer; there is no safe client-side place to infer missing backend metadata.                                                  |
 
 ## Fix
 

@@ -1,6 +1,7 @@
 import z from "zod"
 import { CheckConfig, StageRouting } from "@/engine"
 import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/catalog"
+import { isModelReference } from "@/provider/model-ref"
 
 export const RIGHT_SIDEBAR_SURFACE = "right-sidebar"
 export const PanelSurface = z.enum([...SharedChannelSurface.options, RIGHT_SIDEBAR_SURFACE])
@@ -146,6 +147,12 @@ export const PanelCapabilityRegistry = list(
       request: z.string(),
       request_id: z.string().optional(),
       executor: z.enum(["opencorvus", "codex", "claude-code"]).optional(),
+      model: z
+        .string()
+        .refine(isModelReference, {
+          message: 'Model must be in the format "provider/model".',
+        })
+        .optional(),
       queue: z.boolean().optional(),
       checks: CheckConfig.optional(),
       routing: StageRouting.optional(),

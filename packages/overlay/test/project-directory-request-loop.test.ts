@@ -55,8 +55,12 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain("active={props.active ?? true}")
     expect(main).toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />')
     expect(main).toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />')
-    expect(main).not.toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />')
-    expect(main).not.toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />')
+    expect(main).not.toContain(
+      '<SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />',
+    )
+    expect(main).not.toContain(
+      '<McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />',
+    )
     expect(main).toContain('active={selectedLeftPanelActivity() === "memory"}')
     expect(main).toContain("directory={activeDirectory}")
   })

@@ -184,7 +184,9 @@ export const MaterialInventoryItemSchema = z.object({
   title: z
     .string()
     .min(1)
-    .describe("Short stable name for a required material group, such as CSS tokens, assets, fixtures, fonts, or icons."),
+    .describe(
+      "Short stable name for a required material group, such as CSS tokens, assets, fixtures, fonts, or icons.",
+    ),
   detail: z
     .string()
     .min(1)

@@ -93,7 +93,9 @@ function codingAssistantSessionsPath(input: { limit: number; append?: boolean })
   return `coding/sessions?${params.toString()}`
 }
 
-export async function loadCodingAssistantSessions(options: { signal?: AbortSignal; append?: boolean } = {}): Promise<void> {
+export async function loadCodingAssistantSessions(
+  options: { signal?: AbortSignal; append?: boolean } = {},
+): Promise<void> {
   assertNotAborted(options.signal)
   const append = options.append === true
   setCodingAssistantStore(append ? "loadingMore" : "loading", true)

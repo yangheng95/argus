@@ -1,0 +1,186 @@
+/* Coding Assistant left activity ledger. The component reuses the shared
+   ledger-row grammar, while this file owns the assistant-specific shell. */
+
+.assistant-session-list {
+  overflow: hidden;
+}
+
+.coding-assistant-ledger {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--rail-surface);
+}
+
+.coding-assistant-ledger-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: calc(4px * var(--ui-scale));
+  align-items: center;
+  margin: var(--ui-gap-sm) var(--ui-gap-md);
+}
+
+.coding-assistant-ledger-search {
+  min-width: 0;
+  margin: 0;
+}
+
+.coding-assistant-ledger-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+  padding: 0 var(--ui-gap-sm) var(--ui-gap-md);
+}
+
+.coding-assistant-ledger .ledger-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.oc-button[data-ui="coding-assistant-new"] {
+  --oc-button-height: calc(30px * var(--ui-scale));
+  --oc-button-padding-x: calc(8px * var(--ui-scale));
+  --oc-button-gap: calc(3px * var(--ui-scale));
+
+  flex: 0 0 auto;
+  border-radius: 0;
+}
+
+.coding-assistant-row {
+  display: grid;
+  grid-template-columns: calc(16px * var(--ui-scale)) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  min-height: calc(27px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
+}
+
+.coding-assistant-row:hover,
+.coding-assistant-row:focus-visible,
+.coding-assistant-row:focus-within {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+  outline: none;
+}
+
+.coding-assistant-row[data-active="true"] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-strong);
+}
+
+.coding-assistant-row .ledger-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--text-muted) 88%, transparent);
+}
+
+.coding-assistant-row .ledger-row-main {
+  display: grid;
+  min-width: 0;
+  gap: calc(1px * var(--ui-scale));
+}
+
+.coding-assistant-row .ledger-row-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coding-assistant-row .ledger-row-meta {
+  display: flex;
+  min-width: 0;
+  gap: calc(5px * var(--ui-scale));
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.coding-assistant-row .ledger-row-meta > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.coding-assistant-row .ledger-row-right {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(2px * var(--ui-scale));
+  min-width: 0;
+}
+
+.coding-assistant-row .ledger-row-stamp {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.coding-assistant-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(2px * var(--ui-scale));
+  opacity: var(--ui-opacity-hidden);
+  pointer-events: none;
+  transition: opacity var(--ui-duration-fast) var(--ui-timing-standard);
+}
+
+.ledger-row:hover .coding-assistant-row-actions,
+.ledger-row:focus-within .coding-assistant-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.coding-assistant-row-stop-icon[data-icon="confirm"],
+.coding-assistant-row-delete-icon[data-icon="confirm"] {
+  display: none;
+}
+
+.oc-button[data-ui="coding-assistant-row-stop"][data-confirm="true"] .coding-assistant-row-stop-icon[data-icon="stop"],
+.oc-button[data-ui="coding-assistant-row-delete"][data-confirm="true"]
+  .coding-assistant-row-delete-icon[data-icon="delete"] {
+  display: none;
+}
+
+.oc-button[data-ui="coding-assistant-row-stop"][data-confirm="true"]
+  .coding-assistant-row-stop-icon[data-icon="confirm"],
+.oc-button[data-ui="coding-assistant-row-delete"][data-confirm="true"]
+  .coding-assistant-row-delete-icon[data-icon="confirm"] {
+  display: inline-flex;
+}
+
+.coding-assistant-row-rename-input {
+  width: 100%;
+  min-width: 0;
+  border: var(--oc-border-width) solid var(--accent);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-hover);
+  color: var(--text-strong);
+  padding: calc(2px * var(--ui-scale)) var(--ui-gap-xs);
+  font: inherit;
+}

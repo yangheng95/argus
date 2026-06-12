@@ -13,13 +13,13 @@ already-empty task selection and returned before clearing shared stores.
 
 ## Call Points
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
+| Surface                                             | Evidence                                                                                                      | Decision                                                                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/overlay/src/services/task.ts::selectTask` | `rg "selectTask\\(" packages/overlay/src packages/overlay/test` shows this as the task selection choke point. | Fix the no-op guard to compare the full selected source, not only `activeTaskID()`. Empty task selection is already selected only when `selectedSource` is null. |
-| Sidebar New Conversation | `packages/overlay/src/main.tsx` binds `btnCreateTask` to `setPageMode("panel")` then `selectTask("")`. | Keep this call site; the service fix makes it clear Mission sessions correctly. |
-| Sidebar Mission toggle | `packages/overlay/src/main.tsx` binds `btnMission` to a page-mode toggle only. | When toggling from Mission to Panel, call `selectTask("")` so the shared Mission conversation is removed. |
-| Mission Back to Panel | `packages/overlay/src/components/Mission.tsx` passes `onBackToPanel={() => setPageMode("panel")}`. | Route through `handleCloseMission()` before switching page mode. |
-| Mission session open/close | `packages/overlay/src/components/Mission.tsx::openMissionSession` and `handleCloseMission`. | Keep as the Mission-owned session source owner; no second source or fallback. |
+| Sidebar New Conversation                            | `packages/overlay/src/main.tsx` binds `btnCreateTask` to `setPageMode("panel")` then `selectTask("")`.        | Keep this call site; the service fix makes it clear Mission sessions correctly.                                                                                  |
+| Sidebar Mission toggle                              | `packages/overlay/src/main.tsx` binds `btnMission` to a page-mode toggle only.                                | When toggling from Mission to Panel, call `selectTask("")` so the shared Mission conversation is removed.                                                        |
+| Mission Back to Panel                               | `packages/overlay/src/components/Mission.tsx` passes `onBackToPanel={() => setPageMode("panel")}`.            | Route through `handleCloseMission()` before switching page mode.                                                                                                 |
+| Mission session open/close                          | `packages/overlay/src/components/Mission.tsx::openMissionSession` and `handleCloseMission`.                   | Keep as the Mission-owned session source owner; no second source or fallback.                                                                                    |
 
 ## Acceptance
 

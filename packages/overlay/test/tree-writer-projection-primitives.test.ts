@@ -1,5 +1,4 @@
 import { test, expect } from "bun:test"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 const { applyEvent, flushBufferedPartDeltas, resetWriter, hasProjectedPart } = await import(

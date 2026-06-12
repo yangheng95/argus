@@ -538,9 +538,12 @@ async function bootstrapOverlay(page: OverlayPage): Promise<void> {
       .querySelector<HTMLButtonElement>('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
       ?.click()
   }, FIXTURE_DIR)
-  await page.waitForFunction(() => document.querySelector<HTMLElement>("#leftPanelMissions")?.dataset.active === "true", {
-    timeout: 5_000,
-  })
+  await page.waitForFunction(
+    () => document.querySelector<HTMLElement>("#leftPanelMissions")?.dataset.active === "true",
+    {
+      timeout: 5_000,
+    },
+  )
   await new Promise((r) => setTimeout(r, 800))
 }
 

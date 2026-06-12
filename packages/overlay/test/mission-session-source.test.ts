@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 ;(globalThis as any).window = globalThis
 ;(globalThis as any).location = { protocol: "http:", host: "localhost", origin: "http://localhost", pathname: "/" }
@@ -12,6 +11,8 @@ const CONVERSATION_TSX = readFileSync(join(import.meta.dir, "../src/components/C
 const CONVERSATION_SERVICE = readFileSync(join(import.meta.dir, "../src/services/conversation.ts"), "utf8")
 const TASK_SERVICE = readFileSync(join(import.meta.dir, "../src/services/task.ts"), "utf8")
 const MAIN_TSX = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
+const CHAT_SERVICE = readFileSync(join(import.meta.dir, "../src/services/chat.ts"), "utf8")
+const CODING_ASSISTANT_SERVICE = readFileSync(join(import.meta.dir, "../src/services/coding-assistant.ts"), "utf8")
 
 test("session source hydrates from session conversation and submits to prompt_async", () => {
   expect(CONVERSATION_SERVICE).toContain('const prefix = source.kind === "task" ? "task" : "session"')
@@ -46,7 +47,7 @@ test("Mission left activity selects session source and leaves chat rendering to 
   expect(MAIN_TSX).toContain("<ChatComposer")
   expect(MISSION_TSX).not.toContain("function MissionConversation")
   expect(MISSION_TSX).not.toContain("<Conversation container=")
-  expect(MISSION_TSX).not.toContain("composerDraftKey(\"mission\", \"session\"")
+  expect(MISSION_TSX).not.toContain('composerDraftKey("mission", "session"')
 })
 
 test("composer draft keys are scoped to selected task, assistant session, and Mission launcher", () => {
@@ -58,6 +59,28 @@ test("composer draft keys are scoped to selected task, assistant session, and Mi
   expect(MISSION_TSX).toContain("const missionLauncherDraftKey = () =>")
   expect(MISSION_TSX).toContain('composerDraftKey("mission", "new", directory)')
   expect(MISSION_TSX).toContain("draftKey={missionLauncherDraftKey()}")
+})
+
+test("Mission launcher and Coding Assistant reuse ChatComposer with separate bindings", () => {
+  expect(MISSION_TSX).toContain("<ChatComposer")
+  expect(MISSION_TSX).toContain("onSubmit={handleSubmit}")
+  expect(MISSION_TSX).toContain("await wakeMission({")
+  expect(MISSION_TSX).toContain('composerDraftKey("mission", "new", directory)')
+  expect(MISSION_TSX).not.toContain("panelMessage(")
+
+  expect(MAIN_TSX).toContain("<ChatComposer")
+  expect(MAIN_TSX).toContain("draftKey={panelComposerDraftKey()}")
+  expect(MAIN_TSX).toContain("await panelMessage(text, attachments")
+  expect(CHAT_SERVICE).toContain("const sessionID = activeSessionID()")
+  expect(CHAT_SERVICE).toContain("`session/${encodeURIComponent(sessionID)}/prompt_async`")
+
+  expect(CODING_ASSISTANT_SERVICE).toContain('const source: BoardSource = { kind: "session", id: sessionID }')
+  expect(CODING_ASSISTANT_SERVICE).toContain('setCodingAssistantStore("selectedSessionID", sessionID)')
+  expect(CODING_ASSISTANT_SERVICE).toContain(
+    'resetWriter({ scrollIntent: "bottom", cause: "coding-assistant-switch" })',
+  )
+  expect(CODING_ASSISTANT_SERVICE).toContain("startSSE(source)")
+  expect(CODING_ASSISTANT_SERVICE).not.toContain("wakeMission")
 })
 
 test("Mission ledger uses MissionList and not the task list projection", () => {

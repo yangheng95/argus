@@ -2043,10 +2043,9 @@
 }
 .provider-flat-row {
   display: grid;
-  grid-template-columns: minmax(calc(260px * var(--ui-scale)), 1fr) minmax(
-      calc(160px * var(--ui-scale)),
-      max-content
-    ) max-content;
+  grid-template-columns:
+    minmax(calc(260px * var(--ui-scale)), 1fr) minmax(calc(160px * var(--ui-scale)), max-content)
+    max-content;
   grid-template-areas:
     "main summary actions"
     "key key key"

@@ -42,7 +42,7 @@ import { CUSTOM_LOADERS, smallModelPriority, type CustomModelLoader } from "./ve
 import { installProvider, loadProviderModule } from "./install"
 import { discoverHexinModelsForStartup } from "./hexin-discovery"
 import { InvalidModelReferenceError as ProviderInvalidModelReferenceError, parseModelReference } from "./model-ref"
-import { BUILTIN_TEST_PROVIDERS } from "./builtin-test-providers"
+import { proxiedFetchInit, resolveNetworkProxy } from "../util/network-proxy"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -69,16 +69,12 @@ export namespace Provider {
   }
 
   export function resolveFetchProxy(config: Config.Info): string | undefined {
-    const proxy = config.network?.proxy
-    if (!proxy || proxy.enabled === false) return
-    const url = proxy.url?.trim()
-    return url || undefined
+    return resolveNetworkProxy(config, "llmProvider")
   }
 
   export function providerFetchInit(opts: BunFetchRequestInit, proxyUrl?: string): BunFetchRequestInit {
     return {
-      ...opts,
-      ...(proxyUrl ? { proxy: proxyUrl } : {}),
+      ...proxiedFetchInit(opts, proxyUrl),
       // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
       timeout: false,
     }
@@ -390,17 +386,7 @@ export namespace Provider {
 
     log.info("init")
 
-    // Built-in test providers are fixed in source and then customized by
-    // same-name user config through the normal provider parsing path.
-    // Same-name user config customizes the built-in provider instead of
-    // replacing it wholesale; small options overrides must not erase models.
-    const userConfigProviders = (config.provider ?? {}) as NonNullable<Config.Info["provider"]>
-    const mergedConfigProviders: NonNullable<Config.Info["provider"]> = { ...BUILTIN_TEST_PROVIDERS }
-    for (const [providerID, provider] of entries(userConfigProviders)) {
-      const builtin = BUILTIN_TEST_PROVIDERS[providerID]
-      mergedConfigProviders[providerID] = builtin ? mergeDeep(builtin, provider) : provider
-    }
-    const configProviders = entries(mergedConfigProviders)
+    const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
 
     // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models.
     // discoverHexinModelsForStartup is fault-isolated by contract: a hexin
@@ -449,9 +435,7 @@ export namespace Provider {
         name: provider.name ?? existing?.name ?? providerID,
         env: provider.env ?? existing?.env ?? [],
         options: mergeDeep(existing?.options ?? {}, provider.options ?? {}),
-        // 内置测试 provider 标记为 custom（与 hexin 内置 provider 一致）；
-        // 其余来自 opencorvus.jsonc 的标记为 config。
-        source: providerID in BUILTIN_TEST_PROVIDERS ? "custom" : "config",
+        source: "config",
         models: existing?.models ?? {},
       }
 
@@ -620,10 +604,8 @@ export namespace Provider {
 
     // load config
     for (const [providerID, provider] of configProviders) {
-      // 内置测试 provider 标记为 custom（与 hexin 内置 provider 一致）；
-      // 这里是最终落到 `providers` 的 source,需与上面 database 阶段保持一致。
       const partial: Partial<Info> = {
-        source: providerID in BUILTIN_TEST_PROVIDERS ? "custom" : "config",
+        source: "config",
       }
       if (provider.env) partial.env = provider.env
       if (provider.name) partial.name = provider.name

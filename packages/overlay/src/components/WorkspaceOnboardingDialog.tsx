@@ -177,7 +177,9 @@ export function WorkspaceOnboardingDialog() {
                     data-busy={activeAction() === `detected:${project.directory}` ? "true" : "false"}
                     disabled={actionRunner.pending()}
                     aria-busy={activeAction() === `detected:${project.directory}` ? "true" : "false"}
-                    onClick={() => void runAction(`detected:${project.directory}`, () => setDirectory(project.directory))}
+                    onClick={() =>
+                      void runAction(`detected:${project.directory}`, () => setDirectory(project.directory))
+                    }
                   >
                     <span class="workspace-onboarding-recent-icon" aria-hidden="true">
                       <Icon name="folder" />

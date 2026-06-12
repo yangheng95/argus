@@ -90,7 +90,7 @@ Splitting per-agent models from the execution default lets you **plan with a str
 
 ```jsonc
 {
-  "model": "alibaba-cn/qwen3.5-plus",
+  "model": "openai/gpt-5.5",
   "small_model": "alibaba-cn/qwen2.5-7b",
   "assistant": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },

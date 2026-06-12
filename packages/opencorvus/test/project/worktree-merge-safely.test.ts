@@ -274,7 +274,12 @@ describe("Worktree.mergeSafely", () => {
 
     expect(outcome.primaryRecoveryCommit).toMatch(/^[0-9a-f]{40}$/)
     const recoveryFiles = await $`git show --name-only --format= ${outcome.primaryRecoveryCommit}`.cwd(tmp.path).text()
-    expect(recoveryFiles.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)).toEqual(["kept.txt"])
+    expect(
+      recoveryFiles
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ).toEqual(["kept.txt"])
     const status = (await $`git status --porcelain -- webpage-evidence/source.html`.cwd(tmp.path).text()).trim()
     expect(status).toBe("M webpage-evidence/source.html")
   })

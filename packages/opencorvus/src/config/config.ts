@@ -48,7 +48,7 @@ export namespace Config {
       message: 'Model must be in the format "provider/model".',
     })
     .meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
-  export const DEFAULT_MODEL = "hexin/kimi-k2.6"
+  export const DEFAULT_MODEL = "openai/gpt-5.5"
 
   const log = Log.create({ service: "config" })
 
@@ -1127,23 +1127,35 @@ export namespace Config {
 
   export const NetworkProxy = z
     .object({
-      enabled: z.boolean().optional().describe("Enable the configured HTTP(S) proxy for provider fetch requests"),
-      url: z
-        .string()
-        .trim()
-        .min(1)
+      llmProvider: z
+        .boolean()
         .optional()
-        .describe("HTTP(S) proxy URL, e.g. http://127.0.0.1:7890"),
+        .describe("Route LLM provider HTTP requests through the configured HTTP(S) proxy"),
+      webResearch: z
+        .boolean()
+        .optional()
+        .describe("Route websearch and webfetch HTTP requests through the configured HTTP(S) proxy"),
+      url: z.string().trim().min(1).optional().describe("HTTP(S) proxy URL, e.g. http://127.0.0.1:7890"),
+      username: z.string().trim().min(1).optional().describe("Proxy authentication username"),
+      password: z.string().trim().min(1).optional().describe("Proxy authentication password"),
     })
     .strict()
     .superRefine((proxy, ctx) => {
-      if (proxy.enabled === true && !proxy.url) {
+      const proxyEnabled = proxy.llmProvider === true || proxy.webResearch === true
+      if (proxyEnabled && !proxy.url) {
         ctx.addIssue({
           code: "custom",
           path: ["url"],
-          message: "network.proxy.url is required when network.proxy.enabled is true.",
+          message: "network.proxy.url is required when network.proxy.llmProvider or network.proxy.webResearch is true.",
         })
         return
+      }
+      if (proxy.password && !proxy.username) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["password"],
+          message: "network.proxy.username is required when network.proxy.password is set.",
+        })
       }
       if (!proxy.url) return
       let parsed: URL
@@ -1164,6 +1176,14 @@ export namespace Config {
           message: "network.proxy.url must use http:// or https://.",
         })
       }
+      if (parsed.username || parsed.password) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["url"],
+          message:
+            "network.proxy.url must not include credentials; use network.proxy.username and network.proxy.password.",
+        })
+      }
     })
     .meta({
       ref: "NetworkProxyConfig",
@@ -1172,7 +1192,7 @@ export namespace Config {
 
   export const Network = z
     .object({
-      proxy: NetworkProxy.optional().describe("Provider HTTP proxy configuration"),
+      proxy: NetworkProxy.optional().describe("HTTP proxy configuration for provider and web research traffic"),
     })
     .strict()
     .meta({

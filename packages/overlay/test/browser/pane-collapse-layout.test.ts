@@ -52,7 +52,8 @@ test(
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
-      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
@@ -263,7 +264,7 @@ test(
       assertAbsent(await page.$("#taskDir [data-path-editor]"))
       assertPresent(await page.$('[data-editor="pycharm"] svg'))
       assert.ok(
-        (((await page.$eval('[data-editor="pycharm"]', (node) => node.textContent)) || "").trim()).includes("PyCharm"),
+        ((await page.$eval('[data-editor="pycharm"]', (node) => node.textContent)) || "").trim().includes("PyCharm"),
       )
       await page.keyboard.press("Escape")
 
@@ -348,8 +349,14 @@ test(
       assert.equal(projectMenu.text.includes("WebStorm"), false)
       assert.equal(projectMenu.rows.length, 3)
       assert.equal(new Set(projectMenu.rows.map((row) => row.pathLeft)).size, 1)
-      assert.equal(projectMenu.rows.every((row) => row.pathAlign === "left" || row.pathAlign === "start"), true)
-      assert.equal(projectMenu.rows.every((row) => row.pathText.startsWith("C:/Users/chuan/myhexin-local")), true)
+      assert.equal(
+        projectMenu.rows.every((row) => row.pathAlign === "left" || row.pathAlign === "start"),
+        true,
+      )
+      assert.equal(
+        projectMenu.rows.every((row) => row.pathText.startsWith("C:/Users/chuan/myhexin-local")),
+        true,
+      )
       await page.keyboard.press("Escape")
 
       const toolbarPlacement = await page.evaluate(() => {

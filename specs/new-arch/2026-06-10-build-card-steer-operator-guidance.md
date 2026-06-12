@@ -14,16 +14,16 @@ guide while work is happening.
 
 ## Existing Evidence
 
-| Surface | Current behavior | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/orchestrator/direct-reply.ts` | `DIRECT_REPLY_AGENT_KINDS` excludes `build`; `DIRECT_AGENT_SESSION_CONTROL_KINDS` includes `build` for cancel/control only. | Keep. Direct reply and session control are separate concepts. |
-| `packages/opencorvus/src/task-api/index.ts::resolveDirectReplyTarget` | Rejects any session kind outside `DIRECT_REPLY_AGENT_KINDS` with `InvalidReplyTargetKindError`. | Keep for generic direct reply. |
-| `packages/opencorvus/src/task-api/index.ts::appendDirectAgentSessionReply` | Rejects build-tagged envelopes with `BuildSessionDirectReplyError` because the next loop would wake build tools through a generic route. | Keep. This prevents runtime contract pollution. |
-| `packages/opencorvus/src/orchestrator/tools.ts::steer_subagent` | Non-build children call `EngineService.replyAgentSession`; live-owned build children return an activity snapshot and never inject. | Keep. This is the orchestrator tool contract from the 2026-05-24 spec. |
-| `packages/overlay/src/components/Card.tsx` | Build phase cards can identify `phaseSessionKind === "build"` / `phaseID === "build"` and have `phaseSessionID`. | Route build phase input through task operator message instead of direct reply. |
-| `packages/overlay/src/components/ChatBubble.tsx` | Top-level agent cards carry `stage`; a build message card can identify `stage === "build"`. | Route build agent input through task operator message instead of direct reply. |
-| `packages/overlay/src/services/task.ts::replyToAgentSession` | Posts to `/task/:taskID/session/:sessionID/reply`. | Keep for non-build session steering. |
-| `packages/opencorvus/src/server/routes/orchestrator.ts` | `POST /task/:taskID/message` is the single task-level operator message route. | Reuse; do not add a parallel route. |
+| Surface                                                                    | Current behavior                                                                                                                         | Decision                                                                       |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/orchestrator/direct-reply.ts`                     | `DIRECT_REPLY_AGENT_KINDS` excludes `build`; `DIRECT_AGENT_SESSION_CONTROL_KINDS` includes `build` for cancel/control only.              | Keep. Direct reply and session control are separate concepts.                  |
+| `packages/opencorvus/src/task-api/index.ts::resolveDirectReplyTarget`      | Rejects any session kind outside `DIRECT_REPLY_AGENT_KINDS` with `InvalidReplyTargetKindError`.                                          | Keep for generic direct reply.                                                 |
+| `packages/opencorvus/src/task-api/index.ts::appendDirectAgentSessionReply` | Rejects build-tagged envelopes with `BuildSessionDirectReplyError` because the next loop would wake build tools through a generic route. | Keep. This prevents runtime contract pollution.                                |
+| `packages/opencorvus/src/orchestrator/tools.ts::steer_subagent`            | Non-build children call `EngineService.replyAgentSession`; live-owned build children return an activity snapshot and never inject.       | Keep. This is the orchestrator tool contract from the 2026-05-24 spec.         |
+| `packages/overlay/src/components/Card.tsx`                                 | Build phase cards can identify `phaseSessionKind === "build"` / `phaseID === "build"` and have `phaseSessionID`.                         | Route build phase input through task operator message instead of direct reply. |
+| `packages/overlay/src/components/ChatBubble.tsx`                           | Top-level agent cards carry `stage`; a build message card can identify `stage === "build"`.                                              | Route build agent input through task operator message instead of direct reply. |
+| `packages/overlay/src/services/task.ts::replyToAgentSession`               | Posts to `/task/:taskID/session/:sessionID/reply`.                                                                                       | Keep for non-build session steering.                                           |
+| `packages/opencorvus/src/server/routes/orchestrator.ts`                    | `POST /task/:taskID/message` is the single task-level operator message route.                                                            | Reuse; do not add a parallel route.                                            |
 
 ## Historical Constraint
 

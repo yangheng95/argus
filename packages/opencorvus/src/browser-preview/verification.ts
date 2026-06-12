@@ -10,7 +10,9 @@ import { runBrowserPreviewEvidenceJob } from "./evidence-runner"
 
 export * from "./verification-core"
 
-export async function verifyBrowserPreview(input: BrowserPreviewVerificationInput): Promise<BrowserPreviewVerification> {
+export async function verifyBrowserPreview(
+  input: BrowserPreviewVerificationInput,
+): Promise<BrowserPreviewVerification> {
   return runBrowserPreviewVerification(input, captureWithBrowserEvidenceRunner)
 }
 

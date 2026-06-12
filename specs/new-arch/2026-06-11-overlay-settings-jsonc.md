@@ -6,13 +6,13 @@ Persist overlay connection settings in a JSONC file.
 
 ## Call sites checked
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
+| Surface                                                                    | Current behavior                                            | Change                                                                |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
 | `packages/overlay/src-tauri/src/main.rs` `overlay_settings_path/load/save` | Native desktop settings use `overlay.json` and `serde_json` | Use `overlay.jsonc`, parse JSONC text, keep stable pretty JSON output |
-| `packages/overlay/src/store/settings.ts` `settings.load/save` | Calls native `settings.load` / `settings.save` | No interface change |
-| `packages/overlay/src/services/tauri-transport.ts` | Maps native commands to Tauri commands | No interface change |
-| `packages/overlay/src/services/overlay-settings-storage.ts` | Browser fallback uses `localStorage` keys | No desktop JSONC write path here |
-| `packages/web/src/content/docs/**/overlay/overview.mdx` | Documents `.opencorvus/overlay.json` | Update docs to `.opencorvus/overlay.jsonc` |
+| `packages/overlay/src/store/settings.ts` `settings.load/save`              | Calls native `settings.load` / `settings.save`              | No interface change                                                   |
+| `packages/overlay/src/services/tauri-transport.ts`                         | Maps native commands to Tauri commands                      | No interface change                                                   |
+| `packages/overlay/src/services/overlay-settings-storage.ts`                | Browser fallback uses `localStorage` keys                   | No desktop JSONC write path here                                      |
+| `packages/web/src/content/docs/**/overlay/overview.mdx`                    | Documents `.opencorvus/overlay.json`                        | Update docs to `.opencorvus/overlay.jsonc`                            |
 
 ## Decision
 

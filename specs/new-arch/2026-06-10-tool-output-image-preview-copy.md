@@ -16,14 +16,14 @@ Tool output screenshots render through the shared message image preview, but the
 
 ## Call Point Sweep
 
-| Symbol / Surface | Call points | Action |
-| --- | --- | --- |
-| `PreviewableImage` | `packages/overlay/src/components/FilePart.tsx`, `packages/overlay/src/components/InlineToolPart.tsx` | Keep existing shared entry point. |
-| `ImagePreviewHost` | `packages/overlay/src/components/ImagePreview.tsx`, mounted from `packages/overlay/src/main.tsx` | Add the copy image toolbar action. |
-| `imagePreviewState` | `packages/overlay/src/services/image-preview.ts`, consumed by `ImagePreviewHost` | Keep image identity source unchanged. |
-| `navigator.clipboard.write` | New usage in `ImagePreviewHost` | Write current preview bitmap as `image/png`. |
-| `.image-preview-dialog__toolbar` | `packages/overlay/src/styles/surfaces/messages.css` | Reuse existing toolbar layout. |
-| `message-image-preview.test.ts` | Existing image preview regression test | Add assertions for copy action and PNG clipboard path. |
+| Symbol / Surface                 | Call points                                                                                          | Action                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `PreviewableImage`               | `packages/overlay/src/components/FilePart.tsx`, `packages/overlay/src/components/InlineToolPart.tsx` | Keep existing shared entry point.                      |
+| `ImagePreviewHost`               | `packages/overlay/src/components/ImagePreview.tsx`, mounted from `packages/overlay/src/main.tsx`     | Add the copy image toolbar action.                     |
+| `imagePreviewState`              | `packages/overlay/src/services/image-preview.ts`, consumed by `ImagePreviewHost`                     | Keep image identity source unchanged.                  |
+| `navigator.clipboard.write`      | New usage in `ImagePreviewHost`                                                                      | Write current preview bitmap as `image/png`.           |
+| `.image-preview-dialog__toolbar` | `packages/overlay/src/styles/surfaces/messages.css`                                                  | Reuse existing toolbar layout.                         |
+| `message-image-preview.test.ts`  | Existing image preview regression test                                                               | Add assertions for copy action and PNG clipboard path. |
 
 ## Acceptance
 

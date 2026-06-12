@@ -129,10 +129,7 @@ describe("config panel sizing", () => {
     expect(PROMPT_CATALOG_TSX).not.toContain('{t("prompt.show_default")}')
     expect(bodyOf('.oc-tabs[data-ui="prompt-view-tabs"]')).toMatch(/--oc-tabs-gap\s*:/)
     expect(bodyOf(".prompt-editor-actions")).toMatch(/display:\s*inline-flex/)
-    expect(bodyOf('.oc-tab[data-ui="prompt-view-tab"][data-active="true"]')).toMatch(
-      /--oc-tab-bg:\s*var\(--surface\)/,
-    )
+    expect(bodyOf('.oc-tab[data-ui="prompt-view-tab"][data-active="true"]')).toMatch(/--oc-tab-bg:\s*var\(--surface\)/)
     expect(bodyOf(".prompt-preview-card--attached")).toMatch(/min-height:\s*calc\(160px \* var\(--ui-scale\)\)/)
   })
-
 })

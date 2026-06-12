@@ -19,15 +19,18 @@ import researchReportMd from "./builtin/research-report.md" with { type: "text" 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
   const ExpirationTimestamp = z
-    .preprocess((value) => {
-      if (value instanceof Date) return Number.isNaN(value.getTime()) ? value : value.toISOString()
-      if (typeof value === "number" && Number.isFinite(value)) {
-        const date = new Date(value)
-        return Number.isNaN(date.getTime()) ? value : date.toISOString()
-      }
-      if (typeof value === "string") return value.trim()
-      return value
-    }, z.string().refine((value) => !Number.isNaN(Date.parse(value)), "expires_at must be a valid timestamp"))
+    .preprocess(
+      (value) => {
+        if (value instanceof Date) return Number.isNaN(value.getTime()) ? value : value.toISOString()
+        if (typeof value === "number" && Number.isFinite(value)) {
+          const date = new Date(value)
+          return Number.isNaN(date.getTime()) ? value : date.toISOString()
+        }
+        if (typeof value === "string") return value.trim()
+        return value
+      },
+      z.string().refine((value) => !Number.isNaN(Date.parse(value)), "expires_at must be a valid timestamp"),
+    )
     .optional()
 
   export const Info = z.object({
@@ -121,9 +124,7 @@ export namespace Skill {
         content: string
       }
 
-  const builtins = [
-    { skill: researchReportMd, files: {} },
-  ] as const
+  const builtins = [{ skill: researchReportMd, files: {} }] as const
 
   function isExpired(info: Pick<Info, "expires_at">) {
     return info.expires_at !== undefined && Date.parse(info.expires_at) <= Date.now()

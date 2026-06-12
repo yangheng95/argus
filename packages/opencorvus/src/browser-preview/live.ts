@@ -150,7 +150,10 @@ class BrowserPreviewLiveSidecar {
     })
     this.child.once("error", (error) => this.closeWithError(error, onClose))
     this.child.once("exit", (code, signal) =>
-      this.closeWithError(new Error(`Browser preview live sidecar exited with ${signal ?? code}. ${this.stderr}`), onClose),
+      this.closeWithError(
+        new Error(`Browser preview live sidecar exited with ${signal ?? code}. ${this.stderr}`),
+        onClose,
+      ),
     )
   }
 
@@ -174,7 +177,9 @@ class BrowserPreviewLiveSidecar {
         const pending = this.pending.get(id)
         if (!pending) return
         this.pending.delete(id)
-        pending.reject(signal?.reason instanceof Error ? signal.reason : new Error("Browser preview live command aborted."))
+        pending.reject(
+          signal?.reason instanceof Error ? signal.reason : new Error("Browser preview live command aborted."),
+        )
       }
       signal?.addEventListener("abort", abort, { once: true })
       this.pending.set(id, {

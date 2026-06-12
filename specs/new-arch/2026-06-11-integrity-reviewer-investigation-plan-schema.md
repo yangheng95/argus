@@ -11,15 +11,15 @@ only the missing nested field after a rejected submission.
 
 ## Repository Survey
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Reviewer report schema | `packages/opencorvus/src/integrity/team-schema.ts` | Make `investigationPlan` required and describe `requestPromise` as the audited original request promise. |
-| Final consensus tool | `packages/opencorvus/src/integrity/team-agent.ts::createSingleSessionIntegrityToolKit` | Tool description must tell the single-session consensus agent that every `reviewers[]` entry carries the complete plan. |
-| Reviewer prompt | `packages/opencorvus/src/integrity/team-agent.ts::buildReviewerPrompt` | Keep prompt aligned with required schema fields. |
-| Consensus prompt | `packages/opencorvus/src/integrity/team-agent.ts::buildSingleSessionIntegrityPrompt` | Keep the same contract for embedded reviewer reports. |
-| Prompt rendering | `packages/opencorvus/src/integrity/team-agent.ts::renderReviewerReportsForConsensusPrompt` | Once schema requires the plan, no alternate missing-plan rendering path is needed. |
-| Schema tests | `packages/opencorvus/test/integrity/team-schema.test.ts` | Add negative coverage for omitted plans and missing `requestPromise`. |
-| Agent prompt tests | `packages/opencorvus/test/integrity/team-agent.test.ts` plus integrity fixtures | Update reports to the required shape and assert prompt wording. |
+| Surface                | File                                                                                       | Decision                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Reviewer report schema | `packages/opencorvus/src/integrity/team-schema.ts`                                         | Make `investigationPlan` required and describe `requestPromise` as the audited original request promise.                |
+| Final consensus tool   | `packages/opencorvus/src/integrity/team-agent.ts::createSingleSessionIntegrityToolKit`     | Tool description must tell the single-session consensus agent that every `reviewers[]` entry carries the complete plan. |
+| Reviewer prompt        | `packages/opencorvus/src/integrity/team-agent.ts::buildReviewerPrompt`                     | Keep prompt aligned with required schema fields.                                                                        |
+| Consensus prompt       | `packages/opencorvus/src/integrity/team-agent.ts::buildSingleSessionIntegrityPrompt`       | Keep the same contract for embedded reviewer reports.                                                                   |
+| Prompt rendering       | `packages/opencorvus/src/integrity/team-agent.ts::renderReviewerReportsForConsensusPrompt` | Once schema requires the plan, no alternate missing-plan rendering path is needed.                                      |
+| Schema tests           | `packages/opencorvus/test/integrity/team-schema.test.ts`                                   | Add negative coverage for omitted plans and missing `requestPromise`.                                                   |
+| Agent prompt tests     | `packages/opencorvus/test/integrity/team-agent.test.ts` plus integrity fixtures            | Update reports to the required shape and assert prompt wording.                                                         |
 
 ## Intended Behavior
 

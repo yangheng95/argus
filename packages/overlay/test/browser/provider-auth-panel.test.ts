@@ -854,7 +854,10 @@ test(
             },
           },
         ])
-        assert.deepEqual(state.calls.configPatch.filter((patch) => Object.hasOwn(patch, "provider")), [])
+        assert.deepEqual(
+          state.calls.configPatch.filter((patch) => Object.hasOwn(patch, "provider")),
+          [],
+        )
         assert.equal(await tab.$('[data-testid="provider-custom-row-anthropic"]'), null)
       },
     )

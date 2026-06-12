@@ -485,7 +485,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
 
       // AI SDK v6 contract: `data` carries raw base64 — the openai-compatible
       // adapter prepends `data:<mediaType>;base64,` itself when serializing
-      // to image_url. Returning a full data URL here double-wraps and CZ
+      // to image_url. Returning a full data URL here double-wraps and some
       // Kimi rejects HTTP 500 "Non-base64 digit found".
       expect(result[0].content[0].data).toBe(pngBytes.toString("base64"))
     })

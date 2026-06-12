@@ -478,6 +478,7 @@ export const PanelTool = Tool.define("panel", {
           requestID: params.request_id ?? ctx.extra?.requestID,
           request,
           executor: params.executor,
+          model: params.model,
           queue,
           checks: params.checks,
           routing: params.routing,

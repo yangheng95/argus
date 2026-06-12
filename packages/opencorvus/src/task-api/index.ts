@@ -846,6 +846,12 @@ export namespace EngineService {
       sessionID: session.id,
       patch: { [EffectiveConfig.TASK_SNAPSHOT_KEY]: taskConfigSnapshot },
     })
+    if (input.model) {
+      await Session.mergeConfigOverlay({
+        sessionID: session.id,
+        patch: { model: input.model },
+      })
+    }
     const resolvedChecks = await taskChecks(input.checks)
     const now = Date.now()
     const taskID = Identifier.ascending("task")

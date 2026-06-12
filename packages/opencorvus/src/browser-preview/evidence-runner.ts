@@ -246,10 +246,9 @@ export async function finalizeBrowserPreviewSidecarCapture(input: {
     }
   }
   if (!capture.layers || !capture.dom) {
-    const missing = [
-      !capture.layers ? "layers" : undefined,
-      !capture.dom ? "dom" : undefined,
-    ].filter((item): item is string => !!item)
+    const missing = [!capture.layers ? "layers" : undefined, !capture.dom ? "dom" : undefined].filter(
+      (item): item is string => !!item,
+    )
     const summary = `browser preview capture failed: sidecar did not return structured ${missing.join(" and ")} evidence`
     return {
       capture: {
@@ -282,7 +281,9 @@ export async function finalizeBrowserPreviewSidecarCapture(input: {
   }
   const failedLayers = runtimeCaptureFailedLayers(capture.layers)
   const passed = failedLayers.length === 0
-  const summary = passed ? `all runtime capture layers passed on ${input.url}` : `failed layers: ${failedLayers.join(", ")}`
+  const summary = passed
+    ? `all runtime capture layers passed on ${input.url}`
+    : `failed layers: ${failedLayers.join(", ")}`
   return {
     capture: {
       captured: true,

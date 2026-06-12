@@ -14,14 +14,14 @@ This is not a SQLite/MySQL dual-runtime adapter. SQLite remains the only runtime
 
 Whole-repo checks before implementation:
 
-| Concern | Evidence | Decision |
-| --- | --- | --- |
-| Global DB routes | `/global/db/reset` lives in `packages/opencorvus/src/server/routes/global.ts`. | Add MySQL transfer routes to the same control-plane route module. |
-| Route directory policy | `packages/transport-protocol/src/index.ts` bypasses `/global/*`; overlay and contract tests enumerate `/global/db/reset`. | Add tests for `/global/db/mysql/schema`, `/global/db/mysql/export`, and `/global/db/mysql/import` as global routes. |
-| Schema source | `packages/opencorvus/src/storage/ddl.ts` already derives SQLite DDL from `packages/opencorvus/src/storage/schema.ts`. | Reuse the same collected Drizzle table metadata for MySQL DDL and snapshot table order. |
-| Reset semantics | `Database.reset(projectDir)` also removes project scratch. | Import should only rebuild DB files; it must not delete project worktrees/scratch. |
-| FTS | `memory_fts` is a SQLite FTS5 virtual table populated from `memory_chunk`. | Do not import/export `memory_fts` rows; rebuild it from `memory_chunk` after import. |
-| SQLite-specific indexes | `part_message_tool_call_idx` is a partial/expression index. | MySQL staging DDL reports unsupported indexes explicitly instead of hiding them. |
+| Concern                 | Evidence                                                                                                                  | Decision                                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Global DB routes        | `/global/db/reset` lives in `packages/opencorvus/src/server/routes/global.ts`.                                            | Add MySQL transfer routes to the same control-plane route module.                                                   |
+| Route directory policy  | `packages/transport-protocol/src/index.ts` bypasses `/global/*`; overlay and contract tests enumerate `/global/db/reset`. | Add tests for `/global/db/mysql/schema`, `/global/db/mysql/export`, and `/global/db/mysql/import` as global routes. |
+| Schema source           | `packages/opencorvus/src/storage/ddl.ts` already derives SQLite DDL from `packages/opencorvus/src/storage/schema.ts`.     | Reuse the same collected Drizzle table metadata for MySQL DDL and snapshot table order.                             |
+| Reset semantics         | `Database.reset(projectDir)` also removes project scratch.                                                                | Import should only rebuild DB files; it must not delete project worktrees/scratch.                                  |
+| FTS                     | `memory_fts` is a SQLite FTS5 virtual table populated from `memory_chunk`.                                                | Do not import/export `memory_fts` rows; rebuild it from `memory_chunk` after import.                                |
+| SQLite-specific indexes | `part_message_tool_call_idx` is a partial/expression index.                                                               | MySQL staging DDL reports unsupported indexes explicitly instead of hiding them.                                    |
 
 ## API
 
@@ -49,9 +49,7 @@ Accepts:
   "snapshot": {
     "format": "opencorvus.mysql-transfer.v1",
     "schemaFingerprint": "...",
-    "tables": [
-      { "name": "project", "columns": ["id", "..."], "rows": [{ "id": "..." }] }
-    ]
+    "tables": [{ "name": "project", "columns": ["id", "..."], "rows": [{ "id": "..." }] }]
   }
 }
 ```

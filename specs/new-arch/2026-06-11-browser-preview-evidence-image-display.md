@@ -15,13 +15,13 @@ The preview target is now discovered, but `BrowserPreviewPanel` does not render 
 
 ## Call Points
 
-| Symbol / file | Current behavior | Decision |
-| --- | --- | --- |
-| `findReadableBrowserPreviewEvidenceByID` in `packages/opencorvus/src/browser-preview/persist.ts` | Validates persisted evidence and artifact readability. | Reuse it for evidence metadata and add an exported helper that returns the readable capture artifact path. |
-| `BrowserPreviewRoutes` in `packages/opencorvus/src/server/routes/browser-preview.ts` | Returns target JSON, evidence JSON, and capture JSON. | Add a task-scoped evidence PNG endpoint backed by persisted evidence only. |
-| `loadTaskBrowserPreviewEvidence` in `packages/overlay/src/services/browser-preview.ts` | Loads evidence JSON through `apiJson`. | Add a binary HostTransport loader for the evidence PNG and convert it to an object URL in the component. |
-| `BrowserPreviewPanel` in `packages/overlay/src/components/BrowserPreviewPanel.tsx` | Shows empty state after target resolution and text-only evidence after capture. | Auto-capture a saved target once per target/viewport set and render the current viewport screenshot image. |
-| `packages/overlay/test/browser/browser-preview-evidence.test.ts` | Asserts text evidence only. | Require screenshot image rendering and binary image route use. |
+| Symbol / file                                                                                    | Current behavior                                                                | Decision                                                                                                   |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `findReadableBrowserPreviewEvidenceByID` in `packages/opencorvus/src/browser-preview/persist.ts` | Validates persisted evidence and artifact readability.                          | Reuse it for evidence metadata and add an exported helper that returns the readable capture artifact path. |
+| `BrowserPreviewRoutes` in `packages/opencorvus/src/server/routes/browser-preview.ts`             | Returns target JSON, evidence JSON, and capture JSON.                           | Add a task-scoped evidence PNG endpoint backed by persisted evidence only.                                 |
+| `loadTaskBrowserPreviewEvidence` in `packages/overlay/src/services/browser-preview.ts`           | Loads evidence JSON through `apiJson`.                                          | Add a binary HostTransport loader for the evidence PNG and convert it to an object URL in the component.   |
+| `BrowserPreviewPanel` in `packages/overlay/src/components/BrowserPreviewPanel.tsx`               | Shows empty state after target resolution and text-only evidence after capture. | Auto-capture a saved target once per target/viewport set and render the current viewport screenshot image. |
+| `packages/overlay/test/browser/browser-preview-evidence.test.ts`                                 | Asserts text evidence only.                                                     | Require screenshot image rendering and binary image route use.                                             |
 
 ## Design
 

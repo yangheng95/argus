@@ -29,7 +29,7 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(main).toContain("<BrowserPreviewPanel")
   expect(main).toContain('active={() => isCenterWorkbenchPanelOpen("browser")}')
   expect(main).toContain("browserPreviewLinkRefresh")
-  expect(main).toContain('refreshKey={() => `${boardStore.boardUpdatedAt}:${browserPreviewLinkRefresh()}`}')
+  expect(main).toContain("refreshKey={() => `${boardStore.boardUpdatedAt}:${browserPreviewLinkRefresh()}`}")
   expect(main).toContain("function openRightActivity(activity: RightActivity): void")
   expect(main).toContain("openCenterWorkbenchPanel(activity)")
   expect(main).toContain('onReady={() => openRightActivity("browser")}')

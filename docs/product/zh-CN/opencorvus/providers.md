@@ -113,7 +113,7 @@ per-agent 覆盖与执行模型分离的目的：**用强但慢的模型规划�
 
 ```jsonc
 {
-  "model": "alibaba-cn/qwen3.5-plus",
+  "model": "openai/gpt-5.5",
   "small_model": "alibaba-cn/qwen2.5-7b",
   "assistant": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },

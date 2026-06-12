@@ -5,6 +5,7 @@ import { ControlMessageInput, ControlMessageResult } from "@/control/message-sch
 import { Database, and, eq } from "@/storage/db"
 import z from "zod"
 import { ChannelId } from "./catalog"
+import { isModelReference } from "@/provider/model-ref"
 
 export const MessageAttachmentInput = z.object({
   filename: z.string().trim().min(1),
@@ -23,6 +24,12 @@ export const ChannelIngressInput = z.object({
   request_id: z.string().optional(),
   source: z.string().optional(),
   executor: z.enum(["opencorvus", "codex", "claude-code"]).optional(),
+  model: z
+    .string()
+    .refine(isModelReference, {
+      message: 'Model must be in the format "provider/model".',
+    })
+    .optional(),
   allow_create: z.boolean().default(true),
   allow_session_mutation: z.boolean().default(false),
   bind: z.boolean().default(true),
@@ -57,6 +64,7 @@ export namespace ChannelIngress {
           text: input.text,
           taskID: input.task_id ?? binding?.task_id ?? undefined,
           executor: input.executor,
+          model: input.model,
           channel: input.channel,
           thread: input.thread,
           user_id: input.user_id,

@@ -73,11 +73,17 @@ try {
 
     if (viewport.name === "desktop") {
       assert.ok(layout.trendGrid.width > 1300, "Desktop trend grid should span the content width")
-      assert.ok(layout.gdpCard.x > layout.mapCard.x + layout.mapCard.width, "Desktop GDP card should sit right of the map")
+      assert.ok(
+        layout.gdpCard.x > layout.mapCard.x + layout.mapCard.width,
+        "Desktop GDP card should sit right of the map",
+      )
     }
 
     if (viewport.name === "mobile") {
-      assert.ok(layout.gdpCard.y > layout.mapCard.y + layout.mapCard.height, "Mobile GDP card should stack below the map")
+      assert.ok(
+        layout.gdpCard.y > layout.mapCard.y + layout.mapCard.height,
+        "Mobile GDP card should stack below the map",
+      )
       assert.ok(layout.trendGrid.width < 370, "Mobile trend grid should fit the narrow viewport")
     }
     await page.close()

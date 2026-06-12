@@ -928,7 +928,6 @@ if (chatScroll) {
   render(() => <Conversation container={chatScroll} />, chatScroll)
 }
 
-
 const fileChangesMountEl = document.getElementById("solidFileChangesMount")
 if (fileChangesMountEl) {
   fileChangesMountEl.innerHTML = ""
@@ -1294,18 +1293,12 @@ if (leftActivityToolbarEl) {
 
 const leftSkillsPanelEl = document.getElementById("solidLeftSkillsPanel")
 if (leftSkillsPanelEl) {
-  render(
-    () => <SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />,
-    leftSkillsPanelEl,
-  )
+  render(() => <SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />, leftSkillsPanelEl)
 }
 
 const leftMcpPanelEl = document.getElementById("solidLeftMcpPanel")
 if (leftMcpPanelEl) {
-  render(
-    () => <McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />,
-    leftMcpPanelEl,
-  )
+  render(() => <McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />, leftMcpPanelEl)
 }
 
 const leftMemoryPanelEl = document.getElementById("solidLeftMemoryPanel")

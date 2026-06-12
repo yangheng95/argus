@@ -54,7 +54,7 @@ Drop a minimal `~/.opencorvus/config/opencorvus.json`:
 
 ```jsonc
 {
-  "model": "alibaba-cn/qwen3.5-plus",
+  "model": "openai/gpt-5.5",
 }
 ```
 

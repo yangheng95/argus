@@ -51,12 +51,7 @@ export const ProtocolEventTable = sqliteTable(
       table.emitted_at,
       table.seq,
     ),
-    index("protocol_event_session_type_status_order_idx").on(
-      table.session_id,
-      table.type,
-      table.emitted_at,
-      table.seq,
-    ),
+    index("protocol_event_session_type_status_order_idx").on(table.session_id, table.type, table.emitted_at, table.seq),
   ],
 )
 

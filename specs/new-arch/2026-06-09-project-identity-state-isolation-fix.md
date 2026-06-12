@@ -45,8 +45,8 @@ project.worktree = D:\myhexin-local\demos\economy\economy3
 
 Three top-level tasks pointed to that same project:
 
-| Task | Session directory | Stored project worktree before repair |
-| --- | --- | --- |
+| Task                             | Session directory                         | Stored project worktree before repair     |
+| -------------------------------- | ----------------------------------------- | ----------------------------------------- |
 | `tsk_eabb11632001zzdXG3YeharxZ3` | `D:\myhexin-local\demos\economy\economy2` | `D:\myhexin-local\demos\economy\economy3` |
 | `tsk_eabeaf5430011ZOcSNPG64kcjQ` | `D:\myhexin-local\demos\economy\economy1` | `D:\myhexin-local\demos\economy\economy3` |
 | `tsk_eac420660001v90Q4nLG1M576y` | `D:\myhexin-local\demos\economy\economy3` | `D:\myhexin-local\demos\economy\economy3` |
@@ -179,34 +179,34 @@ project_id
 
 ### Must Change
 
-| Surface | File | Required change |
-| --- | --- | --- |
-| Project identity creation | `packages/opencorvus/src/project/project.ts` | Stop using root commit as local project-instance ID. Detect copied legacy markers that collide with another standalone repo. |
-| Project row upsert | `packages/opencorvus/src/project/project.ts` | Never let a standalone repo collision overwrite another standalone repo's `project.worktree`. |
-| Project tests | `packages/opencorvus/test/project/project.test.ts` | Add copied-template standalone repo regression and linked worktree non-regression. |
-| Attachment task registration | `packages/opencorvus/src/task-api/index.ts` | `mergeTaskFileRef` must reject a file URL whose `projectID` differs from `task.project_id`. |
-| Build staging | `packages/opencorvus/src/storage/attachment-store.ts` | `stageToWorktree(projectID, ...)` must reject an attachment URL whose embedded projectID differs from the supplied projectID. |
-| URL screenshot/material artifact creation | `packages/opencorvus/src/orchestrator/tools.ts` | Use the task's `project_id` as the artifact write target, not ambient context alone. |
-| Attachment tests | Add or extend tests under `packages/opencorvus/test` | Cover cross-project artifact registration rejection and staging rejection. |
+| Surface                                   | File                                                  | Required change                                                                                                               |
+| ----------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Project identity creation                 | `packages/opencorvus/src/project/project.ts`          | Stop using root commit as local project-instance ID. Detect copied legacy markers that collide with another standalone repo.  |
+| Project row upsert                        | `packages/opencorvus/src/project/project.ts`          | Never let a standalone repo collision overwrite another standalone repo's `project.worktree`.                                 |
+| Project tests                             | `packages/opencorvus/test/project/project.test.ts`    | Add copied-template standalone repo regression and linked worktree non-regression.                                            |
+| Attachment task registration              | `packages/opencorvus/src/task-api/index.ts`           | `mergeTaskFileRef` must reject a file URL whose `projectID` differs from `task.project_id`.                                   |
+| Build staging                             | `packages/opencorvus/src/storage/attachment-store.ts` | `stageToWorktree(projectID, ...)` must reject an attachment URL whose embedded projectID differs from the supplied projectID. |
+| URL screenshot/material artifact creation | `packages/opencorvus/src/orchestrator/tools.ts`       | Use the task's `project_id` as the artifact write target, not ambient context alone.                                          |
+| Attachment tests                          | Add or extend tests under `packages/opencorvus/test`  | Cover cross-project artifact registration rejection and staging rejection.                                                    |
 
 ### Must Audit But Not Necessarily Change
 
-| Surface | File(s) | Why |
-| --- | --- | --- |
-| `Session.createNext` | `packages/opencorvus/src/session/index.ts` | It correctly uses the active project context, but should remain safe after project identity is corrected. Parent/child project consistency may get a targeted assertion. |
-| `persistQueuedTask` | `packages/opencorvus/src/engine/pipeline.ts` | It accepts the project ID passed by task creation. No direct fix if `Instance.project.id` becomes correct. |
-| Worktree lifecycle | `packages/opencorvus/src/worktree/index.ts` | Real linked git worktrees must continue sharing the primary project. |
-| `Project.addSandbox` / `removeSandbox` | `packages/opencorvus/src/project/project.ts` | Sandboxes are correct for real linked worktrees and task worktrees. Do not convert them into independent projects. |
-| Attachment HTTP route | `packages/opencorvus/src/server/routes/attachment.ts` | Route can keep serving `/attachment/:projectID/:name`; correctness comes from stable project identity and registration validation. |
-| `tool/read.ts`, `frontend-design/read-attachment-tool.ts` | Read canonical attachment refs | They should continue using full URL project IDs, but will benefit from task registration fixes. |
+| Surface                                                   | File(s)                                               | Why                                                                                                                                                                      |
+| --------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Session.createNext`                                      | `packages/opencorvus/src/session/index.ts`            | It correctly uses the active project context, but should remain safe after project identity is corrected. Parent/child project consistency may get a targeted assertion. |
+| `persistQueuedTask`                                       | `packages/opencorvus/src/engine/pipeline.ts`          | It accepts the project ID passed by task creation. No direct fix if `Instance.project.id` becomes correct.                                                               |
+| Worktree lifecycle                                        | `packages/opencorvus/src/worktree/index.ts`           | Real linked git worktrees must continue sharing the primary project.                                                                                                     |
+| `Project.addSandbox` / `removeSandbox`                    | `packages/opencorvus/src/project/project.ts`          | Sandboxes are correct for real linked worktrees and task worktrees. Do not convert them into independent projects.                                                       |
+| Attachment HTTP route                                     | `packages/opencorvus/src/server/routes/attachment.ts` | Route can keep serving `/attachment/:projectID/:name`; correctness comes from stable project identity and registration validation.                                       |
+| `tool/read.ts`, `frontend-design/read-attachment-tool.ts` | Read canonical attachment refs                        | They should continue using full URL project IDs, but will benefit from task registration fixes.                                                                          |
 
 ### Do Not Change
 
-| Surface | Reason |
-| --- | --- |
-| The `/attachment/<projectID>/<name>` URL shape | It is the canonical single source. The bug is unstable project identity, not the URL format. |
-| AttachmentStore's directory derivation from `Project.get(projectID).worktree` | This is the correct single-source design once project identity is stable. |
-| Real linked `git worktree` sharing behavior | Tests already rely on this. Linked worktrees are one project with multiple sandboxes. |
+| Surface                                                                       | Reason                                                                                       |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| The `/attachment/<projectID>/<name>` URL shape                                | It is the canonical single source. The bug is unstable project identity, not the URL format. |
+| AttachmentStore's directory derivation from `Project.get(projectID).worktree` | This is the correct single-source design once project identity is stable.                    |
+| Real linked `git worktree` sharing behavior                                   | Tests already rely on this. Linked worktrees are one project with multiple sandboxes.        |
 
 ## Proposed Fix
 
@@ -295,10 +295,10 @@ If an orchestrator/session context is wrong, this makes the artifact follow the 
 
 Affected materializers found:
 
-| Location | Source |
-| --- | --- |
+| Location                                                                                                                               | Source                     |
+| -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | `orchestrator/tools.ts` URL screenshot materialization around `AttachmentStore.write(Instance.project.id, capture.screenshotPng, ...)` | `source: "url-screenshot"` |
-| `orchestrator/tools.ts` local material materialization around `AttachmentStore.write(Instance.project.id, bytes, mime, filename)` | `source: "material"` |
+| `orchestrator/tools.ts` local material materialization around `AttachmentStore.write(Instance.project.id, bytes, mime, filename)`      | `source: "material"`       |
 
 Other `AttachmentStore.write(Instance.project.id, ...)` call sites should be audited, but only task-scoped artifact producers need to switch to `task.project_id`. User-upload task creation can continue using `Instance.project.id` after project identity is fixed, because the task is being created in that instance.
 
@@ -481,4 +481,3 @@ Historical logs, decision logs, and old message parts should remain immutable ev
 - Do not add fallback copy logic from another project.
 - Do not allow a task to consume another project's artifact as a compatibility path.
 - Do not convert real linked git worktrees into independent projects.
-

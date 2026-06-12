@@ -13,7 +13,9 @@ export function legacyPrefixedServerUrlFromOverlayLocation(
   return prefix ? `${location.origin}/${prefix}` : location.origin
 }
 
-export function serverUrlFromOverlayLocation(location: Pick<Location, "origin" | "pathname" | "protocol">): string | null {
+export function serverUrlFromOverlayLocation(
+  location: Pick<Location, "origin" | "pathname" | "protocol">,
+): string | null {
   return legacyPrefixedServerUrlFromOverlayLocation(location)
 }
 

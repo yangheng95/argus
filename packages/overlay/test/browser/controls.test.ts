@@ -586,311 +586,309 @@ test(
       const url = new URL(req.url)
       const path = route(url)
       requests.push(`${req.method} ${url.pathname}${url.search}`)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") {
-          return new Response(null, { status: 204 })
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") {
+        return new Response(null, { status: 204 })
+      }
+      if (path === "/ui" || path === "/ui/") {
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      }
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks") {
+        return send({
+          ...data.tasks,
+          tasks: data.tasks.tasks.filter((item) => sameDir(item?.task?.directory, url)),
+        })
+      }
+      if (path === "/global/tasks") return send(data.tasks)
+      if (path === "/executor") return send(data.executors)
+      if (path === "/terminal/profiles") return send({ profiles: [] })
+      if (path === "/coding/cli/profiles") return send({ profiles: [] })
+      if (path === "/project/current/worktrees") return send([])
+      if (path === "/path") return send({ ...data.path, directory: projectDir(url) })
+      if (path === "/vcs") return send(data.vcs)
+      if (path === "/provider") return send(data.provider)
+      if (path === "/provider/auth") return send(data.providerAuth)
+      if (path === "/agent") return send([])
+      if (path === "/config/providers") {
+        return send({
+          providers: data.provider.all.map((item) => ({
+            id: item.id,
+            name: item.name || item.id,
+            models: item.models || {},
+          })),
+          default: data.provider.default || {},
+        })
+      }
+      if (path.startsWith("/provider/") && path.endsWith("/test")) {
+        return send({ ok: true, message: "Provider connected" })
+      }
+      if (path === "/config/prompt") return send(prompts())
+      if (path === "/config" && req.method === "GET") return send(data.config)
+      if (path === "/config" && req.method === "PATCH") {
+        data.config = await req.json()
+        return send(data.config)
+      }
+      if (path === "/channel") return send(data.channels)
+      if (path === "/skill/installed" || path === "/skill") return send(data.skills)
+      if (path === "/skill/directories") return send(["D:/skills"])
+      if (path === "/skill/market") return send(data.skillMarket)
+      if (path === "/skill/install") {
+        const body = await req.json()
+        const value = String(body.value || body.source || "installed-skill")
+        const name = value.split("/").filter(Boolean).at(-1) || "installed-skill"
+        data.skills.push({
+          name,
+          description: `Installed from ${body.kind}`,
+          location: value,
+          builtin: false,
+          source: value,
+          source_type: body.kind === "git" ? "managed_git" : body.kind === "url" ? "config_url" : "config_path",
+        })
+        return send({ ok: true })
+      }
+      if (path === "/skill/remove") {
+        const body = await req.json()
+        const source = String(body.source || "")
+        data.skills = data.skills.filter((item) => item.source !== source)
+        return send({ ok: true })
+      }
+      if (path === "/mcp" && req.method === "GET") return send(data.mcp)
+      if (path === "/mcp" && req.method === "POST") {
+        const body = await req.json()
+        data.mcp[String(body.name)] = { status: "connected" }
+        return send({ ok: true })
+      }
+      if (path.startsWith("/mcp/") && path.endsWith("/disconnect")) {
+        const name = decodeURIComponent(path.slice(5, -11))
+        delete data.mcp[name]
+        return send({ ok: true })
+      }
+      if (path.startsWith("/mcp/") && path.endsWith("/auth")) return send({ ok: true })
+      if (path === "/session" && req.method === "GET")
+        return send(data.sessions.filter((item) => sameDir(item?.directory, url)))
+      if (path === "/session" && req.method === "POST") {
+        const id = `session-${data.counters.nextSession++}`
+        const directory = projectDir(url)
+        const item = {
+          id,
+          title: `Created ${id}`,
+          directory,
+          time: { updated: Date.now() },
         }
-        if (path === "/ui" || path === "/ui/") {
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
+        data.sessions = [item, ...data.sessions]
+        data.session[id] = item
+        data.panelSettings[id] = {}
+        data.timeline.session[id] = []
+        data.diffs[id] = []
+        return send(item)
+      }
+      if (path.startsWith("/session/") && path.endsWith("/panel-settings") && req.method === "GET") {
+        const id = decodeURIComponent(path.slice(9, -15))
+        return send(data.panelSettings[id] || {})
+      }
+      if (path.startsWith("/session/") && path.endsWith("/panel-settings") && req.method === "PATCH") {
+        const id = decodeURIComponent(path.slice(9, -15))
+        data.panelSettings[id] = await req.json()
+        return send(data.panelSettings[id])
+      }
+      if (path.startsWith("/session/") && path.endsWith("/message")) {
+        const id = decodeURIComponent(path.slice(9, -8))
+        return send(data.timeline.session[id] || [])
+      }
+      if (path.startsWith("/session/") && path.endsWith("/diff")) {
+        const id = decodeURIComponent(path.slice(9, -5))
+        return send(data.diffs[id] || [])
+      }
+      if (path.startsWith("/session/") && req.method === "GET") {
+        const id = decodeURIComponent(path.slice(9))
+        return send(data.session[id] || null)
+      }
+      if (path.startsWith("/session/") && req.method === "DELETE") {
+        const id = decodeURIComponent(path.slice(9))
+        data.sessions = data.sessions.filter((item) => item.id !== id)
+        delete data.session[id]
+        delete data.panelSettings[id]
+        delete data.timeline.session[id]
+        delete data.diffs[id]
+        return send({ ok: true })
+      }
+      if (path === "/control/timeline") {
+        const taskID = url.searchParams.get("taskID")
+        const sessionID = url.searchParams.get("sessionID")
+        if (taskID) return send(data.timeline.task[taskID] || [])
+        if (sessionID) return send(data.timeline.session[sessionID] || [])
+        return send([])
+      }
+      if (path === "/panel/message") {
+        return send(await append(await req.json()))
+      }
+      if (path === "/panel/message/stream") {
+        const body = await append(await req.json())
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(`data: ${JSON.stringify({ type: "done", result: body })}\n\n`)
+            controller.close()
+          },
+        })
+        return new Response(stream, {
+          headers: { "content-type": "text/event-stream; charset=utf-8" },
+        })
+      }
+      if (path === "/project/current/init-git") {
+        data.vcs = {
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
         }
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tasks") {
-          return send({
-            ...data.tasks,
-            tasks: data.tasks.tasks.filter((item) => sameDir(item?.task?.directory, url)),
-          })
+        return send({ created: true })
+      }
+      if (path === "/restart") {
+        data.counters.restart += 1
+        return send({ ok: true })
+      }
+      if (path === "/task/task-1/board") {
+        return send(data.board, {
+          headers: { etag: `"board-${data.board.task.time.updated}"` },
+        })
+      }
+      if (path === "/task/task-1/conversation") {
+        const timeline = data.timeline.task["task-1"] || []
+        return send({
+          board: data.board,
+          transcript: timeline,
+          timeline,
+          events: [],
+          view: { sessions: [] },
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+          lastSequence: 0,
+        })
+      }
+      if (path === "/task/task-1/operator-model-context") {
+        return send({
+          taskID: "task-1",
+          sessionID: "session-1",
+          agent: "orchestrator",
+          model: { providerID: "openai", modelID: "gpt-4o-mini" },
+        })
+      }
+      if (path === "/task/task-1/browser-preview") {
+        return send({
+          taskID: "task-1",
+          kind: "missing",
+          status: "missing",
+          projectRoot: "D:/overlay/workspace/app",
+          viewports: [],
+          diagnostics: [],
+          candidates: [],
+          source: "none",
+        })
+      }
+      if (path.startsWith("/task/task-1/conversation/events")) {
+        return send({
+          events: [],
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+        })
+      }
+      if (path === "/task/task-1/transcript") return send(data.timeline.task["task-1"] || [])
+      if (path === "/task/task-1/trace")
+        return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace", enabled: true })
+      if (path === "/task/events" || path === "/task/task-1/events") {
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(":\n\n")
+            controller.close()
+          },
+          cancel() {},
+        })
+        return new Response(stream, {
+          headers: { "content-type": "text/event-stream; charset=utf-8" },
+        })
+      }
+      if (path === "/task/task-1/checks" && req.method === "PATCH") {
+        const body = await req.json()
+        data.board.task.metadata.checks = body.checks
+        return send({ ok: true })
+      }
+      if (path === "/task/task-1/budget" && req.method === "PATCH") {
+        const body = await req.json()
+        data.board.task.budget = body.budget
+        data.tasks.tasks[0].task.budget = body.budget
+        return send(data.board.task)
+      }
+      if (path.startsWith("/interaction/") && path.endsWith("/reply")) {
+        const id = decodeURIComponent(path.slice(13, -6))
+        const item = data.board.interactions.find((entry) => entry.id === id)
+        if (item) item.status = "resolved"
+        return send({ ok: true })
+      }
+      if (path.startsWith("/interaction/") && path.endsWith("/reject")) {
+        const id = decodeURIComponent(path.slice(13, -7))
+        const item = data.board.interactions.find((entry) => entry.id === id)
+        if (item) item.status = "rejected"
+        return send({ ok: true })
+      }
+      if (path === "/panel/knowledge/memory") return send(data.memory)
+      if (path === "/panel/knowledge/memory/search") {
+        const body = await req.json()
+        const q = String(body.query || "").toLowerCase()
+        return send(
+          data.memory.filter((item) => item.title.toLowerCase().includes(q) || item.snippet.toLowerCase().includes(q)),
+        )
+      }
+      if (path.startsWith("/panel/knowledge/memory/") && req.method === "GET") {
+        const id = decodeURIComponent(path.slice(24))
+        return send(data.memoryDetail[id])
+      }
+      if (path.startsWith("/panel/knowledge/memory/") && req.method === "DELETE") {
+        const id = decodeURIComponent(path.slice(24))
+        data.memory = data.memory.filter((item) => item.id !== id)
+        delete data.memoryDetail[id]
+        return send({ ok: true })
+      }
+      if (path === "/panel/knowledge/preference" && req.method === "GET") return send(data.preference)
+      if (path === "/panel/knowledge/preference" && req.method === "POST") {
+        const body = await req.json()
+        const item = {
+          id: `pref-${data.counters.nextPreference++}`,
+          key: String(body.key || ""),
+          value: String(body.value || ""),
+          scope: "global",
+          source: "manual",
         }
-        if (path === "/global/tasks") return send(data.tasks)
-        if (path === "/executor") return send(data.executors)
-        if (path === "/terminal/profiles") return send({ profiles: [] })
-        if (path === "/coding/cli/profiles") return send({ profiles: [] })
-        if (path === "/project/current/worktrees") return send([])
-        if (path === "/path") return send({ ...data.path, directory: projectDir(url) })
-        if (path === "/vcs") return send(data.vcs)
-        if (path === "/provider") return send(data.provider)
-        if (path === "/provider/auth") return send(data.providerAuth)
-        if (path === "/agent") return send([])
-        if (path === "/config/providers") {
-          return send({
-            providers: data.provider.all.map((item) => ({
-              id: item.id,
-              name: item.name || item.id,
-              models: item.models || {},
-            })),
-            default: data.provider.default || {},
-          })
-        }
-        if (path.startsWith("/provider/") && path.endsWith("/test")) {
-          return send({ ok: true, message: "Provider connected" })
-        }
-        if (path === "/config/prompt") return send(prompts())
-        if (path === "/config" && req.method === "GET") return send(data.config)
-        if (path === "/config" && req.method === "PATCH") {
-          data.config = await req.json()
-          return send(data.config)
-        }
-        if (path === "/channel") return send(data.channels)
-        if (path === "/skill/installed" || path === "/skill") return send(data.skills)
-        if (path === "/skill/directories") return send(["D:/skills"])
-        if (path === "/skill/market") return send(data.skillMarket)
-        if (path === "/skill/install") {
-          const body = await req.json()
-          const value = String(body.value || body.source || "installed-skill")
-          const name = value.split("/").filter(Boolean).at(-1) || "installed-skill"
-          data.skills.push({
-            name,
-            description: `Installed from ${body.kind}`,
-            location: value,
-            builtin: false,
-            source: value,
-            source_type: body.kind === "git" ? "managed_git" : body.kind === "url" ? "config_url" : "config_path",
-          })
-          return send({ ok: true })
-        }
-        if (path === "/skill/remove") {
-          const body = await req.json()
-          const source = String(body.source || "")
-          data.skills = data.skills.filter((item) => item.source !== source)
-          return send({ ok: true })
-        }
-        if (path === "/mcp" && req.method === "GET") return send(data.mcp)
-        if (path === "/mcp" && req.method === "POST") {
-          const body = await req.json()
-          data.mcp[String(body.name)] = { status: "connected" }
-          return send({ ok: true })
-        }
-        if (path.startsWith("/mcp/") && path.endsWith("/disconnect")) {
-          const name = decodeURIComponent(path.slice(5, -11))
-          delete data.mcp[name]
-          return send({ ok: true })
-        }
-        if (path.startsWith("/mcp/") && path.endsWith("/auth")) return send({ ok: true })
-        if (path === "/session" && req.method === "GET")
-          return send(data.sessions.filter((item) => sameDir(item?.directory, url)))
-        if (path === "/session" && req.method === "POST") {
-          const id = `session-${data.counters.nextSession++}`
-          const directory = projectDir(url)
-          const item = {
-            id,
-            title: `Created ${id}`,
-            directory,
-            time: { updated: Date.now() },
-          }
-          data.sessions = [item, ...data.sessions]
-          data.session[id] = item
-          data.panelSettings[id] = {}
-          data.timeline.session[id] = []
-          data.diffs[id] = []
-          return send(item)
-        }
-        if (path.startsWith("/session/") && path.endsWith("/panel-settings") && req.method === "GET") {
-          const id = decodeURIComponent(path.slice(9, -15))
-          return send(data.panelSettings[id] || {})
-        }
-        if (path.startsWith("/session/") && path.endsWith("/panel-settings") && req.method === "PATCH") {
-          const id = decodeURIComponent(path.slice(9, -15))
-          data.panelSettings[id] = await req.json()
-          return send(data.panelSettings[id])
-        }
-        if (path.startsWith("/session/") && path.endsWith("/message")) {
-          const id = decodeURIComponent(path.slice(9, -8))
-          return send(data.timeline.session[id] || [])
-        }
-        if (path.startsWith("/session/") && path.endsWith("/diff")) {
-          const id = decodeURIComponent(path.slice(9, -5))
-          return send(data.diffs[id] || [])
-        }
-        if (path.startsWith("/session/") && req.method === "GET") {
-          const id = decodeURIComponent(path.slice(9))
-          return send(data.session[id] || null)
-        }
-        if (path.startsWith("/session/") && req.method === "DELETE") {
-          const id = decodeURIComponent(path.slice(9))
-          data.sessions = data.sessions.filter((item) => item.id !== id)
-          delete data.session[id]
-          delete data.panelSettings[id]
-          delete data.timeline.session[id]
-          delete data.diffs[id]
-          return send({ ok: true })
-        }
-        if (path === "/control/timeline") {
-          const taskID = url.searchParams.get("taskID")
-          const sessionID = url.searchParams.get("sessionID")
-          if (taskID) return send(data.timeline.task[taskID] || [])
-          if (sessionID) return send(data.timeline.session[sessionID] || [])
-          return send([])
-        }
-        if (path === "/panel/message") {
-          return send(await append(await req.json()))
-        }
-        if (path === "/panel/message/stream") {
-          const body = await append(await req.json())
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(`data: ${JSON.stringify({ type: "done", result: body })}\n\n`)
-              controller.close()
-            },
-          })
-          return new Response(stream, {
-            headers: { "content-type": "text/event-stream; charset=utf-8" },
-          })
-        }
-        if (path === "/project/current/init-git") {
-          data.vcs = {
-            branch: "dev",
-            clean: true,
-            dirty: false,
-            staged: 0,
-            modified: 0,
-            untracked: 0,
-            conflicts: 0,
-            ahead: 0,
-            behind: 0,
-          }
-          return send({ created: true })
-        }
-        if (path === "/restart") {
-          data.counters.restart += 1
-          return send({ ok: true })
-        }
-        if (path === "/task/task-1/board") {
-          return send(data.board, {
-            headers: { etag: `"board-${data.board.task.time.updated}"` },
-          })
-        }
-        if (path === "/task/task-1/conversation") {
-          const timeline = data.timeline.task["task-1"] || []
-          return send({
-            board: data.board,
-            transcript: timeline,
-            timeline,
-            events: [],
-            view: { sessions: [] },
-            eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
-            lastSequence: 0,
-          })
-        }
-        if (path === "/task/task-1/operator-model-context") {
-          return send({
-            taskID: "task-1",
-            sessionID: "session-1",
-            agent: "orchestrator",
-            model: { providerID: "openai", modelID: "gpt-4o-mini" },
-          })
-        }
-        if (path === "/task/task-1/browser-preview") {
-          return send({
-            taskID: "task-1",
-            kind: "missing",
-            status: "missing",
-            projectRoot: "D:/overlay/workspace/app",
-            viewports: [],
-            diagnostics: [],
-            candidates: [],
-            source: "none",
-          })
-        }
-        if (path.startsWith("/task/task-1/conversation/events")) {
-          return send({
-            events: [],
-            eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
-          })
-        }
-        if (path === "/task/task-1/transcript") return send(data.timeline.task["task-1"] || [])
-        if (path === "/task/task-1/trace")
-          return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace", enabled: true })
-        if (path === "/task/events" || path === "/task/task-1/events") {
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(":\n\n")
-              controller.close()
-            },
-            cancel() {},
-          })
-          return new Response(stream, {
-            headers: { "content-type": "text/event-stream; charset=utf-8" },
-          })
-        }
-        if (path === "/task/task-1/checks" && req.method === "PATCH") {
-          const body = await req.json()
-          data.board.task.metadata.checks = body.checks
-          return send({ ok: true })
-        }
-        if (path === "/task/task-1/budget" && req.method === "PATCH") {
-          const body = await req.json()
-          data.board.task.budget = body.budget
-          data.tasks.tasks[0].task.budget = body.budget
-          return send(data.board.task)
-        }
-        if (path.startsWith("/interaction/") && path.endsWith("/reply")) {
-          const id = decodeURIComponent(path.slice(13, -6))
-          const item = data.board.interactions.find((entry) => entry.id === id)
-          if (item) item.status = "resolved"
-          return send({ ok: true })
-        }
-        if (path.startsWith("/interaction/") && path.endsWith("/reject")) {
-          const id = decodeURIComponent(path.slice(13, -7))
-          const item = data.board.interactions.find((entry) => entry.id === id)
-          if (item) item.status = "rejected"
-          return send({ ok: true })
-        }
-        if (path === "/panel/knowledge/memory") return send(data.memory)
-        if (path === "/panel/knowledge/memory/search") {
-          const body = await req.json()
-          const q = String(body.query || "").toLowerCase()
-          return send(
-            data.memory.filter(
-              (item) => item.title.toLowerCase().includes(q) || item.snippet.toLowerCase().includes(q),
-            ),
-          )
-        }
-        if (path.startsWith("/panel/knowledge/memory/") && req.method === "GET") {
-          const id = decodeURIComponent(path.slice(24))
-          return send(data.memoryDetail[id])
-        }
-        if (path.startsWith("/panel/knowledge/memory/") && req.method === "DELETE") {
-          const id = decodeURIComponent(path.slice(24))
-          data.memory = data.memory.filter((item) => item.id !== id)
-          delete data.memoryDetail[id]
-          return send({ ok: true })
-        }
-        if (path === "/panel/knowledge/preference" && req.method === "GET") return send(data.preference)
-        if (path === "/panel/knowledge/preference" && req.method === "POST") {
-          const body = await req.json()
-          const item = {
-            id: `pref-${data.counters.nextPreference++}`,
-            key: String(body.key || ""),
-            value: String(body.value || ""),
-            scope: "global",
-            source: "manual",
-          }
-          data.preference = [item, ...data.preference]
-          return send(item)
-        }
-        if (path.startsWith("/panel/knowledge/preference/") && req.method === "PATCH") {
-          const id = decodeURIComponent(path.slice(28))
-          const body = await req.json()
-          data.preference = data.preference.map((item) =>
-            item.id === id
-              ? { ...item, key: String(body.key || item.key), value: String(body.value || item.value) }
-              : item,
-          )
-          return send({ ok: true })
-        }
-        if (path.startsWith("/panel/knowledge/preference/") && req.method === "DELETE") {
-          const id = decodeURIComponent(path.slice(28))
-          data.preference = data.preference.filter((item) => item.id !== id)
-          return send({ ok: true })
-        }
-        if (path === "/log" && req.method === "POST") {
-          const body = await req.json()
-          data.logs.push(
-            `${String(body.level || "info").toUpperCase()}  ${new Date().toISOString()} +0ms service=${body.service} ${body.message}`,
-          )
-          return send({ ok: true })
-        }
-        if (path === "/log/tail") return send({ lines: data.logs })
+        data.preference = [item, ...data.preference]
+        return send(item)
+      }
+      if (path.startsWith("/panel/knowledge/preference/") && req.method === "PATCH") {
+        const id = decodeURIComponent(path.slice(28))
+        const body = await req.json()
+        data.preference = data.preference.map((item) =>
+          item.id === id
+            ? { ...item, key: String(body.key || item.key), value: String(body.value || item.value) }
+            : item,
+        )
+        return send({ ok: true })
+      }
+      if (path.startsWith("/panel/knowledge/preference/") && req.method === "DELETE") {
+        const id = decodeURIComponent(path.slice(28))
+        data.preference = data.preference.filter((item) => item.id !== id)
+        return send({ ok: true })
+      }
+      if (path === "/log" && req.method === "POST") {
+        const body = await req.json()
+        data.logs.push(
+          `${String(body.level || "info").toUpperCase()}  ${new Date().toISOString()} +0ms service=${body.service} ${body.message}`,
+        )
+        return send({ ok: true })
+      }
+      if (path === "/log/tail") return send({ lines: data.logs })
       return text(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
     const seen: string[] = []
@@ -1001,7 +999,10 @@ test(
           if (enabled) return
           await new Promise((resolve) => setTimeout(resolve, 100))
         }
-        const node = await page.evaluate((value) => document.querySelector<HTMLElement>(value)?.outerHTML || "", selector)
+        const node = await page.evaluate(
+          (value) => document.querySelector<HTMLElement>(value)?.outerHTML || "",
+          selector,
+        )
         assert.fail(`Timed out waiting for enabled control ${selector}\n${node}`)
       }
       const tap = async (selector: string) => {
@@ -1019,7 +1020,8 @@ test(
                 return {
                   selector: value,
                   node: node?.outerHTML.slice(0, 800) || "",
-                  activeTask: document.querySelector<HTMLElement>(".task-row-main[data-active='true']")?.dataset.taskId || "",
+                  activeTask:
+                    document.querySelector<HTMLElement>(".task-row-main[data-active='true']")?.dataset.taskId || "",
                   bodyText: document.body.textContent?.slice(0, 1200) || "",
                 }
               }, selector)
@@ -1147,7 +1149,8 @@ test(
           inspector: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
           rightPanel: document.querySelector<HTMLElement>("#rightPanelInspector")?.dataset.active || "",
           sectionText: document.querySelector<HTMLElement>("#sections")?.textContent?.slice(0, 1200) || "",
-          inspectorText: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.textContent?.slice(0, 1200) || "",
+          inspectorText:
+            document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.textContent?.slice(0, 1200) || "",
           bodyText: document.body.textContent?.slice(0, 1200) || "",
         }))
         assert.fail(
@@ -1193,7 +1196,9 @@ test(
       assert.ok(workflowPanels.archDecisionReasonList.includes("Keeps resume and export flows"))
       assert.equal(workflowPanels.archSummaryText.includes("architect decisions across"), false)
       await page.waitForSelector(".change-row", { state: "attached" })
-      await page.waitForSelector(".interaction-card[data-id='interaction-1'] [data-action='once']", { state: "attached" })
+      await page.waitForSelector(".interaction-card[data-id='interaction-1'] [data-action='once']", {
+        state: "attached",
+      })
 
       assert.equal(await page.$("[data-testid^='titlebar-menu-']"), null)
       await page.click('[data-menu-trigger="help"]')

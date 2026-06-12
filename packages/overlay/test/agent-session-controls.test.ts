@@ -99,7 +99,7 @@ describe("agent session controls", () => {
 
     for (const source of [card, bubble]) {
       expect(source).toContain("sendTaskOperatorMessage")
-      expect(source).toContain('normalizeAgentRole(')
+      expect(source).toContain("normalizeAgentRole(")
       expect(source).toContain('"build" ? "task" : "session"')
       expect(source).toContain("Build session steering from overlay.")
       expect(source).toContain("overlay_build_steer")

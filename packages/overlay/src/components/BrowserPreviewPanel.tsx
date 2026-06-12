@@ -188,10 +188,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     URL.revokeObjectURL(previous)
   }
 
-  const loadLiveFrame = async (
-    scope: NonNullable<ReturnType<typeof liveScope>>,
-    input?: BrowserPreviewLiveInput,
-  ) => {
+  const loadLiveFrame = async (scope: NonNullable<ReturnType<typeof liveScope>>, input?: BrowserPreviewLiveInput) => {
     const sequence = ++liveFrameRequestSequence
     setLiveLoading(true)
     setLiveError("")
@@ -478,12 +475,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 <Show when={captureImageUrl()}>
                   {(url) => (
                     <figure class="browser-preview-evidence-shot">
-                      <img
-                        src={url()}
-                        alt={evidence().summary}
-                        data-ui="browser-preview-screenshot"
-                        decoding="async"
-                      />
+                      <img src={url()} alt={evidence().summary} data-ui="browser-preview-screenshot" decoding="async" />
                     </figure>
                   )}
                 </Show>
@@ -544,7 +536,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   )
 }
 
-function BrowserPreviewCandidateOption(props: Select.SelectRootItemComponentProps<BrowserPreviewCandidate>): JSX.Element {
+function BrowserPreviewCandidateOption(
+  props: Select.SelectRootItemComponentProps<BrowserPreviewCandidate>,
+): JSX.Element {
   const candidate = () => props.item.rawValue
   return (
     <Select.Item

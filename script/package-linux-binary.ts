@@ -61,7 +61,11 @@ export function resolveLinuxBinaryArtifacts(repoRoot: string): LinuxBinaryArtifa
   const outputDir = path.join(opencorvusDist, "binary")
   return LINUX_BINARY_TARGETS.map((target) => ({
     target,
-    source: path.join(opencorvusDist, `opencorvus-overlay-server-${target.distDirName.replace(/^opencorvus-/, "")}`, "opencorvus"),
+    source: path.join(
+      opencorvusDist,
+      `opencorvus-overlay-server-${target.distDirName.replace(/^opencorvus-/, "")}`,
+      "opencorvus",
+    ),
     output: path.join(outputDir, target.outputName, "opencorvus"),
     bundleDir: path.join(outputDir, target.outputName),
   }))

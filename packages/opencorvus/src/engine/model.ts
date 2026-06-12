@@ -4,6 +4,7 @@ import { ExecutorName } from "@/executor/contract"
 import { Identifier } from "@/id/id"
 import { Reply as PermissionReply } from "@/permission/types"
 import { Answer as QuestionAnswer } from "@/question/types"
+import { isModelReference } from "@/provider/model-ref"
 
 export const Budget = z.object({
   maxExecutorGroups: z.number().int().positive().optional(),
@@ -241,6 +242,12 @@ export const CreateTaskInput = z.object({
   requestID: z.string().optional(),
   source: z.string().optional(),
   executor: ExecutorName.optional(),
+  model: z
+    .string()
+    .refine(isModelReference, {
+      message: 'Model must be in the format "provider/model".',
+    })
+    .optional(),
   title: z.string().optional(),
   request: z.string(),
   /** File attachments (images / PDF / text / audio / video). Base64 bytes are

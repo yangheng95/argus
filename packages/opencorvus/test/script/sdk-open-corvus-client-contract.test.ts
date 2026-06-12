@@ -55,7 +55,7 @@ describe("SDK OpenCorvus client contract", () => {
     expect(index).toContain("export type OpenCorvusOptions")
     expect(index).toContain("initGit?: boolean")
     expect(index).toContain('throw new Error("createOpenCorvus initGit=true requires a directory")')
-    expect(index).toContain("client.project.current2.initGit({ directory }, { responseStyle: \"fields\" })")
+    expect(index).toContain('client.project.current2.initGit({ directory }, { responseStyle: "fields" })')
     expect(index).toContain("server.close()")
     expect(index).toContain("directory,")
     expect(source).not.toContain("WorktreeNotGitError")
@@ -97,20 +97,20 @@ describe("SDK OpenCorvus client contract", () => {
         string,
         Record<
           string,
-          { requestBody?: { required?: boolean; content?: { "application/json"?: { schema?: { required?: string[] } } } } }
+          {
+            requestBody?: {
+              required?: boolean
+              content?: { "application/json"?: { schema?: { required?: string[] } } }
+            }
+          }
         >
       >
     }
     const captureSchema =
-      openapi.paths["/task/{taskID}/browser-preview/capture"]?.post?.requestBody?.content?.["application/json"]
-        ?.schema
+      openapi.paths["/task/{taskID}/browser-preview/capture"]?.post?.requestBody?.content?.["application/json"]?.schema
 
-    expect(
-      openapi.paths["/task/{taskID}/browser-preview/target"]?.put?.requestBody?.required,
-    ).toBe(true)
-    expect(
-      openapi.paths["/task/{taskID}/browser-preview/capture"]?.post?.requestBody?.required,
-    ).toBe(true)
+    expect(openapi.paths["/task/{taskID}/browser-preview/target"]?.put?.requestBody?.required).toBe(true)
+    expect(openapi.paths["/task/{taskID}/browser-preview/capture"]?.post?.requestBody?.required).toBe(true)
     expect(captureSchema?.required).toContain("targetID")
     expect(captureSchema?.required).toContain("viewportIDs")
     expect(sdk).not.toContain("targetID?: string")

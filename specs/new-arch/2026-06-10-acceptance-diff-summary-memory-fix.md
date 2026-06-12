@@ -12,14 +12,14 @@
 
 ## Call-Site Sweep
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
-| `engine/persist.ts::writeAcceptanceRow` | Stores `input.acceptance.diffs` in acceptance result, `workspace-diff`, and `changed_file` artifacts. | Store only diff summaries: `file`, optional `status`, `additions`, `deletions`. |
-| `engine/persist.ts::finalizeBuildAttempt` | Filters runtime paths but keeps full `before` and `after` strings in per-goal acceptance result. | Filter first, then persist diff summaries only. |
-| `engine/engine.sql.ts::AcceptanceResult` | Type allows `before`, `after`, and `diff`. | Type accepts summary fields only. |
-| `engine/model.ts::Acceptance` | Reuses snapshot `FileDiff`, which requires full file contents. | Use an acceptance-specific summary schema. |
-| `engine/store.ts::viewAcceptance` | Parses acceptance diffs as snapshot full diffs. | Parse summaries so read models match persisted shape. |
-| `workbench/board.ts`, `integrity/replay-context.ts`, `orchestrator/tools.ts` | Read file names and stats from `result.diffs`. | Continue reading the same summary fields. |
+| Surface                                                                      | Current behavior                                                                                      | Change                                                                          |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `engine/persist.ts::writeAcceptanceRow`                                      | Stores `input.acceptance.diffs` in acceptance result, `workspace-diff`, and `changed_file` artifacts. | Store only diff summaries: `file`, optional `status`, `additions`, `deletions`. |
+| `engine/persist.ts::finalizeBuildAttempt`                                    | Filters runtime paths but keeps full `before` and `after` strings in per-goal acceptance result.      | Filter first, then persist diff summaries only.                                 |
+| `engine/engine.sql.ts::AcceptanceResult`                                     | Type allows `before`, `after`, and `diff`.                                                            | Type accepts summary fields only.                                               |
+| `engine/model.ts::Acceptance`                                                | Reuses snapshot `FileDiff`, which requires full file contents.                                        | Use an acceptance-specific summary schema.                                      |
+| `engine/store.ts::viewAcceptance`                                            | Parses acceptance diffs as snapshot full diffs.                                                       | Parse summaries so read models match persisted shape.                           |
+| `workbench/board.ts`, `integrity/replay-context.ts`, `orchestrator/tools.ts` | Read file names and stats from `result.diffs`.                                                        | Continue reading the same summary fields.                                       |
 
 ## Decision
 

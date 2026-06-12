@@ -97,7 +97,9 @@ describe("task directory project-scope reload", () => {
 
     await reloadProjectScope({ restoreWorkspace: false })
 
-    const scoped = requests.filter((req) => ["config", "channel", "skill/installed", "mcp", "path", "vcs", "executor"].includes(req.path))
+    const scoped = requests.filter((req) =>
+      ["config", "channel", "skill/installed", "mcp", "path", "vcs", "executor"].includes(req.path),
+    )
     expect(scoped.length).toBeGreaterThan(0)
     expect(scoped.every((req) => req.query?.directory === "D:/repo/from-task")).toBe(true)
     expect(appStore.skills).toEqual([{ name: "task-skill", builtin: false }])

@@ -36,7 +36,8 @@ function ringPath(ring) {
 function geometryPath(geometry) {
   const polygonPaths = {
     Polygon: () => geometry.coordinates.map((ring) => `${ringPath(ring)} Z`).join(" "),
-    MultiPolygon: () => geometry.coordinates.flatMap((polygon) => polygon.map((ring) => `${ringPath(ring)} Z`)).join(" "),
+    MultiPolygon: () =>
+      geometry.coordinates.flatMap((polygon) => polygon.map((ring) => `${ringPath(ring)} Z`)).join(" "),
   }
   return polygonPaths[geometry.type]()
 }
@@ -205,7 +206,10 @@ function renderNews() {
 
 function renderCalendar() {
   byID("calendar-list").innerHTML = calendarRows
-    .map(([date, event, value]) => `<div class="calendar-row"><strong>${date}</strong><span>${event}</span><em>${value}</em></div>`)
+    .map(
+      ([date, event, value]) =>
+        `<div class="calendar-row"><strong>${date}</strong><span>${event}</span><em>${value}</em></div>`,
+    )
     .join("")
 }
 

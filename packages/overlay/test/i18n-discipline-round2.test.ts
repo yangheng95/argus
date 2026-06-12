@@ -83,7 +83,9 @@ describe("round 2 i18n discipline", () => {
       expect(Object.hasOwn(en, key)).toBe(true)
       expect(Object.hasOwn(zh, key)).toBe(true)
     }
-    expect(providers).toContain('placeholder={t("provider.form.api_placeholder", { value: "https://my-gateway.com/v1" })}')
+    expect(providers).toContain(
+      'placeholder={t("provider.form.api_placeholder", { value: "https://my-gateway.com/v1" })}',
+    )
     expect(providers).toContain('placeholder={t("provider.form.id_placeholder", { value: "opentoken" })}')
     expect(providers).toContain('placeholder={t("provider.form.name_placeholder", { value: "OpenToken CN2" })}')
     expect(providers).toContain('placeholder={t("provider.form.env_placeholder", { value: "OPENTOKEN_API_KEY" })}')

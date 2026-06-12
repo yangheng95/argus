@@ -1,8 +1,10 @@
 import z from "zod"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { Instance, lazyInstanceState } from "@/project/instance"
 import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { BusEvent } from "@/bus/bus-event"
+import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionTable } from "@/session/session.sql"
 import { Message } from "@/session/message"
@@ -469,6 +471,7 @@ export namespace TaskQueueService {
         retryCount,
         failed,
       })
+      if (failed) publishTerminalTaskError(task.session_id, "task timed out while running")
     }
   }
 
@@ -497,6 +500,14 @@ export namespace TaskQueueService {
       maxRetries: task.max_retries,
       failed,
       error: message(error),
+    })
+    if (failed) publishTerminalTaskError(task.session_id, message(error))
+  }
+
+  function publishTerminalTaskError(sessionID: string, text: string) {
+    Bus.publish(Session.Event.Error, {
+      sessionID,
+      error: new NamedError.Unknown({ message: text }).toObject(),
     })
   }
 

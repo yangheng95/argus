@@ -8,17 +8,17 @@ The current page is a static clone target, so no remote API is invented. Every r
 
 Exports:
 
-| Export | Shape | Consumers |
-| --- | --- | --- |
-| `gdpRows` | `{ country, flag, growth, nominal, currency }[]` | GDP table |
-| `countryChips` | `string[]` | Countries chip list |
-| `indicators` | `{ title, code, type, values, yTicks, xTicks, actual, forecast, nextRelease }[]` | Indicator cards and charts |
-| `inflationBandByContinent` | `Record<string, number>` | Inflation map color defaults |
-| `inflationBandByISO` | `Record<string, number>` | Country-level inflation map color overrides |
-| `ideas` | `{ title, symbol, author, time, likes, body }[]` | Ideas list |
-| `news` | `[title, time][]` | News list |
-| `calendarRows` | `[date, event, value][]` | Economic calendar |
-| `faqRows` | `[question, answer][]` | FAQ details |
+| Export                     | Shape                                                                            | Consumers                                   |
+| -------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------- |
+| `gdpRows`                  | `{ country, flag, growth, nominal, currency }[]`                                 | GDP table                                   |
+| `countryChips`             | `string[]`                                                                       | Countries chip list                         |
+| `indicators`               | `{ title, code, type, values, yTicks, xTicks, actual, forecast, nextRelease }[]` | Indicator cards and charts                  |
+| `inflationBandByContinent` | `Record<string, number>`                                                         | Inflation map color defaults                |
+| `inflationBandByISO`       | `Record<string, number>`                                                         | Country-level inflation map color overrides |
+| `ideas`                    | `{ title, symbol, author, time, likes, body }[]`                                 | Ideas list                                  |
+| `news`                     | `[title, time][]`                                                                | News list                                   |
+| `calendarRows`             | `[date, event, value][]`                                                         | Economic calendar                           |
+| `faqRows`                  | `[question, answer][]`                                                           | FAQ details                                 |
 
 Term notes:
 

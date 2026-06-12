@@ -12,15 +12,15 @@ The browser preview panel now resolves the development port and displays task-sc
 
 ## Call Points
 
-| Surface | Current role | Change |
-| --- | --- | --- |
-| `runBrowserPreviewEvidenceJob` | Builds sidecar viewport inputs | Keep the task-scoped evidence source. |
-| `BROWSER_PREVIEW_BATCH_SCRIPT.captureViewport` | Produces screenshot artifacts | Use Playwright full-page screenshots and report document dimensions. |
-| `finalizeBrowserPreviewSidecarCapture` | Persists screenshot and computes pixel evidence | Use decoded PNG dimensions as the final evidence size. |
-| `BrowserPreviewPanel` | Displays evidence screenshot | Keep task-scoped image rendering; no iframe or local override. |
-| `inspector.css` | Defines preview stage layout | Make the stage a real scroll container while preserving empty-state centering. |
-| `browser-preview-evidence.test.ts` | Browser acceptance for evidence image | Assert a tall evidence image creates scrollable preview UI. |
-| `evidence-runner.test.ts` | Backend evidence contract | Assert final evidence size follows PNG dimensions, not viewport metadata. |
+| Surface                                        | Current role                                    | Change                                                                         |
+| ---------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| `runBrowserPreviewEvidenceJob`                 | Builds sidecar viewport inputs                  | Keep the task-scoped evidence source.                                          |
+| `BROWSER_PREVIEW_BATCH_SCRIPT.captureViewport` | Produces screenshot artifacts                   | Use Playwright full-page screenshots and report document dimensions.           |
+| `finalizeBrowserPreviewSidecarCapture`         | Persists screenshot and computes pixel evidence | Use decoded PNG dimensions as the final evidence size.                         |
+| `BrowserPreviewPanel`                          | Displays evidence screenshot                    | Keep task-scoped image rendering; no iframe or local override.                 |
+| `inspector.css`                                | Defines preview stage layout                    | Make the stage a real scroll container while preserving empty-state centering. |
+| `browser-preview-evidence.test.ts`             | Browser acceptance for evidence image           | Assert a tall evidence image creates scrollable preview UI.                    |
+| `evidence-runner.test.ts`                      | Backend evidence contract                       | Assert final evidence size follows PNG dimensions, not viewport metadata.      |
 
 ## Implementation
 

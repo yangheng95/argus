@@ -241,9 +241,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
     unavailableLabel: string
   }): ModelSelectOption[] {
     const options: ModelSelectOption[] = [{ value: "", label: props.emptyLabel }]
-    const selectedAvailable = props.groups.some((group) =>
-      group.models.some((model) => model.value === props.value),
-    )
+    const selectedAvailable = props.groups.some((group) => group.models.some((model) => model.value === props.value))
     if (props.value && (props.unavailable || !selectedAvailable)) {
       options.push({ value: props.value, label: props.unavailableLabel })
     }
@@ -265,9 +263,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
       >
         <span class="agent-model-select-option-text">
           <Select.ItemLabel>{option().label}</Select.ItemLabel>
-          <Show when={option().groupLabel}>
-            {(groupLabel) => <small>{groupLabel()}</small>}
-          </Show>
+          <Show when={option().groupLabel}>{(groupLabel) => <small>{groupLabel()}</small>}</Show>
         </span>
         <Select.ItemIndicator class="oc-select-indicator">
           <Icon name="status-completed" size={12} />

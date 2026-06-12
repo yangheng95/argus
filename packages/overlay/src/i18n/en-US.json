@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "73d5a980b3c197ef"
+    "panel_revision": "2ed363be982cf4b0"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -158,11 +158,16 @@
   "settings.fail_on_information_missing_hint": "When on, every agent prompt receives an INFORMATION MISSING fallback section and the host process.exits the moment any agent emits the <INFORMATION MISSING> XML block. Use to surface upstream context drops; leave off in production.",
   "network.title": "Network",
   "network.proxy.title": "Proxy",
-  "network.proxy.enabled_label": "Provider proxy",
-  "network.proxy.enabled_hint": "Route model provider HTTP requests through the configured HTTP(S) proxy.",
+  "network.proxy.llm_provider_label": "LLM Provider proxy",
+  "network.proxy.llm_provider_hint": "Route model provider HTTP requests through the configured HTTP(S) proxy.",
+  "network.proxy.web_research_label": "Web Search / Web Fetch proxy",
+  "network.proxy.web_research_hint": "Route websearch and webfetch HTTP requests through the configured HTTP(S) proxy.",
   "network.proxy.url_label": "Proxy URL",
-  "network.proxy.url_required": "Proxy URL is required when the proxy is enabled.",
-  "network.proxy.url_invalid": "Proxy URL must start with http:// or https://.",
+  "network.proxy.username_label": "Username",
+  "network.proxy.password_label": "Password",
+  "network.proxy.url_required": "Proxy URL is required when any proxy scope is enabled.",
+  "network.proxy.url_invalid": "Proxy URL must start with http:// or https:// and must not include credentials.",
+  "network.proxy.username_required": "Username is required when password is set.",
   "network.proxy.save_failed": "Proxy settings could not be saved.",
   "channel.public_url_invalid": "Public URL must start with http:// or https://",
   "task_overlay.back": "Workspace",

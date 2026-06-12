@@ -1,5 +1,4 @@
 import { test, expect, spyOn, beforeEach, afterEach, beforeAll } from "bun:test"
-
 ;(globalThis as any).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 // 2026-05-11 codex review found that `interaction.requested` events

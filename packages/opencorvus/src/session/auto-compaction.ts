@@ -2,11 +2,9 @@ import type { SessionKind } from "./session.sql"
 import { AgentRuntimeMetadata } from "./agent-runtime-metadata"
 
 export namespace AutomaticCompaction {
-  export const LIVE_RUNTIME_CONTINUATION_SESSION_KINDS =
-    AgentRuntimeMetadata.LIVE_RUNTIME_CONTINUATION_SESSION_KINDS
+  export const LIVE_RUNTIME_CONTINUATION_SESSION_KINDS = AgentRuntimeMetadata.LIVE_RUNTIME_CONTINUATION_SESSION_KINDS
 
-  export const DISABLED_WORKFLOW_SESSION_KINDS =
-    AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS
+  export const DISABLED_WORKFLOW_SESSION_KINDS = AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS
 
   export type Decision =
     | { enabled: true; reason: "allowed" | "runtime_continuation_ready" }

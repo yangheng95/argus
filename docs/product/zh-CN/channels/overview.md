@@ -41,10 +41,10 @@ bun run dev             # 实际执行 bun run src/main.ts
 
 ## 与 OpenCorvus 后端的通信
 
-| 方向                         | 协议             | 端点                                                                                                                               |
-| ---------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 方向                         | 协议             | 端点                                                                                                                |
+| ---------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
 | channel-runtime → OpenCorvus | HTTP REST (JSON) | `/session`、`/session/{sessionID}/prompt_async`、`/task`、`/task/{taskID}/message`、`/permission/{requestID}/reply` |
-| OpenCorvus → channel-runtime | SSE              | `/event`                                                                                                                           |
+| OpenCorvus → channel-runtime | SSE              | `/event`                                                                                                            |
 
 SDK：`@opencorvus-ai/sdk`。
 

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "73d5a980b3c197ef"
+    "panel_revision": "2ed363be982cf4b0"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -158,11 +158,16 @@
   "settings.fail_on_information_missing_hint": "开启后，所有 agent 的 system prompt 会注入 INFORMATION MISSING fallback 段；任意 agent 输出 <INFORMATION MISSING> XML 块时 host 立即 process.exit，把上游信息丢失立刻暴露出来。仅排查用，生产请关闭。",
   "network.title": "网络",
   "network.proxy.title": "代理",
-  "network.proxy.enabled_label": "Provider 代理",
-  "network.proxy.enabled_hint": "将模型 Provider 的 HTTP 请求转发到配置的 HTTP(S) 代理。",
+  "network.proxy.llm_provider_label": "LLM Provider 代理",
+  "network.proxy.llm_provider_hint": "将模型 Provider 的 HTTP 请求转发到配置的 HTTP(S) 代理。",
+  "network.proxy.web_research_label": "Web Search / Web Fetch 代理",
+  "network.proxy.web_research_hint": "将 websearch 和 webfetch 的 HTTP 请求转发到配置的 HTTP(S) 代理。",
   "network.proxy.url_label": "代理 URL",
-  "network.proxy.url_required": "启用代理时必须填写代理 URL。",
-  "network.proxy.url_invalid": "代理 URL 必须以 http:// 或 https:// 开头。",
+  "network.proxy.username_label": "用户名",
+  "network.proxy.password_label": "密码",
+  "network.proxy.url_required": "启用任一代理作用域时必须填写代理 URL。",
+  "network.proxy.url_invalid": "代理 URL 必须以 http:// 或 https:// 开头，且不能内嵌用户名或密码。",
+  "network.proxy.username_required": "填写密码时必须填写用户名。",
   "network.proxy.save_failed": "代理设置保存失败。",
   "channel.public_url_invalid": "公共 URL 必须以 http:// 或 https:// 开头",
   "task_overlay.back": "工作区",

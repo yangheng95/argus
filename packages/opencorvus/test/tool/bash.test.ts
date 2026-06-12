@@ -263,7 +263,14 @@ describe("tool.bash", () => {
           expect(result.output).toContain("background: true instead of shell '&'")
         }
 
-        for (const command of ["npm install", "pnpm test", "bun run typecheck", "yarn lint", "npx vite build", "git status"]) {
+        for (const command of [
+          "npm install",
+          "pnpm test",
+          "bun run typecheck",
+          "yarn lint",
+          "npx vite build",
+          "git status",
+        ]) {
           const { result } = await executeWithMockedForegroundCommand(command)
           expect(result.output).not.toContain("foreground command lifecycle")
           expect(result.output).not.toContain("background: true instead of shell '&'")

@@ -1,6 +1,6 @@
 /**
  * Scratch: end-to-end smoke test of the Mission agent against the superchart
- * demo project, using the REAL environment (real auth=hexin/glm51, real model
+ * demo project, using the REAL environment (real auth, real model
  * config, real DB). Faithful to the production wake path (mission session +
  * agent="mission" user message + SessionPrompt.loop) but AWAITS the loop instead
  * of fire-and-forget so we can observe one full turn. Intake-only goal — no dispatch.

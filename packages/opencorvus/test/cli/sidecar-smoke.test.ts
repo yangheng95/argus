@@ -125,15 +125,7 @@ describe("opencorvus sidecar (managed mode)", () => {
   test("rejects start when OPENCORVUS_SERVER_PASSWORD is missing", async () => {
     const cliEntry = path.resolve(__dirname, "../../src/index.ts")
     const proc = Bun.spawn(
-      [
-        "bun",
-        cliEntry,
-        "sidecar",
-        "--project-dir",
-        os.tmpdir(),
-        "--parent-pid",
-        String(process.pid),
-      ],
+      ["bun", cliEntry, "sidecar", "--project-dir", os.tmpdir(), "--parent-pid", String(process.pid)],
       {
         env: { ...process.env, OPENCORVUS_SERVER_PASSWORD: "" },
         stdout: "pipe",

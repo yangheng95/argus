@@ -1,5 +1,5 @@
 /**
- * Regression: the orchestrator-dispatched explore subagent (kimik26 model,
+ * Regression: the orchestrator-dispatched explore subagent (private gateway model,
  * task `tsk_e547f0608001sE4ibVP7dmMYhw`) wrote its findings into a
  * `memory.save` value and then, driven by the loop's tool-result echo, the
  * model decided the next input "looks like a system ping with no following

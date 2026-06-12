@@ -10,7 +10,11 @@ import { verifyBrowserPreviewForTest } from "../../src/browser-preview/verificat
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import type { RuntimeCaptureInput, RuntimeCaptureResult, RuntimeCaptureSuccess } from "../../src/runtime/capture-contract"
+import type {
+  RuntimeCaptureInput,
+  RuntimeCaptureResult,
+  RuntimeCaptureSuccess,
+} from "../../src/runtime/capture-contract"
 
 describe("browser preview verification", () => {
   afterEach(async () => {
@@ -240,7 +244,10 @@ describe("browser preview verification", () => {
     expect(artifact?.task_id).toBe(taskID)
     expect(artifact?.payload?.target_id).toBe(persisted.id)
     expect(artifact?.payload?.status).toBe("failed")
-    const evidence = await findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID: result.target.latestEvidenceID! })
+    const evidence = await findReadableBrowserPreviewEvidenceByID({
+      taskID,
+      evidenceID: result.target.latestEvidenceID!,
+    })
     expect(evidence?.taskID).toBe(taskID)
     expect(evidence?.targetID).toBe(persisted.id)
     expect(evidence?.viewportID).toBe("desktop")

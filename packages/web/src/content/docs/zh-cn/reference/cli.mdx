@@ -143,17 +143,17 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 
 `packages/opencorvus/src/index.ts:106-127` 还注册了以下子命令，参数随版本迭代变化，以 `--help` 为准：
 
-| 命令                    | 用途                                                                        |
-| ----------------------- | --------------------------------------------------------------------------- |
-| `opencorvus stats`      | 统计信息                                                                    |
-| `opencorvus upgrade`    | 升级自身                                                                    |
-| `opencorvus uninstall`  | 卸载                                                                        |
-| `opencorvus import`     | 导入 session / task                                                         |
-| `opencorvus github`     | GitHub Action runtime 入口（通常由 Action 内部调用）                        |
-| `opencorvus pr`         | PR 相关辅助                                                                 |
-| `opencorvus attach`     | attach 到现有 session                                                       |
-| `opencorvus mcp`        | MCP 子命令族（`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`） |
-| `opencorvus session`    | session 管理                                                                |
+| 命令                   | 用途                                                                        |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `opencorvus stats`     | 统计信息                                                                    |
+| `opencorvus upgrade`   | 升级自身                                                                    |
+| `opencorvus uninstall` | 卸载                                                                        |
+| `opencorvus import`    | 导入 session / task                                                         |
+| `opencorvus github`    | GitHub Action runtime 入口（通常由 Action 内部调用）                        |
+| `opencorvus pr`        | PR 相关辅助                                                                 |
+| `opencorvus attach`    | attach 到现有 session                                                       |
+| `opencorvus mcp`       | MCP 子命令族（`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`） |
+| `opencorvus session`   | session 管理                                                                |
 
 ## 退出码
 

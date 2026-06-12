@@ -115,12 +115,15 @@ export function canInitGit(): boolean {
 
 /**
  * POST project/current/init-git to initialise a git repository in the active
- * directory. Calls resetProjectScope + reloadProjectScope on success and
- * shows a native notification. Returns true on success, false on error.
+ * directory. The endpoint is idempotent and is the single source of truth;
+ * do not block it on boardStore.vcs because that metadata can still be null
+ * immediately after switching to a new directory. Calls resetProjectScope +
+ * reloadProjectScope on success and shows a native notification. Returns
+ * true on success, false on error.
  */
 export async function initGitCurrent(options: { notify?: boolean } = {}): Promise<boolean> {
   const dir = activeDirectory()
-  if (!dir || !canInitGit()) return false
+  if (!dir) return false
   try {
     const result = await apiJson("project/current/init-git", { method: "POST" })
     // Reload project scope after git init (config, extensions, meta).

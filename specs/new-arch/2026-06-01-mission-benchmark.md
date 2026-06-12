@@ -43,11 +43,11 @@ Add a benchmark focused on OpenCorvus Mission mode. The benchmark must exercise 
 
 ## Live Benchmark Follow-up
 
-The first live `glm51/glm51` run completed the generated project and produced an accepted report, but the log exposed two Mission-mode support issues that must be fixed before final acceptance:
+The first live private-gateway run completed the generated project and produced an accepted report, but the log exposed two Mission-mode support issues that must be fixed before final acceptance:
 
 - `Trace session mismatch: context=<mission wake session> input=<orchestrator session>` while recording the orchestrator report after the Mission-dispatched task completed.
 - The benchmark process kept running after writing the report because isolated project scheduler state was still alive during teardown.
 
-The second live `glm51/glm51` run proved the generated project and Mission state can reconcile to complete, but also exposed that the benchmark accepted the report before the second Mission wake finished updating `tasks.md` / `handoff.md`. The benchmark must wait for the terminal task ID and status to appear in Mission state before writing the final report.
+The second live private-gateway run proved the generated project and Mission state can reconcile to complete, but also exposed that the benchmark accepted the report before the second Mission wake finished updating `tasks.md` / `handoff.md`. The benchmark must wait for the terminal task ID and status to appear in Mission state before writing the final report.
 
-The third live `glm51/glm51` run produced an accepted report after Mission reconciliation and local verify, then stayed alive after `Instance.disposeAll()` completed. The benchmark executable must keep the final verdict exit code and call `process.exit(finalExitCode)` only after instance/server cleanup so unattended runs do not hang after a valid report.
+The third live private-gateway run produced an accepted report after Mission reconciliation and local verify, then stayed alive after `Instance.disposeAll()` completed. The benchmark executable must keep the final verdict exit code and call `process.exit(finalExitCode)` only after instance/server cleanup so unattended runs do not hang after a valid report.

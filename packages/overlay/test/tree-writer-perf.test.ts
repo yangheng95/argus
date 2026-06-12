@@ -12,7 +12,6 @@
 
 import { test, expect } from "bun:test"
 import { installRealOverlayI18n } from "./fixtures/i18n"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 installRealOverlayI18n()
 

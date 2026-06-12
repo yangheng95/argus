@@ -256,10 +256,7 @@ export function TaskDirContent() {
                 </div>
               </div>
             </Show>
-            <Show
-              when={recentDirs().length > 0}
-              fallback={<div class="recent-dir-empty">{t("cwd.recent_empty")}</div>}
-            >
+            <Show when={recentDirs().length > 0} fallback={<div class="recent-dir-empty">{t("cwd.recent_empty")}</div>}>
               <div class="recent-dir-list" data-kind="recent">
                 <For each={recentDirs()}>
                   {(recent) => {

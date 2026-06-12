@@ -13,19 +13,19 @@ Make the browser preview a complete interactive preview surface. The overlay mus
 
 ## Call Points
 
-| Surface | Existing role | Change |
-| --- | --- | --- |
-| `packages/opencorvus/src/server/routes/browser-preview.ts` | Task-scoped target, evidence, capture routes | Add task-scoped live snapshot/input routes using existing target lookup. |
-| `packages/opencorvus/src/browser-preview/persist.ts` | Persisted target/evidence lookup | Reuse `findBrowserPreviewTargetByID`; do not add URL bodies. |
-| `packages/opencorvus/src/browser-preview/viewport.ts` | Single viewport preset source | Reuse `browserPreviewViewportByID` for live sessions. |
-| `packages/opencorvus/src/browser/runtime/node-sidecar.ts` | Node/Playwright runtime resolution | Reuse runtime paths for a persistent sidecar. |
-| `packages/opencorvus/src/browser/runtime/node-executor.ts` | One-shot sidecar executor | Keep one-shot evidence capture unchanged; live preview gets its own JSON-lines sidecar because it must persist. |
-| `packages/overlay/src/services/browser-preview.ts` | Overlay browser preview API client | Add binary live snapshot/input calls through HostTransport. |
-| `packages/overlay/src/components/BrowserPreviewPanel.tsx` | Evidence rendering and target controls | Render live preview as the primary surface and send pointer/wheel/keyboard input to backend. |
-| `packages/overlay/src/styles/surfaces/inspector.css` | Preview stage/evidence CSS | Add stable live frame styles without nested cards. |
-| `packages/opencorvus/test/server/browser-preview-routes.test.ts` | Route contract coverage | Cover target ID requirement and input payload routing. |
-| `packages/overlay/test/browser-preview-panel.test.ts` | Static architecture guard | Require live service and no iframe. |
-| `packages/overlay/test/browser/browser-preview-evidence.test.ts` | Browser panel acceptance | Verify live screenshot loads and user input posts to backend. |
+| Surface                                                          | Existing role                                | Change                                                                                                          |
+| ---------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/server/routes/browser-preview.ts`       | Task-scoped target, evidence, capture routes | Add task-scoped live snapshot/input routes using existing target lookup.                                        |
+| `packages/opencorvus/src/browser-preview/persist.ts`             | Persisted target/evidence lookup             | Reuse `findBrowserPreviewTargetByID`; do not add URL bodies.                                                    |
+| `packages/opencorvus/src/browser-preview/viewport.ts`            | Single viewport preset source                | Reuse `browserPreviewViewportByID` for live sessions.                                                           |
+| `packages/opencorvus/src/browser/runtime/node-sidecar.ts`        | Node/Playwright runtime resolution           | Reuse runtime paths for a persistent sidecar.                                                                   |
+| `packages/opencorvus/src/browser/runtime/node-executor.ts`       | One-shot sidecar executor                    | Keep one-shot evidence capture unchanged; live preview gets its own JSON-lines sidecar because it must persist. |
+| `packages/overlay/src/services/browser-preview.ts`               | Overlay browser preview API client           | Add binary live snapshot/input calls through HostTransport.                                                     |
+| `packages/overlay/src/components/BrowserPreviewPanel.tsx`        | Evidence rendering and target controls       | Render live preview as the primary surface and send pointer/wheel/keyboard input to backend.                    |
+| `packages/overlay/src/styles/surfaces/inspector.css`             | Preview stage/evidence CSS                   | Add stable live frame styles without nested cards.                                                              |
+| `packages/opencorvus/test/server/browser-preview-routes.test.ts` | Route contract coverage                      | Cover target ID requirement and input payload routing.                                                          |
+| `packages/overlay/test/browser-preview-panel.test.ts`            | Static architecture guard                    | Require live service and no iframe.                                                                             |
+| `packages/overlay/test/browser/browser-preview-evidence.test.ts` | Browser panel acceptance                     | Verify live screenshot loads and user input posts to backend.                                                   |
 
 ## API Shape
 

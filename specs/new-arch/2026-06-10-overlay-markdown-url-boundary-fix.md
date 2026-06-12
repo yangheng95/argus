@@ -15,14 +15,14 @@ Tool output JSON such as `{"url":"http://localhost:3006/world-economy/","title":
 
 ## Call Point Inventory
 
-| Area | Call points | Action |
-| --- | --- | --- |
-| Shared Markdown renderer | `packages/overlay/src/utils/markdown.ts` | Replace default GFM bare URL detection with a `linkify-it` backed inline token. Keep explicit Markdown links, images, code blocks, and file-link codespans unchanged. |
-| Text messages | `packages/overlay/src/components/TextPart.tsx` | Preserve use of `renderMarkdown`; no separate link logic. |
-| Tool output bodies | `packages/overlay/src/components/InlineToolPart.tsx` | Preserve `StaticTextPart`; no tool-specific URL extraction. |
-| Click-to-preview delegation | `packages/overlay/src/main.tsx` | Preserve `data-browser-preview-url` as the only click source. |
-| Package dependency | `packages/overlay/package.json`, `bun.lock` | Declare `linkify-it` directly because overlay imports it. |
-| Tests | `packages/overlay/test/markdown-safety.test.ts`, `packages/overlay/test/message-url-preview.test.ts` | Add JSON-boundary assertions and keep shared renderer guard. |
+| Area                        | Call points                                                                                          | Action                                                                                                                                                                |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared Markdown renderer    | `packages/overlay/src/utils/markdown.ts`                                                             | Replace default GFM bare URL detection with a `linkify-it` backed inline token. Keep explicit Markdown links, images, code blocks, and file-link codespans unchanged. |
+| Text messages               | `packages/overlay/src/components/TextPart.tsx`                                                       | Preserve use of `renderMarkdown`; no separate link logic.                                                                                                             |
+| Tool output bodies          | `packages/overlay/src/components/InlineToolPart.tsx`                                                 | Preserve `StaticTextPart`; no tool-specific URL extraction.                                                                                                           |
+| Click-to-preview delegation | `packages/overlay/src/main.tsx`                                                                      | Preserve `data-browser-preview-url` as the only click source.                                                                                                         |
+| Package dependency          | `packages/overlay/package.json`, `bun.lock`                                                          | Declare `linkify-it` directly because overlay imports it.                                                                                                             |
+| Tests                       | `packages/overlay/test/markdown-safety.test.ts`, `packages/overlay/test/message-url-preview.test.ts` | Add JSON-boundary assertions and keep shared renderer guard.                                                                                                          |
 
 ## Design
 

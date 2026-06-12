@@ -112,9 +112,10 @@ function dropCurrentSchema(sqlite: BunDatabase) {
   }
 
   const tables = sqlite
-    .query<{ name: string }, []>(
-      "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY CASE WHEN name = 'memory_fts' THEN 0 ELSE 1 END, name",
-    )
+    .query<
+      { name: string },
+      []
+    >("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY CASE WHEN name = 'memory_fts' THEN 0 ELSE 1 END, name")
     .all()
   for (const table of tables) {
     sqlite.run(`DROP TABLE IF EXISTS ${quoteIdentifier(table.name)}`)

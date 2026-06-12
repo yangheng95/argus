@@ -25,7 +25,7 @@ describe("required CI overlay test coverage", () => {
     expect(requiredBlock).toContain("- overlay-unit")
     expect(requiredBlock).toContain("- overlay-browser")
 
-    expect(workflow).toContain("test \"${{ needs['overlay-unit'].result }}\" = \"success\"")
-    expect(workflow).toContain("test \"${{ needs['overlay-browser'].result }}\" = \"success\"")
+    expect(workflow).toContain('test "${{ needs[\'overlay-unit\'].result }}" = "success"')
+    expect(workflow).toContain('test "${{ needs[\'overlay-browser\'].result }}" = "success"')
   })
 })

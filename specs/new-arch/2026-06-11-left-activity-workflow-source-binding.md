@@ -26,14 +26,14 @@ Memory keeps an explicit directory because its requests are task-scoped.
 
 ## Call Points
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Left activity selection | `rg "selectLeftActivity|activateCodingAssistantSession" packages/overlay/src/main.tsx` shows this is the single toolbar selection entry. | Keep left activity ownership here. Non-assistant activities cancel pending assistant activation and clear assistant session state through `selectTask("")`. |
-| Coding Assistant activation | `packages/overlay/src/main.tsx::activateCodingAssistantSession` calls `selectCodingAssistantSession`. | Pass an `AbortSignal` so stale activations cannot write the shared Workflow after the user switches away. |
-| Coding Assistant service | `packages/overlay/src/services/coding-assistant.ts::selectCodingAssistantSession` owns session resolve, hydrate, and SSE start. | Thread the signal through list/create/hydrate and check it before mutating `boardStore.selectedSource` and before starting SSE. |
-| Task selection clear path | `packages/overlay/src/services/task.ts::selectTask("")` already clears selected session sources after the Mission fix. | Reuse it; no second clear implementation. |
-| Left Skills/MCP mount | `rg "SkillsPanel active|McpPanel active" packages/overlay/src/main.tsx` shows the left rail mounts compact extension panels. | Do not pass `directory={activeDirectory}` to Skills/MCP; use the same internal project directory path as settings. |
-| Browser side-activity flow | `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` already covers left toolbar + shared Workflow. | Extend it to assert Tasks clears Assistant-selected source and title. |
+| Surface                     | Evidence                                                                                                                        | Decision                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Left activity selection     | `rg "selectLeftActivity                                                                                                         | activateCodingAssistantSession" packages/overlay/src/main.tsx` shows this is the single toolbar selection entry.                | Keep left activity ownership here. Non-assistant activities cancel pending assistant activation and clear assistant session state through `selectTask("")`. |
+| Coding Assistant activation | `packages/overlay/src/main.tsx::activateCodingAssistantSession` calls `selectCodingAssistantSession`.                           | Pass an `AbortSignal` so stale activations cannot write the shared Workflow after the user switches away.                       |
+| Coding Assistant service    | `packages/overlay/src/services/coding-assistant.ts::selectCodingAssistantSession` owns session resolve, hydrate, and SSE start. | Thread the signal through list/create/hydrate and check it before mutating `boardStore.selectedSource` and before starting SSE. |
+| Task selection clear path   | `packages/overlay/src/services/task.ts::selectTask("")` already clears selected session sources after the Mission fix.          | Reuse it; no second clear implementation.                                                                                       |
+| Left Skills/MCP mount       | `rg "SkillsPanel active                                                                                                         | McpPanel active" packages/overlay/src/main.tsx` shows the left rail mounts compact extension panels.                            | Do not pass `directory={activeDirectory}` to Skills/MCP; use the same internal project directory path as settings.                                          |
+| Browser side-activity flow  | `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` already covers left toolbar + shared Workflow.            | Extend it to assert Tasks clears Assistant-selected source and title.                                                           |
 
 ## Acceptance
 

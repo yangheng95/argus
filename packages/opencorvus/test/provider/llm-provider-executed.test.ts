@@ -6,10 +6,10 @@ import { ProviderLLM } from "../../src/provider/llm"
 import type { Provider } from "../../src/provider/provider"
 
 const providerModel = {
-  id: "glm51/glm51",
+  id: "provider/model",
   providerID: "hexin",
   api: {
-    id: "glm51/glm51",
+    id: "provider/model",
     npm: "@ai-sdk/openai-compatible",
   },
   capabilities: {

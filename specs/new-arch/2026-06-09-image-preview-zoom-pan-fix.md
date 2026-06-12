@@ -19,25 +19,25 @@ The shared image preview opens at `100%` and scales the bitmap with CSS `transfo
 
 | Area             | Evidence                                                                                                                            | Decision                                                                                                                                 |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Shared host      | `packages/overlay/src/components/ImagePreview.tsx` owns `ImagePreviewHost`, zoom state, toolbar buttons, and rendered image markup. | Keep layout-sized zoom, but default to readable width-fit for long screenshots and expose whole-image fit as an explicit command.       |
+| Shared host      | `packages/overlay/src/components/ImagePreview.tsx` owns `ImagePreviewHost`, zoom state, toolbar buttons, and rendered image markup. | Keep layout-sized zoom, but default to readable width-fit for long screenshots and expose whole-image fit as an explicit command.        |
 | Preview state    | `packages/overlay/src/services/image-preview.ts` owns only `{ open, src, alt }`.                                                    | Keep this as the single source for open image identity; viewer interaction state stays local to the host.                                |
 | Callers          | `main.tsx`, `utils/markdown.ts`, `FilePart.tsx`, and `InlineToolPart.tsx` all route images into the shared host.                    | Keep callers unchanged so markdown, file parts, and browser evidence use one viewer.                                                     |
 | Styles           | `packages/overlay/src/styles/surfaces/messages.css` owns `.image-preview-dialog__*`.                                                | Make the dialog a bounded viewer surface, truncate the title, and size the stage by the scaled bitmap dimensions instead of a transform. |
-| Regression tests | `packages/overlay/test/message-image-preview.test.ts` asserts shared routing and modal zoom CSS.                                    | Add scale helper coverage for tall screenshot readable open scale and explicit whole-image fit.                                         |
+| Regression tests | `packages/overlay/test/message-image-preview.test.ts` asserts shared routing and modal zoom CSS.                                    | Add scale helper coverage for tall screenshot readable open scale and explicit whole-image fit.                                          |
 
 ## Call Point Sweep
 
-| Symbol / Selector              | Call points                                                           | Action                                                           |
-| ------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `openImagePreview`             | `main.tsx`, `ImagePreview.tsx`, `image-preview.ts`                    | Keep API unchanged.                                              |
-| `closeImagePreview`            | `ImagePreview.tsx`, `image-preview.ts`                                | Keep API unchanged.                                              |
-| `imagePreviewState`            | `ImagePreview.tsx`, `image-preview.ts`                                | Keep image identity source unchanged.                            |
-| `PreviewableImage`             | `FilePart.tsx`, `InlineToolPart.tsx`, `message-image-preview.test.ts` | Keep shared thumbnail trigger unchanged.                         |
-| `data-image-preview-trigger`   | `utils/markdown.ts`, `main.tsx`, `ImagePreview.tsx`, tests            | Keep delegated markdown trigger unchanged.                       |
-| `.image-preview-dialog__body`  | `messages.css`, `ImagePreview.tsx`, tests                             | Convert to a scrollable pan surface.                             |
-| `.image-preview-dialog__image` | `messages.css`, `ImagePreview.tsx`, tests                             | Remove transform scaling; use scaled width and height variables. |
-| `calculateImagePreviewFitScale` | `ImagePreview.tsx`, `message-image-preview.test.ts`                  | Keep as the explicit whole-image fit helper.                     |
-| `calculateImagePreviewOpenScale` | New helper used by `ImagePreview.tsx` and tested directly.           | Use width-fit for tall screenshots, otherwise whole-image fit.   |
+| Symbol / Selector                | Call points                                                           | Action                                                           |
+| -------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `openImagePreview`               | `main.tsx`, `ImagePreview.tsx`, `image-preview.ts`                    | Keep API unchanged.                                              |
+| `closeImagePreview`              | `ImagePreview.tsx`, `image-preview.ts`                                | Keep API unchanged.                                              |
+| `imagePreviewState`              | `ImagePreview.tsx`, `image-preview.ts`                                | Keep image identity source unchanged.                            |
+| `PreviewableImage`               | `FilePart.tsx`, `InlineToolPart.tsx`, `message-image-preview.test.ts` | Keep shared thumbnail trigger unchanged.                         |
+| `data-image-preview-trigger`     | `utils/markdown.ts`, `main.tsx`, `ImagePreview.tsx`, tests            | Keep delegated markdown trigger unchanged.                       |
+| `.image-preview-dialog__body`    | `messages.css`, `ImagePreview.tsx`, tests                             | Convert to a scrollable pan surface.                             |
+| `.image-preview-dialog__image`   | `messages.css`, `ImagePreview.tsx`, tests                             | Remove transform scaling; use scaled width and height variables. |
+| `calculateImagePreviewFitScale`  | `ImagePreview.tsx`, `message-image-preview.test.ts`                   | Keep as the explicit whole-image fit helper.                     |
+| `calculateImagePreviewOpenScale` | New helper used by `ImagePreview.tsx` and tested directly.            | Use width-fit for tall screenshots, otherwise whole-image fit.   |
 
 ## Implementation
 

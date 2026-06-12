@@ -36,12 +36,12 @@ User correction on 2026-06-09: when Visual QA receives a reference image, the ag
 
 ## Additional Call Point Inventory
 
-| Surface | Grep evidence | Change |
-| --- | --- | --- |
-| Core prompt | `packages/opencorvus/src/prompt/core/visual-qa-core.txt` | Add strict reference-image fidelity mode: reference images are authoritative visual truth; layout, spacing, typography, color, and state styling must be copied one-to-one. |
-| Runtime delegation prompt | `packages/opencorvus/src/visual-qa/agent.ts` | Tell every Visual QA session that any reference image triggers the same strict one-to-one standard. |
-| Visual QA context renderer | `packages/opencorvus/src/visual-qa/context.ts` | Emit a bounded strict-reference section when frontend-design or frontend-research context names reference image evidence. |
-| Tests | `packages/opencorvus/test/visual-qa/context.test.ts`, `packages/opencorvus/test/visual-qa/agent.test.ts`, `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts` | Assert the prompt/context require strict one-to-one reference-image layout and style fidelity and reject relaxed wording. |
+| Surface                    | Grep evidence                                                                                                                                                          | Change                                                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core prompt                | `packages/opencorvus/src/prompt/core/visual-qa-core.txt`                                                                                                               | Add strict reference-image fidelity mode: reference images are authoritative visual truth; layout, spacing, typography, color, and state styling must be copied one-to-one. |
+| Runtime delegation prompt  | `packages/opencorvus/src/visual-qa/agent.ts`                                                                                                                           | Tell every Visual QA session that any reference image triggers the same strict one-to-one standard.                                                                         |
+| Visual QA context renderer | `packages/opencorvus/src/visual-qa/context.ts`                                                                                                                         | Emit a bounded strict-reference section when frontend-design or frontend-research context names reference image evidence.                                                   |
+| Tests                      | `packages/opencorvus/test/visual-qa/context.test.ts`, `packages/opencorvus/test/visual-qa/agent.test.ts`, `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts` | Assert the prompt/context require strict one-to-one reference-image layout and style fidelity and reject relaxed wording.                                                   |
 
 ## Additional Acceptance
 
