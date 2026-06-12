@@ -3,7 +3,9 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import {
+  archiveBinaryArtifact,
   assertLinuxX64Host,
+  copyBinaryArtifact,
   discoverOverlayUiSourceFiles,
   linuxBinaryBuildEnv,
   parsePackageLinuxBinaryArgs,
@@ -29,6 +31,10 @@ describe("package-linux-binary", () => {
         "opencorvus",
       ),
     ])
+    expect(artifacts.map((artifact) => artifact.sourceBundleDir)).toEqual([
+      path.join("/repo", "packages", "opencorvus", "dist", "opencorvus-overlay-server-linux-x64"),
+      path.join("/repo", "packages", "opencorvus", "dist", "opencorvus-overlay-server-linux-x64-baseline"),
+    ])
     expect(artifacts.map((artifact) => artifact.output)).toEqual([
       path.join("/repo", "packages", "opencorvus", "dist", "binary", "opencorvus-linux-x64", "opencorvus"),
       path.join("/repo", "packages", "opencorvus", "dist", "binary", "opencorvus-linux-x64-baseline", "opencorvus"),
@@ -36,6 +42,26 @@ describe("package-linux-binary", () => {
     expect(artifacts.map((artifact) => artifact.bundleDir)).toEqual([
       path.join("/repo", "packages", "opencorvus", "dist", "binary", "opencorvus-linux-x64"),
       path.join("/repo", "packages", "opencorvus", "dist", "binary", "opencorvus-linux-x64-baseline"),
+    ])
+    expect(artifacts.map((artifact) => artifact.archive)).toEqual([
+      path.join(
+        "/repo",
+        "packages",
+        "opencorvus",
+        "dist",
+        "binary",
+        "opencorvus-linux-x64",
+        "opencorvus-bundle.tar.gz",
+      ),
+      path.join(
+        "/repo",
+        "packages",
+        "opencorvus",
+        "dist",
+        "binary",
+        "opencorvus-linux-x64-baseline",
+        "opencorvus-bundle.tar.gz",
+      ),
     ])
   })
 
@@ -49,6 +75,53 @@ describe("package-linux-binary", () => {
       path.join("/repo", "packages", "opencorvus", "dist", "binary", "opencorvus-linux-x64-baseline", "ui"),
     ])
     expect(resolveLegacyLooseBinaryDir("/repo")).toBe(path.join("/repo", "packages", "opencorvus", "dist", "bin"))
+  })
+
+  test("copies browser MCP node runtime into the final Linux bundle", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-package-linux-runtime-"))
+    try {
+      const artifact = resolveLinuxBinaryArtifacts(repoRoot)[0]
+      await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "browser-mcp-node", "node_modules", "playwright"), {
+        recursive: true,
+      })
+      await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "ui"), { recursive: true })
+      await fs.promises.writeFile(artifact.source, "")
+      await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "browser-mcp-node", "node"), "")
+      await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "browser-mcp-node", "stdio.mjs"), "")
+      await fs.promises.writeFile(
+        path.join(artifact.sourceBundleDir, "browser-mcp-node", "node_modules", "playwright", "package.json"),
+        "{}",
+      )
+      await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "ui", "index.html"), "")
+
+      await copyBinaryArtifact(artifact)
+
+      expect(fs.existsSync(artifact.output)).toBe(true)
+      expect(fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "node"))).toBe(true)
+      expect(fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "stdio.mjs"))).toBe(true)
+      expect(
+        fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "node_modules", "playwright", "package.json")),
+      ).toBe(true)
+    } finally {
+      await fs.promises.rm(repoRoot, { recursive: true, force: true })
+    }
+  })
+
+  test("archives the final Linux bundle as one Docker context file", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-package-linux-archive-"))
+    try {
+      const artifact = resolveLinuxBinaryArtifacts(repoRoot)[0]
+      await fs.promises.mkdir(path.join(artifact.bundleDir, "browser-mcp-node"), { recursive: true })
+      await fs.promises.writeFile(artifact.output, "binary")
+      await fs.promises.writeFile(path.join(artifact.bundleDir, "browser-mcp-node", "stdio.mjs"), "stdio")
+
+      await archiveBinaryArtifact(artifact)
+
+      expect(fs.existsSync(artifact.archive)).toBe(true)
+      expect(fs.statSync(artifact.archive).size).toBeGreaterThan(0)
+    } finally {
+      await fs.promises.rm(repoRoot, { recursive: true, force: true })
+    }
   })
 
   test("renders a Bun file-embedding module for overlay UI assets", async () => {
@@ -101,6 +174,40 @@ describe("package-linux-binary", () => {
 
     expect(source).toContain("script/build.ts --overlay-server --single --baseline")
     expect(source).toContain("opencorvus-overlay-server-")
+  })
+
+  test("container image packages the current Linux binary bundle with Node and Git", async () => {
+    const dockerfile = await Bun.file(path.resolve(import.meta.dir, "../../Dockerfile")).text()
+    const dockerignore = await Bun.file(path.resolve(import.meta.dir, "../../../../.dockerignore")).text()
+    const entrypoint = await Bun.file(
+      path.resolve(import.meta.dir, "../../../../script/opencorvus-container-entrypoint.sh"),
+    ).text()
+
+    expect(dockerfile).toContain("ARG OPENCORVUS_BINARY_NAME=opencorvus-linux-x64")
+    expect(dockerfile).toContain(
+      "COPY packages/opencorvus/dist/binary/${OPENCORVUS_BINARY_NAME}/opencorvus-bundle.tar.gz",
+    )
+    expect(dockerfile).toContain("COPY script/opencorvus-container-entrypoint.sh")
+    expect(dockerfile).toContain("FROM debian:bookworm-slim")
+    expect(dockerfile).toContain("chromium")
+    expect(dockerfile).toContain("git")
+    expect(dockerfile).toContain("libgcc-s1")
+    expect(dockerfile).toContain("libstdc++6")
+    expect(dockerfile).toContain("nodejs")
+    expect(dockerfile).toContain("npm")
+    expect(dockerfile).toContain("test -x /opt/opencorvus/browser-mcp-node/node")
+    expect(dockerfile).toContain("test -f /opt/opencorvus/browser-mcp-node/stdio.mjs")
+    expect(dockerfile).toContain("test -f /opt/opencorvus/browser-mcp-node/http.mjs")
+    expect(dockerfile).toContain("test -f /opt/opencorvus/browser-mcp-node/node_modules/playwright/index.js")
+    expect(dockerfile).toContain("chromium --version")
+    expect(dockerfile).toContain('ENTRYPOINT ["/usr/local/bin/opencorvus-container-entrypoint"]')
+    expect(dockerfile).not.toContain("dist/opencorvus-linux-x64-baseline-musl")
+    expect(dockerignore).toContain("!packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus-bundle.tar.gz")
+    expect(dockerignore).toContain(
+      "!packages/opencorvus/dist/binary/opencorvus-linux-x64-baseline/opencorvus-bundle.tar.gz",
+    )
+    expect(dockerignore).toContain("!script/opencorvus-container-entrypoint.sh")
+    expect(entrypoint).toContain('OPENCORVUS_BIN="${OPENCORVUS_BIN:-/opt/opencorvus/opencorvus}"')
   })
 
   test("parses the skip-build CLI option", () => {

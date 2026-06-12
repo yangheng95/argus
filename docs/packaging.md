@@ -5,12 +5,13 @@ binary, the Tauri overlay desktop app, release CI, and local smoke packaging.
 
 ## Package Surfaces
 
-| Surface                   | Main output                                                                                                        | UI hosting model                                                                                                          | Current owner                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| CLI binary                | `packages/opencorvus/dist/opencorvus-<platform>/opencorvus(.exe)`                                                  | CI currently stages `ui/` sidecar assets next to the CLI binary.                                                          | `packages/opencorvus/script/build.ts` and `.github/workflows/build.yml`                                               |
-| Local Linux single binary | `packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus` and `...-baseline/opencorvus`                    | Overlay UI files are embedded into the Bun executable; no sibling `ui/` directory is required.                            | `script/package-linux-binary.ts`                                                                                      |
-| Overlay desktop app       | `packages/overlay/dist/opencorvus-overlay-<platform>-<arch>/opencorvus-overlay(.exe)` plus installer bundles in CI | Tauri embeds an `opencorvus-overlay-server-*` sidecar archive through Rust `include_bytes!`, then extracts it at runtime. | `packages/overlay/script/build.ts`, `packages/overlay/script/build-overlay.ts`, `packages/overlay/src-tauri/build.rs` |
-| Overlay server sidecar    | `packages/opencorvus/dist/opencorvus-overlay-server-<platform>-<arch>/opencorvus(.exe)`                            | No web UI sidecar contract; it is the backend payload consumed by the Tauri overlay.                                      | `packages/opencorvus/script/build.ts --overlay-server`                                                                |
+| Surface                   | Main output                                                                                                        | UI hosting model                                                                                                                                                            | Current owner                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| CLI binary                | `packages/opencorvus/dist/opencorvus-<platform>/opencorvus(.exe)`                                                  | CI currently stages `ui/` sidecar assets next to the CLI binary.                                                                                                            | `packages/opencorvus/script/build.ts` and `.github/workflows/build.yml`                                               |
+| Local Linux single binary | `packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus` and `...-baseline/opencorvus`                    | Overlay UI files are embedded into the Bun executable; no sibling `ui/` directory is required.                                                                              | `script/package-linux-binary.ts`                                                                                      |
+| Local container image     | Docker image built from `packages/opencorvus/Dockerfile`                                                           | Copies the local Linux single-binary bundle archive to `/opt/opencorvus`, installs Node.js, Git, Chromium, and the Browser MCP sidecar runtime, and serves embedded `/ui/`. | `packages/opencorvus/Dockerfile` and `script/opencorvus-container-entrypoint.sh`                                      |
+| Overlay desktop app       | `packages/overlay/dist/opencorvus-overlay-<platform>-<arch>/opencorvus-overlay(.exe)` plus installer bundles in CI | Tauri embeds an `opencorvus-overlay-server-*` sidecar archive through Rust `include_bytes!`, then extracts it at runtime.                                                   | `packages/overlay/script/build.ts`, `packages/overlay/script/build-overlay.ts`, `packages/overlay/src-tauri/build.rs` |
+| Overlay server sidecar    | `packages/opencorvus/dist/opencorvus-overlay-server-<platform>-<arch>/opencorvus(.exe)`                            | No web UI sidecar contract; it is the backend payload consumed by the Tauri overlay.                                                                                        | `packages/opencorvus/script/build.ts --overlay-server`                                                                |
 
 ## Root Scripts
 
@@ -77,6 +78,26 @@ The Linux single-binary smoke check must copy only the executable to an empty
 directory, run `opencorvus serve`, and fetch `/ui/`. Passing that check proves
 the UI is embedded rather than accidentally served from a sibling `ui/`
 directory or workspace `packages/overlay/dist-vite`.
+
+Build the local container image from the repository root after
+`bun run package:linux-binary` has produced
+`packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus-bundle.tar.gz`:
+
+```bash
+docker build -f packages/opencorvus/Dockerfile \
+  --build-arg OPENCORVUS_BINARY_NAME=opencorvus-linux-x64 \
+  -t opencorvus:local .
+```
+
+Container release smoke checks:
+
+```bash
+docker run --rm opencorvus:local --version
+docker run --rm --entrypoint sh opencorvus:local -lc 'node --version && git --version && chromium --version && /opt/opencorvus/browser-mcp-node/node --version && test -f /opt/opencorvus/browser-mcp-node/stdio.mjs && test -f /opt/opencorvus/browser-mcp-node/http.mjs && test -f /opt/opencorvus/browser-mcp-node/node_modules/playwright/index.js'
+docker run --rm -d --name opencorvus-smoke -p 7878:7878 opencorvus:local
+curl -fsS http://127.0.0.1:7878/ui/ | grep -i '<!doctype html'
+docker rm -f opencorvus-smoke
+```
 
 ## Current Linux Binary Outputs
 

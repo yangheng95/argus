@@ -38,9 +38,11 @@ export const LINUX_BINARY_TARGETS: readonly LinuxBinaryTarget[] = [
 
 export interface LinuxBinaryArtifact {
   target: LinuxBinaryTarget
+  sourceBundleDir: string
   source: string
   output: string
   bundleDir: string
+  archive: string
 }
 
 export interface PackageLinuxBinaryOptions {
@@ -59,16 +61,20 @@ export interface EmbeddedOverlayUiSourceFile {
 export function resolveLinuxBinaryArtifacts(repoRoot: string): LinuxBinaryArtifact[] {
   const opencorvusDist = path.join(repoRoot, "packages", "opencorvus", "dist")
   const outputDir = path.join(opencorvusDist, "binary")
-  return LINUX_BINARY_TARGETS.map((target) => ({
-    target,
-    source: path.join(
+  return LINUX_BINARY_TARGETS.map((target) => {
+    const sourceBundleDir = path.join(
       opencorvusDist,
       `opencorvus-overlay-server-${target.distDirName.replace(/^opencorvus-/, "")}`,
-      "opencorvus",
-    ),
-    output: path.join(outputDir, target.outputName, "opencorvus"),
-    bundleDir: path.join(outputDir, target.outputName),
-  }))
+    )
+    return {
+      target,
+      sourceBundleDir,
+      source: path.join(sourceBundleDir, "opencorvus"),
+      output: path.join(outputDir, target.outputName, "opencorvus"),
+      bundleDir: path.join(outputDir, target.outputName),
+      archive: path.join(outputDir, target.outputName, "opencorvus-bundle.tar.gz"),
+    }
+  })
 }
 
 export function resolveLegacyLooseBinaryDir(repoRoot: string): string {
@@ -120,7 +126,7 @@ async function readPackageVersion(repoRoot: string): Promise<string> {
   return pkg.version
 }
 
-async function copyBinaryArtifact(artifact: LinuxBinaryArtifact): Promise<void> {
+export async function copyBinaryArtifact(artifact: LinuxBinaryArtifact): Promise<void> {
   if (!fs.existsSync(artifact.source)) {
     if (fs.existsSync(artifact.output)) {
       await fs.promises.chmod(artifact.output, 0o755)
@@ -130,7 +136,7 @@ async function copyBinaryArtifact(artifact: LinuxBinaryArtifact): Promise<void> 
   }
   await fs.promises.rm(artifact.bundleDir, { recursive: true, force: true })
   await fs.promises.mkdir(artifact.bundleDir, { recursive: true })
-  await fs.promises.copyFile(artifact.source, artifact.output)
+  await fs.promises.cp(artifact.sourceBundleDir, artifact.bundleDir, { recursive: true, force: true })
   await fs.promises.chmod(artifact.output, 0o755)
 }
 
@@ -238,6 +244,14 @@ async function removeObsoleteSidecarUiDirs(repoRoot: string): Promise<void> {
   }
 }
 
+export async function archiveBinaryArtifact(artifact: LinuxBinaryArtifact): Promise<void> {
+  await fs.promises.rm(artifact.archive, { force: true })
+  const tmpArchive = path.join(path.dirname(artifact.bundleDir), `${artifact.target.outputName}.tar.gz.tmp`)
+  await fs.promises.rm(tmpArchive, { force: true })
+  await $`tar -czf ${tmpArchive} -C ${artifact.bundleDir} .`
+  await fs.promises.rename(tmpArchive, artifact.archive)
+}
+
 export async function packageLinuxBinary(
   repoRoot: string,
   opts: PackageLinuxBinaryOptions = {},
@@ -278,6 +292,9 @@ export async function packageLinuxBinary(
   }
 
   await removeObsoleteSidecarUiDirs(repoRoot)
+  for (const artifact of artifacts) {
+    await archiveBinaryArtifact(artifact)
+  }
 
   return artifacts
 }
