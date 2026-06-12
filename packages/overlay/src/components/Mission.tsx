@@ -210,6 +210,16 @@ function MissionContent(props: MissionProps) {
   createEffect(() => {
     if (!props.active) return
     if (searchQuery().trim()) return
+    if (boardStore.selectedSource?.kind === "session") return
+    if (missionRecords.loading) return
+    const mission = missionRecords()?.records[0]
+    if (!mission) return
+    void handleMissionSelect(mission)
+  })
+
+  createEffect(() => {
+    if (!props.active) return
+    if (searchQuery().trim()) return
     const selected = selectedMissionSessionID()
     if (!selected || missionRecords.loading) return
     const rows = missionRecords()?.records ?? []
