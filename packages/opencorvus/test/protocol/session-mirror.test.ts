@@ -243,6 +243,38 @@ describe("session mirror", () => {
     })
   })
 
+  test("stamps right sidebar assistant session errors for lifecycle-only cards", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sidebar = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const mapped = mapSessionBusEvent(
+          {
+            type: Session.Event.Error.type,
+            properties: {
+              sessionID: sidebar.id,
+              error: {
+                name: "UnknownError",
+                data: { message: "queue execution failed before assistant output" },
+              },
+            },
+          },
+          { sessionID: sidebar.id },
+        )
+
+        expect(mapped?.type).toBe("session.error")
+        expect(mapped?.payload?.channel).toBe("assistant")
+        expect(mapped?.payload?.resolvedRole).toBe("assistant")
+        expect(mapped?.payload?.sessionID).toBe(sidebar.id)
+      },
+    })
+  })
+
   test("stamps right sidebar standalone transcript user and assistant messages", async () => {
     await using tmp = await tmpdir({ git: true })
 

@@ -39,13 +39,18 @@ export interface BrowserPreviewVerification {
   projectRoot: string
   target: BrowserPreviewTarget
   viewports: BrowserPreviewViewport[]
-  captures: Partial<Record<BrowserPreviewViewportID, {
-    captured: boolean
-    passed: boolean
-    url: string
-    summary: string
-    path?: string
-  }>>
+  captures: Partial<
+    Record<
+      BrowserPreviewViewportID,
+      {
+        captured: boolean
+        passed: boolean
+        url: string
+        summary: string
+        path?: string
+      }
+    >
+  >
   evidenceIDs: Partial<Record<BrowserPreviewViewportID, string>>
   diagnostics: string[]
 }

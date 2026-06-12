@@ -11,7 +11,6 @@
 // Run: bun test test/tree-writer-stats-cache.test.ts
 
 import { test, expect } from "bun:test"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).requestAnimationFrame = (() => 1) as any

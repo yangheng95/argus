@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { Bus } from "../../src/bus"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { TaskQueueService } from "../../src/scheduler/task-queue-service"
@@ -179,6 +180,47 @@ describe("scheduler.task-queue-service", () => {
     })
 
     expect(prompt).toHaveBeenCalledTimes(2)
+  })
+
+  test("publishes session error when queued prompt reaches terminal failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const prompt = spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("provider rejected request"))
+    const errors: Array<{ sessionID?: string; message?: string }> = []
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const stop = Bus.subscribe(Session.Event.Error, (event) => {
+          errors.push({
+            sessionID: event.properties.sessionID,
+            message: event.properties.error?.data?.message,
+          })
+        })
+        try {
+          const session = await Session.create({ kind: "assistant" })
+          TaskQueueService.enqueuePrompt({
+            sessionID: session.id,
+            prompt: {
+              parts: [
+                {
+                  type: "text",
+                  text: "fail visibly",
+                },
+              ],
+            },
+            maxRetries: 0,
+            source: "test",
+          })
+
+          await TaskQueueService.runNow()
+          expect(errors).toEqual([{ sessionID: session.id, message: "provider rejected request" }])
+        } finally {
+          stop()
+        }
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
   })
 
   test("poll only processes tasks for current project", async () => {
@@ -742,5 +784,57 @@ describe("scheduler.task-queue-service", () => {
     })
 
     expect(prompt).toHaveBeenCalledTimes(0)
+  })
+
+  test("publishes session error when stale running task reaches terminal failure", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
+    const errors: Array<{ sessionID?: string; message?: string }> = []
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const stop = Bus.subscribe(Session.Event.Error, (event) => {
+          errors.push({
+            sessionID: event.properties.sessionID,
+            message: event.properties.error?.data?.message,
+          })
+        })
+        try {
+          const session = await Session.create({ kind: "assistant" })
+          const now = Date.now()
+          Database.use((db) =>
+            db
+              .insert(TaskQueueTable)
+              .values({
+                id: "task_stale_visible_" + Math.random().toString(36).slice(2),
+                session_id: session.id,
+                prompt: "stale-visible",
+                status: "running",
+                source: "test",
+                retry_count: 0,
+                max_retries: 0,
+                metadata: {
+                  kind: "session_prompt",
+                  input: {
+                    parts: [{ type: "text", text: "stale-visible" }],
+                  },
+                },
+                time_created: now - 5000,
+                time_updated: now - 5000,
+                time_started: now - 5000,
+              })
+              .run(),
+          )
+
+          await TaskQueueService.runNow()
+          expect(errors).toEqual([{ sessionID: session.id, message: "task timed out while running" }])
+        } finally {
+          stop()
+        }
+      },
+    })
   })
 })

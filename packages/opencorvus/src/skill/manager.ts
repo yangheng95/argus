@@ -16,15 +16,18 @@ import { Uint8ArrayReader, Uint8ArrayWriter, ZipReader } from "@zip.js/zip.js"
 
 const MANIFEST = ".opencorvus-skill-source.json"
 const ExpirationTimestamp = z
-  .preprocess((value) => {
-    if (value instanceof Date) return Number.isNaN(value.getTime()) ? value : value.toISOString()
-    if (typeof value === "number" && Number.isFinite(value)) {
-      const date = new Date(value)
-      return Number.isNaN(date.getTime()) ? value : date.toISOString()
-    }
-    if (typeof value === "string") return value.trim()
-    return value
-  }, z.string().refine((value) => !Number.isNaN(Date.parse(value)), "expires_at must be a valid timestamp"))
+  .preprocess(
+    (value) => {
+      if (value instanceof Date) return Number.isNaN(value.getTime()) ? value : value.toISOString()
+      if (typeof value === "number" && Number.isFinite(value)) {
+        const date = new Date(value)
+        return Number.isNaN(date.getTime()) ? value : date.toISOString()
+      }
+      if (typeof value === "string") return value.trim()
+      return value
+    },
+    z.string().refine((value) => !Number.isNaN(Date.parse(value)), "expires_at must be a valid timestamp"),
+  )
   .optional()
 const SkillInfo = z.object({
   name: z.string(),

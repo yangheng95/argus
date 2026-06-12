@@ -1,5 +1,4 @@
 import { test, expect } from "bun:test"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 if (typeof globalThis.requestAnimationFrame === "undefined") {
@@ -1403,6 +1402,31 @@ test("session.error marks the session card with the original stream error", () =
   expect(card.terminalReason).toBe("error")
   expect(card.errorReason).toBe("upstream closed while starting tool call")
   expect(card.timeCompleted).toBe(1_776_000_010_000)
+})
+
+test("session.error with channel materializes a lifecycle-only assistant card", () => {
+  resetWriter()
+
+  applyEvent({
+    type: "session.error",
+    emittedAt: 1_776_000_012_000,
+    properties: {
+      sessionID: "ses_queue_error",
+      channel: "assistant",
+      resolvedRole: "assistant",
+      error: {
+        name: "UnknownError",
+        data: { message: "provider rejected request" },
+      },
+    },
+  })
+
+  const card = cardTreeStore.cards["assistant:session:ses_queue_error"]!
+  expect(card).toBeDefined()
+  expect(card.status).toBe("error")
+  expect(card.terminalReason).toBe("error")
+  expect(card.errorReason).toBe("provider rejected request")
+  expect(card.timeCompleted).toBe(1_776_000_012_000)
 })
 
 // ── Message-turn cards (2026-05-16) ──

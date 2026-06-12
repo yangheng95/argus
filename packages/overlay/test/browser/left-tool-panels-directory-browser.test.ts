@@ -147,23 +147,25 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
   try {
     const page = await browser.newPage()
     await page.setViewport({ width: 1280, height: 365 })
-    await page.evaluateOnNewDocument((input) => {
-      const { serverUrl, directory } = input as { serverUrl: string; directory: string }
-      ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
-      localStorage.setItem("oc_directory", directory)
-      localStorage.setItem("oc_workspace_directory", directory)
-      localStorage.setItem("oc_server_url", serverUrl)
-      localStorage.setItem("oc_workspace_task", TASK_ID)
-      localStorage.setItem("oc_right_panel_collapsed", "false")
-    }, { serverUrl: server.origin, directory: WORKSPACE_DIR })
+    await page.evaluateOnNewDocument(
+      (input) => {
+        const { serverUrl, directory } = input as { serverUrl: string; directory: string }
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        localStorage.setItem("oc_directory", directory)
+        localStorage.setItem("oc_workspace_directory", directory)
+        localStorage.setItem("oc_server_url", serverUrl)
+        localStorage.setItem("oc_workspace_task", TASK_ID)
+        localStorage.setItem("oc_right_panel_collapsed", "false")
+      },
+      { serverUrl: server.origin, directory: WORKSPACE_DIR },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded", timeout: 60_000 })
     await page.waitForSelector("#solidLeftActivityToolbar")
     await page.waitForFunction(() => (window as any).__overlayInitSettled === true)
 
-    await page.$eval(
-      '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]',
-      (node) => (node as HTMLButtonElement).click(),
+    await page.$eval('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]', (node) =>
+      (node as HTMLButtonElement).click(),
     )
     await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-row")
     const skillName = await page.$eval(
@@ -178,12 +180,14 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     assert.ok(skillListMetrics.height > 24)
     assert.match(skillListMetrics.text, /project-review/)
 
-    await page.$eval(
-      '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]',
-      (node) => (node as HTMLButtonElement).click(),
+    await page.$eval('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]', (node) =>
+      (node as HTMLButtonElement).click(),
     )
     await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-row")
-    const mcpName = await page.$eval("#leftPanelMcp .extension-row .extension-row-main > strong", (node) => node.textContent || "")
+    const mcpName = await page.$eval(
+      "#leftPanelMcp .extension-row .extension-row-main > strong",
+      (node) => node.textContent || "",
+    )
     assert.equal(mcpName, "docs")
     const mcpListMetrics = await page.$eval("#leftPanelMcp .extension-list", (node) => {
       const rect = node.getBoundingClientRect()
@@ -192,9 +196,8 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     assert.ok(mcpListMetrics.height > 24)
     assert.match(mcpListMetrics.text, /docs/)
 
-    await page.$eval(
-      '[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]',
-      (node) => (node as HTMLButtonElement).click(),
+    await page.$eval('[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]', (node) =>
+      (node as HTMLButtonElement).click(),
     )
     await page.waitForSelector("#leftPanelMemory[data-active='true'] .knowledge-item")
     const memoryName = await page.$eval("#leftPanelMemory .knowledge-item-title", (node) => node.textContent || "")

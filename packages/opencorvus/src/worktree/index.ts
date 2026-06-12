@@ -61,13 +61,17 @@ export namespace Worktree {
         const writeOwner = () =>
           fs.writeFile(
             ownerPath,
-            JSON.stringify({
-              pid: process.pid,
-              hostname,
-              createdAt,
-              lastHeartbeat: Date.now(),
-              projectID: Instance.project.id,
-            }, null, 2),
+            JSON.stringify(
+              {
+                pid: process.pid,
+                hostname,
+                createdAt,
+                lastHeartbeat: Date.now(),
+                projectID: Instance.project.id,
+              },
+              null,
+              2,
+            ),
             "utf8",
           )
         await writeOwner()
@@ -81,16 +85,21 @@ export namespace Worktree {
         const code = (err as NodeJS.ErrnoException).code
         if (code !== "EEXIST") throw err
         const ownerPath = path.join(lockDir, "owner.json")
-        const owner = await fs.readFile(ownerPath, "utf8")
-          .then((raw) => JSON.parse(raw) as { pid?: unknown; hostname?: unknown; createdAt?: unknown; lastHeartbeat?: unknown })
+        const owner = await fs
+          .readFile(ownerPath, "utf8")
+          .then(
+            (raw) =>
+              JSON.parse(raw) as { pid?: unknown; hostname?: unknown; createdAt?: unknown; lastHeartbeat?: unknown },
+          )
           .catch(() => undefined)
         const pid = typeof owner?.pid === "number" ? owner.pid : undefined
         const ownerHostname = typeof owner?.hostname === "string" ? owner.hostname : undefined
-        const lastHeartbeat = typeof owner?.lastHeartbeat === "number"
-          ? owner.lastHeartbeat
-          : typeof owner?.createdAt === "number"
-            ? owner.createdAt
-            : 0
+        const lastHeartbeat =
+          typeof owner?.lastHeartbeat === "number"
+            ? owner.lastHeartbeat
+            : typeof owner?.createdAt === "number"
+              ? owner.createdAt
+              : 0
         const heartbeatStale = Date.now() - lastHeartbeat > 30_000
         const sameHostPidDead = ownerHostname === hostname && (!pid || !isPidAlive(pid))
         if (sameHostPidDead || heartbeatStale) {
@@ -270,10 +279,10 @@ export namespace Worktree {
     z.object({
       branch: z
         .string()
-        .describe("Local branch ref to merge (e.g. `opencorvus/build-foo`). Must already contain the goal's build commits."),
-      worktreeDir: z
-        .string()
-        .describe("Filesystem path of the goal's worktree (where the merge runs)."),
+        .describe(
+          "Local branch ref to merge (e.g. `opencorvus/build-foo`). Must already contain the goal's build commits.",
+        ),
+      worktreeDir: z.string().describe("Filesystem path of the goal's worktree (where the merge runs)."),
     }),
     async (input) => {
       if (!Project.isGitRepo(Instance.directory)) {
@@ -308,7 +317,8 @@ export namespace Worktree {
         // retrying, otherwise we silently subsume their state into a new
         // merge commit and lose the signal.
         const mergeHead = await runGit(["rev-parse", "--verify", "--quiet", "MERGE_HEAD"], {
-          cwd: input.worktreeDir, timeoutProfile: "fast",
+          cwd: input.worktreeDir,
+          timeoutProfile: "fast",
         })
         if (mergeHead.exitCode === 0) {
           throw new MergeFailedError({
@@ -320,7 +330,8 @@ export namespace Worktree {
           })
         }
         const status = await runGit(["-c", "core.quotepath=false", "status", "--porcelain"], {
-          cwd: input.worktreeDir, timeoutProfile: "default",
+          cwd: input.worktreeDir,
+          timeoutProfile: "default",
         })
         const dirty = statusLinesBlockingMerge(outputText(status.stdout))
         if (dirty.length > 0) {
@@ -367,11 +378,13 @@ export namespace Worktree {
         // agent can reconcile in place. Host-path callers preserve the same
         // worktree for the next attempt.
         const merged = await runGit(["merge", "--no-edit", primaryBranch], {
-          cwd: input.worktreeDir, timeoutProfile: "default",
+          cwd: input.worktreeDir,
+          timeoutProfile: "default",
         })
         if (merged.exitCode !== 0) {
           const conflictList = await runGit(["diff", "--name-only", "--diff-filter=U"], {
-            cwd: input.worktreeDir, timeoutProfile: "default",
+            cwd: input.worktreeDir,
+            timeoutProfile: "default",
           })
           const conflictPaths = outputText(conflictList.stdout)
             .split("\n")
@@ -379,7 +392,8 @@ export namespace Worktree {
             .filter(Boolean)
 
           const primaryTipProbe = await runGit(["rev-parse", `refs/heads/${primaryBranch}`], {
-            cwd: primaryDir, timeoutProfile: "fast",
+            cwd: primaryDir,
+            timeoutProfile: "fast",
           })
           const primaryTip = outputText(primaryTipProbe.stdout)
 
@@ -400,7 +414,8 @@ export namespace Worktree {
         // now strictly descends primary's tip (either via ff or via merge
         // commit produced in step 1).
         const ff = await runGit(["merge", "--ff-only", "--no-edit", input.branch], {
-          cwd: primaryDir, timeoutProfile: "default",
+          cwd: primaryDir,
+          timeoutProfile: "default",
         })
         if (ff.exitCode !== 0) {
           const stderr = errorText(ff) || "git merge --ff-only failed after successful merge"
@@ -412,7 +427,8 @@ export namespace Worktree {
         }
 
         const headProbe = await runGit(["rev-parse", "HEAD"], {
-          cwd: primaryDir, timeoutProfile: "fast",
+          cwd: primaryDir,
+          timeoutProfile: "fast",
         })
         const primaryHead = outputText(headProbe.stdout)
         return { primaryBranch, primaryHead, primaryRecoveryCommit }
@@ -517,14 +533,16 @@ export namespace Worktree {
       checkout: z
         .enum(["sync", "async"])
         .optional()
-        .describe("Deprecated. Worktree.create always waits until checkout, bootstrap, and startup scripts complete before returning."),
+        .describe(
+          "Deprecated. Worktree.create always waits until checkout, bootstrap, and startup scripts complete before returning.",
+        ),
       reuseIfValid: z
         .boolean()
         .optional()
         .describe(
           "When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. " +
-          "Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. " +
-          "Invalid existing trees (zombie linkage, missing branch, etc.) are rejected by the validity gate before the standard reclaim path runs, so corrupt state never silently survives a retry.",
+            "Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. " +
+            "Invalid existing trees (zombie linkage, missing branch, etc.) are rejected by the validity gate before the standard reclaim path runs, so corrupt state never silently survives a retry.",
         ),
       taskID: z.string().optional(),
       goalID: z.string().optional(),
@@ -715,19 +733,26 @@ export namespace Worktree {
     return paths.length > 0 && paths.every((file) => ProjectRuntimePaths.isEvidenceInputRelativePath(file))
   }
 
-  async function committedEvidenceInputDiffs(worktreeDir: string, primaryBranch: string, branch: string): Promise<string[]> {
-    const result = await runGit([
-      "-c",
-      "core.quotepath=false",
-      "diff",
-      "--name-only",
-      "--no-renames",
-      primaryBranch,
-      branch,
-      "--",
-      "web-clone-source",
-      "webpage-evidence",
-    ], { cwd: worktreeDir, timeoutProfile: "default" }).catch(() => undefined)
+  async function committedEvidenceInputDiffs(
+    worktreeDir: string,
+    primaryBranch: string,
+    branch: string,
+  ): Promise<string[]> {
+    const result = await runGit(
+      [
+        "-c",
+        "core.quotepath=false",
+        "diff",
+        "--name-only",
+        "--no-renames",
+        primaryBranch,
+        branch,
+        "--",
+        "web-clone-source",
+        "webpage-evidence",
+      ],
+      { cwd: worktreeDir, timeoutProfile: "default" },
+    ).catch(() => undefined)
     if (!result || result.exitCode !== 0) return []
     return outputText(result.stdout)
       .split("\n")
@@ -738,11 +763,13 @@ export namespace Worktree {
 
   async function inspectBlockedMergeWorktree(directory: string) {
     const mergeHeadResult = await runGit(["rev-parse", "--verify", "--quiet", "MERGE_HEAD"], {
-      cwd: directory, timeoutProfile: "fast",
+      cwd: directory,
+      timeoutProfile: "fast",
     }).catch(() => undefined)
     const mergeHead = mergeHeadResult?.exitCode === 0
     const dirtyResult = await runGit(["-c", "core.quotepath=false", "status", "--porcelain"], {
-      cwd: directory, timeoutProfile: "default",
+      cwd: directory,
+      timeoutProfile: "default",
     }).catch(() => undefined)
     const dirtyPaths = dirtyResult ? statusLinesBlockingMerge(outputText(dirtyResult.stdout)) : []
     return { mergeHead, dirtyPaths }
@@ -764,9 +791,13 @@ export namespace Worktree {
     }
     const commit = await runGit(
       [
-        "-c", "user.name=opencorvus",
-        "-c", "user.email=opencorvus@local",
-        "commit", "-m", InternalGitCommitSubject.preservePrimaryWorktree,
+        "-c",
+        "user.name=opencorvus",
+        "-c",
+        "user.email=opencorvus@local",
+        "commit",
+        "-m",
+        InternalGitCommitSubject.preservePrimaryWorktree,
       ],
       { cwd: input.primaryDir, timeoutProfile: "default" },
     )
@@ -780,7 +811,8 @@ export namespace Worktree {
       })
     }
     const head = await runGit(["rev-parse", "HEAD"], {
-      cwd: input.primaryDir, timeoutProfile: "fast",
+      cwd: input.primaryDir,
+      timeoutProfile: "fast",
     })
     if (head.exitCode !== 0) {
       throw new MergeFailedError({
@@ -883,7 +915,9 @@ export namespace Worktree {
 
   function parseWorktreeList(stdout: Uint8Array | Buffer | undefined): WorktreeEntry[] {
     const entries: WorktreeEntry[] = []
-    for (const line of outputText(stdout).split("\n").map((item) => item.trim())) {
+    for (const line of outputText(stdout)
+      .split("\n")
+      .map((item) => item.trim())) {
       if (!line) continue
       if (line.startsWith("worktree ")) {
         const value = line.slice("worktree ".length).trim()
@@ -893,7 +927,10 @@ export namespace Worktree {
       const current = entries[entries.length - 1]
       if (!current) continue
       if (line.startsWith("branch ")) {
-        current.branch = line.slice("branch ".length).trim().replace(/^refs\/heads\//, "")
+        current.branch = line
+          .slice("branch ".length)
+          .trim()
+          .replace(/^refs\/heads\//, "")
       }
     }
     return entries
@@ -915,7 +952,8 @@ export namespace Worktree {
    */
   async function primaryWorktreeInfo(): Promise<PrimaryWorktreeInfo> {
     const list = await runGit(["worktree", "list", "--porcelain"], {
-      cwd: Instance.worktree, timeoutProfile: "default",
+      cwd: Instance.worktree,
+      timeoutProfile: "default",
     })
     if (list.exitCode !== 0) {
       throw new Error(errorText(list) || "Failed to read git worktrees")
@@ -942,7 +980,8 @@ export namespace Worktree {
     }
 
     const list = await runGit(["worktree", "list", "--porcelain"], {
-      cwd: Instance.worktree, timeoutProfile: "default",
+      cwd: Instance.worktree,
+      timeoutProfile: "default",
     })
     if (list.exitCode !== 0) {
       throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
@@ -968,14 +1007,16 @@ export namespace Worktree {
       const key = await canonical(entry.path)
       const binding = goalByDirectory.get(key)
       const isPrimary = key === primaryKey
-      out.push(ProjectWorktreeInfo.parse({
-        name: path.basename(entry.path),
-        branch: entry.branch,
-        directory: entry.path,
-        goalID: binding?.active ? binding.goalID : undefined,
-        status: isPrimary ? "primary" : binding?.active ? "active" : "expired",
-        removable: !isPrimary,
-      }))
+      out.push(
+        ProjectWorktreeInfo.parse({
+          name: path.basename(entry.path),
+          branch: entry.branch,
+          directory: entry.path,
+          goalID: binding?.active ? binding.goalID : undefined,
+          status: isPrimary ? "primary" : binding?.active ? "active" : "expired",
+          removable: !isPrimary,
+        }),
+      )
     }
     return out
   }
@@ -1029,7 +1070,8 @@ export namespace Worktree {
 
     const dirExists = await exists(directory)
     const branchCheck = await runGit(["show-ref", "--verify", "--quiet", ref], {
-      cwd: Instance.worktree, timeoutProfile: "fast",
+      cwd: Instance.worktree,
+      timeoutProfile: "fast",
     })
     const branchExists = branchCheck.exitCode === 0
 
@@ -1053,17 +1095,18 @@ export namespace Worktree {
       // never registered against this branch (so remove() didn't touch it).
       // Re-probe and clean up independently.
       const stillExists = await runGit(["show-ref", "--verify", "--quiet", ref], {
-        cwd: Instance.worktree, timeoutProfile: "fast",
+        cwd: Instance.worktree,
+        timeoutProfile: "fast",
       })
       if (stillExists.exitCode === 0) {
         const del = await runGit(["branch", "-D", branch], {
-          cwd: Instance.worktree, timeoutProfile: "fast",
+          cwd: Instance.worktree,
+          timeoutProfile: "fast",
         })
         if (del.exitCode !== 0) {
           throw new CreateFailedError({
             message:
-              `worktree reclaim: failed to delete stale branch ${branch}: ` +
-              (errorText(del) || "unknown error"),
+              `worktree reclaim: failed to delete stale branch ${branch}: ` + (errorText(del) || "unknown error"),
           })
         }
       }
@@ -1080,11 +1123,13 @@ export namespace Worktree {
 
   async function reclaimBase(root: string, base: string): Promise<Info> {
     const name = base
-    return reclaimInfo(Info.parse({
-      name,
-      branch: `opencorvus/${name}`,
-      directory: path.join(root, name),
-    }))
+    return reclaimInfo(
+      Info.parse({
+        name,
+        branch: `opencorvus/${name}`,
+        directory: path.join(root, name),
+      }),
+    )
   }
 
   async function candidate(root: string, base?: string) {
@@ -1106,7 +1151,8 @@ export namespace Worktree {
 
       const ref = `refs/heads/${branch}`
       const branchCheck = await runGit(["show-ref", "--verify", "--quiet", ref], {
-        cwd: Instance.worktree, timeoutProfile: "fast",
+        cwd: Instance.worktree,
+        timeoutProfile: "fast",
       })
       if (branchCheck.exitCode === 0) continue
 
@@ -1157,7 +1203,8 @@ export namespace Worktree {
 
   async function readGitlinks(directory: string): Promise<Gitlink[]> {
     const listed = await runGit(["ls-files", "--stage", "-z"], {
-      cwd: directory, timeoutProfile: "default",
+      cwd: directory,
+      timeoutProfile: "default",
     })
     if (listed.exitCode !== 0) {
       throw new Error(errorText(listed) || "Failed to read gitlinks")
@@ -1178,7 +1225,8 @@ export namespace Worktree {
     if (!(await exists(path.join(directory, ".gitmodules")))) return new Set()
 
     const paths = await runGit(["config", "-f", ".gitmodules", "--get-regexp", "^submodule\\..*\\.path$"], {
-      cwd: directory, timeoutProfile: "fast",
+      cwd: directory,
+      timeoutProfile: "fast",
     })
     if (paths.exitCode === 1) return new Set()
     if (paths.exitCode !== 0) {
@@ -1195,7 +1243,8 @@ export namespace Worktree {
       const submodulePath = trimmed.slice(separator).trim()
       const urlKey = key.replace(/\.path$/, ".url")
       const url = await runGit(["config", "-f", ".gitmodules", "--get", urlKey], {
-        cwd: directory, timeoutProfile: "fast",
+        cwd: directory,
+        timeoutProfile: "fast",
       })
       if (url.exitCode === 0 && outputText(url.stdout)) result.add(submodulePath)
     }
@@ -1204,7 +1253,8 @@ export namespace Worktree {
 
   async function isGitWorkTree(directory: string) {
     const checked = await runGit(["rev-parse", "--is-inside-work-tree"], {
-      cwd: directory, timeoutProfile: "fast",
+      cwd: directory,
+      timeoutProfile: "fast",
     }).catch(() => undefined)
     return checked?.exitCode === 0 && outputText(checked.stdout) === "true"
   }
@@ -1227,18 +1277,15 @@ export namespace Worktree {
     args.push("--", ...paths)
 
     const updated = await runGit(args, {
-      cwd: directory, timeoutProfile: "network",
+      cwd: directory,
+      timeoutProfile: "network",
     })
     if (updated.exitCode !== 0) {
       throw new Error(errorText(updated) || "Failed to update URL-backed gitlinks")
     }
   }
 
-  async function materializeLocalGitlink(input: {
-    sourceRoot: string
-    targetRoot: string
-    gitlink: Gitlink
-  }) {
+  async function materializeLocalGitlink(input: { sourceRoot: string; targetRoot: string; gitlink: Gitlink }) {
     const source = pathInside(input.sourceRoot, input.gitlink.path)
     const target = pathInside(input.targetRoot, input.gitlink.path)
     if (!(await isGitWorkTree(source))) {
@@ -1248,7 +1295,8 @@ export namespace Worktree {
     }
 
     const commit = await runGit(["cat-file", "-e", `${input.gitlink.object}^{commit}`], {
-      cwd: source, timeoutProfile: "fast",
+      cwd: source,
+      timeoutProfile: "fast",
     })
     if (commit.exitCode !== 0) {
       throw new Error(
@@ -1259,15 +1307,20 @@ export namespace Worktree {
     await fs.rm(target, { recursive: true, force: true })
     await fs.mkdir(path.dirname(target), { recursive: true })
 
-    const cloned = await runGit(["-c", "protocol.file.allow=always", "clone", "--local", "--no-checkout", source, target], {
-      cwd: input.targetRoot, timeoutProfile: "network",
-    })
+    const cloned = await runGit(
+      ["-c", "protocol.file.allow=always", "clone", "--local", "--no-checkout", source, target],
+      {
+        cwd: input.targetRoot,
+        timeoutProfile: "network",
+      },
+    )
     if (cloned.exitCode !== 0) {
       throw new Error(errorText(cloned) || `Failed to clone local gitlink ${input.gitlink.path}`)
     }
 
     const reset = await runGit(["reset", "--hard", input.gitlink.object], {
-      cwd: target, timeoutProfile: "default",
+      cwd: target,
+      timeoutProfile: "default",
     })
     if (reset.exitCode !== 0) {
       throw new Error(errorText(reset) || `Failed to checkout local gitlink ${input.gitlink.path}`)
@@ -1280,9 +1333,13 @@ export namespace Worktree {
 
     const urlBackedPaths = await readUrlBackedSubmodulePaths(input.targetRoot)
     const urlBacked = gitlinks.filter((gitlink) => urlBackedPaths.has(gitlink.path))
-    await updateUrlBackedGitlinks(input.targetRoot, urlBacked.map((gitlink) => gitlink.path), {
-      force: input.force,
-    })
+    await updateUrlBackedGitlinks(
+      input.targetRoot,
+      urlBacked.map((gitlink) => gitlink.path),
+      {
+        force: input.force,
+      },
+    )
 
     for (const gitlink of gitlinks) {
       if (urlBackedPaths.has(gitlink.path)) continue
@@ -1316,14 +1373,16 @@ export namespace Worktree {
       }
 
       const reset = await runGit(["reset", "--hard"], {
-        cwd: target, timeoutProfile: "default",
+        cwd: target,
+        timeoutProfile: "default",
       })
       if (reset.exitCode !== 0) {
         throw new Error(errorText(reset) || `Failed to reset gitlink ${gitlink.path}`)
       }
 
       const clean = await runGit(["clean", "-ffdx"], {
-        cwd: target, timeoutProfile: "default",
+        cwd: target,
+        timeoutProfile: "default",
       })
       if (clean.exitCode !== 0) {
         throw new Error(errorText(clean) || `Failed to clean gitlink ${gitlink.path}`)
@@ -1448,9 +1507,13 @@ export namespace Worktree {
       // bootstrap broke earlier — fail loud rather than paper over with a
       // `git add -A` "initial scaffold" empty commit that historically
       // swallowed `node_modules/` into HEAD before .gitignore landed.
-      const hasCommits = (await runGit(["rev-parse", "--verify", "HEAD"], {
-        cwd: primaryDir, timeoutProfile: "fast",
-      })).exitCode === 0
+      const hasCommits =
+        (
+          await runGit(["rev-parse", "--verify", "HEAD"], {
+            cwd: primaryDir,
+            timeoutProfile: "fast",
+          })
+        ).exitCode === 0
       if (!hasCommits) {
         throw new CreateFailedError({
           message:
@@ -1476,7 +1539,8 @@ export namespace Worktree {
     const extra = input?.startCommand?.trim()
     const populate = async () => {
       const populated = await runGit(["reset", "--hard"], {
-        cwd: info.directory, timeoutProfile: "default",
+        cwd: info.directory,
+        timeoutProfile: "default",
       })
       if (populated.exitCode !== 0) {
         const message = errorText(populated) || "Failed to populate worktree"
@@ -1590,7 +1654,8 @@ export namespace Worktree {
       return { valid: false, reason: `missing .git linkage at ${gitLink}` }
     }
     const list = await runGit(["worktree", "list", "--porcelain"], {
-      cwd: Instance.worktree, timeoutProfile: "default",
+      cwd: Instance.worktree,
+      timeoutProfile: "default",
     })
     if (list.exitCode !== 0) {
       return { valid: false, reason: errorText(list) || "git worktree list failed" }
@@ -1633,7 +1698,9 @@ export namespace Worktree {
   export async function recoverRecorded(input: {
     directory: string
     branch: string
-  }): Promise<{ status: "recovered"; directory: string; branch: string } | { status: "unrecoverable"; reason: string }> {
+  }): Promise<
+    { status: "recovered"; directory: string; branch: string } | { status: "unrecoverable"; reason: string }
+  > {
     const validity = await isValid(input.directory)
     if (validity.valid) {
       const runtimeError = await materializeRecordedTaskRuntime(input.directory)
@@ -1642,7 +1709,8 @@ export namespace Worktree {
     }
 
     const branchCheck = await runGit(["show-ref", "--verify", "--quiet", `refs/heads/${input.branch}`], {
-      cwd: Instance.worktree, timeoutProfile: "fast",
+      cwd: Instance.worktree,
+      timeoutProfile: "fast",
     })
     if (branchCheck.exitCode !== 0) {
       return { status: "unrecoverable", reason: `branch ${input.branch} does not exist` }
@@ -1669,7 +1737,8 @@ export namespace Worktree {
 
     await fs.mkdir(path.dirname(input.directory), { recursive: true })
     const added = await runGit(["worktree", "add", "--force", input.directory, input.branch], {
-      cwd: Instance.worktree, timeoutProfile: "default",
+      cwd: Instance.worktree,
+      timeoutProfile: "default",
     })
     if (added.exitCode !== 0) {
       return { status: "unrecoverable", reason: errorText(added) || "git worktree add failed" }
@@ -1712,7 +1781,8 @@ export namespace Worktree {
     // All git operations serialized to prevent concurrent corruption with create/merge
     return withGitLock(async () => {
       const list = await runGit(["worktree", "list", "--porcelain"], {
-        cwd: Instance.worktree, timeoutProfile: "default",
+        cwd: Instance.worktree,
+        timeoutProfile: "default",
       })
       if (list.exitCode !== 0) {
         throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
@@ -1737,11 +1807,13 @@ export namespace Worktree {
 
       await stop(entry.path)
       const removed = await runGit(["worktree", "remove", "--force", entry.path], {
-        cwd: Instance.worktree, timeoutProfile: "default",
+        cwd: Instance.worktree,
+        timeoutProfile: "default",
       })
       if (removed.exitCode !== 0) {
         const next = await runGit(["worktree", "list", "--porcelain"], {
-          cwd: Instance.worktree, timeoutProfile: "default",
+          cwd: Instance.worktree,
+          timeoutProfile: "default",
         })
         if (next.exitCode !== 0) {
           throw new RemoveFailedError({
@@ -1760,7 +1832,8 @@ export namespace Worktree {
       const branch = entry.branch?.replace(/^refs\/heads\//, "")
       if (branch) {
         const deleted = await runGit(["branch", "-D", branch], {
-          cwd: Instance.worktree, timeoutProfile: "fast",
+          cwd: Instance.worktree,
+          timeoutProfile: "fast",
         })
         if (deleted.exitCode !== 0) {
           throw new RemoveFailedError({ message: errorText(deleted) || "Failed to delete worktree branch" })
@@ -1787,7 +1860,8 @@ export namespace Worktree {
 
     const worktreePath = await withGitLock(async () => {
       const list = await runGit(["worktree", "list", "--porcelain"], {
-        cwd: Instance.worktree, timeoutProfile: "default",
+        cwd: Instance.worktree,
+        timeoutProfile: "default",
       })
       if (list.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(list) || "Failed to read git worktrees" })
@@ -1825,7 +1899,8 @@ export namespace Worktree {
 
       const worktreePath = entry.path
       const resetToTarget = await runGit(["reset", "--hard", target], {
-        cwd: worktreePath, timeoutProfile: "default",
+        cwd: worktreePath,
+        timeoutProfile: "default",
       })
       if (resetToTarget.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(resetToTarget) || "Failed to reset worktree to target" })
@@ -1858,7 +1933,8 @@ export namespace Worktree {
       }
 
       const status = await runGit(["status", "--porcelain=v1"], {
-        cwd: worktreePath, timeoutProfile: "default",
+        cwd: worktreePath,
+        timeoutProfile: "default",
       })
       if (status.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(status) || "Failed to read git status" })

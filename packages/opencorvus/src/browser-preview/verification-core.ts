@@ -87,7 +87,10 @@ export async function runBrowserPreviewVerification(
       viewports,
       captures: {},
       evidenceIDs: {},
-      diagnostics: ["Preview verification requires at least one browser preview viewport.", ...input.target.diagnostics],
+      diagnostics: [
+        "Preview verification requires at least one browser preview viewport.",
+        ...input.target.diagnostics,
+      ],
     }
   }
   if (!input.taskID || !input.targetID) {
@@ -117,7 +120,8 @@ export async function runBrowserPreviewVerification(
   }
 
   const captureID = Identifier.ascending("artifact")
-  const outDir = input.outDir ?? ProjectRuntimePaths.taskAbsolute(projectRoot, input.taskID, "browser-preview", captureID)
+  const outDir =
+    input.outDir ?? ProjectRuntimePaths.taskAbsolute(projectRoot, input.taskID, "browser-preview", captureID)
   const { captures, manifest } = await captureJob({
     taskID: input.taskID,
     targetID: input.targetID,
@@ -127,7 +131,9 @@ export async function runBrowserPreviewVerification(
     viewportIDs,
     signal: input.signal,
   })
-  const diagnostics = viewports.map((viewport) => captures[viewport.id]?.summary ?? `missing capture for ${viewport.id}`)
+  const diagnostics = viewports.map(
+    (viewport) => captures[viewport.id]?.summary ?? `missing capture for ${viewport.id}`,
+  )
   const evidenceIDs: Record<string, string> = {}
   const responseCaptures: Record<string, BrowserPreviewCaptureSummary> = {}
   for (const viewport of viewports) {

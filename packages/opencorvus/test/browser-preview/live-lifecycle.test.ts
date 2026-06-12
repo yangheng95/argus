@@ -25,7 +25,9 @@ test("interactive browser preview command abort and timeout paths release listen
 
   expect(live).toContain("const pending = this.pending.get(id)")
   expect(live).toContain("pending.reject(new Error(`Browser preview live command timed out.")
-  expect(live).toContain('pending.reject(signal?.reason instanceof Error ? signal.reason : new Error("Browser preview live command aborted."))')
+  expect(live).toContain(
+    'pending.reject(signal?.reason instanceof Error ? signal.reason : new Error("Browser preview live command aborted."))',
+  )
   expect(live).toContain('signal?.removeEventListener("abort", abort)')
 })
 
@@ -44,9 +46,13 @@ test("server dispose and shutdown paths close interactive browser preview sessio
   const globalRoutes = source("src/server/routes/global.ts")
 
   expect(serve).toContain("closeBrowserPreviewLiveSessions")
-  expect(serve.indexOf("await closeBrowserPreviewLiveSessions()")).toBeGreaterThan(serve.indexOf("abortLiveExecutionOnShutdown"))
+  expect(serve.indexOf("await closeBrowserPreviewLiveSessions()")).toBeGreaterThan(
+    serve.indexOf("abortLiveExecutionOnShutdown"),
+  )
   expect(appRoutes).toContain("await closeBrowserPreviewLiveSessions()")
-  expect(appRoutes.indexOf("await closeBrowserPreviewLiveSessions()")).toBeLessThan(appRoutes.indexOf("await Instance.dispose()"))
+  expect(appRoutes.indexOf("await closeBrowserPreviewLiveSessions()")).toBeLessThan(
+    appRoutes.indexOf("await Instance.dispose()"),
+  )
   expect(globalRoutes).toContain("await closeBrowserPreviewLiveSessions()")
   expect(globalRoutes.indexOf("await closeBrowserPreviewLiveSessions()")).toBeLessThan(
     globalRoutes.indexOf("await Instance.disposeAll()"),

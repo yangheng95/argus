@@ -221,8 +221,7 @@ function normalizeIntegrityPayload(payload: unknown):
     verdict: typeof obj.verdict === "string" ? obj.verdict : undefined,
     reason: typeof obj.reason === "string" ? obj.reason : undefined,
     findings_count: typeof obj.findings_count === "number" ? obj.findings_count : undefined,
-    required_repairs_count:
-      typeof obj.required_repairs_count === "number" ? obj.required_repairs_count : undefined,
+    required_repairs_count: typeof obj.required_repairs_count === "number" ? obj.required_repairs_count : undefined,
     team_report_markdown: typeof obj.team_report_markdown === "string" ? obj.team_report_markdown : undefined,
     findings: Array.isArray(obj.findings) ? obj.findings : [],
     required_repairs: Array.isArray(obj.required_repairs) ? obj.required_repairs : [],

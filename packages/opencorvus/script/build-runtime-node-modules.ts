@@ -73,14 +73,7 @@ async function copyRuntimePackageTree(
 
   const packageRequire = createRequire(path.join(source, "package.json"))
   for (const dependencyName of dependencyNames) {
-    await copyRuntimePackageTree(
-      dependencyName,
-      outNodeModules,
-      packageRequire,
-      target,
-      copied,
-      rootPackageNames,
-    )
+    await copyRuntimePackageTree(dependencyName, outNodeModules, packageRequire, target, copied, rootPackageNames)
   }
 }
 

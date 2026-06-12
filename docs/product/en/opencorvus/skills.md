@@ -25,7 +25,7 @@ Frontmatter fields (`src/skill/skill.ts:26-45`):
 | `auto_detect.task_signals` | object                           | Discovery hint from task signals such as image attachment, non-Figma URL, Figma URL, package scripts, or request text |
 | `priority`                 | number                           | Sort order (higher first, default 0)                                                                                  |
 | `required_tools`           | string[]                         | Tool hints the skill expects the agent may need                                                                       |
-| `expires_at`               | string                           | Optional ISO timestamp; the skill stops loading once current time reaches or passes this timestamp                     |
+| `expires_at`               | string                           | Optional ISO timestamp; the skill stops loading once current time reaches or passes this timestamp                    |
 
 ## Skill ↔ agent relationship
 

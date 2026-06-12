@@ -315,7 +315,9 @@ describe("coding assistant routes", () => {
           },
         })
         expect(stopped.status).toBe(200)
-        const queueRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get())
+        const queueRow = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get(),
+        )
         expect(queueRow?.status).toBe("failed")
         expect(queueRow?.error_message).toBe("coding assistant stopped")
 

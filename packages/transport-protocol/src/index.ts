@@ -290,7 +290,13 @@ export const EXTENSION_MESSAGE_TYPES = [
 ] as const
 
 /** Whitelisted WebviewMessage `type` values. */
-export const WEBVIEW_MESSAGE_TYPES = ["request", "stream.open", "stream.close", "request.abort", "native.request"] as const
+export const WEBVIEW_MESSAGE_TYPES = [
+  "request",
+  "stream.open",
+  "stream.close",
+  "request.abort",
+  "native.request",
+] as const
 
 /**
  * Type-narrowing predicate: does `m` look like a typed extension message?
@@ -372,8 +378,7 @@ export function isNativeCommand(value: unknown): value is NativeCommand {
       )
     case "workspace.openProjectEditor":
       return (
-        (PROJECT_EDITOR_IDS as readonly string[]).includes(obj["editor"] as string) &&
-        typeof obj["path"] === "string"
+        (PROJECT_EDITOR_IDS as readonly string[]).includes(obj["editor"] as string) && typeof obj["path"] === "string"
       )
     case "notification.send":
       return (

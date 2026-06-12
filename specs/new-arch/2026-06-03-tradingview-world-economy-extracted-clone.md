@@ -2,7 +2,7 @@
 
 ## Requirement
 
-Use OpenCorvus frontend_design with `glm51/glm51` to extract `https://www.tradingview.com/markets/world-economy/`, then ship a human-readable and maintainable project while preserving at least 80% visual similarity.
+Use OpenCorvus frontend_design with the configured project model to extract `https://www.tradingview.com/markets/world-economy/`, then ship a human-readable and maintainable project while preserving at least 80% visual similarity.
 
 The user explicitly corrected the implementation rule: extract materials as much as possible, and avoid hand-written visual approximation code in principle.
 

@@ -215,10 +215,11 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === Session.Event.Error.type) {
+    const payload = stampSessionEventPayload(sessionID, props)
     return {
       type: "session.error",
       summary: "Session error",
-      payload: props,
+      payload,
     }
   }
   if (event.type === PermissionNext.Event.Asked.type) {

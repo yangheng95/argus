@@ -61,7 +61,7 @@ describe("task config live overrides", () => {
   test("task agent model override takes effect immediately over stale per-agent snapshot", async () => {
     await using tmp = await tmpdir({
       config: {
-        model: "kimik26/kimik26",
+        model: "live/default-model",
         agent: {
           integrity: { model: "hexin/cy-claude-sonnet-4-6" },
         },
@@ -98,13 +98,13 @@ describe("task config live overrides", () => {
             .run(),
         )
 
-        await Config.update({ agent: { integrity: { model: "kimik26/kimik26" } } } as never)
+        await Config.update({ agent: { integrity: { model: "live/integrity-model" } } } as never)
         Agent.resetAll()
         Provider.resetAll()
 
         await expect(resolveAgentModelRef("integrity", { taskID })).resolves.toEqual({
-          providerID: "kimik26",
-          modelID: "kimik26",
+          providerID: "live",
+          modelID: "integrity-model",
         })
       },
     })

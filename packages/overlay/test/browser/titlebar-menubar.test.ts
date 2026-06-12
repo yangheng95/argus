@@ -33,43 +33,43 @@ test(
       model: "openai/super-long-provider-model-name-for-titlebar-geometry",
     }
     const server = await startBrowserFixture(async (req) => {
-        const url = new URL(req.url)
-        const path = route(url)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-        if (path === "/" || path === "/ui" || path === "/ui/")
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
-        if (path === "/session") return send([])
-        if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
-        if (path === "/vcs")
-          return send({
-            branch: "dev",
-            clean: true,
-            dirty: false,
-            staged: 0,
-            modified: 0,
-            untracked: 0,
-            conflicts: 0,
-            ahead: 0,
-            behind: 0,
-          })
-        if (path === "/provider") return send({ all: [], connected: [], default: {} })
-        if (path === "/provider/auth") return send({})
-        if (path === "/config/providers") return send({ providers: [], default: {} })
-        if (path === "/config/prompt") return send([])
-        if (path === "/config") return send(config)
-        if (path === "/agent") return send([])
-        if (path === "/channel") return send([])
-        if (path === "/executor") return send([])
-        if (path === "/skill/installed" || path === "/skill") return send([])
-        if (path === "/mcp") return send({})
-        if (path === "/panel/knowledge/memory") return send([])
-        if (path === "/panel/knowledge/preference") return send([])
-        if (path === "/log" && req.method === "POST") return send({ ok: true })
-        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs")
+        return send({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [], default: {} })
+      if (path === "/config/prompt") return send([])
+      if (path === "/config") return send(config)
+      if (path === "/agent") return send([])
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -227,30 +227,45 @@ test(
             }
           })
 
-          assert.equal((geometry.triggers).includes("product"), false)
-          assert.ok((geometry.triggers).includes("workspace"))
-          assert.equal((geometry.triggers).includes("model"), false)
-          assert.equal((geometry.triggers).includes("agent"), false)
-          assert.ok((geometry.triggers).includes("provider"))
-          assert.ok((geometry.triggers).includes("tools"))
-          assert.equal((geometry.triggers).includes("skill"), false)
-          assert.equal((geometry.triggers).includes("mcp"), false)
-          assert.equal((geometry.triggers).includes("memory"), false)
-          assert.ok((geometry.triggers).includes("settings"))
+          assert.equal(geometry.triggers.includes("product"), false)
+          assert.ok(geometry.triggers.includes("workspace"))
+          assert.equal(geometry.triggers.includes("model"), false)
+          assert.equal(geometry.triggers.includes("agent"), false)
+          assert.ok(geometry.triggers.includes("provider"))
+          assert.ok(geometry.triggers.includes("tools"))
+          assert.equal(geometry.triggers.includes("skill"), false)
+          assert.equal(geometry.triggers.includes("mcp"), false)
+          assert.equal(geometry.triggers.includes("memory"), false)
+          assert.ok(geometry.triggers.includes("settings"))
           assert.deepEqual(geometry.outOfBounds, [])
           assert.deepEqual(geometry.overlaps, [])
-          assert.ok((geometry.brandWidth) > 24)
-          assert.equal((geometry.badgeText).includes(`:${server.port}`), false)
-          assert.ok((geometry.badgeTitle).includes(String(server.port)))
-          assert.ok((geometry.badgeTitle).includes("12345"))
-          assert.ok((geometry.titlebarHeight) > 24)
+          assert.ok(geometry.brandWidth > 24)
+          assert.equal(geometry.badgeText.includes(`:${server.port}`), false)
+          assert.ok(geometry.badgeTitle.includes(String(server.port)))
+          assert.ok(geometry.badgeTitle.includes("12345"))
+          assert.ok(geometry.titlebarHeight > 24)
           if (width <= 760) {
-            assert.equal(geometry.triggerMetrics.every((item) => item.width <= 32), true)
+            assert.equal(
+              geometry.triggerMetrics.every((item) => item.width <= 32),
+              true,
+            )
             assert.equal(new Set(geometry.triggerMetrics.map((item) => Math.round(item.height))).size, 1)
-            assert.equal(geometry.triggerMetrics.every((item) => item.labelDisplay === "none"), true)
-            assert.equal(geometry.triggerMetrics.every((item) => item.compactDisplay !== "none"), true)
-            assert.equal(geometry.triggerMetrics.every((item) => Number.parseFloat(item.compactFontSize) > 0), true)
-            assert.equal(geometry.triggerMetrics.every((item) => item.compactWidth > 0 && item.compactHeight > 0), true)
+            assert.equal(
+              geometry.triggerMetrics.every((item) => item.labelDisplay === "none"),
+              true,
+            )
+            assert.equal(
+              geometry.triggerMetrics.every((item) => item.compactDisplay !== "none"),
+              true,
+            )
+            assert.equal(
+              geometry.triggerMetrics.every((item) => Number.parseFloat(item.compactFontSize) > 0),
+              true,
+            )
+            assert.equal(
+              geometry.triggerMetrics.every((item) => item.compactWidth > 0 && item.compactHeight > 0),
+              true,
+            )
           }
           for (const menu of ["workspace", "provider", "run", "tools", "settings", "view", "help"]) {
             await page.click(`[data-menu-trigger="${menu}"]`)
@@ -268,12 +283,12 @@ test(
                 viewportHeight: window.innerHeight,
               }
             })
-            assert.ok((panelBounds.left) >= 0)
-            assert.ok((panelBounds.right) <= panelBounds.viewportWidth)
-            assert.ok((panelBounds.top) >= 0)
-            assert.ok((panelBounds.bottom) <= panelBounds.viewportHeight)
-            assert.ok((panelBounds.width) > 120)
-            assert.ok((panelBounds.height) > 24)
+            assert.ok(panelBounds.left >= 0)
+            assert.ok(panelBounds.right <= panelBounds.viewportWidth)
+            assert.ok(panelBounds.top >= 0)
+            assert.ok(panelBounds.bottom <= panelBounds.viewportHeight)
+            assert.ok(panelBounds.width > 120)
+            assert.ok(panelBounds.height > 24)
             await page.keyboard.press("Escape")
             await page.waitForFunction(
               (value) => !document.querySelector(`[data-testid="titlebar-menu-${value}"]`),
@@ -300,13 +315,14 @@ test(
           assert.equal(helpContract.hasRefresh, false)
           assert.equal(helpContract.hasLogs, false)
           assert.equal(helpContract.hasDiagnostics, false)
-          assert.deepEqual(helpContract.labels.map((item) => item.testid), [
-            "titlebar-help-docs",
-            "titlebar-help-sdk",
-            "titlebar-help-devtools",
-            "titlebar-help-about",
-          ])
-          assert.equal(helpContract.labels.every((item) => item.title && item.ariaLabel), true)
+          assert.deepEqual(
+            helpContract.labels.map((item) => item.testid),
+            ["titlebar-help-docs", "titlebar-help-sdk", "titlebar-help-devtools", "titlebar-help-about"],
+          )
+          assert.equal(
+            helpContract.labels.every((item) => item.title && item.ariaLabel),
+            true,
+          )
           const helpVisual = await page.$eval('[data-testid="titlebar-menu-help"]', (node) => {
             const panelRect = node.getBoundingClientRect()
             const itemRects = Array.from(node.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((item) => {
@@ -344,23 +360,23 @@ test(
               itemRects,
             }
           })
-          assert.ok((helpVisual.panelLeft) >= 0)
-          assert.ok((helpVisual.panelRight) <= helpVisual.viewportWidth)
+          assert.ok(helpVisual.panelLeft >= 0)
+          assert.ok(helpVisual.panelRight <= helpVisual.viewportWidth)
           assert.ok(helpVisual.panelWidth > (width <= 320 ? 280 : 300))
           for (const item of helpVisual.itemRects) {
             assert.equal(item.display, "grid")
             assert.notEqual(item.gridTemplateColumns, "none")
-            assert.ok((item.metaText.trim().length) > 12)
+            assert.ok(item.metaText.trim().length > 12)
             assert.notEqual(item.metaWhiteSpace, "nowrap")
             assert.notEqual(item.metaTextOverflow, "ellipsis")
-            assert.ok((item.itemLeft) >= helpVisual.panelLeft)
-            assert.ok((item.itemRight) <= helpVisual.panelRight)
-            assert.ok((item.titleLeft) >= item.itemLeft)
-            assert.ok((item.metaRight) <= item.itemRight)
-            assert.ok((item.titleRight) <= item.metaLeft)
-            assert.ok((item.metaHeight) > 10)
-            assert.ok((item.metaOverflowX) <= 1)
-            assert.ok((item.titleOverflowX) <= 1)
+            assert.ok(item.itemLeft >= helpVisual.panelLeft)
+            assert.ok(item.itemRight <= helpVisual.panelRight)
+            assert.ok(item.titleLeft >= item.itemLeft)
+            assert.ok(item.metaRight <= item.itemRight)
+            assert.ok(item.titleRight <= item.metaLeft)
+            assert.ok(item.metaHeight > 10)
+            assert.ok(item.metaOverflowX <= 1)
+            assert.ok(item.titleOverflowX <= 1)
           }
           await page.click('[data-testid="titlebar-help-docs"]')
           await page.waitForFunction(() => (window as any).__helpOpenUrls.length === 1)
@@ -437,9 +453,9 @@ test(
           const rect = node.getBoundingClientRect()
           return { left: rect.left, right: rect.right, width: rect.width }
         })
-        assert.ok((workspaceBounds.left) >= 0)
-        assert.ok((workspaceBounds.right) <= width)
-        assert.ok((workspaceBounds.width) > 16)
+        assert.ok(workspaceBounds.left >= 0)
+        assert.ok(workspaceBounds.right <= width)
+        assert.ok(workspaceBounds.width > 16)
         await page.close()
       }
     } finally {
@@ -456,43 +472,43 @@ test(
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
     const server = await startBrowserFixture(async (req) => {
-        const url = new URL(req.url)
-        const path = route(url)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-        if (path === "/" || path === "/ui" || path === "/ui/")
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
-        if (path === "/session") return send([])
-        if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
-        if (path === "/vcs")
-          return send({
-            branch: "dev",
-            clean: true,
-            dirty: false,
-            staged: 0,
-            modified: 0,
-            untracked: 0,
-            conflicts: 0,
-            ahead: 0,
-            behind: 0,
-          })
-        if (path === "/provider") return send({ all: [], connected: [], default: {} })
-        if (path === "/provider/auth") return send({})
-        if (path === "/config/providers") return send({ providers: [], default: {} })
-        if (path === "/config/prompt") return send([])
-        if (path === "/config") return send({})
-        if (path === "/agent") return send([])
-        if (path === "/channel") return send([])
-        if (path === "/executor") return send([])
-        if (path === "/skill/installed" || path === "/skill") return send([])
-        if (path === "/mcp") return send({})
-        if (path === "/panel/knowledge/memory") return send([])
-        if (path === "/panel/knowledge/preference") return send([])
-        if (path === "/log" && req.method === "POST") return send({ ok: true })
-        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs")
+        return send({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [], default: {} })
+      if (path === "/config/prompt") return send([])
+      if (path === "/config") return send({})
+      if (path === "/agent") return send([])
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -588,7 +604,7 @@ test(
         focusedMenuText: (document.activeElement as HTMLElement | null)?.textContent?.trim() || "",
       }))
       assert.equal(altOpenState.expanded, "true")
-      assert.ok((altOpenState.focusedMenuText).includes("Language"))
+      assert.ok(altOpenState.focusedMenuText.includes("Language"))
 
       await page.close()
     } finally {
@@ -605,16 +621,16 @@ test(
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
     const server = await startBrowserFixture(async (req) => {
-        const url = new URL(req.url)
-        const path = route(url)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-        if (path === "/" || path === "/ui" || path === "/ui/")
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/log" && req.method === "POST") return send({ ok: true })
-        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -687,9 +703,9 @@ test(
       })
       assert.equal(intro.hasStartup, true)
       assert.equal(intro.pickDirInvokes, 0)
-      assert.ok((intro.openFolderText).includes("Open Local Directory"))
+      assert.ok(intro.openFolderText.includes("Open Local Directory"))
       assert.equal(intro.hasCreateDirectory, false)
-      assert.ok((intro.title).includes("Open a workspace directory"))
+      assert.ok(intro.title.includes("Open a workspace directory"))
       assert.equal(intro.brandWordmark, "OpenCorvus")
       assert.equal(intro.brandLabel, "Workspace")
       assert.deepEqual(intro.rightActivities, [
@@ -715,43 +731,43 @@ test(
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
     const server = await startBrowserFixture(async (req) => {
-        const url = new URL(req.url)
-        const path = route(url)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-        if (path === "/" || path === "/ui" || path === "/ui/")
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
-        if (path === "/session") return send([])
-        if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
-        if (path === "/vcs")
-          return send({
-            branch: "dev",
-            clean: true,
-            dirty: false,
-            staged: 0,
-            modified: 0,
-            untracked: 0,
-            conflicts: 0,
-            ahead: 0,
-            behind: 0,
-          })
-        if (path === "/provider") return send({ all: [], connected: [], default: {} })
-        if (path === "/provider/auth") return send({})
-        if (path === "/config/providers") return send({ providers: [], default: {} })
-        if (path === "/config/prompt") return send([])
-        if (path === "/config") return send({ model: "openai/test" })
-        if (path === "/agent") return send([{ id: "codex", selectable: true }])
-        if (path === "/channel") return send([])
-        if (path === "/executor") return send([{ id: "codex", selectable: true }])
-        if (path === "/skill/installed" || path === "/skill") return send([])
-        if (path === "/mcp") return send({})
-        if (path === "/panel/knowledge/memory") return send([])
-        if (path === "/panel/knowledge/preference") return send([])
-        if (path === "/log" && req.method === "POST") return send({ ok: true })
-        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs")
+        return send({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [], default: {} })
+      if (path === "/config/prompt") return send([])
+      if (path === "/config") return send({ model: "openai/test" })
+      if (path === "/agent") return send([{ id: "codex", selectable: true }])
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([{ id: "codex", selectable: true }])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -830,7 +846,7 @@ test(
       assert.equal(state.path, null)
       assert.equal(state.vcs, null)
       assert.equal(state.config, null)
-      assert.ok((state.recent).includes("D:/overlay/workspace/app"))
+      assert.ok(state.recent.includes("D:/overlay/workspace/app"))
       assert.equal(state.persistedDirectory, null)
       await page.close()
     } finally {
@@ -847,43 +863,43 @@ test(
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
     const server = await startBrowserFixture(async (req) => {
-        const url = new URL(req.url)
-        const path = route(url)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-        if (path === "/" || path === "/ui" || path === "/ui/")
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
-        if (path === "/session") return send([])
-        if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
-        if (path === "/vcs")
-          return send({
-            branch: "dev",
-            clean: true,
-            dirty: false,
-            staged: 0,
-            modified: 0,
-            untracked: 0,
-            conflicts: 0,
-            ahead: 0,
-            behind: 0,
-          })
-        if (path === "/provider") return send({ all: [], connected: [], default: {} })
-        if (path === "/provider/auth") return send({})
-        if (path === "/config/providers") return send({ providers: [], default: {} })
-        if (path === "/config/prompt") return send([])
-        if (path === "/config") return send({})
-        if (path === "/agent") return send([])
-        if (path === "/channel") return send([])
-        if (path === "/executor") return send([])
-        if (path === "/skill/installed" || path === "/skill") return send([])
-        if (path === "/mcp") return send({})
-        if (path === "/panel/knowledge/memory") return send([])
-        if (path === "/panel/knowledge/preference") return send([])
-        if (path === "/log" && req.method === "POST") return send({ ok: true })
-        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs")
+        return send({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [], default: {} })
+      if (path === "/config/prompt") return send([])
+      if (path === "/config") return send({})
+      if (path === "/agent") return send([])
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -966,12 +982,12 @@ test(
       assert.equal(initial.panelPaddingBottom, "0px")
       assert.equal(initial.panelPaddingLeft, "0px")
       assert.equal(initial.workspaceGap, "0px")
-      assert.ok((initial.leftDivider) <= 2)
-      assert.ok((initial.rightDivider) <= 2)
-      assert.ok((Math.abs(initial.leftDivider - initial.rightDivider)) <= 1)
+      assert.ok(initial.leftDivider <= 2)
+      assert.ok(initial.rightDivider <= 2)
+      assert.ok(Math.abs(initial.leftDivider - initial.rightDivider) <= 1)
       assert.equal(initial.workbenchStartsAtWorkspace, true)
-      assert.ok((initial.leftHandleWidth) <= 2)
-      assert.ok((initial.rightToolbarWidth) > 32)
+      assert.ok(initial.leftHandleWidth <= 2)
+      assert.ok(initial.rightToolbarWidth > 32)
       assert.equal(initial.rightPaneResizerExists, false)
 
       const projectChromeHeights = await page.evaluate(() => {
@@ -983,7 +999,10 @@ test(
           return { selector, missing: false, height: Math.round(rect.height) }
         })
       })
-      assert.equal(projectChromeHeights.every((item) => !item.missing), true)
+      assert.equal(
+        projectChromeHeights.every((item) => !item.missing),
+        true,
+      )
       assert.equal(new Set(projectChromeHeights.map((item) => item.height)).size, 1)
 
       const controlsWithMargins = await page.evaluate(() => {
@@ -1212,15 +1231,15 @@ test(
         }
       })
 
-      assert.ok((afterInspectorOpen.sections) > 300)
-      assert.ok((Math.abs(afterInspectorOpen.sections - afterInspectorOpen.chat)) <= 2)
-      assert.ok((afterInspectorOpen.leftDivider) <= 2)
-      assert.ok((afterInspectorOpen.rightDivider) <= 2)
-      assert.ok((Math.abs(afterInspectorOpen.leftDivider - afterInspectorOpen.rightDivider)) <= 1)
+      assert.ok(afterInspectorOpen.sections > 300)
+      assert.ok(Math.abs(afterInspectorOpen.sections - afterInspectorOpen.chat) <= 2)
+      assert.ok(afterInspectorOpen.leftDivider <= 2)
+      assert.ok(afterInspectorOpen.rightDivider <= 2)
+      assert.ok(Math.abs(afterInspectorOpen.leftDivider - afterInspectorOpen.rightDivider) <= 1)
       assert.equal(afterInspectorOpen.workbenchStartsAtWorkspace, true)
       assert.equal(afterInspectorOpen.centerInspectorActive, "true")
       assert.equal(afterInspectorOpen.inspectorButtonActive, "true")
-      assert.ok((afterInspectorOpen.leftHandleWidth) <= 2)
+      assert.ok(afterInspectorOpen.leftHandleWidth <= 2)
       assert.equal(afterInspectorOpen.rightPaneResizerExists, false)
 
       await page.evaluate(() => {
@@ -1259,12 +1278,12 @@ test(
           rightPaneResizerExists: !!document.querySelector("#rightPaneResizer"),
         }
       })
-      assert.ok((afterLeftDrag.sidebar) > 600)
-      assert.ok((afterLeftDrag.chat) > 300)
-      assert.ok((afterLeftDrag.leftDivider) <= 2)
-      assert.ok((afterLeftDrag.rightDivider) <= 2)
-      assert.ok((Math.abs(afterLeftDrag.leftDivider - afterLeftDrag.rightDivider)) <= 1)
-      assert.ok((afterLeftDrag.leftHandleWidth) <= 2)
+      assert.ok(afterLeftDrag.sidebar > 600)
+      assert.ok(afterLeftDrag.chat > 300)
+      assert.ok(afterLeftDrag.leftDivider <= 2)
+      assert.ok(afterLeftDrag.rightDivider <= 2)
+      assert.ok(Math.abs(afterLeftDrag.leftDivider - afterLeftDrag.rightDivider) <= 1)
+      assert.ok(afterLeftDrag.leftHandleWidth <= 2)
       assert.equal(afterLeftDrag.rightPaneResizerExists, false)
       await page.close()
     } finally {

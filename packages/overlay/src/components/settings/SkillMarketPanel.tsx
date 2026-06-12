@@ -310,9 +310,7 @@ function FormSelect(props: {
       sameWidth
     >
       <Select.Trigger class="field-input oc-select-trigger settings-form-select-trigger" aria-label={props.ariaLabel}>
-        <Select.Value<FormSelectOption>>
-          {(state) => <span>{state.selectedOption()?.label ?? ""}</span>}
-        </Select.Value>
+        <Select.Value<FormSelectOption>>{(state) => <span>{state.selectedOption()?.label ?? ""}</span>}</Select.Value>
         <Select.Icon>
           <Icon name="caret-down" size={12} />
         </Select.Icon>
@@ -790,7 +788,12 @@ function ExtensionSettingsPanel(props: {
             <div class="tool-panel-toolbar" role="toolbar" aria-label={t("skill.title")}>
               <PanelActionButton compact icon="refresh" label={t("common.reload")} onClick={handleReloadSkills} />
               <Show when={canOpenLocalPath()}>
-                <PanelActionButton compact icon="folder-open" label={t("skill.open_dir")} onClick={handleOpenSkillDir} />
+                <PanelActionButton
+                  compact
+                  icon="folder-open"
+                  label={t("skill.open_dir")}
+                  onClick={handleOpenSkillDir}
+                />
               </Show>
               <PanelActionButton
                 compact
@@ -1171,7 +1174,12 @@ export function SkillsPanel(props: { active?: boolean; compact?: boolean; direct
 
 export function McpPanel(props: { active?: boolean; compact?: boolean; directory?: DirectoryProp } = {}) {
   return (
-    <ExtensionSettingsPanel mode="mcp" active={props.active ?? true} compact={props.compact} directory={props.directory} />
+    <ExtensionSettingsPanel
+      mode="mcp"
+      active={props.active ?? true}
+      compact={props.compact}
+      directory={props.directory}
+    />
   )
 }
 

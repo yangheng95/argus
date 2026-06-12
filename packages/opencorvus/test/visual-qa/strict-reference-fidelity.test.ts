@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
 import { VisualQaTestHooks } from "../../src/visual-qa"
-import {
-  renderVisualQaFrontendDesignContext,
-  renderVisualQaFrontendResearchContext,
-} from "../../src/visual-qa/context"
+import { renderVisualQaFrontendDesignContext, renderVisualQaFrontendResearchContext } from "../../src/visual-qa/context"
 import type { ResearchBrief } from "../../src/research/schema"
 
 describe("visual-qa strict reference image fidelity", () => {

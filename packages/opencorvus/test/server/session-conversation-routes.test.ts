@@ -150,10 +150,12 @@ describe("session conversation routes", () => {
         expect(response.status).toBe(200)
         const body = (await response.json()) as any
         const transcript = body.transcript as Array<{ info: any; parts: any[] }>
-        expect(transcript.map((message) => [message.info.id, message.info.channel, message.info.resolvedRole])).toEqual([
-          [user.id, "main", "user"],
-          [assistant.id, "assistant", "assistant"],
-        ])
+        expect(transcript.map((message) => [message.info.id, message.info.channel, message.info.resolvedRole])).toEqual(
+          [
+            [user.id, "main", "user"],
+            [assistant.id, "assistant", "assistant"],
+          ],
+        )
         expect(transcript.map((message) => message.parts[0]?.channel)).toEqual(["main", "assistant"])
         expect(body.view.topLevelSessionIDs).toContain(session.id)
       },

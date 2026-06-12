@@ -1,5 +1,4 @@
-const SDK_CLIENT_ROUTE_PATTERN =
-  /\.(?:sse\.)?(get|post|put|patch|delete)(?:<[\s\S]*?>)?\s*\(\s*\{\s*url:\s*"([^"]+)"/g
+const SDK_CLIENT_ROUTE_PATTERN = /\.(?:sse\.)?(get|post|put|patch|delete)(?:<[\s\S]*?>)?\s*\(\s*\{\s*url:\s*"([^"]+)"/g
 
 // SDK means Software Development Kit; this extracts generated HTTP client routes from the typed SDK surface.
 export function extractSdkRoutesFromText(text: string) {

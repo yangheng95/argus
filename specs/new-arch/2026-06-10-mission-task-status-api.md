@@ -6,14 +6,14 @@
 
 ## Evidence
 
-| Surface | Existing owner | Decision |
-| --- | --- | --- |
-| `/mission` routes | `packages/opencorvus/src/server/routes/mission.ts` | Keep mission session and mission task membership here. Add mission-scoped status endpoint. |
-| `/task/:taskID` routes | `packages/opencorvus/src/server/routes/orchestrator.ts` | Add task-scoped status endpoint beside existing task routes. |
-| Task status | `deriveTaskStatus` from `packages/opencorvus/src/engine/task-status.ts` | Reuse as raw task lifecycle source; do not add a stored status column. |
-| Goal progress | `compileBoard().goalWorkflows` from `packages/opencorvus/src/workbench/board.ts` | Reuse board projection as the only goal detail/progress source. |
-| Mission task membership | `listMissionTasks` from `packages/opencorvus/src/engine/store.ts` | Reuse existing mission provenance query. |
-| Existing mission list schema | `MissionTaskProjection` in `mission.ts` | Keep its raw lifecycle `status`; add `executionStatus` for normalized success/failed/running. |
+| Surface                      | Existing owner                                                                   | Decision                                                                                      |
+| ---------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `/mission` routes            | `packages/opencorvus/src/server/routes/mission.ts`                               | Keep mission session and mission task membership here. Add mission-scoped status endpoint.    |
+| `/task/:taskID` routes       | `packages/opencorvus/src/server/routes/orchestrator.ts`                          | Add task-scoped status endpoint beside existing task routes.                                  |
+| Task status                  | `deriveTaskStatus` from `packages/opencorvus/src/engine/task-status.ts`          | Reuse as raw task lifecycle source; do not add a stored status column.                        |
+| Goal progress                | `compileBoard().goalWorkflows` from `packages/opencorvus/src/workbench/board.ts` | Reuse board projection as the only goal detail/progress source.                               |
+| Mission task membership      | `listMissionTasks` from `packages/opencorvus/src/engine/store.ts`                | Reuse existing mission provenance query.                                                      |
+| Existing mission list schema | `MissionTaskProjection` in `mission.ts`                                          | Keep its raw lifecycle `status`; add `executionStatus` for normalized success/failed/running. |
 
 ## API
 

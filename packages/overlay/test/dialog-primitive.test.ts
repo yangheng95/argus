@@ -152,7 +152,7 @@ describe("Dialog primitive adoption", () => {
     for (const { rel, text } of componentSources()) {
       expect(text).not.toMatch(/<dialog\b/)
       expect(text).not.toContain("showModal()")
-      expect(text).not.toContain("querySelectorAll(\"dialog.dialog\")")
+      expect(text).not.toContain('querySelectorAll("dialog.dialog")')
       expect(text).not.toContain('querySelector("dialog[open]")')
       expect(text).not.toContain("dataset.backdropClose")
     }

@@ -181,15 +181,14 @@ test("agent model selects patch independent per-agent overrides", async () => {
     assert.equal(initialOptionCount, 0)
 
     await chooseModelOption(page, '[data-testid="agent-model-select-build"]', "anthropic/claude-sonnet-4-6")
-    await page.waitForFunction(
-      () =>
-        document.querySelector('[data-testid="agent-model-select-build"]')?.textContent?.includes("claude-sonnet-4-6"),
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="agent-model-select-build"]')?.textContent?.includes("claude-sonnet-4-6"),
     )
 
     await page.waitForSelector('[data-testid="agent-model-select-integrity"]')
     await chooseModelOption(page, '[data-testid="agent-model-select-integrity"]', "openai/gpt-4.1")
-    await page.waitForFunction(
-      () => document.querySelector('[data-testid="agent-model-select-integrity"]')?.textContent?.includes("gpt-4.1"),
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="agent-model-select-integrity"]')?.textContent?.includes("gpt-4.1"),
     )
 
     const modelPatches = patches.filter((patch) => "agent" in patch)

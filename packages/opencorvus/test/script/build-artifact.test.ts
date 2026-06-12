@@ -191,9 +191,7 @@ describe("build-artifact", () => {
       expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher/wrapper.js"))).toBe(true)
       expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher-win32-x64/package.json"))).toBe(true)
       expect(existsSync(resolve(outdir, "node_modules/micromatch/package.json"))).toBe(true)
-      expect(
-        existsSync(resolve(outdir, "node_modules/node-screenshots-win32-x64-msvc/package.json")),
-      ).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules/node-screenshots-win32-x64-msvc/package.json"))).toBe(true)
     } finally {
       await rm(outdir, { recursive: true, force: true })
     }

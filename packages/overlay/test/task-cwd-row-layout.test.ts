@@ -117,7 +117,7 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).toContain('t("worktree.expired")')
     expect(TASK_DIR_BAR).toMatch(/<DropdownMenu\.Trigger\s+as=\{Button\}/)
     expect(TASK_DIR_BAR).toContain('<DropdownMenu.Content class="project-worktree-panel">')
-    expect(TASK_DIR_BAR).toContain('<DropdownMenu.Item')
+    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Item")
     expect(TASK_DIR_BAR).toContain('placement="bottom-end"')
     expect(TASK_DIR_BAR).toContain("fitViewport")
     expect(TASK_DIR_BAR).not.toContain("active_short")

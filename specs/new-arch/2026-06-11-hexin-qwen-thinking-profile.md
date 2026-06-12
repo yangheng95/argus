@@ -6,13 +6,13 @@ Hexin `qwen3.7-max` returns HTTP 400 when `tool_choice` is `required` or a pinne
 
 ## Call Points Checked
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/provider/hexin-profiles.ts` | `profileFor()` is the single capability source for Hexin discovery. | Add a dedicated `qwen3.7-max` matcher before generic Qwen. |
-| `packages/opencorvus/src/provider/hexin-discovery.ts` | `buildModel()` copies `profile.reasoning` into `model.capabilities.reasoning`. | No discovery logic change. |
-| `packages/opencorvus/src/session/loop.ts` | `terminalToolChoice()` and `structuredOutputToolChoice()` already use `capabilities.reasoning` to avoid forced tool choice. | No loop change. |
-| `packages/opencorvus/src/session/llm.ts` | Passes computed `toolChoice` to `streamText`. | No LLM call change. |
-| `packages/opencorvus/test/provider/hexin-profiles.test.ts` | Existing profile contract tests cover Kimi and GLM thinking models. | Extend tests with Qwen profile coverage. |
+| Surface                                                    | Evidence                                                                                                                    | Decision                                                   |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `packages/opencorvus/src/provider/hexin-profiles.ts`       | `profileFor()` is the single capability source for Hexin discovery.                                                         | Add a dedicated `qwen3.7-max` matcher before generic Qwen. |
+| `packages/opencorvus/src/provider/hexin-discovery.ts`      | `buildModel()` copies `profile.reasoning` into `model.capabilities.reasoning`.                                              | No discovery logic change.                                 |
+| `packages/opencorvus/src/session/loop.ts`                  | `terminalToolChoice()` and `structuredOutputToolChoice()` already use `capabilities.reasoning` to avoid forced tool choice. | No loop change.                                            |
+| `packages/opencorvus/src/session/llm.ts`                   | Passes computed `toolChoice` to `streamText`.                                                                               | No LLM call change.                                        |
+| `packages/opencorvus/test/provider/hexin-profiles.test.ts` | Existing profile contract tests cover Kimi and GLM thinking models.                                                         | Extend tests with Qwen profile coverage.                   |
 
 ## Scope
 

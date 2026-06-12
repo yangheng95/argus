@@ -7,15 +7,15 @@ This page explains how external systems call the OpenCorvus Mission and Task API
 
 ## Terms
 
-| Term | Meaning |
-| --- | --- |
-| API | Application Programming Interface. |
-| HTTP | Hypertext Transfer Protocol, the protocol exposed by the OpenCorvus server. |
-| SDK | Software Development Kit, the typed `@opencorvus-ai/sdk` client. |
-| SSE | Server-Sent Events, the server event stream used for task updates. |
+| Term | Meaning                                                                             |
+| ---- | ----------------------------------------------------------------------------------- |
+| API  | Application Programming Interface.                                                  |
+| HTTP | Hypertext Transfer Protocol, the protocol exposed by the OpenCorvus server.         |
+| SDK  | Software Development Kit, the typed `@opencorvus-ai/sdk` client.                    |
+| SSE  | Server-Sent Events, the server event stream used for task updates.                  |
 | JSON | JavaScript Object Notation, the request and response body format for normal routes. |
-| ZIP | The archive format returned by `project-archive`. |
-| ID | Identifier, such as `taskID` or `missionID`. |
+| ZIP  | The archive format returned by `project-archive`.                                   |
+| ID   | Identifier, such as `taskID` or `missionID`.                                        |
 
 ## Mission Or Task
 
@@ -23,13 +23,13 @@ A Task is one concrete work request. It has its own status, progress, conversati
 
 A Mission is the long-running coordination layer. One Mission is backed by one `kind="mission"` session. It understands the larger goal, keeps talking to the user, and dispatches concrete work as normal Tasks. Mission does not replace Task; Mission status is aggregated from the Tasks it dispatched.
 
-| Scenario | Use |
-| --- | --- |
-| One code change, fix, generation, or investigation | `POST /task` |
-| A long-running goal that OpenCorvus should decompose and track | `POST /mission/wake` |
-| Check one concrete work item | `GET /task/{taskID}/status` |
-| Check all work under a long-running goal | `GET /mission/{missionID}/status` |
-| Download code and execution flow for one task | `GET /task/{taskID}/project-archive` |
+| Scenario                                                       | Use                                  |
+| -------------------------------------------------------------- | ------------------------------------ |
+| One code change, fix, generation, or investigation             | `POST /task`                         |
+| A long-running goal that OpenCorvus should decompose and track | `POST /mission/wake`                 |
+| Check one concrete work item                                   | `GET /task/{taskID}/status`          |
+| Check all work under a long-running goal                       | `GET /mission/{missionID}/status`    |
+| Download code and execution flow for one task                  | `GET /task/{taskID}/project-archive` |
 
 ## Request Basics
 
@@ -74,17 +74,17 @@ const taskID = created.data.task_id
 
 Common fields:
 
-| Field | Meaning |
-| --- | --- |
-| `request` | Required user request text. |
-| `title` | Task title shown in the UI. The system generates one when omitted. |
-| `executor` | `opencorvus`, `codex`, or `claude-code`. |
-| `kind` | `workflow` uses the full requirements, design, execution, and acceptance pipeline; `build` starts direct implementation. |
-| `priority` | `critical`, `high`, `normal`, or `low`. |
-| `queue` | `true` enters the directory queue; `false` attempts immediate start. |
-| `attachments` | Files such as images, PDFs, and text inputs. |
-| `checks` | Build, test, visual, and other acceptance checks. |
-| `metadata` | Caller-owned metadata. |
+| Field         | Meaning                                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `request`     | Required user request text.                                                                                              |
+| `title`       | Task title shown in the UI. The system generates one when omitted.                                                       |
+| `executor`    | `opencorvus`, `codex`, or `claude-code`.                                                                                 |
+| `kind`        | `workflow` uses the full requirements, design, execution, and acceptance pipeline; `build` starts direct implementation. |
+| `priority`    | `critical`, `high`, `normal`, or `low`.                                                                                  |
+| `queue`       | `true` enters the directory queue; `false` attempts immediate start.                                                     |
+| `attachments` | Files such as images, PDFs, and text inputs.                                                                             |
+| `checks`      | Build, test, visual, and other acceptance checks.                                                                        |
+| `metadata`    | Caller-owned metadata.                                                                                                   |
 
 Equivalent HTTP request:
 
@@ -116,14 +116,14 @@ console.log(status.data.status, status.data.progress.percent)
 
 The response has two status layers:
 
-| Field | Meaning |
-| --- | --- |
-| `status` | Normalized external state: `running`, `success`, or `failed`. |
+| Field             | Meaning                                                                        |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `status`          | Normalized external state: `running`, `success`, or `failed`.                  |
 | `lifecycleStatus` | Raw task lifecycle: `queued`, `active`, `completed`, `failed`, or `cancelled`. |
-| `progress` | Total, completed, failed, running, pending, and percent. |
-| `workflow.steps` | Task-level workflow steps. |
-| `goals[].steps` | Per-goal execution steps and phases. |
-| `error` | Failure or cancellation details. |
+| `progress`        | Total, completed, failed, running, pending, and percent.                       |
+| `workflow.steps`  | Task-level workflow steps.                                                     |
+| `goals[].steps`   | Per-goal execution steps and phases.                                           |
+| `error`           | Failure or cancellation details.                                               |
 
 Polling example:
 
@@ -165,11 +165,11 @@ await client.task.message({
 
 For direct controls, use the explicit routes:
 
-| Action | Route |
-| --- | --- |
-| Cancel | `POST /task/{taskID}/cancel` |
-| Retry current plan | `POST /task/{taskID}/retry` |
-| Replan | `POST /task/{taskID}/replan` |
+| Action                | Route                           |
+| --------------------- | ------------------------------- |
+| Cancel                | `POST /task/{taskID}/cancel`    |
+| Retry current plan    | `POST /task/{taskID}/retry`     |
+| Replan                | `POST /task/{taskID}/replan`    |
 | Start queued task now | `POST /task/{taskID}/start-now` |
 
 ## Download Task Code
@@ -224,11 +224,11 @@ await client.mission.wake({
 
 Response fields:
 
-| Field | Meaning |
-| --- | --- |
-| `missionID` | Mission identifier. The server generates it when omitted. |
-| `sessionID` | Session that carries the Mission agent conversation. |
-| `created` | `true` means a new Mission was created; `false` means an existing Mission was resumed. |
+| Field       | Meaning                                                                                |
+| ----------- | -------------------------------------------------------------------------------------- |
+| `missionID` | Mission identifier. The server generates it when omitted.                              |
+| `sessionID` | Session that carries the Mission agent conversation.                                   |
+| `created`   | `true` means a new Mission was created; `false` means an existing Mission was resumed. |
 
 Mission IDs may only use lowercase letters, digits, and hyphens, with length 1 to 64. The server guarantees that one `(project, missionID)` maps to exactly one Mission session.
 
@@ -254,13 +254,13 @@ const missions = await client.mission.list({
 
 Common query parameters:
 
-| Parameter | Meaning |
-| --- | --- |
-| `directory` | Filter to one project directory. |
-| `search` | Search by title, Mission ID, or directory. |
-| `limit` | Result count, maximum 200. |
-| `archived` | Include archived Missions. |
-| `cursorUpdated` / `cursorSessionID` | Pagination cursor. Provide both together. |
+| Parameter                           | Meaning                                    |
+| ----------------------------------- | ------------------------------------------ |
+| `directory`                         | Filter to one project directory.           |
+| `search`                            | Search by title, Mission ID, or directory. |
+| `limit`                             | Result count, maximum 200.                 |
+| `archived`                          | Include archived Missions.                 |
+| `cursorUpdated` / `cursorSessionID` | Pagination cursor. Provide both together.  |
 
 Check Mission aggregate status:
 
@@ -273,20 +273,20 @@ console.log(snapshot.data.status, snapshot.data.taskCounts)
 
 `mission.status` returns the aggregate view of all Tasks under the Mission:
 
-| Field | Meaning |
-| --- | --- |
-| `status` | `running`, `success`, or `failed`. |
+| Field        | Meaning                                     |
+| ------------ | ------------------------------------------- |
+| `status`     | `running`, `success`, or `failed`.          |
 | `taskCounts` | Total, success, failed, and running counts. |
-| `progress` | Aggregate progress. |
-| `tasks` | One `TaskStatusDetail` per Task. |
+| `progress`   | Aggregate progress.                         |
+| `tasks`      | One `TaskStatusDetail` per Task.            |
 
 ## Manage Missions
 
-| Action | Route | Meaning |
-| --- | --- | --- |
-| Rename | `PATCH /mission/{missionID}/title` | Update the Mission session title. |
-| Abort | `POST /mission/{missionID}/abort` | Cancel the active Mission agent loop. |
-| Delete | `DELETE /mission/{missionID}` | Delete the Mission session and conversation history. |
+| Action | Route                              | Meaning                                              |
+| ------ | ---------------------------------- | ---------------------------------------------------- |
+| Rename | `PATCH /mission/{missionID}/title` | Update the Mission session title.                    |
+| Abort  | `POST /mission/{missionID}/abort`  | Cancel the active Mission agent loop.                |
+| Delete | `DELETE /mission/{missionID}`      | Delete the Mission session and conversation history. |
 
 Deleting a Mission does not delete Tasks it already dispatched. Tasks are independent execution records and remain available through the Task API.
 

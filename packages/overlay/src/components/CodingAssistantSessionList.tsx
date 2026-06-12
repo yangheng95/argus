@@ -238,17 +238,9 @@ function CodingAssistantSessionRow(props: {
           {updated() ? relativeTime(updated()) : t("coding_assistant.ledger.updated_unknown")}
         </span>
         <span class="coding-assistant-row-actions">
-          <CodingAssistantStopButton
-            session={props.session}
-            disabled={props.busy}
-            onStop={props.onStopSession}
-          />
+          <CodingAssistantStopButton session={props.session} disabled={props.busy} onStop={props.onStopSession} />
           <CodingAssistantRenameButton disabled={props.busy} onClick={beginRename} />
-          <CodingAssistantDeleteButton
-            session={props.session}
-            disabled={props.busy}
-            onDelete={props.onDeleteSession}
-          />
+          <CodingAssistantDeleteButton session={props.session} disabled={props.busy} onDelete={props.onDeleteSession} />
         </span>
       </span>
     </div>

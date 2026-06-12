@@ -3,6 +3,8 @@ import path from "path"
 import { Instance } from "../../src/project/instance"
 import { WebFetchTool } from "../../src/tool/webfetch"
 import { Truncate } from "../../src/tool/truncation"
+import { tmpdir } from "../fixture/fixture"
+import { exaMcpCall } from "../../src/tool/exa-mcp"
 
 const projectRoot = path.join(import.meta.dir, "../..")
 const INSTANCE_STARTUP_TIMEOUT_MS = 60_000
@@ -32,6 +34,109 @@ async function withFetch(
 }
 
 describe("tool.webfetch", () => {
+  test(
+    "uses configured authenticated proxy for web research fetches",
+    async () => {
+      let seenProxy: unknown
+      await using tmp = await tmpdir({
+        init: async (dir) => {
+          await Bun.write(
+            path.join(dir, "opencorvus.json"),
+            JSON.stringify({
+              $schema: "https://opencorvus.ai/config.json",
+              network: {
+                proxy: {
+                  url: "http://10.217.133.185:30100",
+                  username: "hexin",
+                  password: "hx300033",
+                  llmProvider: false,
+                  webResearch: true,
+                },
+              },
+            }),
+          )
+        },
+      })
+
+      await withFetch(
+        async (_input, init) => {
+          seenProxy = (init as any)?.proxy
+          return new Response("proxied webfetch", {
+            status: 200,
+            headers: { "content-type": "text/plain; charset=utf-8" },
+          })
+        },
+        async () => {
+          await Instance.provide({
+            directory: tmp.path,
+            fn: async () => {
+              const webfetch = await WebFetchTool.init()
+              const result = await webfetch.execute({ url: "https://example.com/file.txt", format: "text" }, ctx)
+              expect(result.output).toBe("proxied webfetch")
+              expect(seenProxy).toBe("http://hexin:hx300033@10.217.133.185:30100/")
+            },
+          })
+        },
+      )
+    },
+    { timeout: INSTANCE_STARTUP_TIMEOUT_MS },
+  )
+
+  test(
+    "uses configured authenticated proxy for Exa MCP web research transport",
+    async () => {
+      let seenProxy: unknown
+      await using tmp = await tmpdir({
+        init: async (dir) => {
+          await Bun.write(
+            path.join(dir, "opencorvus.json"),
+            JSON.stringify({
+              $schema: "https://opencorvus.ai/config.json",
+              network: {
+                proxy: {
+                  url: "http://10.217.133.185:30100",
+                  username: "hexin",
+                  password: "hx300033",
+                  llmProvider: false,
+                  webResearch: true,
+                },
+              },
+            }),
+          )
+        },
+      })
+
+      await withFetch(
+        async (_input, init) => {
+          seenProxy = (init as any)?.proxy
+          return new Response(
+            'data: {"jsonrpc":"2.0","result":{"content":[{"type":"text","text":"proxied search"}]}}\n',
+            {
+              status: 200,
+              headers: { "content-type": "text/event-stream" },
+            },
+          )
+        },
+        async () => {
+          await Instance.provide({
+            directory: tmp.path,
+            fn: async () => {
+              const text = await exaMcpCall({
+                name: "web_search_exa",
+                arguments: { query: "proxy test" },
+                timeoutMs: 1000,
+                label: "Web search",
+              })
+              expect(text).toBe("proxied search")
+              expect(seenProxy).toBe("http://hexin:hx300033@10.217.133.185:30100/")
+            },
+          })
+        },
+      )
+    },
+    { timeout: INSTANCE_STARTUP_TIMEOUT_MS },
+  )
+
   test(
     "returns image responses as file attachments",
     async () => {

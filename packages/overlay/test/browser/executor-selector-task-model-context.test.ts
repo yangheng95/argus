@@ -132,100 +132,100 @@ test(
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-        if (path === "/" || path === "/ui" || path === "/ui/")
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tasks" || path === "/global/tasks") {
-          return send({ tasks: [{ task: taskListEntry(taskB) }, { task: taskListEntry(taskA) }] })
-        }
-        if (path === "/session") return send([])
-        if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
-        if (path === "/vcs")
-          return send({
-            branch: "dev",
-            clean: true,
-            dirty: false,
-            staged: 0,
-            modified: 0,
-            untracked: 0,
-            conflicts: 0,
-            ahead: 0,
-            behind: 0,
-          })
-        if (path === "/provider") {
-          return send({
-            all: [
-              {
-                id: "openai",
-                name: "OpenAI",
-                models: {
-                  "project-model": { id: "project-model" },
-                  "project-orchestrator": { id: "project-orchestrator" },
-                  "task-a-model": { id: "task-a-model" },
-                  "task-b-model": { id: "task-b-model" },
-                  "task-b-new": { id: "task-b-new" },
-                },
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") {
+        return send({ tasks: [{ task: taskListEntry(taskB) }, { task: taskListEntry(taskA) }] })
+      }
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs")
+        return send({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      if (path === "/provider") {
+        return send({
+          all: [
+            {
+              id: "openai",
+              name: "OpenAI",
+              models: {
+                "project-model": { id: "project-model" },
+                "project-orchestrator": { id: "project-orchestrator" },
+                "task-a-model": { id: "task-a-model" },
+                "task-b-model": { id: "task-b-model" },
+                "task-b-new": { id: "task-b-new" },
               },
-            ],
-            connected: ["openai"],
-            default: { openai: "project-model" },
-          })
-        }
-        if (path === "/provider/auth") return send({})
-        if (path === "/config/providers") return send({ providers: [], default: {} })
-        if (path === "/config" && req.method === "GET") return send(effectiveConfig(""))
-        if (path === "/config" && req.method === "PATCH") return send(await req.json())
-        if (path === "/config/prompt") return send([])
-        if (path === "/agent") return send([])
-        if (path === "/channel") return send([])
-        if (path === "/executor")
-          return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
-        if (path === "/skill/installed" || path === "/skill") return send([])
-        if (path === "/mcp") return send({})
-        if (path === "/panel/knowledge/memory") return send([])
-        if (path === "/panel/knowledge/preference") return send([])
-        if (path.startsWith("/task/") && path.endsWith("/conversation")) {
-          const taskID = decodeURIComponent(path.slice("/task/".length, -"/conversation".length))
-          return send(conversation(taskID === taskA.id ? taskA : taskB))
-        }
-        if (path.startsWith("/task/") && path.endsWith("/operator-model-context")) {
-          const taskID = decodeURIComponent(path.slice("/task/".length, -"/operator-model-context".length))
-          if (taskID === taskA.id) await taskAContextDelay
-          return send(context(taskID))
-        }
-        if (path.startsWith("/task/") && path.endsWith("/browser-preview")) {
-          const taskID = decodeURIComponent(path.slice("/task/".length, -"/browser-preview".length))
-          return send({
-            taskID,
-            kind: "missing",
-            status: "missing",
-            projectRoot: "D:/overlay/workspace/app",
-            viewports: [],
-            diagnostics: [],
-            candidates: [],
-            source: "none",
-          })
-        }
-        if (path.startsWith("/session/") && path.endsWith("/config") && req.method === "PATCH") {
-          const sessionID = decodeURIComponent(path.slice("/session/".length, -"/config".length))
-          const body = (await req.json()) as Record<string, unknown>
-          patches.push({ sessionID, body })
-          overlays[sessionID] = mergePatch(overlays[sessionID] ?? {}, body) as Record<string, unknown>
-          return send({ config: effectiveConfig(sessionID), origin: {} })
-        }
-        if (path.startsWith("/session/") && path.endsWith("/config") && req.method === "GET") {
-          const sessionID = decodeURIComponent(path.slice("/session/".length, -"/config".length))
-          return send({ config: effectiveConfig(sessionID), origin: {} })
-        }
-        if (path === "/task/events" || /^\/task\/[^/]+\/events$/.test(path)) {
-          return new Response(`data: ${JSON.stringify({ type: "task.connected", properties: {} })}\n\n`, {
-            headers: { "content-type": "text/event-stream; charset=utf-8" },
-          })
-        }
-        if (path === "/log" && req.method === "POST") return send({ ok: true })
+            },
+          ],
+          connected: ["openai"],
+          default: { openai: "project-model" },
+        })
+      }
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [], default: {} })
+      if (path === "/config" && req.method === "GET") return send(effectiveConfig(""))
+      if (path === "/config" && req.method === "PATCH") return send(await req.json())
+      if (path === "/config/prompt") return send([])
+      if (path === "/agent") return send([])
+      if (path === "/channel") return send([])
+      if (path === "/executor")
+        return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path.startsWith("/task/") && path.endsWith("/conversation")) {
+        const taskID = decodeURIComponent(path.slice("/task/".length, -"/conversation".length))
+        return send(conversation(taskID === taskA.id ? taskA : taskB))
+      }
+      if (path.startsWith("/task/") && path.endsWith("/operator-model-context")) {
+        const taskID = decodeURIComponent(path.slice("/task/".length, -"/operator-model-context".length))
+        if (taskID === taskA.id) await taskAContextDelay
+        return send(context(taskID))
+      }
+      if (path.startsWith("/task/") && path.endsWith("/browser-preview")) {
+        const taskID = decodeURIComponent(path.slice("/task/".length, -"/browser-preview".length))
+        return send({
+          taskID,
+          kind: "missing",
+          status: "missing",
+          projectRoot: "D:/overlay/workspace/app",
+          viewports: [],
+          diagnostics: [],
+          candidates: [],
+          source: "none",
+        })
+      }
+      if (path.startsWith("/session/") && path.endsWith("/config") && req.method === "PATCH") {
+        const sessionID = decodeURIComponent(path.slice("/session/".length, -"/config".length))
+        const body = (await req.json()) as Record<string, unknown>
+        patches.push({ sessionID, body })
+        overlays[sessionID] = mergePatch(overlays[sessionID] ?? {}, body) as Record<string, unknown>
+        return send({ config: effectiveConfig(sessionID), origin: {} })
+      }
+      if (path.startsWith("/session/") && path.endsWith("/config") && req.method === "GET") {
+        const sessionID = decodeURIComponent(path.slice("/session/".length, -"/config".length))
+        return send({ config: effectiveConfig(sessionID), origin: {} })
+      }
+      if (path === "/task/events" || /^\/task\/[^/]+\/events$/.test(path)) {
+        return new Response(`data: ${JSON.stringify({ type: "task.connected", properties: {} })}\n\n`, {
+          headers: { "content-type": "text/event-stream; charset=utf-8" },
+        })
+      }
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
       return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
@@ -404,80 +404,80 @@ test(
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-        if (path === "/" || path === "/ui" || path === "/ui/")
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tasks" || path === "/global/tasks")
-          return send({ tasks: [{ task: { ...task, sessionID: undefined } }] })
-        if (path === "/session") return send([])
-        if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
-        if (path === "/vcs")
-          return send({
-            branch: "dev",
-            clean: true,
-            dirty: false,
-            staged: 0,
-            modified: 0,
-            untracked: 0,
-            conflicts: 0,
-            ahead: 0,
-            behind: 0,
-          })
-        if (path === "/provider") {
-          return send({
-            all: [
-              {
-                id: "openai",
-                name: "OpenAI",
-                models: {
-                  "task-context-model": { id: "task-context-model" },
-                },
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks")
+        return send({ tasks: [{ task: { ...task, sessionID: undefined } }] })
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs")
+        return send({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      if (path === "/provider") {
+        return send({
+          all: [
+            {
+              id: "openai",
+              name: "OpenAI",
+              models: {
+                "task-context-model": { id: "task-context-model" },
               },
-            ],
-            connected: ["openai"],
-            default: { openai: "task-context-model" },
-          })
-        }
-        if (path === "/provider/auth") return send({})
-        if (path === "/config/providers") return send({ providers: [], default: {} })
-        if (path === "/config" && req.method === "GET") return send({ model: "openai/project-model" })
-        if (path === "/config" && req.method === "PATCH") return send(await req.json())
-        if (path === "/config/prompt") return send([])
-        if (path === "/agent") return send([])
-        if (path === "/channel") return send([])
-        if (path === "/executor")
-          return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
-        if (path === "/skill/installed" || path === "/skill") return send([])
-        if (path === "/mcp") return send({})
-        if (path === "/panel/knowledge/memory") return send([])
-        if (path === "/panel/knowledge/preference") return send([])
-        if (path.startsWith("/task/") && path.endsWith("/conversation")) return send(conversation())
-        if (path.startsWith("/task/") && path.endsWith("/operator-model-context")) {
-          contextCalls += 1
-          if (contextCalls === 1) return send({ message: "context exploded" }, { status: 500 })
-          return send(context())
-        }
-        if (path.startsWith("/task/") && path.endsWith("/browser-preview")) {
-          return send({
-            taskID: task.id,
-            kind: "missing",
-            status: "missing",
-            projectRoot: "D:/overlay/workspace/app",
-            viewports: [],
-            diagnostics: [],
-            candidates: [],
-            source: "none",
-          })
-        }
-        if (path === "/task/events" || /^\/task\/[^/]+\/events$/.test(path)) {
-          return new Response(`data: ${JSON.stringify({ type: "task.connected", properties: {} })}\n\n`, {
-            headers: { "content-type": "text/event-stream; charset=utf-8" },
-          })
-        }
-        if (path === "/log" && req.method === "POST") return send({ ok: true })
+            },
+          ],
+          connected: ["openai"],
+          default: { openai: "task-context-model" },
+        })
+      }
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [], default: {} })
+      if (path === "/config" && req.method === "GET") return send({ model: "openai/project-model" })
+      if (path === "/config" && req.method === "PATCH") return send(await req.json())
+      if (path === "/config/prompt") return send([])
+      if (path === "/agent") return send([])
+      if (path === "/channel") return send([])
+      if (path === "/executor")
+        return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path.startsWith("/task/") && path.endsWith("/conversation")) return send(conversation())
+      if (path.startsWith("/task/") && path.endsWith("/operator-model-context")) {
+        contextCalls += 1
+        if (contextCalls === 1) return send({ message: "context exploded" }, { status: 500 })
+        return send(context())
+      }
+      if (path.startsWith("/task/") && path.endsWith("/browser-preview")) {
+        return send({
+          taskID: task.id,
+          kind: "missing",
+          status: "missing",
+          projectRoot: "D:/overlay/workspace/app",
+          viewports: [],
+          diagnostics: [],
+          candidates: [],
+          source: "none",
+        })
+      }
+      if (path === "/task/events" || /^\/task\/[^/]+\/events$/.test(path)) {
+        return new Response(`data: ${JSON.stringify({ type: "task.connected", properties: {} })}\n\n`, {
+          headers: { "content-type": "text/event-stream; charset=utf-8" },
+        })
+      }
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
       return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 

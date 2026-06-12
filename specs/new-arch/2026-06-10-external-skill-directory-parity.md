@@ -6,14 +6,14 @@
 
 ## Call Points
 
-| Area | File | Decision |
-| --- | --- | --- |
-| External discovery roots | `packages/opencorvus/src/skill/skill.ts` | Keep one external root list for `.claude`, `.agents`, `.codex`, and `.opencorvus`; the pattern only scans `skills/**/SKILL.md`, not `.opencorvus/runtime`. |
-| Installed source classification | `packages/opencorvus/src/skill/manager.ts` | Treat `.codex/skills` and `.opencorvus/skills` paths as `external`, same as `.claude` and `.agents`; keep native `.opencorvus/skill` local. |
-| Trust classification | `packages/opencorvus/src/skill/manager.ts` | Treat `.codex/skills` and `.opencorvus/skills` paths as `external`, same as `.claude` and `.agents`; keep native `.opencorvus/skill` local. |
-| Discovery tests | `packages/opencorvus/test/skill/skill.test.ts` | Add project and global `.codex/skills` coverage, include `.codex` and `.opencorvus/skills` in mixed-root coverage, and prove duplicate scans of `.opencorvus/skills` do not create duplicate locations. |
-| Route tests | `packages/opencorvus/test/server/skill-routes.test.ts` | Lock `/skill/installed` classification for `.codex/skills` and `.opencorvus/skills`. |
-| OverlayUI bundle test | `packages/opencorvus/test/server/overlay-ui-handler.test.ts` | Serve the built `/ui` bundle and assert it contains Skill/MCP/Memory panel API paths, directory header injection, duplicate metadata, and no-directory notice strings. |
+| Area                            | File                                                         | Decision                                                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| External discovery roots        | `packages/opencorvus/src/skill/skill.ts`                     | Keep one external root list for `.claude`, `.agents`, `.codex`, and `.opencorvus`; the pattern only scans `skills/**/SKILL.md`, not `.opencorvus/runtime`.                                              |
+| Installed source classification | `packages/opencorvus/src/skill/manager.ts`                   | Treat `.codex/skills` and `.opencorvus/skills` paths as `external`, same as `.claude` and `.agents`; keep native `.opencorvus/skill` local.                                                             |
+| Trust classification            | `packages/opencorvus/src/skill/manager.ts`                   | Treat `.codex/skills` and `.opencorvus/skills` paths as `external`, same as `.claude` and `.agents`; keep native `.opencorvus/skill` local.                                                             |
+| Discovery tests                 | `packages/opencorvus/test/skill/skill.test.ts`               | Add project and global `.codex/skills` coverage, include `.codex` and `.opencorvus/skills` in mixed-root coverage, and prove duplicate scans of `.opencorvus/skills` do not create duplicate locations. |
+| Route tests                     | `packages/opencorvus/test/server/skill-routes.test.ts`       | Lock `/skill/installed` classification for `.codex/skills` and `.opencorvus/skills`.                                                                                                                    |
+| OverlayUI bundle test           | `packages/opencorvus/test/server/overlay-ui-handler.test.ts` | Serve the built `/ui` bundle and assert it contains Skill/MCP/Memory panel API paths, directory header injection, duplicate metadata, and no-directory notice strings.                                  |
 
 ## Supported Layouts
 

@@ -84,9 +84,10 @@ describe("MySQL transfer", () => {
     const raw = new RawSqlite(Database.Path(), { readonly: true })
     try {
       const fts = raw
-        .query<{ count: number }, []>(
-          "SELECT count(*) AS count FROM memory_fts WHERE chunk_id = 'memory-chunk-transfer'",
-        )
+        .query<
+          { count: number },
+          []
+        >("SELECT count(*) AS count FROM memory_fts WHERE chunk_id = 'memory-chunk-transfer'")
         .get()
       expect(fts?.count).toBe(1)
     } finally {

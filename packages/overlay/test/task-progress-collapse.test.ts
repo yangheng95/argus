@@ -13,14 +13,16 @@ test("TaskProgressBar exposes a whole-card fold control", () => {
   expect(source).toContain('class="task-progress__fold"')
   expect(source).toContain('aria-controls="taskProgressPills"')
   expect(source).toContain('aria-expanded={folded() ? "false" : "true"}')
-  expect(source).toContain('onClick={() => setFolded((value) => !value)}')
+  expect(source).toContain("onClick={() => setFolded((value) => !value)}")
   expect(source).toContain('Icon name={folded() ? "chevron-down" : "chevron-up"}')
 })
 
 test("folded task progress hides only the goal details below the progress bar", () => {
   expect(source).toContain('id="taskProgressPills"')
   expect(css).toContain(".task-progress__fold")
-  expect(css).toMatch(/\.task-progress\[data-folded="true"\] \.task-progress__pills,\s*\.task-progress\[data-folded="true"\] \.task-progress__toggle\s*\{[^}]*display:\s*none/)
+  expect(css).toMatch(
+    /\.task-progress\[data-folded="true"\] \.task-progress__pills,\s*\.task-progress\[data-folded="true"\] \.task-progress__toggle\s*\{[^}]*display:\s*none/,
+  )
   expect(css).toContain(".task-progress__bar")
 })
 

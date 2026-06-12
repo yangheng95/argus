@@ -15,13 +15,13 @@ G3 started a dev server twice. Port 3456 printed `http://localhost:3456/world-ec
 
 ## Call Points
 
-| Symbol / file | Current behavior | Decision |
-| --- | --- | --- |
-| `createBrowserPreviewProcessOutputMaterializer` in `packages/opencorvus/src/browser-preview/extract.ts` | Adds URL to `seen` before reachability probe. | Mark URLs persisted only after successful artifact write; allow retry after failed probe while deduplicating in-flight probes. |
-| `persistBrowserPreviewTargetFromProcessOutput` in `packages/opencorvus/src/browser-preview/extract.ts` | Scans completed output only. | Keep as output-only for generic tools. |
-| `BashTool` in `packages/opencorvus/src/tool/bash.ts` | Passes only task ID to streaming materializer. | Pass the actual shell command so the materializer can derive dev-server port candidates. |
-| `SessionShell.shell` in `packages/opencorvus/src/session/shell-exec.ts` | Passes only task ID to streaming materializer. | Pass the executed command for the same materializer path. |
-| `resolveBrowserPreviewTarget` in `packages/opencorvus/src/browser-preview/target.ts` | Resolves only persisted task artifacts. | Keep unchanged; no package metadata, query override, or overlay-side fallback. |
+| Symbol / file                                                                                           | Current behavior                               | Decision                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `createBrowserPreviewProcessOutputMaterializer` in `packages/opencorvus/src/browser-preview/extract.ts` | Adds URL to `seen` before reachability probe.  | Mark URLs persisted only after successful artifact write; allow retry after failed probe while deduplicating in-flight probes. |
+| `persistBrowserPreviewTargetFromProcessOutput` in `packages/opencorvus/src/browser-preview/extract.ts`  | Scans completed output only.                   | Keep as output-only for generic tools.                                                                                         |
+| `BashTool` in `packages/opencorvus/src/tool/bash.ts`                                                    | Passes only task ID to streaming materializer. | Pass the actual shell command so the materializer can derive dev-server port candidates.                                       |
+| `SessionShell.shell` in `packages/opencorvus/src/session/shell-exec.ts`                                 | Passes only task ID to streaming materializer. | Pass the executed command for the same materializer path.                                                                      |
+| `resolveBrowserPreviewTarget` in `packages/opencorvus/src/browser-preview/target.ts`                    | Resolves only persisted task artifacts.        | Keep unchanged; no package metadata, query override, or overlay-side fallback.                                                 |
 
 ## Design
 

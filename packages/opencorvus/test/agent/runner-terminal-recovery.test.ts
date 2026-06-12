@@ -47,5 +47,4 @@ describe("runAgentSession terminal tool missing detection", () => {
       })?.message,
     ).toBe("missing report")
   })
-
 })

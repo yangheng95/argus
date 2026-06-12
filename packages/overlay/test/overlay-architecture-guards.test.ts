@@ -1763,7 +1763,9 @@ describe("overlay architecture guards", () => {
 
     expect(styles).not.toMatch(/(^|\n)\.chat-scroll\s*\{/)
     expect(conversationSurface).toMatch(/(^|\n)\.chat-scroll\s*\{/)
-    expect(conversationSurface).toMatch(/\.conversation-virtual-item > \.card,\n\.conversation-virtual-item > \.interaction-card/)
+    expect(conversationSurface).toMatch(
+      /\.conversation-virtual-item > \.card,\n\.conversation-virtual-item > \.interaction-card/,
+    )
     expect(conversationSurface).toMatch(/@media \(max-width: 900px\)/)
   })
 

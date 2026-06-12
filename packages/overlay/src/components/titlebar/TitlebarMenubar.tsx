@@ -388,27 +388,27 @@ export function TitlebarMenubar() {
         {(menu) => (
           <Menubar.Menu value={menu.id} placement="bottom-start" gutter={7} fitViewport slide={false} flip={false}>
             <div class="titlebar-menubar-slot">
-            <Menubar.Trigger
-              type="button"
-              class="oc-button"
-              data-variant="ghost"
-              data-size="sm"
-              data-tone="neutral"
-              data-ui="titlebar-menubar-trigger"
-              data-menu-trigger={menu.id}
-              data-compact={menu.compact}
-              data-access-key={menu.accessKey}
-              data-active={openMenu() === menu.id ? "true" : "false"}
-              title={menu.label}
-              aria-label={menu.label}
-              aria-keyshortcuts={`Alt+${menu.accessKey.toUpperCase()}`}
-              onPointerDown={(event) => toggleMenuFromTrigger(event, menu.id)}
-            >
-              <span class="titlebar-menu-trigger-label">{menu.label}</span>
-              <span class="titlebar-menu-trigger-compact" aria-hidden="true">
-                {menu.compact}
-              </span>
-            </Menubar.Trigger>
+              <Menubar.Trigger
+                type="button"
+                class="oc-button"
+                data-variant="ghost"
+                data-size="sm"
+                data-tone="neutral"
+                data-ui="titlebar-menubar-trigger"
+                data-menu-trigger={menu.id}
+                data-compact={menu.compact}
+                data-access-key={menu.accessKey}
+                data-active={openMenu() === menu.id ? "true" : "false"}
+                title={menu.label}
+                aria-label={menu.label}
+                aria-keyshortcuts={`Alt+${menu.accessKey.toUpperCase()}`}
+                onPointerDown={(event) => toggleMenuFromTrigger(event, menu.id)}
+              >
+                <span class="titlebar-menu-trigger-label">{menu.label}</span>
+                <span class="titlebar-menu-trigger-compact" aria-hidden="true">
+                  {menu.compact}
+                </span>
+              </Menubar.Trigger>
             </div>
             <Portal>
               <Menubar.Content

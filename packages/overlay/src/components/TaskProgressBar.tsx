@@ -16,35 +16,35 @@
 // to be the single writer. This component is purely a derived view of
 // boardStore + cardTreeStore (for scroll target lookup).
 
-import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { boardStore } from "../store/board";
-import { cardTreeStore } from "../store/card-tree";
-import { requestConversationCardScroll } from "../services/conversation-scroll";
-import { t } from "../utils/i18n";
-import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
-import { goalState, type GoalState } from "../utils/goal-state";
-import { Icon } from "./Icon";
-import { createAnimationFrameScheduler } from "../utils/animation-frame";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { boardStore } from "../store/board"
+import { cardTreeStore } from "../store/card-tree"
+import { requestConversationCardScroll } from "../services/conversation-scroll"
+import { t } from "../utils/i18n"
+import { goalRevisionLabelFromIndexes } from "../utils/goal-label"
+import { goalState, type GoalState } from "../utils/goal-state"
+import { Icon } from "./Icon"
+import { createAnimationFrameScheduler } from "../utils/animation-frame"
 
 /** Visible pill rows before the strip collapses behind a "+N more" toggle.
  *  Operators scanning a long task want the goal list visible at a glance, not
  *  pushing the conversation down by 8+ rows. Three rows fits ~6–12 pills in a
  *  typical conversation column and keeps the sticky header light. */
-const MAX_VISIBLE_PILL_ROWS = 3;
+const MAX_VISIBLE_PILL_ROWS = 3
 
 interface GoalPill {
-  goalID: string;
-  index: number;
-  attempt: number;
-  title: string;
-  state: GoalState;
+  goalID: string
+  index: number
+  attempt: number
+  title: string
+  state: GoalState
 }
 
 function pillStateLabel(state: GoalState, title: string): string {
   // Static `t(\`progress.goal.${state}\`)` so the i18n linter sees
   // "progress.goal" as a referenced prefix (template-literal head + dot
   // matches its ancestor rule).
-  return t(`progress.goal.${state}`, { title });
+  return t(`progress.goal.${state}`, { title })
 }
 
 /** Find the on-screen card id that represents this goal's most recent
@@ -53,42 +53,44 @@ function pillStateLabel(state: GoalState, title: string): string {
  *  contain the goalID. Best-effort: if there's no matching card yet
  *  (goal still pending dispatch) the click is a noop. */
 function findGoalCardID(goalID: string): string | undefined {
-  const ids = cardTreeStore.order;
+  const ids = cardTreeStore.order
   for (let i = ids.length - 1; i >= 0; i--) {
-    const card = cardTreeStore.cards[ids[i]];
-    if (!card) continue;
-    if (card.goalID === goalID) return card.id;
+    const card = cardTreeStore.cards[ids[i]]
+    if (!card) continue
+    if (card.goalID === goalID) return card.id
   }
-  return undefined;
+  return undefined
 }
 
 export function TaskProgressBar() {
   const goals = createMemo<GoalPill[]>(() => {
-    const list = (boardStore.board as any)?.goalWorkflows;
-    if (!Array.isArray(list) || list.length === 0) return [];
-    return list.map((g: any, i: number): GoalPill => ({
-      goalID: String(g?.goalID || `goal-${i}`),
-      index: typeof g?.orderIndex === "number" ? g.orderIndex : i,
-      attempt: typeof g?.retryCount === "number" ? g.retryCount : 0,
-      title: String(g?.goalTitle || "").trim() || `Goal ${i + 1}`,
-      state: goalState(g),
-    }));
-  });
+    const list = (boardStore.board as any)?.goalWorkflows
+    if (!Array.isArray(list) || list.length === 0) return []
+    return list.map(
+      (g: any, i: number): GoalPill => ({
+        goalID: String(g?.goalID || `goal-${i}`),
+        index: typeof g?.orderIndex === "number" ? g.orderIndex : i,
+        attempt: typeof g?.retryCount === "number" ? g.retryCount : 0,
+        title: String(g?.goalTitle || "").trim() || `Goal ${i + 1}`,
+        state: goalState(g),
+      }),
+    )
+  })
 
   const counts = createMemo(() => {
-    const all = goals();
-    let passed = 0;
-    let failed = 0;
-    let running = 0;
+    const all = goals()
+    let passed = 0
+    let failed = 0
+    let running = 0
     for (const g of all) {
-      if (g.state === "passed") passed++;
-      else if (g.state === "failed") failed++;
-      else if (g.state === "running") running++;
+      if (g.state === "passed") passed++
+      else if (g.state === "failed") failed++
+      else if (g.state === "running") running++
     }
-    return { passed, failed, running, total: all.length };
-  });
+    return { passed, failed, running, total: all.length }
+  })
 
-  const hasGoals = () => goals().length > 0;
+  const hasGoals = () => goals().length > 0
 
   // ── Auto-collapse beyond MAX_VISIBLE_PILL_ROWS ──
   // A ResizeObserver on the pills container measures the offsetTop of each
@@ -96,97 +98,97 @@ export function TaskProgressBar() {
   // depend on UI scale, font, and pill-title length when wrapped). When the
   // natural layout would exceed 3 rows we expose a `+N more` toggle; under
   // the limit the toggle stays hidden and the strip is unconstrained.
-  let pillsEl: HTMLDivElement | undefined;
-  const [folded, setFolded] = createSignal(false);
-  const [expanded, setExpanded] = createSignal(false);
-  const [hiddenCount, setHiddenCount] = createSignal(0);
-  const [collapsedMaxHeight, setCollapsedMaxHeight] = createSignal<number | null>(null);
+  let pillsEl: HTMLDivElement | undefined
+  const [folded, setFolded] = createSignal(false)
+  const [expanded, setExpanded] = createSignal(false)
+  const [hiddenCount, setHiddenCount] = createSignal(0)
+  const [collapsedMaxHeight, setCollapsedMaxHeight] = createSignal<number | null>(null)
 
   const remeasure = () => {
-    const el = pillsEl;
-    if (!el) return;
-    const pills = el.querySelectorAll<HTMLElement>(".task-progress__pill");
+    const el = pillsEl
+    if (!el) return
+    const pills = el.querySelectorAll<HTMLElement>(".task-progress__pill")
     if (pills.length === 0) {
-      setHiddenCount(0);
-      setCollapsedMaxHeight(null);
-      return;
+      setHiddenCount(0)
+      setCollapsedMaxHeight(null)
+      return
     }
     // Group pills by their offsetTop (rounded to the nearest pixel to absorb
     // sub-pixel layout drift). Even when the container is collapsed, each
     // pill's offsetTop still reports its natural position relative to the
     // flex container — only paint is clipped — so this measurement works in
     // both expanded and collapsed states.
-    const rowTops: number[] = [];
-    let lastTop = Number.NEGATIVE_INFINITY;
+    const rowTops: number[] = []
+    let lastTop = Number.NEGATIVE_INFINITY
     for (let i = 0; i < pills.length; i++) {
-      const top = Math.round(pills[i].offsetTop);
+      const top = Math.round(pills[i].offsetTop)
       if (top > lastTop + 1) {
-        rowTops.push(top);
-        lastTop = top;
+        rowTops.push(top)
+        lastTop = top
       }
     }
     if (rowTops.length <= MAX_VISIBLE_PILL_ROWS) {
-      setHiddenCount(0);
-      setCollapsedMaxHeight(null);
-      return;
+      setHiddenCount(0)
+      setCollapsedMaxHeight(null)
+      return
     }
-    const firstHiddenTop = rowTops[MAX_VISIBLE_PILL_ROWS];
-    let firstHiddenIndex = pills.length;
+    const firstHiddenTop = rowTops[MAX_VISIBLE_PILL_ROWS]
+    let firstHiddenIndex = pills.length
     for (let i = 0; i < pills.length; i++) {
       if (Math.round(pills[i].offsetTop) >= firstHiddenTop) {
-        firstHiddenIndex = i;
-        break;
+        firstHiddenIndex = i
+        break
       }
     }
-    setHiddenCount(pills.length - firstHiddenIndex);
+    setHiddenCount(pills.length - firstHiddenIndex)
     // Clip the container exactly at the first-hidden-row top so the last
     // visible row never gets truncated mid-pill.
-    setCollapsedMaxHeight(firstHiddenTop);
-  };
+    setCollapsedMaxHeight(firstHiddenTop)
+  }
 
   onMount(() => {
-    if (!pillsEl) return;
-    const remeasureOnFrame = createAnimationFrameScheduler(remeasure);
+    if (!pillsEl) return
+    const remeasureOnFrame = createAnimationFrameScheduler(remeasure)
     // Initial measure waits for the first paint so offsetTop values are stable.
-    remeasureOnFrame.schedule();
-    const ro = new ResizeObserver(remeasureOnFrame.schedule);
-    ro.observe(pillsEl);
+    remeasureOnFrame.schedule()
+    const ro = new ResizeObserver(remeasureOnFrame.schedule)
+    ro.observe(pillsEl)
     // Pill children may resize independently of the container (i18n switch
     // changes label length; UI scale changes pill padding). Observe each pill
     // to catch those cases too.
-    const observed = new WeakSet<Element>();
+    const observed = new WeakSet<Element>()
     const observePills = () => {
-      if (!pillsEl) return;
+      if (!pillsEl) return
       for (const pill of pillsEl.querySelectorAll<HTMLElement>(".task-progress__pill")) {
         if (!observed.has(pill)) {
-          ro.observe(pill);
-          observed.add(pill);
+          ro.observe(pill)
+          observed.add(pill)
         }
       }
-    };
-    observePills();
+    }
+    observePills()
     const mo = new MutationObserver(() => {
-      observePills();
-      remeasureOnFrame.schedule();
-    });
-    mo.observe(pillsEl, { childList: true, subtree: false });
+      observePills()
+      remeasureOnFrame.schedule()
+    })
+    mo.observe(pillsEl, { childList: true, subtree: false })
     onCleanup(() => {
-      ro.disconnect();
-      mo.disconnect();
-      remeasureOnFrame.cancel();
-    });
-  });
+      ro.disconnect()
+      mo.disconnect()
+      remeasureOnFrame.cancel()
+    })
+  })
 
   const onPillClick = (goalID: string) => {
-    const cardID = findGoalCardID(goalID);
-    if (!cardID) return;
+    const cardID = findGoalCardID(goalID)
+    if (!cardID) return
     void requestConversationCardScroll({
       cardID,
       behavior: "smooth",
       block: "start",
       focus: "card",
-    });
-  };
+    })
+  }
 
   return (
     <Show when={hasGoals()} fallback={null}>
@@ -199,12 +201,15 @@ export function TaskProgressBar() {
       >
         <div class="task-progress__header">
           <span class="task-progress__heading">{t("progress.heading")}</span>
-          <span class="task-progress__summary" title={t("progress.summary", {
-            passed: String(counts().passed),
-            failed: String(counts().failed),
-            running: String(counts().running),
-            total: String(counts().total),
-          })}>
+          <span
+            class="task-progress__summary"
+            title={t("progress.summary", {
+              passed: String(counts().passed),
+              failed: String(counts().failed),
+              running: String(counts().running),
+              total: String(counts().total),
+            })}
+          >
             {counts().passed}/{counts().total}
           </span>
           <button
@@ -256,9 +261,7 @@ export function TaskProgressBar() {
                 aria-label={pillStateLabel(g.state, g.title)}
                 onClick={() => onPillClick(g.goalID)}
               >
-                <span class="task-progress__pill-id">
-                  {goalRevisionLabelFromIndexes(g.index, g.attempt)}
-                </span>
+                <span class="task-progress__pill-id">{goalRevisionLabelFromIndexes(g.index, g.attempt)}</span>
                 <span class="task-progress__pill-title">{g.title}</span>
               </button>
             )}
@@ -271,12 +274,10 @@ export function TaskProgressBar() {
             aria-expanded={expanded() ? "true" : "false"}
             onClick={() => setExpanded((v) => !v)}
           >
-            {expanded()
-              ? t("progress.collapse")
-              : t("progress.expand_more", { count: String(hiddenCount()) })}
+            {expanded() ? t("progress.collapse") : t("progress.expand_more", { count: String(hiddenCount()) })}
           </button>
         </Show>
       </div>
     </Show>
-  );
+  )
 }

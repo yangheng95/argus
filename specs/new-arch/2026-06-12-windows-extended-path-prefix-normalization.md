@@ -28,13 +28,13 @@ rg -n "fs\.realpath|realpathSync|path\.toNamespacedPath" packages/opencorvus/src
 
 Relevant write/read boundary:
 
-| Surface | Decision |
-| --- | --- |
-| `Filesystem.normalizePath` | Strip Windows extended path prefixes after `realpathSync.native`. |
-| `Filesystem.resolve` | Continue to use the single filesystem path boundary, now inheriting prefix stripping through `windowsPath` and `normalizePath`. |
-| `Filesystem.windowsPath` | Strip `\\?\` and `\\?\UNC\` before Git Bash / Cygwin / WSL mount translation. |
-| `Filesystem.contains` | Compare paths after the same extended-prefix normalization so namespace and regular forms do not diverge. |
-| `BashTool.resolveStaticPathArg` | No separate implementation; it calls `Filesystem.windowsPath(real)` and inherits the common normalization. |
+| Surface                         | Decision                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `Filesystem.normalizePath`      | Strip Windows extended path prefixes after `realpathSync.native`.                                                               |
+| `Filesystem.resolve`            | Continue to use the single filesystem path boundary, now inheriting prefix stripping through `windowsPath` and `normalizePath`. |
+| `Filesystem.windowsPath`        | Strip `\\?\` and `\\?\UNC\` before Git Bash / Cygwin / WSL mount translation.                                                   |
+| `Filesystem.contains`           | Compare paths after the same extended-prefix normalization so namespace and regular forms do not diverge.                       |
+| `BashTool.resolveStaticPathArg` | No separate implementation; it calls `Filesystem.windowsPath(real)` and inherits the common normalization.                      |
 
 ## Decision
 

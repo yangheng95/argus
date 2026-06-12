@@ -10,6 +10,7 @@ import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src
 import { beginBuildAttempt } from "../../src/engine/persist"
 import { findGoalRun, findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
+import { resolveConfiguredModelRef } from "../../src/agent/model"
 import {
   completeOrchestratorToolOwnership,
   createOrchestratorToolOwnershipPayload,
@@ -40,6 +41,7 @@ import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Orchestrator } from "../../src/orchestrator/agent"
 import { Database, eq } from "../../src/storage/db"
+import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -111,6 +113,61 @@ describe("engine queue", () => {
         expect(taskStatus(taskID)).toBe("active")
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
+      },
+    })
+  })
+
+  test("createTask stores an explicit task model in the root session overlay", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+        const taskID = await EngineService.createTask({
+          request: "use explicit model",
+          title: "explicit model task",
+          executor: "opencorvus",
+          model: "openai/gpt-5.5",
+          queue: false,
+        })
+
+        await expect(resolveConfiguredModelRef({ taskID })).resolves.toEqual({
+          providerID: "openai",
+          modelID: "gpt-5.5",
+        })
+
+        const task = findTask(taskID)!
+        const root = await Session.get(task.session_id!)
+        expect(root.metadata?.configOverlay).toEqual({ model: "openai/gpt-5.5" })
+      },
+    })
+  })
+
+  test("createTask without a model does not write a task model overlay", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+        const taskID = await EngineService.createTask({
+          request: "use project model",
+          title: "project model task",
+          executor: "opencorvus",
+          queue: false,
+        })
+
+        await expect(resolveConfiguredModelRef({ taskID })).resolves.toEqual({
+          providerID: "project",
+          modelID: "default",
+        })
+
+        const task = findTask(taskID)!
+        const root = await Session.get(task.session_id!)
+        expect((root.metadata as Record<string, unknown>)?.configOverlay).toBeUndefined()
       },
     })
   })

@@ -30,6 +30,10 @@ async function writeConfig(dir: string, config: object, name = "opencorvus.json"
 
 const NATIVE_AGENT_IDS = Object.keys(AgentRoleContract.all)
 
+test("documented default model declaration is gpt-5.5", () => {
+  expect(Config.DEFAULT_MODEL).toBe("openai/gpt-5.5")
+})
+
 test("no project config files: does NOT auto-write a project config and does NOT default model (spec §6-2, rule 7/8)", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -86,8 +90,11 @@ test("loads network proxy config", async () => {
         $schema: "https://opencorvus.ai/config.json",
         network: {
           proxy: {
-            enabled: true,
             url: "http://127.0.0.1:7890",
+            username: "hexin",
+            password: "hx300033",
+            llmProvider: true,
+            webResearch: true,
           },
         },
       })
@@ -97,8 +104,11 @@ test("loads network proxy config", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.network?.proxy?.enabled).toBe(true)
       expect(config.network?.proxy?.url).toBe("http://127.0.0.1:7890")
+      expect(config.network?.proxy?.username).toBe("hexin")
+      expect(config.network?.proxy?.password).toBe("hx300033")
+      expect(config.network?.proxy?.llmProvider).toBe(true)
+      expect(config.network?.proxy?.webResearch).toBe(true)
     },
   })
 })
@@ -110,8 +120,8 @@ test("rejects unsupported network proxy URL scheme", async () => {
         $schema: "https://opencorvus.ai/config.json",
         network: {
           proxy: {
-            enabled: true,
             url: "socks5://127.0.0.1:1080",
+            llmProvider: true,
           },
         },
       })
@@ -121,6 +131,55 @@ test("rejects unsupported network proxy URL scheme", async () => {
     directory: tmp.path,
     fn: async () => {
       await expect(Config.get()).rejects.toThrow("network.proxy.url must use http:// or https://")
+    },
+  })
+})
+
+test("rejects network proxy password without username", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        network: {
+          proxy: {
+            url: "http://127.0.0.1:7890",
+            password: "secret",
+            llmProvider: true,
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow(
+        "network.proxy.username is required when network.proxy.password is set",
+      )
+    },
+  })
+})
+
+test("rejects network proxy credentials embedded in URL", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        network: {
+          proxy: {
+            url: "http://user:pass@127.0.0.1:7890",
+            llmProvider: true,
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow(
+        "network.proxy.url must not include credentials; use network.proxy.username and network.proxy.password",
+      )
     },
   })
 })

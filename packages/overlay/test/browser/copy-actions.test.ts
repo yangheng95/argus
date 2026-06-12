@@ -269,7 +269,9 @@ test(
           body: document.body.textContent?.slice(0, 500) || "",
           serverUrl: localStorage.getItem("oc_server_url"),
         }))
-        assert.fail(`${error instanceof Error ? error.message : String(error)}\n${JSON.stringify({ errors, snapshot })}`)
+        assert.fail(
+          `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify({ errors, snapshot })}`,
+        )
       }
       await tab.waitForSelector(".task-row-main[data-task-id='task-1']")
       await tab.click(".task-row-main[data-task-id='task-1']")

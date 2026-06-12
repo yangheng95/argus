@@ -26,12 +26,12 @@ task result, or an internal retry/recovery path.
 
 ### SessionWake Call Sites
 
-| Caller | File | Current behavior | Risk |
-| --- | --- | --- | --- |
-| Mission HTTP route | `packages/opencorvus/src/server/routes/mission.ts` | `POST /mission/wake` ensures a mission session and calls `SessionWake.wake({ agent: "mission" })`. | Correct entry, but the resulting user message has no persisted wake source. |
-| Mission-owned task result | `packages/opencorvus/src/task-api/index.ts` | `notifyTaskLineageTerminal` calls `SessionWake.wake({ agent: "mission" })` with a `Mission task terminal update` prompt. | Correct to notify Mission of dispatched task results, but source/reason is only embedded in free text. |
-| Cron scheduler | `packages/opencorvus/src/scheduler/cron-service.ts` | Due cron jobs call `SessionWake.wake`, then update `last_run` / `next_run` or disable one-shot jobs. | Lease exists, but no durable per-fire record ties one wake message to one cron fire. |
-| Event scheduler | `packages/opencorvus/src/scheduler/event-service.ts` | Matching events call `SessionWake.wake`, then update `last_run` / `last_event`. | Running guard is in memory; failures do not write a delivery fact; event storms are hard to audit. |
+| Caller                    | File                                                 | Current behavior                                                                                                         | Risk                                                                                                   |
+| ------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Mission HTTP route        | `packages/opencorvus/src/server/routes/mission.ts`   | `POST /mission/wake` ensures a mission session and calls `SessionWake.wake({ agent: "mission" })`.                       | Correct entry, but the resulting user message has no persisted wake source.                            |
+| Mission-owned task result | `packages/opencorvus/src/task-api/index.ts`          | `notifyTaskLineageTerminal` calls `SessionWake.wake({ agent: "mission" })` with a `Mission task terminal update` prompt. | Correct to notify Mission of dispatched task results, but source/reason is only embedded in free text. |
+| Cron scheduler            | `packages/opencorvus/src/scheduler/cron-service.ts`  | Due cron jobs call `SessionWake.wake`, then update `last_run` / `next_run` or disable one-shot jobs.                     | Lease exists, but no durable per-fire record ties one wake message to one cron fire.                   |
+| Event scheduler           | `packages/opencorvus/src/scheduler/event-service.ts` | Matching events call `SessionWake.wake`, then update `last_run` / `last_event`.                                          | Running guard is in memory; failures do not write a delivery fact; event storms are hard to audit.     |
 
 No production `SessionWake.wake` call exists in `packages/opencorvus/src/agent`
 or `packages/opencorvus/src/build`. Agent finalizer recovery is therefore not a
@@ -74,10 +74,10 @@ surface, but it is not connected to the wake entry point.
 
 ### Scheduler Delivery Shapes
 
-| Scheduler | File | Persistence today | Gap |
-| --- | --- | --- | --- |
-| cron | `packages/opencorvus/src/scheduler/cron-service.ts` | Job row stores lease, `last_run`, `next_run`, `failure_count`, `last_error`. | No individual fire id or message id; one job row is overwritten across fires. |
-| event | `packages/opencorvus/src/scheduler/event-service.ts` | Job row stores `last_run`, `last_event`, enabled flag. | No per-event delivery fact; failed wake leaves no successful delivery row and only logs the error. |
+| Scheduler  | File                                                      | Persistence today                                                                      | Gap                                                                                                                            |
+| ---------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| cron       | `packages/opencorvus/src/scheduler/cron-service.ts`       | Job row stores lease, `last_run`, `next_run`, `failure_count`, `last_error`.           | No individual fire id or message id; one job row is overwritten across fires.                                                  |
+| event      | `packages/opencorvus/src/scheduler/event-service.ts`      | Job row stores `last_run`, `last_event`, enabled flag.                                 | No per-event delivery fact; failed wake leaves no successful delivery row and only logs the error.                             |
 | task_queue | `packages/opencorvus/src/scheduler/task-queue-service.ts` | `a2a_task_queue` rows store queued/retrying/running/completed/failed prompt execution. | It bypasses `SessionWake` and calls `SessionPrompt.prompt`, so it has execution facts but no common wake-causality vocabulary. |
 
 ## Root Causes
@@ -115,7 +115,7 @@ surface, but it is not connected to the wake entry point.
 - Do not add cooldown/debounce/gate logic to hide frequent wakes.
 - Do not make Mission ignore valid user messages.
 - Do not key behavior off free-text matching such as `Mission task terminal
-  update`.
+update`.
 - Do not create a parallel wake history table while `wake_reason` exists.
 
 ## Design
@@ -171,12 +171,12 @@ introduced; otherwise `session/loop.ts` will fail them as unsupported controls.
 
 ### 2. Thread Reasons Through All Wake Callers
 
-| Caller | Required reason |
-| --- | --- |
-| `server/routes/mission.ts` | `{ source: "mission.operator", missionID, route: "/mission/wake" }` |
+| Caller                                         | Required reason                                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------------ |
+| `server/routes/mission.ts`                     | `{ source: "mission.operator", missionID, route: "/mission/wake" }`      |
 | `task-api/index.ts::notifyTaskLineageTerminal` | `{ source: "mission.child_task_result", missionID, taskID, taskStatus }` |
-| `cron-service.ts` | `{ source: "scheduler.cron", jobID, fireID }` |
-| `event-service.ts` | `{ source: "scheduler.event", jobID, fireID, eventType }` |
+| `cron-service.ts`                              | `{ source: "scheduler.cron", jobID, fireID }`                            |
+| `event-service.ts`                             | `{ source: "scheduler.event", jobID, fireID, eventType }`                |
 
 For `task_queue`, do not force it through `SessionWake` because it already owns
 queued prompt execution through `SessionPrompt.prompt`. Instead, add equivalent
@@ -248,15 +248,15 @@ not from logs or prompt text.
 
 ## Risks And Hidden Failure Modes
 
-| Risk | Why it matters | Mitigation |
-| --- | --- | --- |
-| `wake_reason` pending records fail in loop | `session/loop.ts` only treats compaction controls as actionable. | Store wake reasons as consumed audit records, not pending controls. |
-| Two-source audit | Message `extra` and control payload can drift. | Create both in the same `SessionWake.wake` operation and anchor control to `message_id`. Tests assert equality. |
-| Scheduler fire lost after failed wake | Cron/event currently update durable state only after wake success. | Record fire attempt reason before/with wake if audit of failures is required; otherwise at minimum log reason with `fireID`. |
-| Hidden agent recovery remains | Current runner diff conflicts with existing spec. | Revert automatic loop and implement explicit continuation artifact path. |
-| Free-text coupling remains | Child-result prompt text contains task facts but no structured source. | Put taskID/status/missionID in `WakeReason`; keep text for model readability. |
-| TaskQueue excluded from wake audit | It does not use `SessionWake`. | Stamp `scheduler.task_queue` reason on queued prompt user messages and expose it through the same message debug surface. |
-| Event job duplicate after restart | `EventService.running` is in memory. | Do not hide duplicates; make each delivery auditable with `fireID`. Later dedupe can be data-integrity based on explicit event id if the event source provides one. |
+| Risk                                       | Why it matters                                                         | Mitigation                                                                                                                                                          |
+| ------------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wake_reason` pending records fail in loop | `session/loop.ts` only treats compaction controls as actionable.       | Store wake reasons as consumed audit records, not pending controls.                                                                                                 |
+| Two-source audit                           | Message `extra` and control payload can drift.                         | Create both in the same `SessionWake.wake` operation and anchor control to `message_id`. Tests assert equality.                                                     |
+| Scheduler fire lost after failed wake      | Cron/event currently update durable state only after wake success.     | Record fire attempt reason before/with wake if audit of failures is required; otherwise at minimum log reason with `fireID`.                                        |
+| Hidden agent recovery remains              | Current runner diff conflicts with existing spec.                      | Revert automatic loop and implement explicit continuation artifact path.                                                                                            |
+| Free-text coupling remains                 | Child-result prompt text contains task facts but no structured source. | Put taskID/status/missionID in `WakeReason`; keep text for model readability.                                                                                       |
+| TaskQueue excluded from wake audit         | It does not use `SessionWake`.                                         | Stamp `scheduler.task_queue` reason on queued prompt user messages and expose it through the same message debug surface.                                            |
+| Event job duplicate after restart          | `EventService.running` is in memory.                                   | Do not hide duplicates; make each delivery auditable with `fireID`. Later dedupe can be data-integrity based on explicit event id if the event source provides one. |
 
 ## Test Plan
 

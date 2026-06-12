@@ -12,12 +12,12 @@ Hono 4.10.7 `streamSSE()` only binds `c.req.raw.signal.abort` to `stream.abort()
 
 ## Grep Coverage
 
-| Symbol / path | Call points | Decision |
-| --- | --- | --- |
-| `streamSSE` import from `hono/streaming` | `server/routes/app.ts`, `global.ts`, `orchestrator.ts`, `panel.ts`, `session.ts` | Replace with one OpenCorvus server SSE helper. No route-local duplicate cleanup. |
-| `stream.onAbort` | `app.ts`, `global.ts`, `orchestrator.ts` task list and selected task streams, `session.ts` | Preserve route cleanup callbacks; helper makes late `onAbort` subscribers observe an already-aborted request. |
-| `writeSSE` | Same SSE routes plus `panel.ts` stream response | Preserve write behavior; helper only owns abort propagation. |
-| `EventSource` client | `overlay/src/services/tauri-transport.ts` | No frontend change. Client already calls `source.close()`; the server must release its side. |
+| Symbol / path                            | Call points                                                                                | Decision                                                                                                      |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `streamSSE` import from `hono/streaming` | `server/routes/app.ts`, `global.ts`, `orchestrator.ts`, `panel.ts`, `session.ts`           | Replace with one OpenCorvus server SSE helper. No route-local duplicate cleanup.                              |
+| `stream.onAbort`                         | `app.ts`, `global.ts`, `orchestrator.ts` task list and selected task streams, `session.ts` | Preserve route cleanup callbacks; helper makes late `onAbort` subscribers observe an already-aborted request. |
+| `writeSSE`                               | Same SSE routes plus `panel.ts` stream response                                            | Preserve write behavior; helper only owns abort propagation.                                                  |
+| `EventSource` client                     | `overlay/src/services/tauri-transport.ts`                                                  | No frontend change. Client already calls `source.close()`; the server must release its side.                  |
 
 ## Implementation
 

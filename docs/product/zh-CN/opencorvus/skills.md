@@ -121,13 +121,13 @@ Session 初始化时会提供 Skill Policy 与可用 skill 摘要。Agent 需要
 
 ## 8. 信任等级与风险
 
-| 等级        | 来源                               |
-| ----------- | ---------------------------------- |
-| `builtin`   | 随二进制打包                       |
-| `official`  | openai/skills 或 anthropics/skills |
-| `curated`   | skills.sh / skillstore.io          |
-| `community` | skills.pub                         |
-| `local`     | 本地路径                           |
+| 等级        | 来源                                                                |
+| ----------- | ------------------------------------------------------------------- |
+| `builtin`   | 随二进制打包                                                        |
+| `official`  | openai/skills 或 anthropics/skills                                  |
+| `curated`   | skills.sh / skillstore.io                                           |
+| `community` | skills.pub                                                          |
+| `local`     | 本地路径                                                            |
 | `external`  | `.claude/`、`.codex/`、`.opencorvus/skills/` 或 `.agents/` 目录发现 |
 
 风险评估：目录含 `scripts/` → 高风险；含 `agents/` 或 `references/` → 中等。

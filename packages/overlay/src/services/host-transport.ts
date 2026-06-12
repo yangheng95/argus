@@ -114,11 +114,7 @@ export interface ServerInfo {
   port?: number
 }
 
-export type {
-  NativeCommand,
-  NativeCommandKind,
-  ProjectEditorID,
-} from "@opencorvus-ai/transport-protocol"
+export type { NativeCommand, NativeCommandKind, ProjectEditorID } from "@opencorvus-ai/transport-protocol"
 export { PROJECT_EDITOR_IDS } from "@opencorvus-ai/transport-protocol"
 
 import { PROJECT_EDITOR_IDS } from "@opencorvus-ai/transport-protocol"

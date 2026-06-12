@@ -102,7 +102,7 @@ describe("app/session dialog single source", () => {
     expect(appHost).toContain("<Select.HiddenSelect")
     expect(appHost).toContain("function AppDialogSelectOptionItem")
     expect(appDialogService).toContain("dialogStore.app.selectValue || null")
-    expect(appDialogService).not.toContain("document.getElementById(\"appDialogSelect\")")
+    expect(appDialogService).not.toContain('document.getElementById("appDialogSelect")')
     expect(appDialogService).not.toContain("HTMLSelectElement")
     expect(appHost).not.toContain("<select")
     expect(appHost).not.toContain("<option")
@@ -121,13 +121,17 @@ describe("app/session dialog single source", () => {
     expect(configHost).not.toContain("<AgentModelsPanel />\n            </div>\n          </div>")
   })
 
-  test("network settings tab is a first-class config section and writes only network.proxy", () => {
+  test("network settings tab is a first-class config section and writes only scoped network.proxy", () => {
     expect(dialogStore).toContain('| "network"')
     expect(dialogStore).toContain('{ id: "network", labelKey: "network.title" }')
     expect(configHost).toContain('network: "config-network"')
     expect(configHost).toContain('case "network":')
     expect(configHost).toContain("<NetworkPanel />")
     expect(networkPanel).toContain("patchConfig({ network: { proxy: nextProxy } })")
+    expect(networkPanel).toContain("llmProvider: llmProvider()")
+    expect(networkPanel).toContain("webResearch: webResearch()")
+    expect(networkPanel).toContain("username: proxyUsername")
+    expect(networkPanel).toContain("password: proxyPassword")
     expect(networkPanel).not.toContain('apiJson("config")')
     expect(networkPanel).not.toContain("updateConfig(")
   })

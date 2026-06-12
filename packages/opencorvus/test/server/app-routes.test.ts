@@ -37,7 +37,9 @@ describe("app routes", () => {
     const response = spec.paths?.["/task/{taskID}/operator-model-context"]?.get?.responses?.[409]
     const schema = response?.content?.["application/json"]?.schema
     const schemas = schema?.anyOf ?? (schema ? [schema] : [])
-    const names = schemas.map((schema: { properties?: { name?: { const?: string } } }) => schema.properties?.name?.const)
+    const names = schemas.map(
+      (schema: { properties?: { name?: { const?: string } } }) => schema.properties?.name?.const,
+    )
 
     expect(response?.description).toBe("Conflict")
     expect(names).toContain("ReplyTargetEnvelopeMissingError")

@@ -15,27 +15,27 @@ The browser preview flashes every few seconds and renders all viewport frames in
 
 ## Codebase Evidence
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Overlay component | `packages/overlay/src/components/BrowserPreviewPanel.tsx` owns `setInterval`, `visibleViewportIDs`, `frameToken`, tab rows, close buttons, and iframe stack. | Remove active polling from the live UI and key rendered frames by stable viewport IDs so ordinary target refreshes do not remount iframes. |
-| Overlay service | `packages/overlay/src/services/browser-preview.ts` is the only browser-preview client and uses HostTransport-backed `apiJson`. | Keep service unchanged. |
-| Backend routes | `packages/opencorvus/src/server/routes/browser-preview.ts` exposes task-scoped GET/PUT/POST routes. | Keep backend as single source; this fix does not add a parallel local source. |
-| CSS surface | `packages/overlay/src/styles/surfaces/inspector.css` owns `.browser-preview-viewport-layout`, `.browser-preview-frame-stack`, `.browser-preview-frame-shell`, and tab row layout. | Change the frame surface from a centered vertical stack to a bounded viewport grid. Move close controls into each frame header. |
-| Regression tests | `packages/overlay/test/browser-preview-panel.test.ts` asserts component/service/CSS contracts by source. | Update assertions to cover no polling, bounded grid layout, and frame-local close controls. |
+| Area              | Evidence                                                                                                                                                                          | Decision                                                                                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Overlay component | `packages/overlay/src/components/BrowserPreviewPanel.tsx` owns `setInterval`, `visibleViewportIDs`, `frameToken`, tab rows, close buttons, and iframe stack.                      | Remove active polling from the live UI and key rendered frames by stable viewport IDs so ordinary target refreshes do not remount iframes. |
+| Overlay service   | `packages/overlay/src/services/browser-preview.ts` is the only browser-preview client and uses HostTransport-backed `apiJson`.                                                    | Keep service unchanged.                                                                                                                    |
+| Backend routes    | `packages/opencorvus/src/server/routes/browser-preview.ts` exposes task-scoped GET/PUT/POST routes.                                                                               | Keep backend as single source; this fix does not add a parallel local source.                                                              |
+| CSS surface       | `packages/overlay/src/styles/surfaces/inspector.css` owns `.browser-preview-viewport-layout`, `.browser-preview-frame-stack`, `.browser-preview-frame-shell`, and tab row layout. | Change the frame surface from a centered vertical stack to a bounded viewport grid. Move close controls into each frame header.            |
+| Regression tests  | `packages/overlay/test/browser-preview-panel.test.ts` asserts component/service/CSS contracts by source.                                                                          | Update assertions to cover no polling, bounded grid layout, and frame-local close controls.                                                |
 
 ## Call Point Sweep
 
-| Symbol / Selector | Call points | Action |
-| --- | --- | --- |
-| `BrowserPreviewPanel` | `packages/overlay/src/main.tsx`, `packages/overlay/test/acceptance-panel-mount.test.ts`, `packages/overlay/test/browser-preview-panel.test.ts` | Keep mount and onReady behavior. |
-| `loadTaskBrowserPreviewTarget` | `BrowserPreviewPanel.tsx`, `browser-preview-service.test.ts` | Keep GET source; remove only timer-driven reloads. |
-| `saveTaskBrowserPreviewTarget` | `BrowserPreviewPanel.tsx`, `browser-preview-service.test.ts` | Keep save-triggered refresh. |
-| `captureTaskBrowserPreviewEvidence` | `BrowserPreviewPanel.tsx`, `browser-preview-service.test.ts` | Keep evidence path. |
-| `visibleViewportIDs` | `BrowserPreviewPanel.tsx`, `browser-preview-panel.test.ts` | Keep explicit visibility state. |
-| `viewportByID` | `BrowserPreviewPanel.tsx`, `browser-preview-panel.test.ts` | Add as the stable lookup backing ID-keyed frame rendering. |
-| `browser-preview-viewport-tab-row` | `BrowserPreviewPanel.tsx`, `inspector.css`, `browser-preview-panel.test.ts` | Replace row close button with visibility checkbox in the rail. |
-| `browser-preview-frame-stack` | `BrowserPreviewPanel.tsx`, `inspector.css`, `browser-preview-panel.test.ts` | Replace stacked centering with a responsive viewport grid class. |
-| `data-frame-token` / `frameToken` | `BrowserPreviewPanel.tsx`, `browser-preview-panel.test.ts` | Keep manual reload token and direct iframe reload support. |
+| Symbol / Selector                   | Call points                                                                                                                                    | Action                                                           |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `BrowserPreviewPanel`               | `packages/overlay/src/main.tsx`, `packages/overlay/test/acceptance-panel-mount.test.ts`, `packages/overlay/test/browser-preview-panel.test.ts` | Keep mount and onReady behavior.                                 |
+| `loadTaskBrowserPreviewTarget`      | `BrowserPreviewPanel.tsx`, `browser-preview-service.test.ts`                                                                                   | Keep GET source; remove only timer-driven reloads.               |
+| `saveTaskBrowserPreviewTarget`      | `BrowserPreviewPanel.tsx`, `browser-preview-service.test.ts`                                                                                   | Keep save-triggered refresh.                                     |
+| `captureTaskBrowserPreviewEvidence` | `BrowserPreviewPanel.tsx`, `browser-preview-service.test.ts`                                                                                   | Keep evidence path.                                              |
+| `visibleViewportIDs`                | `BrowserPreviewPanel.tsx`, `browser-preview-panel.test.ts`                                                                                     | Keep explicit visibility state.                                  |
+| `viewportByID`                      | `BrowserPreviewPanel.tsx`, `browser-preview-panel.test.ts`                                                                                     | Add as the stable lookup backing ID-keyed frame rendering.       |
+| `browser-preview-viewport-tab-row`  | `BrowserPreviewPanel.tsx`, `inspector.css`, `browser-preview-panel.test.ts`                                                                    | Replace row close button with visibility checkbox in the rail.   |
+| `browser-preview-frame-stack`       | `BrowserPreviewPanel.tsx`, `inspector.css`, `browser-preview-panel.test.ts`                                                                    | Replace stacked centering with a responsive viewport grid class. |
+| `data-frame-token` / `frameToken`   | `BrowserPreviewPanel.tsx`, `browser-preview-panel.test.ts`                                                                                     | Keep manual reload token and direct iframe reload support.       |
 
 ## Implementation
 

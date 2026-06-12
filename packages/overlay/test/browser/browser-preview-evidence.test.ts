@@ -27,12 +27,7 @@ function eventStream() {
   })
 }
 
-async function waitForPageState(
-  page: any,
-  predicate: () => boolean,
-  label: string,
-  diagnostics?: () => unknown,
-) {
+async function waitForPageState(page: any, predicate: () => boolean, label: string, diagnostics?: () => unknown) {
   for (let i = 0; i < 100; i += 1) {
     if (await page.evaluate(predicate)) return
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -115,7 +110,8 @@ test(
     let serverOrigin = ""
     const previewTarget = () => `${serverOrigin}/preview-target`
     const alternatePreviewTarget = () => `${serverOrigin}/preview-target-alt`
-    const selectedPreviewTarget = () => (selectedTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget())
+    const selectedPreviewTarget = () =>
+      selectedTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget()
     const viewports = [
       { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1440, height: 900 },
       { id: "tablet", labelKey: "browser_preview.viewport.tablet", width: 834, height: 1112 },
@@ -147,13 +143,16 @@ test(
       const url = new URL(req.url)
       const path = route(url)
       requestLog.push(`${req.method} ${url.pathname}${url.search}`)
-      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
-      if (path === "/preview-target") return new Response("<main>Preview target is live</main>", {
-        headers: { "content-type": "text/html; charset=utf-8" },
-      })
-      if (path === "/preview-target-alt") return new Response("<main>Alternate preview target is live</main>", {
-        headers: { "content-type": "text/html; charset=utf-8" },
-      })
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/preview-target")
+        return new Response("<main>Preview target is live</main>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        })
+      if (path === "/preview-target-alt")
+        return new Response("<main>Alternate preview target is live</main>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        })
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
@@ -204,8 +203,13 @@ test(
         })
       }
       if (path === `/task/${taskID}/transcript`) return send([])
-      if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace`, enabled: true })
-      if (path === "/task/events" || path === `/task/${taskID}/events` || path === `/task/${taskID}/conversation/events`) {
+      if (path === `/task/${taskID}/trace`)
+        return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace`, enabled: true })
+      if (
+        path === "/task/events" ||
+        path === `/task/${taskID}/events` ||
+        path === `/task/${taskID}/conversation/events`
+      ) {
         return eventStream()
       }
       if (path === `/task/${taskID}/browser-preview`) {
@@ -469,7 +473,11 @@ test(
       await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await waitForPageText(page, alternatePreviewTarget(), "alternate preview target text")
-      for (let i = 0; i < 100 && !liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID)); i += 1) {
+      for (
+        let i = 0;
+        i < 100 && !liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID));
+        i += 1
+      ) {
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
       assert.ok(
@@ -524,10 +532,7 @@ test(
         liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID)),
         "live snapshot should reload after selecting an alternate target",
       )
-      assert.deepEqual(
-        liveInputBodies.map((body) => (body as any).input.kind).slice(0, 2),
-        ["click", "wheel"],
-      )
+      assert.deepEqual(liveInputBodies.map((body) => (body as any).input.kind).slice(0, 2), ["click", "wheel"])
       assert.ok(
         requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/capture`)),
         "capture route should be called through the task-scoped backend",

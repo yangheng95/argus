@@ -14,13 +14,13 @@ The fix is not an API fallback and not a hook bypass. The internal maintenance c
 
 ## Grep Evidence
 
-| Symbol or route | Grep result | Decision |
-| --- | --- | --- |
-| `ensureGitignore` | `packages/opencorvus/src/engine/git.ts`, `packages/opencorvus/src/project/instance.ts`, `packages/opencorvus/src/task-api/index.ts`, acceptance/result commit paths, and focused tests | Keep behavior; change only the internal maintenance subject used by the seed commit. |
-| `coding/sessions` | `packages/opencorvus/src/server/routes/coding.ts`, `packages/opencorvus/test/server/coding-routes.test.ts` | No route change. The route correctly exposes the bootstrap failure; the bootstrap commit title is invalid. |
-| `chore(opencorvus)` | `packages/opencorvus/src/engine/git.ts`, `packages/opencorvus/src/worktree/index.ts`, `packages/opencorvus/test/project/worktree-merge-safely.test.ts` | Replace internal scoped maintenance titles with hook-compatible subjects. |
-| `chore:` | `packages/opencorvus/src/engine/git.ts` | Replace the internal cleanup title and stop using `--no-verify` in that cleanup commit. |
-| `--no-verify` | `packages/opencorvus/src/engine/git.ts` cleanup commit | Remove. The fix must satisfy hooks instead of bypassing them. |
+| Symbol or route     | Grep result                                                                                                                                                                            | Decision                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `ensureGitignore`   | `packages/opencorvus/src/engine/git.ts`, `packages/opencorvus/src/project/instance.ts`, `packages/opencorvus/src/task-api/index.ts`, acceptance/result commit paths, and focused tests | Keep behavior; change only the internal maintenance subject used by the seed commit.                       |
+| `coding/sessions`   | `packages/opencorvus/src/server/routes/coding.ts`, `packages/opencorvus/test/server/coding-routes.test.ts`                                                                             | No route change. The route correctly exposes the bootstrap failure; the bootstrap commit title is invalid. |
+| `chore(opencorvus)` | `packages/opencorvus/src/engine/git.ts`, `packages/opencorvus/src/worktree/index.ts`, `packages/opencorvus/test/project/worktree-merge-safely.test.ts`                                 | Replace internal scoped maintenance titles with hook-compatible subjects.                                  |
+| `chore:`            | `packages/opencorvus/src/engine/git.ts`                                                                                                                                                | Replace the internal cleanup title and stop using `--no-verify` in that cleanup commit.                    |
+| `--no-verify`       | `packages/opencorvus/src/engine/git.ts` cleanup commit                                                                                                                                 | Remove. The fix must satisfy hooks instead of bypassing them.                                              |
 
 ## Implementation
 

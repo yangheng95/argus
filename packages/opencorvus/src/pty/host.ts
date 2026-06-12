@@ -267,9 +267,7 @@ async function resolvePtyNodeRuntime() {
       nodePtyRequirePath: runtimePackageRequire().resolve("@lydell/node-pty"),
     }
   }
-  throw new Error(
-    `PTY Node runtime is missing. Expected ${packaged.nodeExecutable} beside the opencorvus executable.`,
-  )
+  throw new Error(`PTY Node runtime is missing. Expected ${packaged.nodeExecutable} beside the opencorvus executable.`)
 }
 
 function bridgeMessage(child: ChildProcess, message: unknown) {

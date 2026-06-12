@@ -142,7 +142,10 @@ test(
       assert.equal(initialPanelState.terminalPresent, false)
       assert.equal(panelState.terminalPresent, false)
       assert.ok(profileRequestDirectories.length > 0)
-      assert.equal(profileRequestDirectories.every((directory) => directory === "D:/overlay/workspace/app"), true)
+      assert.equal(
+        profileRequestDirectories.every((directory) => directory === "D:/overlay/workspace/app"),
+        true,
+      )
     } finally {
       await browser.close()
       await server.close()

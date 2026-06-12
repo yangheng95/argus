@@ -15,15 +15,15 @@ When a frontend dev server prints its local URL while a long-running shell comma
 
 ## Call Points
 
-| Symbol / file | Current behavior | Change |
-| --- | --- | --- |
-| `extractBrowserPreviewUrlsFromText` | Extracts normalized loopback URLs from a completed text blob. | Reuse unchanged for both completed and streaming output. |
-| `persistBrowserPreviewTargetFromProcessOutput` | Called from `Tool.define` after a tool result is available. | Keep as the completed-output entrypoint and share its persistence kernel with streaming output. |
-| `Tool.define` | Scans successful tool results after `execute()` returns. | Keep for non-streaming tools. It cannot be the only path for long-lived dev servers. |
-| `BashTool` stdout/stderr append | Updates tool metadata while background commands continue. | Feed each output chunk into a task-scoped browser-preview materializer before the command returns or continues. |
-| `SessionShell.shell` stdout/stderr append | Updates the shell tool part metadata until process exit. | Feed chunks into the same task-scoped materializer, deriving the task from the owning session. |
-| `persistBrowserPreviewTarget` | Emits `task.updated` after target upsert. | Keep unchanged so existing SSE refresh opens the preview from the persisted artifact. |
-| `BrowserPreviewPanel` | Loads targets from backend using `boardUpdatedAt` / manual refresh. | Keep unchanged; this fix makes backend events happen at the correct time. |
+| Symbol / file                                  | Current behavior                                                    | Change                                                                                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `extractBrowserPreviewUrlsFromText`            | Extracts normalized loopback URLs from a completed text blob.       | Reuse unchanged for both completed and streaming output.                                                        |
+| `persistBrowserPreviewTargetFromProcessOutput` | Called from `Tool.define` after a tool result is available.         | Keep as the completed-output entrypoint and share its persistence kernel with streaming output.                 |
+| `Tool.define`                                  | Scans successful tool results after `execute()` returns.            | Keep for non-streaming tools. It cannot be the only path for long-lived dev servers.                            |
+| `BashTool` stdout/stderr append                | Updates tool metadata while background commands continue.           | Feed each output chunk into a task-scoped browser-preview materializer before the command returns or continues. |
+| `SessionShell.shell` stdout/stderr append      | Updates the shell tool part metadata until process exit.            | Feed chunks into the same task-scoped materializer, deriving the task from the owning session.                  |
+| `persistBrowserPreviewTarget`                  | Emits `task.updated` after target upsert.                           | Keep unchanged so existing SSE refresh opens the preview from the persisted artifact.                           |
+| `BrowserPreviewPanel`                          | Loads targets from backend using `boardUpdatedAt` / manual refresh. | Keep unchanged; this fix makes backend events happen at the correct time.                                       |
 
 ## Design
 

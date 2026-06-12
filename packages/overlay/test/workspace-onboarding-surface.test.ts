@@ -16,7 +16,7 @@ test("workspace onboarding surface stays flat and non-semantic", () => {
 test("workspace onboarding lists discovered projects before recent directories", () => {
   expect(component).toContain("loadDiscoveredProjects")
   expect(component).toContain('t("cwd.detected_projects")')
-  expect(component).toContain('data-testid={`workspace-onboarding-detected-${index()}`}')
+  expect(component).toContain("data-testid={`workspace-onboarding-detected-${index()}`}")
   expect(component).toContain("setDirectory(project.directory)")
   expect(component.indexOf('t("cwd.detected_projects")')).toBeLessThan(
     component.indexOf('t("workspace_onboarding.recent_title")'),

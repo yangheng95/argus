@@ -9,8 +9,7 @@
   --bar: #4b8af7;
   --pink: #e91e63;
   --orange: #ff9500;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
 * {
@@ -69,8 +68,7 @@ input {
   position: absolute;
   content: "";
   inset: 3px 0 7px 0;
-  background:
-    linear-gradient(90deg, #111 0 28%, transparent 28% 40%, #111 40% 100%);
+  background: linear-gradient(90deg, #111 0 28%, transparent 28% 40%, #111 40% 100%);
   clip-path: polygon(0 0, 100% 0, 74% 100%, 45% 100%, 45% 42%, 28% 42%, 28% 100%, 0 100%);
 }
 
@@ -165,7 +163,9 @@ input {
   content: "";
   border: 2px solid #111;
   border-radius: 50%;
-  box-shadow: 0 16px 0 -2px #fff, 0 16px 0 0 #111;
+  box-shadow:
+    0 16px 0 -2px #fff,
+    0 16px 0 0 #111;
 }
 
 .cta {
@@ -415,8 +415,7 @@ main {
 .flag-kr {
   background:
     radial-gradient(circle at 50% 45%, #e54040 0 22%, transparent 23%),
-    radial-gradient(circle at 50% 58%, #2768c9 0 22%, transparent 23%),
-    #f7f8fb;
+    radial-gradient(circle at 50% 58%, #2768c9 0 22%, transparent 23%), #f7f8fb;
 }
 .flag-kr::before,
 .flag-kr::after {
@@ -691,8 +690,7 @@ main {
   border-radius: 8px;
   background:
     linear-gradient(135deg, rgba(41, 98, 255, 0.1), rgba(233, 30, 99, 0.12)),
-    repeating-linear-gradient(0deg, transparent 0 28px, rgba(41, 98, 255, 0.16) 28px 29px),
-    #fbfbfc;
+    repeating-linear-gradient(0deg, transparent 0 28px, rgba(41, 98, 255, 0.16) 28px 29px), #fbfbfc;
 }
 
 .idea-thumb span {
@@ -701,7 +699,9 @@ main {
   height: 2px;
   margin: 82px auto 0;
   background: #2962ff;
-  box-shadow: 16px -30px 0 #e91e63, -12px -54px 0 #18b6a4;
+  box-shadow:
+    16px -30px 0 #e91e63,
+    -12px -54px 0 #18b6a4;
   transform: rotate(-12deg);
 }
 

@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { __setHostTransportForTest } from "../src/services/host-transport"
-import { createTauriTransport } from "../src/services/tauri-transport"
 import type {
   HostKind,
   HostTransport,
@@ -8,8 +6,12 @@ import type {
   TransportRequest,
   TransportResponse,
 } from "../src/services/host-transport"
-import { createTask, panelRequestBody } from "../src/services/task"
-import {
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+
+const { __setHostTransportForTest } = await import("../src/services/host-transport")
+const { createTauriTransport } = await import("../src/services/tauri-transport")
+const { createTask, panelRequestBody } = await import("../src/services/task")
+const {
   applySettings,
   bootstrapOverlaySettings,
   DEFAULT_SETTINGS,
@@ -18,7 +20,7 @@ import {
   sanitizeExecutor,
   setSettingsStore,
   settingsStore,
-} from "../src/store/settings"
+} = await import("../src/store/settings")
 
 class MemoryStorage {
   private values = new Map<string, string>()
@@ -198,6 +200,26 @@ describe("executor settings", () => {
     expect(captured?.body?.kind).toBe("json")
     expect((captured?.body as any).value.executor).toBe("opencorvus")
     expect((captured?.body as any).value.kind).toBe("workflow")
+  })
+
+  test("task creation forwards an explicit OpenCorvus model", async () => {
+    let captured: TransportRequest | undefined
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        captured = req
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: { task_id: "task_model" },
+        }
+      }),
+    )
+
+    await createTask({ text: "hello", queue: false, kind: "workflow", model: "openai/gpt-5.5" })
+
+    expect(captured?.body?.kind).toBe("json")
+    expect((captured?.body as any).value.model).toBe("openai/gpt-5.5")
   })
 
   test("panel request body sanitizes explicit executor input", () => {

@@ -16,15 +16,15 @@
 
 ## Call Points
 
-| Surface | Call point | Decision |
-| --- | --- | --- |
-| Overlay sidebar | `packages/overlay/src/store/board.ts::loadTasksOnce` | Keep `global/tasks`; do not increase timeout. |
-| Task API list rows | `packages/opencorvus/src/task-api/index.ts::taskItems` | Keep `active_sessions` projection; fix query support. |
-| Task progress | `packages/opencorvus/src/task-api/index.ts::getProgress` | Keep `listActiveSessionsForTask(taskID)`; same index fix applies. |
-| Active-session query | `packages/opencorvus/src/engine/store.ts::listActiveSessionsForTask` | Keep SQL semantics; add covering indexes for existing query shape. |
-| Bootstrap schema | `packages/opencorvus/src/storage/ddl.ts` | Add indexes so existing/current DBs can apply them on startup. |
-| Engine Drizzle schema | `packages/opencorvus/src/engine/engine.sql.ts` | Add matching task-list indexes to prevent schema drift. |
-| Protocol Drizzle schema | `packages/opencorvus/src/protocol/protocol.sql.ts` | Add matching event indexes to prevent schema drift. |
+| Surface                 | Call point                                                           | Decision                                                           |
+| ----------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Overlay sidebar         | `packages/overlay/src/store/board.ts::loadTasksOnce`                 | Keep `global/tasks`; do not increase timeout.                      |
+| Task API list rows      | `packages/opencorvus/src/task-api/index.ts::taskItems`               | Keep `active_sessions` projection; fix query support.              |
+| Task progress           | `packages/opencorvus/src/task-api/index.ts::getProgress`             | Keep `listActiveSessionsForTask(taskID)`; same index fix applies.  |
+| Active-session query    | `packages/opencorvus/src/engine/store.ts::listActiveSessionsForTask` | Keep SQL semantics; add covering indexes for existing query shape. |
+| Bootstrap schema        | `packages/opencorvus/src/storage/ddl.ts`                             | Add indexes so existing/current DBs can apply them on startup.     |
+| Engine Drizzle schema   | `packages/opencorvus/src/engine/engine.sql.ts`                       | Add matching task-list indexes to prevent schema drift.            |
+| Protocol Drizzle schema | `packages/opencorvus/src/protocol/protocol.sql.ts`                   | Add matching event indexes to prevent schema drift.                |
 
 ## Fix
 

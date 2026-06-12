@@ -141,7 +141,8 @@ function mysqlColumnType(config: TableConfig, column: Column) {
   if (type === "SQLiteTextJson") return "LONGTEXT"
   if (type === "SQLiteText") {
     const indexed = indexedTextColumns(config)
-    if (column.primary || indexed.has(column.name) || column.default !== undefined || dataType !== "string") return "VARCHAR(255)"
+    if (column.primary || indexed.has(column.name) || column.default !== undefined || dataType !== "string")
+      return "VARCHAR(255)"
     return "LONGTEXT"
   }
   return column.getSQLType().toUpperCase()
@@ -235,10 +236,7 @@ export function mysqlSchemaFingerprint() {
 export function mysqlSchemaExport(): MysqlTransferSchemaExport {
   const tables = tableConfigs()
   const skippedIndexes: MysqlTransferSchemaExport["skippedIndexes"] = []
-  const statements: string[] = [
-    "SET NAMES utf8mb4;",
-    "SET FOREIGN_KEY_CHECKS = 0;",
-  ]
+  const statements: string[] = ["SET NAMES utf8mb4;", "SET FOREIGN_KEY_CHECKS = 0;"]
 
   for (const config of tables) {
     const definitions = config.columns.map((column) => `  ${renderMysqlColumn(config, column)}`)
@@ -248,7 +246,9 @@ export function mysqlSchemaExport(): MysqlTransferSchemaExport {
       inlineConstraints.push(`PRIMARY KEY (${inlinePrimary.map((column) => mysqlIdentifier(column.name)).join(", ")})`)
     }
     for (const primaryKey of config.primaryKeys) {
-      inlineConstraints.push(`PRIMARY KEY (${primaryKey.columns.map((column) => mysqlIdentifier(column.name)).join(", ")})`)
+      inlineConstraints.push(
+        `PRIMARY KEY (${primaryKey.columns.map((column) => mysqlIdentifier(column.name)).join(", ")})`,
+      )
     }
     for (const unique of config.uniqueConstraints) {
       inlineConstraints.push(`UNIQUE (${unique.columns.map((column) => mysqlIdentifier(column.name)).join(", ")})`)
@@ -298,8 +298,7 @@ export function exportMysqlTransferSnapshot(): MysqlTransferSnapshot {
     const tables = schemaShapes().map((table) => {
       const rows = Database.use((db) =>
         db.all<Record<string, unknown>>(drizzleSql.raw(`SELECT * FROM ${sqliteIdentifier(table.name)}`)),
-      )
-        .map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, encodeSnapshotCell(value)])))
+      ).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, encodeSnapshotCell(value)])))
       return { name: table.name, columns: table.columns.map((column) => column.name), rows }
     })
     return { format: MYSQL_TRANSFER_FORMAT, schemaFingerprint: mysqlSchemaFingerprint(), tables }

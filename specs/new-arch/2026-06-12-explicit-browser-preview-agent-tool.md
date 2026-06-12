@@ -8,19 +8,19 @@ The requested direction is to remove that automatic preview chain and expose an 
 
 ## Call Point Audit
 
-| Surface | Current call point | Decision |
-| --- | --- | --- |
-| Generic tool wrapper | `packages/opencorvus/src/tool/tool.ts` imports `persistBrowserPreviewTargetFromProcessOutput` and scans every tool result unless metadata opts out. | Delete automatic scan. |
-| Build/general `bash` | `packages/opencorvus/src/tool/bash.ts` streams stdout/stderr into `createBrowserPreviewProcessOutputMaterializer`. | Delete automatic stream materialization. |
-| Session shell execution | `packages/opencorvus/src/session/shell-exec.ts` streams user shell output into `createBrowserPreviewProcessOutputMaterializer`. | Delete automatic stream materialization. |
-| MCP browser result | `packages/opencorvus/src/session/loop.ts` scans `browser_*` tool output into preview targets. | Delete automatic scan. |
-| Explicit preview tool | `packages/opencorvus/src/tool/browser-preview.ts` starts a background service through `BashTool`. | Keep and make it the single automatic extraction owner for its own startup output / explicit URL. |
-| URL extraction helpers | `packages/opencorvus/src/browser-preview/extract.ts` extracts loopback URLs and persists reachable targets. | Keep extraction and explicit persistence helper; remove automatic materializer entrypoints. |
-| Orchestrator tools | `packages/opencorvus/src/orchestrator/tools.ts` custom tool set has no `browser_preview`. | Add explicit `browser_preview` wrapper. |
-| Visual QA tools | `packages/opencorvus/src/visual-qa/agent.ts` static tool surface has no `browser_preview`. | Add explicit `browser_preview`. |
-| Integrity tools | `packages/opencorvus/src/integrity/team-agent.ts` only has evidence tools plus submit. | Add explicit `browser_preview`. |
-| Agent catalog | `packages/opencorvus/src/agent/agent.ts` tool include lists do not expose `browser_preview` to orchestrator/visual-qa/integrity metadata. | Add to those three agents only. |
-| Prompt docs | `orchestrator-core.txt`, `visual-qa-core.txt`, `integrity-team-core.txt` mention preview/evidence behavior. | Update prompts to require explicit tool use, not host auto-prep. |
+| Surface                 | Current call point                                                                                                                                  | Decision                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Generic tool wrapper    | `packages/opencorvus/src/tool/tool.ts` imports `persistBrowserPreviewTargetFromProcessOutput` and scans every tool result unless metadata opts out. | Delete automatic scan.                                                                            |
+| Build/general `bash`    | `packages/opencorvus/src/tool/bash.ts` streams stdout/stderr into `createBrowserPreviewProcessOutputMaterializer`.                                  | Delete automatic stream materialization.                                                          |
+| Session shell execution | `packages/opencorvus/src/session/shell-exec.ts` streams user shell output into `createBrowserPreviewProcessOutputMaterializer`.                     | Delete automatic stream materialization.                                                          |
+| MCP browser result      | `packages/opencorvus/src/session/loop.ts` scans `browser_*` tool output into preview targets.                                                       | Delete automatic scan.                                                                            |
+| Explicit preview tool   | `packages/opencorvus/src/tool/browser-preview.ts` starts a background service through `BashTool`.                                                   | Keep and make it the single automatic extraction owner for its own startup output / explicit URL. |
+| URL extraction helpers  | `packages/opencorvus/src/browser-preview/extract.ts` extracts loopback URLs and persists reachable targets.                                         | Keep extraction and explicit persistence helper; remove automatic materializer entrypoints.       |
+| Orchestrator tools      | `packages/opencorvus/src/orchestrator/tools.ts` custom tool set has no `browser_preview`.                                                           | Add explicit `browser_preview` wrapper.                                                           |
+| Visual QA tools         | `packages/opencorvus/src/visual-qa/agent.ts` static tool surface has no `browser_preview`.                                                          | Add explicit `browser_preview`.                                                                   |
+| Integrity tools         | `packages/opencorvus/src/integrity/team-agent.ts` only has evidence tools plus submit.                                                              | Add explicit `browser_preview`.                                                                   |
+| Agent catalog           | `packages/opencorvus/src/agent/agent.ts` tool include lists do not expose `browser_preview` to orchestrator/visual-qa/integrity metadata.           | Add to those three agents only.                                                                   |
+| Prompt docs             | `orchestrator-core.txt`, `visual-qa-core.txt`, `integrity-team-core.txt` mention preview/evidence behavior.                                         | Update prompts to require explicit tool use, not host auto-prep.                                  |
 
 ## Design
 

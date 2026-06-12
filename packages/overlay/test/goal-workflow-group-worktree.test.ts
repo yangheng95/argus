@@ -38,7 +38,7 @@ describe("GoalWorkflowGroup — worktree row contract", () => {
   test("expanded body renders a capability-gated worktree button keyed to props.goal.workspaceDir", () => {
     expect(source).toContain('getHostTransport().capabilities.nativeCommands["open-path"]')
     expect(source).toContain("when={canOpenWorktreeDirectory}")
-    expect(source).toContain("<div class=\"gwg-worktree\"")
+    expect(source).toContain('<div class="gwg-worktree"')
     expect(source).toContain('data-ui="goal-worktree-open"')
     expect(source).toContain("props.goal.workspaceDir")
     expect(source).toContain("openDirectory(props.goal.workspaceDir!)")

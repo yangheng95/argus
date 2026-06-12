@@ -311,9 +311,7 @@ describe("filesystem", () => {
       setPlatform("win32")
 
       expect(Filesystem.windowsPath("\\\\?\\D:\\repo\\src\\file.ts")).toBe("D:\\repo\\src\\file.ts")
-      expect(Filesystem.windowsPath("\\\\?\\UNC\\server\\share\\src\\file.ts")).toBe(
-        "\\\\server\\share\\src\\file.ts",
-      )
+      expect(Filesystem.windowsPath("\\\\?\\UNC\\server\\share\\src\\file.ts")).toBe("\\\\server\\share\\src\\file.ts")
     })
 
     test("converts Git Bash paths", () => {

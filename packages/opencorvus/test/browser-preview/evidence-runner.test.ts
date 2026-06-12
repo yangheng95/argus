@@ -2,13 +2,19 @@ import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { PNG } from "pngjs"
-import { finalizeBrowserPreviewSidecarCapture, writeBrowserEvidenceManifest } from "../../src/browser-preview/evidence-runner"
+import {
+  finalizeBrowserPreviewSidecarCapture,
+  writeBrowserEvidenceManifest,
+} from "../../src/browser-preview/evidence-runner"
 import type { RuntimeCaptureSuccess } from "../../src/runtime/capture-contract"
 import { tmpdir } from "../fixture/fixture"
 
 describe("browser preview evidence runner contract", () => {
   test("sidecar captures full-page screenshots instead of viewport clips", async () => {
-    const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/browser-preview/evidence-runner.ts"), "utf8")
+    const source = await fs.readFile(
+      path.resolve(import.meta.dir, "../../src/browser-preview/evidence-runner.ts"),
+      "utf8",
+    )
 
     expect(source).toContain("collectPageSize(page)")
     expect(source).toContain("fullPage: true")

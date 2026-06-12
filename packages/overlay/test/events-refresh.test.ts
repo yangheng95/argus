@@ -1,6 +1,5 @@
 import { afterEach, expect, mock, test } from "bun:test"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 mock.module("../src/utils/icon-html", () => ({

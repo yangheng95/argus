@@ -188,7 +188,7 @@ export namespace ProviderTransform {
     // AI SDK v6 `file` part shape contract diverges by field:
     //   - `data`: openai-compatible adapter ALWAYS prepends `data:<mediaType>;base64,`
     //     itself when serializing to image_url. Feeding it a full data URL
-    //     here double-wraps → CZ Kimi K2.6 rejects HTTP 500 "Non-base64 digit
+    //     here double-wraps; some OpenAI-compatible gateways reject it as "Non-base64 digit
     //     found". Inline must be RAW base64 payload only.
     //   - `url`: adapter forwards verbatim. Full data URL is correct.
     const ref = (value: unknown): string | undefined =>

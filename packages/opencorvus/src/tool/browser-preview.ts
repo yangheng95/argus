@@ -28,18 +28,12 @@ export const BrowserPreviewToolParameters = z.object({
       "Optional explicit preview URL (Uniform Resource Locator) to save after the service starts, for commands that do not print a local URL.",
     )
     .optional(),
-  timeout: z
-    .number()
-    .describe("Optional startup readiness wait in milliseconds before this tool returns.")
-    .optional(),
+  timeout: z.number().describe("Optional startup readiness wait in milliseconds before this tool returns.").optional(),
   leaseTimeout: z
     .number()
     .describe("Optional background service lease in milliseconds. Defaults to the bash background lease.")
     .optional(),
-  description: z
-    .string()
-    .describe("Optional concise label for the service startup command.")
-    .optional(),
+  description: z.string().describe("Optional concise label for the service startup command.").optional(),
 })
 export type BrowserPreviewToolParameters = z.infer<typeof BrowserPreviewToolParameters>
 
@@ -53,7 +47,9 @@ export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx)
     async execute(params: BrowserPreviewToolParameters, ctx: Tool.Context) {
       const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID.trim() : ""
       if (!taskID) {
-        throw new Error("browser_preview requires a task context so the preview target can be saved as a task artifact.")
+        throw new Error(
+          "browser_preview requires a task context so the preview target can be saved as a task artifact.",
+        )
       }
 
       const startup = await bash.execute(

@@ -12,13 +12,13 @@ That path emits `message.updated` with raw `info`, so `info.channel` is absent a
 
 Full-repo grep covered the relevant event and bridge surfaces:
 
-| Surface | Finding |
-| --- | --- |
-| `packages/overlay/src/services/tree-writer.ts` | `deriveSessionStage()` requires backend-stamped `channel`; no frontend fallback should be added. |
-| `packages/opencorvus/src/orchestrator/protocol/message-bridge.ts` | Task-scoped events use `enrichProperties()` and already stamp `channel/resolvedRole`. |
-| `packages/opencorvus/src/protocol/session-mirror.ts` | Session-scoped mirror stamps only mission payloads; right-sidebar assistant sessions are passed through raw. |
-| `packages/opencorvus/src/server/routes/session.ts` | `/session/:sessionID/conversation` used the mission-only transcript enrichment path, so right-sidebar hydrate had the same missing-channel defect. |
-| `packages/opencorvus/src/executor/opencorvus.ts` | Uses `mapSessionBusEvent()` for executor event streams; keep event shape compatible while enriching message payloads. |
+| Surface                                                           | Finding                                                                                                                                            |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/services/tree-writer.ts`                    | `deriveSessionStage()` requires backend-stamped `channel`; no frontend fallback should be added.                                                   |
+| `packages/opencorvus/src/orchestrator/protocol/message-bridge.ts` | Task-scoped events use `enrichProperties()` and already stamp `channel/resolvedRole`.                                                              |
+| `packages/opencorvus/src/protocol/session-mirror.ts`              | Session-scoped mirror stamps only mission payloads; right-sidebar assistant sessions are passed through raw.                                       |
+| `packages/opencorvus/src/server/routes/session.ts`                | `/session/:sessionID/conversation` used the mission-only transcript enrichment path, so right-sidebar hydrate had the same missing-channel defect. |
+| `packages/opencorvus/src/executor/opencorvus.ts`                  | Uses `mapSessionBusEvent()` for executor event streams; keep event shape compatible while enriching message payloads.                              |
 
 ## Fix
 

@@ -16,6 +16,7 @@ function readRepo(rel: string): string {
 test("coding assistant activity selects an independent session in the shared message panel", () => {
   const html = readOverlay("src/index.html")
   const main = readOverlay("src/main.tsx")
+  const css = readOverlay("src/styles/surfaces/coding-assistant.css")
   const icons = readOverlay("src/components/Icon.tsx")
   const service = readOverlay("src/services/coding-assistant.ts")
   const chat = readOverlay("src/services/chat.ts")
@@ -31,6 +32,7 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(html).toContain('id="leftPanelMissions"')
   expect(html).toContain('id="leftPanelAssistant"')
   expect(html).toContain('id="codingAssistantSessionListPanel"')
+  expect(html).toContain('href="styles/surfaces/coding-assistant.css"')
   expect(html).not.toContain('id="centerWorkbenchAssistant"')
   expect(html).not.toContain('id="solidCodingAssistantMount"')
   expect(html).not.toContain('id="chatPluginPane"')
@@ -64,7 +66,9 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(service).toContain("export async function loadCodingAssistantSessions")
   expect(service).toContain("codingAssistantSessionsPath({ limit: 30, append })")
   expect(service).toContain('apiJson("coding/session", {')
-  expect(service).toContain("return selectCodingAssistantSession({ sessionID: sessionIDFromResponse(response), signal: options.signal })")
+  expect(service).toContain(
+    "return selectCodingAssistantSession({ sessionID: sessionIDFromResponse(response), signal: options.signal })",
+  )
   expect(service).toContain("assertNotAborted(options.signal)")
   expect(service).toContain('setBoardStore("selectedSource", source)')
   expect(service).toContain("startSSE(source)")
@@ -78,6 +82,16 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(main).not.toContain("PluginPanel")
   expect(main).not.toContain("coding-agent-tui")
   expect(main).not.toContain("TuiHostPanel")
+
+  expect(css).toContain(".coding-assistant-row")
+  expect(css).toContain("grid-template-columns: calc(16px * var(--ui-scale)) minmax(0, 1fr) auto;")
+  expect(css).toContain(".coding-assistant-row .ledger-row-title")
+  expect(css).toContain("text-overflow: ellipsis;")
+  expect(css).toContain("white-space: nowrap;")
+  expect(css).toContain(".coding-assistant-row .ledger-row-meta > span")
+  expect(css).toContain(".coding-assistant-row-actions")
+  expect(css).toContain("pointer-events: none;")
+  expect(css).toContain(".ledger-row:hover .coding-assistant-row-actions")
 
   expect(icons).toContain('| "message"')
   expect(icons).toContain("message: { component: MessageSquare }")

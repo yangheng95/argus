@@ -111,17 +111,29 @@ export type ServerConfig = {
 }
 
 /**
- * Provider HTTP proxy configuration
+ * HTTP proxy configuration for provider and web research traffic
  */
 export type NetworkProxyConfig = {
   /**
-   * Enable the configured HTTP(S) proxy for provider fetch requests
+   * Route LLM provider HTTP requests through the configured HTTP(S) proxy
    */
-  enabled?: boolean
+  llmProvider?: boolean
+  /**
+   * Route websearch and webfetch HTTP requests through the configured HTTP(S) proxy
+   */
+  webResearch?: boolean
   /**
    * HTTP(S) proxy URL, e.g. http://127.0.0.1:7890
    */
   url?: string
+  /**
+   * Proxy authentication username
+   */
+  username?: string
+  /**
+   * Proxy authentication password
+   */
+  password?: string
 }
 
 /**
@@ -837,7 +849,7 @@ export type Config = {
    */
   enabled_providers?: Array<string>
   /**
-   * Model to use in the format of provider/model, eg hexin/kimi-k2.6
+   * Model to use in the format of provider/model, eg openai/gpt-5.5
    */
   model?: string
   /**
@@ -1688,6 +1700,17 @@ export type ApiError = {
   }
 }
 
+export type TokenUsage = {
+  total: number
+  input: number
+  output: number
+  reasoning: number
+  cache: {
+    read: number
+    write: number
+  }
+}
+
 export type AssistantMessage = {
   id: string
   sessionID: string
@@ -1720,16 +1743,7 @@ export type AssistantMessage = {
   }
   summary?: boolean
   cost: number
-  tokens: {
-    total?: number
-    input: number
-    output: number
-    reasoning: number
-    cache: {
-      read: number
-      write: number
-    }
-  }
+  tokens: TokenUsage
   structured?: unknown
   variant?: string
   finish?: string
@@ -1925,16 +1939,7 @@ export type StepFinishPart = {
   reason: string
   snapshot?: string
   cost: number
-  tokens: {
-    total?: number
-    input: number
-    output: number
-    reasoning: number
-    cache: {
-      read: number
-      write: number
-    }
-  }
+  tokens: TokenUsage
 }
 
 export type SnapshotPart = {
@@ -2344,6 +2349,32 @@ export type FormatterStatus = {
   enabled: boolean
 }
 
+export type EventInstallationUpdated = {
+  type: "installation.updated"
+  properties: {
+    version: string
+  }
+}
+
+export type EventInstallationUpdateAvailable = {
+  type: "installation.update-available"
+  properties: {
+    version: string
+  }
+}
+
+export type EventProjectUpdated = {
+  type: "project.updated"
+  properties: Project
+}
+
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
+  }
+}
+
 export type EventServerConnected = {
   type: "server.connected"
   properties: {
@@ -2355,6 +2386,170 @@ export type EventGlobalDisposed = {
   type: "global.disposed"
   properties: {
     [key: string]: unknown
+  }
+}
+
+export type EventLspClientDiagnostics = {
+  type: "lsp.client.diagnostics"
+  properties: {
+    serverID: string
+    path: string
+  }
+}
+
+export type EventLspUpdated = {
+  type: "lsp.updated"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventTodoUpdated = {
+  type: "todo.updated"
+  properties: {
+    sessionID: string
+    todos: Array<Todo>
+  }
+}
+
+export type EventMessageUpdated = {
+  type: "message.updated"
+  properties: {
+    info: Message
+  }
+}
+
+export type EventMessageRemoved = {
+  type: "message.removed"
+  properties: {
+    sessionID: string
+    messageID: string
+  }
+}
+
+export type EventMessagePartUpdated = {
+  type: "message.part.updated"
+  properties: {
+    part: Part
+  }
+}
+
+export type EventMessagePartDelta = {
+  type: "message.part.delta"
+  properties: {
+    sessionID: string
+    messageID: string
+    partID: string
+    field: string
+    delta: string
+  }
+}
+
+export type EventMessagePartRemoved = {
+  type: "message.part.removed"
+  properties: {
+    sessionID: string
+    messageID: string
+    partID: string
+  }
+}
+
+export type EventSessionError = {
+  type: "session.error"
+  properties: {
+    sessionID?: string
+    error?:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | StructuredOutputPayloadError
+      | TerminalToolMissingError
+      | SnapshotIntegrityError
+      | SnapshotEmptyTreeError
+      | ContextOverflowError
+      | PromptBudgetOverflowError
+      | ToolSchemaBudgetError
+      | ApiError
+  }
+}
+
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
+  properties: {
+    mcpName: string
+    url: string
+  }
+}
+
+export type EventMcpAuthRequired = {
+  type: "mcp.auth.required"
+  properties: {
+    name: string
+    message: string
+    reason: "needs_auth" | "needs_client_registration"
+  }
+}
+
+export type EventMcpPromptsChanged = {
+  type: "mcp.prompts.changed"
+  properties: {
+    server?: string
+  }
+}
+
+export type EventMcpResourcesChanged = {
+  type: "mcp.resources.changed"
+  properties: {
+    server?: string
+  }
+}
+
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+  }
+}
+
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
+}
+
+export type EventPermissionReplied = {
+  type: "permission.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+    autoReply: boolean
+  }
+}
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
   }
 }
 
@@ -2909,196 +3104,6 @@ export type EventIntegrityReviewCompleted = {
   }
 }
 
-export type EventInstallationUpdated = {
-  type: "installation.updated"
-  properties: {
-    version: string
-  }
-}
-
-export type EventInstallationUpdateAvailable = {
-  type: "installation.update-available"
-  properties: {
-    version: string
-  }
-}
-
-export type EventProjectUpdated = {
-  type: "project.updated"
-  properties: Project
-}
-
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
-export type EventLspClientDiagnostics = {
-  type: "lsp.client.diagnostics"
-  properties: {
-    serverID: string
-    path: string
-  }
-}
-
-export type EventLspUpdated = {
-  type: "lsp.updated"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventTodoUpdated = {
-  type: "todo.updated"
-  properties: {
-    sessionID: string
-    todos: Array<Todo>
-  }
-}
-
-export type EventMessageUpdated = {
-  type: "message.updated"
-  properties: {
-    info: Message
-  }
-}
-
-export type EventMessageRemoved = {
-  type: "message.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-  }
-}
-
-export type EventMessagePartUpdated = {
-  type: "message.part.updated"
-  properties: {
-    part: Part
-  }
-}
-
-export type EventMessagePartDelta = {
-  type: "message.part.delta"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-    field: string
-    delta: string
-  }
-}
-
-export type EventMessagePartRemoved = {
-  type: "message.part.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-  }
-}
-
-export type EventSessionError = {
-  type: "session.error"
-  properties: {
-    sessionID?: string
-    error?:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputError
-      | StructuredOutputPayloadError
-      | TerminalToolMissingError
-      | SnapshotIntegrityError
-      | SnapshotEmptyTreeError
-      | ContextOverflowError
-      | PromptBudgetOverflowError
-      | ToolSchemaBudgetError
-      | ApiError
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
-  }
-}
-
-export type EventMcpAuthRequired = {
-  type: "mcp.auth.required"
-  properties: {
-    name: string
-    message: string
-    reason: "needs_auth" | "needs_client_registration"
-  }
-}
-
-export type EventMcpPromptsChanged = {
-  type: "mcp.prompts.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventMcpResourcesChanged = {
-  type: "mcp.resources.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-    autoReply: boolean
-  }
-}
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
 export type EventTaskQueueCompleted = {
   type: "task-queue.completed"
   properties: {
@@ -3338,8 +3343,31 @@ export type EventPtyDeleted = {
 }
 
 export type Event =
+  | EventInstallationUpdated
+  | EventInstallationUpdateAvailable
+  | EventProjectUpdated
+  | EventServerInstanceDisposed
   | EventServerConnected
   | EventGlobalDisposed
+  | EventLspClientDiagnostics
+  | EventLspUpdated
+  | EventTodoUpdated
+  | EventMessageUpdated
+  | EventMessageRemoved
+  | EventMessagePartUpdated
+  | EventMessagePartDelta
+  | EventMessagePartRemoved
+  | EventSessionError
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
+  | EventMcpAuthRequired
+  | EventMcpPromptsChanged
+  | EventMcpResourcesChanged
+  | EventCommandExecuted
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventSessionStatus
+  | EventSessionIdle
   | EventTaskCreated
   | EventTaskUpdated
   | EventTaskCompleted
@@ -3376,29 +3404,6 @@ export type Event =
   | EventReviewStreamChunk
   | EventAcceptanceEvidenceUpdated
   | EventIntegrityReviewCompleted
-  | EventInstallationUpdated
-  | EventInstallationUpdateAvailable
-  | EventProjectUpdated
-  | EventServerInstanceDisposed
-  | EventLspClientDiagnostics
-  | EventLspUpdated
-  | EventTodoUpdated
-  | EventMessageUpdated
-  | EventMessageRemoved
-  | EventMessagePartUpdated
-  | EventMessagePartDelta
-  | EventMessagePartRemoved
-  | EventSessionError
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
-  | EventMcpAuthRequired
-  | EventMcpPromptsChanged
-  | EventMcpResourcesChanged
-  | EventCommandExecuted
-  | EventPermissionAsked
-  | EventPermissionReplied
-  | EventSessionStatus
-  | EventSessionIdle
   | EventTaskQueueCompleted
   | EventQuestionAsked
   | EventQuestionReplied
@@ -3953,6 +3958,7 @@ export type ChannelMessageData = {
     request_id?: string
     source?: string
     executor?: "opencorvus" | "codex" | "claude-code"
+    model?: string
     allow_create?: boolean
     allow_session_mutation?: boolean
     bind?: boolean
@@ -7000,6 +7006,7 @@ export type PanelMessageData = {
     taskID?: string
     sessionID?: string
     executor?: "opencorvus" | "codex" | "claude-code"
+    model?: string
     channel?: string
     thread?: string
     user_id?: string
@@ -7085,6 +7092,7 @@ export type PanelMessageStreamData = {
     taskID?: string
     sessionID?: string
     executor?: "opencorvus" | "codex" | "claude-code"
+    model?: string
     channel?: string
     thread?: string
     user_id?: string
@@ -7721,6 +7729,7 @@ export type GatewayControlMessageData = {
     taskID?: string
     sessionID?: string
     executor?: "opencorvus" | "codex" | "claude-code"
+    model?: string
     channel?: string
     thread?: string
     user_id?: string
@@ -7808,6 +7817,7 @@ export type GatewayControlActionData = {
         request: string
         request_id?: string
         executor?: "opencorvus" | "codex" | "claude-code"
+        model?: string
         queue?: boolean
         checks?: {
           build?: Array<string> | false
@@ -8142,6 +8152,7 @@ export type GatewayChannelMessageData = {
     request_id?: string
     source?: string
     executor?: "opencorvus" | "codex" | "claude-code"
+    model?: string
     allow_create?: boolean
     allow_session_mutation?: boolean
     bind?: boolean
@@ -8871,6 +8882,7 @@ export type TaskCreateData = {
     requestID?: string
     source?: string
     executor?: "opencorvus" | "codex" | "claude-code"
+    model?: string
     title?: string
     request: string
     attachments?: Array<{

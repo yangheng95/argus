@@ -181,7 +181,9 @@ function MissionContent(props: MissionProps) {
       const bySession = new Map(current.records.map((mission) => [mission.sessionID, mission]))
       for (const mission of nextPage.records) bySession.set(mission.sessionID, mission)
       missionRecordsCtl.mutate({
-        records: [...bySession.values()].sort((a, b) => b.updated - a.updated || b.sessionID.localeCompare(a.sessionID)),
+        records: [...bySession.values()].sort(
+          (a, b) => b.updated - a.updated || b.sessionID.localeCompare(a.sessionID),
+        ),
         hasMore: nextPage.hasMore,
         cursor: nextPage.cursor,
       })

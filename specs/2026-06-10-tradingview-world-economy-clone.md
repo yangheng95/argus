@@ -11,15 +11,15 @@ Evidence collected:
 
 Reference regions:
 
-| Region | Desktop evidence | Mobile evidence | Implementation owner |
-| --- | --- | --- | --- |
-| Header | 64px tall white header, left logo, search pill, nav links, language/account icons, blue-purple CTA | 64px compact header, menu icon, mark logo, search icon, CTA | `examples/tradingview-world-economy/index.html`, `examples/tradingview-world-economy/src/styles.css` |
-| Breadcrumb/title | `Markets / Economy`, centered `Economy`, large `Overview` with chevron | Same hierarchy, smaller spacing | `examples/tradingview-world-economy/index.html`, `examples/tradingview-world-economy/src/styles.css` |
-| Economic trends map | Left card, rounded 16px, `Inflation map`, orange world choropleth, segmented legend | Full-width card with same title/map/legend | `src/app.js`, `src/economy-data.js`, `src/styles.css` |
-| GDP table | Right card, 6 countries, circular flag marks, three-column desktop table | Full-width card, GDP growth and nominal GDP stacked right | `src/app.js`, `src/economy-data.js` |
-| Indicator cards | Three equal cards: unemployment bars, interest step line, trade balance negative bars | Stacked cards | `src/app.js`, `src/economy-data.js` |
-| Countries chips | `Countries` heading and rounded gray pills | Flowing chips below trends | `index.html`, `src/economy-data.js` |
-| Lower content | Ideas/news/calendar/FAQ continue page depth | Same content stacked | `index.html`, `src/styles.css` |
+| Region              | Desktop evidence                                                                                   | Mobile evidence                                             | Implementation owner                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Header              | 64px tall white header, left logo, search pill, nav links, language/account icons, blue-purple CTA | 64px compact header, menu icon, mark logo, search icon, CTA | `examples/tradingview-world-economy/index.html`, `examples/tradingview-world-economy/src/styles.css` |
+| Breadcrumb/title    | `Markets / Economy`, centered `Economy`, large `Overview` with chevron                             | Same hierarchy, smaller spacing                             | `examples/tradingview-world-economy/index.html`, `examples/tradingview-world-economy/src/styles.css` |
+| Economic trends map | Left card, rounded 16px, `Inflation map`, orange world choropleth, segmented legend                | Full-width card with same title/map/legend                  | `src/app.js`, `src/economy-data.js`, `src/styles.css`                                                |
+| GDP table           | Right card, 6 countries, circular flag marks, three-column desktop table                           | Full-width card, GDP growth and nominal GDP stacked right   | `src/app.js`, `src/economy-data.js`                                                                  |
+| Indicator cards     | Three equal cards: unemployment bars, interest step line, trade balance negative bars              | Stacked cards                                               | `src/app.js`, `src/economy-data.js`                                                                  |
+| Countries chips     | `Countries` heading and rounded gray pills                                                         | Flowing chips below trends                                  | `index.html`, `src/economy-data.js`                                                                  |
+| Lower content       | Ideas/news/calendar/FAQ continue page depth                                                        | Same content stacked                                        | `index.html`, `src/styles.css`                                                                       |
 
 Call-point and naming grep:
 

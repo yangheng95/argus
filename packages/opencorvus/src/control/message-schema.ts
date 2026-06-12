@@ -1,5 +1,6 @@
 import z from "zod"
 import { ChannelSurface } from "@/channel/catalog"
+import { isModelReference } from "@/provider/model-ref"
 
 export const ControlLocalAction = z.discriminatedUnion("type", [
   z.object({
@@ -42,6 +43,12 @@ export const ControlMessageInput = z.object({
   taskID: z.string().optional(),
   sessionID: z.string().optional(),
   executor: z.enum(["opencorvus", "codex", "claude-code"]).optional(),
+  model: z
+    .string()
+    .refine(isModelReference, {
+      message: 'Model must be in the format "provider/model".',
+    })
+    .optional(),
   channel: z.string().optional(),
   thread: z.string().optional(),
   user_id: z.string().optional(),

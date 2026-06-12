@@ -8,16 +8,16 @@ Assistant sessions can start frontend development servers with `bash`, and exist
 
 ## Grep Evidence
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/tool/bash.ts` | `BashTool` supports `background: true` and returns startup output / process metadata. | Reuse it for process lifecycle and permission parsing, without automatic preview target side effects. |
-| `packages/opencorvus/src/browser-preview/extract.ts` | `extractBrowserPreviewUrlsFromText` and `persistBrowserPreviewUrls` normalize/probe/persist task preview URLs. | Keep as the explicit `browser_preview` tool's persistence kernel. |
-| `packages/opencorvus/src/browser-preview/persist.ts` | `persistBrowserPreviewTarget` emits `task.updated`. | Reuse for explicit URL inputs so overlay refresh remains event-driven. |
-| `packages/opencorvus/src/browser-preview/target.ts` | `resolveBrowserPreviewTarget` reads only task artifacts. | Keep unchanged; no package metadata or overlay override source. |
-| `packages/opencorvus/src/server/routes/browser-preview.ts` | Task routes read/select/capture/live-snapshot persisted targets. | No route change needed. |
-| `packages/overlay/src/components/BrowserPreviewPanel.tsx` | `onReady` fires when a ready target resolves. | Existing overlay behavior opens the browser preview when the artifact appears. |
-| `packages/overlay/src/main.tsx` | `onReady={() => openRightActivity("browser")}`. | No frontend state hook needed. |
-| `packages/opencorvus/src/tool/registry.ts` | Tool list registers assistant tools. | Add the new tool there. |
+| Surface                                                    | Evidence                                                                                                       | Decision                                                                                              |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/tool/bash.ts`                     | `BashTool` supports `background: true` and returns startup output / process metadata.                          | Reuse it for process lifecycle and permission parsing, without automatic preview target side effects. |
+| `packages/opencorvus/src/browser-preview/extract.ts`       | `extractBrowserPreviewUrlsFromText` and `persistBrowserPreviewUrls` normalize/probe/persist task preview URLs. | Keep as the explicit `browser_preview` tool's persistence kernel.                                     |
+| `packages/opencorvus/src/browser-preview/persist.ts`       | `persistBrowserPreviewTarget` emits `task.updated`.                                                            | Reuse for explicit URL inputs so overlay refresh remains event-driven.                                |
+| `packages/opencorvus/src/browser-preview/target.ts`        | `resolveBrowserPreviewTarget` reads only task artifacts.                                                       | Keep unchanged; no package metadata or overlay override source.                                       |
+| `packages/opencorvus/src/server/routes/browser-preview.ts` | Task routes read/select/capture/live-snapshot persisted targets.                                               | No route change needed.                                                                               |
+| `packages/overlay/src/components/BrowserPreviewPanel.tsx`  | `onReady` fires when a ready target resolves.                                                                  | Existing overlay behavior opens the browser preview when the artifact appears.                        |
+| `packages/overlay/src/main.tsx`                            | `onReady={() => openRightActivity("browser")}`.                                                                | No frontend state hook needed.                                                                        |
+| `packages/opencorvus/src/tool/registry.ts`                 | Tool list registers assistant tools.                                                                           | Add the new tool there.                                                                               |
 
 ## Design
 

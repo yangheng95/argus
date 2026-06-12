@@ -1,4 +1,6 @@
 import { abortAfterAny } from "../util/abort"
+import { Config } from "../config/config"
+import { proxiedFetchInit, resolveNetworkProxy } from "../util/network-proxy"
 
 const EXA_MCP_URL = "https://mcp.exa.ai/mcp"
 
@@ -42,18 +44,25 @@ export async function exaMcpCall(opts: {
     }
     const exaKey = process.env.EXA_API_KEY
     if (exaKey) headers["x-api-key"] = exaKey
+    const proxyUrl = resolveNetworkProxy(await Config.get(), "webResearch")
 
-    const response = await fetch(EXA_MCP_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: { name: opts.name, arguments: opts.arguments },
-      }),
-      signal,
-    })
+    const response = await fetch(
+      EXA_MCP_URL,
+      proxiedFetchInit(
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: { name: opts.name, arguments: opts.arguments },
+          }),
+          signal,
+        },
+        proxyUrl,
+      ),
+    )
 
     clearTimeout()
 

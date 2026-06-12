@@ -893,6 +893,7 @@ export class Channel extends HeyApiClient {
       request_id?: string
       source?: string
       executor?: "opencorvus" | "codex" | "claude-code"
+      model?: string
       allow_create?: boolean
       allow_session_mutation?: boolean
       bind?: boolean
@@ -923,6 +924,7 @@ export class Channel extends HeyApiClient {
             { in: "body", key: "request_id" },
             { in: "body", key: "source" },
             { in: "body", key: "executor" },
+            { in: "body", key: "model" },
             { in: "body", key: "allow_create" },
             { in: "body", key: "allow_session_mutation" },
             { in: "body", key: "bind" },
@@ -3629,6 +3631,7 @@ export class Message extends HeyApiClient {
       taskID?: string
       sessionID?: string
       executor?: "opencorvus" | "codex" | "claude-code"
+      model?: string
       channel?: string
       thread?: string
       user_id?: string
@@ -3657,6 +3660,7 @@ export class Message extends HeyApiClient {
             { in: "body", key: "taskID" },
             { in: "body", key: "sessionID" },
             { in: "body", key: "executor" },
+            { in: "body", key: "model" },
             { in: "body", key: "channel" },
             { in: "body", key: "thread" },
             { in: "body", key: "user_id" },
@@ -3893,6 +3897,7 @@ export class Panel extends HeyApiClient {
       taskID?: string
       sessionID?: string
       executor?: "opencorvus" | "codex" | "claude-code"
+      model?: string
       channel?: string
       thread?: string
       user_id?: string
@@ -3921,6 +3926,7 @@ export class Panel extends HeyApiClient {
             { in: "body", key: "taskID" },
             { in: "body", key: "sessionID" },
             { in: "body", key: "executor" },
+            { in: "body", key: "model" },
             { in: "body", key: "channel" },
             { in: "body", key: "thread" },
             { in: "body", key: "user_id" },
@@ -4328,6 +4334,7 @@ export class Control2 extends HeyApiClient {
       taskID?: string
       sessionID?: string
       executor?: "opencorvus" | "codex" | "claude-code"
+      model?: string
       channel?: string
       thread?: string
       user_id?: string
@@ -4356,6 +4363,7 @@ export class Control2 extends HeyApiClient {
             { in: "body", key: "taskID" },
             { in: "body", key: "sessionID" },
             { in: "body", key: "executor" },
+            { in: "body", key: "model" },
             { in: "body", key: "channel" },
             { in: "body", key: "thread" },
             { in: "body", key: "user_id" },
@@ -4412,6 +4420,7 @@ export class Control2 extends HeyApiClient {
             request: string
             request_id?: string
             executor?: "opencorvus" | "codex" | "claude-code"
+            model?: string
             queue?: boolean
             checks?: {
               build?: Array<string> | false
@@ -4756,6 +4765,7 @@ export class Channel2 extends HeyApiClient {
       request_id?: string
       source?: string
       executor?: "opencorvus" | "codex" | "claude-code"
+      model?: string
       allow_create?: boolean
       allow_session_mutation?: boolean
       bind?: boolean
@@ -4805,6 +4815,7 @@ export class Channel2 extends HeyApiClient {
             { in: "body", key: "request_id" },
             { in: "body", key: "source" },
             { in: "body", key: "executor" },
+            { in: "body", key: "model" },
             { in: "body", key: "allow_create" },
             { in: "body", key: "allow_session_mutation" },
             { in: "body", key: "bind" },
@@ -5768,6 +5779,7 @@ export class Task extends HeyApiClient {
       requestID?: string
       source?: string
       executor?: "opencorvus" | "codex" | "claude-code"
+      model?: string
       title?: string
       request: string
       attachments?: Array<{
@@ -6236,6 +6248,7 @@ export class Task extends HeyApiClient {
             { in: "body", key: "requestID" },
             { in: "body", key: "source" },
             { in: "body", key: "executor" },
+            { in: "body", key: "model" },
             { in: "body", key: "title" },
             { in: "body", key: "request" },
             { in: "body", key: "attachments" },

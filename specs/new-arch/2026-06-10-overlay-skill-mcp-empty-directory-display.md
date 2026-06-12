@@ -10,20 +10,20 @@ Follow-up investigation found a second path: the left tool panels are separate S
 
 ## Call Points
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Installed Skill loader | `packages/overlay/src/components/settings/SkillMarketPanel.tsx` | Keep scoped loader, add explicit active-directory guard and visible warning. |
-| MCP loader | `packages/overlay/src/components/settings/SkillMarketPanel.tsx` | Keep scoped refresh, add explicit active-directory guard and visible warning. |
-| Memory loader | `packages/overlay/src/components/MemoryPanel.tsx` | Make active state, task ID, and active directory explicit reactive dependencies; do not request task memory without a directory. |
-| Left panel mounts | `packages/overlay/src/main.tsx` | Pass `activeDirectory` and panel active state into Skill, MCP, and Memory roots. |
-| Project-scope reload | `packages/overlay/src/services/config.ts` | Use `activeDirectory()` instead of `settingsStore.directory`, then sync API directory context before project-scoped requests. |
-| Workspace directory API context | `packages/overlay/src/services/workspace.ts` | Add a single `syncActiveDirectoryApiContext()` helper for panel requests. |
-| Skill market loader | `packages/overlay/src/components/settings/SkillMarketPanel.tsx` | Already checks `activeDirectory()`; leave as source pattern. |
-| API directory injection | `packages/overlay/src/services/api.ts` | No change; `/skill/installed` and `/mcp` remain project-scoped. |
-| Server middleware | `packages/opencorvus/src/server/server.ts` | No change; strict directory requirement is correct. |
-| Server routes | `packages/opencorvus/src/server/routes/app.ts`, `packages/opencorvus/src/server/routes/mcp.ts`, `packages/opencorvus/src/server/routes/skill.ts` | No change; the data depends on `Instance.directory`. |
-| Browser coverage | `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` | Restore a task and assert Skill, MCP, and Memory rows render through real panel clicks. |
-| Source contract coverage | `packages/overlay/test/project-directory-request-loop.test.ts` | Extend string checks for the new explicit directory guard. |
+| Surface                         | File                                                                                                                                             | Decision                                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Installed Skill loader          | `packages/overlay/src/components/settings/SkillMarketPanel.tsx`                                                                                  | Keep scoped loader, add explicit active-directory guard and visible warning.                                                     |
+| MCP loader                      | `packages/overlay/src/components/settings/SkillMarketPanel.tsx`                                                                                  | Keep scoped refresh, add explicit active-directory guard and visible warning.                                                    |
+| Memory loader                   | `packages/overlay/src/components/MemoryPanel.tsx`                                                                                                | Make active state, task ID, and active directory explicit reactive dependencies; do not request task memory without a directory. |
+| Left panel mounts               | `packages/overlay/src/main.tsx`                                                                                                                  | Pass `activeDirectory` and panel active state into Skill, MCP, and Memory roots.                                                 |
+| Project-scope reload            | `packages/overlay/src/services/config.ts`                                                                                                        | Use `activeDirectory()` instead of `settingsStore.directory`, then sync API directory context before project-scoped requests.    |
+| Workspace directory API context | `packages/overlay/src/services/workspace.ts`                                                                                                     | Add a single `syncActiveDirectoryApiContext()` helper for panel requests.                                                        |
+| Skill market loader             | `packages/overlay/src/components/settings/SkillMarketPanel.tsx`                                                                                  | Already checks `activeDirectory()`; leave as source pattern.                                                                     |
+| API directory injection         | `packages/overlay/src/services/api.ts`                                                                                                           | No change; `/skill/installed` and `/mcp` remain project-scoped.                                                                  |
+| Server middleware               | `packages/opencorvus/src/server/server.ts`                                                                                                       | No change; strict directory requirement is correct.                                                                              |
+| Server routes                   | `packages/opencorvus/src/server/routes/app.ts`, `packages/opencorvus/src/server/routes/mcp.ts`, `packages/opencorvus/src/server/routes/skill.ts` | No change; the data depends on `Instance.directory`.                                                                             |
+| Browser coverage                | `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts`                                                                            | Restore a task and assert Skill, MCP, and Memory rows render through real panel clicks.                                          |
+| Source contract coverage        | `packages/overlay/test/project-directory-request-loop.test.ts`                                                                                   | Extend string checks for the new explicit directory guard.                                                                       |
 
 ## Implementation
 

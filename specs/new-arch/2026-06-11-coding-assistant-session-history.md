@@ -14,15 +14,15 @@ Build session history for the right-sidebar Coding Assistant:
 
 ## Call-Site Evidence
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Coding Assistant entry | `packages/overlay/src/main.tsx` uses the left `assistant` activity and calls `selectCodingAssistantSession({ signal })`. | Keep the left activity, but mount a real session list instead of auto-selecting `limit=1`. |
-| Current assistant service | `packages/overlay/src/services/coding-assistant.ts` lists `coding/sessions?limit=1`, creates `coding/session`, then hydrates `{ kind: "session" }`. | Extend this service into the single frontend facade for list/create/select/rename/delete/stop. |
-| Message source | `packages/overlay/src/services/conversation.ts` hydrates session sources through `session/:id/conversation` and subscribes through `session/:id/events`. | Do not add `/coding/.../messages`; selected assistant sessions continue through canonical session routes. |
-| Row primitives | `packages/overlay/src/components/TaskList.tsx` owns inline rename, two-step delete/stop, and hover actions; `MissionList.tsx` already uses `LedgerList` and `.ledger-row`. | Reuse the mature ledger row grammar and shared confirm hook. Do not coerce sessions into task rows. |
-| Backend facade | `packages/opencorvus/src/server/routes/coding.ts` already creates/lists/claims right-sidebar sessions. | Extend `/coding` only where project-bound validation is needed. |
-| Session single source | `packages/opencorvus/src/session/index.ts` owns `Session.setTitle`, `Session.remove`, `Session.setArchived`, messages, and events. | Reuse session CRUD and events; no new DB table or parallel history store. |
-| Prompt queue | `packages/opencorvus/src/scheduler/task-queue-service.ts` owns async prompt queue state. | Stop/delete must cancel queued/running async prompts, not just active model streams. |
+| Area                      | Evidence                                                                                                                                                                   | Decision                                                                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Coding Assistant entry    | `packages/overlay/src/main.tsx` uses the left `assistant` activity and calls `selectCodingAssistantSession({ signal })`.                                                   | Keep the left activity, but mount a real session list instead of auto-selecting `limit=1`.                |
+| Current assistant service | `packages/overlay/src/services/coding-assistant.ts` lists `coding/sessions?limit=1`, creates `coding/session`, then hydrates `{ kind: "session" }`.                        | Extend this service into the single frontend facade for list/create/select/rename/delete/stop.            |
+| Message source            | `packages/overlay/src/services/conversation.ts` hydrates session sources through `session/:id/conversation` and subscribes through `session/:id/events`.                   | Do not add `/coding/.../messages`; selected assistant sessions continue through canonical session routes. |
+| Row primitives            | `packages/overlay/src/components/TaskList.tsx` owns inline rename, two-step delete/stop, and hover actions; `MissionList.tsx` already uses `LedgerList` and `.ledger-row`. | Reuse the mature ledger row grammar and shared confirm hook. Do not coerce sessions into task rows.       |
+| Backend facade            | `packages/opencorvus/src/server/routes/coding.ts` already creates/lists/claims right-sidebar sessions.                                                                     | Extend `/coding` only where project-bound validation is needed.                                           |
+| Session single source     | `packages/opencorvus/src/session/index.ts` owns `Session.setTitle`, `Session.remove`, `Session.setArchived`, messages, and events.                                         | Reuse session CRUD and events; no new DB table or parallel history store.                                 |
+| Prompt queue              | `packages/opencorvus/src/scheduler/task-queue-service.ts` owns async prompt queue state.                                                                                   | Stop/delete must cancel queued/running async prompts, not just active model streams.                      |
 
 ## Backend Plan
 

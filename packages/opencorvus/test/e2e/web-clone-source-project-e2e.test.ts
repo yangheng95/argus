@@ -686,7 +686,7 @@ function resolveModelRefFromProviders(providers: Awaited<ReturnType<typeof Provi
   if (input.includes("/")) {
     return input
   }
-  for (const providerID of ["hexin", "moonshotai-cn", "moonshotai", "kimik26", "glm51", "huggingface"]) {
+  for (const providerID of ["hexin", "moonshotai-cn", "moonshotai", "huggingface"]) {
     if (providers[providerID]?.models[input]) return `${providerID}/${input}`
   }
   throw new Error(`frontend-design benchmark model not found in current project: ${input}`)
@@ -694,10 +694,8 @@ function resolveModelRefFromProviders(providers: Awaited<ReturnType<typeof Provi
 
 function resolvePreferredFrontendDesignModel(providers: Awaited<ReturnType<typeof Provider.list>>): string {
   for (const [providerID, modelID] of [
-    ["glm51", "glm51"],
     ["hexin", "kimi-k2.5"],
     ["hexin", "glm-5.1"],
-    ["kimik26", "kimik26"],
     ["moonshotai-cn", "kimi-k2.5"],
     ["moonshotai", "kimi-k2.5"],
   ] as const) {

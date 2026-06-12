@@ -24,9 +24,7 @@ describe("Kobalte patched declarations", () => {
     }
     const lock = read(join(REPO_ROOT, "bun.lock"))
 
-    expect(pkg.patchedDependencies?.["@kobalte/core@0.13.11"]).toBe(
-      "patches/@kobalte%2Fcore@0.13.11.patch",
-    )
+    expect(pkg.patchedDependencies?.["@kobalte/core@0.13.11"]).toBe("patches/@kobalte%2Fcore@0.13.11.patch")
     expect(lock).toContain('"@kobalte/core@0.13.11": "patches/@kobalte%2Fcore@0.13.11.patch"')
   })
 
@@ -68,9 +66,9 @@ describe("Kobalte patched declarations", () => {
           'import { Root as DialogRoot, Content as DialogContent, Title as DialogTitle } from "@kobalte/core/dialog"',
           'import { Root as MenubarRoot, Menu as MenubarMenu, Trigger as MenubarTrigger } from "@kobalte/core/menubar"',
           "export const probe = (",
-          '  <DialogRoot open={true}>',
-          '    <DialogContent><DialogTitle>Dialog</DialogTitle></DialogContent>',
-          '    <MenubarRoot><MenubarMenu><MenubarTrigger>Menu</MenubarTrigger></MenubarMenu></MenubarRoot>',
+          "  <DialogRoot open={true}>",
+          "    <DialogContent><DialogTitle>Dialog</DialogTitle></DialogContent>",
+          "    <MenubarRoot><MenubarMenu><MenubarTrigger>Menu</MenubarTrigger></MenubarMenu></MenubarRoot>",
           "  </DialogRoot>",
           ")",
         ].join("\n"),

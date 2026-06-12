@@ -8,15 +8,15 @@ Investigate the feasibility and cost of replacing the current OpenCorvus SQLite 
 
 Repository grep on 2026-06-10 shows:
 
-| Area | Evidence | Migration meaning |
-| --- | --- | --- |
-| Driver | `packages/opencorvus/src/storage/db.ts` imports `bun:sqlite`, `drizzle-orm/bun-sqlite`, `SQLiteTransaction`, and `SQLiteBunDatabase`. | The storage runtime is synchronous and SQLite-specific at the root. |
-| Schema | 17 schema files use `drizzle-orm/sqlite-core`; 42 `sqliteTable(...)` declarations exist under `packages/opencorvus/src`. | Every table declaration must move to `drizzle-orm/mysql-core`; this is a full schema rewrite, not a config toggle. |
-| DDL | `packages/opencorvus/src/storage/ddl.ts` uses `SQLiteSyncDialect`, `getTableConfig`, generated SQLite DDL, an explicit FTS5 virtual table, duplicate cleanup by `rowid`, and a SQLite trigger using `RAISE(ABORT, ...)`. | The bootstrap DDL generator is SQLite-specific and must be replaced with a MySQL dialect or a MySQL-native schema bootstrap. |
-| Runtime API | `Database.use/transaction/Client/Path/reset/vacuum` style calls appear 379 times in `packages/opencorvus/src`, across 69 files. | Drizzle MySQL with `mysql2` is async. Current sync call sites cannot be migrated by swapping the client type. |
-| Tests | 117 test files call `resetDatabase(...)`; storage tests directly inspect SQLite PRAGMA and `sqlite_schema`. | Test infrastructure and storage assertions need a MySQL-backed reset fixture and different schema introspection. |
-| SQLite-only operations | 30 `json_extract` references, 14 `.returning(...)`, 9 `onConflictDo*` call sites, 12 `bun:sqlite` imports, PRAGMA/WAL/vacuum/checkpoint usage. | SQL compatibility work is real: JSON query syntax, upsert/returning semantics, file reset semantics, and maintenance commands must be rewritten. |
-| Product docs | English and Chinese docs describe durable state as SQLite under `~/.opencorvus/opencorvus.db`; `/global/health` exposes `paths.database`. | Product behavior and CLI/API wording must change, not only internals. |
+| Area                   | Evidence                                                                                                                                                                                                                 | Migration meaning                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Driver                 | `packages/opencorvus/src/storage/db.ts` imports `bun:sqlite`, `drizzle-orm/bun-sqlite`, `SQLiteTransaction`, and `SQLiteBunDatabase`.                                                                                    | The storage runtime is synchronous and SQLite-specific at the root.                                                                              |
+| Schema                 | 17 schema files use `drizzle-orm/sqlite-core`; 42 `sqliteTable(...)` declarations exist under `packages/opencorvus/src`.                                                                                                 | Every table declaration must move to `drizzle-orm/mysql-core`; this is a full schema rewrite, not a config toggle.                               |
+| DDL                    | `packages/opencorvus/src/storage/ddl.ts` uses `SQLiteSyncDialect`, `getTableConfig`, generated SQLite DDL, an explicit FTS5 virtual table, duplicate cleanup by `rowid`, and a SQLite trigger using `RAISE(ABORT, ...)`. | The bootstrap DDL generator is SQLite-specific and must be replaced with a MySQL dialect or a MySQL-native schema bootstrap.                     |
+| Runtime API            | `Database.use/transaction/Client/Path/reset/vacuum` style calls appear 379 times in `packages/opencorvus/src`, across 69 files.                                                                                          | Drizzle MySQL with `mysql2` is async. Current sync call sites cannot be migrated by swapping the client type.                                    |
+| Tests                  | 117 test files call `resetDatabase(...)`; storage tests directly inspect SQLite PRAGMA and `sqlite_schema`.                                                                                                              | Test infrastructure and storage assertions need a MySQL-backed reset fixture and different schema introspection.                                 |
+| SQLite-only operations | 30 `json_extract` references, 14 `.returning(...)`, 9 `onConflictDo*` call sites, 12 `bun:sqlite` imports, PRAGMA/WAL/vacuum/checkpoint usage.                                                                           | SQL compatibility work is real: JSON query syntax, upsert/returning semantics, file reset semantics, and maintenance commands must be rewritten. |
+| Product docs           | English and Chinese docs describe durable state as SQLite under `~/.opencorvus/opencorvus.db`; `/global/health` exposes `paths.database`.                                                                                | Product behavior and CLI/API wording must change, not only internals.                                                                            |
 
 Relevant existing design history:
 
@@ -75,16 +75,16 @@ The simplest viable interpretation under current project rules is **reset storag
 
 Assuming one experienced engineer already familiar with this codebase:
 
-| Workstream | Estimate |
-| --- | ---: |
-| Storage runtime and async propagation spike | 2-4 engineering days |
-| Schema rewrite and MySQL DDL bootstrap | 3-6 engineering days |
-| JSON/upsert/returning/query dialect rewrites | 4-8 engineering days |
-| FTS/memory search replacement and parity tests | 3-6 engineering days |
-| CLI/API/docs reset and health semantics | 1-3 engineering days |
-| Test fixture rebuild and regression stabilization | 4-8 engineering days |
-| Packaging/config/docs polish | 1-2 engineering days |
-| **Total** | **18-37 engineering days** |
+| Workstream                                        |                   Estimate |
+| ------------------------------------------------- | -------------------------: |
+| Storage runtime and async propagation spike       |       2-4 engineering days |
+| Schema rewrite and MySQL DDL bootstrap            |       3-6 engineering days |
+| JSON/upsert/returning/query dialect rewrites      |       4-8 engineering days |
+| FTS/memory search replacement and parity tests    |       3-6 engineering days |
+| CLI/API/docs reset and health semantics           |       1-3 engineering days |
+| Test fixture rebuild and regression stabilization |       4-8 engineering days |
+| Packaging/config/docs polish                      |       1-2 engineering days |
+| **Total**                                         | **18-37 engineering days** |
 
 The low end assumes no hidden driver/type issues and acceptable MySQL FULLTEXT behavior. The high end is more realistic if full memory search fidelity, packaged local developer setup, and broad test stabilization are required.
 

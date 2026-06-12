@@ -17,7 +17,7 @@ Same-name fields: later wins.
 ```jsonc
 {
   "$schema": "https://opencorvus.ai/config.json",
-  "model": "alibaba-cn/qwen3.5-plus",
+  "model": "openai/gpt-5.5",
 }
 ```
 

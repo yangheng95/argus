@@ -24,7 +24,7 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).not.toContain('role="menu"')
     expect(SOURCE).not.toContain('role="menuitem"')
     expect(SOURCE).not.toContain('aria-haspopup="menu"')
-    expect(SOURCE).not.toContain("document.addEventListener(\"pointerdown\"")
+    expect(SOURCE).not.toContain('document.addEventListener("pointerdown"')
   })
 
   test("keeps product Alt access keys outside handwritten menu roles", () => {

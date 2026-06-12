@@ -195,9 +195,7 @@ describe("browser preview target resolver", () => {
 
     expect(probeCount).toBe(2)
     expect(persisted.map((target) => target.url)).toEqual(["http://127.0.0.1:5173/app"])
-    expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([
-      "http://127.0.0.1:5173/app",
-    ])
+    expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual(["http://127.0.0.1:5173/app"])
   })
 
   test("persisting a preview target emits a task update event for overlay refresh", async () => {

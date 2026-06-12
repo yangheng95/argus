@@ -74,6 +74,8 @@ export interface CreateTaskOptions {
   priority?: "critical" | "high" | "normal" | "low"
   /** Optional executor override. The server defaults to the project executor. */
   executor?: "opencorvus" | "codex" | "claude-code"
+  /** Optional OpenCorvus model override for this new task. */
+  model?: string
   /** Title override. Server falls back to the request body when omitted. */
   title?: string
   signal?: AbortSignal
@@ -624,6 +626,7 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
     queue,
     metadata,
     source: "panel",
+    ...(options.model ? { model: options.model } : {}),
     ...(options.priority ? { priority: options.priority } : {}),
     ...(options.title ? { title: options.title } : {}),
     ...(budget ? { budget } : {}),

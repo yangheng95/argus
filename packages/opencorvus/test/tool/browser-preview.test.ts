@@ -72,172 +72,192 @@ async function seedTask(directory: string) {
 }
 
 describe("tool.browser_preview", () => {
-  test("is registered for assistant tool use", async () => {
-    await Instance.provide({
-      directory: path.join(__dirname, "../.."),
-      fn: async () => {
-        await expect(ToolRegistry.ids()).resolves.toContain("browser_preview")
-      },
-    })
-  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
-
-  test("starts a background service and opens preview from printed process URL", async () => {
-    const preview = await startReachablePreviewServer()
-    try {
-      await using tmp = await tmpdir({ git: true })
-      const taskID = await seedTask(tmp.path)
+  test(
+    "is registered for assistant tool use",
+    async () => {
       await Instance.provide({
-        directory: tmp.path,
+        directory: path.join(__dirname, "../.."),
         fn: async () => {
-          const restore = ProcessSupervisor.setFactoryForTest(async () => {
-            const stdout = new PassThrough()
-            queueMicrotask(() => {
-              stdout.write(`Local: ${preview.url}\n`)
+          await expect(ToolRegistry.ids()).resolves.toContain("browser_preview")
+        },
+      })
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "starts a background service and opens preview from printed process URL",
+    async () => {
+      const preview = await startReachablePreviewServer()
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const restore = ProcessSupervisor.setFactoryForTest(async () => {
+              const stdout = new PassThrough()
+              queueMicrotask(() => {
+                stdout.write(`Local: ${preview.url}\n`)
+              })
+              return {
+                pid: 9101,
+                stdin: null,
+                stdout,
+                stderr: new PassThrough(),
+                exited: new Promise<number>(() => {}),
+                terminate: async () => {},
+                dispose: async () => {},
+                unref: () => {},
+              }
             })
-            return {
-              pid: 9101,
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: "npm run dev",
+                  timeout: 20,
+                  leaseTimeout: 200,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.targetUrl).toBe(preview.url)
+              expect(result.metadata.targetStatus).toBe("ready")
+              expect(payload.target.url).toBe(preview.url)
+              expect(payload.diagnostics.join("\n")).toContain("browser_preview_target")
+              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+            } finally {
+              restore()
+            }
+          },
+        })
+      } finally {
+        await preview.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "starts a background service and opens preview from explicit URL",
+    async () => {
+      const preview = await startReachablePreviewServer()
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+              pid: 9102,
               stdin: null,
-              stdout,
+              stdout: new PassThrough(),
               stderr: new PassThrough(),
               exited: new Promise<number>(() => {}),
               terminate: async () => {},
               dispose: async () => {},
               unref: () => {},
+            }))
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: "npm run dev",
+                  url: preview.url,
+                  timeout: 20,
+                  leaseTimeout: 200,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.explicitUrlPersisted).toBe(true)
+              expect(result.metadata.targetUrl).toBe(preview.url)
+              expect(payload.explicitUrlPersisted).toBe(true)
+              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+            } finally {
+              restore()
             }
-          })
-          try {
-            const tool = await BrowserPreviewTool.init()
-            const result = await tool.execute(
+          },
+        })
+      } finally {
+        await preview.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "starts a background service and opens preview from command port",
+    async () => {
+      const preview = await startReachablePreviewServer()
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const url = new URL(preview.url)
+            const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+              pid: 9103,
+              stdin: null,
+              stdout: new PassThrough(),
+              stderr: new PassThrough(),
+              exited: new Promise<number>(() => {}),
+              terminate: async () => {},
+              dispose: async () => {},
+              unref: () => {},
+            }))
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: `npx vite --host 127.0.0.1 --port ${url.port}`,
+                  timeout: 20,
+                  leaseTimeout: 200,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.targetUrl).toBe(preview.url)
+              expect(payload.startupTargets).toEqual([{ id: result.metadata.targetID, url: preview.url }])
+              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+            } finally {
+              restore()
+            }
+          },
+        })
+      } finally {
+        await preview.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "requires a task context before starting a preview service",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const tool = await BrowserPreviewTool.init()
+          await expect(
+            tool.execute(
               {
                 command: "npm run dev",
                 timeout: 20,
                 leaseTimeout: 200,
               },
-              { ...baseCtx, extra: { taskID } },
-            )
-            const payload = JSON.parse(result.output)
-
-            expect(result.metadata.targetUrl).toBe(preview.url)
-            expect(result.metadata.targetStatus).toBe("ready")
-            expect(payload.target.url).toBe(preview.url)
-            expect(payload.diagnostics.join("\n")).toContain("browser_preview_target")
-            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
-          } finally {
-            restore()
-          }
+              baseCtx,
+            ),
+          ).rejects.toThrow("requires a task context")
         },
       })
-    } finally {
-      await preview.close()
-    }
-  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
-
-  test("starts a background service and opens preview from explicit URL", async () => {
-    const preview = await startReachablePreviewServer()
-    try {
-      await using tmp = await tmpdir({ git: true })
-      const taskID = await seedTask(tmp.path)
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const restore = ProcessSupervisor.setFactoryForTest(async () => ({
-            pid: 9102,
-            stdin: null,
-            stdout: new PassThrough(),
-            stderr: new PassThrough(),
-            exited: new Promise<number>(() => {}),
-            terminate: async () => {},
-            dispose: async () => {},
-            unref: () => {},
-          }))
-          try {
-            const tool = await BrowserPreviewTool.init()
-            const result = await tool.execute(
-              {
-                command: "npm run dev",
-                url: preview.url,
-                timeout: 20,
-                leaseTimeout: 200,
-              },
-              { ...baseCtx, extra: { taskID } },
-            )
-            const payload = JSON.parse(result.output)
-
-            expect(result.metadata.explicitUrlPersisted).toBe(true)
-            expect(result.metadata.targetUrl).toBe(preview.url)
-            expect(payload.explicitUrlPersisted).toBe(true)
-            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
-          } finally {
-            restore()
-          }
-        },
-      })
-    } finally {
-      await preview.close()
-    }
-  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
-
-  test("starts a background service and opens preview from command port", async () => {
-    const preview = await startReachablePreviewServer()
-    try {
-      await using tmp = await tmpdir({ git: true })
-      const taskID = await seedTask(tmp.path)
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const url = new URL(preview.url)
-          const restore = ProcessSupervisor.setFactoryForTest(async () => ({
-            pid: 9103,
-            stdin: null,
-            stdout: new PassThrough(),
-            stderr: new PassThrough(),
-            exited: new Promise<number>(() => {}),
-            terminate: async () => {},
-            dispose: async () => {},
-            unref: () => {},
-          }))
-          try {
-            const tool = await BrowserPreviewTool.init()
-            const result = await tool.execute(
-              {
-                command: `npx vite --host 127.0.0.1 --port ${url.port}`,
-                timeout: 20,
-                leaseTimeout: 200,
-              },
-              { ...baseCtx, extra: { taskID } },
-            )
-            const payload = JSON.parse(result.output)
-
-            expect(result.metadata.targetUrl).toBe(preview.url)
-            expect(payload.startupTargets).toEqual([{ id: result.metadata.targetID, url: preview.url }])
-            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
-          } finally {
-            restore()
-          }
-        },
-      })
-    } finally {
-      await preview.close()
-    }
-  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
-
-  test("requires a task context before starting a preview service", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const tool = await BrowserPreviewTool.init()
-        await expect(
-          tool.execute(
-            {
-              command: "npm run dev",
-              timeout: 20,
-              leaseTimeout: 200,
-            },
-            baseCtx,
-          ),
-        ).rejects.toThrow("requires a task context")
-      },
-    })
-  }, { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS })
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
 })

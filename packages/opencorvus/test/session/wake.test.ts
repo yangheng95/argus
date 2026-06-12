@@ -86,11 +86,7 @@ test("wake injects the configured default model instead of inheriting the last s
         oneShot: false,
       })
       const controls = Database.use((db) =>
-        db
-          .select()
-          .from(SessionControlRecordTable)
-          .where(eq(SessionControlRecordTable.session_id, session.id))
-          .all(),
+        db.select().from(SessionControlRecordTable).where(eq(SessionControlRecordTable.session_id, session.id)).all(),
       )
       expect(controls).toHaveLength(1)
       expect(controls[0]?.kind).toBe("wake_reason")

@@ -60,7 +60,9 @@ export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
   const autoServerRaw = read("oc_auto_server")
   const defaultServer = currentDefaultServer()
   const legacyPrefixedServer =
-    typeof window !== "undefined" && window.location ? legacyPrefixedServerUrlFromOverlayLocation(window.location) : null
+    typeof window !== "undefined" && window.location
+      ? legacyPrefixedServerUrlFromOverlayLocation(window.location)
+      : null
   const autoServer = autoServerRaw === null ? undefined : autoServerRaw !== "false"
   const storedServerIsMigratedDefault =
     autoServer !== false &&

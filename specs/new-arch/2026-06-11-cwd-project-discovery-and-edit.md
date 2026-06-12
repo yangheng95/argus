@@ -9,17 +9,17 @@ The workspace cwd control must support:
 
 ## Call points checked
 
-| Surface | Existing owner | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/server/server.ts` | project-scoped directory middleware | Keep explicit `directory` required for project routes. Do not reintroduce `process.cwd()` fallback. |
-| `packages/opencorvus/src/server/routes/global.ts` | control-plane routes | Add a control-plane discovery route because discovery does not require active `Instance` context. |
-| `packages/opencorvus/src/project/project.ts` | project identity/list/update | Add the single backend discovery helper and schema here so route code stays thin. |
-| `packages/overlay/src/services/workspace.ts` | workspace switch lifecycle and recent dirs | Add discovery service wrapper; keep `setDirectory`/`applyDirectory` as the only directory switch path. |
-| `packages/overlay/src/components/TaskDirBar.tsx` | cwd dropdown | Add editable path form and detected project rows to the existing Kobalte dropdown. |
-| `packages/overlay/src/components/WorkspaceOnboardingDialog.tsx` | no-directory onboarding | Reuse the same discovery service and existing `setDirectory` switch path. |
-| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx` | workspace menu | No direct change required; it already has browse/recent actions and should not become a second editor implementation. |
-| `packages/overlay/src/styles/surfaces/conversation.css` | cwd dropdown styling | Add styles for the cwd edit and detected rows. |
-| `packages/overlay/src/styles/surfaces/workspace-onboarding.css` | onboarding styling | Reuse existing recent item styles for detected project rows. |
+| Surface                                                         | Existing owner                             | Decision                                                                                                              |
+| --------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/server/server.ts`                      | project-scoped directory middleware        | Keep explicit `directory` required for project routes. Do not reintroduce `process.cwd()` fallback.                   |
+| `packages/opencorvus/src/server/routes/global.ts`               | control-plane routes                       | Add a control-plane discovery route because discovery does not require active `Instance` context.                     |
+| `packages/opencorvus/src/project/project.ts`                    | project identity/list/update               | Add the single backend discovery helper and schema here so route code stays thin.                                     |
+| `packages/overlay/src/services/workspace.ts`                    | workspace switch lifecycle and recent dirs | Add discovery service wrapper; keep `setDirectory`/`applyDirectory` as the only directory switch path.                |
+| `packages/overlay/src/components/TaskDirBar.tsx`                | cwd dropdown                               | Add editable path form and detected project rows to the existing Kobalte dropdown.                                    |
+| `packages/overlay/src/components/WorkspaceOnboardingDialog.tsx` | no-directory onboarding                    | Reuse the same discovery service and existing `setDirectory` switch path.                                             |
+| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx`  | workspace menu                             | No direct change required; it already has browse/recent actions and should not become a second editor implementation. |
+| `packages/overlay/src/styles/surfaces/conversation.css`         | cwd dropdown styling                       | Add styles for the cwd edit and detected rows.                                                                        |
+| `packages/overlay/src/styles/surfaces/workspace-onboarding.css` | onboarding styling                         | Reuse existing recent item styles for detected project rows.                                                          |
 
 ## Discovery semantics
 

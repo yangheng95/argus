@@ -97,8 +97,7 @@ export const ideas = [
     author: "Mr_J__fx",
     time: "22 hours ago",
     likes: "1",
-    body:
-      "China's exports surged year-on-year to a record USD 376.8 billion in May 2026, far exceeding forecasts and picking up from April.",
+    body: "China's exports surged year-on-year to a record USD 376.8 billion in May 2026, far exceeding forecasts and picking up from April.",
   },
   {
     title: "Yield Curve Inversion IHS Breakout - Recession Warning",
@@ -106,8 +105,7 @@ export const ideas = [
     author: "jonnieking",
     time: "4 hours ago",
     likes: "1",
-    body:
-      "The yield curve inversion chart appears to have broken out of an inverse head and shoulders pattern while reclaiming the 50MA.",
+    body: "The yield curve inversion chart appears to have broken out of an inverse head and shoulders pattern while reclaiming the 50MA.",
   },
   {
     title: "How Food prices are affected by OIL Price",
@@ -115,8 +113,7 @@ export const ideas = [
     author: "Realisto_FX",
     time: "Jun 5",
     likes: "1",
-    body:
-      "The chart tracks the impact of oil prices on world food prices and compares current levels with historical data.",
+    body: "The chart tracks the impact of oil prices on world food prices and compares current levels with historical data.",
   },
 ]
 
@@ -135,6 +132,9 @@ export const calendarRows = [
 // FAQ means Frequently Asked Questions.
 export const faqRows = [
   ["What is GDP?", "GDP is the market value of final goods and services produced within an economy."],
-  ["How is inflation shown?", "The map colors economies from low inflation to high inflation using the orange scale above."],
+  [
+    "How is inflation shown?",
+    "The map colors economies from low inflation to high inflation using the orange scale above.",
+  ],
   ["Why compare nominal GDP?", "Nominal GDP keeps the ranking tied to current-price economic output in USD."],
 ]

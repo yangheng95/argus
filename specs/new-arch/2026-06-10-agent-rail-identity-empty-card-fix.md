@@ -6,14 +6,14 @@ Sending one user message can render multiple top-level agent cards that contain 
 
 ## Evidence
 
-| Surface | Current behavior | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/conversation/view.ts` | `session.status` / `session.error` events can create `ConversationSessionView` rows with `messageIDs: []`. | Lifecycle events remain in `events`, but message-less sessions are not display sessions. |
-| `packages/opencorvus/src/server/routes/orchestrator.ts` | Task and session hydrate responses pass lifecycle events into `projectConversationView`. | Keep event replay; let tree-writer attach lifecycle status only after a real card exists. |
-| `packages/overlay/src/services/tree-writer.ts` | Live path already says `ensureSessionProjection` never creates display cards; only message turns create cards. | Preserve this live contract as the hydrate contract too. |
-| `packages/overlay/src/store/conversation-agents.ts` | Hydrated lifecycle-only sessions synthesize `renderedCardID: <stage>:session:<sid>`. | Do not create rail records without a display message or goal-phase target. |
-| `packages/overlay/src/components/ConversationAgentRail.tsx` | Icon/accent uses `avatarRole(record().agentName)`. | Icon/accent uses canonical `record.stage`; label can remain `agentName`. |
-| `packages/overlay/src/utils/agent-workflow-records.ts` | Merge lets live card projection overwrite hydrated backend identity. | Merge render/status fields without overwriting canonical identity from hydrated session records. |
+| Surface                                                     | Current behavior                                                                                               | Decision                                                                                         |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/conversation/view.ts`              | `session.status` / `session.error` events can create `ConversationSessionView` rows with `messageIDs: []`.     | Lifecycle events remain in `events`, but message-less sessions are not display sessions.         |
+| `packages/opencorvus/src/server/routes/orchestrator.ts`     | Task and session hydrate responses pass lifecycle events into `projectConversationView`.                       | Keep event replay; let tree-writer attach lifecycle status only after a real card exists.        |
+| `packages/overlay/src/services/tree-writer.ts`              | Live path already says `ensureSessionProjection` never creates display cards; only message turns create cards. | Preserve this live contract as the hydrate contract too.                                         |
+| `packages/overlay/src/store/conversation-agents.ts`         | Hydrated lifecycle-only sessions synthesize `renderedCardID: <stage>:session:<sid>`.                           | Do not create rail records without a display message or goal-phase target.                       |
+| `packages/overlay/src/components/ConversationAgentRail.tsx` | Icon/accent uses `avatarRole(record().agentName)`.                                                             | Icon/accent uses canonical `record.stage`; label can remain `agentName`.                         |
+| `packages/overlay/src/utils/agent-workflow-records.ts`      | Merge lets live card projection overwrite hydrated backend identity.                                           | Merge render/status fields without overwriting canonical identity from hydrated session records. |
 
 ## Call Point Grep
 

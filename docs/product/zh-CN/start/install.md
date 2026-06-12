@@ -54,7 +54,7 @@ opencorvus doctor
 
 ```jsonc
 {
-  "model": "alibaba-cn/qwen3.5-plus",
+  "model": "openai/gpt-5.5",
 }
 ```
 

@@ -845,7 +845,9 @@ export type IntegrityArtifactMissingSessionStatus = {
   error?: string
 }
 
-export function findLatestIntegrityArtifactMissingStatus(taskID: string): IntegrityArtifactMissingSessionStatus | undefined {
+export function findLatestIntegrityArtifactMissingStatus(
+  taskID: string,
+): IntegrityArtifactMissingSessionStatus | undefined {
   const row = Database.use((db) =>
     db
       .select({
@@ -895,9 +897,10 @@ export function findLatestIntegrityArtifactMissingStatus(taskID: string): Integr
 }
 
 function toIntegrityAttemptArtifactRow(row: ArtifactRow): IntegrityAttemptArtifactRow {
-  const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
-    ? (row.payload as Record<string, unknown>)
-    : {}
+  const payload =
+    row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+      ? (row.payload as Record<string, unknown>)
+      : {}
   const specSnapshotID = typeof payload.spec_snapshot_id === "string" ? payload.spec_snapshot_id : ""
   return {
     ...row,
@@ -918,7 +921,10 @@ export function findLatestAcceptanceVerdictArtifactForAcceptance(acceptanceID: s
       .select()
       .from(EngineArtifactTable)
       .where(
-        and(eq(EngineArtifactTable.acceptance_id, acceptanceID), eq(EngineArtifactTable.label, "acceptance-review-verdict")),
+        and(
+          eq(EngineArtifactTable.acceptance_id, acceptanceID),
+          eq(EngineArtifactTable.label, "acceptance-review-verdict"),
+        ),
       )
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
@@ -1557,8 +1563,7 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     activeRunID: findActiveRunForTask(row.id)?.id,
     requestID: row.request_id ?? undefined,
     parentTaskID:
-      ((row.metadata as Record<string, unknown> | null | undefined)?.parent_task_id as string | undefined) ??
-      undefined,
+      ((row.metadata as Record<string, unknown> | null | undefined)?.parent_task_id as string | undefined) ?? undefined,
     source: row.source,
     title: row.title,
     request: row.request,
