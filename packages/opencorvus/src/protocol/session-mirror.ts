@@ -4,7 +4,6 @@ import { ProtocolStore } from "@/protocol/store"
 import { Question } from "@/question"
 import { Message, Session, SessionStatus } from "@/session"
 import { sessionGoalID, sessionRole } from "@/orchestrator/task-event"
-import { isRightSidebarCodingAssistantSession } from "@/coding-assistant/session"
 import { overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { Database, eq } from "@/storage/db"
 import { MessageTable } from "@/session/session.sql"
@@ -267,9 +266,7 @@ export function mapSessionBusEvent(
 async function shouldMirrorStandaloneSession(sessionID: string): Promise<boolean> {
   const role = sessionRole(sessionID)
   if (role === "mission") return true
-  if (role !== "assistant") return false
-  const session = await Session.get(sessionID).catch(() => undefined)
-  return !!session && isRightSidebarCodingAssistantSession(session)
+  return role === "assistant"
 }
 
 export async function mirrorSessionBusEvent(event: SessionBusEvent, sessionID: string): Promise<void> {
