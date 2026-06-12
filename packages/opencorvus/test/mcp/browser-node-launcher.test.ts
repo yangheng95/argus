@@ -21,8 +21,7 @@ describe("browser MCP node launcher", () => {
     const runtime = path.join(tmp.path, "browser-mcp-node")
     await fs.mkdir(runtime, { recursive: true })
     await fs.writeFile(path.join(runtime, "node.exe"), "")
-    await fs.writeFile(path.join(runtime, "stdio.mjs"), "")
-    await fs.writeFile(path.join(runtime, "http.mjs"), "")
+    await fs.writeFile(path.join(runtime, "browser.mjs"), "")
 
     await expect(
       BrowserMCPNodeLauncher.resolveRuntime({
@@ -31,18 +30,18 @@ describe("browser MCP node launcher", () => {
       }),
     ).resolves.toEqual({
       node: path.join(runtime, "node.exe"),
-      bundle: path.join(runtime, "stdio.mjs"),
+      bundle: path.join(runtime, "browser.mjs"),
       packaged: true,
     })
   })
 
-  test("resolves packaged browser MCP HTTP bundle beside the executable", async () => {
+  test("resolves packaged browser MCP HTTP transport to the shared bundle beside the executable", async () => {
     await using tmp = await tmpdir()
     const exe = path.join(tmp.path, "opencorvus.exe")
     const runtime = path.join(tmp.path, "browser-mcp-node")
     await fs.mkdir(runtime, { recursive: true })
     await fs.writeFile(path.join(runtime, "node.exe"), "")
-    await fs.writeFile(path.join(runtime, "http.mjs"), "")
+    await fs.writeFile(path.join(runtime, "browser.mjs"), "")
 
     await expect(
       BrowserMCPNodeLauncher.resolveRuntime({
@@ -52,7 +51,7 @@ describe("browser MCP node launcher", () => {
       }),
     ).resolves.toEqual({
       node: path.join(runtime, "node.exe"),
-      bundle: path.join(runtime, "http.mjs"),
+      bundle: path.join(runtime, "browser.mjs"),
       packaged: true,
     })
   })

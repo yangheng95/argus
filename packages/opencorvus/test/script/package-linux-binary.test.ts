@@ -87,7 +87,7 @@ describe("package-linux-binary", () => {
       await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "ui"), { recursive: true })
       await fs.promises.writeFile(artifact.source, "")
       await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "browser-mcp-node", "node"), "")
-      await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "browser-mcp-node", "stdio.mjs"), "")
+      await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "browser-mcp-node", "browser.mjs"), "")
       await fs.promises.writeFile(
         path.join(artifact.sourceBundleDir, "browser-mcp-node", "node_modules", "playwright", "package.json"),
         "{}",
@@ -98,7 +98,7 @@ describe("package-linux-binary", () => {
 
       expect(fs.existsSync(artifact.output)).toBe(true)
       expect(fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "node"))).toBe(true)
-      expect(fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "stdio.mjs"))).toBe(true)
+      expect(fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "browser.mjs"))).toBe(true)
       expect(
         fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "node_modules", "playwright", "package.json")),
       ).toBe(true)
@@ -113,7 +113,7 @@ describe("package-linux-binary", () => {
       const artifact = resolveLinuxBinaryArtifacts(repoRoot)[0]
       await fs.promises.mkdir(path.join(artifact.bundleDir, "browser-mcp-node"), { recursive: true })
       await fs.promises.writeFile(artifact.output, "binary")
-      await fs.promises.writeFile(path.join(artifact.bundleDir, "browser-mcp-node", "stdio.mjs"), "stdio")
+      await fs.promises.writeFile(path.join(artifact.bundleDir, "browser-mcp-node", "browser.mjs"), "browser")
 
       await archiveBinaryArtifact(artifact)
 
@@ -196,8 +196,9 @@ describe("package-linux-binary", () => {
     expect(dockerfile).toContain("nodejs")
     expect(dockerfile).toContain("npm")
     expect(dockerfile).toContain("test -x /opt/opencorvus/browser-mcp-node/node")
-    expect(dockerfile).toContain("test -f /opt/opencorvus/browser-mcp-node/stdio.mjs")
-    expect(dockerfile).toContain("test -f /opt/opencorvus/browser-mcp-node/http.mjs")
+    expect(dockerfile).toContain("test -f /opt/opencorvus/browser-mcp-node/browser.mjs")
+    expect(dockerfile).not.toContain("test -f /opt/opencorvus/browser-mcp-node/stdio.mjs")
+    expect(dockerfile).not.toContain("test -f /opt/opencorvus/browser-mcp-node/http.mjs")
     expect(dockerfile).toContain("test -f /opt/opencorvus/browser-mcp-node/node_modules/playwright/index.js")
     expect(dockerfile).toContain("chromium --version")
     expect(dockerfile).toContain('ENTRYPOINT ["/usr/local/bin/opencorvus-container-entrypoint"]')
