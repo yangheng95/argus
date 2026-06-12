@@ -25,7 +25,7 @@ describe("session mirror", () => {
     await resetDatabase()
   })
 
-  test("mirrors right sidebar assistant sessions but not ordinary assistant sessions", async () => {
+  test("mirrors standalone assistant sessions but not unrelated session kinds", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -35,11 +35,12 @@ describe("session mirror", () => {
           kind: "assistant",
           metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
         })
-        const ordinary = await Session.create({ kind: "assistant" })
-        const mirrored: string[] = []
+        const plainAssistant = await Session.create({ kind: "assistant" })
+        const architect = await Session.create({ kind: "architect" })
+        const mirrored: Array<{ key: string; payload: Record<string, any> }> = []
         const stop = ProtocolStore.subscribeEvents(
           (event) => {
-            mirrored.push(`${event.sessionID}:${event.type}`)
+            mirrored.push({ key: `${event.sessionID}:${event.type}`, payload: event.payload ?? {} })
           },
           { aggregate: "session" },
         )
@@ -63,21 +64,95 @@ describe("session mirror", () => {
             type: Message.Event.Updated.type,
             properties: {
               info: {
-                id: "msg_ordinary",
-                sessionID: ordinary.id,
+                id: "msg_plain_assistant",
+                sessionID: plainAssistant.id,
                 role: "assistant",
                 time: { created: Date.now() },
               },
             },
           },
-          ordinary.id,
+          plainAssistant.id,
+        )
+        await mirrorSessionBusEvent(
+          {
+            type: Message.Event.Updated.type,
+            properties: {
+              info: {
+                id: "msg_architect",
+                sessionID: architect.id,
+                role: "assistant",
+                time: { created: Date.now() },
+              },
+            },
+          },
+          architect.id,
         )
 
         await new Promise((resolve) => setTimeout(resolve, 50))
         stop()
 
-        expect(mirrored).toContain(`${sidebar.id}:message.updated`)
-        expect(mirrored).not.toContain(`${ordinary.id}:message.updated`)
+        expect(mirrored.map((event) => event.key)).toContain(`${sidebar.id}:message.updated`)
+        const plain = mirrored.find((event) => event.key === `${plainAssistant.id}:message.updated`)
+        expect(plain?.payload.info.channel).toBe("assistant")
+        expect(plain?.payload.info.resolvedRole).toBe("assistant")
+        expect(mirrored.map((event) => event.key)).not.toContain(`${architect.id}:message.updated`)
+      },
+    })
+  })
+
+  test("enriches cloud container assistant update payload before session SSE dispatch", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "cloud coding assistant" })
+        const mirrored: Array<{ type: string; payload: Record<string, any> }> = []
+        const stop = ProtocolStore.subscribeEvents(
+          (event) => {
+            mirrored.push({ type: event.type, payload: event.payload ?? {} })
+          },
+          { aggregate: "session", sessionID: session.id },
+        )
+
+        await mirrorSessionBusEvent(
+          {
+            type: Message.Event.Updated.type,
+            properties: {
+              info: {
+                id: "msg_cloud_assistant",
+                sessionID: session.id,
+                role: "assistant",
+                time: { created: 1781241865042 },
+                parentID: "msg_cloud_user",
+                modelID: "cy-claude-sonnet-4-6",
+                providerID: "hexin",
+                agent: "coding-assistant",
+                path: {
+                  cwd: "/workspace/nova-vibecoding-template",
+                  root: "/workspace/nova-vibecoding-template",
+                },
+                cost: 0,
+                tokens: {
+                  input: 0,
+                  output: 0,
+                  reasoning: 0,
+                  cache: { read: 0, write: 0 },
+                },
+              },
+              summary: "Message updated: assistant",
+            },
+          },
+          session.id,
+        )
+        await waitFor(() => mirrored.some((event) => event.type === "message.updated"))
+        stop()
+
+        const updated = mirrored.find((event) => event.type === "message.updated")
+        expect(updated?.payload.info.channel).toBe("assistant")
+        expect(updated?.payload.info.resolvedRole).toBe("assistant")
+        expect(updated?.payload.channel).toBe("assistant")
+        expect(updated?.payload.resolvedRole).toBe("assistant")
       },
     })
   })
@@ -104,6 +179,7 @@ describe("session mirror", () => {
           path: { cwd: tmp.path, root: tmp.path },
           cost: 0,
           tokens: {
+            total: 0,
             input: 0,
             output: 0,
             reasoning: 0,
@@ -197,6 +273,7 @@ describe("session mirror", () => {
           path: { cwd: tmp.path, root: tmp.path },
           cost: 0,
           tokens: {
+            total: 0,
             input: 0,
             output: 0,
             reasoning: 0,

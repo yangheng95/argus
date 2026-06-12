@@ -128,6 +128,7 @@ describe("session conversation routes", () => {
           path: { cwd: tmp.path, root: tmp.path },
           cost: 0,
           tokens: {
+            total: 0,
             input: 0,
             output: 0,
             reasoning: 0,
@@ -189,6 +190,7 @@ describe("session conversation routes", () => {
             path: { cwd: tmp.path, root: tmp.path },
             cost: 0,
             tokens: {
+              total: 0,
               input: 0,
               output: 0,
               reasoning: 0,
