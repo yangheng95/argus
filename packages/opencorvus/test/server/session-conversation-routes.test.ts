@@ -214,4 +214,63 @@ describe("session conversation routes", () => {
       },
     })
   })
+
+  test("GET /session/:sessionID/events enriches plain assistant message events for tree-writer", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "Cloud assistant SSE" })
+        const abort = new AbortController()
+        const timeout = setTimeout(() => abort.abort("timed out waiting for assistant message.updated"), 6_000)
+        try {
+          const response = await Server.App().request(`/session/${session.id}/events`, {
+            headers: { "x-opencorvus-directory": tmp.path },
+            signal: abort.signal,
+          })
+          expect(response.status).toBe(200)
+          const readEvent = sseReader(response)
+          expect((await readEvent()).type).toBe("session.connected")
+
+          await Session.updateMessage({
+            id: Identifier.ascending("message"),
+            sessionID: session.id,
+            role: "assistant",
+            time: { created: 1781241865042 },
+            parentID: "msg_cloud_user",
+            modelID: "cy-claude-sonnet-4-6",
+            providerID: "hexin",
+            agent: "coding-assistant",
+            path: {
+              cwd: "/workspace/nova-vibecoding-template",
+              root: "/workspace/nova-vibecoding-template",
+            },
+            cost: 0,
+            tokens: {
+              total: 0,
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+          } as any)
+
+          let mirrored: any
+          while (!mirrored) {
+            const event = await readEvent()
+            if (event.type === "message.updated") mirrored = event
+          }
+          expect(mirrored.session_id).toBe(session.id)
+          expect(mirrored.payload.info.sessionID).toBe(session.id)
+          expect(mirrored.payload.info.channel).toBe("assistant")
+          expect(mirrored.payload.info.resolvedRole).toBe("assistant")
+          expect(mirrored.payload.channel).toBe("assistant")
+          expect(mirrored.payload.resolvedRole).toBe("assistant")
+        } finally {
+          clearTimeout(timeout)
+          abort.abort("test complete")
+        }
+      },
+    })
+  })
 })
