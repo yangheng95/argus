@@ -5,6 +5,7 @@ import { join } from "node:path"
 
 const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
 const MISSION_LIST_TSX = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
+const MAIN_TSX = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
 const MISSION_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/mission.css"), "utf8")
 const SERVICES_MISSION = readFileSync(join(import.meta.dir, "../src/services/mission.ts"), "utf8")
 const HELPERS = readFileSync(join(import.meta.dir, "../src/utils/mission-helpers.ts"), "utf8")
@@ -48,12 +49,13 @@ test("Mission waits for i18n readiness before rendering translated content", () 
 })
 
 test("Mission wake result opens the shared center conversation surface", () => {
-  expect(MISSION_TSX).toContain("handleMissionAwake")
-  expect(MISSION_TSX).toContain("missionRecordsCtl.refetch()")
-  expect(MISSION_TSX).toContain('setBoardStore("selectedSource", source)')
-  expect(MISSION_TSX).toContain('setBoardStore("board", null)')
-  expect(MISSION_TSX).toContain("loadConversation(source")
-  expect(MISSION_TSX).toContain("startSSE(source")
+  expect(MAIN_TSX).toContain("async function openMissionSession(result: MissionWakeResult)")
+  expect(MAIN_TSX).toContain('resetWriter({ scrollIntent: "bottom", cause: "mission-session-switch" })')
+  expect(MAIN_TSX).toContain('setBoardStore("selectedSource", source)')
+  expect(MAIN_TSX).toContain('setBoardStore("board", null)')
+  expect(MAIN_TSX).toContain("loadConversation(source")
+  expect(MAIN_TSX).toContain("startSSE(source")
+  expect(MAIN_TSX).toContain("setMissionSharedRefreshToken((value) => value + 1)")
   expect(MISSION_TSX).not.toContain("MissionConversation")
   expect(MISSION_TSX).not.toContain('data-ui="mission-conversation"')
   expect(MISSION_TSX).not.toContain('data-ui="mission-agent-rail"')
@@ -125,18 +127,19 @@ test("Mission ledger is embedded in the left task panel without its retired pane
   expect(MISSION_LIST_TSX).toContain('data-ui="mission-ledger-search-clear"')
 })
 
-test("MissionComposer reuses ChatComposer with mission-scoped DOM ids", () => {
-  expect(MISSION_TSX).toContain('formID="missionLauncherChatForm"')
-  expect(MISSION_TSX).toContain('textareaID="missionLauncherChatTextarea"')
-  expect(MISSION_TSX).toContain('sendID="missionLauncherChatSend"')
-  expect(MISSION_TSX).toContain('textareaDataUI="mission-composer-input"')
-  expect(MISSION_TSX).toContain('sendDataUI="mission-composer-submit"')
-  expect(MISSION_TSX).toContain("draftKey={props.draftKey}")
+test("Mission launcher reuses the main ChatComposer with mission-scoped bindings", () => {
+  expect(MISSION_TSX).not.toContain("function MissionComposer")
+  expect(MISSION_TSX).not.toContain("<ChatComposer")
+  expect(MISSION_TSX).toContain("props.onCreateMission()")
+  expect(MAIN_TSX).toContain("<ChatComposer")
+  expect(MAIN_TSX).toContain('textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}')
+  expect(MAIN_TSX).toContain('sendDataUI={missionLauncherActive() ? "mission-composer-submit" : undefined}')
+  expect(MAIN_TSX).toContain('composerDraftKey("mission", "new", directory)')
 })
 
-test("MissionComposer exposes the standard data-ui hooks for downstream e2e", () => {
-  expect(MISSION_TSX).toContain('textareaDataUI="mission-composer-input"')
-  expect(MISSION_TSX).toContain('sendDataUI="mission-composer-submit"')
+test("main ChatComposer exposes the standard Mission data-ui hooks for downstream e2e", () => {
+  expect(MAIN_TSX).toContain('textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}')
+  expect(MAIN_TSX).toContain('sendDataUI={missionLauncherActive() ? "mission-composer-submit" : undefined}')
   expect(MISSION_TSX).not.toContain('data-ui="mission-composer-mission-id"')
   expect(MISSION_TSX).not.toContain("missionID().trim()")
 })
@@ -144,6 +147,7 @@ test("MissionComposer exposes the standard data-ui hooks for downstream e2e", ()
 const LAUNCHER_KEYS = [
   "mission.launcher.title",
   "mission.launcher.error",
+  "mission.launcher.placeholder",
   "mission.launcher.discard_title",
   "mission.launcher.result_created",
   "mission.launcher.result_resumed",

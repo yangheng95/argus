@@ -52,24 +52,28 @@ test("Mission left activity selects session source and leaves chat rendering to 
 
 test("composer draft keys are scoped to selected task, assistant session, and Mission launcher", () => {
   expect(MAIN_TSX).toContain("const panelComposerDraftKey = () =>")
+  expect(MAIN_TSX).toContain("if (missionLauncherActive())")
+  expect(MAIN_TSX).toContain('composerDraftKey("mission", "new", directory)')
   expect(MAIN_TSX).toContain('composerDraftKey("task", taskID)')
   expect(MAIN_TSX).toContain('composerDraftKey("task", "new", directory)')
   expect(MAIN_TSX).toContain('composerDraftKey("session", sessionID)')
   expect(MAIN_TSX).toContain("draftKey={panelComposerDraftKey()}")
-  expect(MISSION_TSX).toContain("const missionLauncherDraftKey = () =>")
-  expect(MISSION_TSX).toContain('composerDraftKey("mission", "new", directory)')
-  expect(MISSION_TSX).toContain("draftKey={missionLauncherDraftKey()}")
+  expect(MISSION_TSX).not.toContain("const missionLauncherDraftKey = () =>")
+  expect(MISSION_TSX).not.toContain('composerDraftKey("mission", "new", directory)')
 })
 
-test("Mission launcher and Coding Assistant reuse ChatComposer with separate bindings", () => {
-  expect(MISSION_TSX).toContain("<ChatComposer")
-  expect(MISSION_TSX).toContain("onSubmit={handleSubmit}")
-  expect(MISSION_TSX).toContain("await wakeMission({")
-  expect(MISSION_TSX).toContain('composerDraftKey("mission", "new", directory)')
+test("Mission launcher and Coding Assistant reuse the main ChatComposer with separate bindings", () => {
+  expect(MISSION_TSX).not.toContain("<ChatComposer")
+  expect(MISSION_TSX).toContain("props.onCreateMission()")
   expect(MISSION_TSX).not.toContain("panelMessage(")
 
   expect(MAIN_TSX).toContain("<ChatComposer")
   expect(MAIN_TSX).toContain("draftKey={panelComposerDraftKey()}")
+  expect(MAIN_TSX).toContain('placeholder={missionLauncherActive() ? t("mission.launcher.placeholder") : undefined}')
+  expect(MAIN_TSX).toContain('textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}')
+  expect(MAIN_TSX).toContain("if (missionLauncherActive())")
+  expect(MAIN_TSX).toContain("const result = await wakeMission({ text })")
+  expect(MAIN_TSX).toContain("await openMissionSession(result)")
   expect(MAIN_TSX).toContain("await panelMessage(text, attachments")
   expect(CHAT_SERVICE).toContain("const sessionID = activeSessionID()")
   expect(CHAT_SERVICE).toContain("`session/${encodeURIComponent(sessionID)}/prompt_async`")
@@ -104,8 +108,10 @@ test("Mission ledger groups records by project directory", () => {
 })
 
 test("Mission launcher submits through wakeMission rather than task composition", () => {
-  expect(MISSION_TSX).toContain("await wakeMission({")
-  expect(MISSION_TSX).toContain("text,")
+  expect(MAIN_TSX).toContain("const result = await wakeMission({ text })")
+  expect(MAIN_TSX).toContain("missionLauncherActive()")
+  expect(MAIN_TSX).toContain("await openMissionSession(result)")
+  expect(MISSION_TSX).not.toContain("wakeMission")
   expect(MISSION_TSX).not.toContain('source: "gateway"')
   expect(MISSION_TSX).not.toContain("composeTaskText")
 })

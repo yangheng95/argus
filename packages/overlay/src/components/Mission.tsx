@@ -1,27 +1,22 @@
-import { Show, createEffect, createResource, createSignal, onCleanup } from "solid-js"
+import { Show, createEffect, createResource, createSignal } from "solid-js"
 import { appStore } from "../store/app"
 import { boardStore, setBoardStore } from "../store/board"
 import { clearMessages, setChatAttachments } from "../store/messages"
 import { loadConversation } from "../services/conversation"
-import { clearComposerDraft, composerDraftKey } from "../services/composer-draft"
 import {
   abortMission,
   deleteMission,
   loadMissions,
   missionPage,
   renameMission,
-  wakeMission,
   type MissionRecord,
 } from "../services/mission"
 import { startSSE, stopSSE } from "../services/sse"
 import { resetWriter } from "../services/tree-writer"
-import { activeDirectory as activeProjectDirectory } from "../services/workspace"
 import { ApiError } from "../services/api"
 import { t } from "../utils/i18n"
 import { humanizeApiError } from "../utils/mission-helpers"
 import { Icon } from "./Icon"
-import { Button } from "./ui/Button"
-import { ChatComposer } from "./ChatComposer"
 import { MissionList } from "./MissionList"
 
 function errorMessage(err: unknown): string {
@@ -41,6 +36,7 @@ const MISSION_LIST_PAGE_SIZE = 10
 export interface MissionProps {
   active: boolean
   refreshToken?: number
+  onCreateMission: () => void
   onSelectTask: (taskID: string) => void
 }
 
@@ -55,7 +51,6 @@ export function Mission(props: MissionProps) {
 function MissionContent(props: MissionProps) {
   const [searchQuery, setSearchQuery] = createSignal("")
   const [missionRefreshToken, setMissionRefreshToken] = createSignal(0)
-  const [composerOpen, setComposerOpen] = createSignal(false)
   const [actionBusy, setActionBusy] = createSignal<string>("")
   const [actionError, setActionError] = createSignal<{ action: string; error: string } | null>(null)
   const [missionsLoadingMore, setMissionsLoadingMore] = createSignal(false)
@@ -127,11 +122,7 @@ function MissionContent(props: MissionProps) {
   }
 
   function handleNewMission(): void {
-    handleCloseMission()
-    setComposerOpen(true)
-    queueMicrotask(() => {
-      document.querySelector<HTMLTextAreaElement>('[data-ui="mission-composer-input"]')?.focus()
-    })
+    props.onCreateMission()
   }
 
   async function handleMissionAbort(mission: MissionRecord): Promise<void> {
@@ -154,13 +145,6 @@ function MissionContent(props: MissionProps) {
       await renameMission(mission, title)
       await missionRecordsCtl.refetch()
     })
-  }
-
-  async function handleMissionAwake(result: { missionID: string; sessionID: string; created: boolean }): Promise<void> {
-    await missionRecordsCtl.refetch()
-    const mission = (missionRecords()?.records ?? []).find((record) => record.sessionID === result.sessionID)
-    await openMissionSession(result.sessionID, mission?.directory ?? activeProjectDirectory())
-    setComposerOpen(false)
   }
 
   async function handleMissionLoadMore(): Promise<void> {
@@ -192,11 +176,6 @@ function MissionContent(props: MissionProps) {
     } finally {
       setMissionsLoadingMore(false)
     }
-  }
-
-  const missionLauncherDraftKey = () => {
-    const directory = activeProjectDirectory()
-    return directory ? composerDraftKey("mission", "new", directory) : composerDraftKey("mission", "new")
   }
 
   function handleCloseMission(): void {
@@ -251,14 +230,6 @@ function MissionContent(props: MissionProps) {
         </div>
       </Show>
 
-      <Show when={composerOpen()}>
-        <MissionComposer
-          onClose={() => setComposerOpen(false)}
-          onAwake={(result) => void handleMissionAwake(result)}
-          draftKey={missionLauncherDraftKey()}
-        />
-      </Show>
-
       <MissionList
         missions={missionRecords()?.records ?? []}
         selectedSessionID={selectedMissionSessionID()}
@@ -281,121 +252,6 @@ function MissionContent(props: MissionProps) {
         loadingMore={missionsLoadingMore()}
         onLoadMore={() => void handleMissionLoadMore()}
       />
-    </div>
-  )
-}
-
-function MissionComposer(props: {
-  onClose: () => void
-  onAwake: (result: { missionID: string; sessionID: string; created: boolean }) => void
-  draftKey: string
-}) {
-  const [submitting, setSubmitting] = createSignal(false)
-  const [error, setError] = createSignal("")
-  const [lastResult, setLastResult] = createSignal<{ missionID: string; sessionID: string; created: boolean } | null>(
-    null,
-  )
-
-  let activeController: AbortController | null = null
-  const cancelActive = (reason?: unknown): void => {
-    if (!activeController) return
-    activeController.abort(reason ?? new DOMException("Mission launcher dismissed", "AbortError"))
-    activeController = null
-  }
-  onCleanup(() => cancelActive())
-
-  async function handleSubmit(promptText: string, attachments: unknown[]) {
-    const text = promptText.trim()
-    if (!text) return
-    if (attachments.length > 0) {
-      const message = t("mission.launcher.attachments_unsupported")
-      setError(message)
-      throw new Error(message)
-    }
-    setSubmitting(true)
-    setError("")
-    cancelActive()
-    const controller = new AbortController()
-    activeController = controller
-    try {
-      const result = await wakeMission({
-        text,
-        signal: controller.signal,
-      })
-      if (controller.signal.aborted) return
-      setLastResult(result)
-      props.onAwake(result)
-    } catch (err) {
-      if (controller.signal.aborted) return
-      setError(humanizeApiError(err))
-      setLastResult(null)
-      throw err
-    } finally {
-      if (activeController === controller) activeController = null
-      setSubmitting(false)
-    }
-  }
-
-  function handleDiscard() {
-    cancelActive()
-    setError("")
-    setLastResult(null)
-    clearComposerDraft(props.draftKey)
-    props.onClose()
-  }
-
-  return (
-    <div class="mission-composer mission-composer--inline" data-ui="mission-composer">
-      <header class="mission-composer-header oc-surface-header">
-        <div class="mission-composer-title-block">
-          <span class="mission-composer-kicker">{t("mission.title")}</span>
-          <h2 class="mission-composer-title oc-surface-header__title">{t("mission.launcher.title")}</h2>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          tone="neutral"
-          data-ui="mission-composer-discard"
-          title={t("mission.launcher.discard_title")}
-          aria-label={t("mission.launcher.discard_title")}
-          onClick={handleDiscard}
-        >
-          <Icon name="close" size={12} />
-        </Button>
-      </header>
-      <div class="mission-composer-shell">
-        <ChatComposer
-          enabled={!submitting()}
-          busy={false}
-          formID="missionLauncherChatForm"
-          textareaID="missionLauncherChatTextarea"
-          sendID="missionLauncherChatSend"
-          textareaDataUI="mission-composer-input"
-          sendDataUI="mission-composer-submit"
-          draftKey={props.draftKey}
-          onSubmit={handleSubmit}
-        />
-      </div>
-      <Show when={error()}>
-        <div class="mission-error" role="alert" data-ui="mission-composer-error">
-          <span>{t("mission.launcher.error", { error: error() })}</span>
-        </div>
-      </Show>
-      <Show when={lastResult()}>
-        {(result) => (
-          <div class="mission-launcher-result" role="status" data-ui="mission-launcher-result">
-            <p>
-              {result().created
-                ? t("mission.launcher.result_created", { missionID: result().missionID })
-                : t("mission.launcher.result_resumed", { missionID: result().missionID })}
-            </p>
-            <p class="mission-launcher-result-session">
-              <code>{result().sessionID}</code>
-            </p>
-          </div>
-        )}
-      </Show>
     </div>
   )
 }

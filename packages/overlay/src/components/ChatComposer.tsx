@@ -67,6 +67,8 @@ export interface ChatComposerProps {
   sendDataUI?: string
   /** Stable task/mission scoped key used to save and restore draft text. */
   draftKey?: string
+  /** Optional single prompt hint for scoped composers such as Mission launch. */
+  placeholder?: string
 }
 
 // ── Constants ──
@@ -219,7 +221,8 @@ export function ChatComposer(props: ChatComposerProps) {
   const showHint = createMemo(() => props.enabled && !props.busy && !focused() && text().length === 0)
 
   createEffect(() => {
-    const examples = tArray("chat.placeholder_projects")
+    const scopedPlaceholder = props.placeholder?.trim()
+    const examples = scopedPlaceholder ? [scopedPlaceholder] : tArray("chat.placeholder_projects")
     if (showHint() && examples.length > 0) {
       startRotate(examples)
     } else {
@@ -236,7 +239,8 @@ export function ChatComposer(props: ChatComposerProps) {
       if (document.hidden) {
         stopHint()
       } else {
-        const examples = tArray("chat.placeholder_projects")
+        const scopedPlaceholder = props.placeholder?.trim()
+        const examples = scopedPlaceholder ? [scopedPlaceholder] : tArray("chat.placeholder_projects")
         if (showHint() && examples.length > 0) startRotate(examples)
       }
     }
@@ -357,11 +361,12 @@ export function ChatComposer(props: ChatComposerProps) {
     const trimmed = text().trim()
     if (!trimmed) return
     const sentAttachments = [...attachments()]
+    const submittedDraftKey = props.draftKey
     setSubmitting(true)
     try {
       await props.onSubmit(trimmed, sentAttachments, false)
       setText("")
-      clearComposerDraft(props.draftKey)
+      clearComposerDraft(submittedDraftKey)
       setAttachments([])
       if (textareaRef) {
         textareaRef.value = ""

@@ -639,12 +639,10 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
     await new Promise((r) => setTimeout(r, 400))
   })
 
-  // Narrow-breakpoint capture — flip viewport, dismiss the launcher so the
-  // ledger is the front surface, then snap. Keeps the helper signature
-  // consistent (state + side effects only).
+  // Narrow-breakpoint capture — flip viewport with the shared composer still
+  // active in the center workflow while the Mission ledger remains in the
+  // left activity panel.
   try {
-    const discard = await page.$('[data-ui="mission-composer-discard"]')
-    if (discard) await discard.click()
     await new Promise((r) => setTimeout(r, 300))
     const narrowPath = await snap(page, "06-narrow-breakpoint", VIEWPORT_NARROW)
     results.push({ state: "06-narrow-breakpoint", ok: true, path: narrowPath })
