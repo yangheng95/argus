@@ -56,10 +56,26 @@ describe("BrowserRuntime", () => {
       browserCommands: ["chromium-browser"],
       defaultCandidates: [],
       envPath: tmp.path,
+      homeDir: "",
       platform: "linux",
     })
 
-    expect(candidates).toEqual([executable])
+    expect(candidates).toContain(executable)
+  })
+
+  test("includes Linux user-local browser commands even when PATH omits them", async () => {
+    await using tmp = await tmpdir()
+    const executable = path.join(tmp.path, ".local", "bin", "google-chrome")
+
+    const candidates = BrowserRuntime.resolveBrowserExecutableCandidates({
+      browserCommands: ["google-chrome"],
+      defaultCandidates: [],
+      envPath: "/usr/bin",
+      homeDir: tmp.path,
+      platform: "linux",
+    })
+
+    expect(candidates).toContain(executable)
   })
 
   test("defines the shared browser launch arguments", () => {
