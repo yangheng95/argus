@@ -135,19 +135,25 @@ export namespace BrowserRuntime {
 
   export function resolveBrowserExecutableCandidates(input?: {
     envPath?: string
+    homeDir?: string
     pathExt?: string
     platform?: NodeJS.Platform
     defaultCandidates?: readonly string[]
     browserCommands?: readonly string[]
   }): string[] {
     const fixedCandidates = input?.defaultCandidates ?? DEFAULT_BROWSER_CANDIDATES
+    const userBinCandidates = resolveBrowserCommandsFromUserBin({
+      browserCommands: input?.browserCommands,
+      homeDir: input?.homeDir,
+      platform: input?.platform,
+    })
     const pathCandidates = resolveBrowserCommandsFromPath({
       browserCommands: input?.browserCommands,
       envPath: input?.envPath,
       pathExt: input?.pathExt,
       platform: input?.platform,
     })
-    return uniqueCandidates([...fixedCandidates, ...pathCandidates])
+    return uniqueCandidates([...fixedCandidates, ...userBinCandidates, ...pathCandidates])
   }
 
   export async function resolvePlaywrightEntry(): Promise<string> {
@@ -227,6 +233,22 @@ export namespace BrowserRuntime {
       }
     }
     return candidates
+  }
+
+  function resolveBrowserCommandsFromUserBin(input?: {
+    homeDir?: string
+    platform?: NodeJS.Platform
+    browserCommands?: readonly string[]
+  }): string[] {
+    const platform = input?.platform ?? process.platform
+    if (platform !== "linux") return []
+
+    const homeDir = input?.homeDir ?? process.env.HOME
+    if (!homeDir?.trim()) return []
+
+    const userBin = path.join(homeDir, ".local", "bin")
+    const browserCommands = input?.browserCommands ?? DEFAULT_BROWSER_COMMANDS
+    return browserCommands.map((command) => path.join(userBin, command))
   }
 
   function windowsPathExtensions(pathExt = process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM"): string[] {
