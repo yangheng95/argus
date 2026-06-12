@@ -238,6 +238,7 @@ async function renderPageViaNode(input: {
     payload: {
       ...input,
       executablePath,
+      launchArgs: BrowserRuntime.defaultLaunchArgs(),
       launchTimeoutMs,
       navigationTimeoutMs,
       requiredDomDescendants: input.minDomDescendants ?? 1,
@@ -393,7 +394,7 @@ async function main() {
       executablePath: input.executablePath,
       headless: input.headless,
       timeout: input.launchTimeoutMs,
-      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+      args: input.launchArgs,
     });
     const context = await browser.newContext({
       viewport: { width: input.viewport.width, height: input.viewport.height },

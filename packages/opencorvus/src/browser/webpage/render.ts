@@ -75,6 +75,13 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
     executablePath: await BrowserRuntime.findBrowserExecutable(),
     nodeExecutable: sidecarRuntime.nodeExecutable,
     playwrightRequirePath: sidecarRuntime.playwrightRequirePath,
+    launchArgs: BrowserRuntime.defaultLaunchArgs({
+      extraArgs: [
+        "--disable-extensions",
+        "--disable-background-networking",
+        `--window-size=${viewport.width},${viewport.height}`,
+      ],
+    }),
     launchTimeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(),
     stabilizationCss: SCREENSHOT_STABILIZATION_CSS,
   })
@@ -111,6 +118,7 @@ type NodeRenderInput = {
   executablePath: string
   nodeExecutable: string
   playwrightRequirePath: string
+  launchArgs: string[]
   launchTimeoutMs: number
   stabilizationCss: string
 }
@@ -188,14 +196,7 @@ async function main() {
       executablePath: input.executablePath,
       headless: true,
       timeout: input.launchTimeoutMs,
-      args: [
-        "--no-sandbox",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "--disable-extensions",
-        "--disable-background-networking",
-        "--window-size=" + input.viewport.width + "," + input.viewport.height,
-      ],
+      args: input.launchArgs,
     });
     const context = await browser.newContext({ viewport: input.viewport });
     const page = await context.newPage();

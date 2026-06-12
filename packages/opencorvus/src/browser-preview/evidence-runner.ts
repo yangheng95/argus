@@ -103,6 +103,7 @@ export async function runBrowserPreviewEvidenceJob(
     payload: {
       url: input.url,
       executablePath,
+      launchArgs: BrowserRuntime.defaultLaunchArgs(),
       launchTimeoutMs,
       navigationTimeoutMs,
       settleMs,
@@ -477,7 +478,7 @@ async function main() {
       executablePath: input.executablePath,
       headless: true,
       timeout: input.launchTimeoutMs,
-      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+      args: input.launchArgs,
     });
     const captures = [];
     for (const viewport of input.viewports) {

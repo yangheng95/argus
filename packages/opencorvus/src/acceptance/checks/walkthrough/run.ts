@@ -44,7 +44,7 @@ export async function runWalkthroughWithDependencies(
   await fs.mkdir(input.outDir, { recursive: true })
   const browser = await dependencies.browserRuntime.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+    args: BrowserRuntime.defaultLaunchArgs(),
   })
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
@@ -99,6 +99,7 @@ async function runWalkthroughViaNode(input: {
       steps: input.steps,
       screenshotPath,
       executablePath,
+      launchArgs: BrowserRuntime.defaultLaunchArgs(),
       launchTimeoutMs,
     },
     payloadEnvName: "OPENCORVUS_WALKTHROUGH_INPUT",
@@ -193,7 +194,7 @@ async function main() {
       executablePath: input.executablePath,
       headless: true,
       timeout: input.launchTimeoutMs,
-      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+      args: input.launchArgs,
     });
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();

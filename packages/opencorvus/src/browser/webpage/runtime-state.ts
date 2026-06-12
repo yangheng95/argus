@@ -138,6 +138,7 @@ type NodeRuntimeStateInput = {
   outputDir: string
   viewport: RuntimeStateViewport
   executablePath: string
+  launchArgs: string[]
   launchTimeoutMs: number
   navigationTimeoutMs: number
   captureFunctionSource: string
@@ -171,6 +172,13 @@ async function captureRuntimeStateSnapshotsViaNode(input: {
     outputDir: input.outputDir,
     viewport: input.viewport,
     executablePath,
+    launchArgs: BrowserRuntime.defaultLaunchArgs({
+      extraArgs: [
+        "--disable-extensions",
+        "--disable-background-networking",
+        `--window-size=${input.viewport.width},${input.viewport.height}`,
+      ],
+    }),
     launchTimeoutMs,
     navigationTimeoutMs: 60_000,
     captureFunctionSource: browserCaptureRuntimeState.toString(),
@@ -347,14 +355,7 @@ async function main() {
       executablePath: input.executablePath,
       headless: true,
       timeout: input.launchTimeoutMs,
-      args: [
-        "--no-sandbox",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "--disable-extensions",
-        "--disable-background-networking",
-        "--window-size=" + input.viewport.width + "," + input.viewport.height,
-      ],
+      args: input.launchArgs,
     });
     const context = await browser.newContext({
       viewport: input.viewport,

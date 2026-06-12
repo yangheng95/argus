@@ -83,6 +83,30 @@ describe("BrowserRuntime", () => {
     expect(BrowserRuntime.defaultLaunchArgs()).toContain("--disable-remote-fonts")
   })
 
+  test("adds Chromium proxy launch arguments from the process proxy environment", () => {
+    const args = BrowserRuntime.defaultLaunchArgs({
+      env: {
+        HTTPS_PROXY: "http://172.25.160.1:6268",
+        NO_PROXY: "localhost,127.0.0.1,::1,*.local",
+      },
+    })
+
+    expect(args).toContain("--proxy-server=http://172.25.160.1:6268")
+    expect(args).toContain("--proxy-bypass-list=localhost;127.0.0.1;::1;*.local")
+  })
+
+  test("uses BROWSER_PROXY before HTTP proxy environment variables", () => {
+    const args = BrowserRuntime.defaultLaunchArgs({
+      env: {
+        BROWSER_PROXY: "socks5://127.0.0.1:1080",
+        HTTPS_PROXY: "http://172.25.160.1:6268",
+      },
+    })
+
+    expect(args).toContain("--proxy-server=socks5://127.0.0.1:1080")
+    expect(args).not.toContain("--proxy-server=http://172.25.160.1:6268")
+  })
+
   test("resolves source Playwright from the package root", async () => {
     const entry = await BrowserRuntime.resolvePlaywrightEntry()
     expect(entry.replaceAll("\\", "/")).toContain("/packages/opencorvus/node_modules/playwright/index.mjs")

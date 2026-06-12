@@ -136,6 +136,7 @@ class BrowserPreviewLiveSidecar {
         ...process.env,
         OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH: runtime.playwrightRequirePath,
         OPENCORVUS_BROWSER_EXECUTABLE: executablePath,
+        OPENCORVUS_BROWSER_LAUNCH_ARGS: JSON.stringify(BrowserRuntime.defaultLaunchArgs()),
         OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS: String(launchTimeoutMs),
       },
       stdio: ["pipe", "pipe", "pipe"],
@@ -315,7 +316,7 @@ async function ensurePage(command) {
     browser = await chromium.launch({
       executablePath: process.env.OPENCORVUS_BROWSER_EXECUTABLE,
       headless: true,
-      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--disable-remote-fonts"],
+      args: JSON.parse(process.env.OPENCORVUS_BROWSER_LAUNCH_ARGS || "[]"),
       timeout: Number(process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS || "300000"),
     });
   }
