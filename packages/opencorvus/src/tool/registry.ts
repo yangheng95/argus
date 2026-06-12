@@ -1,5 +1,6 @@
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
+import { BrowserPreviewTool } from "./browser-preview"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
 import { SearchCodeTool } from "./grep"
@@ -127,6 +128,7 @@ export namespace ToolRegistry {
     return [
       ...(question ? [QuestionTool] : []),
       BashTool,
+      BrowserPreviewTool,
       ReadTool,
       GlobTool,
       SearchCodeTool,
