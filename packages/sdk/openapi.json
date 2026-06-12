@@ -41998,6 +41998,9 @@
           "root": {
             "type": "string"
           },
+          "defaultDirectory": {
+            "type": "string"
+          },
           "projects": {
             "type": "array",
             "items": {
@@ -42007,6 +42010,7 @@
         },
         "required": [
           "root",
+          "defaultDirectory",
           "projects"
         ]
       },

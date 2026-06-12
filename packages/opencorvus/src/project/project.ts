@@ -1,7 +1,7 @@
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import path from "path"
-import { createHash } from "crypto"
+import { createHash, randomUUID } from "crypto"
 import { Database, eq } from "../storage/db"
 import { ProjectTable } from "./project.sql"
 import { Log } from "../util/log"
@@ -11,7 +11,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { existsSync } from "fs"
-import { readdir } from "fs/promises"
+import { mkdir, readdir } from "fs/promises"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
 import { which } from "@/util/which"
@@ -160,6 +160,7 @@ export namespace Project {
   export const Discovery = z
     .object({
       root: z.string(),
+      defaultDirectory: z.string(),
       projects: DiscoveredProject.array(),
     })
     .meta({
@@ -375,8 +376,34 @@ export namespace Project {
     )
   }
 
+  const generatedDefaultDirectories = new Map<string, string>()
+
+  function explicitLaunchProjectDirectory() {
+    const value = process.env.OPENCORVUS_PROJECT_DIR
+    return typeof value === "string" && value.trim() ? Filesystem.resolve(value) : ""
+  }
+
   function launchDirectory() {
-    return Filesystem.resolve(process.env.OPENCORVUS_PROJECT_DIR || process.cwd())
+    return explicitLaunchProjectDirectory() || Filesystem.resolve(process.cwd())
+  }
+
+  async function generatedDefaultDirectory(root: string) {
+    const cached = generatedDefaultDirectories.get(root)
+    if (cached) return cached
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const name = randomUUID().slice(0, 8)
+      const directory = path.join(root, name)
+      if (await Filesystem.exists(directory)) continue
+      try {
+        await mkdir(directory, { recursive: false })
+      } catch (error) {
+        if ((error as { code?: string })?.code === "EEXIST") continue
+        throw error
+      }
+      generatedDefaultDirectories.set(root, directory)
+      return directory
+    }
+    throw new Error(`Unable to create generated default project directory under ${root}`)
   }
 
   function projectName(directory: string) {
@@ -399,6 +426,7 @@ export namespace Project {
     const root = launchDirectory()
     const candidates = [root, ...(await immediateDirectories(root))]
     const projects: DiscoveredProject[] = []
+    const defaultDirectory = explicitLaunchProjectDirectory() || (await generatedDefaultDirectory(root))
     for (const directory of candidates) {
       if (!(await hasOpenCorvusMarker(directory))) continue
       projects.push({
@@ -407,7 +435,7 @@ export namespace Project {
         marker: path.join(directory, ".opencorvus"),
       })
     }
-    return Discovery.parse({ root, projects })
+    return Discovery.parse({ root, defaultDirectory, projects })
   }
 
   export function get(id: string): Info | undefined {

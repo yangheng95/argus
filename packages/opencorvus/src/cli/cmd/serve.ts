@@ -93,6 +93,7 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
   const projectDir = (args as any)["project-dir"] || process.env.OPENCORVUS_PROJECT_DIR || undefined
   if (projectDir) {
     const resolved = require("path").resolve(projectDir)
+    process.env.OPENCORVUS_PROJECT_DIR = resolved
     console.log(`Project directory (sandbox): ${resolved}`)
   }
   const shutdownDirectory = require("path").resolve(projectDir || process.cwd())

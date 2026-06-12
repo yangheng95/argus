@@ -1,0 +1,29 @@
+# Editable CWD And Launch Directory Default
+
+## Goal
+
+Make the workspace CWD selectable by typing in the UI and let a fresh Web/Overlay session resolve a real editable project directory without falling back to the server process CWD.
+
+## Call Point Inventory
+
+| Area | Call points | Decision |
+| --- | --- | --- |
+| Backend project discovery | `packages/opencorvus/src/project/project.ts::Project.Discovery`, `Project.discoverFromLaunchDirectory` | Extend the existing discovery response with one explicit `defaultDirectory`; keep `/global/projects/discover` as the single source. If no project directory was passed, create one `<launch-root>/<uuid4-first-8>` directory once per process and return that path. |
+| CLI serve argument | `packages/opencorvus/src/cli/cmd/serve.ts::handleServeCommand` | Mirror explicit `--project-dir` into `OPENCORVUS_PROJECT_DIR` so the discovery source can distinguish explicit project input from no project input. |
+| Backend route | `packages/opencorvus/src/server/routes/global.ts` | No new route. The current control-plane discovery endpoint remains the API source for Web UI and desktop. |
+| Backend tests | `packages/opencorvus/test/server/global-project-discovery.test.ts` | Assert launch root becomes `defaultDirectory` only when it contains `.opencorvus`. |
+| Overlay discovery service | `packages/overlay/src/services/workspace.ts::loadDiscoveredProjects`, `ensureDefaultDirectory` | Parse `defaultDirectory` and apply it only when no saved directory exists. |
+| Overlay cwd editor | `packages/overlay/src/components/TaskDirBar.tsx::TaskDirContent` | Keep the existing typed path editor in the shared cwd dropdown; add test coverage so Web UI support cannot regress. |
+| Overlay onboarding | `packages/overlay/src/components/WorkspaceOnboardingDialog.tsx` | Already supports browser manual path entry through host capabilities; no parallel UI path. |
+| Overlay tests | `packages/overlay/test/workspace-discovery-service.test.ts`, `packages/overlay/test/workspace-active-directory.test.ts`, `packages/overlay/test/task-cwd-row-layout.test.ts` | Cover discovery parsing, default directory loading, and the shared editable cwd input. |
+
+## Design
+
+`/global/projects/discover` returns `defaultDirectory` from the backend's explicit launch context. When `--project-dir` / `OPENCORVUS_PROJECT_DIR` is present, that resolved directory is the default. When no project directory was passed, the backend creates a fresh child directory named by the first 8 characters of a UUIDv4 under the already-recognized launch root and returns that as `defaultDirectory`.
+
+The reason is isolation: no-argument Web UI startup must not write into the OpenCorvus repository, the packaged app directory, or a shared process CWD. The generated child directory is a real editable project root and gives each no-project launch a separate workspace.
+
+## Verification
+
+- `bun test packages/opencorvus/test/server/global-project-discovery.test.ts`
+- `bun test packages/overlay/test/workspace-discovery-service.test.ts packages/overlay/test/workspace-active-directory.test.ts packages/overlay/test/task-cwd-row-layout.test.ts`
