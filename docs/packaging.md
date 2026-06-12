@@ -93,7 +93,7 @@ Container release smoke checks:
 
 ```bash
 docker run --rm opencorvus:local --version
-docker run --rm --entrypoint sh opencorvus:local -lc 'node --version && git --version && chromium --version && /opt/opencorvus/browser-mcp-node/node --version && test -f /opt/opencorvus/browser-mcp-node/stdio.mjs && test -f /opt/opencorvus/browser-mcp-node/http.mjs && test -f /opt/opencorvus/browser-mcp-node/node_modules/playwright/index.js'
+docker run --rm --entrypoint sh opencorvus:local -lc 'node --version && git --version && chromium --version && /opt/opencorvus/browser-mcp-node/node --version && test -f /opt/opencorvus/browser-mcp-node/browser.mjs && test -f /opt/opencorvus/browser-mcp-node/node_modules/playwright/index.js'
 docker run --rm -d --name opencorvus-smoke -p 7878:7878 opencorvus:local
 curl -fsS http://127.0.0.1:7878/ui/ | grep -i '<!doctype html'
 docker rm -f opencorvus-smoke

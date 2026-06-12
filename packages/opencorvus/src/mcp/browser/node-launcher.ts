@@ -28,7 +28,7 @@ export namespace BrowserMCPNodeLauncher {
       env.OPENCORVUS_BROWSER_MCP_SOURCE_PACKAGE_DIR = path.resolve(import.meta.dir, "../../..")
       delete env.OPENCORVUS_BROWSER_MCP_PACKAGED
     }
-    const child = spawn(node, [bundle], {
+    const child = spawn(node, [bundle, transport], {
       cwd: process.cwd(),
       env,
       stdio: "inherit",
@@ -83,7 +83,7 @@ export namespace BrowserMCPNodeLauncher {
     const transport = runtime.transport ?? "stdio"
     return {
       node: packaged.nodeExecutable,
-      bundle: transport === "http" ? packaged.mcpHttpBundle : packaged.mcpBundle,
+      bundle: packaged.mcpBundle,
     }
   }
 

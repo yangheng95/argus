@@ -20,8 +20,7 @@ export function packagedBrowserNodeRuntimePaths(
   return {
     nodeExecutable: path.join(dir, browserNodeExecutableName(platform)),
     playwrightRequirePath: path.join(dir, "node_modules", "playwright", "index.js"),
-    mcpBundle: path.join(dir, "stdio.mjs"),
-    mcpHttpBundle: path.join(dir, "http.mjs"),
+    mcpBundle: path.join(dir, "browser.mjs"),
   }
 }
 

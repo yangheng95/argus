@@ -36,8 +36,7 @@ RUN rm -rf /opt/opencorvus \
   && chmod +x /opt/opencorvus/opencorvus /opt/opencorvus/browser-mcp-node/node /usr/local/bin/opencorvus-container-entrypoint \
   && /opt/opencorvus/opencorvus --version \
   && test -x /opt/opencorvus/browser-mcp-node/node \
-  && test -f /opt/opencorvus/browser-mcp-node/stdio.mjs \
-  && test -f /opt/opencorvus/browser-mcp-node/http.mjs \
+  && test -f /opt/opencorvus/browser-mcp-node/browser.mjs \
   && test -f /opt/opencorvus/browser-mcp-node/node_modules/playwright/index.js \
   && node --version \
   && git --version \
