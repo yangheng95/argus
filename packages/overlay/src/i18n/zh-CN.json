@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "8eeb62c679e205e8"
+    "panel_revision": "73d5a980b3c197ef"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -915,7 +915,6 @@
   "mission.runtime.running": "运行中",
   "mission.runtime.stopped": "已停止",
   "mission.runtime.error": "错误",
-  "mission.ledger.title": "Missions",
   "mission.ledger.search_placeholder": "按标题或 Mission ID 搜索…",
   "mission.ledger.search_clear": "清除搜索",
   "mission.ledger.empty": "暂无 Mission。",
@@ -938,7 +937,6 @@
   "mission.error.action.rename": "重命名 Mission",
   "mission.error.action.reorder": "调整队列顺序",
   "mission.error.action.start": "启动排队任务",
-  "mission.error.action.restart": "重启通道运行时",
   "mission.error.class.DirectoryRequiredError": "请先在标题栏选择一个工作目录，再加载 Mission。",
   "mission.error.class.InvalidDirectoryError": "选择的工作目录不存在或不是一个目录，请重新选择。",
   "mission.error.class.WorktreeNotGitError": "选择的目录不是 Git 工作树。先初始化 Git 或在标题栏切换到已被 Git 管理的目录。",

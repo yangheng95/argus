@@ -10,7 +10,6 @@ const REQUIRED_KEYS = [
   "mission.title",
   "mission.new",
   "mission.new_title",
-  "mission.ledger.title",
   "mission.ledger.search_placeholder",
   "mission.ledger.search_clear",
   "mission.ledger.empty",
@@ -62,6 +61,7 @@ const RETIRED_KEYS = [
   "mission.error.channel_runtime_failed",
   "mission.error.channels_failed",
   "mission.error.restart_failed",
+  "mission.error.action.restart",
   "mission.launcher.discard",
   "mission.launcher.conversation_title",
 ] as const

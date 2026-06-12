@@ -18,6 +18,7 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   const zh = read("src/i18n/zh-CN.json")
 
   expect(html).toContain('id="solidLeftActivityToolbar"')
+  expect(html).toContain('id="leftActivityShell"')
   expect(html).toContain('id="leftPanelTasks"')
   expect(html).toContain('id="leftPanelMissions"')
   expect(html).toContain('id="leftPanelSkills"')
@@ -54,6 +55,8 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(toolbar).toContain("title={tooltip()}")
   expect(toolbar).toContain("aria-label={tooltip()}")
   expect(activityCss).toContain(".sidebar-tool-panel .ext-group")
+  expect(activityCss).toContain(".left-activity-shell")
+  expect(activityCss).toContain("flex-direction: row")
   expect(activityCss).toMatch(
     /\.sidebar-tool-panel \.ext-group-body,\s*\.sidebar-tool-panel \.memory-panel\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s,
   )

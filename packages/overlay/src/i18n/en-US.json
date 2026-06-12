@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "8eeb62c679e205e8"
+    "panel_revision": "73d5a980b3c197ef"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -915,7 +915,6 @@
   "mission.runtime.running": "Running",
   "mission.runtime.stopped": "Stopped",
   "mission.runtime.error": "Error",
-  "mission.ledger.title": "Missions",
   "mission.ledger.search_placeholder": "Search by title or mission ID…",
   "mission.ledger.search_clear": "Clear search",
   "mission.ledger.empty": "No missions yet.",
@@ -938,7 +937,6 @@
   "mission.error.action.rename": "Rename mission",
   "mission.error.action.reorder": "Reorder queue",
   "mission.error.action.start": "Start queued task",
-  "mission.error.action.restart": "Restart channel runtime",
   "mission.error.class.DirectoryRequiredError": "Pick a working directory from the titlebar before loading Mission.",
   "mission.error.class.InvalidDirectoryError": "The selected directory does not exist or is not a folder. Pick a valid path.",
   "mission.error.class.WorktreeNotGitError": "The selected directory is not a Git working tree. Initialise Git or switch to a Git-managed folder from the titlebar.",

@@ -322,32 +322,7 @@ export function MissionList(props: MissionListProps) {
   }
 
   return (
-    <aside class="mission-ledger" data-ui="mission-ledger">
-      <header class="mission-ledger-header oc-surface-header">
-        <span class="mission-ledger-title oc-surface-header__title">{t("mission.ledger.title")}</span>
-        <div
-          class="mission-ledger-header-actions oc-surface-header__actions"
-          role="toolbar"
-          aria-label={t("mission.ledger.title")}
-        >
-          <Button
-            type="button"
-            variant="solid"
-            size="md"
-            tone="accent"
-            data-ui="mission-new"
-            title={t("mission.new_title")}
-            aria-label={t("mission.new")}
-            onClick={props.onCreateMission}
-          >
-            <span class="sidebar-btn-icon" aria-hidden="true">
-              <Icon name="plus" size={13} />
-            </span>
-            <span>{t("mission.new")}</span>
-          </Button>
-        </div>
-      </header>
-
+    <div class="mission-ledger" data-ui="mission-ledger">
       <div class="mission-ledger-search search-field">
         <Icon name="search" size={12} class="mission-ledger-search-icon search-field-icon" />
         <input
@@ -377,6 +352,19 @@ export function MissionList(props: MissionListProps) {
       </div>
 
       <div class="mission-ledger-list">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          tone="accent"
+          data-ui="mission-new"
+          title={t("mission.new_title")}
+          aria-label={t("mission.new")}
+          onClick={props.onCreateMission}
+        >
+          <Icon name="plus" size={13} />
+          <span>{t("mission.new")}</span>
+        </Button>
         <LedgerList
           items={groupedMissions()}
           loading={props.loading}
@@ -455,6 +443,6 @@ export function MissionList(props: MissionListProps) {
           </div>
         </Show>
       </div>
-    </aside>
+    </div>
   )
 }
