@@ -1042,10 +1042,70 @@ export namespace ProviderTransform {
             }
           }
         }
-        return { type: "object", properties: merged, required: [...allRequired] } as JSONSchema7
+        schema = { type: "object", properties: merged, required: [...allRequired] } as JSONSchema7
       }
     }
 
+    if (requiresOpenAIStrictToolSchema(model)) {
+      return normalizeOpenAIStrictToolSchema(schema as JSONSchema7) as JSONSchema7
+    }
+
     return schema as JSONSchema7
+  }
+
+  function requiresOpenAIStrictToolSchema(model: Provider.Model): boolean {
+    if (model.api.npm === "@ai-sdk/openai" || model.api.npm === "@ai-sdk/azure") return true
+    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+    const id = `${model.id} ${model.api.id}`.toLowerCase()
+    return /(^|[\/\s])gpt-[\w.-]+/.test(id)
+  }
+
+  function normalizeOpenAIStrictToolSchema(schema: JSONSchema7): JSONSchema7 {
+    return strictifyOpenAISchemaNode(schema, false) as JSONSchema7
+  }
+
+  function strictifyOpenAISchemaNode(node: unknown, optionalFromParent: boolean): unknown {
+    if (Array.isArray(node)) return node.map((item) => strictifyOpenAISchemaNode(item, false))
+    if (!node || typeof node !== "object") return node
+
+    const input = node as Record<string, unknown>
+    const output: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(input)) {
+      if (key === "properties" && value && typeof value === "object" && !Array.isArray(value)) {
+        continue
+      }
+      output[key] = strictifyOpenAISchemaNode(value, false)
+    }
+
+    const properties = input.properties
+    if (properties && typeof properties === "object" && !Array.isArray(properties)) {
+      const required = new Set(Array.isArray(input.required) ? input.required.filter((item) => typeof item === "string") : [])
+      const strictProperties: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(properties as Record<string, unknown>)) {
+        const strictValue = strictifyOpenAISchemaNode(value, !required.has(key))
+        strictProperties[key] =
+          !required.has(key) && !schemaAllowsNull(strictValue) ? nullableOpenAISchema(strictValue) : strictValue
+      }
+      output.properties = strictProperties
+      output.required = Object.keys(strictProperties)
+      if (output.additionalProperties === undefined) output.additionalProperties = false
+    }
+
+    return optionalFromParent && !schemaAllowsNull(output) ? nullableOpenAISchema(output) : output
+  }
+
+  function schemaAllowsNull(schema: unknown): boolean {
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return false
+    const record = schema as Record<string, unknown>
+    if (record.type === "null") return true
+    if (Array.isArray(record.type) && record.type.includes("null")) return true
+    return (
+      (Array.isArray(record.anyOf) && record.anyOf.some(schemaAllowsNull)) ||
+      (Array.isArray(record.oneOf) && record.oneOf.some(schemaAllowsNull))
+    )
+  }
+
+  function nullableOpenAISchema(schema: unknown): unknown {
+    return { anyOf: [schema, { type: "null" }] }
   }
 }

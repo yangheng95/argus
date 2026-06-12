@@ -989,6 +989,7 @@ export namespace SessionLoop {
             async execute(args: unknown, options: ToolExecutionOptions) {
               const materializedArgs = await materializeProviderToolExecutionInput({
                 name: input.name,
+                model: input.model,
                 inputSchema: raw.inputSchema,
                 args,
               })
@@ -1014,6 +1015,7 @@ export namespace SessionLoop {
 
   async function materializeProviderToolExecutionInput(input: {
     name: string
+    model: Provider.Model
     inputSchema: unknown
     args: unknown
   }): Promise<unknown> {
@@ -1021,16 +1023,100 @@ export namespace SessionLoop {
     const schema = asSchema(input.inputSchema as never) as {
       validate?: (args: unknown) => Promise<ValidationResult>
     }
-    if (typeof schema.validate !== "function") return input.args
+    const args = shouldStripProviderNullOptionals(input.model)
+      ? stripProviderNullOptionals(input.name, input.inputSchema, input.args)
+      : input.args
+    if (typeof schema.validate !== "function") return args
 
     let result: ValidationResult
     try {
-      result = await schema.validate(input.args)
+      result = await schema.validate(args)
     } catch (err) {
-      throw invalidProviderToolInput(input.name, input.args, err)
+      throw invalidProviderToolInput(input.name, args, err)
     }
     if (result.success) return result.value
-    throw invalidProviderToolInput(input.name, input.args, result.error)
+    throw invalidProviderToolInput(input.name, args, result.error)
+  }
+
+  function shouldStripProviderNullOptionals(model: Provider.Model): boolean {
+    if (model.api.npm === "@ai-sdk/openai" || model.api.npm === "@ai-sdk/azure") return true
+    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+    const id = `${model.id} ${model.api.id}`.toLowerCase()
+    return /(^|[\/\s])gpt-[\w.-]+/.test(id)
+  }
+
+  function stripProviderNullOptionals(toolName: string, inputSchema: unknown, args: unknown): unknown {
+    try {
+      const rawJsonSchema = asSchema(inputSchema as never).jsonSchema
+      return stripNullOptionalsFromJsonSchema(rawJsonSchema, args)
+    } catch (err) {
+      throw invalidProviderToolInput(toolName, args, err)
+    }
+  }
+
+  function stripNullOptionalsFromJsonSchema(schema: unknown, value: unknown, dropUnknownNulls = false): unknown {
+    const selected = selectJsonSchemaVariant(schema, value)
+    if (selected !== schema) return stripNullOptionalsFromJsonSchema(selected, value, true)
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return value
+    const record = schema as Record<string, unknown>
+    if (record.type === "array" && Array.isArray(value)) {
+      return value.map((item) => stripNullOptionalsFromJsonSchema(record.items, item))
+    }
+    const properties = record.properties
+    if (!properties || typeof properties !== "object" || Array.isArray(properties)) return value
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value
+
+    const required = new Set(Array.isArray(record.required) ? record.required.filter((item) => typeof item === "string") : [])
+    const out: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      const propertySchema = (properties as Record<string, unknown>)[key]
+      if (item === null && propertySchema === undefined && dropUnknownNulls) {
+        continue
+      }
+      if (item === null && propertySchema !== undefined && !required.has(key) && !jsonSchemaAllowsNull(propertySchema)) {
+        continue
+      }
+      out[key] =
+        propertySchema !== undefined ? stripNullOptionalsFromJsonSchema(propertySchema, item, false) : item
+    }
+    return out
+  }
+
+  function selectJsonSchemaVariant(schema: unknown, value: unknown): unknown {
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return schema
+    if (!value || typeof value !== "object" || Array.isArray(value)) return schema
+    const record = schema as Record<string, unknown>
+    const variants = Array.isArray(record.anyOf) ? record.anyOf : Array.isArray(record.oneOf) ? record.oneOf : undefined
+    if (!variants) return schema
+    for (const variant of variants) {
+      if (!variant || typeof variant !== "object" || Array.isArray(variant)) continue
+      const properties = (variant as Record<string, unknown>).properties
+      if (!properties || typeof properties !== "object" || Array.isArray(properties)) continue
+      let matchedConst = false
+      let mismatched = false
+      for (const [key, propertySchema] of Object.entries(properties as Record<string, unknown>)) {
+        if (!propertySchema || typeof propertySchema !== "object" || Array.isArray(propertySchema)) continue
+        if (!("const" in propertySchema)) continue
+        matchedConst = true
+        if ((value as Record<string, unknown>)[key] !== (propertySchema as Record<string, unknown>).const) {
+          mismatched = true
+          break
+        }
+      }
+      if (matchedConst && !mismatched) return variant
+    }
+    return schema
+  }
+
+  function jsonSchemaAllowsNull(schema: unknown): boolean {
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return false
+    const record = schema as Record<string, unknown>
+    if (record.type === "null") return true
+    if (Array.isArray(record.type) && record.type.includes("null")) return true
+    return (
+      (Array.isArray(record.anyOf) && record.anyOf.some(jsonSchemaAllowsNull)) ||
+      (Array.isArray(record.oneOf) && record.oneOf.some(jsonSchemaAllowsNull))
+    )
   }
 
   function invalidProviderToolInput(toolName: string, args: unknown, cause: unknown): InvalidToolInputError {

@@ -632,6 +632,15 @@ describe("extra tool provider schema preparation", () => {
       url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     },
   } as any
+  const hexinGptModel = {
+    providerID: "hexin",
+    id: "hexin/gpt-5.5",
+    api: {
+      id: "gpt-5.5",
+      npm: "@ai-sdk/openai-compatible",
+      url: "https://aimemodeldev.myhexin.com/litellm/v1",
+    },
+  } as any
 
   test("keeps explicit final confirmation required on extra submit tools", () => {
     const prepared = SessionLoop.prepareProviderTool({
@@ -722,6 +731,82 @@ describe("extra tool provider schema preparation", () => {
       "Invalid input for tool numeric_tool",
     )
     expect(executed).toBe(false)
+  })
+
+  test("strips GPT strict-schema null placeholders before local execution validation", async () => {
+    let seenArgs: unknown
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "submit_timeline",
+      source: "structured",
+      model: hexinGptModel,
+      tool: tool({
+        description: "submit timeline",
+        inputSchema: z.object({
+          chronology: z.array(
+            z.object({
+              event: z.string(),
+              evidence: z.string().optional(),
+            }),
+          ),
+        }),
+        async execute(args) {
+          seenArgs = args
+          return { output: "ok", title: "", metadata: {} }
+        },
+      }),
+    }) as any
+
+    await prepared.execute(
+      { chronology: [{ event: "captured", evidence: null }] },
+      { toolCallId: "call_null_optional" },
+    )
+
+    expect(seenArgs).toEqual({ chronology: [{ event: "captured" }] })
+  })
+
+  test("keeps BuildResult local semantics after GPT strict-schema null placeholders", async () => {
+    let seenArgs: any
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "report_build_result",
+      source: "extra",
+      model: hexinGptModel,
+      tool: tool({
+        description: "report build result",
+        inputSchema: BuildResultSchema,
+        async execute(args) {
+          seenArgs = args
+          return { output: "ok", title: "", metadata: {} }
+        },
+      }),
+    }) as any
+
+    await prepared.execute(
+      {
+        status: "passed",
+        summary: "No-op verification passed.",
+        files_changed: [],
+        tests: [],
+        fact_check_items: [],
+        error: null,
+      },
+      { toolCallId: "call_build_null_error" },
+    )
+    expect(seenArgs.status).toBe("passed")
+    expect("error" in seenArgs).toBe(false)
+
+    await expect(
+      prepared.execute(
+        {
+          status: "passed",
+          summary: "No-op verification passed.",
+          files_changed: [],
+          tests: [],
+          fact_check_items: [],
+          error: "dummy",
+        },
+        { toolCallId: "call_build_string_error" },
+      ),
+    ).rejects.toThrow("Invalid input for tool report_build_result")
   })
 
   test("adds v6-aware model output conversion for project tool-result objects", () => {
