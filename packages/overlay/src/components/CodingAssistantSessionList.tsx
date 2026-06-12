@@ -1,8 +1,8 @@
-import { createSignal, Show } from "solid-js"
+import { createMemo, createSignal, For, Show } from "solid-js"
 import type { CodingAssistantSessionInfo } from "../store/coding-assistant"
 import { useArmedConfirm } from "../solid/armed-confirm"
 import { t } from "../utils/i18n"
-import { compactDirectory } from "../utils/mission-helpers"
+import { projectDirectoryKey, projectDirectoryLabel } from "../utils/project-directory"
 import { detailStamp, relativeTime } from "../utils/time"
 import { Icon } from "./Icon"
 import { LedgerList } from "./LedgerList"
@@ -19,7 +19,6 @@ export interface CodingAssistantSessionListProps {
   actionBusyID?: string
   onSearchChange: (next: string) => void
   onSelectSession: (session: CodingAssistantSessionInfo) => void
-  onCreateSession: () => void
   onRenameSession: (session: CodingAssistantSessionInfo, title: string) => void | Promise<void>
   onDeleteSession: (session: CodingAssistantSessionInfo) => void
   onStopSession: (session: CodingAssistantSessionInfo) => void
@@ -29,12 +28,32 @@ export interface CodingAssistantSessionListProps {
 
 const CONFIRM_WINDOW_MS = 3000
 
+type CodingAssistantGroup = {
+  directory: string
+  latest: number
+  items: CodingAssistantSessionInfo[]
+}
+
 function sessionTitle(session: CodingAssistantSessionInfo): string {
   return session.title?.trim() || session.id
 }
 
 function sessionUpdated(session: CodingAssistantSessionInfo): number {
   return Number(session.time?.updated || session.time?.created || 0)
+}
+
+function sessionProjectDirectory(session: CodingAssistantSessionInfo): string {
+  return session.directory || ""
+}
+
+function sessionProjectTip(directory: string, count: number): string {
+  return [directory || t("task.project.unknown"), String(count)].filter(Boolean).join(" / ")
+}
+
+function sessionRowTip(session: CodingAssistantSessionInfo): string {
+  return [sessionTitle(session), session.id ? `ID: ${session.id}` : "", sessionProjectDirectory(session)]
+    .filter(Boolean)
+    .join(" / ")
 }
 
 function CodingAssistantStopButton(props: {
@@ -169,10 +188,11 @@ function CodingAssistantSessionRow(props: {
     <div
       role="button"
       tabindex={0}
-      class="ledger-row coding-assistant-row"
+      class="task-row-mini global-task-row coding-assistant-row"
       data-ui="coding-assistant-row"
       data-session-id={props.session.id}
       data-active={props.selected ? "true" : undefined}
+      title={sessionRowTip(props.session)}
       onClick={() => {
         if (editing() || props.busy) return
         props.onSelectSession(props.session)
@@ -189,65 +209,120 @@ function CodingAssistantSessionRow(props: {
         beginRename()
       }}
     >
-      <span class="ledger-row-icon" aria-hidden="true">
+      <span class="task-row-badge coding-assistant-row-kind-badge" aria-hidden="true">
         <Icon name="message" size={14} />
       </span>
-      <span class="ledger-row-main">
+      <div class="task-row-body">
         <Show
           when={!editing()}
           fallback={
-            <input
-              ref={(el) => {
-                inputRef = el
-              }}
-              class="coding-assistant-row-rename-input"
-              data-ui="coding-assistant-row-rename-input"
-              type="text"
-              maxLength={200}
-              value={draftTitle()}
-              aria-label={t("coding_assistant.ledger.rename_placeholder")}
-              placeholder={t("coding_assistant.ledger.rename_placeholder")}
-              onInput={(event) => setDraftTitle(event.currentTarget.value)}
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault()
-                  commitRename()
-                } else if (event.key === "Escape") {
-                  event.preventDefault()
-                  cancelRename()
-                }
-              }}
-              onBlur={() => {
-                queueMicrotask(() => {
-                  if (editing()) commitRename()
-                })
-              }}
-            />
+            <div class="task-row-main task-row-main--editing" data-ui="coding-assistant-row-rename-editor">
+              <div class="task-row-head">
+                <input
+                  ref={(el) => {
+                    inputRef = el
+                  }}
+                  class="coding-assistant-row-rename-input"
+                  data-ui="coding-assistant-row-rename-input"
+                  type="text"
+                  maxLength={200}
+                  value={draftTitle()}
+                  aria-label={t("coding_assistant.ledger.rename_placeholder")}
+                  placeholder={t("coding_assistant.ledger.rename_placeholder")}
+                  onInput={(event) => setDraftTitle(event.currentTarget.value)}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault()
+                      commitRename()
+                    } else if (event.key === "Escape") {
+                      event.preventDefault()
+                      cancelRename()
+                    }
+                  }}
+                  onBlur={() => {
+                    queueMicrotask(() => {
+                      if (editing()) commitRename()
+                    })
+                  }}
+                />
+              </div>
+            </div>
           }
         >
-          <span class="ledger-row-title">{title()}</span>
+          <button
+            type="button"
+            class="task-row-main coding-assistant-row-main"
+            title={sessionRowTip(props.session)}
+            disabled={props.busy}
+            aria-disabled={props.busy ? "true" : undefined}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (!props.busy) props.onSelectSession(props.session)
+            }}
+            onDblClick={(event) => {
+              event.stopPropagation()
+              event.preventDefault()
+              beginRename()
+            }}
+          >
+            <div class="task-row-head">
+              <strong>{title()}</strong>
+            </div>
+          </button>
         </Show>
-        <span class="ledger-row-meta">
-          <span>{props.session.id}</span>
-          <span>{compactDirectory(props.session.directory || "")}</span>
-        </span>
-      </span>
-      <span class="ledger-row-right">
-        <span class="ledger-row-stamp" title={updated() ? detailStamp(updated()) : ""}>
+      </div>
+      <div class="task-row-right">
+        <small class="task-row-stamp coding-assistant-row-stamp" title={updated() ? detailStamp(updated()) : ""}>
           {updated() ? relativeTime(updated()) : t("coding_assistant.ledger.updated_unknown")}
-        </span>
-        <span class="coding-assistant-row-actions">
+        </small>
+        <div class="task-row-actions coding-assistant-row-actions">
           <CodingAssistantStopButton session={props.session} disabled={props.busy} onStop={props.onStopSession} />
           <CodingAssistantRenameButton disabled={props.busy} onClick={beginRename} />
           <CodingAssistantDeleteButton session={props.session} disabled={props.busy} onDelete={props.onDeleteSession} />
-        </span>
-      </span>
+        </div>
+      </div>
     </div>
   )
 }
 
 export function CodingAssistantSessionList(props: CodingAssistantSessionListProps) {
+  const [collapsedDirectories, setCollapsedDirectories] = createSignal<Record<string, boolean>>({})
+  const groupedSessions = createMemo<CodingAssistantGroup[]>(() => {
+    const groups = new Map<string, CodingAssistantGroup>()
+    for (const session of props.sessions) {
+      const directory = sessionProjectDirectory(session)
+      let group = groups.get(directory)
+      if (!group) {
+        group = { directory, latest: 0, items: [] }
+        groups.set(directory, group)
+      }
+      const updated = sessionUpdated(session)
+      group.items.push(session)
+      if (updated > group.latest) group.latest = updated
+    }
+    return [...groups.values()]
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((a, b) => sessionUpdated(b) - sessionUpdated(a)),
+      }))
+      .sort((a, b) => b.latest - a.latest)
+  })
+
+  function isDirectoryCollapsed(directory: string): boolean {
+    return collapsedDirectories()[projectDirectoryKey(directory)] === true
+  }
+
+  function toggleDirectoryGroup(directory: string): void {
+    const key = projectDirectoryKey(directory)
+    setCollapsedDirectories((current) => {
+      const next = { ...current }
+      if (next[key]) delete next[key]
+      else next[key] = true
+      return next
+    })
+  }
+
   return (
     <aside class="coding-assistant-ledger" data-ui="coding-assistant-ledger">
       <div class="coding-assistant-ledger-toolbar" role="toolbar" aria-label={t("coding_assistant.title")}>
@@ -278,25 +353,10 @@ export function CodingAssistantSessionList(props: CodingAssistantSessionListProp
             </Button>
           </Show>
         </div>
-        <Button
-          type="button"
-          variant="solid"
-          size="md"
-          tone="accent"
-          data-ui="coding-assistant-new"
-          title={t("coding_assistant.new_title")}
-          aria-label={t("coding_assistant.new")}
-          onClick={props.onCreateSession}
-        >
-          <span class="sidebar-btn-icon" aria-hidden="true">
-            <Icon name="plus" size={13} />
-          </span>
-          <span>{t("coding_assistant.new")}</span>
-        </Button>
       </div>
       <div class="coding-assistant-ledger-list">
         <LedgerList
-          items={props.sessions}
+          items={groupedSessions()}
           loading={props.loading}
           error={props.error}
           emptyLabel={
@@ -305,17 +365,59 @@ export function CodingAssistantSessionList(props: CodingAssistantSessionListProp
           retryLabel={t("coding_assistant.ledger.error_retry")}
           onRetry={props.onRetry}
         >
-          {(session) => (
-            <CodingAssistantSessionRow
-              session={session}
-              selected={props.selectedSessionID === session.id}
-              busy={props.actionBusyID === session.id}
-              onSelectSession={props.onSelectSession}
-              onStopSession={props.onStopSession}
-              onDeleteSession={props.onDeleteSession}
-              onRenameSession={props.onRenameSession}
-            />
-          )}
+          {(group) => {
+            const label = projectDirectoryLabel(group.directory, t("task.project.unknown"))
+            const collapsed = () => isDirectoryCollapsed(group.directory)
+            return (
+              <section
+                class="project-group coding-assistant-project-group"
+                data-ui="coding-assistant-project-group"
+                data-collapsed={collapsed() ? "true" : undefined}
+              >
+                <button
+                  type="button"
+                  class="project-group-heading"
+                  title={sessionProjectTip(group.directory, group.items.length)}
+                  aria-expanded={collapsed() ? "false" : "true"}
+                  aria-label={label.name}
+                  onClick={() => toggleDirectoryGroup(group.directory)}
+                >
+                  <span class="project-group-icon" aria-hidden="true">
+                    <Icon name={collapsed() ? "folder" : "folder-open"} size={15} />
+                  </span>
+                  <span class="project-group-copy">
+                    <span class="project-group-name">{label.name}</span>
+                    <Show when={label.parent}>
+                      <span class="project-group-parent">{label.parent}</span>
+                    </Show>
+                  </span>
+                  <span class="project-group-count" aria-label={String(group.items.length)}>
+                    {group.items.length}
+                  </span>
+                  <span class="project-group-chevron" aria-hidden="true">
+                    <Icon name={collapsed() ? "chevron" : "chevron-down"} size={12} />
+                  </span>
+                </button>
+                <Show when={!collapsed()}>
+                  <div class="project-group-body">
+                    <For each={group.items}>
+                      {(session) => (
+                        <CodingAssistantSessionRow
+                          session={session}
+                          selected={props.selectedSessionID === session.id}
+                          busy={props.actionBusyID === session.id}
+                          onSelectSession={props.onSelectSession}
+                          onStopSession={props.onStopSession}
+                          onDeleteSession={props.onDeleteSession}
+                          onRenameSession={props.onRenameSession}
+                        />
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </section>
+            )
+          }}
         </LedgerList>
         <Show when={props.hasMore}>
           <div class="project-group-show-more coding-assistant-ledger-load-more">

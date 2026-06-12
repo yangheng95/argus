@@ -2,7 +2,6 @@ import { createMemo, createSignal, For, Show } from "solid-js"
 import type { MissionRecord, MissionTaskProjection, MissionTaskStatus } from "../services/mission"
 import { detailStamp, relativeTime } from "../utils/time"
 import { t } from "../utils/i18n"
-import { compactDirectory } from "../utils/mission-helpers"
 import { projectDirectoryKey, projectDirectoryLabel } from "../utils/project-directory"
 import { useArmedConfirm } from "../solid/armed-confirm"
 import { Icon } from "./Icon"
@@ -21,7 +20,6 @@ export interface MissionListProps {
   onAbortMission: (mission: MissionRecord) => void
   onDeleteMission: (mission: MissionRecord) => void
   onRenameMission: (mission: MissionRecord, title: string) => void | Promise<void>
-  onCreateMission: () => void
   onRetry: () => void
   hasMore?: boolean
   loadingMore?: boolean
@@ -37,6 +35,12 @@ type MissionGroup = {
 
 function missionProjectTip(directory: string, count: number): string {
   return [directory || t("task.project.unknown"), String(count)].filter(Boolean).join(" / ")
+}
+
+function missionRowTip(mission: MissionRecord): string {
+  return [mission.title || mission.missionID, mission.missionID ? `ID: ${mission.missionID}` : "", mission.directory]
+    .filter(Boolean)
+    .join(" / ")
 }
 
 const CONFIRM_WINDOW_MS = 3000
@@ -125,6 +129,10 @@ function missionTaskStatusLabel(status: MissionTaskStatus): string {
   return value === `task.status.${status}` ? status : value
 }
 
+function missionTaskProjectionTip(task: MissionTaskProjection): string {
+  return [task.title || task.id, task.id ? `ID: ${task.id}` : "", task.directory].filter(Boolean).join(" / ")
+}
+
 function MissionTaskProjectionRow(props: { task: MissionTaskProjection; onSelectTask: (taskID: string) => void }) {
   return (
     <li
@@ -137,6 +145,7 @@ function MissionTaskProjectionRow(props: { task: MissionTaskProjection; onSelect
         type="button"
         class="mission-task-projection-button"
         data-ui="mission-task-projection-select"
+        title={missionTaskProjectionTip(props.task)}
         onClick={(event) => {
           event.stopPropagation()
           props.onSelectTask(props.task.id)
@@ -144,10 +153,6 @@ function MissionTaskProjectionRow(props: { task: MissionTaskProjection; onSelect
       >
         <span class="mission-task-projection-main">
           <span class="mission-task-projection-title">{props.task.title || props.task.id}</span>
-          <span class="mission-task-projection-meta">
-            <span>{props.task.id}</span>
-            <span>{compactDirectory(props.task.directory)}</span>
-          </span>
         </span>
         <span class="mission-task-projection-status" data-status={props.task.status}>
           {missionTaskStatusLabel(props.task.status)}
@@ -198,11 +203,12 @@ function MissionRow(props: {
       <div
         role="button"
         tabindex={0}
-        class="ledger-row mission-row"
+        class="task-row-mini global-task-row mission-row"
         data-ui="mission-row"
         data-mission-id={props.mission.missionID}
         data-session-id={props.mission.sessionID}
         data-active={props.selected ? "true" : undefined}
+        title={missionRowTip(props.mission)}
         onClick={() => {
           if (editing()) return
           props.onSelectMission(props.mission)
@@ -219,60 +225,77 @@ function MissionRow(props: {
           beginRename()
         }}
       >
-        <span class="ledger-row-icon" aria-hidden="true">
+        <span class="task-row-badge mission-row-kind-badge" aria-hidden="true">
           <Icon name="mission" size={14} />
         </span>
-        <span class="ledger-row-main">
+        <div class="task-row-body">
           <Show
             when={!editing()}
             fallback={
-              <input
-                ref={(el) => {
-                  inputRef = el
-                }}
-                class="mission-row-rename-input"
-                data-ui="mission-row-rename-input"
-                type="text"
-                maxLength={200}
-                value={draftTitle()}
-                aria-label={t("mission.ledger.rename_placeholder")}
-                placeholder={t("mission.ledger.rename_placeholder")}
-                onInput={(event) => setDraftTitle(event.currentTarget.value)}
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault()
-                    commitRename()
-                  } else if (event.key === "Escape") {
-                    event.preventDefault()
-                    cancelRename()
-                  }
-                }}
-                onBlur={() => {
-                  queueMicrotask(() => {
-                    if (editing()) commitRename()
-                  })
-                }}
-              />
+              <div class="task-row-main task-row-main--editing" data-ui="mission-row-rename-editor">
+                <div class="task-row-head">
+                  <input
+                    ref={(el) => {
+                      inputRef = el
+                    }}
+                    class="mission-row-rename-input"
+                    data-ui="mission-row-rename-input"
+                    type="text"
+                    maxLength={200}
+                    value={draftTitle()}
+                    aria-label={t("mission.ledger.rename_placeholder")}
+                    placeholder={t("mission.ledger.rename_placeholder")}
+                    onInput={(event) => setDraftTitle(event.currentTarget.value)}
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault()
+                        commitRename()
+                      } else if (event.key === "Escape") {
+                        event.preventDefault()
+                        cancelRename()
+                      }
+                    }}
+                    onBlur={() => {
+                      queueMicrotask(() => {
+                        if (editing()) commitRename()
+                      })
+                    }}
+                  />
+                </div>
+              </div>
             }
           >
-            <span class="ledger-row-title">{title()}</span>
+            <button
+              type="button"
+              class="task-row-main mission-row-main"
+              title={missionRowTip(props.mission)}
+              onClick={(event) => {
+                event.stopPropagation()
+                props.onSelectMission(props.mission)
+              }}
+              onDblClick={(event) => {
+                event.stopPropagation()
+                event.preventDefault()
+                beginRename()
+              }}
+            >
+              <div class="task-row-head">
+                <strong>{title()}</strong>
+              </div>
+            </button>
           </Show>
-          <span class="ledger-row-meta">
-            <span>{props.mission.missionID}</span>
-            <span>{compactDirectory(props.mission.directory)}</span>
-          </span>
-        </span>
-        <span class="ledger-row-right">
-          <span class="ledger-row-stamp" title={detailStamp(props.mission.updated)}>
+        </div>
+        <div class="task-row-right">
+          <small class="task-row-stamp mission-row-stamp" title={detailStamp(props.mission.updated)}>
             {relativeTime(props.mission.updated) || t("mission.ledger.updated_unknown")}
-          </span>
-          <span class="mission-row-actions">
+          </small>
+          <div class="task-row-actions mission-row-actions">
             <MissionAbortButton mission={props.mission} onAbort={props.onAbortMission} />
             <MissionRenameButton onClick={beginRename} />
             <MissionDeleteButton mission={props.mission} onDelete={props.onDeleteMission} />
-          </span>
-        </span>
+          </div>
+        </div>
       </div>
       <Show when={props.mission.tasks.length > 0}>
         <ul class="mission-task-projection-list" aria-label={t("mission.ledger.tasks_label")}>
@@ -351,20 +374,6 @@ export function MissionList(props: MissionListProps) {
             </Button>
           </Show>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          tone="accent"
-          data-chrome="icon-action"
-          data-ui="mission-new"
-          title={t("mission.new_title")}
-          aria-label={t("mission.new")}
-          onClick={props.onCreateMission}
-        >
-          <Icon name="plus" size={13} />
-          <span class="mission-new-label">{t("mission.new")}</span>
-        </Button>
       </div>
 
       <div class="mission-ledger-list">
