@@ -323,48 +323,51 @@ export function MissionList(props: MissionListProps) {
 
   return (
     <div class="mission-ledger" data-ui="mission-ledger">
-      <div class="mission-ledger-search search-field">
-        <Icon name="search" size={12} class="mission-ledger-search-icon search-field-icon" />
-        <input
-          type="search"
-          class="mission-ledger-search-input search-field-input"
-          placeholder={t("mission.ledger.search_placeholder")}
-          value={props.searchQuery}
-          onInput={(e) => props.onSearchChange(e.currentTarget.value)}
-          aria-label={t("mission.ledger.search_placeholder")}
-          data-ui="mission-search"
-        />
-        <Show when={props.searchQuery}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            tone="neutral"
-            data-chrome="icon-action"
-            data-ui="mission-ledger-search-clear"
-            aria-label={t("mission.ledger.search_clear")}
-            title={t("mission.ledger.search_clear")}
-            onClick={() => props.onSearchChange("")}
-          >
-            <Icon name="close" />
-          </Button>
-        </Show>
-      </div>
-
-      <div class="mission-ledger-list">
+      <div class="mission-ledger-controls">
+        <div class="mission-ledger-search search-field">
+          <Icon name="search" size={12} class="mission-ledger-search-icon search-field-icon" />
+          <input
+            type="search"
+            class="mission-ledger-search-input search-field-input"
+            placeholder={t("mission.ledger.search_placeholder")}
+            value={props.searchQuery}
+            onInput={(e) => props.onSearchChange(e.currentTarget.value)}
+            aria-label={t("mission.ledger.search_placeholder")}
+            data-ui="mission-search"
+          />
+          <Show when={props.searchQuery}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              tone="neutral"
+              data-chrome="icon-action"
+              data-ui="mission-ledger-search-clear"
+              aria-label={t("mission.ledger.search_clear")}
+              title={t("mission.ledger.search_clear")}
+              onClick={() => props.onSearchChange("")}
+            >
+              <Icon name="close" />
+            </Button>
+          </Show>
+        </div>
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="icon"
           tone="accent"
+          data-chrome="icon-action"
           data-ui="mission-new"
           title={t("mission.new_title")}
           aria-label={t("mission.new")}
           onClick={props.onCreateMission}
         >
           <Icon name="plus" size={13} />
-          <span>{t("mission.new")}</span>
+          <span class="mission-new-label">{t("mission.new")}</span>
         </Button>
+      </div>
+
+      <div class="mission-ledger-list">
         <LedgerList
           items={groupedMissions()}
           loading={props.loading}
