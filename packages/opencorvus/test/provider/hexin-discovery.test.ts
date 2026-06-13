@@ -103,7 +103,11 @@ describe("hexin model discovery", () => {
     expect(models["kimi-k2.6"].capabilities).toMatchObject({
       reasoning: true,
       temperature: false,
+      attachment: true,
       toolcall: true,
+      input: {
+        image: true,
+      },
       interleaved: { field: "reasoning_content" },
     })
     expect(models["openai/glm-5.1"].capabilities).toMatchObject({
