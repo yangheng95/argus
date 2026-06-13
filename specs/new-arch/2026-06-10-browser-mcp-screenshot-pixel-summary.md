@@ -24,11 +24,14 @@ Command:
 Add one helper in `mcp/browser/tools.ts` that computes:
 
 - `currentPixels = width * height`
-- `compressedPixels = min(currentPixels, modelPixelBudget)`
-- `compressionRatio = currentPixels / compressedPixels`
+- `dimensionScale = sqrt(modelPixelBudget / currentPixels)` when the screenshot exceeds budget, otherwise `1`
+- `compressedWidth = floor(width * dimensionScale)`
+- `compressedHeight = floor(height * dimensionScale)`
+- `compressedPixels = compressedWidth * compressedHeight`
+- `compressionRatio = max(width / compressedWidth, height / compressedHeight)`
 - `preferPartialScreenshot = compressionRatio >= warningRatio`
 
-The helper only describes expected model-side visual downscaling pressure. It does not add routing gates, block full-page screenshots, or introduce a second capture path. When the ratio is high, the text says: `压缩率过大，请优先使用 selector 或 clip 做局部截图。`
+The helper only describes expected model-side proportional visual downscaling pressure. It does not add routing gates, block full-page screenshots, or introduce a second capture path. When the ratio is high, the text says: `压缩率过大，请优先使用 selector 或 clip 做局部截图。`
 
 ## Verification
 

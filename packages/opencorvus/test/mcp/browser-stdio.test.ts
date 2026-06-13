@@ -306,7 +306,13 @@ describe("built-in browser MCP stdio", () => {
           data?: string
           width?: number
           height?: number
-          pixelSummary?: { currentPixels?: number; compressedPixels?: number; preferPartialScreenshot?: boolean }
+          pixelSummary?: {
+            currentPixels?: number
+            compressedPixels?: number
+            compressedWidth?: number
+            compressedHeight?: number
+            preferPartialScreenshot?: boolean
+          }
         }
         dom?: { visibleText?: string; interactive?: unknown[] }
         diagnostics?: { consoleErrors?: unknown[]; httpErrors?: unknown[] }
@@ -320,6 +326,8 @@ describe("built-in browser MCP stdio", () => {
       expect(observeData.screenshot?.pixelSummary).toMatchObject({
         currentPixels: 307_200,
         compressedPixels: 307_200,
+        compressedWidth: 640,
+        compressedHeight: 480,
         preferPartialScreenshot: false,
       })
       expect(observeData.screenshot?.data?.length ?? 0).toBeGreaterThan(100)
@@ -333,13 +341,21 @@ describe("built-in browser MCP stdio", () => {
         data?: string
         width?: number
         height?: number
-        pixelSummary?: { currentPixels?: number; compressedPixels?: number; preferPartialScreenshot?: boolean }
+        pixelSummary?: {
+          currentPixels?: number
+          compressedPixels?: number
+          compressedWidth?: number
+          compressedHeight?: number
+          preferPartialScreenshot?: boolean
+        }
       }
       expect(shotData.width).toBe(640)
       expect(shotData.height).toBe(480)
       expect(shotData.pixelSummary).toMatchObject({
         currentPixels: 307_200,
         compressedPixels: 307_200,
+        compressedWidth: 640,
+        compressedHeight: 480,
         preferPartialScreenshot: false,
       })
       const shotText = screenshot.content.find(
@@ -366,13 +382,21 @@ describe("built-in browser MCP stdio", () => {
         data?: string
         width?: number
         height?: number
-        pixelSummary?: { currentPixels?: number; compressedPixels?: number; preferPartialScreenshot?: boolean }
+        pixelSummary?: {
+          currentPixels?: number
+          compressedPixels?: number
+          compressedWidth?: number
+          compressedHeight?: number
+          preferPartialScreenshot?: boolean
+        }
       }
       expect(clippedData.width).toBe(120)
       expect(clippedData.height).toBe(80)
       expect(clippedData.pixelSummary).toMatchObject({
         currentPixels: 9_600,
         compressedPixels: 9_600,
+        compressedWidth: 120,
+        compressedHeight: 80,
         preferPartialScreenshot: false,
       })
       const clippedBytes = Buffer.from(clippedData.data ?? "", "base64")
