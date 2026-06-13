@@ -161,6 +161,8 @@ describe("hexin model discovery", () => {
         fn: async () => {
           const providers = await Provider.list()
           expect(Object.keys(providers.hexin.models).sort()).toEqual(["glm-5.1", "kimi-k2.6"])
+          expect(providers.hexin.models["kimi-k2.6"].capabilities.attachment).toBe(true)
+          expect(providers.hexin.models["kimi-k2.6"].capabilities.input.image).toBe(true)
           expect(requests).toEqual([{ authorization: "Bearer auth-hexin-key" }])
         },
       })
