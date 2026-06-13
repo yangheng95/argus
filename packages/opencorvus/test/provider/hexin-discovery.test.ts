@@ -93,14 +93,27 @@ describe("hexin model discovery", () => {
 
   test("target reasoning models are exposed with provider-safe capabilities", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ data: [{ id: "kimi-k2.6" }, { id: "openai/glm-5.1" }] }), {
+      new Response(
+        JSON.stringify({ data: [{ id: "kimi-k2.6" }, { id: "kimi-k2.7-code" }, { id: "openai/glm-5.1" }] }),
+        {
         status: 200,
         headers: { "content-type": "application/json" },
-      })) as typeof fetch
+        },
+      )) as typeof fetch
 
     const models = await refreshHexinCache("test-hexin-key")
 
     expect(models["kimi-k2.6"].capabilities).toMatchObject({
+      reasoning: true,
+      temperature: false,
+      attachment: true,
+      toolcall: true,
+      input: {
+        image: true,
+      },
+      interleaved: { field: "reasoning_content" },
+    })
+    expect(models["kimi-k2.7-code"].capabilities).toMatchObject({
       reasoning: true,
       temperature: false,
       attachment: true,
@@ -145,7 +158,7 @@ describe("hexin model discovery", () => {
       requests.push({
         authorization: new Headers(init?.headers).get("authorization"),
       })
-      return new Response(JSON.stringify({ data: [{ id: "glm-5.1" }, { id: "kimi-k2.6" }] }), {
+      return new Response(JSON.stringify({ data: [{ id: "glm-5.1" }, { id: "kimi-k2.6" }, { id: "kimi-k2.7-code" }] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       })
@@ -160,9 +173,11 @@ describe("hexin model discovery", () => {
         },
         fn: async () => {
           const providers = await Provider.list()
-          expect(Object.keys(providers.hexin.models).sort()).toEqual(["glm-5.1", "kimi-k2.6"])
+          expect(Object.keys(providers.hexin.models).sort()).toEqual(["glm-5.1", "kimi-k2.6", "kimi-k2.7-code"])
           expect(providers.hexin.models["kimi-k2.6"].capabilities.attachment).toBe(true)
           expect(providers.hexin.models["kimi-k2.6"].capabilities.input.image).toBe(true)
+          expect(providers.hexin.models["kimi-k2.7-code"].capabilities.attachment).toBe(true)
+          expect(providers.hexin.models["kimi-k2.7-code"].capabilities.input.image).toBe(true)
           expect(requests).toEqual([{ authorization: "Bearer auth-hexin-key" }])
         },
       })

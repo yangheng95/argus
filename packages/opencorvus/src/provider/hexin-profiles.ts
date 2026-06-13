@@ -203,6 +203,25 @@ const MATCHERS: Matcher[] = [
       output: 128_000,
     },
   },
+  // Kimi K2.7 Code: direct Hexin probe accepted image input and returned
+  // reasoning_content. The same route rejects arbitrary temperature values;
+  // keep fixed Moonshot sampling and leave PDF disabled until verified.
+  {
+    test: (id) => /(^|\/)kimi-k2\.7-code$/i.test(id),
+    contractIDs: ["kimi-k2.7-code"],
+    profile: {
+      family: "kimi",
+      reasoning: true,
+      temperature: false,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+      context: 200_000,
+      output: 16_384,
+    },
+  },
   // Kimi
   {
     test: (id) => /kimi/i.test(id),
