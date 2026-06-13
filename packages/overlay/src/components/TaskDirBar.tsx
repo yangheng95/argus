@@ -315,8 +315,14 @@ export function ProjectWorktreeDropdown() {
   const expiredWorktrees = createMemo(() => worktrees().filter((item) => item.status === "expired"))
 
   async function syncWorktrees(): Promise<void> {
+    const projectDirectory = dir().trim()
+    if (!projectDirectory) {
+      setWorktrees([])
+      setError("")
+      return
+    }
     try {
-      const items = await loadProjectWorktrees()
+      const items = await loadProjectWorktrees(projectDirectory)
       setWorktrees(items)
       setError("")
     } catch (err) {
@@ -347,7 +353,7 @@ export function ProjectWorktreeDropdown() {
     })
     if (!confirmed.confirmed) return
     try {
-      await deleteProjectWorktree(item.directory)
+      await deleteProjectWorktree(dir(), item.directory)
       await syncWorktrees()
       await loadBoard({ sync: true }).catch(() => undefined)
     } catch (err) {
