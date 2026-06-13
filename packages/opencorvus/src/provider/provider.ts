@@ -389,12 +389,15 @@ export namespace Provider {
     const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
 
     // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models.
+    // Even when the generated registry snapshot contains a `hexin` provider,
+    // replace it here: the gateway's /models endpoint exposes IDs only, and
+    // Hexin capability data has a single source in hexin-profiles.ts.
     // discoverHexinModelsForStartup is fault-isolated by contract: a hexin
     // upstream outage (budget exceeded, 401, DNS) MUST NOT reject state(),
     // because that would 500 /config/providers and erase every other provider
     // from the Settings UI — leaving the operator no way to switch keys or
     // disable hexin. The helper falls back cache → empty and never throws.
-    if (!database["hexin"] && !disabled.has("hexin")) {
+    if (!disabled.has("hexin")) {
       const key = await hexinApiKey(config)
       const outcome = await discoverHexinModelsForStartup({ apiKey: key })
       if (outcome.error) {
