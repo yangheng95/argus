@@ -7,6 +7,10 @@ import { Worktree } from "../../src/worktree"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
+function slash(input: string) {
+  return input.replace(/\\/g, "/")
+}
+
 describe("Worktree.remove", () => {
   test("continues when git remove exits non-zero after detaching", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -59,6 +63,35 @@ describe("Worktree.remove", () => {
     const list = await $`git worktree list --porcelain`.cwd(root).quiet().text()
     expect(list).not.toContain(`worktree ${dir}`)
 
+    const ref = await $`git show-ref --verify --quiet refs/heads/${branch}`.cwd(root).quiet().nothrow()
+    expect(ref.exitCode).not.toBe(0)
+  })
+
+  test("prunes a registered worktree whose .git linkage is already missing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const root = tmp.path
+    const name = `remove-zombie-${Date.now().toString(36)}`
+    const branch = `opencorvus/${name}`
+    const dir = path.join(root, "..", name)
+
+    await $`git worktree add --no-checkout -b ${branch} ${dir}`.cwd(root).quiet()
+    await $`git reset --hard`.cwd(dir).quiet()
+    await fs.writeFile(path.join(dir, "leftover.txt"), "zombie residue\n")
+    await fs.rm(path.join(dir, ".git"), { force: true })
+
+    const before = await $`git worktree list --porcelain`.cwd(root).quiet().text()
+    expect(slash(before)).toContain(`worktree ${slash(path.resolve(dir))}`)
+    expect(await Filesystem.exists(dir)).toBe(true)
+
+    const ok = await Instance.provide({
+      directory: root,
+      fn: () => Worktree.remove({ directory: dir }),
+    })
+
+    expect(ok).toBe(true)
+    expect(await Filesystem.exists(dir)).toBe(false)
+    const list = await $`git worktree list --porcelain`.cwd(root).quiet().text()
+    expect(slash(list)).not.toContain(`worktree ${slash(path.resolve(dir))}`)
     const ref = await $`git show-ref --verify --quiet refs/heads/${branch}`.cwd(root).quiet().nothrow()
     expect(ref.exitCode).not.toBe(0)
   })

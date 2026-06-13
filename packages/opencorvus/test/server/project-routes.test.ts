@@ -10,6 +10,7 @@ import { Database } from "../../src/storage/db"
 import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
+import { Project } from "../../src/project/project"
 
 Log.init({ print: false })
 
@@ -160,6 +161,10 @@ describe("project routes", () => {
 
     await $`git worktree add --no-checkout -b ${`opencorvus/delete-${now}`} ${expiredDir}`.cwd(tmp.path).quiet()
     await $`git reset --hard`.cwd(expiredDir).quiet()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: () => Project.addSandbox(Instance.project.id, expiredDir),
+    })
 
     const response = await app.request("/project/current/worktrees", {
       method: "DELETE",
@@ -175,5 +180,10 @@ describe("project routes", () => {
     expect(await Filesystem.exists(expiredDir)).toBe(false)
     const list = await $`git worktree list --porcelain`.cwd(tmp.path).quiet().text()
     expect(list).not.toContain(path.resolve(expiredDir))
+    const project = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Project.get(Instance.project.id),
+    })
+    expect(project?.sandboxes).not.toContain(expiredDir)
   }, 30_000)
 })

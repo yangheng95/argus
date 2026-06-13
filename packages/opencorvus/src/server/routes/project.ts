@@ -135,6 +135,7 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const body = c.req.valid("json")
         await Worktree.remove(body)
+        await Project.removeSandbox(Instance.project.id, body.directory)
         return c.json({ ok: true })
       },
     )
