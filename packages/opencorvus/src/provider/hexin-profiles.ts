@@ -185,6 +185,8 @@ const MATCHERS: Matcher[] = [
   },
   // Kimi K2.6: thinking is enabled by default; fixed sampling and
   // reasoning_content round-tripping are required by Moonshot's API contract.
+  // The generated provider snapshot marks Kimi K2.6 image-capable; keep PDF
+  // disabled here until the exact Hexin route is verified for PDF input.
   {
     test: (id) => /(^|\/)kimi-k2\.6$/i.test(id),
     contractIDs: ["kimi-k2.6"],
@@ -192,8 +194,8 @@ const MATCHERS: Matcher[] = [
       family: "kimi",
       reasoning: true,
       temperature: false,
-      attachment: false,
-      image_in: false,
+      attachment: true,
+      image_in: true,
       pdf_in: false,
       toolcall: true,
       interleaved: { field: "reasoning_content" },
