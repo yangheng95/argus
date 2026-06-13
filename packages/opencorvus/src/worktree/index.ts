@@ -1806,24 +1806,54 @@ export namespace Worktree {
       }
 
       await stop(entry.path)
-      const removed = await runGit(["worktree", "remove", "--force", entry.path], {
-        cwd: Instance.worktree,
-        timeoutProfile: "default",
-      })
-      if (removed.exitCode !== 0) {
+      const gitLinkExists = await exists(path.join(entry.path, ".git"))
+      if (gitLinkExists) {
+        const removed = await runGit(["worktree", "remove", "--force", entry.path], {
+          cwd: Instance.worktree,
+          timeoutProfile: "default",
+        })
+        if (removed.exitCode !== 0) {
+          const next = await runGit(["worktree", "list", "--porcelain"], {
+            cwd: Instance.worktree,
+            timeoutProfile: "default",
+          })
+          if (next.exitCode !== 0) {
+            throw new RemoveFailedError({
+              message: errorText(removed) || errorText(next) || "Failed to remove git worktree",
+            })
+          }
+
+          const stale = await findWorktreeEntry(next.stdout, directory)
+          if (stale?.path) {
+            throw new RemoveFailedError({ message: errorText(removed) || "Failed to remove git worktree" })
+          }
+        }
+      } else {
+        const pruned = await runGit(["worktree", "prune"], {
+          cwd: Instance.worktree,
+          timeoutProfile: "default",
+        })
+        if (pruned.exitCode !== 0) {
+          throw new RemoveFailedError({
+            message:
+              `Failed to prune broken git worktree registry for ${entry.path}: ` +
+              (errorText(pruned) || "unknown error"),
+          })
+        }
         const next = await runGit(["worktree", "list", "--porcelain"], {
           cwd: Instance.worktree,
           timeoutProfile: "default",
         })
         if (next.exitCode !== 0) {
           throw new RemoveFailedError({
-            message: errorText(removed) || errorText(next) || "Failed to remove git worktree",
+            message: errorText(next) || "Failed to read git worktrees after prune",
           })
         }
-
         const stale = await findWorktreeEntry(next.stdout, directory)
         if (stale?.path) {
-          throw new RemoveFailedError({ message: errorText(removed) || "Failed to remove git worktree" })
+          throw new RemoveFailedError({
+            message: `Broken git worktree registry still lists ${entry.path} after prune`,
+          })
         }
       }
 
