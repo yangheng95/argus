@@ -41,6 +41,27 @@ test("hexin kimi-k2.6 profile follows Moonshot thinking-model contract", () => {
   expect(profile.context).toBe(256_000)
 })
 
+test("hexin kimi-k2.7-code profile follows verified Moonshot vision contract", () => {
+  const profile = profileFor("kimi-k2.7-code")
+
+  expect(profile.family).toBe("kimi")
+  expect(profile.reasoning).toBe(true)
+  expect(profile.temperature).toBe(false)
+  expect(profile.attachment).toBe(true)
+  expect(profile.image_in).toBe(true)
+  expect(profile.pdf_in).toBe(false)
+  expect(profile.toolcall).toBe(true)
+  expect(profile.interleaved).toEqual({ field: "reasoning_content" })
+  expect(profile.context).toBe(200_000)
+  expect(profile.output).toBe(16_384)
+  expect(
+    ProviderTransform.requestBody("hexin", {
+      model: "kimi-k2.7-code",
+      temperature: 0,
+    }),
+  ).toMatchObject({ temperature: 1 })
+})
+
 test("hexin glm-5.1 profile follows Z.AI thinking-model contract", () => {
   const profile = profileFor("openai/glm-5.1")
 
@@ -87,7 +108,13 @@ test("hexin qwen3.7-max profile marks Hexin thinking mode as reasoning", () => {
 
 test("hexin interleaved reasoning profiles have explicit transform contracts", () => {
   expect(interleavedReasoningProfileContractGaps()).toEqual([])
-  expect(interleavedReasoningProfileContractIDs().sort()).toEqual(["glm-5", "glm-5.1", "kimi-k2.6", "qwen3.7-max"])
+  expect(interleavedReasoningProfileContractIDs().sort()).toEqual([
+    "glm-5",
+    "glm-5.1",
+    "kimi-k2.6",
+    "kimi-k2.7-code",
+    "qwen3.7-max",
+  ])
 
   for (const id of interleavedReasoningProfileContractIDs()) {
     const profile = profileFor(id)

@@ -280,7 +280,7 @@ export namespace ProviderTransform {
     if (id.includes("glm-4.6")) return GLM_EVALUATION_TEMPERATURE
     if (id.includes("glm-4.7")) return GLM_EVALUATION_TEMPERATURE
     if (id.includes("minimax-m2")) return 1.0
-    if (id === "kimi-k2.6" || id.endsWith("/kimi-k2.6")) return undefined
+    if (isHexinMoonshotFixedTemperatureModel(id)) return undefined
     if (id.includes("kimi-k2")) {
       // kimi-k2-thinking & kimi-k2.5 && kimi-k2p5 && kimi-k2-5
       if (["thinking", "k2.", "k2p", "k2-5"].some((s) => id.includes(s))) {
@@ -296,11 +296,15 @@ export namespace ProviderTransform {
     if (!body || typeof body !== "object" || Array.isArray(body)) return body
     const request = body as Record<string, unknown>
     const modelID = typeof request.model === "string" ? request.model.toLowerCase() : ""
-    if (!/(^|\/)kimi-k2\.6$/.test(modelID)) return body
+    if (!isHexinMoonshotFixedTemperatureModel(modelID)) return body
     return {
       ...request,
       temperature: 1,
     }
+  }
+
+  function isHexinMoonshotFixedTemperatureModel(modelID: string) {
+    return /(^|\/)(kimi-k2\.6|kimi-k2\.7-code)$/.test(modelID)
   }
 
   export function shouldNormalizeRequestBody(providerID: string, apiNpm: string): boolean {

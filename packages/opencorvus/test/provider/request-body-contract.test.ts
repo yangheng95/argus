@@ -406,6 +406,20 @@ describe("provider request-body contract", () => {
     })
   })
 
+  test("Hexin Kimi K2.7 Code request body uses the Moonshot fixed temperature", () => {
+    const body = ProviderTransform.requestBody("hexin", {
+      model: "kimi-k2.7-code",
+      temperature: 0,
+      stream: true,
+    })
+
+    expect(body).toMatchObject({
+      model: "kimi-k2.7-code",
+      temperature: 1,
+      stream: true,
+    })
+  })
+
   test("Hexin request body preserves assistant tool-call null content", () => {
     const body = ProviderTransform.requestBody("hexin", {
       model: "gpt-5.4",
