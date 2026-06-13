@@ -151,6 +151,8 @@ const SCREENSHOT_COMPRESSION_WARNING_RATIO = 2
 const screenshotPixelSummarySchema = z.object({
   currentPixels: z.number(),
   compressedPixels: z.number(),
+  compressedWidth: z.number(),
+  compressedHeight: z.number(),
   compressionRatio: z.number(),
   preferPartialScreenshot: z.boolean(),
   text: z.string(),
@@ -160,16 +162,25 @@ type ScreenshotPixelSummary = z.infer<typeof screenshotPixelSummarySchema>
 
 export const screenshotPixelSummary = (width: number, height: number): ScreenshotPixelSummary => {
   const currentPixels = width * height
-  const compressedPixels = Math.min(currentPixels, SCREENSHOT_MODEL_PIXEL_BUDGET)
-  const compressionRatio = compressedPixels > 0 ? Number((currentPixels / compressedPixels).toFixed(2)) : 1
+  const dimensionScale =
+    currentPixels > SCREENSHOT_MODEL_PIXEL_BUDGET ? Math.sqrt(SCREENSHOT_MODEL_PIXEL_BUDGET / currentPixels) : 1
+  const compressedWidth = Math.max(1, Math.floor(width * dimensionScale))
+  const compressedHeight = Math.max(1, Math.floor(height * dimensionScale))
+  const compressedPixels = compressedWidth * compressedHeight
+  const compressionRatio =
+    compressedWidth > 0 && compressedHeight > 0
+      ? Number(Math.max(width / compressedWidth, height / compressedHeight).toFixed(2))
+      : 1
   const preferPartialScreenshot = compressionRatio >= SCREENSHOT_COMPRESSION_WARNING_RATIO
   return {
     currentPixels,
     compressedPixels,
+    compressedWidth,
+    compressedHeight,
     compressionRatio,
     preferPartialScreenshot,
     text:
-      `当前像素: ${currentPixels} (${width}x${height}); 压缩后像素: ${compressedPixels}; ` +
+      `当前像素: ${currentPixels} (${width}x${height}); 压缩后像素: ${compressedPixels} (${compressedWidth}x${compressedHeight}); ` +
       `压缩率: ${compressionRatio.toFixed(2)}x` +
       (preferPartialScreenshot ? "; 压缩率过大，请优先使用 selector 或 clip 做局部截图。" : ""),
   }
