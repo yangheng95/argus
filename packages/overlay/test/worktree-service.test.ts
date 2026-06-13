@@ -59,7 +59,7 @@ test("loadProjectWorktrees reads the project worktree route with directory conte
     ),
   )
 
-  const items = await loadProjectWorktrees()
+  const items = await loadProjectWorktrees(SAVED_DIRECTORY)
 
   expect(captured?.path).toBe("project/current/worktrees")
   expect(captured?.method).toBe("GET")
@@ -84,7 +84,7 @@ test("deleteProjectWorktree sends the target directory in the DELETE JSON body",
     }),
   )
 
-  const ok = await deleteProjectWorktree("D:/workspace/app/.opencorvus/runtime/worktrees/old")
+  const ok = await deleteProjectWorktree(SAVED_DIRECTORY, "D:/workspace/app/.opencorvus/runtime/worktrees/old")
 
   expect(ok).toBe(true)
   expect(captured?.path).toBe("project/current/worktrees")
@@ -113,5 +113,33 @@ test("loadProjectWorktrees rejects malformed project worktree payloads", async (
     ),
   )
 
-  await expect(loadProjectWorktrees()).rejects.toThrow("project worktree has an unknown status")
+  await expect(loadProjectWorktrees(SAVED_DIRECTORY)).rejects.toThrow("project worktree has an unknown status")
+})
+
+test("loadProjectWorktrees carries the explicit project directory when API context is empty", async () => {
+  configure({ directory: "" })
+  let captured: TransportRequest | undefined
+  __setHostTransportForTest(
+    transport([], (req) => {
+      captured = req
+    }),
+  )
+
+  await loadProjectWorktrees(SAVED_DIRECTORY)
+
+  expect(captured?.path).toBe("project/current/worktrees")
+  expect(captured?.method).toBe("GET")
+  expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
+})
+
+test("loadProjectWorktrees rejects empty project directory before transport", async () => {
+  let called = false
+  __setHostTransportForTest(
+    transport([], () => {
+      called = true
+    }),
+  )
+
+  await expect(loadProjectWorktrees("")).rejects.toThrow("project/current/worktrees requires a project directory")
+  expect(called).toBe(false)
 })

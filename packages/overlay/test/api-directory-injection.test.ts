@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { apiJson, apiRequest, apiUrl, configure } from "../src/services/api"
+import { ProjectDirectoryRequiredError, apiJson, apiRequest, apiUrl, configure } from "../src/services/api"
 import { HOST_CAPABILITIES, __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 import { routeRequiresProjectDirectory } from "@opencorvus-ai/transport-protocol"
@@ -129,6 +129,8 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("config/prompt", () => expectInjects("config/prompt"))
     test("config/executor", () => expectInjects("config/executor"))
     test("provider", () => expectInjects("provider"))
+    test("project current", () => expectInjects("project/current"))
+    test("project current worktrees", () => expectInjects("project/current/worktrees"))
     test("mission wake", () => expectInjects("mission/wake"))
     test("channel", () => expectInjects("channel"))
     test("agent", () => expectInjects("agent"))
@@ -189,6 +191,8 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "path",
       "vcs",
       "config",
+      "project/current",
+      "project/current/worktrees",
       "session/session_123/conversation",
       "mission/wake",
       "coding/session/ses_123/abort",
@@ -201,14 +205,38 @@ describe("apiUrl directory injection (W2-V31)", () => {
     expect(routeRequiresProjectDirectory("task/abc/conversation", "POST")).toBe(true)
   })
 
-  describe("when no directory is configured, no path receives the query", () => {
+  describe("when no directory is configured, project requests do not leave the overlay unscoped", () => {
     beforeEach(() => {
       configure({ directory: "" })
     })
 
-    test("project-scoped path skips inject when context is empty", () => {
+    test("apiUrl does not fabricate a project directory", () => {
       const url = new URL(apiUrl("tasks"))
       expect(url.searchParams.has("directory")).toBe(false)
+    })
+
+    test("apiJson rejects a project-scoped request before HostTransport", async () => {
+      let called = false
+      __setHostTransportForTest(
+        fakeTransport(() => {
+          called = true
+        }),
+      )
+
+      await expect(apiJson("tasks")).rejects.toBeInstanceOf(ProjectDirectoryRequiredError)
+      expect(called).toBe(false)
+    })
+
+    test("apiRequest rejects a project-scoped request before HostTransport", async () => {
+      let called = false
+      __setHostTransportForTest(
+        fakeTransport(() => {
+          called = true
+        }),
+      )
+
+      await expect(apiRequest("project/current/worktrees")).rejects.toBeInstanceOf(ProjectDirectoryRequiredError)
+      expect(called).toBe(false)
     })
   })
 

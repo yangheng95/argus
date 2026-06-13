@@ -70,6 +70,16 @@ export function getServerUrl(): string {
 
 type QueryMap = Record<string, string | number | boolean | undefined | null>
 
+export class ProjectDirectoryRequiredError extends Error {
+  override readonly name = "ProjectDirectoryRequiredError"
+  constructor(
+    readonly path: string,
+    readonly method: string,
+  ) {
+    super(`Project-scoped route ${method} /${path.replace(/^\/+/, "")} requires a configured directory`)
+  }
+}
+
 function splitPathQuery(path: string): { pathOnly: string; query: Record<string, string> | undefined } {
   const qIdx = path.indexOf("?")
   if (qIdx < 0) return { pathOnly: path, query: undefined }
@@ -101,6 +111,21 @@ export function queryWithDirectory(
   return Object.keys(next).length > 0 ? next : undefined
 }
 
+function hasDirectoryQuery(query: Record<string, string | number | boolean> | undefined): boolean {
+  if (!query || query.directory === undefined) return false
+  return String(query.directory).trim().length > 0
+}
+
+function requireProjectDirectoryQuery(
+  pathOnly: string,
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+  query: Record<string, string | number | boolean> | undefined,
+): void {
+  if (!routeRequiresProjectDirectory(pathOnly, method)) return
+  if (hasDirectoryQuery(query)) return
+  throw new ProjectDirectoryRequiredError(pathOnly, method)
+}
+
 function requestTarget(
   path: string,
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
@@ -110,9 +135,12 @@ function requestTarget(
 } {
   const url = relativePath(path)
   const { pathOnly, query } = splitPathQuery(url)
+  const requestMethod = method ?? "GET"
+  const nextQuery = queryWithDirectory(pathOnly, query, requestMethod)
+  requireProjectDirectoryQuery(pathOnly, requestMethod, nextQuery)
   return {
     pathOnly,
-    query: queryWithDirectory(pathOnly, query, method),
+    query: nextQuery,
   }
 }
 
