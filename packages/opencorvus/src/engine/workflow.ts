@@ -4,12 +4,11 @@
  * 系统只内置两条路径：
  *   1. **direct**   — build
  *      用于显式 kind=build 的单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
- *   2. **pipeline** — (frontend_design + frontend_research) → analyze_intent → requirements → architect → per-goal[build] → peer reviews[visual_qa + integrity]
+ *   2. **pipeline** — (frontend_design + frontend_research) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
- * Pipeline 以 build 做实现、以 visual_qa 做 batch-level frontend review、以 integrity 做 session-bound final gate。visual_qa
- * 和 integrity 是 post-build peer review agents；visual_qa 不替代 integrity，也不是 integrity 的 workflow prerequisite。deliver
- * host gate 已禁用，不再作为推荐 workflow 的验收步骤。
+ * Pipeline 以 build 做实现、以 visual_qa 做 frontend post-build review evidence，
+ * 以 integrity 做 session-bound final gate。旧 host acceptance gate 已禁用，不再作为推荐 workflow 的验收步骤。
  *
  * MiniWorkflow 不是状态机，不是固定 pipeline。Orchestrator 仍可基于 agent 推理偏离推荐
  * 路径，每个步骤映射到一个已存在的 Orchestrator 工具，工作流只在 system prompt 中以
@@ -162,14 +161,14 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → peer reviews[visual_qa(每个 frontend goal batch 后一次) + integrity]；
- *  visual_qa 是 terminal frontend goal batch 后的视觉/可见功能复核阶段；integrity 是同级 post-build agent 中的 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
+ *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity；
+ *  visual_qa 是 terminal frontend goal batch 后的同级视觉/产品审查证据；integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
   description:
-    "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → peer reviews[visual_qa(每个 frontend goal batch 后一次) + integrity]。多文件功能 / UI 复刻 / 跨模块重构。",
+    "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "frontend_design",
@@ -217,6 +216,15 @@ const PIPELINE: MiniWorkflow = {
       after: ["requirements"],
     },
     {
+      id: "workload_analysis",
+      tool: "workload_analysis",
+      label: "Workload",
+      hint: "只读 goal 定型复核：深读 frontend template / contract graph / reference coverage，逐 goal 产 why_not_smaller、underestimation_traps、execution_inventory、verification_inventory 和 decomposition_concern。它不创建/修改 goal，不是 gate；concern 回喂 architect 重定型，brief 供 build 反过早最小化。",
+      scope: "task",
+      skippable: true,
+      after: ["architect"],
+    },
+    {
       // Per-goal 实现：每个 goal 派发到 build agent（在 worktree 中）。
       // Orchestrator calls the unified `build` tool with goalID; the build
       // prompt carries a budgeted architecture-consensus view. After the
@@ -230,14 +238,14 @@ const PIPELINE: MiniWorkflow = {
       hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；build 完成后 architecture_review 的完整反馈会原文返回给 orchestrator，由 orchestrator LLM 自行决定后续动作（modify_goal / build / architect / integrity / fail_task）。",
       scope: "goal",
       skippable: false,
-      after: ["architect"],
+      after: ["workload_analysis"],
       phases: [{ id: "build", label: "Build", sessionKind: "build" }],
     },
     {
       id: "visual_qa",
       tool: "visual_qa",
       label: "Visual QA",
-      hint: "post-goal-batch 前端 GUI 修复/证据阶段。GUI=Graphical User Interface，图形用户界面。每个 terminal 前端 goal batch 后运行一次，和 integrity 是同级 post-build review agent；消费 frontend_design/build 以及已有 integrity evidence，以挑剔的专业设计 QA 视角列出 production_blockers，不以固定相似度分数作为唯一 verdict；先修组件真实性和可见功能，再修布局结构，最后才做样式微调。它不是 host gate，也不替代 final integrity；若无法安全修复且返回 follow_up_task，orchestrator 应通过 propose_task 创建继承任务。",
+      hint: "terminal frontend goal batch 后的同级 GUI 视觉/功能/产品审查与 in-scope repair 证据。GUI=Graphical User Interface，图形用户界面。它消费 frontend_design/build 以及可选 prior integrity evidence；先修组件真实性和可见功能，再修布局结构，最后才做样式微调。它不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；accepted=false 或 production_blockers>0 时由 orchestrator 基于证据选择 build / modify_goal / architect / propose_task / fail_task。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -246,7 +254,7 @@ const PIPELINE: MiniWorkflow = {
       id: "integrity",
       tool: "integrity",
       label: "Review",
-      hint: "最终系统完整性 gate：在所有 blocking goal build 终态后调用。Integrity 和 visual_qa 是同级 post-build review agents；Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system，不被 Visual QA 取代。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
+      hint: "最终系统完整性 gate：在所有 blocking goal build 完成后调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -408,30 +416,20 @@ function taskStepStatusByTool(
 
 function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
   const entries = createDecisionLog(taskID).readByPhase("visual_qa")
-  const latestCompletedBuildAt = latestCompletedGoalRunTime(taskID)
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]
     if (entry.key.startsWith("report_")) {
       const report = parseVisualQaReportProjection(entry.value)
       if (!report) return "failed"
-      if (latestCompletedBuildAt && latestCompletedBuildAt > entry.timeCreated) return "pending"
       return report.accepted && report.productionBlockers === 0 ? "completed" : "failed"
     }
     if (entry.key === "latest_summary") {
       const summary = parseVisualQaSummaryProjection(entry.value)
       if (!summary) return "failed"
-      if (latestCompletedBuildAt && latestCompletedBuildAt > entry.timeCreated) return "pending"
       return summary.accepted && summary.productionBlockers === 0 ? "completed" : "failed"
     }
   }
   return "pending"
-}
-
-function latestCompletedGoalRunTime(taskID: string): number | undefined {
-  const completedTimes = listGoalRunsForTask(taskID)
-    .filter((run) => run.status === "completed")
-    .map((run) => run.time_completed ?? run.time_updated ?? run.time_created)
-  return completedTimes.length > 0 ? Math.max(...completedTimes) : undefined
 }
 
 function parseVisualQaReportProjection(value: string): { accepted: boolean; productionBlockers: number } | undefined {

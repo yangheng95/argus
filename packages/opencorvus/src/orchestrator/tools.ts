@@ -41,6 +41,7 @@ import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { ProcessSupervisor } from "@/shell/process-supervisor"
 import { isHostKillingCommand } from "@/tool/bash"
 import { BrowserPreviewTool, BrowserPreviewToolParameters } from "@/tool/browser-preview"
+import { WAIT_MAX_MS, WAIT_MIN_MS, WaitToolDescription, WaitToolParameters, executeWait } from "@/tool/wait"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
@@ -160,8 +161,8 @@ export const ORCHESTRATOR_BASH_MAX_TIMEOUT_MS = 10 * 60 * 1000
 // Wait tool bounds. Floor is one second so the LLM cannot use it as a
 // cheap busy-wait; ceiling matches bash so the longest deliberate idle
 // pause is still bounded by the same operator-visible budget.
-export const ORCHESTRATOR_WAIT_MIN_MS = 1_000
-export const ORCHESTRATOR_WAIT_MAX_MS = 10 * 60 * 1000
+export const ORCHESTRATOR_WAIT_MIN_MS = WAIT_MIN_MS
+export const ORCHESTRATOR_WAIT_MAX_MS = WAIT_MAX_MS
 
 const log = Log.create({ service: "task-tools" })
 
@@ -234,16 +235,24 @@ function requireOrchestratorToolExecutionContext(options: unknown, toolName: str
 }
 
 /**
- * Orchestrator-side bash is a user-authorized single-command evidence surface.
- * Prompt-level rules carry the "when is this authorized" boundary. This schema
- * owns only command-shape safety: no empty command, shell chaining, pipelines,
- * redirection, command substitution, embedded newlines, or host-killing
- * patterns.
+ * Orchestrator-side bash is narrowly scoped to git merge-state repair only
+ * (per the operator's binding directive). The schema rejects any non-git
+ * invocation, any pipeline / redirect / command substitution, and any
+ * process-killing pattern. This is data-integrity guarding for an
+ * irreversible-by-LLM surface (shell execution); prompt-level rules carry only
+ * the "what counts as a merge repair" scoping.
  */
 export function validateOrchestratorBashCommand(command: string): { ok: true } | { ok: false; reason: string } {
   const trimmed = command.trim()
   if (!trimmed) return { ok: false, reason: "empty command" }
-  // Reject shell metacharacters that turn a single invocation into a
+  if (trimmed !== "git" && !/^git[\s]/.test(trimmed)) {
+    const head = trimmed.split(/\s+/, 1)[0] ?? ""
+    return {
+      ok: false,
+      reason: `command must begin with 'git' (got '${head}'). Orchestrator bash is git-merge-only — dispatch a sub-agent for any other surface.`,
+    }
+  }
+  // Reject shell metacharacters that turn a single git invocation into a
   // multi-step pipeline / redirect / subshell. Longer tokens first so the
   // reason string reports the most specific match.
   const dangerous: Array<[string, string]> = [
@@ -266,7 +275,7 @@ export function validateOrchestratorBashCommand(command: string): { ok: true } |
     if (trimmed.includes(tok)) {
       return {
         ok: false,
-        reason: `disallowed shell metacharacter ${why}. Orchestrator bash runs one command invocation only; dispatch the responsible agent instead of shell-chaining.`,
+        reason: `disallowed shell metacharacter ${why}. Orchestrator bash runs a single git invocation only; chain orchestrator tool calls instead of shell.`,
       }
     }
   }
@@ -1285,7 +1294,7 @@ export function createOrchestratorTools(input: {
     acceptanceID: string
     runID: string
     summary: string
-    source: "publish_acceptance"
+    source: "artifact_export"
   }) {
     const detail =
       `Publish gate blocked acceptance ${input.acceptanceID}: ${input.summary}. ` +
@@ -1469,6 +1478,28 @@ export function createOrchestratorTools(input: {
       })
     } catch {
       /* best effort */
+    }
+  }
+
+  async function trackStepProgress(toolName: string, summary: string, goalID?: string): Promise<void> {
+    if (!input.workflow) return
+    const step = findStepByTool(input.workflow, toolName)
+    if (!step) return
+    try {
+      await EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
+        taskID,
+        stepID: step.id,
+        goalID,
+        status: "running",
+        summary,
+      })
+    } catch (err) {
+      log.warn("workflow step progress emit failed", {
+        taskID,
+        toolName,
+        summary,
+        error: err instanceof Error ? err.message : String(err),
+      })
     }
   }
 
@@ -2115,7 +2146,7 @@ export function createOrchestratorTools(input: {
   // CLAUDE.md rule 13 (no state-machine flow control). The orchestrator LLM
   // now reads the full review markdown returned in the build tool result
   // and chooses modify_goal / build({goalID}) / architect / fail_task /
-  // deliver itself. spec architecture-rework-loosening-plan-2026-05-06.md
+  // integrity itself. spec architecture-rework-loosening-plan-2026-05-06.md
   // (B12 / B13 / B14).
 
   async function restartTaskFromStage(stage: RestartStage, reason: string) {
@@ -2233,8 +2264,8 @@ export function createOrchestratorTools(input: {
         'Only rerun after an operator scope change, `restart_from_stage("requirements")`, ' +
         "or concrete evidence that the active REQ snapshot is invalid.\n" +
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
-        "build agent can run against the user's text alone and `deliver` has enough " +
-        "signal in the request to verify. Frontend evidence tools are available candidates when the full task context " +
+        "build agent can run against the user's text alone and integrity has enough " +
+        "signal in the request and build evidence to verify. Frontend evidence tools are available candidates when the full task context " +
         "needs visual/reference material for requirements analysis.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
@@ -2558,6 +2589,7 @@ export function createOrchestratorTools(input: {
         }
 
         await trackStepStart("frontend_design")
+        await trackStepProgress("frontend_design", "frontend_design dispatch: input accepted")
         let frontendDesignStepClosed = false
         const closeFrontendDesignStep = async (failed = false) => {
           if (frontendDesignStepClosed) return
@@ -2586,7 +2618,7 @@ export function createOrchestratorTools(input: {
         //     from treating system-generated PNGs as user input).
         //
         // frontend-design combines both columns when assembling its visual
-        // input. The deliver-time visual diff also reads both. Requirements
+        // input. Downstream visual/integrity review also reads both. Requirements
         // reads only attachments — it must see user intent, not internal
         // captures.
         const { AttachmentStore } = await import("@/storage/attachment-store")
@@ -2613,6 +2645,10 @@ export function createOrchestratorTools(input: {
         // --- Figma MCP references --------------------------------------------
         for (const figmaUrl of figmaUrls) {
           try {
+            await trackStepProgress(
+              "frontend_design",
+              `frontend_design dispatch: materializing Figma reference ${figmaUrl}`,
+            )
             materializedCount += await materializeFigmaMcpReference({
               taskID,
               projectID: Instance.project.id,
@@ -2638,6 +2674,10 @@ export function createOrchestratorTools(input: {
         // heuristics are diagnostics attached to the materialized reference.
         for (const liveUrl of liveUrls) {
           try {
+            await trackStepProgress(
+              "frontend_design",
+              `frontend_design dispatch: capturing URL screenshot ${liveUrl}`,
+            )
             const {
               captureReferenceManifest,
               assessCaptureDiagnostics,
@@ -2707,6 +2747,10 @@ export function createOrchestratorTools(input: {
         const projectRoot = Instance.project.worktree
         for (const rawPath of materialPaths) {
           try {
+            await trackStepProgress(
+              "frontend_design",
+              `frontend_design dispatch: materializing local material ${rawPath}`,
+            )
             const abs = pathMod.isAbsolute(rawPath)
               ? pathMod.normalize(rawPath)
               : pathMod.normalize(pathMod.resolve(projectRoot, rawPath))
@@ -2760,6 +2804,7 @@ export function createOrchestratorTools(input: {
         let preparedWebpageEvidenceStatus: string | undefined
         if (liveUrls.length > 0) {
           try {
+            await trackStepProgress("frontend_design", "frontend_design dispatch: preparing live webpage evidence")
             const evidence = await ensureLiveWebpageEvidence({
               projectDir: Instance.project.worktree,
               worktreeDir: Instance.directory,
@@ -2888,7 +2933,12 @@ export function createOrchestratorTools(input: {
         // its id via onSessionCreated for downstream emit attribution.
         let runnerSessionID: string | undefined
         try {
+          await trackStepProgress("frontend_design", "frontend_design dispatch: loading agent module")
           const { FrontendDesignAgent } = await import("@/frontend-design")
+          await trackStepProgress(
+            "frontend_design",
+            "frontend_design dispatch: visual input ready; calling agent analyze",
+          )
 
           const analysis = await FrontendDesignAgent.analyze({
             title: task.title,
@@ -2905,8 +2955,13 @@ export function createOrchestratorTools(input: {
             onStatus: () => {},
             onSessionCreated: (id) => {
               runnerSessionID = id
+              void trackStepProgress(
+                "frontend_design",
+                `frontend_design dispatch: agent session created ${id}`,
+              )
             },
           })
+          await trackStepProgress("frontend_design", "frontend_design dispatch: agent analyze returned")
 
           // Persist optional visual anchors on task.design_specs (dedicated
           // JSON column, not metadata). The binding contract is the frontend template
@@ -4818,7 +4873,7 @@ export function createOrchestratorTools(input: {
               ) {
                 sections.push(
                   `- terminal report hint: retry this goal with explicit report_build_result(files_changed[]) instructions. ` +
-                    `Any retained files under .opencorvus/runtime are diagnostic worktree evidence, not primary workspace pollution; ` +
+                    `Any retained files under .opencorvus/r are diagnostic worktree evidence, not primary workspace pollution; ` +
                     `do not restart_from_stage solely because those diagnostic files exist.`,
                 )
               }
@@ -5543,7 +5598,7 @@ export function createOrchestratorTools(input: {
         "Use SPARINGLY — only when you genuinely cannot proceed without a human decision. " +
         "Valid triggers: (1) incoming request is too vague for requirements decomposition, " +
         "(2) mid-execute missing critical info (tech stack, data source, conflicting goals), " +
-        "(3) pre-deliver you have multiple viable approaches and need the user to pick, " +
+        "(3) before final integrity review you have multiple viable approaches and need the user to pick, " +
         "(4) post-refine suggestions — let the user select which improvements to roll in. " +
         "Each question may provide options for click-selection; omit options for free-text. " +
         "Set multiple=true to allow multi-select. Returns the answers in the same order as questions. " +
@@ -6886,7 +6941,7 @@ export function createOrchestratorTools(input: {
           closeBuildOwnership("failed", msg)
           if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
           // Build itself failed (LLM error, tool guard fault, worktree
-          // creation failed, etc.) — distinct from deliver-rejection.
+          // creation failed, etc.) — distinct from integrity non-pass evidence.
           // Surface the error so the orchestrator decides (retry / fail_task).
           // Card terminal flows through session.status from the build
           // agent's actor close path.
@@ -6923,16 +6978,15 @@ export function createOrchestratorTools(input: {
 
     bash: tool({
       description:
-        "User-authorized single-command shell evidence. Runs ONE command " +
-        "against the project root only when the latest user/operator request " +
-        "explicitly asks for command output or directly requires one command " +
-        "result. The schema rejects pipeline / redirect / command substitution, " +
-        "embedded newlines, and process-killing patterns. This is NOT a code " +
-        "editor, NOT an autonomous test runner, NOT a repository inspector for " +
-        "general investigation, NOT a research tool, and NOT a shortcut around " +
-        "requirements / architect / build / integrity. The system prompt " +
-        "carries authorization scope; this schema carries command-shape " +
-        "restrictions.",
+        "Git-only merge-state repair shell. Runs ONE `git ...` invocation " +
+        "against the project root for resolving an in-progress merge that no " +
+        "sub-agent can clear by itself. The schema rejects any non-git " +
+        "command, any pipeline / redirect / command substitution, and any " +
+        "process-killing pattern. This is NOT a code editor, NOT a test " +
+        "runner, NOT a repository inspector for general investigation, NOT a " +
+        "research tool, and NOT a shortcut around requirements / architect / " +
+        "build / integrity. The system prompt carries merge-repair scope; " +
+        "this schema carries command-shape restrictions.",
       inputSchema: z.object({
         command: z
           .string()
@@ -6944,16 +6998,17 @@ export function createOrchestratorTools(input: {
             }
           })
           .describe(
-            "Single command invocation. Must contain no " +
+            "Single git invocation. MUST start with `git ` and contain no " +
               "pipeline (|), command separator (; / && / ||), background (&), " +
               "redirection (> / <), command substitution ($() / backticks), or " +
-              "process-killing pattern. Examples: `git status`, `npm test`, " +
-              "`node --version`, `ls packages/opencorvus`.",
+              "process-killing pattern. Examples: `git status`, " +
+              "`git merge --abort`, `git checkout --ours -- path/to/file`, " +
+              "`git diff --name-only --diff-filter=U`.",
           ),
         description: z
           .string()
           .min(1)
-          .describe("Concise 5-15 word statement of the user-authorized command evidence you are collecting."),
+          .describe("Concise 5-15 word statement of the git merge-state symptom you are repairing."),
         timeout: z
           .number()
           .int()
@@ -6965,7 +7020,7 @@ export function createOrchestratorTools(input: {
           ),
       }),
       execute: async ({ command, description, timeout }) => {
-        // Schema-level refine already rejected pipeline / kill
+        // Schema-level refine already rejected non-git / pipeline / kill
         // shapes, but re-validate defensively so a future schema regression
         // does not turn into silent shell exposure.
         const validation = validateOrchestratorBashCommand(command)
@@ -7032,93 +7087,18 @@ export function createOrchestratorTools(input: {
 
     wait: tool({
       description:
-        "One-shot deliberate pause. Yields the current orchestrator turn for the " +
-        "stated number of milliseconds before returning, so a NAMED external event " +
-        "the repository cannot itself trigger (CI run still propagating, dev-server " +
-        "warming up, remote queue draining, operator's manual setup the user just " +
-        "described) has time to settle before your NEXT tool call. " +
-        "USE WHEN: task evidence shows there is nothing dispatchable RIGHT NOW, AND " +
-        "the unblocking event is concretely external (not 'maybe a goal will finish' " +
-        "— that wakes you naturally on completion). " +
-        "NOT a polling primitive — never chain wait calls to re-inspect state on a " +
-        "fixed cadence. The orchestrator wakes on real external triggers (operator " +
-        "message, ownership recovery, scheduler tick); a second wait in the same turn " +
-        "is the signal you should have called `question` or `fail_task` instead. " +
-        "NOT a substitute for `question` (operator input required), `fail_task` " +
-        "(no responsible same-task repair), or `read_context` (refreshing task " +
-        "evidence — that is a tool call, not a pause). " +
-        "After wait returns, re-read evidence with `read_context` before deciding " +
-        "the next dispatch.",
-      inputSchema: z.object({
-        duration_ms: z
-          .number()
-          .int()
-          .min(ORCHESTRATOR_WAIT_MIN_MS)
-          .max(ORCHESTRATOR_WAIT_MAX_MS)
-          .describe(
-            `Pause length in milliseconds. Minimum ${ORCHESTRATOR_WAIT_MIN_MS}, ` +
-              `maximum ${ORCHESTRATOR_WAIT_MAX_MS}. Pick the smallest duration that ` +
-              `gives the named external event a real chance to occur.`,
-          ),
-        reason: z
-          .string()
-          .min(1)
-          .describe(
-            "Concrete external event you are waiting for and why no in-task " +
-              "dispatch is responsible until it lands. Recorded in the decision log " +
-              "so the next wake can audit the deliberate pause.",
-          ),
-      }),
+        WaitToolDescription +
+        " In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or `read_context` (refreshing task evidence). After wait returns, re-read evidence with `read_context` before deciding the next dispatch.",
+      inputSchema: WaitToolParameters,
       execute: async ({ duration_ms, reason }) => {
-        const startedAt = Date.now()
-        try {
-          createDecisionLog(taskID).append({
-            phase: "orchestrator",
-            key: `wait_${startedAt}`,
-            value: `wait ${duration_ms}ms`,
-            reason,
-          })
-        } catch (error) {
-          log.warn("wait decision log append failed", {
-            taskID,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
-
-        let aborted = false
-        await new Promise<void>((resolve) => {
-          if (input.signal?.aborted) {
-            aborted = true
-            resolve()
-            return
-          }
-          const onAbort = () => {
-            aborted = true
-            clearTimeout(timer)
-            resolve()
-          }
-          const timer = setTimeout(() => {
-            input.signal?.removeEventListener("abort", onAbort)
-            resolve()
-          }, duration_ms)
-          input.signal?.addEventListener("abort", onAbort, { once: true })
-        })
-
-        const elapsed = Date.now() - startedAt
-        log.info("orchestrator wait completed", {
+        const result = await executeWait({
+          duration_ms,
+          reason,
+          signal: input.signal,
           taskID,
-          requestedMs: duration_ms,
-          elapsedMs: elapsed,
-          aborted,
+          logPhase: "orchestrator",
         })
-        if (aborted) {
-          return `wait aborted after ${elapsed}ms (requested ${duration_ms}ms). Reason: ${reason}`
-        }
-        return (
-          `Waited ${elapsed}ms (requested ${duration_ms}ms). Reason: ${reason}. ` +
-          `Re-read task evidence with read_context before your next dispatch — ` +
-          `the world may have changed during the pause.`
-        )
+        return `${result.output} Re-read task evidence with read_context before your next dispatch.`
       },
     }),
   }

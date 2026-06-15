@@ -17,7 +17,8 @@ test("orchestrator workflow retires deliver and uses integrity as the final gate
   expect(prompt).not.toContain("Rejected `deliver` returns evidence")
 
   expect(workflow).toContain("integrity 是 session-bound final gate")
-  expect(workflow).toContain("deliver")
+  expect(workflow).not.toContain('tool: "deliver"')
+  expect(workflow).not.toContain("deliver →")
   expect(workflow).not.toContain("deliver 是唯一接受闸")
   expect(workflow).not.toContain("停止调度")
 

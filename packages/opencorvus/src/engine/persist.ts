@@ -2015,7 +2015,7 @@ export function deleteGoal(goalID: string) {
  * and re-dispatches build, burning decision turns indefinitely.
  *
  * Per rule 23 the LLM still owns the *decision* on what to do with the
- * outcome (call deliver, retry, fail_task). This helper only persists
+ * outcome (run integrity, retry, fail_task). This helper only persists
  * the *fact* that build ran and what it returned.
  */
 /**

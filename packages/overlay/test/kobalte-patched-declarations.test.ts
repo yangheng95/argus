@@ -45,6 +45,11 @@ describe("Kobalte patched declarations", () => {
     const dialog = read(join(dist, "index-df27bfc9.d.ts"))
     const menubar = read(join(dist, "index-9e11b9e4.d.ts"))
 
+    expect(dialog).toContain("Title: typeof DialogTitle")
+    expect(dialog).toContain("Trigger: typeof DialogTrigger")
+    expect(dialog).toContain("declare const index_Dialog: typeof Dialog")
+    expect(dialog).not.toContain("Portal: typeof DialogPortal;\ntype index_DialogCloseButtonCommonProps")
+
     expect(dialog).toContain("type index_DialogRootProps = DialogRootProps")
     expect(dialog).toContain("type index_DialogContextValue = DialogContextValue")
     expect(dialog).not.toContain("declare const index_DialogRootProps: typeof DialogRootProps")

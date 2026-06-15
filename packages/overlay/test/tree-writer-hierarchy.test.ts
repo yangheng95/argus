@@ -11,7 +11,9 @@ const { applyEvent, flushBufferedPartDeltas, resetWriter, hydrateConversationVie
   "../src/services/tree-writer"
 )
 const { cardTreeStore } = await import("../src/store/card-tree")
+const { collectDialogInteractions } = await import("../src/utils/interaction-dialog")
 const { statusBadge } = await import("../src/utils/status-badge")
+const { installRealOverlayI18n } = await import("./fixtures/i18n")
 const { replay } = await import("./fixtures/replay")
 const {
   EVENTS,
@@ -27,6 +29,8 @@ const {
   ARCHITECT_SID,
   TASK_ID,
 } = await import("./fixtures/goal-phase-events")
+
+installRealOverlayI18n()
 
 const INTEGRITY_SID = "ses_integrity"
 
@@ -575,6 +579,63 @@ test("tree-writer projects raw Mission question events into the session card", (
   expect(questionPart?.type).toBe("interaction-question")
   expect(questionPart?.interaction?.replyEndpoint).toBe("question")
   expect(questionPart?.interaction?.payload?.questions?.[0]?.header).toBe("Tech Stack")
+  expect(collectDialogInteractions(cardTreeStore.cards).map((item) => item.id)).toContain(QUESTION_ID)
+})
+
+test("tree-writer keeps background Mission questions available for the popup host", () => {
+  const MISSION_SID = "ses_background_mission_question"
+  const QUESTION_ID = "que_background_mission_stack"
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "active task while mission runs",
+      sessionID: ROOT_SID,
+      time: { created: 1_780_600_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  })
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
+  resetWriter()
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      info: stampedInfo("mission", {
+        id: "msg_background_mission_question",
+        sessionID: MISSION_SID,
+        role: "assistant",
+        resolvedRole: "mission",
+        agent: "mission",
+        channel: "mission",
+        time: { created: 1_780_600_000_100 },
+      }),
+    },
+  })
+
+  applyEvent({
+    type: "question.asked",
+    emittedAt: 1_780_600_000_500,
+    properties: {
+      id: QUESTION_ID,
+      sessionID: MISSION_SID,
+      questions: [
+        {
+          header: "Priority",
+          question: "Should the Mission continue waiting for the external deployment?",
+          options: [{ label: "Wait", description: "Keep the mission open" }],
+        },
+      ],
+      tool: { messageID: "msg_background_mission_question", callID: "call_question" },
+    },
+  })
+
+  const missionCardID = `mission:session:${MISSION_SID}:message:msg_background_mission_question`
+  const questionCardID = `interaction-card:ctx:interaction:${QUESTION_ID}`
+  expect(cardTreeStore.cards[missionCardID]?.childIDs || []).toContain(questionCardID)
+  expect(collectDialogInteractions(cardTreeStore.cards).map((item) => item.id)).toContain(QUESTION_ID)
 })
 
 test("tree-writer does not duplicate task questions from raw question events", () => {

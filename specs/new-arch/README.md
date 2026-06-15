@@ -3,9 +3,10 @@
 > 替代原 1336 行单 SVG。现在按「4 主题 MD + 3 瘦身 SVG」维护。
 > 旧 SVG 已归档为 `_archive-old-arch.svg`。
 >
-> **Last sync 2026-05-18**：本轮 `codex/agent-boundary-role-contract` 分支引入了
-> `packages/opencorvus/src/agent/role-contract.ts`（`AgentRoleContract` 接口 +
-> `AgentRoleID` 联合类型），并新增 `cancel_subagent` orchestrator tool（工具总数升至 22 个）。
+> **Last sync 2026-06-15**：当前 orchestrator 工具面以 `packages/opencorvus/src/agent/agent.ts`
+> 的 include 列表和 `packages/opencorvus/src/orchestrator/tools.ts` 为准；`deliver` /
+> `publish_acceptance` 已删除，`integrity` 是最终 workflow acceptance，`visual_qa` 是
+> terminal frontend goal batch 后的同级视觉/产品审查证据，`workload_analysis` 是 architect 后的只读 goal 定型复核层。
 
 ## 目录
 
@@ -119,19 +120,20 @@
   - **`src/pipeline/` 只剩 `goal-contract.schema.ts` + `types.ts`** 两个 schema 文件，
     所有运行时代码（`executor.ts` / `runner.ts` 等）均已迁走
   - 新增独立包：`src/intent/`（`bundle.ts` 单文件）、`src/intent-analysis/`、`src/integrity/`、
-    `src/prosecutor/`、`src/acceptance/`（`contract-audit.ts` + `types.ts`）、`src/browser/webpage/`、`src/frontend-design/tools/`、
+    `src/acceptance/`（`contract-audit.ts` + `types.ts`）、`src/browser/webpage/`、`src/frontend-design/tools/`、
     `src/preview/`、`src/build/`（build 独立成包仅 4 个文件：`agent.ts` / `index.ts` /
     `report.ts` / `types.ts`；**worktree+executor 执行体仍在 `src/goal/runner.ts`**，共享
     sub-agent 协议在 `src/agent/sub-agent-protocol.ts`，build/ 下没有 `runner.ts` /
     `sub-agent-protocol.ts` / `prompt/`）
-  - `orchestrator/tools.ts` 当前导出 **21 个 tool**（按文件顺序）：
-    `requirements` · `frontend_design` · `architect` · `integrity` · `prosecute` ·
-    `analyze_intent` · `modify_goal` · `query_failed_goals` · `read_context` ·
-    `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` ·
-    `steer_subagent` · `restart_from_stage` · `deliver` · `publish_acceptance` ·
-    `refine` · `question` · `propose_task` · `build`
-    `publish_acceptance` is post-acceptance artifact export only; accepted `deliver`
-    is the task lifecycle completion authority.
+  - 2026-06-15 修正：该段的 `deliver` / `publish_acceptance` 事实已过期。当前
+    orchestrator 工具面包含 `requirements`、`frontend_design`、`frontend_research`、
+    `deep_research`、`architect`、`workload_analysis`、`build`、`visual_qa`、
+    `integrity`、`fact_check`、`analyze_intent`、`explore`、`read_context`、
+    `browser_preview`、`wait`、`bash`、`add_goal` / `modify_goal` 等 goal 控制、
+    task 控制与 `propose_task`；最终验收由
+    `integrity` pass 完成。
+  - 2026-06-15 修正：`prosecutor` / `prosecute` 不再是当前注册 agent/tool；对抗性复核职责归入
+    `integrity` reviewer team。
   - `panel/capability.ts` 当前注册 **20 个 action**（详见 03-control.md）
   - **SessionKind 实际是 15 种**（02-data.md 写"16 种"且把 `planner` 列入是错的）：
     `root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` ·
@@ -187,7 +189,7 @@ plan_exit` 这些 tool **从未存在**；build / general / explore / acceptance
     `agent/sub-agent-protocol.ts`
   - **14-agent-runtime-mode.md** — 头部对应代码改为 `src/agent/runner.ts`（旧
     `src/agent/runtime/runtime.ts` 已删，`ProviderLLM.stream` 已从 `provider/llm.ts` 移除）；
-    §5.2 移除 `planner` 行，新增 `intent-analysis / integrity / prosecutor`
+    §5.2 移除 `planner` 行；2026-06-15 再同步为当前 `intent-analysis / integrity / visual-qa / fact-check / deep-research / frontend-research / goal-workload-analyst`，`prosecutor` 已并入 integrity
   - **16-unified-teardown.md** — `writer.ts:224` → `:234`；`session/revert.ts` 已不存在，
     边界注释目标改指 `engine/rewind.ts`；明确 `engine/runtime.ts:123,182,193` 与
     `goal-status.ts:40-62` 两处 FSM-shaped residue 仍未收口
@@ -237,26 +239,21 @@ quality:0.5` 默认值（真实默认 `max_steps: 1000`，无 timeout / quality 
     `[plan, build, evaluate]` 3 个；`goalStagePhaseID`
     （`overlay/src/utils/workflow-step.ts:25-35`）只映射 `planner → {build, plan}` 和
     `build → {build, build}`，其他全部返回 null
-  - **08-agent-tool-adapter.md** — 头注修正 #7 扩展：`integrity` / `prosecutor` 也是
-    ToolRegistry agent（`agent.ts:379-405`），`include: []` 因为 verdict / counter-example
-    tools 是 per-call 由 SessionLoop extra tools 注入；新增 #9（orchestrator 本身走
-    ToolRegistry，include 在 `agent.ts:276-310`）和 #10（webpage evidence tool gating 在
-    `tool/registry.ts:181-183`，仅 `frontend-design` 保留 webpage evidence tools）
+  - **08-agent-tool-adapter.md** — 头注修正 #7 扩展：stage agent 走 ToolRegistry；
+    2026-06-15 再同步：`prosecutor` / `deliver` / `publish_acceptance` 已退役，
+    orchestrator workflow/control tools 由 `createOrchestratorTools()` 自建，
+    `agent.ts` include 列表负责暴露全部自建工具。
   - **09-verification-evidence.md** — 头部加 `engine_evaluation` 表已删除（`engine.sql.ts:552-556`）
     的注释；保留 `EngineEvaluation*` 类型仍存活（`engine.sql.ts:120-160`）；补 2026-05-10
     后的事实：`AcceptanceSpec.scenario`（`acceptance/types.ts:24,119`）、
     `engine_artifact.kind="orchestrator-stream-error"`、integrity post-build + freshness
     gate、ContractIR/Linker/contract_audit 链接、arbiter 真源导出列表
     （`arbitrateAcceptanceGate` / `arbitrateAcceptanceVerdict` / `appendManifestEvidence`）
-  - **11-agent-oop-protocol.md** — §三 inheritance hierarchy 删除 `RetiredPlanningRole`，新增
-    `IntegrityAgent` / `ProsecutorAgent`；BuildAgent 双路径注（SessionAgent vs
-    PipelineAgent）；§4.1 prompt 目录表对齐实际盘上文件（`agent/prompt/` 有 `judge.txt`
-    无 `summary.txt`；`prompt/core/` 含 `build-core.txt`）；§七迁移表把
-    `IntegrityAgent.review()` / `ProsecutorAgent.review()` 改为函数式入口
-    `reviewIntegrity()`（`integrity/agent.ts:257`） / `runProsecutor()`
-    （`prosecutor/agent.ts:322`），补 tool 接线 cite（`tools.ts:2811` / `tools.ts:2858`）；
-    §5.3 whitelist 删 planner 行，补 integrity / prosecutor 行 + orchestrator 实际可调用
-    集权威来源 cite（`agent/agent.ts:276-310`）
+  - **11-agent-oop-protocol.md** — §三 inheritance hierarchy 删除 `RetiredPlanningRole`；
+    BuildAgent 双路径注（SessionAgent vs PipelineAgent）；§4.1 prompt 目录表对齐实际盘上文件；
+    2026-06-15 再同步：`acceptance` / `prosecutor` 不再是当前 native agent，
+    current whitelist 改指 `frontend-research` / `workload-analysis` / `visual-qa` /
+    `integrity` / `fact-check` / `deep-research` 与 orchestrator tool include 真源。
   - **13-agent-communication-matrix.md** — 真源文件索引删重复条目（`src/goal/runner.ts`
     出现两次，第二条还自带"已在上一条单独列出"自承认）
   - **14-agent-runtime-mode.md** — §6.3 `ProviderLLM.stream` 描述改写为说明 Phase E

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { beginBuildAttempt, recordIntegrityAttempt, updateGoalRun } from "../../src/engine/persist"
+import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { recordIntegrityAttempt } from "../../src/engine/persist"
 import {
   WorkflowRegistry,
   createWorkflowState,
@@ -12,7 +12,7 @@ import {
 import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
 
-describe("pipeline workflow architecture review step", () => {
+describe("pipeline workflow review topology", () => {
   beforeEach(async () => {
     await resetDatabase()
   })
@@ -21,7 +21,7 @@ describe("pipeline workflow architecture review step", () => {
     await resetDatabase()
   })
 
-  test("projects architecture review after build instead of before execution", () => {
+  test("projects workload, visual QA, and integrity as advisory peer review topology", () => {
     const pipeline = WorkflowRegistry.resolveSync("pipeline")
     expect(pipeline).toBeDefined()
     const stepIDs = pipeline!.steps.map((step) => step.id)
@@ -31,6 +31,7 @@ describe("pipeline workflow architecture review step", () => {
       "analyze_intent",
       "requirements",
       "architect",
+      "workload_analysis",
       "build",
       "visual_qa",
       "integrity",
@@ -45,10 +46,13 @@ describe("pipeline workflow architecture review step", () => {
       "frontend_design",
       "frontend_research",
     ])
-    expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["architect"])
-    expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
+    expect(pipeline!.steps.find((step) => step.id === "workload_analysis")?.after).toEqual(["architect"])
+    expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["workload_analysis"])
     expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.after).toEqual(["build"])
-    expect(stepIDs.indexOf("visual_qa")).toBeLessThan(stepIDs.indexOf("integrity"))
+    expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
+    expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.after).not.toContain("integrity")
+    expect(stepIDs.indexOf("workload_analysis")).toBeGreaterThan(stepIDs.indexOf("architect"))
+    expect(stepIDs.indexOf("workload_analysis")).toBeLessThan(stepIDs.indexOf("build"))
   })
 
   test("rendered workflow prompt does not expose deleted architect or scheduler semantics", () => {
@@ -68,6 +72,8 @@ describe("pipeline workflow architecture review step", () => {
     expect(text).toContain("Pipeline 的最后 gate 是 `integrity`")
     expect(text).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
     expect(text).toContain("最终系统完整性 gate")
+    expect(text).toContain("terminal frontend goal batch 后的同级 GUI")
+    expect(text).not.toContain("post-integrity 前端 GUI 修复")
   })
 
   test("projects frontend_design as completed from frontend template decision log without visual rows", () => {
@@ -173,100 +179,6 @@ describe("pipeline workflow architecture review step", () => {
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
     expect(taskSteps.visual_qa?.status).toBe("completed")
-  })
-
-  test("projects visual_qa as pending when a newer goal build completed after the report", () => {
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `proj_workflow_visual_qa_stale_${stamp}`
-    const taskID = `tsk_workflow_visual_qa_stale_${stamp}`
-    const specID = `spec_workflow_visual_qa_stale_${stamp}`
-    const goalID = `goal_workflow_visual_qa_stale_${stamp}`
-
-    Database.use((db) => {
-      db.insert(ProjectTable)
-        .values({
-          id: projectID,
-          worktree: process.cwd(),
-          name: "Workflow stale visual QA report test",
-          sandboxes: [],
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      db.insert(EngineTaskTable)
-        .values({
-          id: taskID,
-          project_id: projectID,
-          source: "test",
-          title: "Workflow stale visual QA status",
-          request: "Run visual QA once after each frontend goal batch",
-          kind: "workflow",
-          priority: "normal",
-          design_specs: [],
-          time_created: now,
-          time_updated: now,
-          time_started: now,
-        })
-        .run()
-      db.insert(EngineSpecSnapshotTable)
-        .values({
-          id: specID,
-          task_id: taskID,
-          version: 1,
-          status: "ready",
-          summary: "Active spec",
-          content: "spec",
-          scope: "scope",
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      db.insert(EngineGoalTable)
-        .values({
-          id: goalID,
-          task_id: taskID,
-          spec_snapshot_id: specID,
-          title: "Frontend batch",
-          slug: "frontend-batch",
-          objective: "Produce a frontend-visible batch.",
-          acceptance_specs: [],
-          owned_paths: ["src/App.tsx"],
-          depends_on: [],
-          exports: [],
-          imports: [],
-          kind: "feature",
-          requirement_ids: [],
-          priority: "blocking",
-          source: "test",
-          status: "pending",
-          order_index: 0,
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    })
-
-    createDecisionLog(taskID).append({
-      phase: "visual_qa",
-      key: "latest_summary",
-      value: "accepted=true\nsummary=visual QA passed for the prior batch\nproduction_blockers=0",
-      reason: "Latest structured visual QA summary for a prior batch.",
-    })
-    const goalRunID = beginBuildAttempt({
-      taskID,
-      goalID,
-      sessionID: `ses_build_after_visual_${stamp}`,
-      now: now + 10_000,
-    })
-    updateGoalRun(goalRunID, {
-      status: "completed",
-      time_completed: now + 20_000,
-    })
-
-    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
-    const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("pending")
   })
 
   test("projects visual_qa as failed when summary lacks acceptance semantics", () => {

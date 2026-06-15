@@ -745,11 +745,11 @@ export function findGoalRun(goalRunID: string): GoalRunRow | undefined {
 }
 
 /**
- * Latest verdict artifact written by the deliver tool for `taskID`. The
- * payload is the full AcceptanceVerdict (summary, issues_found, rejection_details,
+ * Latest acceptance verdict artifact for `taskID`. The payload is the full
+ * AcceptanceVerdict (summary, issues_found, rejection_details,
  * startup_verification, frontend_check). Surfaced by `buildSystemParts` into
- * the orchestrator prompt so the LLM sees the most recent verdict on its
- * next decision turn — a snapshot read, not a workflow gate.
+ * the orchestrator prompt so the LLM sees historical acceptance evidence on
+ * its next decision turn — a snapshot read, not a workflow gate.
  */
 export function findLatestAcceptanceVerdictArtifact(taskID: string) {
   return Database.use((db) =>
