@@ -55,10 +55,14 @@ describe("panel.create_task actor provenance", () => {
       missionSession?: boolean
       source?: string
       title?: string
+      request?: string
+      originalText?: string
     } = {},
   ) {
     await using tmp = await tmpdir({ git: true })
-    let captured: { metadata?: Record<string, unknown>; source?: string; title?: string } | undefined
+    let captured:
+      | { metadata?: Record<string, unknown>; source?: string; title?: string; request?: string }
+      | undefined
     let missionID: string | undefined
     await Instance.provide({
       directory: tmp.path,
@@ -75,7 +79,7 @@ describe("panel.create_task actor provenance", () => {
         await tool.execute(
           {
             action: "create_task",
-            request: "do thing",
+            request: opts.request ?? "do thing",
             allow_create: true,
             queue: false,
             ...(opts.title ? { title: opts.title } : {}),
@@ -90,14 +94,25 @@ describe("panel.create_task actor provenance", () => {
             messages: [],
             metadata() {},
             async ask() {},
-            extra: { surface: "panel" },
+            extra: { surface: "panel", ...(opts.originalText ? { originalText: opts.originalText } : {}) },
           },
         )
         expect(createSpy).toHaveBeenCalledTimes(1)
-        captured = createSpy.mock.calls[0]?.[0] as { metadata?: Record<string, unknown>; source?: string; title?: string }
+        captured = createSpy.mock.calls[0]?.[0] as {
+          metadata?: Record<string, unknown>
+          source?: string
+          title?: string
+          request?: string
+        }
       },
     })
-    return { metadata: captured?.metadata ?? {}, source: captured?.source, title: captured?.title, missionID }
+    return {
+      metadata: captured?.metadata ?? {},
+      source: captured?.source,
+      title: captured?.title,
+      request: captured?.request,
+      missionID,
+    }
   }
 
   test("control agent stamps actor=control_agent into task metadata", async () => {
@@ -125,6 +140,29 @@ describe("panel.create_task actor provenance", () => {
       title: "Verify delivery evidence",
     })
     expect(title).toBe("Verify delivery evidence")
+  })
+
+  test("create_task request uses explicit tool input instead of ambient originalText", async () => {
+    const explicit = [
+      "## Mission brief",
+      "",
+      "Original user input:",
+      "```",
+      "复刻 https://www.ainvest.com/market/，不要丢约束",
+      "```",
+      "",
+      "Executor instructions: preserve every hard constraint.",
+    ].join("\n")
+    const { request } = await runCreateTask("mission", {
+      missionSession: true,
+      title: "Market page clone",
+      request: explicit,
+      originalText: "ambient user text that must not replace the mission brief",
+    })
+
+    expect(request).toBe(explicit)
+    expect(request).toContain("Original user input:")
+    expect(request).not.toBe("ambient user text that must not replace the mission brief")
   })
 
   test("mission agent create_task without title is rejected before task creation", async () => {
