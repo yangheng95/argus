@@ -4,6 +4,7 @@ import z from "zod"
 import { streamText } from "../../llm/api"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
+import { ProviderLLM } from "../../provider/llm"
 import { Agent } from "../../agent/agent"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
@@ -367,7 +368,7 @@ export const ProviderRoutes = lazy(() =>
 
         try {
           const model = await Provider.getModel(providerID, modelID)
-          const language = await Provider.getLanguage(model)
+          const language = ProviderLLM.wrapModel(await Provider.getLanguage(model), model, {})
           const auth = await Auth.get(providerID)
           const isCodexOauth = providerID === "openai" && auth?.type === "oauth"
           const stream = streamText({

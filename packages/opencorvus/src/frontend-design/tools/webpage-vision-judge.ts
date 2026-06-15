@@ -30,6 +30,7 @@ import { Output } from "ai"
 import { Tool } from "../../tool/tool"
 import { Provider } from "../../provider/provider"
 import { ProviderLLM } from "../../provider/llm"
+import { ProviderSchema } from "../../provider/schema"
 import { resolveConfiguredModelRef } from "../../agent/model"
 import { EffectiveConfig } from "../../config/effective"
 import { Log } from "../../util/log"
@@ -246,7 +247,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
           // cls=idle instead of wedging the parent build session.
           const result = streamText({
             model: language,
-            output: Output.object({ schema: VerdictSchema }),
+            output: Output.object({ schema: ProviderSchema.output(model, VerdictSchema) }),
             abortSignal: run.signal,
             timeoutMs: false,
             messages: [
