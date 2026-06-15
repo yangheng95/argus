@@ -139,7 +139,7 @@ export async function compareBrowserPreviewRegions(
     throw new Error("Browser preview region comparison requires taskID and targetID.")
   }
   const jobID = Identifier.ascending("artifact")
-  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, jobID)
+  const outDir = ProjectRuntimePaths.taskAbsolute(input.projectRoot, input.taskID, "browser-preview", jobID)
   await fs.mkdir(outDir, { recursive: true })
 
   const selectedViewportIDs = dedupeViewportIDs(input.viewportIDs)
@@ -478,7 +478,7 @@ function sanitizeSegment(value: string): string {
 }
 
 function regionDirectoryKey(binding: BrowserPreviewRegionBinding): string {
-  return Identifier.scopedDirectoryKey("browser-preview-region", `${binding.viewport_id}:${binding.region_id}`)
+  return sanitizeSegment(`${binding.viewport_id}:${binding.region_id}`)
 }
 
 function clamp(value: number, min: number, max: number): number {

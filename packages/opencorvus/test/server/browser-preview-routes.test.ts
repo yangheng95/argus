@@ -68,7 +68,7 @@ describe("browser preview routes", () => {
   }
 
   async function browserPreviewArtifactPath(directory: string, taskID: string, name: string): Promise<string> {
-    const dir = ProjectRuntimePaths.browserPreviewJobRoot(directory, taskID, "art_route_test_job")
+    const dir = ProjectRuntimePaths.taskAbsolute(directory, taskID, "browser-preview", "art-route-test-job")
     await fs.mkdir(dir, { recursive: true })
     return path.join(dir, name)
   }
@@ -206,11 +206,12 @@ describe("browser preview routes", () => {
       const taskID = await seedTask(tmp.path)
       try {
         const target = await persistBrowserPreviewTarget({ taskID, url: preview.url.href })
-        const desktopPath = path.join(tmp.path, "desktop.png")
-        const mobilePath = path.join(tmp.path, "mobile.png")
+        const desktopPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop.png")
+        const mobilePath = await browserPreviewArtifactPath(tmp.path, taskID, "mobile.png")
         await fs.writeFile(desktopPath, "desktop-evidence")
         await fs.writeFile(mobilePath, "mobile-evidence")
         const desktopEvidenceID = persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
           taskID,
           targetID: target.id,
           viewportID: "desktop",
@@ -221,6 +222,7 @@ describe("browser preview routes", () => {
           now: 1000,
         })
         const mobileEvidenceID = persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
           taskID,
           targetID: target.id,
           viewportID: "mobile",
@@ -462,7 +464,12 @@ describe("browser preview routes", () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
       const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
-      const missingPath = ProjectRuntimePaths.browserPreviewJobRelative(taskID, "art_route_test_job", "missing.png")
+      const missingPath = ProjectRuntimePaths.taskRelative(
+        taskID,
+        "browser-preview",
+        "art-route-test-job",
+        "missing.png",
+      )
       const missingEvidenceID = persistBrowserPreviewEvidence({
         projectRoot: tmp.path,
         taskID,
