@@ -308,8 +308,6 @@ test("public workflow docs and live prompt describe the current model only", asy
   const livePromptFiles = [
     "packages/web/src/content/docs/start/quickstart.mdx",
     "packages/web/src/content/docs/zh-cn/start/quickstart.mdx",
-    "docs/product/en/start/quickstart.md",
-    "docs/product/zh-CN/start/quickstart.md",
     "packages/opencorvus/src/session/prompt/system.txt",
   ]
 

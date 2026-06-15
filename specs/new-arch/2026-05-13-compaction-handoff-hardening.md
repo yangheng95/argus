@@ -287,7 +287,7 @@ Files:
 
 - `packages/sdk/openapi.json`
 - `packages/sdk/js/src/gen/types.gen.ts`
-- `docs/product/*/opencorvus/configuration.md` if they mention compaction defaults
+- `packages/web/src/content/docs/{config,zh-cn/config}.mdx` if they mention compaction defaults
 
 Change:
 
