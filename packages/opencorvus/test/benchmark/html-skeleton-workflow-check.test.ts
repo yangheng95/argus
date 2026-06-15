@@ -1,10 +1,24 @@
 import { describe, expect, test } from "bun:test"
 import path from "node:path"
-import { runHtmlSkeletonWorkflowCheck } from "../../script/benchmark/html-skeleton-workflow-check"
+import {
+  parseHtmlSkeletonWorkflowCheckArgs,
+  runHtmlSkeletonWorkflowCheck,
+} from "../../script/benchmark/html-skeleton-workflow-check"
 import { tmpdir } from "../fixture/fixture"
 
 describe("html skeleton workflow check", () => {
-  test("accepts a task-scoped visual HTML skeleton artifact set", async () => {
+  test("CLI parser does not expose an artifacts-only pass mode", () => {
+    const originalArgv = process.argv
+    try {
+      process.argv = ["bun", "html-skeleton-workflow-check.ts", "--artifacts-only", "--out", "out"]
+      const parsed = parseHtmlSkeletonWorkflowCheckArgs()
+      expect("artifactsOnly" in parsed).toBe(false)
+    } finally {
+      process.argv = originalArgv
+    }
+  })
+
+  test("static artifact success still fails without a visual diff", async () => {
     await using tmp = await tmpdir()
     const frontendDesignDir = path.join(tmp.path, "frontend-design")
     const visualRoot = path.join(frontendDesignDir, "visual-html-skeleton")
@@ -74,15 +88,17 @@ describe("html skeleton workflow check", () => {
 
     const report = await runHtmlSkeletonWorkflowCheck({
       frontendDesignDir,
+      reference: path.join(tmp.path, "missing-reference.png"),
       outDir: path.join(tmp.path, "out"),
       threshold: 0.95,
       worstThreshold: 0.8,
       headless: true,
-      artifactsOnly: true,
     })
 
-    expect(report.passed).toBe(true)
-    expect(report.checks.every((check) => check.passed)).toBe(true)
+    expect(report.passed).toBe(false)
+    expect(report.visualDiff).toBeUndefined()
+    expect(report.checks.filter((check) => check.id !== "reference-png").every((check) => check.passed)).toBe(true)
+    expect(report.checks.find((check) => check.id === "reference-png")?.passed).toBe(false)
     expect(await Bun.file(path.join(tmp.path, "out", "html-skeleton-workflow-report.json")).exists()).toBe(true)
   })
 
@@ -157,14 +173,16 @@ describe("html skeleton workflow check", () => {
 
     const report = await runHtmlSkeletonWorkflowCheck({
       taskDir,
+      reference: path.join(tmp.path, "missing-reference.png"),
       outDir: path.join(tmp.path, "out"),
       threshold: 0.95,
       worstThreshold: 0.8,
       headless: true,
-      artifactsOnly: true,
     })
 
-    expect(report.passed).toBe(true)
+    expect(report.passed).toBe(false)
+    expect(report.visualDiff).toBeUndefined()
+    expect(report.checks.find((check) => check.id === "reference-png")?.passed).toBe(false)
     expect(report.checks.find((check) => check.id === "frontend-research-evidence")?.passed).toBe(true)
     expect(report.checks.find((check) => check.id === "frontend-research-citation-map")?.passed).toBe(true)
     expect(report.checks.find((check) => check.id === "frontend-research-webpage-contract")?.passed).toBe(true)
@@ -192,7 +210,6 @@ describe("html skeleton workflow check", () => {
       threshold: 0.95,
       worstThreshold: 0.8,
       headless: true,
-      artifactsOnly: true,
     })
 
     expect(report.passed).toBe(false)
@@ -223,7 +240,6 @@ describe("html skeleton workflow check", () => {
       threshold: 0.95,
       worstThreshold: 0.8,
       headless: true,
-      artifactsOnly: true,
     })
 
     expect(report.passed).toBe(false)
@@ -294,16 +310,18 @@ describe("html skeleton workflow check", () => {
 
     const report = await runHtmlSkeletonWorkflowCheck({
       taskDir: tasksDir,
+      reference: path.join(tmp.path, "missing-reference.png"),
       outDir: path.join(tmp.path, "out"),
       threshold: 0.95,
       worstThreshold: 0.8,
       headless: true,
-      artifactsOnly: true,
     })
 
-    expect(report.passed).toBe(true)
+    expect(report.passed).toBe(false)
+    expect(report.visualDiff).toBeUndefined()
     expect(report.frontendDesignDir).toBe(frontendDesignDir)
     expect(report.visualRoot).toBe(visualRoot)
+    expect(report.checks.find((check) => check.id === "reference-png")?.passed).toBe(false)
   })
 
   test("rejects old task-scoped source baseline handoffs that never restored visual-html-skeleton", async () => {
@@ -331,7 +349,6 @@ describe("html skeleton workflow check", () => {
       threshold: 0.95,
       worstThreshold: 0.8,
       headless: true,
-      artifactsOnly: true,
     })
 
     expect(report.passed).toBe(false)
