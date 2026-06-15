@@ -939,6 +939,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("findings")
     expect(normalized).toContain("production_blockers")
     expect(normalized).toContain("evidence")
+    expect(normalized).toContain("peer post-build review agents")
+    expect(normalized).toContain("Do not claim to replace integrity or to be its workflow prerequisite")
   })
 
   test("no core prompt smuggles JS template-literal escapes into raw text", async () => {
@@ -977,13 +979,15 @@ describe("core prompt hygiene", () => {
       "Repository investigation belongs to `analyze_intent`, `requirements`, or the registered `explore` subagent surface",
     )
     expect(normalized).toContain("after each terminal goal batch, dispatch `visual_qa` once")
-    expect(normalized).toContain("call `visual_qa` once before dispatching the next goal batch or final `integrity`")
+    expect(normalized).toContain("visual_qa` and `integrity` are peer post-build review agents")
+    expect(normalized).toContain("call `visual_qa` once as peer post-build review evidence before another batch")
     expect(normalized).toContain("component truth and visible functionality first")
     expect(normalized).toContain("static mock charts must become real chart implementations")
-    expect(normalized).toContain("before final `integrity`")
+    expect(normalized).toContain("`visual_qa` does not replace `integrity`")
     expect(normalized).not.toContain("call `visual_qa` after integrity")
     expect(normalized).not.toContain("run `integrity` first")
     expect(normalized).not.toContain("required post-build agent before `integrity`")
+    expect(normalized).not.toContain("final goal batch or final `integrity`")
     expect(normalized).not.toContain(["inspect", "only"].join("_"))
     expect(normalized).not.toContain("Task-level inspect-only build is not a workflow path")
   })

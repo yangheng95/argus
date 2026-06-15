@@ -4,10 +4,11 @@
  * 系统只内置两条路径：
  *   1. **direct**   — build
  *      用于显式 kind=build 的单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
- *   2. **pipeline** — (frontend_design + frontend_research) → analyze_intent → requirements → architect → per-goal[build] → visual_qa → integrity
+ *   2. **pipeline** — (frontend_design + frontend_research) → analyze_intent → requirements → architect → per-goal[build] → peer reviews[visual_qa + integrity]
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
- * Pipeline 以 build 做实现、以 visual_qa 做 batch-level frontend review、以 integrity 做 session-bound final gate。deliver
+ * Pipeline 以 build 做实现、以 visual_qa 做 batch-level frontend review、以 integrity 做 session-bound final gate。visual_qa
+ * 和 integrity 是 post-build peer review agents；visual_qa 不替代 integrity，也不是 integrity 的 workflow prerequisite。deliver
  * host gate 已禁用，不再作为推荐 workflow 的验收步骤。
  *
  * MiniWorkflow 不是状态机，不是固定 pipeline。Orchestrator 仍可基于 agent 推理偏离推荐
@@ -161,14 +162,14 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → visual_qa(每个 frontend goal batch 后一次) → integrity；
- *  visual_qa 是 terminal frontend goal batch 后的视觉/可见功能复核阶段；integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
+ *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → peer reviews[visual_qa(每个 frontend goal batch 后一次) + integrity]；
+ *  visual_qa 是 terminal frontend goal batch 后的视觉/可见功能复核阶段；integrity 是同级 post-build agent 中的 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
   description:
-    "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → visual_qa(每个 frontend goal batch 后一次) → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
+    "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → peer reviews[visual_qa(每个 frontend goal batch 后一次) + integrity]。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "frontend_design",
@@ -236,7 +237,7 @@ const PIPELINE: MiniWorkflow = {
       id: "visual_qa",
       tool: "visual_qa",
       label: "Visual QA",
-      hint: "terminal frontend goal batch 后执行一次的前端 GUI 复核/修复阶段。GUI=Graphical User Interface，图形用户界面。每批 blocking goal build 终态后、下一批 build 或最终 integrity 前调用一次；消费 frontend_design/build 与可用 integrity evidence，以专业设计 QA 视角列出 production_blockers，不以固定相似度分数作为唯一 verdict；先修组件真实性和可见功能（例如占位/虚假图表必须替换为真实图表实现），再修布局结构，最后才做样式微调。它不是 host gate；若修改文件或返回阻断项，先路由修复，再进入下一批 build 或最终 integrity。",
+      hint: "terminal frontend goal batch 后执行一次的前端 GUI 复核/修复阶段。GUI=Graphical User Interface，图形用户界面。每批 blocking goal build 终态后调用一次；它和 integrity 是同级 post-build review agents，消费 frontend_design/build 与可用 integrity evidence，以专业设计 QA 视角列出 production_blockers，不以固定相似度分数作为唯一 verdict；先修组件真实性和可见功能（例如占位/虚假图表必须替换为真实图表实现），再修布局结构，最后才做样式微调。它不是 host gate，不替代 integrity，也不是 integrity 的 workflow prerequisite；若修改文件或返回阻断项，先路由修复，再进入下一批 build 或最终验收判断。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -245,10 +246,10 @@ const PIPELINE: MiniWorkflow = {
       id: "integrity",
       tool: "integrity",
       label: "Review",
-      hint: "最终系统完整性 gate：在所有 blocking goal build 终态且本轮 frontend goal batch 的 visual_qa 已完成后调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
+      hint: "最终系统完整性 gate：在所有 blocking goal build 终态后调用。Integrity 和 visual_qa 是同级 post-build review agents；Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system，不被 Visual QA 取代。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
       scope: "task",
       skippable: false,
-      after: ["visual_qa"],
+      after: ["build"],
     },
   ],
   goalLoopStepIDs: ["build"],

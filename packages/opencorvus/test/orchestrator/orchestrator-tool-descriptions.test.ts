@@ -66,6 +66,7 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.visual_qa.description).toContain("GUI means Graphical User Interface")
     expect(tools.visual_qa.description).toContain("post-goal-batch")
     expect(tools.visual_qa.description).toContain("once after each terminal frontend goal batch")
+    expect(tools.visual_qa.description).toContain("peer post-build review evidence")
     expect(tools.visual_qa.description).toContain("component truth and visible functionality first")
     expect(tools.visual_qa.description).toContain("layout/composition second")
     expect(tools.visual_qa.description).toContain("micro-style polish last")
@@ -73,6 +74,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.visual_qa.description).toContain("webpage_render/evaluate/text_diff/vision_judge")
     expect(tools.visual_qa.description).toContain("does NOT acquire new webpage clone evidence")
     expect(tools.visual_qa.description).toContain("NOT the final acceptance gate")
+    expect(tools.visual_qa.description).toContain("Visual QA and integrity are peer review agents")
+    expect(tools.visual_qa.description).toContain("does not replace integrity")
+    expect(tools.visual_qa.description).toContain("not integrity's workflow prerequisite")
 
     expect(tools.browser_preview.description).toContain("Explicitly start a long-lived frontend preview service")
     expect(tools.browser_preview.description).toContain("ordinary command output does not update preview targets")
