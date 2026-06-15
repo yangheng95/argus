@@ -9,7 +9,12 @@ import { BrowserRuntime } from "@/browser/runtime"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { browserPreviewViewportByID, BrowserPreviewViewportID } from "./viewport"
-import { normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
+import {
+  findBrowserPreviewTargetByID,
+  normalizeRuntimePathRefs,
+  persistBrowserPreviewEvidence,
+  type PersistedBrowserPreviewTarget,
+} from "./persist"
 
 const SOURCE_REFERENCE_FILES = new Set(["reference.png", "reference-mobile.png"])
 
@@ -65,7 +70,7 @@ export const BrowserPreviewRegionComparisonRequest = z.object({
       include_side_by_side: true,
       include_diff: false,
     }),
-})
+}).strict()
 export type BrowserPreviewRegionComparisonRequest = z.infer<typeof BrowserPreviewRegionComparisonRequest>
 
 export const BrowserPreviewRegionComparisonResult = z.object({
@@ -103,7 +108,6 @@ type BrowserPreviewRegionComparisonInput = {
   projectRoot: string
   taskID: string
   targetID: string
-  url: string
   bindings: BrowserPreviewRegionBinding[]
   viewportIDs: BrowserPreviewViewportID[]
   includeFullpageOverview?: boolean
@@ -132,12 +136,22 @@ type SidecarResult = {
   }>
 } | { ok: false; message: string; stack?: string }
 
+export class BrowserPreviewRegionComparisonTargetNotFoundError extends Error {
+  constructor(readonly targetID: string) {
+    super(`Browser preview target not found: ${targetID}`)
+    this.name = "BrowserPreviewRegionComparisonTargetNotFoundError"
+  }
+}
+
 export async function compareBrowserPreviewRegions(
   input: BrowserPreviewRegionComparisonInput,
 ): Promise<BrowserPreviewRegionComparisonResult> {
   if (!input.taskID.trim() || !input.targetID.trim()) {
     throw new Error("Browser preview region comparison requires taskID and targetID.")
   }
+  const target = findBrowserPreviewTargetByID({ taskID: input.taskID, targetID: input.targetID })
+  if (!target) throw new BrowserPreviewRegionComparisonTargetNotFoundError(input.targetID)
+
   const jobID = Identifier.ascending("artifact")
   const outDir = ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, jobID)
   await fs.mkdir(outDir, { recursive: true })
@@ -183,7 +197,7 @@ export async function compareBrowserPreviewRegions(
   const runnableBindings = selectedBindings.filter((binding) => sourceRefs.has(bindingKey(binding)))
   const sidecar = runnableBindings.length
     ? await runImplementationCapture({
-        url: input.url,
+        target,
         outDir,
         viewportIDs: selectedViewportIDs,
         bindings: runnableBindings,
@@ -297,7 +311,7 @@ export function resolveSourceReferencePath(input: {
 }
 
 async function runImplementationCapture(input: {
-  url: string
+  target: PersistedBrowserPreviewTarget
   outDir: string
   viewportIDs: BrowserPreviewViewportID[]
   bindings: BrowserPreviewRegionBinding[]
@@ -317,7 +331,7 @@ async function runImplementationCapture(input: {
     runtime,
     script: REGION_COMPARISON_SCRIPT,
     payload: {
-      url: input.url,
+      url: input.target.url,
       outDir: input.outDir,
       executablePath,
       launchArgs: BrowserRuntime.defaultLaunchArgs(),

@@ -1,6 +1,6 @@
 import path from "node:path"
 import z from "zod"
-import { findBrowserPreviewTargetByID, resolveRuntimeRelativePath } from "@/browser-preview/persist"
+import { resolveRuntimeRelativePath } from "@/browser-preview/persist"
 import {
   BrowserPreviewRegionBinding,
   BrowserPreviewRegionComparisonResult,
@@ -19,7 +19,7 @@ export const BrowserPreviewCompareRegionsToolParameters = z.object({
     .describe("Task-scoped source/local region bindings produced from source visual evidence and local components."),
   includeDiff: z.boolean().default(false).describe("Whether to also generate per-region difference PNGs."),
   includeFullpageOverview: z.boolean().default(false).describe("Whether to retain full-page overview capture metadata."),
-})
+}).strict()
 export type BrowserPreviewCompareRegionsToolParameters = z.infer<typeof BrowserPreviewCompareRegionsToolParameters>
 
 export const BrowserPreviewCompareRegionsTool = Tool.define("browser_preview_compare_regions", {
@@ -31,15 +31,10 @@ export const BrowserPreviewCompareRegionsTool = Tool.define("browser_preview_com
     if (!taskID) {
       throw new Error("browser_preview_compare_regions requires a task context.")
     }
-    const target = findBrowserPreviewTargetByID({ taskID, targetID: params.targetID })
-    if (!target) {
-      throw new Error(`Browser preview target not found: ${params.targetID}`)
-    }
     const result = await compareBrowserPreviewRegions({
       projectRoot: Instance.directory,
       taskID,
       targetID: params.targetID,
-      url: target.url,
       viewportIDs: params.viewportIDs,
       bindings: params.inlineBindings,
       includeDiff: params.includeDiff,

@@ -569,6 +569,39 @@ describe("browser preview routes", () => {
       })
       expect(unknownTarget.status).toBe(404)
       expect(JSON.stringify(await unknownTarget.json())).toContain("art_previewtarget_missing")
+
+      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const rawUrl = await app.request(`/task/${taskID}/browser-preview/compare`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({
+          targetID: target.id,
+          url: "http://127.0.0.1:5174/other",
+          outDir: ".opencorvus/r/tsk/browser-preview/job",
+          viewportIDs: ["desktop"],
+          inlineBindings: [
+            {
+              region_id: "economy",
+              viewport_id: "desktop",
+              region_scope: "page-section",
+              source: {
+                reference_artifact_id: "reference.png",
+                bbox: { x: 0, y: 0, width: 100, height: 80 },
+                semantic_role: "economy section",
+              },
+              implementation: {
+                route: "/",
+                locator: { kind: "data-oc-region", value: "economy" },
+              },
+            },
+          ],
+        }),
+      })
+      expect(rawUrl.status).toBe(400)
+      expect(JSON.stringify(await rawUrl.json())).toContain("Unrecognized")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )

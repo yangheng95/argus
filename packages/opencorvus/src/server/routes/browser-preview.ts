@@ -26,6 +26,7 @@ import { BrowserPreviewVerification, verifyBrowserPreview } from "../../browser-
 import { BrowserPreviewViewportID } from "../../browser-preview/viewport"
 import { captureBrowserPreviewLiveSnapshot, interactBrowserPreviewLive } from "../../browser-preview/live"
 import {
+  BrowserPreviewRegionComparisonTargetNotFoundError,
   BrowserPreviewRegionComparisonRequest,
   BrowserPreviewRegionComparisonResult,
   compareBrowserPreviewRegions,
@@ -323,21 +324,25 @@ export const BrowserPreviewRoutes = lazy(() =>
         const { taskID } = c.req.valid("param")
         const body = c.req.valid("json")
         requireTask(taskID)
-        const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
-        if (!target) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
-        const result = await compareBrowserPreviewRegions({
-          projectRoot: Instance.directory,
-          taskID,
-          targetID: body.targetID,
-          url: target.url,
-          viewportIDs: body.viewportIDs,
-          bindings: body.inlineBindings,
-          includeFullpageOverview: body.output.include_fullpage_overview,
-          includeSideBySide: body.output.include_side_by_side,
-          includeDiff: body.output.include_diff,
-          signal: c.req.raw.signal,
-        })
-        return c.json(result)
+        try {
+          const result = await compareBrowserPreviewRegions({
+            projectRoot: Instance.directory,
+            taskID,
+            targetID: body.targetID,
+            viewportIDs: body.viewportIDs,
+            bindings: body.inlineBindings,
+            includeFullpageOverview: body.output.include_fullpage_overview,
+            includeSideBySide: body.output.include_side_by_side,
+            includeDiff: body.output.include_diff,
+            signal: c.req.raw.signal,
+          })
+          return c.json(result)
+        } catch (error) {
+          if (error instanceof BrowserPreviewRegionComparisonTargetNotFoundError) {
+            return c.json({ message: error.message }, 404)
+          }
+          throw error
+        }
       },
     )
     .post(
