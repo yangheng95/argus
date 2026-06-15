@@ -47,7 +47,6 @@ export interface BrowserPreviewVerification {
         passed: boolean
         url: string
         summary: string
-        path?: string
       }
     >
   >
@@ -67,7 +66,6 @@ export interface BrowserPreviewEvidence {
     passed?: boolean
     url?: string
     summary?: string
-    path?: string
     sha?: string
     bytes?: number
   }
@@ -93,26 +91,12 @@ export async function loadTaskBrowserPreviewTarget(
 export async function selectTaskBrowserPreviewTarget(input: {
   taskID: string
   targetID: string
-  url?: never
-  signal?: AbortSignal
-}): Promise<BrowserPreviewTarget>
-export async function selectTaskBrowserPreviewTarget(input: {
-  taskID: string
-  url: string
-  targetID?: never
-  signal?: AbortSignal
-}): Promise<BrowserPreviewTarget>
-export async function selectTaskBrowserPreviewTarget(input: {
-  taskID: string
-  targetID?: string
-  url?: string
   signal?: AbortSignal
 }): Promise<BrowserPreviewTarget> {
-  const body = "url" in input ? { url: input.url } : { targetID: input.targetID }
   return (await apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/target`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ targetID: input.targetID }),
     signal: input.signal,
   })) as BrowserPreviewTarget
 }
@@ -155,7 +139,7 @@ export async function loadTaskBrowserPreviewEvidenceCaptureObjectUrl(input: {
     responseKind: "binary",
     signal: input.signal,
   })
-  if (!response.ok) throw new ApiError(response.status, path, response.body)
+  if (!response.ok) throw new ApiError(response.status, path, decodeBinaryBrowserPreviewErrorBody(response.body))
   const contentType = response.headers["content-type"] || response.headers["Content-Type"] || "image/png"
   return URL.createObjectURL(new Blob([bytesToArrayBuffer(response.body)], { type: contentType }))
 }
@@ -206,7 +190,17 @@ async function browserPreviewLiveFrameObjectUrl(
     responseKind: "binary",
     signal,
   })
-  if (!response.ok) throw new ApiError(response.status, path, response.body)
+  if (!response.ok) throw new ApiError(response.status, path, decodeBinaryBrowserPreviewErrorBody(response.body))
   const contentType = response.headers["content-type"] || response.headers["Content-Type"] || "image/png"
   return URL.createObjectURL(new Blob([bytesToArrayBuffer(response.body)], { type: contentType }))
+}
+
+function decodeBinaryBrowserPreviewErrorBody(body: Uint8Array): unknown {
+  const text = new TextDecoder().decode(body).trim()
+  if (!text) return body
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return text
+  }
 }
