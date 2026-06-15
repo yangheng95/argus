@@ -19,6 +19,7 @@ import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
 import { Tab, Tabs } from "./ui/Tabs"
+import { browserPreviewLivePoint } from "./browser-preview-live-point"
 
 type BrowserPreviewCandidate = BrowserPreviewTarget["candidates"][number]
 
@@ -254,11 +255,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const image = element.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
     if (!viewport || !image) return undefined
     const rect = image.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0) return undefined
-    return {
-      x: Math.max(0, Math.min(viewport.width, ((event.clientX - rect.left) / rect.width) * viewport.width)),
-      y: Math.max(0, Math.min(viewport.height, ((event.clientY - rect.top) / rect.height) * viewport.height)),
-    }
+    return browserPreviewLivePoint(event, rect, viewport)
   }
 
   const sendLiveInput = (input: BrowserPreviewLiveInput) => {
