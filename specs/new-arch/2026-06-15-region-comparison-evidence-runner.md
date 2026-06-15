@@ -28,6 +28,7 @@ The experiment in `.scratch/economy-tv-compare-20260615085702` compared TradingV
 1. The feature belongs to `BrowserEvidenceRunner`, not to Build, Browser MCP, Visual QA, or overlay.
 2. MCP may expose a convenience tool only as a runner client. MCP-local pages, screenshots, logs, monitor frames, and attachments are not task evidence.
 3. Build must see the generated side-by-side image in the same agent turn that requested comparison, before reporting success.
+3a. When source/reference evidence and a local preview target both exist, Build should use region comparison before standalone screenshots for the changed surface. Standalone screenshots are surrounding context; they are not the primary repair-loop evidence for reference-parity regions with bindings.
 4. Source region authority comes from frontend-design/source-capture evidence, preferably `SourceRegion.bbox`. Build must not invent source bounding boxes during implementation.
 5. Local region authority comes from implementation-owned bindings such as `data-oc-region`, `data-testid`, role/name, or a declared component selector. No `nth-child`, broad text search, or screenshot matching fallback is allowed.
 6. Comparison scores are evidence only. They do not become a workflow gate, host gate, or pass/fail shortcut.
@@ -156,6 +157,7 @@ type RegionComparisonManifest = {
 5. The tool returns a manifest path and attaches the side-by-side image to the build turn.
 6. Build inspects the image. If the region is wrong, it repairs and reruns comparison.
 7. Build may report success only after current-scope comparison artifacts are fresh, visible, and cited in `tests[]` or verification evidence.
+8. Build may use standalone screenshots for page context, responsive framing, or regions that genuinely lack authoritative bindings, but must not substitute them for region comparison when bindings exist.
 
 ## Tool Surface
 
