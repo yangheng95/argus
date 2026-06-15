@@ -349,12 +349,18 @@ jobs:
       run:
         shell: bash
     steps:
+      - name: Download CLI dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: opencorvus-dist-*
+          path: /tmp/release-assets
+
       - uses: actions/download-artifact@v4
         with:
           pattern: overlay-*
           path: /tmp/release-assets
 
-      - name: Upload overlay assets to GitHub Release
+      - name: Upload release assets to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -25,4 +25,16 @@ describe("release overlay artifact contract", () => {
     expect(releaseBuild).not.toContain("tauri build --no-bundle")
     expect(devBuild).toContain("tauri build --no-bundle")
   })
+
+  test("release publish job uploads CLI archives and overlay bundles", () => {
+    const workflow = readRepo(".github/workflows/build.yml")
+    const publishJob = /publish-release-assets:[\s\S]*?(?=\n  publish-release-branch:)/.exec(workflow)?.[0] ?? ""
+
+    expect(publishJob).toContain("Download CLI dist artifacts")
+    expect(publishJob).toContain("pattern: opencorvus-dist-*")
+    expect(publishJob).toContain("pattern: overlay-*")
+    expect(publishJob).toContain("find /tmp/release-assets -type f | sort")
+    expect(publishJob).toContain('gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"')
+    expect(publishJob).not.toContain("Upload overlay assets to GitHub Release")
+  })
 })
