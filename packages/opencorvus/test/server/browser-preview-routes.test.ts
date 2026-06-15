@@ -646,6 +646,19 @@ describe("browser preview routes", () => {
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
 
+  test("live preview routes delegate target lookup to the live display module", async () => {
+    const routeSource = await fs.readFile(
+      path.resolve(import.meta.dir, "../../src/server/routes/browser-preview.ts"),
+      "utf8",
+    )
+    const liveRoutes = routeSource.slice(routeSource.indexOf('"/task/:taskID/browser-preview/live/snapshot"'))
+
+    expect(liveRoutes).toContain("captureBrowserPreviewLiveSnapshot({")
+    expect(liveRoutes).toContain("interactBrowserPreviewLive({")
+    expect(liveRoutes).not.toContain("url: target.url")
+    expect(liveRoutes).not.toContain("findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })")
+  })
+
   test(
     "POST /task/:taskID/browser-preview/live/snapshot returns a PNG from the persisted target",
     async () => {
@@ -669,6 +682,20 @@ describe("browser preview routes", () => {
       expect(response.headers.get("content-type")).toBe("image/png")
       const bytes = Buffer.from(await response.arrayBuffer())
       expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+      const evidenceRows = Database.use((db) =>
+        db
+          .select()
+          .from(EngineArtifactTable)
+          .where(
+            and(
+              eq(EngineArtifactTable.task_id, taskID),
+              eq(EngineArtifactTable.kind, "browser_preview_evidence"),
+            ),
+          )
+          .all(),
+      )
+      expect(evidenceRows).toHaveLength(0)
+      expect(latestBrowserPreviewEvidenceID({ taskID, targetID: target.id })).toBeUndefined()
     },
     { timeout: 60_000 },
   )
@@ -708,6 +735,24 @@ describe("browser preview routes", () => {
         }),
       })
       expect(unknownTarget.status).toBe(404)
+
+      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const rawUrl = await app.request(`/task/${taskID}/browser-preview/live/input`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({
+          targetID: target.id,
+          url: "http://127.0.0.1:5174/other",
+          outDir: ".opencorvus/r/tsk/browser-preview/job",
+          viewportID: "desktop",
+          input: { kind: "click", x: 1, y: 1 },
+        }),
+      })
+      expect(rawUrl.status).toBe(400)
+      expect(JSON.stringify(await rawUrl.json())).toContain("Unrecognized")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
