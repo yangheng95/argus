@@ -14,6 +14,9 @@ import {
   type RuntimeCaptureSuccess,
 } from "@/runtime/capture-contract"
 import { pngLuminanceVariance } from "@/runtime/png-metrics"
+import { Identifier } from "@/id/id"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { findBrowserPreviewTargetByID } from "./persist"
 import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./viewport"
 
 export type BrowserEvidenceManifestSummary = {
@@ -36,11 +39,9 @@ export type BrowserPreviewEvidenceRunnerResult = {
 }
 
 type BrowserPreviewEvidenceRunnerInput = {
-  jobID: string
+  projectRoot: string
   taskID: string
   targetID: string
-  url: string
-  outDir: string
   viewportIDs: BrowserPreviewViewportID[]
   signal?: AbortSignal
 }
@@ -77,12 +78,19 @@ export async function runBrowserPreviewEvidenceJob(
   input: BrowserPreviewEvidenceRunnerInput,
 ): Promise<BrowserPreviewEvidenceRunnerResult> {
   requireBrowserEvidenceIdentity(input)
+  const target = findBrowserPreviewTargetByID({ taskID: input.taskID, targetID: input.targetID })
+  if (!target) {
+    throw new Error(`Browser preview target not found: ${input.targetID}`)
+  }
+  const jobID = Identifier.ascending("artifact")
+  const projectRoot = path.resolve(input.projectRoot)
+  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID)
   const executablePath = await BrowserRuntime.findBrowserExecutable()
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(undefined)
   const navigationTimeoutMs = RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms
   const settleMs = RUNTIME_CAPTURE_DEFAULTS.settle_ms
   const runtime = await resolveBrowserNodeSidecarRuntime()
-  await fs.mkdir(input.outDir, { recursive: true })
+  await fs.mkdir(outDir, { recursive: true })
 
   const viewports: SidecarViewportInput[] = input.viewportIDs.map((id) => {
     const preset = browserPreviewViewportByID(id)
@@ -91,7 +99,7 @@ export async function runBrowserPreviewEvidenceJob(
       id,
       width: viewport.width,
       height: viewport.height,
-      screenshotPath: path.join(input.outDir, `${id}.png`),
+      screenshotPath: path.join(outDir, `${id}.png`),
     }
   })
 
@@ -101,7 +109,7 @@ export async function runBrowserPreviewEvidenceJob(
     runtime,
     script: BROWSER_PREVIEW_BATCH_SCRIPT,
     payload: {
-      url: input.url,
+      url: target.url,
       executablePath,
       launchArgs: BrowserRuntime.defaultLaunchArgs(),
       launchTimeoutMs,
@@ -134,18 +142,18 @@ export async function runBrowserPreviewEvidenceJob(
   const artifactPaths: string[] = []
   const diagnostics: string[] = []
   for (const capture of sidecar.result.captures) {
-    const finalized = await finalizeBrowserPreviewSidecarCapture({ capture, url: input.url, outDir: input.outDir })
+    const finalized = await finalizeBrowserPreviewSidecarCapture({ capture, url: target.url, outDir })
     captures[capture.id] = finalized.capture
     if (finalized.artifactPath) artifactPaths.push(finalized.artifactPath)
     diagnostics.push(finalized.diagnostic)
   }
 
   const manifest = await writeBrowserEvidenceManifest({
-    outDir: input.outDir,
-    jobID: input.jobID,
+    outDir,
+    jobID,
     taskID: input.taskID,
     targetID: input.targetID,
-    url: input.url,
+    url: target.url,
     viewportIDs: input.viewportIDs,
     artifactPaths,
     captures,
@@ -166,6 +174,7 @@ export async function writeBrowserEvidenceManifest(input: {
   diagnostics: string[]
 }): Promise<BrowserEvidenceManifestSummary> {
   requireBrowserEvidenceIdentity(input)
+  await fs.mkdir(input.outDir, { recursive: true })
   const diagnosticsPath = path.join(input.outDir, "diagnostics.json")
   const manifest: BrowserEvidenceManifestSummary = {
     manifestPath: path.join(input.outDir, "manifest.json"),
@@ -215,9 +224,10 @@ export async function writeBrowserEvidenceManifest(input: {
   return manifest
 }
 
-function requireBrowserEvidenceIdentity(input: { jobID: string; taskID: string; targetID: string }): void {
+function requireBrowserEvidenceIdentity(input: { projectRoot?: string; jobID?: string; taskID: string; targetID: string }): void {
   const missing = [
-    input.jobID.trim() ? undefined : "jobID",
+    "projectRoot" in input && !input.projectRoot?.trim() ? "projectRoot" : undefined,
+    "jobID" in input && !input.jobID?.trim() ? "jobID" : undefined,
     input.taskID.trim() ? undefined : "taskID",
     input.targetID.trim() ? undefined : "targetID",
   ].filter((item): item is string => Boolean(item))
