@@ -169,32 +169,28 @@ function recallMemory(task: typeof EngineTaskTable.$inferSelect) {
     .slice(0, 6)
     .join(" ")
   if (!query) return []
-  try {
-    const primary = Memory.recall({
-      query,
-      projectId: task.project_id,
-      sessionID: task.session_id ?? undefined,
-      scope: "all",
-      limit: 5,
-    })
-    const requestLine = task.request.split("\n").find(Boolean)?.trim()
-    if (!requestLine || requestLine === query) return primary
-    const secondary = Memory.recall({
-      query: requestLine.slice(0, 120),
-      projectId: task.project_id,
-      sessionID: task.session_id ?? undefined,
-      scope: "all",
-      limit: 3,
-    })
-    const seen = new Set(primary.map((item) => item.chunkId))
-    for (const item of secondary) {
-      if (!seen.has(item.chunkId)) {
-        primary.push(item)
-        seen.add(item.chunkId)
-      }
+  const primary = Memory.recall({
+    query,
+    projectId: task.project_id,
+    sessionID: task.session_id ?? undefined,
+    scope: "all",
+    limit: 5,
+  })
+  const requestLine = task.request.split("\n").find(Boolean)?.trim()
+  if (!requestLine || requestLine === query) return primary
+  const secondary = Memory.recall({
+    query: requestLine.slice(0, 120),
+    projectId: task.project_id,
+    sessionID: task.session_id ?? undefined,
+    scope: "all",
+    limit: 3,
+  })
+  const seen = new Set(primary.map((item) => item.chunkId))
+  for (const item of secondary) {
+    if (!seen.has(item.chunkId)) {
+      primary.push(item)
+      seen.add(item.chunkId)
     }
-    return primary.slice(0, 8)
-  } catch {
-    return []
   }
+  return primary.slice(0, 8)
 }
