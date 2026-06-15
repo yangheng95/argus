@@ -518,8 +518,8 @@ export function applyEvent(event: any): void {
   // only signal that flips a session card out of `running`. Carries
   // `{sessionID, status:{type:"streaming"|"idle"|"retry"|"terminal", ...}}`.
   // Applies to every session — orchestrator root, requirements / architect /
-  // frontend-design / integrity / build / deliver / refine /
-  // analyze_intent / modify_goal / publish_acceptance, future phases. See
+  // frontend-design / frontend-research / workload_analysis / visual_qa /
+  // integrity / build / refine / analyze_intent / modify_goal, future phases. See
   // specs/new-arch/07-panel-reactivity.md §session 终态信号源.
   if (type === "session.status") {
     return applyVisibleCardTreeEvent(() => handleSessionStatus(event))
@@ -1314,7 +1314,9 @@ function handleStandaloneQuestion(event: any): void {
   if (!requestID || !sessionID) {
     throw new Error(`${type} missing requestID/sessionID`)
   }
-  if (!isSelectedStandaloneSession(sessionID) && !standaloneQuestionInteractions.has(requestID)) {
+  const session = sessions.get(sessionID)
+  const isKnownMissionSession = session?.stage === "mission"
+  if (!isSelectedStandaloneSession(sessionID) && !isKnownMissionSession && !standaloneQuestionInteractions.has(requestID)) {
     return
   }
 
@@ -2332,9 +2334,9 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   if (ordered.length === 0) return
 
   const segments: TimelineSegment[] = []
+  const segmentBySessionKey = new Map<string, TimelineSegment>()
   const desiredCardByMessage = new Map<string, string>()
   const targetMessageIDs = new Set<string>()
-  let currentSegment: TimelineSegment | undefined
 
   for (const message of ordered) {
     const session = sessions.get(message.sessionID)
@@ -2342,24 +2344,18 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
     const stage = message.stage || session.stage
     const goalID = message.goalID || session.goalID
     if (isPhaseAbsorbedSession(stage, goalID)) {
-      currentSegment = undefined
       continue
     }
 
-    let segment =
-      currentSegment &&
-      currentSegment.session.sessionID === message.sessionID &&
-      currentSegment.stage === stage &&
-      currentSegment.goalID === goalID
-        ? currentSegment
-        : undefined
+    const segmentKey = `${message.sessionID}\u0000${stage}\u0000${goalID}`
+    let segment = segmentBySessionKey.get(segmentKey)
     if (!segment) {
       const cardID = timelineCardID(stage, message.sessionID, message.id)
       segment = { cardID, session, stage, goalID, messages: [] }
+      segmentBySessionKey.set(segmentKey, segment)
       segments.push(segment)
     }
     segment.messages.push(message)
-    currentSegment = segment
     desiredCardByMessage.set(message.id, segment.cardID)
     targetMessageIDs.add(message.id)
   }

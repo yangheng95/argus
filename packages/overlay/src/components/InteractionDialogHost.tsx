@@ -7,8 +7,9 @@
 // surface is safe.
 //
 // Behavior:
-//   • Reactively reads boardStore.board.interactions, picks the oldest pending
-//     interaction not already dismissed for this overlay session.
+//   • Reactively reads the card tree's normalized interaction-card parts,
+//     picks the oldest pending interaction not already dismissed for this
+//     overlay session.
 //   • Reuses <InteractionCard> for the body — there is exactly one place that
 //     renders an interaction (rule 8 / rule 9). The card already closes the
 //     loop with loadBoard() after a successful reply, which collapses the
@@ -19,8 +20,8 @@
 //     re-asserting itself for the same prompt.
 
 import { createMemo, createSignal, Show } from "solid-js"
-import { boardStore } from "../store/board"
-import { pickDialogInteraction } from "../utils/interaction-dialog"
+import { cardTreeStore } from "../store/card-tree"
+import { collectDialogInteractions, pickDialogInteraction } from "../utils/interaction-dialog"
 import { t } from "../utils/i18n"
 import { InteractionCard, type InteractionData } from "./InteractionCard"
 import { Dialog } from "./primitives/Dialog"
@@ -29,7 +30,7 @@ export function InteractionDialogHost() {
   const [dismissed, setDismissed] = createSignal<ReadonlySet<string>>(new Set())
 
   const current = createMemo<InteractionData | null>(() => {
-    const list = (boardStore.board?.interactions || []) as InteractionData[]
+    const list = collectDialogInteractions(cardTreeStore.cards) as InteractionData[]
     const it = pickDialogInteraction(list, dismissed())
     if (!it) return null
     const pruned = pruneDismissed(dismissed(), list)

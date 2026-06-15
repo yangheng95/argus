@@ -207,6 +207,7 @@ coverage/
 .turbo/
 .DS_Store
 Thumbs.db
+.opencorvus/r/
 .opencorvus/runtime/
 .opencorvus/intent/
 .opencorvus/frontend-design/
@@ -323,12 +324,12 @@ export async function ensureGitignore() {
   const isRepo = await git(["rev-parse", "--git-dir"], { cwd: dir })
   if (isRepo.exitCode !== 0) return
   // `--force` is mandatory for goal worktrees: their cwd lives at
-  // `<project>/.opencorvus/runtime/.../worktree` and the project root
+  // `<project>/.opencorvus/r/.../worktree` and the project root
   // `.gitignore` (which the worktree shares via the parent repo) lists
-  // `.opencorvus/runtime/`. Without `-f`, `git add .gitignore` from inside the
+  // `.opencorvus/r/`. Without `-f`, `git add .gitignore` from inside the
   // worktree fails with "The following paths are ignored by one of your
-  // .gitignore files: .opencorvus/runtime" and publish_acceptance aborts at goal
-  // workspace terminal cleanup (r11 bench evidence
+  // .gitignore files: .opencorvus/r" and goal workspace terminal cleanup
+  // aborts before integrity can consume the evidence (r11 bench evidence
   // `_session-r11-glm5cn.out` line 91025, 2026-04-30T19:34:37). The
   // semantic match: we explicitly want to seed/refresh `.gitignore`
   // regardless of any parent-scope ignore rule that captures the worktree
@@ -441,7 +442,7 @@ function result(task: TaskRow) {
  * Always commits — `--allow-empty` plus `--no-gpg-sign` keep this a
  * pure time anchor when acceptance made no code edits. Best-effort: any
  * git failure is logged and reported back, never thrown, so a broken
- * commit never blocks the surrounding deliver tool.
+ * commit never blocks the surrounding acceptance-evidence publication.
  */
 async function commitAcceptanceRound(input: {
   task: TaskRow

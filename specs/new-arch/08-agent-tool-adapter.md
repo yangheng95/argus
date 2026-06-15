@@ -22,14 +22,13 @@
 > 5. 实际 explore agent 的 `include`（`agent.ts:157`）是
 >    `["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"]`
 >    ——下文里写的 `grep` / `codesearch` 都已重命名为 `search_code` / `external_code_search`。
-> 6. 实际 acceptance review（`agent.ts:233`）用 `tools: { include: [] }` 空白名单，
->    review/output tools 由 `AcceptanceReview.verify` 通过 SessionLoop extra tools 在运行时注入。
+> 6. 旧 acceptance review agent / `deliver` 路径已退役；最终验收由 `integrity` agent
+>    通过运行时注入的 review/output tools 完成。
 > 7. `requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity`
->    / `prosecutor` 等 stage agent **走** ToolRegistry（在 `agent.ts:316+` 注册，全部是
+>    等 stage agent **走** ToolRegistry（在 `agent.ts:316+` 注册，全部是
 >    `mode: "primary" + hidden: true` 的 native），不属于"不走 ToolRegistry"那一类。
->    `integrity` / `prosecutor` 的 verdict / counter-example 工具是运行时通过 SessionLoop
->    extra tools 注入（registry `include: []` 故意留空——见 `agent.ts:382-405` 注释）。真正
->    "不走 ToolRegistry"的只有 orchestrator tools 内部自建工具集（`build` / `deliver` 等
+>    `integrity` 的 review/output tools 是运行时通过 SessionLoop extra tools 注入。真正
+>    "不走 ToolRegistry"的只有 orchestrator tools 内部自建工具集（`build` / `integrity` / `visual_qa` 等
 >    tool 内部创建子 session 时手动组装）。
 > 8. `task` / `planner` agent 不存在——`task` 是个 tool（`src/tool/task.ts`），
 >    `planner` agent 已随 the removed planning package 删除。
@@ -93,21 +92,19 @@ export async function tools(model, agent?) {
 | coding          | exclude | `["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS]`                                                                                  | 通用交互编码角色，**独立命名角色**（非 build 别名）；prompt = `agent/prompt/coding.txt`（`agent.ts:127`）                  |
 | build           | exclude | `["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS]`                                                                                  | goal executor，与 `coding` 同一 exclude 集合；orchestrator `build` tool 另注入 session 级 deny（见下节）（`agent.ts:142`） |
 | general         | exclude | `["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...WEBPAGE_EVIDENCE_TOOL_IDS]`                                              | 通用 sub-agent（`agent.ts:158`）                                                                                           |
-| explore         | include | `["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"]`                                                         | 只读搜索专用（`agent.ts:174`）                                                                                             |
+| explore         | include | `["read", "glob", "search_code", "external_code_search", "lsp", "webfetch", "websearch", "panel", "memory"]`                                         | 只读调查 + panel 只读状态查询；默认不持有 `bash` / 写入工具                                                                 |
 | compaction      | include | `[]`                                                                                                                                                   | 无工具                                                                                                                     |
 | title           | include | `[]`                                                                                                                                                   | 无工具                                                                                                                     |
 | summary         | include | `[]`                                                                                                                                                   | 无工具                                                                                                                     |
 | control         | include | `["panel"]`                                                                                                                                            | 仅 panel capability（`agent.ts:227`）                                                                                      |
-| acceptance      | include | `[]`                                                                                                                                                   | adversarial evaluator；工具集经 orchestrator `deliver` tool 的 session 注入（`agent.ts:242`）                              |
-| orchestrator    | include | dispatch/observation/interaction/bookkeeping 共一组（含 `cancel_subagent`，见 `agent.ts:299-332`）                                                     | **走** ToolRegistry（`agent.ts:267+`）                                                                                     |
-| requirements    | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]`                                 | **走** ToolRegistry（`agent.ts:340+`，`mode:"primary"` + `hidden` native）                                                 |
-| architect       | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]`                                 | **走** ToolRegistry（`agent.ts:355+`）                                                                                     |
-| frontend-design | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot", ...WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS]` | **走** ToolRegistry（`agent.ts:366+`）                                                                                     |
-| intent-analysis | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]`                                 | **走** ToolRegistry（`agent.ts:393+`）                                                                                     |
-| integrity       | include | `[]`                                                                                                                                                   | **走** ToolRegistry（`agent.ts:403+`）；工具集经 session 注入                                                              |
-| prosecutor      | include | `[]`                                                                                                                                                   | **走** ToolRegistry（`agent.ts:414+`）；工具集经 session 注入                                                              |
+| orchestrator    | include | dispatch / review / goal-control / task-control / observation / interaction / bookkeeping 共一组，含 `add_goal`、`modify_goal`、`cancel_subagent`、`wait` | include 列表是 agent 可见面；运行时的 workflow tools 由 `createOrchestratorTools()` 自建，少量通用工具来自 ToolRegistry |
+| requirements    | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "skill", "todoread", "todowrite", "websearch"]`            | **走** ToolRegistry；允许 query search 验证当前框架/库事实，禁止 `webfetch`                                                |
+| architect       | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "skill", "todoread", "todowrite", "websearch"]`            | **走** ToolRegistry；允许 query search 验证当前技术事实，禁止 `webfetch`                                                   |
+| frontend-design | include | `FRONTEND_DESIGN_STATIC_TOOL_IDS`（含 `skill`、`url_screenshot` 与 webpage render/evaluate evidence 工具）                                               | **走** ToolRegistry；由专用 evidence toolchain 获取视觉参考                                                                |
+| intent-analysis | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "skill", "todoread", "todowrite"]`                         | **走** ToolRegistry；第一层分类不做 web research                                                                            |
+| integrity       | include | `["browser_preview"]`                                                                                                                                  | **走** ToolRegistry；专用 integrity team 的内部审查工具由 team runtime 注入                                                 |
 
-> 已删除的 agent 行（`spec` / `plan` / `planner` / `task` / `evaluator`）已从上表移除——这些 native agent 已在历次重构中删除，`agent.ts` 不再注册。`requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity` / `prosecutor` **均走 ToolRegistry**（与本文件头部「校准注」一致，旧版「不走 ToolRegistry」表述已纠正）。
+> 已删除的 agent 行（`spec` / `plan` / `planner` / `task` / `evaluator` / `prosecutor`）已从上表移除——这些 native agent 已在历次重构中删除或并入 integrity 团队，`agent.ts` 不再注册。`requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity` **均走 ToolRegistry**；orchestrator 的 workflow/control tools 由 `src/orchestrator/tools.ts::createOrchestratorTools()` 自建，`src/agent/agent.ts` 的 include 列表负责把这些工具暴露给 Orchestrator LLM。
 
 ### Build 快速通道（orchestrator build tool）
 
@@ -183,7 +180,7 @@ tools: z.union([z.object({ include: z.array(z.string()) }), z.object({ exclude: 
 
 ## 不动的
 
-- `orchestrator/tools.ts` 的 orchestrator **自建工具**（`build` / `deliver` / `prosecute` / `publish_acceptance` 等 dispatch/observation tool）—— 这些不走 ToolRegistry，由 orchestrator tool 工厂独立构建。注意：`requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity` / `prosecutor` 是 **native agent，走 ToolRegistry**（见上表），不属于此类；`planner` agent 已删除
+- `orchestrator/tools.ts` 的 orchestrator **自建工具**（`requirements` / `architect` / `workload_analysis` / `build` / `visual_qa` / `integrity` / `add_goal` / `modify_goal` / `wait` 等 dispatch、observation、interaction、task-control tool）—— 这些不走普通 ToolRegistry，由 orchestrator tool 工厂独立构建；`src/agent/agent.ts` 的 orchestrator include 列表必须覆盖该工厂的全部工具。注意：`requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity` 同时也是 **native agent** 身份，走 ToolRegistry 只描述它们被单独唤醒时的自身工具集；`planner` / `prosecutor` agent 已删除；`deliver` / `publish_acceptance` 已退役。
 - `PermissionNext` 基础设施 —— 复用现有 deny/allow/ask 语义
 - agent prompt 内容 —— 工具不可见后，prompt 中 "use the Task tool" 之类的指示自然失效，无需改 prompt
 

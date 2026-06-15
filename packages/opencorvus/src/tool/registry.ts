@@ -34,6 +34,7 @@ import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
 import { PanelTool } from "./panel"
 import { MissionStateTool } from "./mission-state"
+import { WaitTool } from "./wait"
 import { TaskReportTool } from "./task-report"
 import { GoalReportTool } from "./goal-report"
 import { WebCloneGenerateSourceProjectTool } from "./web-clone-generate-source-project"
@@ -149,6 +150,7 @@ export namespace ToolRegistry {
       PlannerTool,
       PanelTool,
       MissionStateTool,
+      WaitTool,
       TaskReportTool,
       GoalReportTool,
       WebClonePrepareContextTool,
