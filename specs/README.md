@@ -9,7 +9,7 @@ This directory stores implementation notes, product requirements, and investigat
 | Public product docs | `packages/web/src/content/docs/**` |
 | Architecture map | `specs/new-arch/README.md` |
 | API reference | `packages/web/src/content/docs/{reference/api,zh-cn/reference/api}.mdx`, generated from `packages/sdk/openapi.json` |
-| Package-local OpenCorvus notes | `packages/opencorvus/specs/**` |
+| Package-local OpenCorvus notes | `packages/opencorvus/specs/README.md` |
 | Retired missing historical references | `specs/retired-reference-ledger.md` |
 
 Do not recreate `docs/product/**`. It was removed on 2026-06-15 because it duplicated the Starlight docs source.

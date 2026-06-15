@@ -108,6 +108,24 @@ function indexedRootSpecs(): Map<string, string> {
   return rows
 }
 
+function indexedSpecTable(indexPath: string): Map<string, string> {
+  const readme = fs.readFileSync(indexPath, "utf8")
+  const rows = new Map<string, string>()
+  for (const match of readme.matchAll(/^\| `([^`]+)` \| ([^|]+) \|/gm)) {
+    rows.set(match[1]!, match[2]!.trim())
+  }
+  return rows
+}
+
+function packageSpecFiles(): string[] {
+  return fs
+    .readdirSync(path.join(repoRoot, "packages/opencorvus/specs"), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && markdownExtensions.has(path.extname(entry.name).toLowerCase()))
+    .map((entry) => entry.name)
+    .filter((name) => name !== "README.md")
+    .sort()
+}
+
 function missingReferences(files: string[], retired: Set<string>): string[] {
   const missing: string[] = []
   for (const file of files) {
@@ -145,6 +163,12 @@ describe("historical docs repository links", () => {
     const indexed = indexedRootSpecs()
 
     expect(rootSpecFiles().filter((file) => !indexed.has(file))).toEqual([])
+  })
+
+  test("package-local OpenCorvus specs are indexed", () => {
+    const indexed = indexedSpecTable(path.join(repoRoot, "packages/opencorvus/specs/README.md"))
+
+    expect(packageSpecFiles().filter((file) => !indexed.has(file))).toEqual([])
   })
 
   test("root specs marked superseded have a top-of-file banner", () => {
