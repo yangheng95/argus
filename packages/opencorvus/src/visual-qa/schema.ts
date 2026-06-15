@@ -61,6 +61,23 @@ export const VisualQaProductionBlockerSchema = z.object({
   evidence_refs: z.array(z.string().min(1)).default([]),
 })
 
+export const VisualQaFollowUpTaskSchema = z.object({
+  title: z.string().min(1).describe("Concise title for the inheriting follow-up task."),
+  request: z
+    .string()
+    .min(1)
+    .describe("Complete, self-contained request for the next task round that addresses the unrepairable blockers."),
+  reason: z
+    .string()
+    .min(1)
+    .describe("Evidence-backed reason Visual QA cannot safely repair these blockers inside the current worktree."),
+  priority: z.enum(["critical", "high", "normal", "low"]).default("high"),
+  blocker_ids: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe("Production blocker IDs this follow-up task must address."),
+})
+
 export const VisualQaRepairSchema = z.object({
   finding_ids: z.array(z.string().min(1)).default([]),
   files_changed: z.array(z.string().min(1)).default([]),
@@ -99,6 +116,7 @@ export const VisualQaReportSchema = z.object({
   coverage: z.array(VisualQaCoverageSchema).default([]),
   findings: z.array(VisualQaFindingSchema).default([]),
   production_blockers: z.array(VisualQaProductionBlockerSchema).default([]),
+  follow_up_task: VisualQaFollowUpTaskSchema.nullable().default(null),
   repairs: z.array(VisualQaRepairSchema).default([]),
   evidence: z.array(VisualQaEvidenceSchema).default([]),
   commands: z.array(VisualQaCommandSchema).default([]),

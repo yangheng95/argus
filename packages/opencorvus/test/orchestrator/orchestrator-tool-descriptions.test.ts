@@ -25,6 +25,7 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   test("propose_task describes inheriting evidence-backed follow-up work", () => {
     expect(tools.propose_task.description).toContain("execution evidence")
     expect(tools.propose_task.description).toContain("artifact state")
+    expect(tools.propose_task.description).toContain("failed visual_qa evidence includes follow_up_task")
     expect(tools.propose_task.description).toContain("supplemental features")
     expect(tools.propose_task.description).toContain("project-improvement suggestions")
     expect(tools.propose_task.description).toContain("original user request never authorised")
@@ -67,6 +68,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.visual_qa.description).toContain("post-goal-batch")
     expect(tools.visual_qa.description).toContain("once after each terminal frontend goal batch")
     expect(tools.visual_qa.description).toContain("peer post-build review evidence")
+    expect(tools.visual_qa.description).toContain("picky professional design QA perspective")
+    expect(tools.visual_qa.description).toContain("accepted=false with follow_up_task")
     expect(tools.visual_qa.description).toContain("component truth and visible functionality first")
     expect(tools.visual_qa.description).toContain("layout/composition second")
     expect(tools.visual_qa.description).toContain("micro-style polish last")

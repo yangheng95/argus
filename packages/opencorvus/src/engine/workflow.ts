@@ -237,7 +237,7 @@ const PIPELINE: MiniWorkflow = {
       id: "visual_qa",
       tool: "visual_qa",
       label: "Visual QA",
-      hint: "terminal frontend goal batch 后执行一次的前端 GUI 复核/修复阶段。GUI=Graphical User Interface，图形用户界面。每批 blocking goal build 终态后调用一次；它和 integrity 是同级 post-build review agents，消费 frontend_design/build 与可用 integrity evidence，以专业设计 QA 视角列出 production_blockers，不以固定相似度分数作为唯一 verdict；先修组件真实性和可见功能（例如占位/虚假图表必须替换为真实图表实现），再修布局结构，最后才做样式微调。它不是 host gate，不替代 integrity，也不是 integrity 的 workflow prerequisite；若修改文件或返回阻断项，先路由修复，再进入下一批 build 或最终验收判断。",
+      hint: "post-goal-batch 前端 GUI 修复/证据阶段。GUI=Graphical User Interface，图形用户界面。每个 terminal 前端 goal batch 后运行一次，和 integrity 是同级 post-build review agent；消费 frontend_design/build 以及已有 integrity evidence，以挑剔的专业设计 QA 视角列出 production_blockers，不以固定相似度分数作为唯一 verdict；先修组件真实性和可见功能，再修布局结构，最后才做样式微调。它不是 host gate，也不替代 final integrity；若无法安全修复且返回 follow_up_task，orchestrator 应通过 propose_task 创建继承任务。",
       scope: "task",
       skippable: true,
       after: ["build"],

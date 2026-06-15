@@ -35,8 +35,21 @@ function validateVisualQaReport(report: VisualQaReport): string[] {
       `accepted=true is incompatible with production blockers: ${report.production_blockers.map((blocker) => blocker.id).join(", ")}.`,
     )
   }
+  if (report.accepted && report.follow_up_task) {
+    issues.push("accepted=true is incompatible with follow_up_task; follow-up work means visual QA did not accept.")
+  }
   if (!report.accepted && report.production_blockers.length === 0 && openBlocking.length === 0) {
     issues.push("accepted=false requires production_blockers or open critical/major findings with actionable evidence.")
+  }
+  if (report.follow_up_task) {
+    const blockerIDs = new Set(report.production_blockers.map((blocker) => blocker.id))
+    const unknown = report.follow_up_task.blocker_ids.filter((id) => !blockerIDs.has(id))
+    if (report.production_blockers.length === 0) {
+      issues.push("follow_up_task requires production_blockers because the new task must inherit concrete blocker evidence.")
+    }
+    if (unknown.length > 0) {
+      issues.push(`follow_up_task.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
+    }
   }
   return issues
 }
@@ -55,6 +68,15 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
     (coverage) =>
       `${coverage.region}: ${coverage.viewports.length} viewport(s), ${coverage.states.length} state(s), evidence=${coverage.evidence_refs.join(", ") || "(none)"}`,
   )
+  const followUpLine = report.follow_up_task
+    ? [
+        `title=${report.follow_up_task.title}`,
+        `priority=${report.follow_up_task.priority}`,
+        `blockers=${report.follow_up_task.blocker_ids.join(", ")}`,
+        `reason=${report.follow_up_task.reason}`,
+        `request=${report.follow_up_task.request}`,
+      ].join("; ")
+    : "- none"
   return {
     summary: limitSummary(report.summary),
     detail: [
@@ -63,6 +85,7 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
       `## Coverage\n${coverageLines.length ? markdownList(coverageLines) : "- no coverage submitted"}`,
       `## Findings\n${findingLines.length ? markdownList(findingLines) : "- no findings"}`,
       `## Production Blockers\n${blockerLines.length ? markdownList(blockerLines) : "- none"}`,
+      `## Follow-up Task\n${followUpLine}`,
       `## Evidence\n${report.evidence.length ? markdownList(report.evidence.map((item) => `${item.type}: ${item.ref} — ${item.note}`)) : "- no evidence submitted"}`,
       `## Repairs\n${report.repairs.length ? markdownList(report.repairs.map((repair) => `${repair.files_changed.join(", ") || "(no files)"}: ${repair.reason}`)) : "- no repairs"}`,
       `## Commands\n${report.commands.length ? markdownList(report.commands.map((command) => `${command.passed ? "passed" : "failed"} ${command.command}: ${command.detail}`)) : "- no commands"}`,
@@ -78,7 +101,8 @@ export function createVisualQaOutputTools() {
     submit_visual_qa_report: tool({
       description:
         "Submit the final frontend visual GUI fidelity and functional QA report. GUI means Graphical User Interface. " +
-        "Use accepted=true only with fresh visual and functional evidence, no open critical/major findings, and no production_blockers.",
+        "Use accepted=true only with fresh visual and functional evidence, no open critical/major findings, no production_blockers, and no follow_up_task. " +
+        "When unrepairable production blockers require a new round, submit accepted=false with follow_up_task.",
       inputSchema: VisualQaReportSchema,
       execute: async (raw) => {
         if (collector.final)
