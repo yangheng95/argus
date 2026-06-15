@@ -143,6 +143,17 @@ function missingReferences(files: string[], retired: Set<string>): string[] {
   return missing
 }
 
+function referencedRetiredPaths(files: string[], retired: Set<string>): Set<string> {
+  const referenced = new Set<string>()
+  for (const file of files) {
+    const text = fs.readFileSync(file, "utf8")
+    for (const ref of refsIn(text)) {
+      if (retired.has(ref)) referenced.add(ref)
+    }
+  }
+  return referenced
+}
+
 describe("historical docs repository links", () => {
   test("local historical doc references resolve or are marked retired", () => {
     const files = docsScanRoots
@@ -157,6 +168,13 @@ describe("historical docs repository links", () => {
     const missing = missingReferences(walkRepository(repoRoot), retiredRefs())
 
     expect(missing).toEqual([])
+  })
+
+  test("retired reference ledger entries are still referenced", () => {
+    const retired = retiredRefs()
+    const referenced = referencedRetiredPaths(walkRepository(repoRoot), retired)
+
+    expect(Array.from(retired).filter((ref) => !referenced.has(ref))).toEqual([])
   })
 
   test("root historical specs are indexed", () => {
