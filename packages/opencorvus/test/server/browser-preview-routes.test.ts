@@ -7,7 +7,11 @@ import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sq
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { closeBrowserPreviewLiveSessions } from "../../src/browser-preview/live"
-import { persistBrowserPreviewEvidence, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import {
+  findLatestBrowserPreviewTarget,
+  persistBrowserPreviewEvidence,
+  persistBrowserPreviewTarget,
+} from "../../src/browser-preview/persist"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -222,7 +226,7 @@ describe("browser preview routes", () => {
   )
 
   test(
-    "PUT /task/:taskID/browser-preview/target rejects arbitrary URL bodies",
+    "PUT /task/:taskID/browser-preview/target persists an explicit URL as the task target",
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
@@ -237,9 +241,45 @@ describe("browser preview routes", () => {
         body: JSON.stringify({ url: "localhost:5173" }),
       })
 
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as {
+        id?: string
+        status: string
+        url?: string
+        source: string
+        diagnostics?: string[]
+      }
+      expect(body.id).toBeString()
+      expect(body.status).toBe("ready")
+      expect(body.url).toBe("http://localhost:5173/")
+      expect(body.source).toBe("task-artifact")
+      expect(body.diagnostics?.join("\n")).toContain(`Selected task browser preview target ${body.id}.`)
+      expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe("http://localhost:5173/")
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "PUT /task/:taskID/browser-preview/target rejects invalid explicit URL bodies",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const app = Server.App()
+
+      const response = await app.request(`/task/${taskID}/browser-preview/target`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({ url: "file:///tmp/index.html" }),
+      })
+
       expect(response.status).toBe(400)
-      const body = await response.json()
-      expect(JSON.stringify(body)).toContain("targetID")
+      const body = (await response.json()) as { status?: string; diagnostics?: string[] }
+      expect(body.status).toBe("failed")
+      expect(body.diagnostics?.join("\n")).toContain("Invalid browser preview URL: file:///tmp/index.html")
+      expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )

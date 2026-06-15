@@ -33,6 +33,7 @@ export const DEFAULT_TIMEOUT = Flag.OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT
 export const log = Log.create({ service: "bash-tool" })
 const DYNAMIC_PATH_PATTERN = /[*?[\]{}$`~]/
 const FORBIDDEN_ENV_KEYS = new Set(["LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_FORCE_FLAT_NAMESPACE"])
+type BashOutputObserver = (input: { stream: "stdout" | "stderr"; chunk: string; output: string }) => void
 
 function foregroundLifecycleHint(timeout: number) {
   return [
@@ -330,9 +331,15 @@ export const BashTool = Tool.define("bash", async () => {
         },
       })
 
-      const append = (chunk: Buffer) => {
+      const outputObserver =
+        typeof ctx.extra?.bashOutputObserver === "function"
+          ? (ctx.extra.bashOutputObserver as BashOutputObserver)
+          : undefined
+
+      const append = (stream: "stdout" | "stderr", chunk: Buffer) => {
         const text = chunk.toString()
         output += text
+        outputObserver?.({ stream, chunk: text, output })
         ctx.metadata({
           metadata: {
             // truncate the metadata to avoid GIANT blobs of data (has nothing to do w/ what agent can access)
@@ -342,8 +349,8 @@ export const BashTool = Tool.define("bash", async () => {
         })
       }
 
-      supervisor.stdout?.on("data", append)
-      supervisor.stderr?.on("data", append)
+      supervisor.stdout?.on("data", (chunk: Buffer) => append("stdout", chunk))
+      supervisor.stderr?.on("data", (chunk: Buffer) => append("stderr", chunk))
 
       let timedOut = false
       let aborted = false

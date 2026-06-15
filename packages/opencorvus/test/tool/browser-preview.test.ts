@@ -141,6 +141,66 @@ describe("tool.browser_preview", () => {
   )
 
   test(
+    "keeps observing process output after bash readiness returns",
+    async () => {
+      const preview = await startReachablePreviewServer()
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const restore = ProcessSupervisor.setFactoryForTest(async () => {
+              const stdout = new PassThrough()
+              setTimeout(() => {
+                stdout.write(`Local: ${preview.url}\n`)
+              }, 1_700)
+              return {
+                pid: 9105,
+                stdin: null,
+                stdout,
+                stderr: new PassThrough(),
+                exited: new Promise<number>(() => {}),
+                terminate: async () => {},
+                dispose: async () => {},
+                unref: () => {},
+              }
+            })
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: "npm run dev",
+                  timeout: 2_500,
+                  leaseTimeout: 3_000,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.targetUrl).toBe(preview.url)
+              expect(result.metadata.targetStatus).toBe("ready")
+              expect(payload.startupTargets).toEqual([
+                {
+                  id: result.metadata.targetID,
+                  url: preview.url,
+                  source: "process-output",
+                },
+              ])
+              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+            } finally {
+              restore()
+            }
+          },
+        })
+      } finally {
+        await preview.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "starts a background service and keeps explicit URL ahead of printed URLs",
     async () => {
       const preview = await startReachablePreviewServer()

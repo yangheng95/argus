@@ -39,6 +39,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [liveImageUrl, setLiveImageUrl] = createSignal("")
   const [liveError, setLiveError] = createSignal("")
   const [liveLoading, setLiveLoading] = createSignal(false)
+  const [manualUrl, setManualUrl] = createSignal("")
+  const [manualUrlError, setManualUrlError] = createSignal("")
+  const [manualUrlSubmitting, setManualUrlSubmitting] = createSignal(false)
   const [verificationRequest, setVerificationRequest] = createSignal<{
     taskID: string
     targetID: string
@@ -162,6 +165,22 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     void selectTaskBrowserPreviewTarget({ taskID, targetID: candidate.id }).then(() =>
       setRefreshToken((value) => value + 1),
     )
+  }
+
+  const submitManualUrl: JSX.EventHandlerUnion<HTMLFormElement, SubmitEvent> = (event) => {
+    event.preventDefault()
+    const taskID = props.taskID()
+    const url = manualUrl().trim()
+    if (!taskID || !url || manualUrlSubmitting()) return
+    setManualUrlSubmitting(true)
+    setManualUrlError("")
+    void selectTaskBrowserPreviewTarget({ taskID, url })
+      .then(() => {
+        setManualUrl("")
+        setRefreshToken((value) => value + 1)
+      })
+      .catch((error) => setManualUrlError(String(error)))
+      .finally(() => setManualUrlSubmitting(false))
   }
 
   const captureEvidence = () => {
@@ -353,6 +372,36 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             </Select.Portal>
           </Select.Root>
 
+          <form class="browser-preview-url-form" onSubmit={submitManualUrl} data-ui="browser-preview-url-form">
+            <input
+              class="browser-preview-url-input"
+              value={manualUrl()}
+              type="text"
+              inputMode="url"
+              spellcheck={false}
+              placeholder={t("browser_preview.url_placeholder")}
+              aria-label={t("browser_preview.url_label")}
+              disabled={!props.taskID() || manualUrlSubmitting()}
+              onInput={(event) => {
+                setManualUrl(event.currentTarget.value)
+                setManualUrlError("")
+              }}
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              size="icon"
+              tone="neutral"
+              title={t("browser_preview.url_submit")}
+              aria-label={t("browser_preview.url_submit")}
+              disabled={!props.taskID() || !manualUrl().trim() || manualUrlSubmitting()}
+            >
+              <Show when={manualUrlSubmitting()} fallback={<Icon name="send" size={13} />}>
+                <span class="card__spinner" />
+              </Show>
+            </Button>
+          </form>
+
           <Show when={viewports().length > 0}>
             <div class="browser-preview-viewport-controls">
               <Tabs
@@ -398,10 +447,22 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
           <div
             class="browser-preview-evidence-status"
             data-status={
-              verification.error ? "failed" : (verification()?.status ?? (verification.loading ? "loading" : "idle"))
+              manualUrlError()
+                ? "failed"
+                : verification.error
+                  ? "failed"
+                  : (verification()?.status ?? (verification.loading ? "loading" : "idle"))
             }
           >
             <Switch>
+              <Match when={manualUrlError()}>
+                {(error) => (
+                  <>
+                    <Icon name="status-failed" size={14} />
+                    <span>{error()}</span>
+                  </>
+                )}
+              </Match>
               <Match when={verification.error}>
                 {(error) => (
                   <>

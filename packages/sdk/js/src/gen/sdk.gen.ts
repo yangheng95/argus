@@ -409,9 +409,9 @@ export class Worktrees extends HeyApiClient {
    * Remove a git worktree registered for the current project.
    */
   public delete<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      worktreeRemoveInput?: WorktreeRemoveInput
+      worktreeRemoveInput: WorktreeRemoveInput
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -698,9 +698,9 @@ export class Config extends HeyApiClient {
    * Partially update OpenCorvus configuration per RFC 7396. Only include fields to change; set a field to null to delete it.
    */
   public update<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      body?: {
+      body: {
         [key: string]: unknown
       }
     },
@@ -1143,9 +1143,9 @@ export class Worktree extends HeyApiClient {
    * Remove a git worktree and delete its branch.
    */
   public remove<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      worktreeRemoveInput?: WorktreeRemoveInput
+      worktreeRemoveInput: WorktreeRemoveInput
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1197,9 +1197,9 @@ export class Worktree extends HeyApiClient {
    * Create a new git worktree for the current project and run any configured startup scripts.
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      worktreeCreateInput?: WorktreeCreateInput
+      worktreeCreateInput: WorktreeCreateInput
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1232,9 +1232,9 @@ export class Worktree extends HeyApiClient {
    * Reset a worktree branch to the primary default branch.
    */
   public reset<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      worktreeResetInput?: WorktreeResetInput
+      worktreeResetInput: WorktreeResetInput
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2784,7 +2784,7 @@ export class Part extends HeyApiClient {
       messageID: string
       partID: string
       directory?: string
-      part?: Part2
+      part: Part2
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4421,9 +4421,9 @@ export class Control2 extends HeyApiClient {
    * Execute a structured gateway capability action without LLM interpretation.
    */
   public action<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      body?:
+      body:
         | {
             action: "view_plan"
             taskID: string
@@ -5237,13 +5237,14 @@ export class BrowserPreview extends HeyApiClient {
   /**
    * Select task browser preview target
    *
-   * Promote an existing task browser preview target artifact. Arbitrary operator URLs are not accepted as preview targets.
+   * Promote an existing task browser preview target artifact, or persist an explicit operator URL as the task preview target.
    */
   public selectTaskTarget<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
       directory?: string
-      targetID: string
+      targetID?: string
+      url?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5255,6 +5256,7 @@ export class BrowserPreview extends HeyApiClient {
             { in: "path", key: "taskID" },
             { in: "query", key: "directory" },
             { in: "body", key: "targetID" },
+            { in: "body", key: "url" },
           ],
         },
       ],
@@ -8612,8 +8614,8 @@ export class Config3 extends HeyApiClient {
    * Update global OpenCorvus configuration settings and preferences.
    */
   public update<ThrowOnError extends boolean = false>(
-    parameters?: {
-      config?: Config4
+    parameters: {
+      config: Config4
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -8805,7 +8807,7 @@ export class Auth3 extends HeyApiClient {
   public set<ThrowOnError extends boolean = false>(
     parameters: {
       providerID: string
-      auth?: Auth4
+      auth: Auth4
     },
     options?: Options<never, ThrowOnError>,
   ) {

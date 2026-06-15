@@ -110,6 +110,27 @@ test("browser preview service selects an existing backend target by ID", async (
   })
 })
 
+test("browser preview service asks the backend to persist an explicit URL target", async () => {
+  let captured: TransportRequest | undefined
+  __setHostTransportForTest(
+    fakePreviewTransport((req) => {
+      captured = req
+    }),
+  )
+
+  await selectTaskBrowserPreviewTarget({ taskID: TASK_ID, url: "localhost:5173" })
+
+  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/target`)
+  expect(captured?.method).toBe("PUT")
+  expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
+  expect(captured?.body).toEqual({
+    kind: "json",
+    value: {
+      url: "localhost:5173",
+    },
+  })
+})
+
 test("browser preview service asks the backend to persist Playwright evidence", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest({

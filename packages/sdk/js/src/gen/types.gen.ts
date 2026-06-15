@@ -3552,7 +3552,7 @@ export type ProjectCurrentInitGitResponses = {
 export type ProjectCurrentInitGitResponse = ProjectCurrentInitGitResponses[keyof ProjectCurrentInitGitResponses]
 
 export type ProjectCurrentWorktreesDeleteData = {
-  body?: WorktreeRemoveInput
+  body: WorktreeRemoveInput
   path?: never
   query?: {
     /**
@@ -3696,7 +3696,7 @@ export type ProjectCurrentCleanupCandidatesResponse =
   ProjectCurrentCleanupCandidatesResponses[keyof ProjectCurrentCleanupCandidatesResponses]
 
 export type ProjectUpdateData = {
-  body?: {
+  body: {
     name?: string
     icon?: {
       url?: string
@@ -3829,7 +3829,7 @@ export type ConfigGetResponses = {
 export type ConfigGetResponse = ConfigGetResponses[keyof ConfigGetResponses]
 
 export type ConfigUpdateData = {
-  body?: {
+  body: {
     [key: string]: unknown
   }
   path?: never
@@ -4319,7 +4319,7 @@ export type ToolListResponses = {
 export type ToolListResponse = ToolListResponses[keyof ToolListResponses]
 
 export type WorktreeRemoveData = {
-  body?: WorktreeRemoveInput
+  body: WorktreeRemoveInput
   path?: never
   query?: {
     /**
@@ -4370,7 +4370,7 @@ export type WorktreeListResponses = {
 export type WorktreeListResponse = WorktreeListResponses[keyof WorktreeListResponses]
 
 export type WorktreeCreateData = {
-  body?: WorktreeCreateInput
+  body: WorktreeCreateInput
   path?: never
   query?: {
     /**
@@ -4496,7 +4496,7 @@ export type ExperimentalWorkspaceListResponse =
   ExperimentalWorkspaceListResponses[keyof ExperimentalWorkspaceListResponses]
 
 export type WorktreeResetData = {
-  body?: WorktreeResetInput
+  body: WorktreeResetInput
   path?: never
   query?: {
     /**
@@ -5011,7 +5011,7 @@ export type SessionConfigGetResponses = {
 export type SessionConfigGetResponse = SessionConfigGetResponses[keyof SessionConfigGetResponses]
 
 export type SessionConfigUpdateData = {
-  body?: {
+  body: {
     model?: string | null
     prompt?: {
       [key: string]: string | null
@@ -5282,7 +5282,7 @@ export type SessionGetResponses = {
 export type SessionGetResponse = SessionGetResponses[keyof SessionGetResponses]
 
 export type SessionUpdateData = {
-  body?: {
+  body: {
     title?: string
     time?: {
       archived?: number
@@ -5441,7 +5441,7 @@ export type SessionInitResponses = {
 export type SessionInitResponse = SessionInitResponses[keyof SessionInitResponses]
 
 export type SessionForkData = {
-  body?: {
+  body: {
     messageID?: string
   }
   path: {
@@ -5810,7 +5810,7 @@ export type PartDeleteResponses = {
 export type PartDeleteResponse = PartDeleteResponses[keyof PartDeleteResponses]
 
 export type PartUpdateData = {
-  body?: Part
+  body: Part
   path: {
     /**
      * Session ID
@@ -6449,7 +6449,7 @@ export type ProviderDiscoverModelsResponses = {
 export type ProviderDiscoverModelsResponse = ProviderDiscoverModelsResponses[keyof ProviderDiscoverModelsResponses]
 
 export type ProviderTestData = {
-  body?: {
+  body: {
     modelID?: string
   }
   path: {
@@ -6876,7 +6876,7 @@ export type SkillInstallResponses = {
 export type SkillInstallResponse = SkillInstallResponses[keyof SkillInstallResponses]
 
 export type SkillImportFileData = {
-  body?: {
+  body: {
     filename?: string
     content?: string
     sourceName?: string
@@ -7589,7 +7589,7 @@ export type CodingSessionGetResponses = {
 export type CodingSessionGetResponse = CodingSessionGetResponses[keyof CodingSessionGetResponses]
 
 export type CodingSessionUpdateData = {
-  body?: {
+  body: {
     title?: string
   }
   path: {
@@ -7878,7 +7878,7 @@ export type GatewayControlMessageResponses = {
 export type GatewayControlMessageResponse = GatewayControlMessageResponses[keyof GatewayControlMessageResponses]
 
 export type GatewayControlActionData = {
-  body?:
+  body:
     | {
         action: "view_plan"
         taskID: string
@@ -8720,7 +8720,8 @@ export type BrowserPreviewReadTaskEvidenceCaptureResponse =
 
 export type BrowserPreviewSelectTaskTargetData = {
   body: {
-    targetID: string
+    targetID?: string
+    url?: string
   }
   path: {
     taskID: string
@@ -13672,7 +13673,7 @@ export type PtyGetResponses = {
 export type PtyGetResponse = PtyGetResponses[keyof PtyGetResponses]
 
 export type PtyUpdateData = {
-  body?: {
+  body: {
     title?: string
     size?: {
       rows: number
@@ -14142,7 +14143,7 @@ export type GlobalConfigGetResponses = {
 export type GlobalConfigGetResponse = GlobalConfigGetResponses[keyof GlobalConfigGetResponses]
 
 export type GlobalConfigUpdateData = {
-  body?: Config
+  body: Config
   path?: never
   query?: never
   url: "/global/config"
@@ -14379,7 +14380,7 @@ export type AuthRemoveResponses = {
 export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
 
 export type AuthSetData = {
-  body?: Auth
+  body: Auth
   path: {
     providerID: string
   }
