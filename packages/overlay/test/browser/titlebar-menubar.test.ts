@@ -69,6 +69,7 @@ test(
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
       if (path === "/log" && req.method === "POST") return send({ ok: true })
+      if (path === "/log/tail") return send({ lines: ['{"level":30,"time":"2026-06-15T00:00:00.000Z","msg":"ready"}'] })
       return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
@@ -313,11 +314,17 @@ test(
             }
           })
           assert.equal(helpContract.hasRefresh, false)
-          assert.equal(helpContract.hasLogs, false)
+          assert.equal(helpContract.hasLogs, true)
           assert.equal(helpContract.hasDiagnostics, false)
           assert.deepEqual(
             helpContract.labels.map((item) => item.testid),
-            ["titlebar-help-docs", "titlebar-help-sdk", "titlebar-help-devtools", "titlebar-help-about"],
+            [
+              "titlebar-help-docs",
+              "titlebar-help-sdk",
+              "titlebar-help-logs",
+              "titlebar-help-devtools",
+              "titlebar-help-about",
+            ],
           )
           assert.equal(
             helpContract.labels.every((item) => item.title && item.ariaLabel),
@@ -384,6 +391,12 @@ test(
           await page.waitForSelector('[data-testid="titlebar-help-sdk"]', { visible: true })
           await page.click('[data-testid="titlebar-help-sdk"]')
           await page.waitForFunction(() => (window as any).__helpOpenUrls.length === 2)
+          await page.click('[data-menu-trigger="help"]')
+          await page.waitForSelector('[data-testid="titlebar-help-logs"]', { visible: true })
+          await page.click('[data-testid="titlebar-help-logs"]')
+          await page.waitForSelector("#logDialog", { visible: true })
+          await page.click("#btnCloseLog")
+          await page.waitForFunction(() => document.querySelector("#logDialog") === null)
           await page.click('[data-menu-trigger="help"]')
           await page.waitForSelector('[data-testid="titlebar-help-devtools"]', { visible: true })
           await page.click('[data-testid="titlebar-help-devtools"]')
@@ -714,6 +727,7 @@ test(
         { activity: "explorer", active: "false" },
         { activity: "diff", active: "false" },
         { activity: "browser", active: "false" },
+        { activity: "screenshots", active: "false" },
         { activity: "notifications", active: "false" },
       ])
       await page.close()

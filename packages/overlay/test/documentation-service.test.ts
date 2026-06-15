@@ -13,10 +13,11 @@ describe("documentation entries", () => {
     expect(documentationEntryUrl("sdk", "zh-CN")).toBe("https://opencorvus.ai/docs/zh-cn/reference/sdk/")
   })
 
-  test("Command Palette opens logs through the explicit log event, not the removed Help menu item", () => {
-    const source = readFileSync(join(OVERLAY_ROOT, "src/components/CommandPalette.tsx"), "utf8")
-    expect(source).toContain('new CustomEvent("oc:open-logs")')
-    expect(source).not.toContain("titlebar.logs")
-    expect(source).not.toContain("titlebar-help-logs")
+  test("Command Palette and Help menu open logs through the same explicit log event", () => {
+    const commandPalette = readFileSync(join(OVERLAY_ROOT, "src/components/CommandPalette.tsx"), "utf8")
+    const titlebarMenubar = readFileSync(join(OVERLAY_ROOT, "src/components/titlebar/TitlebarMenubar.tsx"), "utf8")
+    expect(commandPalette).toContain('new CustomEvent("oc:open-logs")')
+    expect(titlebarMenubar).toContain('new CustomEvent("oc:open-logs")')
+    expect(titlebarMenubar).toContain('testid="titlebar-help-logs"')
   })
 })

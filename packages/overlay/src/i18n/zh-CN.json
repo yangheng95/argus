@@ -847,6 +847,8 @@
   "titlebar.devtools_hint": "打开桌面 WebView 开发者工具，用于检查浮层界面。",
   "titlebar.docs": "使用文档",
   "titlebar.docs_hint": "打开快速开始指南，跑通第一个 OpenCorvus 任务。",
+  "titlebar.logs": "打开日志",
+  "titlebar.logs_hint": "打开运行时日志面板，查看 Overlay 与后端诊断信息。",
   "titlebar.maximize": "最大化",
   "titlebar.menu.help": "帮助",
   "titlebar.menu.provider": "提供商",

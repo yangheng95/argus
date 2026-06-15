@@ -847,6 +847,8 @@
   "titlebar.devtools_hint": "Open the desktop webview developer tools for inspecting the overlay.",
   "titlebar.docs": "Documentation",
   "titlebar.docs_hint": "Open the quickstart guide for running your first OpenCorvus task.",
+  "titlebar.logs": "Open Logs",
+  "titlebar.logs_hint": "Open the runtime log viewer for overlay and backend diagnostics.",
   "titlebar.maximize": "Maximize",
   "titlebar.menu.help": "Help",
   "titlebar.menu.provider": "Provider",
