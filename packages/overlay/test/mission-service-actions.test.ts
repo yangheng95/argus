@@ -58,6 +58,7 @@ function recordingTransport(): HostTransport {
           directory: "D:/repo",
           created: 1,
           updated: 2,
+          interruptible: false,
           tasks: [],
           taskStats: { total: 0, queued: 0, active: 0, completed: 0, failed: 0, cancelled: 0 },
         },

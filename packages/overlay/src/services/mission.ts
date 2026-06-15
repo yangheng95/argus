@@ -104,6 +104,7 @@ export interface MissionRecord {
   created: number
   updated: number
   archived?: number
+  interruptible: boolean
   tasks: MissionTaskProjection[]
   taskStats: MissionTaskStats
 }

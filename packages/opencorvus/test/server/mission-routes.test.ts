@@ -6,7 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { ensureMissionSession } from "../../src/mission/session"
 import { Server } from "../../src/server/server"
-import { Session } from "../../src/session"
+import { Session, SessionStatus } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionTable } from "../../src/session/session.sql"
 import { resetDatabase } from "../fixture/db"
@@ -57,6 +57,7 @@ describe("mission routes", () => {
         const app = Server.App()
         const session = await ensureMissionSession({ missionID: "m-tasks", defaultCwd: tmp.path })
         const other = await ensureMissionSession({ missionID: "m-other", defaultCwd: tmp.path })
+        SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
         const now = Date.now()
 
         function insertTask(input: {
@@ -124,11 +125,13 @@ describe("mission routes", () => {
         expect(response.status).toBe(200)
         const body = (await response.json()) as Array<{
           missionID: string
+          interruptible: boolean
           tasks: Array<{ id: string; title: string; status: string }>
           taskStats: Record<string, number>
         }>
         const record = body.find((item) => item.missionID === session.missionID)
         expect(record).toBeDefined()
+        expect(record!.interruptible).toBe(true)
         expect(record!.tasks.map((task) => task.id).sort()).toEqual([activeTaskID, completedTaskID].sort())
         expect(record!.tasks.map((task) => task.title).sort()).toEqual([
           "Mission active task",
@@ -344,7 +347,10 @@ describe("mission routes", () => {
       fn: async () => {
         const app = Server.App()
         const session = await ensureMissionSession({ missionID: "m-abort", defaultCwd: tmp.path })
-        const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => undefined)
+        SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
+        const cancel = spyOn(SessionPrompt, "cancel").mockImplementation((sessionID) => {
+          SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" }, { publish: false })
+        })
 
         const response = await app.request("/mission/m-abort/abort", {
           method: "POST",
@@ -356,6 +362,17 @@ describe("mission routes", () => {
         expect(response.status).toBe(200)
         expect(await response.json()).toBe(true)
         expect(cancel).toHaveBeenCalledWith(session.id, tmp.path)
+        const list = await app.request("/mission", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(list.status).toBe(200)
+        const rows = (await list.json()) as Array<{ missionID: string; interruptible: boolean }>
+        expect(rows.find((row) => row.missionID === "m-abort")).toMatchObject({
+          missionID: "m-abort",
+          interruptible: false,
+        })
         cancel.mockRestore()
       },
     })

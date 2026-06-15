@@ -55,7 +55,7 @@ function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: 
       size="icon"
       tone="neutral"
       data-chrome="icon-action"
-      data-ui="mission-row-abort"
+      data-ui="task-row-cancel"
       data-confirm={confirmAbort.armed() ? "true" : undefined}
       title={t("mission.ledger.abort_title")}
       aria-label={t("mission.ledger.abort_title")}
@@ -65,10 +65,10 @@ function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: 
       }}
       onBlur={confirmAbort.disarm}
     >
-      <span class="mission-row-abort-icon" data-icon="abort" aria-hidden="true">
+      <span class="task-row-cancel-icon" data-icon="cancel" aria-hidden="true">
         <Icon name="stop" size={11} />
       </span>
-      <span class="mission-row-abort-icon" data-icon="confirm" aria-hidden="true">
+      <span class="task-row-cancel-icon" data-icon="confirm" aria-hidden="true">
         <Icon name="check" size={11} />
       </span>
     </Button>
@@ -84,7 +84,7 @@ function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission
       size="icon"
       tone="danger"
       data-chrome="icon-action"
-      data-ui="mission-row-delete"
+      data-ui="task-row-delete"
       data-confirm={confirmDelete.armed() ? "true" : undefined}
       title={t("mission.ledger.delete_title")}
       aria-label={t("mission.ledger.delete_title")}
@@ -94,10 +94,10 @@ function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission
       }}
       onBlur={confirmDelete.disarm}
     >
-      <span class="mission-row-delete-icon" data-icon="delete" aria-hidden="true">
+      <span class="task-row-delete-icon" data-icon="delete" aria-hidden="true">
         <Icon name="close" size={11} />
       </span>
-      <span class="mission-row-delete-icon" data-icon="confirm" aria-hidden="true">
+      <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
         <Icon name="check" size={11} />
       </span>
     </Button>
@@ -112,7 +112,7 @@ function MissionRenameButton(props: { onClick: () => void }) {
       size="icon"
       tone="neutral"
       data-chrome="icon-action"
-      data-ui="mission-row-rename"
+      data-ui="task-row-rename"
       title={t("mission.ledger.rename_title")}
       aria-label={t("mission.ledger.rename_title")}
       onClick={(event) => {
@@ -177,6 +177,7 @@ function MissionRow(props: {
   const [debugCopied, setDebugCopied] = createSignal(false)
   let inputRef: HTMLInputElement | undefined
   const title = () => props.mission.title || props.mission.missionID
+  const canAbort = () => props.mission.interruptible
 
   function beginRename(): void {
     setDraftTitle(title())
@@ -304,8 +305,10 @@ function MissionRow(props: {
           <small class="task-row-stamp mission-row-stamp" title={detailStamp(props.mission.updated)}>
             {relativeTime(props.mission.updated) || t("mission.ledger.updated_unknown")}
           </small>
-          <div class="task-row-actions mission-row-actions">
-            <MissionAbortButton mission={props.mission} onAbort={props.onAbortMission} />
+          <div class="task-row-actions">
+            <Show when={canAbort()}>
+              <MissionAbortButton mission={props.mission} onAbort={props.onAbortMission} />
+            </Show>
             <MissionRenameButton onClick={beginRename} />
             <MissionDeleteButton mission={props.mission} onDelete={props.onDeleteMission} />
           </div>

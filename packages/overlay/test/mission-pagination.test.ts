@@ -9,6 +9,7 @@ function mission(index: number): MissionRecord {
     directory: "D:/workspace",
     created: 1_000 + index,
     updated: 2_000 + index,
+    interruptible: false,
     tasks: [],
     taskStats: { total: 0, queued: 0, active: 0, completed: 0, failed: 0, cancelled: 0 },
   }

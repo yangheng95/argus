@@ -83,6 +83,15 @@ test("Mission left activity loads and paginates Mission records only while activ
   expect(MISSION_TSX).toContain("missionPage(records, MISSION_LIST_PAGE_SIZE)")
 })
 
+test("Mission abort immediately removes the interruptible row action before list refresh settles", () => {
+  expect(MISSION_TSX).toContain("await abortMission(mission)")
+  expect(MISSION_TSX).toContain("missionRecordsCtl.mutate({")
+  expect(MISSION_TSX).toContain("record.missionID === mission.missionID ? { ...record, interruptible: false } : record")
+  expect(MISSION_TSX.indexOf("missionRecordsCtl.mutate({")).toBeLessThan(
+    MISSION_TSX.indexOf("setMissionRefreshToken((value) => value + 1)"),
+  )
+})
+
 test("services/mission.ts exports wakeMission pointed at /mission/wake", () => {
   expect(SERVICES_MISSION).toContain("export async function wakeMission")
   expect(SERVICES_MISSION).toContain("`mission/wake`")
@@ -132,7 +141,13 @@ test("Mission ledger is embedded in the left task panel without its retired pane
   expect(MISSION_LIST_TSX).not.toContain('class="ledger-row-meta"')
   expect(MISSION_LIST_TSX).not.toContain("compactDirectory")
   expect(MISSION_CSS).toContain(".mission-row.task-row-mini")
-  expect(MISSION_CSS).toContain(".task-row-mini:hover .mission-row-actions")
+  expect(MISSION_LIST_TSX).toContain('data-ui="task-row-cancel"')
+  expect(MISSION_LIST_TSX).toContain('data-ui="task-row-rename"')
+  expect(MISSION_LIST_TSX).toContain('data-ui="task-row-delete"')
+  expect(MISSION_LIST_TSX).toContain("<Show when={canAbort()}>")
+  expect(MISSION_LIST_TSX).not.toContain('data-ui="mission-row-abort"')
+  expect(MISSION_LIST_TSX).not.toContain('data-ui="mission-row-delete"')
+  expect(MISSION_CSS).not.toContain(".mission-row-actions")
   expect(MISSION_LIST_TSX).toContain('class="mission-ledger-search search-field"')
   expect(MISSION_LIST_TSX).toContain('class="mission-ledger-search-input search-field-input"')
   expect(MISSION_LIST_TSX).toContain('data-ui="mission-ledger-search-clear"')

@@ -362,6 +362,7 @@ async function applyMocks(page: OverlayPage): Promise<void> {
           directory: "/workspace/mission-demo",
           created: Date.now() - 3_600_000,
           updated: Date.now() - 120_000,
+          interruptible: true,
           tasks: [
             {
               id: "task_visual_active",
@@ -396,6 +397,7 @@ async function applyMocks(page: OverlayPage): Promise<void> {
           directory: "/workspace/mission-audit",
           created: Date.now() - 7_200_000,
           updated: Date.now() - 240_000,
+          interruptible: false,
           tasks: [],
           taskStats: { total: 0, queued: 0, active: 0, completed: 0, failed: 0, cancelled: 0 },
         },
