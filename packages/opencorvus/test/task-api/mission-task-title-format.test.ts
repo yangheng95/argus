@@ -16,7 +16,7 @@ describe("mission task title format", () => {
   })
 
   test("formats mission-created task titles inside EngineService task creation", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
 
     await Instance.provide({
       directory: tmp.path,
