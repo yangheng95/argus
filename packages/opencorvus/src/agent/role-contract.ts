@@ -105,7 +105,7 @@ export namespace AgentRoleContract {
     mission: {
       id: "mission",
       description:
-        "Mission primary agent. Owns long-running user goals: intake and clarification, the mission contract and state, the roadmap, and reconciliation of delivered work. A full coordinator (reads/analyses the project, plans, delegates, summarises, asks the user) that delegates execution to orchestrator-led squad/team tasks rather than writing code itself.",
+        "Mission primary agent. Owns long-running user goals: intake and clarification, the mission contract and state, the roadmap, and reconciliation of delivered work. A full coordinator (reads/analyses the project, plans, delegates, summarises, asks the user, and may collect user-authorized command evidence) that delegates implementation to orchestrator-led squad/team tasks rather than writing code itself.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

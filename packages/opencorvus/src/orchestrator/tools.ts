@@ -234,24 +234,16 @@ function requireOrchestratorToolExecutionContext(options: unknown, toolName: str
 }
 
 /**
- * Orchestrator-side bash is narrowly scoped to git merge-state repair only
- * (per the operator's binding directive). The schema rejects any non-git
- * invocation, any pipeline / redirect / command substitution, and any
- * process-killing pattern. This is data-integrity guarding for an
- * irreversible-by-LLM surface (shell execution); prompt-level rules carry only
- * the "what counts as a merge repair" scoping.
+ * Orchestrator-side bash is a user-authorized single-command evidence surface.
+ * Prompt-level rules carry the "when is this authorized" boundary. This schema
+ * owns only command-shape safety: no empty command, shell chaining, pipelines,
+ * redirection, command substitution, embedded newlines, or host-killing
+ * patterns.
  */
 export function validateOrchestratorBashCommand(command: string): { ok: true } | { ok: false; reason: string } {
   const trimmed = command.trim()
   if (!trimmed) return { ok: false, reason: "empty command" }
-  if (trimmed !== "git" && !/^git[\s]/.test(trimmed)) {
-    const head = trimmed.split(/\s+/, 1)[0] ?? ""
-    return {
-      ok: false,
-      reason: `command must begin with 'git' (got '${head}'). Orchestrator bash is git-merge-only — dispatch a sub-agent for any other surface.`,
-    }
-  }
-  // Reject shell metacharacters that turn a single git invocation into a
+  // Reject shell metacharacters that turn a single invocation into a
   // multi-step pipeline / redirect / subshell. Longer tokens first so the
   // reason string reports the most specific match.
   const dangerous: Array<[string, string]> = [
@@ -274,7 +266,7 @@ export function validateOrchestratorBashCommand(command: string): { ok: true } |
     if (trimmed.includes(tok)) {
       return {
         ok: false,
-        reason: `disallowed shell metacharacter ${why}. Orchestrator bash runs a single git invocation only; chain orchestrator tool calls instead of shell.`,
+        reason: `disallowed shell metacharacter ${why}. Orchestrator bash runs one command invocation only; dispatch the responsible agent instead of shell-chaining.`,
       }
     }
   }
@@ -6927,15 +6919,16 @@ export function createOrchestratorTools(input: {
 
     bash: tool({
       description:
-        "Git-only merge-state repair shell. Runs ONE `git ...` invocation " +
-        "against the project root for resolving an in-progress merge that no " +
-        "sub-agent can clear by itself. The schema rejects any non-git " +
-        "command, any pipeline / redirect / command substitution, and any " +
-        "process-killing pattern. This is NOT a code editor, NOT a test " +
-        "runner, NOT a repository inspector for general investigation, NOT a " +
-        "research tool, and NOT a shortcut around requirements / architect / " +
-        "build / integrity. The system prompt carries merge-repair scope; " +
-        "this schema carries command-shape restrictions.",
+        "User-authorized single-command shell evidence. Runs ONE command " +
+        "against the project root only when the latest user/operator request " +
+        "explicitly asks for command output or directly requires one command " +
+        "result. The schema rejects pipeline / redirect / command substitution, " +
+        "embedded newlines, and process-killing patterns. This is NOT a code " +
+        "editor, NOT an autonomous test runner, NOT a repository inspector for " +
+        "general investigation, NOT a research tool, and NOT a shortcut around " +
+        "requirements / architect / build / integrity. The system prompt " +
+        "carries authorization scope; this schema carries command-shape " +
+        "restrictions.",
       inputSchema: z.object({
         command: z
           .string()
@@ -6947,17 +6940,16 @@ export function createOrchestratorTools(input: {
             }
           })
           .describe(
-            "Single git invocation. MUST start with `git ` and contain no " +
+            "Single command invocation. Must contain no " +
               "pipeline (|), command separator (; / && / ||), background (&), " +
               "redirection (> / <), command substitution ($() / backticks), or " +
-              "process-killing pattern. Examples: `git status`, " +
-              "`git merge --abort`, `git checkout --ours -- path/to/file`, " +
-              "`git diff --name-only --diff-filter=U`.",
+              "process-killing pattern. Examples: `git status`, `npm test`, " +
+              "`node --version`, `ls packages/opencorvus`.",
           ),
         description: z
           .string()
           .min(1)
-          .describe("Concise 5-15 word statement of the git merge-state symptom you are repairing."),
+          .describe("Concise 5-15 word statement of the user-authorized command evidence you are collecting."),
         timeout: z
           .number()
           .int()
@@ -6969,7 +6961,7 @@ export function createOrchestratorTools(input: {
           ),
       }),
       execute: async ({ command, description, timeout }) => {
-        // Schema-level refine already rejected non-git / pipeline / kill
+        // Schema-level refine already rejected pipeline / kill
         // shapes, but re-validate defensively so a future schema regression
         // does not turn into silent shell exposure.
         const validation = validateOrchestratorBashCommand(command)

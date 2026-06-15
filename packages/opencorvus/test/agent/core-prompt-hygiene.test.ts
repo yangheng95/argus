@@ -63,8 +63,7 @@ describe("core prompt hygiene", () => {
       intentAnalysis: relaxedAgentPromptLineBudget,
       goalWorkloadAnalyst: relaxedAgentPromptLineBudget,
       // Raised from 360 -> 375 on 2026-05-21 to add the orchestrator's
-      // project-root git conflict ownership and toolchain readiness duties
-      // without widening the narrow git-only bash surface.
+      // project-root git conflict ownership and toolchain readiness duties.
       // Raised 380 -> 420 on 2026-05-22 to make same-task deadlock recovery
       // explicit: dependency, worktree merge, port, script, and toolchain
       // blockers must be routed to repair owners instead of passive waits.
@@ -318,46 +317,48 @@ describe("core prompt hygiene", () => {
     expect(tools).toContain("architecture_review_rework")
   })
 
-  test("orchestrator prompt scopes bash to git merge repair only and forbids replacing sub-agents", async () => {
-    // The orchestrator bash tool is a narrow git-only repair surface; the
-    // prompt must (a) declare the section, (b) explicitly forbid using bash
-    // as a code editor / test runner / investigation surface, and (c) point
-    // exact command-shape rejection to the tool schema single source.
+  test("orchestrator prompt scopes bash to user-authorized command evidence", async () => {
+    // The orchestrator bash tool is a user-authorized command evidence
+    // surface; the prompt must (a) declare the section, (b) explicitly forbid
+    // using bash as a code editor / autonomous test runner / investigation
+    // surface, and (c) point exact command-shape rejection to the tool schema
+    // single source.
     const orchestrator = await readPrompt("orchestrator")
     const flat = orchestrator.replace(/\s+/g, " ")
 
-    expect(orchestrator).toContain("## Git Merge Repair Bash")
-    expect(flat).toContain("single repair surface for a stuck merge")
+    expect(orchestrator).toContain("## User-Authorized Bash")
+    expect(flat).toContain("user-authorized command evidence surface")
+    expect(flat).toContain("latest user/operator message explicitly asks")
     expect(flat).toContain("bash tool schema is the single source for exact command-shape rejection")
     expect(flat).not.toContain("no pipelines")
     expect(flat).not.toContain("command substitution (`$(...)` / backticks)")
     expect(flat).toContain("Build is the only code-author path")
     expect(flat).toContain("Network git (`fetch`, `pull`, `push`, `clone`, `remote ...`)")
     expect(flat).toContain("worktrees are Build's surface")
-    expect(flat).toContain("`bash` is one shot, not a debugger")
+    expect(flat).toContain("do not chain `bash` into a debugging loop")
 
     // The MUST-NOT block calls out bash explicitly so the LLM cannot
     // claim "bash isn't listed".
-    expect(flat).toContain("use `bash` for anything outside the narrow git merge-state repair scope")
+    expect(flat).toContain("use `bash` unless the latest user/operator message explicitly asks")
     expect(flat).toContain("NOT a code editor")
-    expect(flat).toContain("NOT a test runner")
+    expect(flat).toContain("NOT an autonomous test runner")
     expect(flat).toContain("NOT a research tool")
 
     // Tool Selection entry must point back to the scoped section.
-    expect(flat).toContain("`bash`: git-only merge-state repair shell")
+    expect(flat).toContain("`bash`: user-authorized single-command evidence")
   })
 
   test("orchestrator prompt owns git conflict resolution and toolchain readiness", async () => {
     // Spec — 2026-05-21 orchestrator-git-toolchain-duty.
-    // This is prompt policy, not a new host state machine: the bash schema
-    // remains git-only while the orchestrator must treat required tools as
-    // readiness blockers instead of dispatching blindly.
+    // This is prompt policy, not a new host state machine: bash authorization
+    // remains prompt-scoped while the orchestrator must treat required tools
+    // as readiness blockers instead of dispatching blindly.
     const orchestrator = await readPrompt("orchestrator")
     const flat = orchestrator.replace(/\s+/g, " ")
 
     expect(flat).toContain("You own project-root git conflict resolution")
     expect(flat).toContain("in-progress merge or unresolved conflict in the primary project root")
-    expect(flat).toContain("clear it through the narrow `bash` git repair surface")
+    expect(flat).toContain("clear it through `bash`")
     expect(orchestrator).toContain("## Toolchain Readiness")
     expect(flat).toContain("bash / accepted shell")
     expect(flat).toContain("git")
@@ -369,9 +370,9 @@ describe("core prompt hygiene", () => {
     expect(flat).toContain("dispatch `build` to repair project scripts, dependencies, package installation metadata")
     expect(flat).toContain("dynamic port selection, or tool configuration")
     expect(flat).toContain("use `explore` for read-only toolchain diagnosis")
-    expect(flat).toContain("This is the direct surface for your project-root git conflict responsibility")
+    expect(flat).toContain("use `bash` only for a user-authorized single command result")
     expect(flat).toContain(
-      "NEVER for code edits, tests, repository investigation, dependency changes, research, toolchain diagnosis",
+      "NEVER for code edits, autonomous test iteration, repository investigation, dependency changes, research",
     )
   })
 

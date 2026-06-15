@@ -159,9 +159,11 @@ test("mission uses coordination tools without generic subagent dispatch", async 
       const mission = await Agent.get("mission")
       expect(mission?.tools?.include).toContain("panel")
       expect(mission?.tools?.include).toContain("mission_state")
+      expect(mission?.tools?.include).toContain("bash")
       expect(mission?.tools?.include).not.toContain("task")
       expect(PermissionNext.evaluate("panel", "*", mission?.permission).action).toBe("allow")
       expect(PermissionNext.evaluate("mission_state", "*", mission?.permission).action).toBe("allow")
+      expect(PermissionNext.evaluate("bash", "*", mission?.permission).action).toBe("allow")
     },
   })
 })

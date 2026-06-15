@@ -325,18 +325,20 @@ export namespace Agent {
         // (same as `coding` / `control`), NOT runAgentSession. See
         // specs/gateway-mission-split-2026-05-28.md.
         //
-        // Capability set = COORDINATOR (user-confirmed 2026-05-28): it reads
-        // and analyses the project, maintains mission state, plans, dispatches
-        // squad/team work, reconciles outcomes, and talks to the user. It does
-        // NOT write code or run shells — execution is delegated to
+        // Capability set = COORDINATOR (updated 2026-06-15): it reads and
+        // analyses the project, maintains mission state, plans, dispatches
+        // squad/team work, reconciles outcomes, talks to the user, and may run
+        // user-authorized command evidence through bash. It does NOT write code
+        // or use shell as an executor — implementation is delegated to
         // orchestrator-led squad/team tasks.
         //
-        // Deliberately EXCLUDED (each on purpose): bash / edit / write /
-        // apply_patch (it is not a coding executor — would let it bypass the
-        // orchestrator, rule 11); url_screenshot / webpage_* (crawling/visual
-        // capture belong to frontend-design inside a dispatched task); task
-        // (generic sub-agent dispatch is not Mission's engine-task dispatch
-        // path; Mission creates engine tasks through panel.create_task).
+        // Deliberately EXCLUDED (each on purpose): edit / write / apply_patch
+        // (it is not a coding executor — would let it bypass the orchestrator,
+        // rule 11); url_screenshot / webpage_* (crawling/visual capture belong
+        // to frontend-design inside a dispatched task); task (generic sub-agent
+        // dispatch is not Mission's engine-task dispatch path; Mission creates
+        // engine tasks through panel.create_task). Bash is included only for
+        // user-authorized command evidence, not autonomous execution.
         //
         // panel is allowed but action-filtered to the coordination set by
         // panel.ts execute (actor-based whitelist on derivePanelActor value):
@@ -349,6 +351,7 @@ export namespace Agent {
             "read",
             "glob",
             "search_code",
+            "bash",
             // `lsp` is experimental (flag-gated in the tool registry); it
             // resolves only when OPENCORVUS_EXPERIMENTAL_LSP_TOOL is on, same
             // as the explore agent. Directory listing is covered by `glob`.
@@ -368,6 +371,7 @@ export namespace Agent {
             read: "allow",
             glob: "allow",
             search_code: "allow",
+            bash: "allow",
             lsp: "allow",
             panel: "allow",
             mission_state: "allow",
@@ -412,11 +416,13 @@ export namespace Agent {
         // Allowed:
         //   - dispatch tools (the orchestrator's actual job)
         //   - observation tools (read_context, query_failed_goals, goal_report)
+        //   - user-authorized command evidence (`bash`) when the latest
+        //     operator request explicitly needs a command result
         //   - user interaction (question)
         //   - session-local bookkeeping (todoread, todowrite)
         // Excluded:
-        //   - filesystem / shell (bash, read, edit, write, glob, search_code,
-        //     external_code_search, lsp, codesearch, list)
+        //   - filesystem authoring / broad repo inspection (read, edit, write,
+        //     glob, search_code, external_code_search, lsp, codesearch, list)
         //   - webpage evidence toolchain (webpage_extract / compile / compile_html /
         //     analyze / render / evaluate / text_diff) — these belong to build
         //   - network (webfetch, websearch) — same reason
@@ -453,6 +459,7 @@ export namespace Agent {
             "goal_report",
             "analytics",
             "browser_preview",
+            "bash",
             // user interaction
             "question",
             // own bookkeeping
