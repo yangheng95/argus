@@ -21,6 +21,7 @@ import {
 } from "../services/workspace"
 import { t } from "../utils/i18n"
 import { AppLog } from "../utils/log"
+import { canInitGit, initGitCurrent } from "../utils/git"
 import { deleteProjectWorktree, loadProjectWorktrees, type ProjectWorktreeInfo } from "../services/worktree"
 import { showAppDialog } from "../services/app-dialog"
 import { getHostTransport } from "../services/host-transport"
@@ -463,6 +464,7 @@ export function ProjectDirectoryBar() {
         <div class="task-project-cluster">
           <TaskDirContent />
           <ProjectWorktreeDropdown />
+          <InitGitButton />
           <VcsBadge />
         </div>
         <div class="workspace-command-dock" data-no-drag="true">
@@ -474,6 +476,40 @@ export function ProjectDirectoryBar() {
         </div>
       </div>
     </div>
+  )
+}
+
+export function InitGitButton() {
+  const [busy, setBusy] = createSignal(false)
+  const visible = createMemo(() => canInitGit())
+
+  async function handleInitGit(): Promise<void> {
+    if (!visible() || busy()) return
+    setBusy(true)
+    try {
+      await initGitCurrent()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Show when={visible()}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        tone="accent"
+        data-ui="project-init-git"
+        disabled={busy()}
+        title={t("git.init")}
+        aria-label={t("git.init")}
+        onClick={() => void handleInitGit()}
+      >
+        <Icon name="github" size={14} />
+        <span class="project-init-git-label">{busy() ? t("common.loading") : t("git.init")}</span>
+      </Button>
+    </Show>
   )
 }
 
