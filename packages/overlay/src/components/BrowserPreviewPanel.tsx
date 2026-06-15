@@ -1,6 +1,7 @@
 import * as Select from "@kobalte/core/select"
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import type { JSX } from "solid-js"
+import { ApiError } from "../services/api"
 import {
   captureTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewLiveSnapshotObjectUrl,
@@ -39,16 +40,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [liveImageUrl, setLiveImageUrl] = createSignal("")
   const [liveError, setLiveError] = createSignal("")
   const [liveLoading, setLiveLoading] = createSignal(false)
-  const [manualUrl, setManualUrl] = createSignal("")
-  const [manualUrlError, setManualUrlError] = createSignal("")
-  const [manualUrlSubmitting, setManualUrlSubmitting] = createSignal(false)
   const [verificationRequest, setVerificationRequest] = createSignal<{
     taskID: string
     targetID: string
     viewportIDs: BrowserPreviewViewportID[]
     token: number
   }>()
-  const [target] = createResource(
+  const [target, { refetch: refetchTarget }] = createResource(
     () => {
       const taskID = props.taskID()
       const directory = props.directory()
@@ -65,7 +63,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     }),
   )
   const panelActive = createMemo(() => props.active())
-  const currentTarget = createMemo(() => (props.taskID() && props.directory() ? target() : undefined))
+  const currentTarget = createMemo(() => {
+    const taskID = props.taskID()
+    if (!taskID || !props.directory()) return undefined
+    const resolved = target()
+    if (!resolved || resolved.taskID !== taskID) return undefined
+    return resolved
+  })
   const [latestEvidence] = createResource(
     () => {
       const taskID = props.taskID()
@@ -107,7 +111,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [captureImageUrl] = createResource(
     () => {
       const evidence = renderedEvidence()
-      if (!evidence?.capture?.captured || !evidence.capture.path) return undefined
+      if (!evidence?.capture?.captured) return undefined
       return { taskID: evidence.taskID, evidenceID: evidence.id, viewportID: evidence.viewportID }
     },
     (scope) => loadTaskBrowserPreviewEvidenceCaptureObjectUrl(scope),
@@ -167,22 +171,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     )
   }
 
-  const submitManualUrl: JSX.EventHandlerUnion<HTMLFormElement, SubmitEvent> = (event) => {
-    event.preventDefault()
-    const taskID = props.taskID()
-    const url = manualUrl().trim()
-    if (!taskID || !url || manualUrlSubmitting()) return
-    setManualUrlSubmitting(true)
-    setManualUrlError("")
-    void selectTaskBrowserPreviewTarget({ taskID, url })
-      .then(() => {
-        setManualUrl("")
-        setRefreshToken((value) => value + 1)
-      })
-      .catch((error) => setManualUrlError(String(error)))
-      .finally(() => setManualUrlSubmitting(false))
-  }
-
   const captureEvidence = () => {
     const taskID = props.taskID()
     const resolved = currentTarget()
@@ -221,7 +209,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       }
       replaceLiveImageUrl(next)
     } catch (error) {
-      if (sequence === liveFrameRequestSequence) setLiveError(String(error))
+      if (sequence === liveFrameRequestSequence) {
+        setLiveError(String(error))
+        if (error instanceof ApiError && error.status === 404) {
+          clearLiveImageUrl()
+          void refetchTarget()
+        }
+      }
     } finally {
       if (sequence === liveFrameRequestSequence) setLiveLoading(false)
     }
@@ -264,6 +258,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   const handleLiveKeyDown: JSX.EventHandlerUnion<HTMLElement, KeyboardEvent> = (event) => {
     if (event.key === "Shift" || event.key === "Control" || event.key === "Alt" || event.key === "Meta") return
+    if (event.key === "Tab" || event.key === "Escape") return
     event.preventDefault()
     sendLiveInput({ kind: "key", key: event.key })
   }
@@ -372,36 +367,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             </Select.Portal>
           </Select.Root>
 
-          <form class="browser-preview-url-form" onSubmit={submitManualUrl} data-ui="browser-preview-url-form">
-            <input
-              class="browser-preview-url-input"
-              value={manualUrl()}
-              type="text"
-              inputMode="url"
-              spellcheck={false}
-              placeholder={t("browser_preview.url_placeholder")}
-              aria-label={t("browser_preview.url_label")}
-              disabled={!props.taskID() || manualUrlSubmitting()}
-              onInput={(event) => {
-                setManualUrl(event.currentTarget.value)
-                setManualUrlError("")
-              }}
-            />
-            <Button
-              type="submit"
-              variant="outline"
-              size="icon"
-              tone="neutral"
-              title={t("browser_preview.url_submit")}
-              aria-label={t("browser_preview.url_submit")}
-              disabled={!props.taskID() || !manualUrl().trim() || manualUrlSubmitting()}
-            >
-              <Show when={manualUrlSubmitting()} fallback={<Icon name="send" size={13} />}>
-                <span class="card__spinner" />
-              </Show>
-            </Button>
-          </form>
-
           <Show when={viewports().length > 0}>
             <div class="browser-preview-viewport-controls">
               <Tabs
@@ -447,22 +412,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
           <div
             class="browser-preview-evidence-status"
             data-status={
-              manualUrlError()
-                ? "failed"
-                : verification.error
-                  ? "failed"
-                  : (verification()?.status ?? (verification.loading ? "loading" : "idle"))
+              verification.error ? "failed" : (verification()?.status ?? (verification.loading ? "loading" : "idle"))
             }
           >
             <Switch>
-              <Match when={manualUrlError()}>
-                {(error) => (
-                  <>
-                    <Icon name="status-failed" size={14} />
-                    <span>{error()}</span>
-                  </>
-                )}
-              </Match>
               <Match when={verification.error}>
                 {(error) => (
                   <>
@@ -577,14 +530,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                       <div>
                         <dt>{t("browser_preview.url_label")}</dt>
                         <dd>{url()}</dd>
-                      </div>
-                    )}
-                  </Show>
-                  <Show when={evidence().capture?.path}>
-                    {(path) => (
-                      <div>
-                        <dt>path</dt>
-                        <dd>{path()}</dd>
                       </div>
                     )}
                   </Show>

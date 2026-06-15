@@ -229,11 +229,11 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
 ]
 
 const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
-const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)
+const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>("workflow")
 const activeRightActivity = () => selectedRightActivity()
-const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")
-const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("mission")
-const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")
+const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
+const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("tasks")
+const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("task")
 const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
 const [missionLauncherActive, setMissionLauncherActive] = createSignal(false)
 const [missionLauncherSubmitting, setMissionLauncherSubmitting] = createSignal(false)
@@ -445,6 +445,11 @@ async function openMissionSession(result: MissionWakeResult): Promise<void> {
   })
   startSSE(source, 0)
   setMissionSharedRefreshToken((value) => value + 1)
+}
+
+function selectTaskFromTaskList(taskID: string): void {
+  if (activeTaskID() !== taskID) resetCenterWorkbenchToFocusedPanel("tasks")
+  void selectTask(taskID)
 }
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
@@ -894,10 +899,7 @@ if (taskListEl) {
   render(
     () => (
       <TaskList
-        onSelectTask={(taskID) => {
-          resetCenterWorkbenchToFocusedPanel("tasks")
-          void selectTask(taskID)
-        }}
+        onSelectTask={selectTaskFromTaskList}
         onDeleteTask={(taskID) => void deleteTask(taskID)}
         onCancelTask={(taskID) => void cancelTask(taskID)}
         onRenameTask={(taskID, title) => void renameTask(taskID, title)}
