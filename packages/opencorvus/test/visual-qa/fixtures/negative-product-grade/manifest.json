@@ -1,0 +1,31 @@
+{
+  "description": "Negative product-grade visual QA calibration fixtures. These images are test assets, not prompt examples.",
+  "cases": [
+    {
+      "id": "low_fidelity_map_surface",
+      "image": "low-fidelity-map-surface.png",
+      "expected_verdict": "fail",
+      "blocker": {
+        "id": "blocker_low_fidelity_map_surface",
+        "principle_ids": ["component-truth", "production-completeness"],
+        "region": "primary visualization",
+        "reason": "The primary visualization reads as a low-fidelity stand-in rather than a product-grade data surface.",
+        "impact": "The product would communicate incomplete or misleading analytical value.",
+        "required_correction": "Replace the stand-in with the correct data-bound visualization component and verify fresh screenshots."
+      }
+    },
+    {
+      "id": "clipped_primary_navigation",
+      "image": "clipped-primary-navigation.png",
+      "expected_verdict": "fail",
+      "blocker": {
+        "id": "blocker_clipped_primary_navigation",
+        "principle_ids": ["reference-structure", "visual-hierarchy-readability"],
+        "region": "primary navigation and first viewport",
+        "reason": "The first viewport clips and misframes the primary navigation/content structure.",
+        "impact": "Users cannot trust the delivered surface as a complete, intentional product screen.",
+        "required_correction": "Rebuild the viewport framing and navigation layout so the first screen is complete and readable."
+      }
+    }
+  ]
+}

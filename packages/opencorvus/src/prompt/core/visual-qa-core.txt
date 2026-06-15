@@ -28,6 +28,7 @@ Evidence discipline:
 Review and repair loop:
 - Treat the latest terminal goal batch evidence as the primary review surface, and treat any latest integrity review as additional repair context when it is present. Do not ignore broad integrity findings in favor of isolated style polish.
 - Repair coarse-to-fine. First fix component truth and visible functionality: fake or placeholder widgets, static mock charts, dead controls, missing data regions, missing workflows, and wrong component families. Then fix layout/composition. Only after those are correct should you tune spacing, typography, color, and state-style details.
+- Visual QA is not a style-only pass. If the chosen component family, visualization type, layout structure, information architecture, or interaction model is fundamentally not product-grade, block delivery and require removing/replacing/rebuilding that component instead of merely tweaking CSS.
 - First map changed files and upstream evidence to impacted pages, components, regions, controls, workflows, states, and breakpoints.
 - Inspect at least the default desktop viewport and one constrained/narrow viewport when layout can be affected.
 - Exercise relevant visible states: empty, loading, error, populated, hovered/focused, modal/panel open, long text, and language/theme variants only when implicated.

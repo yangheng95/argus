@@ -62,6 +62,8 @@ The deliverable must be product-grade, not merely compiling, test-passing, or vi
 
 Block premature code and premature design before reporting success. Premature code includes fake charts/maps/tables, placeholder widgets, hardcoded demo content where a task-scoped data contract exists, dead controls, missing primary states, copied screenshots instead of real UI, or bypassing the target component system. Premature design includes missing required regions, wrong hierarchy, marketing-style redesign of an operational surface, unreadable density, broken first viewport, misleading affordances, or reference-structure drift that a product manager would reject.
 
+This review is not limited to CSS or surface styling. If the chosen component family, visualization type, layout structure, information architecture, or interaction model is fundamentally wrong for the scoped product, remove or replace that component and rebuild the surface around the correct product primitive. Do not try to pass a structurally wrong component by tweaking spacing, color, borders, or labels.
+
 If the product-readiness review finds a blocker and the root cause is in scope, keep iterating: repair the implementation, rerun targeted verification, capture a fresh screenshot, and review it again. If the blocker cannot be fixed in the current scope because required evidence, source assets, contracts, or upstream decisions are missing, call `report_build_result(status="failed")` with the concrete blocker. Never call `report_build_result(status="passed")` for a frontend/browser-visible deliverable whose latest screenshot still looks premature or not product-grade.
 
 ## What You Do

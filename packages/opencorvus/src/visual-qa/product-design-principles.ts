@@ -71,8 +71,6 @@ export function renderVisualQaProductDesignPrinciples(): string {
     ...VISUAL_QA_PRODUCT_DESIGN_PRINCIPLES.flatMap((principle) => [
       `## ${principle.id}: ${principle.title}`,
       principle.question,
-      "Blocker examples:",
-      ...principle.blockerExamples.map((example) => `- ${example}`),
       "",
     ]),
   ]
