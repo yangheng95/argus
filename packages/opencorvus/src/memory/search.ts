@@ -70,32 +70,18 @@ export namespace MemorySearch {
       return []
     }
 
-    try {
-      return searchFts({
-        query,
-        projectId: input.projectId,
-        sessionID: input.sessionID,
-        sessionSet,
-        scope,
-        limit,
-        minScore,
-        temporalDecay: input.temporalDecay ?? false,
-        kinds: input.kinds,
-        sources: input.sources,
-      })
-    } catch (err) {
-      log.warn("FTS search failed, falling back to LIKE", { err })
-      return searchLike({
-        query: input.query,
-        projectId: input.projectId,
-        sessionID: input.sessionID,
-        sessionSet,
-        scope,
-        limit,
-        kinds: input.kinds,
-        sources: input.sources,
-      })
-    }
+    return searchFts({
+      query,
+      projectId: input.projectId,
+      sessionID: input.sessionID,
+      sessionSet,
+      scope,
+      limit,
+      minScore,
+      temporalDecay: input.temporalDecay ?? false,
+      kinds: input.kinds,
+      sources: input.sources,
+    })
   }
 
   function searchFts(input: {
@@ -197,83 +183,6 @@ export namespace MemorySearch {
       candidates: rows.length,
     })
     return final
-  }
-
-  function searchLike(input: {
-    query: string
-    projectId: string
-    sessionID?: string
-    sessionSet: Set<string> | null
-    scope: Memory.QueryScope
-    limit: number
-    kinds?: Memory.Kind[]
-    sources?: Memory.Source[]
-  }) {
-    const pattern = `%${input.query}%`
-    const rows = Database.use((db) =>
-      db.all<{
-        chunk_id: string
-        file_id: string
-        title: string
-        content: string
-        scope: Memory.Scope
-        session_id: string | null
-        source: Memory.Source
-        kind: Memory.Kind
-        key: string | null
-        importance: number
-        confidence: number
-        time_created: number
-      }>(sql`
-        SELECT
-          mc.id as chunk_id,
-          mc.file_id,
-          mf.title,
-          mc.content,
-          mf.scope,
-          mf.session_id,
-          mf.source,
-          mf.kind,
-          mf.key,
-          mf.importance,
-          mf.confidence,
-          mc.time_created
-        FROM memory_chunk mc
-        JOIN memory_file mf ON mf.id = mc.file_id
-        WHERE mc.content LIKE ${pattern}
-          AND mc.project_id = ${input.projectId}
-        ORDER BY mc.time_created DESC
-        LIMIT ${Math.max(input.limit * 6, 24)}
-      `),
-    )
-
-    return rows
-      .filter((row) =>
-        matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID, input.sessionSet),
-      )
-      .filter((row) => matchesKinds(row.kind, input.kinds))
-      .filter((row) => matchesSources(row.source, input.sources))
-      .map((row, idx) => ({
-        chunkId: row.chunk_id,
-        fileId: row.file_id,
-        fileTitle: row.title,
-        content: row.content,
-        scope: row.scope,
-        sessionID: row.session_id ?? undefined,
-        source: row.source,
-        kind: row.kind,
-        key: row.key ?? undefined,
-        importance: clampScore(row.importance, 60),
-        confidence: clampScore(row.confidence, 75),
-        score:
-          (1 - idx * 0.04) *
-          KIND_WEIGHT[row.kind] *
-          (0.8 + clampScore(row.importance, 60) / 200) *
-          (0.85 + clampScore(row.confidence, 75) / 250),
-        timeCreated: row.time_created,
-      }))
-      .sort(compareResults)
-      .slice(0, input.limit)
   }
 
   function compareResults(a: Memory.SearchResult, b: Memory.SearchResult) {
