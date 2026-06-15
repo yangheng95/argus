@@ -52,8 +52,10 @@ describe("pipeline workflow architecture review step", () => {
     ])
     expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["architect"])
     expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.after).toEqual(["build"])
-    expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["visual_qa"])
-    expect(stepIDs.indexOf("visual_qa")).toBeLessThan(stepIDs.indexOf("integrity"))
+    expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
+    expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.hint).toContain("同级 post-build review agents")
+    expect(pipeline!.steps.find((step) => step.id === "integrity")?.hint).toContain("同级 post-build review agents")
+    expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.hint).toContain("不替代 integrity")
   })
 
   test("rendered workflow prompt does not expose deleted architect or scheduler semantics", () => {

@@ -3713,12 +3713,12 @@ export function createOrchestratorTools(input: {
     visual_qa: tool({
       description:
         "Dedicated post-goal-batch frontend visual GUI fidelity and functional testing agent. GUI means Graphical User Interface. " +
-        "Use once after each terminal frontend goal batch, before the next goal batch or final integrity: desktop/mobile screenshots, " +
+        "Use once after each terminal frontend goal batch as peer post-build review evidence before the next goal batch: desktop/mobile screenshots, " +
         "interaction-state checks, visual comparison, console/network review, or direct repair of visual or functional defects. " +
         "It consumes task-scoped frontend_design/build evidence plus any prior integrity evidence and repairs coarse-to-fine: component truth and visible functionality first, layout/composition second, micro-style polish last. " +
         "It reviews from a professional design QA perspective, lists production_blockers when the product cannot ship, and does not use a fixed similarity score as the only verdict. " +
         "It may use skills, bash/edit/write/apply_patch, and webpage_render/evaluate/text_diff/vision_judge. " +
-        "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final.",
+        "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final. Visual QA and integrity are peer review agents; visual_qa does not replace integrity and is not integrity's workflow prerequisite.",
       inputSchema: VisualQaInputSchema,
       execute: async ({ reason, focus, app_url, preview_command }) => {
         const task = requireTask(taskID)
@@ -6881,8 +6881,8 @@ export function createOrchestratorTools(input: {
             `### Next step\n` +
             `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
             `When the current eligible wave reaches terminal state, choose visual_qa / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting. ` +
-            `For frontend/browser-visible work, run \`visual_qa\` once for the terminal goal batch before the next build wave or final \`integrity\`. ` +
-            `Call \`integrity\` as the final workflow gate after all blocking builds are terminal and the current frontend batch has visual QA evidence; before that, use it only when integrated evidence raises a real question about requirement mining or system integrity.`
+            `For frontend/browser-visible work, run \`visual_qa\` once for the terminal goal batch as peer post-build review evidence before the next build wave. ` +
+            `Call \`integrity\` as the final workflow gate after all blocking builds are terminal; visual_qa and integrity are peer review agents, not replacements for each other. Before final acceptance, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
