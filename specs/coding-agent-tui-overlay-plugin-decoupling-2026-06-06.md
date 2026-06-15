@@ -1,5 +1,8 @@
 # Coding Agent TUI Overlay Plugin Decoupling - 2026-06-06
 
+> Superseded by `specs/coding-agent-tui-independent-plugin-2026-06-06.md`.
+> Keep this file as investigation evidence for the failed generic PTY embed and the first OpenTUI sidecar pass; the current architecture is plugin-owned service routing.
+
 ## Evidence
 
 The Tank Battle prompt is a right-sidebar TUI usability case, not a request to fake a game fixture.
