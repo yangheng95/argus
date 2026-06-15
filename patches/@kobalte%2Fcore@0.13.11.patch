@@ -1,8 +1,67 @@
+diff --git a/dist/index-29c57b8d.d.ts b/dist/index-29c57b8d.d.ts
+index 0d7846d..6370972 100644
+--- a/dist/index-29c57b8d.d.ts
++++ b/dist/index-29c57b8d.d.ts
+@@ -23,30 +23,30 @@ declare const Listbox: typeof ListboxRoot & {
+ 
+ declare const index_Listbox: typeof Listbox;
+ type index_ListboxContextValue = ListboxContextValue;
+-declare const index_ListboxItemCommonProps: typeof ListboxItemCommonProps;
+-declare const index_ListboxItemDescriptionCommonProps: typeof ListboxItemDescriptionCommonProps;
+-declare const index_ListboxItemDescriptionOptions: typeof ListboxItemDescriptionOptions;
+-declare const index_ListboxItemDescriptionProps: typeof ListboxItemDescriptionProps;
+-declare const index_ListboxItemDescriptionRenderProps: typeof ListboxItemDescriptionRenderProps;
+-declare const index_ListboxItemIndicatorCommonProps: typeof ListboxItemIndicatorCommonProps;
+-declare const index_ListboxItemIndicatorOptions: typeof ListboxItemIndicatorOptions;
+-declare const index_ListboxItemIndicatorProps: typeof ListboxItemIndicatorProps;
+-declare const index_ListboxItemIndicatorRenderProps: typeof ListboxItemIndicatorRenderProps;
+-declare const index_ListboxItemLabelCommonProps: typeof ListboxItemLabelCommonProps;
+-declare const index_ListboxItemLabelOptions: typeof ListboxItemLabelOptions;
+-declare const index_ListboxItemLabelProps: typeof ListboxItemLabelProps;
+-declare const index_ListboxItemLabelRenderProps: typeof ListboxItemLabelRenderProps;
+-declare const index_ListboxItemOptions: typeof ListboxItemOptions;
+-declare const index_ListboxItemProps: typeof ListboxItemProps;
+-declare const index_ListboxItemRenderProps: typeof ListboxItemRenderProps;
+-declare const index_ListboxRootCommonProps: typeof ListboxRootCommonProps;
+-declare const index_ListboxRootOptions: typeof ListboxRootOptions;
+-declare const index_ListboxRootProps: typeof ListboxRootProps;
+-declare const index_ListboxRootRenderProps: typeof ListboxRootRenderProps;
+-declare const index_ListboxSectionCommonProps: typeof ListboxSectionCommonProps;
+-declare const index_ListboxSectionOptions: typeof ListboxSectionOptions;
+-declare const index_ListboxSectionProps: typeof ListboxSectionProps;
+-declare const index_ListboxSectionRenderProps: typeof ListboxSectionRenderProps;
++type index_ListboxItemCommonProps = ListboxItemCommonProps;
++type index_ListboxItemDescriptionCommonProps = ListboxItemDescriptionCommonProps;
++type index_ListboxItemDescriptionOptions = ListboxItemDescriptionOptions;
++type index_ListboxItemDescriptionProps = ListboxItemDescriptionProps;
++type index_ListboxItemDescriptionRenderProps = ListboxItemDescriptionRenderProps;
++type index_ListboxItemIndicatorCommonProps = ListboxItemIndicatorCommonProps;
++type index_ListboxItemIndicatorOptions = ListboxItemIndicatorOptions;
++type index_ListboxItemIndicatorProps = ListboxItemIndicatorProps;
++type index_ListboxItemIndicatorRenderProps = ListboxItemIndicatorRenderProps;
++type index_ListboxItemLabelCommonProps = ListboxItemLabelCommonProps;
++type index_ListboxItemLabelOptions = ListboxItemLabelOptions;
++type index_ListboxItemLabelProps = ListboxItemLabelProps;
++type index_ListboxItemLabelRenderProps = ListboxItemLabelRenderProps;
++type index_ListboxItemOptions = ListboxItemOptions;
++type index_ListboxItemProps = ListboxItemProps;
++type index_ListboxItemRenderProps = ListboxItemRenderProps;
++type index_ListboxRootCommonProps = ListboxRootCommonProps;
++type index_ListboxRootOptions = ListboxRootOptions<any, any>;
++type index_ListboxRootProps = ListboxRootProps<any, any>;
++type index_ListboxRootRenderProps = ListboxRootRenderProps;
++type index_ListboxSectionCommonProps = ListboxSectionCommonProps;
++type index_ListboxSectionOptions = ListboxSectionOptions;
++type index_ListboxSectionProps = ListboxSectionProps;
++type index_ListboxSectionRenderProps = ListboxSectionRenderProps;
+ declare const index_useListboxContext: typeof useListboxContext;
+ declare namespace index {
+   export {
 diff --git a/dist/index-9e11b9e4.d.ts b/dist/index-9e11b9e4.d.ts
-index 996373a..d85e491 100644
+index 9fab529..6fae062 100644
 --- a/dist/index-9e11b9e4.d.ts
 +++ b/dist/index-9e11b9e4.d.ts
-@@ -33,13 +33,13 @@ declare const Menubar: typeof MenubarRoot & {
+@@ -35,13 +35,13 @@ declare const Menubar: typeof MenubarRoot & {
  };
  
  declare const index_Menubar: typeof Menubar;
@@ -24,10 +83,10 @@ index 996373a..d85e491 100644
  declare namespace index {
    export {
 diff --git a/dist/index-df27bfc9.d.ts b/dist/index-df27bfc9.d.ts
-index 85bd482..d34e9f7 100644
+index 20bd113..b32c2c3 100644
 --- a/dist/index-df27bfc9.d.ts
 +++ b/dist/index-df27bfc9.d.ts
-@@ -32,34 +32,34 @@ declare const Dialog: typeof DialogRoot & {
+@@ -37,34 +37,34 @@ declare const Dialog: typeof DialogRoot & {
  };
  
  declare const index_Dialog: typeof Dialog;
@@ -87,64 +146,5 @@ index 85bd482..d34e9f7 100644
 +type index_DialogTriggerProps = DialogTriggerProps;
 +type index_DialogTriggerRenderProps = DialogTriggerRenderProps;
  declare const index_useDialogContext: typeof useDialogContext;
- declare namespace index {
-   export {
-diff --git a/dist/index-29c57b8d.d.ts b/dist/index-29c57b8d.d.ts
-index c7d6d1f..f9a1f32 100644
---- a/dist/index-29c57b8d.d.ts
-+++ b/dist/index-29c57b8d.d.ts
-@@ -23,30 +23,30 @@ declare const Listbox: typeof ListboxRoot & {
- 
- declare const index_Listbox: typeof Listbox;
- type index_ListboxContextValue = ListboxContextValue;
--declare const index_ListboxItemCommonProps: typeof ListboxItemCommonProps;
--declare const index_ListboxItemDescriptionCommonProps: typeof ListboxItemDescriptionCommonProps;
--declare const index_ListboxItemDescriptionOptions: typeof ListboxItemDescriptionOptions;
--declare const index_ListboxItemDescriptionProps: typeof ListboxItemDescriptionProps;
--declare const index_ListboxItemDescriptionRenderProps: typeof ListboxItemDescriptionRenderProps;
--declare const index_ListboxItemIndicatorCommonProps: typeof ListboxItemIndicatorCommonProps;
--declare const index_ListboxItemIndicatorOptions: typeof ListboxItemIndicatorOptions;
--declare const index_ListboxItemIndicatorProps: typeof ListboxItemIndicatorProps;
--declare const index_ListboxItemIndicatorRenderProps: typeof ListboxItemIndicatorRenderProps;
--declare const index_ListboxItemLabelCommonProps: typeof ListboxItemLabelCommonProps;
--declare const index_ListboxItemLabelOptions: typeof ListboxItemLabelOptions;
--declare const index_ListboxItemLabelProps: typeof ListboxItemLabelProps;
--declare const index_ListboxItemLabelRenderProps: typeof ListboxItemLabelRenderProps;
--declare const index_ListboxItemOptions: typeof ListboxItemOptions;
--declare const index_ListboxItemProps: typeof ListboxItemProps;
--declare const index_ListboxItemRenderProps: typeof ListboxItemRenderProps;
--declare const index_ListboxRootCommonProps: typeof ListboxRootCommonProps;
--declare const index_ListboxRootOptions: typeof ListboxRootOptions;
--declare const index_ListboxRootProps: typeof ListboxRootProps;
--declare const index_ListboxRootRenderProps: typeof ListboxRootRenderProps;
--declare const index_ListboxSectionCommonProps: typeof ListboxSectionCommonProps;
--declare const index_ListboxSectionOptions: typeof ListboxSectionOptions;
--declare const index_ListboxSectionProps: typeof ListboxSectionProps;
--declare const index_ListboxSectionRenderProps: typeof ListboxSectionRenderProps;
-+type index_ListboxItemCommonProps = ListboxItemCommonProps;
-+type index_ListboxItemDescriptionCommonProps = ListboxItemDescriptionCommonProps;
-+type index_ListboxItemDescriptionOptions = ListboxItemDescriptionOptions;
-+type index_ListboxItemDescriptionProps = ListboxItemDescriptionProps;
-+type index_ListboxItemDescriptionRenderProps = ListboxItemDescriptionRenderProps;
-+type index_ListboxItemIndicatorCommonProps = ListboxItemIndicatorCommonProps;
-+type index_ListboxItemIndicatorOptions = ListboxItemIndicatorOptions;
-+type index_ListboxItemIndicatorProps = ListboxItemIndicatorProps;
-+type index_ListboxItemIndicatorRenderProps = ListboxItemIndicatorRenderProps;
-+type index_ListboxItemLabelCommonProps = ListboxItemLabelCommonProps;
-+type index_ListboxItemLabelOptions = ListboxItemLabelOptions;
-+type index_ListboxItemLabelProps = ListboxItemLabelProps;
-+type index_ListboxItemLabelRenderProps = ListboxItemLabelRenderProps;
-+type index_ListboxItemOptions = ListboxItemOptions;
-+type index_ListboxItemProps = ListboxItemProps;
-+type index_ListboxItemRenderProps = ListboxItemRenderProps;
-+type index_ListboxRootCommonProps = ListboxRootCommonProps;
-+type index_ListboxRootOptions = ListboxRootOptions<any, any>;
-+type index_ListboxRootProps = ListboxRootProps<any, any>;
-+type index_ListboxRootRenderProps = ListboxRootRenderProps;
-+type index_ListboxSectionCommonProps = ListboxSectionCommonProps;
-+type index_ListboxSectionOptions = ListboxSectionOptions;
-+type index_ListboxSectionProps = ListboxSectionProps;
-+type index_ListboxSectionRenderProps = ListboxSectionRenderProps;
- declare const index_useListboxContext: typeof useListboxContext;
  declare namespace index {
    export {

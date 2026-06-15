@@ -125,14 +125,16 @@ export type BuildRepairReport = z.infer<typeof BuildRepairReport>
 
 /**
  * Terminal payload the build agent records through report_build_result.
- * Orchestrator reads this typed result and decides
- * whether to call `deliver`, `build` again with feedback, or stop.
+ * Orchestrator reads this typed result and decides whether to call
+ * `visual_qa`, `integrity`, `build` again with feedback, modify the goal,
+ * or fail/question from the evidence.
  *
  * `status="passed"` means the build agent believes every acceptance_spec is met
  * AND its own verification commands passed. For honest no-change implementation
  * outcomes, it may also mean the requested behavior was already present and no
- * project file changes were needed. `deliver` still runs as an adversarial
- * double-check — build's self-report is trust-but-verify.
+ * project file changes were needed. Integrity remains the final workflow
+ * acceptance review; build's self-report is implementation evidence, not task
+ * completion.
  *
  * When `status="failed"` the payload MUST describe why (`error`), not just be a
  * rejection. The orchestrator wants actionable feedback so it can decide

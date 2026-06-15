@@ -200,8 +200,11 @@ interface AgentExecutionPlan {
 | `frontend-design` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `intent-analysis` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `integrity`       | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `prosecutor`      | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `acceptance`      | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `visual-qa`       | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `fact-check`      | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `deep-research`   | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `frontend-research` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `goal-workload-analyst` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `summary`         | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 
 > 注：`planner` 已不在表中——the removed planning package 整目录已删除，相关 episodic 调用并入

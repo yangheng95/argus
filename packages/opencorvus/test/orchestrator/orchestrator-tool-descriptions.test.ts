@@ -25,7 +25,6 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   test("propose_task describes inheriting evidence-backed follow-up work", () => {
     expect(tools.propose_task.description).toContain("execution evidence")
     expect(tools.propose_task.description).toContain("artifact state")
-    expect(tools.propose_task.description).toContain("failed visual_qa evidence includes follow_up_task")
     expect(tools.propose_task.description).toContain("supplemental features")
     expect(tools.propose_task.description).toContain("project-improvement suggestions")
     expect(tools.propose_task.description).toContain("original user request never authorised")
@@ -35,6 +34,14 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.modify_goal.description).toContain("clarify or tighten acceptance")
     expect(tools.modify_goal.description).toContain("Scope expansion")
     expect(tools.modify_goal.description).toContain("propose_task or question")
+  })
+
+  test("add_goal owns concrete in-scope new goals without replacing re-decomposition", () => {
+    expect(tools.add_goal.description).toContain("Append one new executable goal")
+    expect(tools.add_goal.description).toContain("latest operator message")
+    expect(tools.add_goal.description).toContain("Use this instead of `modify_goal`")
+    expect(tools.add_goal.description).toContain("instead of `architect`")
+    expect(tools.add_goal.description).toContain("After this returns, dispatch `build({ goalID })`")
   })
 
   test("frontend_research and frontend_design descriptions separate investigation division from UI implementation", () => {
@@ -68,8 +75,6 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.visual_qa.description).toContain("post-goal-batch")
     expect(tools.visual_qa.description).toContain("once after each terminal frontend goal batch")
     expect(tools.visual_qa.description).toContain("peer post-build review evidence")
-    expect(tools.visual_qa.description).toContain("picky professional design QA perspective")
-    expect(tools.visual_qa.description).toContain("accepted=false with follow_up_task")
     expect(tools.visual_qa.description).toContain("component truth and visible functionality first")
     expect(tools.visual_qa.description).toContain("layout/composition second")
     expect(tools.visual_qa.description).toContain("micro-style polish last")

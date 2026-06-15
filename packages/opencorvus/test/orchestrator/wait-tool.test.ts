@@ -4,6 +4,10 @@ import {
   ORCHESTRATOR_WAIT_MAX_MS,
   ORCHESTRATOR_WAIT_MIN_MS,
 } from "../../src/orchestrator/tools"
+import { Agent } from "../../src/agent/agent"
+import { ToolRegistry } from "../../src/tool/registry"
+import { Instance } from "../../src/project/instance"
+import { tmpdir } from "../fixture/fixture"
 
 /**
  * Orchestrator `wait` is a one-shot deliberate pause for a NAMED external
@@ -54,6 +58,22 @@ describe("createOrchestratorTools — wait wiring", () => {
     expect(wait.description).toMatch(/question/)
     expect(wait.description).toMatch(/fail_task/)
     expect(wait.description).toMatch(/read_context/)
+  })
+
+  test("mission and orchestrator agent tool surfaces expose wait", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const mission = await Agent.get("mission")
+        const orchestrator = await Agent.get("orchestrator")
+        expect(mission?.tools?.include).toContain("wait")
+        expect(orchestrator?.tools?.include).toContain("wait")
+
+        const missionTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, mission)
+        expect(missionTools.map((tool) => tool.id)).toContain("wait")
+      },
+    })
   })
 })
 
