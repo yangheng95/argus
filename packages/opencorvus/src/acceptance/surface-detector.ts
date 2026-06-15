@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Identifier } from "@/id/id"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { discoverPackageRoot } from "./checks/discovery"
 import type { AcceptanceSpec } from "@/acceptance/types"
 
@@ -100,7 +101,9 @@ export async function detectAcceptanceSurfaces(input: {
   const surfaces = new Set<AcceptanceSurface>()
   const pkg = await readPackage(projectRoot)
   const files = await listProjectFiles(projectRoot)
-  const changedFiles = (input.changedFiles ?? []).map((item) => item.replaceAll("\\", "/"))
+  const changedFiles = (input.changedFiles ?? [])
+    .map((item) => item.replaceAll("\\", "/"))
+    .filter(ProjectRuntimePaths.isSourceEnumerationAllowed)
   const allFileRefs = [...new Set([...files, ...changedFiles])]
 
   const deps = new Set([...Object.keys(pkg?.dependencies ?? {}), ...Object.keys(pkg?.devDependencies ?? {})])

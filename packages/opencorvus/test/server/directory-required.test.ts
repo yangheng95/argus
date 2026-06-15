@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EnginePlanVersionTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Server } from "../../src/server/server"
 import { clearServerShutdownHandler } from "../../src/server/shutdown"
+import { SessionTable } from "../../src/session/session.sql"
 import { Database, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
@@ -27,6 +29,7 @@ describe("project-scope middleware: directory required", () => {
   afterEach(async () => {
     mock.restore()
     clearServerShutdownHandler()
+    Server.resetProjectRoutesAppForTest()
     await resetDatabase()
   })
 
@@ -44,6 +47,7 @@ describe("project-scope middleware: directory required", () => {
   test("record-level DELETE /task/:taskID works without ?directory=", async () => {
     const now = Date.now()
     const taskID = Identifier.ascending("task")
+    const sessionID = Identifier.ascending("session")
     Database.use((db) => {
       db.insert(ProjectTable)
         .values({
@@ -55,10 +59,24 @@ describe("project-scope middleware: directory required", () => {
           time_updated: now,
         })
         .run()
+      db.insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: "project-deleted-record",
+          slug: "deleted-record-session",
+          directory: "C:/missing/deleted-record-project",
+          title: "Deleted record session",
+          version: "0.0.1",
+          kind: "root",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
       db.insert(EngineTaskTable)
         .values({
           id: taskID,
           project_id: "project-deleted-record",
+          session_id: sessionID,
           title: "Deleted project task",
           request: "delete stale record",
           priority: "normal",
@@ -79,6 +97,64 @@ describe("project-scope middleware: directory required", () => {
       db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
     )
     expect(row).toBeUndefined()
+    const session = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get())
+    expect(session).toBeUndefined()
+  })
+
+  test("record-level DELETE /task/:taskID cancels and removes an active session-backed task without ?directory=", async () => {
+    const now = Date.now()
+    const taskID = Identifier.ascending("task")
+    const sessionID = Identifier.ascending("session")
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: "project-deleted-active-record",
+          name: "Deleted active record project",
+          worktree: "C:/missing/deleted-active-record-project",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: "project-deleted-active-record",
+          slug: "deleted-active-record-session",
+          directory: "C:/missing/deleted-active-record-project",
+          title: "Deleted active record session",
+          version: "0.0.1",
+          kind: "root",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: "project-deleted-active-record",
+          session_id: sessionID,
+          title: "Deleted active project task",
+          request: "delete active stale record",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    const app = Server.App()
+    const response = await app.request(`/task/${taskID}`, { method: "DELETE" })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toBe(true)
+    const row = Database.use((db) =>
+      db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+    )
+    expect(row).toBeUndefined()
+    const session = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get())
+    expect(session).toBeUndefined()
   })
 
   test("control-plane POST /shutdown still works without ?directory=", async () => {
@@ -115,6 +191,23 @@ describe("project-scope middleware: directory required", () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as { healthy: boolean }
     expect(body.healthy).toBe(true)
+  })
+
+  test("cold concurrent project routes share one route initialization", async () => {
+    await using tmp = await tmpdir({ git: true })
+    Server.resetProjectRoutesAppForTest()
+    const app = Server.App()
+
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        app.request("/config", {
+          method: "GET",
+          headers: { "x-opencorvus-directory": tmp.path },
+        }),
+      ),
+    )
+
+    expect(responses.map((response) => response.status)).toEqual(Array(8).fill(200))
   })
 
   test("cross-project MySQL transfer routes work without ?directory=", async () => {
@@ -237,6 +330,92 @@ describe("project-scope middleware: directory required", () => {
     expect(next.status).toBe(200)
     const nextBody = (await next.json()) as { tasks: Array<{ task: { id: string } }> }
     expect(nextBody.tasks.map((item) => item.task.id)).toEqual(["page-a"])
+  })
+
+  test("cross-project GET /global/tasks returns lean task rows without prompt-scale fields", async () => {
+    const now = Date.now()
+    const taskID = Identifier.ascending("task")
+    const planID = Identifier.ascending("plan")
+    const largeText = "large task-list payload ".repeat(500)
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: "project-lean-task-list",
+          name: "Lean task list",
+          worktree: "C:/work/lean-task-list",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: "project-lean-task-list",
+          source: "mission",
+          title: "Lean projection task",
+          request: largeText,
+          priority: "normal",
+          metadata: {
+            checks: { build: ["pnpm", "build"] },
+            large: largeText,
+          },
+          budget: { max_executor_groups: 2 },
+          attachments: [
+            {
+              sha: "sha-lean-list",
+              url: "/attachment/project/sha-lean-list.txt",
+              mime: "text/plain",
+              size: largeText.length,
+              filename: "large.txt",
+            },
+          ],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EnginePlanVersionTable)
+        .values({
+          id: planID,
+          task_id: taskID,
+          version: 1,
+          status: "active",
+          summary: "active plan",
+          prompt: largeText,
+          metadata: { large: largeText },
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+
+    const app = Server.App()
+    const response = await app.request("/global/tasks?limit=5&q=Lean%20projection", { method: "GET" })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { tasks: Array<Record<string, any>> }
+    expect(body.tasks).toHaveLength(1)
+    const item = body.tasks[0]!
+    expect(item.plan).toBeUndefined()
+    expect(item.run).toBeUndefined()
+    expect(item.evaluation).toBeUndefined()
+    expect(item.task).toMatchObject({
+      id: taskID,
+      title: "Lean projection task",
+      status: "queued",
+      directory: "C:/work/lean-task-list",
+      priority: "normal",
+    })
+    expect(item.task.request).toBeUndefined()
+    expect(item.task.metadata).toBeUndefined()
+    expect(item.task.attachments).toBeUndefined()
+    expect(item.task.budget).toBeUndefined()
+
+    const full = await app.request(`/task/${taskID}`, { method: "GET" })
+    expect(full.status).toBe(200)
+    const fullBody = (await full.json()) as { request?: string; metadata?: unknown; attachments?: unknown[] }
+    expect(fullBody.request).toBe(largeText)
+    expect(fullBody.metadata).toBeDefined()
+    expect(fullBody.attachments).toHaveLength(1)
   })
 
   test("cross-project GET /global/tasks rejects incomplete compound cursor query", async () => {

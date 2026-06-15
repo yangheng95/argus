@@ -970,6 +970,80 @@ describe("session.compaction.prune", () => {
     expect(selected.map((part) => part.id)).toEqual(["p-covered-newer", "p-covered-older"])
   })
 
+  test("uses marker-on-anchor summary as prune boundary when no tail was preserved", () => {
+    const anchor = userMessage("m-anchor", [
+      { ...basePart("m-anchor", "p-anchor"), type: "text", text: "original user request" },
+      {
+        ...basePart("m-anchor", "p-anchor-compaction"),
+        type: "compaction",
+        auto: true,
+        anchor_id: "m-anchor",
+      },
+    ])
+    const coveredOlder = assistantMessage("m-covered-older", "m-anchor", [
+      toolPart("m-covered-older", "p-covered-older", largeOutput),
+    ])
+    const coveredNewer = assistantMessage("m-covered-newer", "m-anchor", [
+      toolPart("m-covered-newer", "p-covered-newer", largeOutput),
+    ])
+    const compactSummary = assistantMessage(
+      "m-compact-summary",
+      "m-anchor",
+      [{ ...basePart("m-compact-summary", "p-summary"), type: "text", text: "rendered summary" }],
+      {
+        summary: true,
+        finish: "stop",
+        structured: handoffFixture(),
+      },
+    )
+    const messages = [anchor, coveredOlder, coveredNewer, compactSummary]
+
+    const selected = SessionCompaction.TestHooks.prunableToolParts(messages)
+
+    expect(selected.map((part) => part.id)).toEqual(["p-covered-older"])
+  })
+
+  test("uses marker-on-anchor tail_start_id as prune boundary when a user tail was preserved", () => {
+    const anchor = userMessage("m-anchor", [
+      { ...basePart("m-anchor", "p-anchor"), type: "text", text: "original user request" },
+      {
+        ...basePart("m-anchor", "p-anchor-compaction"),
+        type: "compaction",
+        auto: true,
+        anchor_id: "m-anchor",
+        tail_start_id: "m-tail",
+      },
+    ])
+    const coveredOlder = assistantMessage("m-covered-older", "m-anchor", [
+      toolPart("m-covered-older", "p-covered-older", largeOutput),
+    ])
+    const coveredNewer = assistantMessage("m-covered-newer", "m-anchor", [
+      toolPart("m-covered-newer", "p-covered-newer", largeOutput),
+    ])
+    const tailUser = userMessage("m-tail", [
+      { ...basePart("m-tail", "p-tail-user"), type: "text", text: "preserved tail request" },
+    ])
+    const tailAssistant = assistantMessage("m-tail-assistant", "m-tail", [
+      toolPart("m-tail-assistant", "p-tail-tool", largeOutput),
+    ])
+    const compactSummary = assistantMessage(
+      "m-compact-summary",
+      "m-anchor",
+      [{ ...basePart("m-compact-summary", "p-summary"), type: "text", text: "rendered summary" }],
+      {
+        summary: true,
+        finish: "stop",
+        structured: handoffFixture(),
+      },
+    )
+    const messages = [anchor, coveredOlder, coveredNewer, tailUser, tailAssistant, compactSummary]
+
+    const selected = SessionCompaction.TestHooks.prunableToolParts(messages)
+
+    expect(selected.map((part) => part.id)).toEqual(["p-covered-older"])
+    expect(selected.some((part) => part.id === "p-tail-tool")).toBe(false)
+  })
+
   test("database prune does not compact tool output when tail_start_id points to assistant", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

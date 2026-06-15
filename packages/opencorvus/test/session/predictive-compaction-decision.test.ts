@@ -6,6 +6,7 @@ import { SessionLoop } from "../../src/session/loop"
 import type { Message } from "../../src/session/message"
 import type { Config } from "../../src/config/config"
 import type { Provider } from "../../src/provider/provider"
+import type { CompactionHandoff } from "../../src/session/compaction-handoff"
 
 const sessionLoopSourcePath = new URL("../../src/session/loop.ts", import.meta.url)
 
@@ -58,7 +59,7 @@ function assistantMessage(id: string, input: Partial<Message.Assistant> = {}): M
   }
 }
 
-function userMessage(id: string): Message.WithParts {
+function userMessage(id: string, parts: Message.Part[] = []): Message.WithParts {
   return {
     info: {
       id,
@@ -68,7 +69,62 @@ function userMessage(id: string): Message.WithParts {
       agent: "build",
       model: { providerID: "test", modelID: "test-model" },
     } as Message.User,
-    parts: [],
+    parts,
+  }
+}
+
+function basePart(messageID: string, id: string) {
+  return {
+    id,
+    sessionID: "session",
+    messageID,
+    time: { start: 0, end: 0 },
+  }
+}
+
+function handoffFixture(sourceUserMessageID = "user"): CompactionHandoff.Info {
+  return {
+    objective: "Continue the task after compaction",
+    acceptanceCriteria: ["Do not queue duplicate same-source compactions"],
+    durableInstructionSources: [],
+    activeBuildContracts: [],
+    todos: [],
+    workingContext: ["A structured compaction summary already exists for the source user."],
+    chronology: [{ event: "Created structured compaction summary", evidence: "test fixture" }],
+    currentState: {
+      phase: "testing same-source compaction status",
+      activeTask: "verify duplicate compaction detection",
+      sourceUserMessage: {
+        id: sourceUserMessageID,
+        agent: "build",
+        model: { providerID: "test", modelID: "test-model" },
+        formatType: "text",
+        systemMode: null,
+        toolNames: [],
+        variant: null,
+        extraKeys: [],
+      },
+    },
+    decisions: [
+      {
+        decision: "Expose already-compacted overflow as a visible error",
+        rationale: "A second same-source compaction cannot shrink the filtered prompt",
+        evidence: "packages/opencorvus/src/session/loop.ts",
+      },
+    ],
+    evidence: [
+      {
+        kind: "file",
+        value: "packages/opencorvus/src/session/loop.ts",
+        detail: "Same-source compaction summary exists",
+      },
+    ],
+    files: [],
+    testsAndCommands: [],
+    errorsAndBlockers: [],
+    userMessages: ["Continue the task"],
+    nextActions: ["Stop instead of queueing duplicate same-source compaction"],
+    openRisks: [],
   }
 }
 
@@ -203,6 +259,52 @@ describe("SessionLoop.predictiveCompactionDecision", () => {
   })
 })
 
+describe("SessionLoop.hasCompletedCompactionForSource", () => {
+  test("recognizes a same-source compaction marker with a valid structured summary", () => {
+    const source = userMessage("m-source", [
+      {
+        ...basePart("m-source", "p-compaction"),
+        type: "compaction",
+        auto: true,
+        anchor_id: "m-source",
+      },
+    ])
+    const summary = assistantMessage("m-summary", {
+      parentID: "m-source",
+      summary: true,
+      finish: "stop",
+      structured: handoffFixture("m-source"),
+    })
+
+    expect(SessionLoop.hasCompletedCompactionForSource([source, summary], "m-source")).toBe(true)
+  })
+
+  test("does not treat a marker without a valid structured summary as completed", () => {
+    const source = userMessage("m-source", [
+      {
+        ...basePart("m-source", "p-compaction"),
+        type: "compaction",
+        auto: true,
+        anchor_id: "m-source",
+      },
+    ])
+    const proseSummary = assistantMessage("m-summary", {
+      parentID: "m-source",
+      summary: true,
+      finish: "stop",
+    })
+    const otherSourceSummary = assistantMessage("m-other-summary", {
+      parentID: "m-other-source",
+      summary: true,
+      finish: "stop",
+      structured: handoffFixture("m-other-source"),
+    })
+
+    expect(SessionLoop.hasCompletedCompactionForSource([source, proseSummary], "m-source")).toBe(false)
+    expect(SessionLoop.hasCompletedCompactionForSource([source, otherSourceSummary], "m-source")).toBe(false)
+  })
+})
+
 describe("SessionLoop prompt final message selection", () => {
   test("loop input defaults to reply mode but accepts explicit summary mode", () => {
     expect(SessionLoop.LoopInput.parse({ sessionID: "ses_test" }).result_mode).toBeUndefined()
@@ -311,6 +413,31 @@ describe("SessionLoop predictive compaction transcript hygiene", () => {
 
     expect(compactionControl).toBeGreaterThan(0)
     expect(newestUserModel).toBeGreaterThan(compactionControl)
+  })
+
+  test("predictive compaction reports already-compacted same-source overflow before queueing another request", async () => {
+    const source = await fs.readFile(sessionLoopSourcePath, "utf8")
+    const trigger = source.indexOf('if (decision.kind === "compact")')
+    const duplicateCheck = source.indexOf("hasCompletedCompactionForSource(input.msgs, input.lastUser.id)", trigger)
+    const create = source.indexOf("await SessionCompaction.create", trigger)
+
+    expect(trigger).toBeGreaterThan(0)
+    expect(duplicateCheck).toBeGreaterThan(trigger)
+    expect(duplicateCheck).toBeLessThan(create)
+  })
+
+  test("post-turn overflow skips duplicate same-source compaction and continues to prompt diagnostics", async () => {
+    const source = await fs.readFile(sessionLoopSourcePath, "utf8")
+    const trigger = source.indexOf("lastFinished.summary !== true")
+    const duplicateCheck = source.indexOf("!hasCompletedCompactionForSource(msgs, lastUser.id)", trigger)
+    const create = source.indexOf("await SessionCompaction.create", trigger)
+    const processTurn = source.indexOf("const turn = await processTurn", trigger)
+
+    expect(trigger).toBeGreaterThan(0)
+    expect(duplicateCheck).toBeGreaterThan(trigger)
+    expect(duplicateCheck).toBeLessThan(create)
+    expect(processTurn).toBeGreaterThan(create)
+    expect(create).toBeLessThan(processTurn)
   })
 
   test("uses the legacy compaction marker owner as the compaction source", async () => {

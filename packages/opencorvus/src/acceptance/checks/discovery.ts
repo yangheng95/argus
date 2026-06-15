@@ -1,5 +1,6 @@
 import { inferFamily } from "@/check/policy"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { CheckConfig, NamedCheckConfig, NamedCheckFamily } from "@/engine"
 import { Filesystem } from "@/util/filesystem"
 import fs from "fs/promises"
@@ -274,6 +275,7 @@ export async function discoverPackageRoot(changedFiles?: unknown) {
   const candidates = new Map<string, number>()
   const items = Array.isArray(changedFiles)
     ? changedFiles.filter((item): item is string => typeof item === "string" && item.length > 0)
+        .filter(ProjectRuntimePaths.isSourceEnumerationAllowed)
     : []
 
   for (const file of items) {

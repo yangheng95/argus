@@ -1,5 +1,6 @@
 import z from "zod"
 import { FactCheckItemListSchema } from "@/fact-check/schema"
+import { VISUAL_QA_PRODUCT_DESIGN_PRINCIPLE_IDS } from "./product-design-principles"
 
 export const VisualQaSeveritySchema = z.enum(["critical", "major", "minor"])
 export const VisualQaFindingStatusSchema = z.enum(["open", "repaired", "deferred"])
@@ -43,6 +44,23 @@ export const VisualQaFindingSchema = z.object({
     .describe("Changed files, commits, or verification refs when repaired."),
 })
 
+export const VisualQaProductionBlockerSchema = z.object({
+  id: z.string().min(1),
+  principle_ids: z
+    .array(z.enum(VISUAL_QA_PRODUCT_DESIGN_PRINCIPLE_IDS))
+    .min(1)
+    .describe("Product design QA principle IDs that make this issue block production delivery."),
+  region: z.string().min(1),
+  reason: z
+    .string()
+    .min(1)
+    .describe("Why a professional design reviewer would block this surface from production delivery."),
+  impact: z.string().min(1).describe("User-visible or product-quality impact if shipped as-is."),
+  required_correction: z.string().min(1).describe("Concrete correction required before the product can ship."),
+  source_refs: z.array(z.string().min(1)).default([]),
+  evidence_refs: z.array(z.string().min(1)).default([]),
+})
+
 export const VisualQaRepairSchema = z.object({
   finding_ids: z.array(z.string().min(1)).default([]),
   files_changed: z.array(z.string().min(1)).default([]),
@@ -80,6 +98,7 @@ export const VisualQaReportSchema = z.object({
   summary: z.string().min(1),
   coverage: z.array(VisualQaCoverageSchema).default([]),
   findings: z.array(VisualQaFindingSchema).default([]),
+  production_blockers: z.array(VisualQaProductionBlockerSchema).default([]),
   repairs: z.array(VisualQaRepairSchema).default([]),
   evidence: z.array(VisualQaEvidenceSchema).default([]),
   commands: z.array(VisualQaCommandSchema).default([]),

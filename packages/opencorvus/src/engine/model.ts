@@ -322,6 +322,17 @@ export const Task = z.object({
   }),
 })
 
+export const TaskListTask = Task.omit({
+  activePlanVersionID: true,
+  activeRunID: true,
+  request: true,
+  blockingReason: true,
+  error: true,
+  budget: true,
+  metadata: true,
+  attachments: true,
+})
+
 export const PlanVersion = z.object({
   id: Identifier.schema("plan"),
   taskID: Identifier.schema("task"),
@@ -546,15 +557,27 @@ export const TaskAccepted = z.object({
   task_id: Identifier.schema("task"),
 })
 
+export const TaskMessageTarget = z
+  .object({
+    kind: z.literal("build_session"),
+    sessionID: z.string().min(1),
+    goalID: z.string().min(1).optional(),
+  })
+  .meta({
+    ref: "TaskMessageTarget",
+  })
+export type TaskMessageTargetInput = z.infer<typeof TaskMessageTarget>
+
 export const TaskMessageInput = z.object({
   text: z.string(),
-  source: z.string().optional(),
+  source: z.string().min(1),
+  target: TaskMessageTarget.optional(),
   user_id: z.string().optional(),
   attachments: TaskAttachmentInput.array().optional(),
   /** Overlay bridge envelope fields. They identify how a rendered message was
    *  displayed, not what the operator asked. The task service accepts them so
    *  replay/resume clients can reuse bridge-stamped message objects, but task
-   *  semantics still come only from `text`, `source`, `user_id`, and
+   *  semantics still come only from `text`, `source`, `target`, `user_id`, and
    *  `attachments`. */
   resolvedRole: z.string().optional(),
   channel: z.string().optional(),
@@ -892,11 +915,8 @@ export const TaskProject = z.object({
 })
 
 export const ProjectTaskSummary = z.object({
-  task: Task,
+  task: TaskListTask,
   project: TaskProject.nullable().optional(),
-  plan: PlanVersion.optional(),
-  run: Run.optional(),
-  evaluation: Evaluation.optional(),
   active_sessions: ActiveSession.array(),
   pending_interactions: z.number().int(),
   pending_interaction_items: Interaction.array(),
@@ -1316,8 +1336,10 @@ export const Event = {
       taskID: Identifier.schema("task"),
       kind: TaskMessageResult.shape.kind,
       source: z.string(),
+      target: TaskMessageTarget.optional(),
       text: z.string(),
       summary: z.string(),
+      messageID: Identifier.schema("message").optional(),
     }),
     { tier: 3 },
   ),

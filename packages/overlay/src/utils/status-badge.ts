@@ -23,12 +23,12 @@ export interface CardStatusBadge {
 
 export function statusBadge(node: CardNode): CardStatusBadge {
   const s = node.status
+  const reason = String((node as any).terminalReason || "").toLowerCase()
+  if (reason === "cancelled" || reason === "aborted") {
+    return { tone: "cancelled", glyph: "⊘" } // ⊘
+  }
   if (s === "running") return { tone: "running", glyph: "" }
   if (s === "error") {
-    const reason = String((node as any).terminalReason || "").toLowerCase()
-    if (reason === "cancelled" || reason === "aborted") {
-      return { tone: "cancelled", glyph: "⊘" } // ⊘
-    }
     return { tone: "error", glyph: "✗" } // ✗
   }
   if (s === "skipped") return { tone: "skipped", glyph: "—" } // —

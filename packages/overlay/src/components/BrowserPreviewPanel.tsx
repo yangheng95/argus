@@ -78,7 +78,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     () =>
       candidates().find((item) => item.selected) ??
       candidates().find((item) => item.id === currentTarget()?.id) ??
-      candidates()[0] ??
       null,
   )
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
@@ -437,6 +436,12 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             </div>
           }
         >
+          <Match when={target.loading}>
+            <div class="browser-preview-empty" data-status="loading">
+              <span class="card__spinner" />
+              <p>{t("browser_preview.loading")}</p>
+            </div>
+          </Match>
           <Match when={liveImageUrl()}>
             {(url) => (
               <section
@@ -462,6 +467,23 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 </figure>
                 <Show when={liveError()}>{(error) => <code>{error()}</code>}</Show>
               </section>
+            )}
+          </Match>
+          <Match when={liveLoading()}>
+            <div class="browser-preview-empty" data-status="loading" data-ui="browser-preview-live-loading">
+              <span class="card__spinner" />
+              <p>{t("browser_preview.loading")}</p>
+              <Show when={targetUrl()}>{(url) => <code>{url()}</code>}</Show>
+            </div>
+          </Match>
+          <Match when={liveError()}>
+            {(error) => (
+              <div class="browser-preview-empty" data-status="failed" data-ui="browser-preview-live-error">
+                <Icon name="status-failed" size={18} />
+                <p>{t("browser_preview.empty.failed")}</p>
+                <Show when={targetUrl()}>{(url) => <code>{url()}</code>}</Show>
+                <code>{error()}</code>
+              </div>
             )}
           </Match>
           <Match when={renderedEvidence()}>
@@ -508,6 +530,16 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 </dl>
                 <For each={evidence().diagnostics}>{(item) => <code>{item}</code>}</For>
               </section>
+            )}
+          </Match>
+          <Match when={currentTarget()?.status === "failed" ? currentTarget() : undefined}>
+            {(resolved) => (
+              <div class="browser-preview-empty" data-status="failed" data-ui="browser-preview-target-failed">
+                <Icon name="status-failed" size={18} />
+                <p>{t("browser_preview.empty.failed")}</p>
+                <Show when={resolved().url}>{(url) => <code>{url()}</code>}</Show>
+                <For each={resolved().diagnostics}>{(item) => <code>{item}</code>}</For>
+              </div>
             )}
           </Match>
           <Match when={targetUrl()}>
@@ -597,9 +629,12 @@ function evidenceFromVerification(
 ): BrowserPreviewEvidence {
   const capture = input.captures[viewportID]
   const evidenceID = input.evidenceIDs[viewportID]
+  if (!evidenceID) {
+    throw new Error(`Browser preview verification missing persisted evidence ID for viewport ${viewportID}`)
+  }
   const summary = capture?.summary ?? input.diagnostics.join(" ")
   return {
-    id: evidenceID ?? `${scope.targetID}:${viewportID}`,
+    id: evidenceID,
     taskID: scope.taskID,
     targetID: scope.targetID,
     viewportID,
@@ -607,7 +642,7 @@ function evidenceFromVerification(
     summary,
     capture,
     diagnostics: input.diagnostics,
-    timeCompleted: Date.now(),
-    timeCreated: Date.now(),
+    timeCompleted: 0,
+    timeCreated: 0,
   }
 }

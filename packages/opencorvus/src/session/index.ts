@@ -758,6 +758,11 @@ export namespace Session {
     return rows.map(fromRow)
   })
 
+  const SessionProjectInput = z.object({
+    sessionID: Identifier.schema("session"),
+    projectID: z.string().min(1),
+  })
+
   // Flat list of session IDs in the subtree rooted at `sessionID`, parent
   // first then descendants. Lives here as the single source for "walk the
   // session tree" — callers that need to cancel/abort/cleanup every session
@@ -765,11 +770,15 @@ export namespace Session {
   // (rule 8 single source, rule 9 shared abstraction). Previously duplicated
   // as private `sessionTree` helpers in engine/writer.ts and task-api/index.ts.
   export const tree = fn(Identifier.schema("session"), async (sessionID) => {
+    return treeInProject({ sessionID, projectID: Instance.project.id })
+  })
+
+  export const treeInProject = fn(SessionProjectInput, async ({ sessionID, projectID }) => {
     const ids: string[] = [sessionID]
     const queue: string[] = [sessionID]
     while (queue.length > 0) {
       const next = queue.shift()!
-      const direct = await children(next)
+      const direct = await childrenInProject({ parentID: next, projectID })
       for (const child of direct) {
         ids.push(child.id)
         queue.push(child.id)
@@ -795,21 +804,35 @@ export namespace Session {
     },
   )
 
-  export const remove = fn(Identifier.schema("session"), async (sessionID) => {
+  async function removeSessionTree(input: { sessionID: string; projectID: string; publishDeleted: boolean }) {
+    const { sessionID, projectID, publishDeleted } = input
     const session = await get(sessionID)
-    for (const child of await children(sessionID)) {
-      await remove(child.id)
+    if (session.projectID !== projectID) {
+      throw new Error(`Session ${sessionID} belongs to project ${session.projectID}, not ${projectID}`)
+    }
+    for (const child of await childrenInProject({ parentID: sessionID, projectID })) {
+      await removeSessionTree({ sessionID: child.id, projectID, publishDeleted })
     }
     // CASCADE delete handles messages and parts automatically
     Database.use((db) => {
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
       Database.effect(() => Database.incrementalVacuum())
-      Database.effect(() =>
-        Bus.publish(Event.Deleted, {
-          info: session,
-        }),
-      )
+      if (publishDeleted) {
+        Database.effect(() =>
+          Bus.publish(Event.Deleted, {
+            info: session,
+          }),
+        )
+      }
     })
+  }
+
+  export const remove = fn(Identifier.schema("session"), async (sessionID) => {
+    return removeSessionTree({ sessionID, projectID: Instance.project.id, publishDeleted: true })
+  })
+
+  export const removeInProject = fn(SessionProjectInput, async ({ sessionID, projectID }) => {
+    return removeSessionTree({ sessionID, projectID, publishDeleted: false })
   })
 
   function messageWithPersistedCreated(msg: Message.Info, timeCreated: number): Message.Info {

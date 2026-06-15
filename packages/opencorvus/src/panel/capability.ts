@@ -98,6 +98,11 @@ function schemas<const T extends readonly Capability[]>(items: T) {
   }
 }
 
+function missionSchemas<const T extends readonly Capability[]>(items: T) {
+  return items.map((item) => (item.action === "create_task" ? item.schema.required({ title: true }) : item.schema)) as
+    | [z.ZodObject<any>, z.ZodObject<any>, ...z.ZodObject<any>[]]
+}
+
 export const PanelCapabilityRegistry = list(
   item({
     action: "view_plan",
@@ -144,6 +149,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
+      title: z.string().trim().min(1).max(80).optional(),
       request: z.string(),
       request_id: z.string().optional(),
       executor: z.enum(["opencorvus", "codex", "claude-code"]).optional(),
@@ -172,7 +178,7 @@ export const PanelCapabilityRegistry = list(
     params: {
       taskID: z.string(),
       text: z.string(),
-      source: z.string().optional(),
+      source: z.string().min(1),
       user_id: z.string().optional(),
     },
   }),
@@ -331,6 +337,11 @@ export const PanelCapabilityRegistry = list(
 )
 
 export const PanelActionSchema = z.discriminatedUnion("action", schemas(PanelCapabilityRegistry))
+export const MissionPanelActionSchema = z.discriminatedUnion("action", missionSchemas(PanelCapabilityRegistry))
+
+export function panelActionSchemaForAgent(agent: string | undefined): typeof PanelActionSchema {
+  return (agent === "mission" ? MissionPanelActionSchema : PanelActionSchema) as typeof PanelActionSchema
+}
 
 export const PanelCapability = z.object({
   action: z.string(),

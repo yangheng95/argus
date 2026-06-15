@@ -63,6 +63,25 @@ describe("Bus.subscribe / Bus.publish", () => {
     })
   })
 
+  test("unsubscribe removes empty subscription buckets", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const before = Bus.subscriptionStats()
+        const unsub = Bus.subscribe(TestEvent, () => {})
+        expect(Bus.subscriptionStats()).toEqual({
+          types: before.types + 1,
+          callbacks: before.callbacks + 1,
+        })
+
+        unsub()
+
+        expect(Bus.subscriptionStats()).toEqual(before)
+      },
+    })
+  })
+
   test("multiple subscribers each receive the event", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

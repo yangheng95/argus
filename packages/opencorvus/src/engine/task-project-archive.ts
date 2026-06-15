@@ -3,6 +3,7 @@ import path from "path"
 import { BlobWriter, TextReader, Uint8ArrayReader, ZipWriter } from "@zip.js/zip.js"
 import { EngineService } from "@/task-api"
 import { Project } from "@/project/project"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Filesystem } from "@/util/filesystem"
 import { git } from "@/util/git"
 import { requireTask } from "./store"
@@ -25,15 +26,16 @@ type ExecutionFlow = {
   task: Awaited<ReturnType<typeof EngineService.getTask>>
   board: Awaited<ReturnType<typeof EngineService.getBoard>>
   runs: Awaited<ReturnType<typeof EngineService.listRuns>>
-  interactions: Awaited<ReturnType<typeof EngineService.listTaskInteractions>>
-  artifacts: Array<{
-    runID: string
-    artifacts: Awaited<ReturnType<typeof EngineService.listArtifacts>>
-  }>
-  protocolEvents: Awaited<ReturnType<typeof EngineService.listProtocolEvents>>
-  trace: Awaited<ReturnType<typeof EngineService.getTaskTrace>>
-  transcript: unknown[]
+  interactions: unknown
+  artifacts: unknown
+  protocolEvents: unknown
+  trace: unknown
+  transcript: unknown
 }
+
+const ARCHIVE_MAX_STRING_CHARS = 16_384
+const ARCHIVE_MAX_ARRAY_ITEMS = 500
+const ARCHIVE_MAX_DEPTH = 12
 
 function safeArchiveSegment(value: string): string {
   const cleaned = value
@@ -51,6 +53,7 @@ function parseGitNulList(output: string): string[] {
   return output
     .split("\0")
     .filter((item) => item.length > 0)
+    .filter(ProjectRuntimePaths.isSourceArchiveAllowed)
     .toSorted()
 }
 
@@ -89,6 +92,36 @@ async function listGitIncludedFiles(projectDir: string): Promise<string[]> {
 
 async function addJson(zip: ZipWriter<Blob>, name: string, value: unknown): Promise<void> {
   await zip.add(name, new TextReader(`${JSON.stringify(value, null, 2)}\n`))
+}
+
+function boundArchiveValue(value: unknown, depth = 0): unknown {
+  if (depth > ARCHIVE_MAX_DEPTH) return { truncated: true, reason: "max_depth" }
+  if (typeof value === "string") {
+    if (value.length <= ARCHIVE_MAX_STRING_CHARS) return value
+    return {
+      truncated: true,
+      reason: "string_limit",
+      chars: value.length,
+      preview: value.slice(0, ARCHIVE_MAX_STRING_CHARS),
+    }
+  }
+  if (!value || typeof value !== "object") return value
+  if (Array.isArray(value)) {
+    const items = value.slice(0, ARCHIVE_MAX_ARRAY_ITEMS).map((item) => boundArchiveValue(item, depth + 1))
+    if (value.length <= ARCHIVE_MAX_ARRAY_ITEMS) return items
+    return [
+      ...items,
+      {
+        truncated: true,
+        reason: "array_limit",
+        originalLength: value.length,
+        kept: ARCHIVE_MAX_ARRAY_ITEMS,
+      },
+    ]
+  }
+  const out: Record<string, unknown> = {}
+  for (const [key, val] of Object.entries(value)) out[key] = boundArchiveValue(val, depth + 1)
+  return out
 }
 
 async function addProjectFile(zip: ZipWriter<Blob>, projectDir: string, relativePath: string): Promise<void> {
@@ -142,21 +175,26 @@ async function collectExecutionFlow(input: {
       worktree: input.project.worktree,
     },
     projectFileRoot: "project/",
-    projectFileSelection: "git ls-files --cached --others --exclude-standard -z -- .",
+    projectFileSelection: "git ls-files --cached --others --exclude-standard -z -- . + OpenCorvus runtime filter",
     projectFileCount: input.fileCount,
     executionFlowRoot: "opencorvus-task-execution-flow/",
     executionFiles,
+    executionFlowBounds: {
+      maxStringChars: ARCHIVE_MAX_STRING_CHARS,
+      maxArrayItems: ARCHIVE_MAX_ARRAY_ITEMS,
+      maxDepth: ARCHIVE_MAX_DEPTH,
+    },
   }
   return {
     manifest,
     task,
     board,
     runs,
-    interactions,
-    artifacts,
-    protocolEvents,
-    trace,
-    transcript: input.transcript,
+    interactions: boundArchiveValue(interactions),
+    artifacts: boundArchiveValue(artifacts),
+    protocolEvents: boundArchiveValue(protocolEvents),
+    trace: boundArchiveValue(trace),
+    transcript: boundArchiveValue(input.transcript),
   }
 }
 

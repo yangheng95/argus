@@ -279,6 +279,41 @@ function bridgeMessage(child: ChildProcess, message: unknown) {
   }
 }
 
+function bridgeExited(child: ChildProcess) {
+  return child.exitCode !== null || child.signalCode !== null
+}
+
+function unrefTimer(timer: ReturnType<typeof setTimeout>) {
+  const unref = timer as { unref?: () => void }
+  unref.unref?.()
+}
+
+function forceKillBridgeChild(child: ChildProcess) {
+  if (bridgeExited(child) || !child.pid) return
+  if (process.platform === "win32") {
+    const killer = nodeSpawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    })
+    killer.on("error", () => {})
+    return
+  }
+  child.kill("SIGKILL")
+}
+
+function terminateBridgeChild(child: ChildProcess) {
+  if (bridgeExited(child)) return
+  bridgeMessage(child, { type: "kill" })
+  child.stdin?.end()
+  unrefTimer(
+    setTimeout(() => {
+      if (bridgeExited(child)) return
+      child.kill("SIGTERM")
+      unrefTimer(setTimeout(() => forceKillBridgeChild(child), 1_000))
+    }, 1_000),
+  )
+}
+
 async function nodeBridgePtyProcess(input: {
   command: PtyPreparedCommand
   cols: number
@@ -311,6 +346,7 @@ async function nodeBridgePtyProcess(input: {
   const pendingData: string[] = []
   let pendingExit: { exitCode: number | null } | undefined
   let exited = false
+  let terminating = false
 
   const emitData = (chunk: string) => {
     if (dataHandlers.length === 0) {
@@ -363,7 +399,11 @@ async function nodeBridgePtyProcess(input: {
     pid: child.pid ?? 0,
     write: (data) => bridgeMessage(child, { type: "input", data }),
     resize: (cols, rows) => bridgeMessage(child, { type: "resize", cols, rows }),
-    kill: () => bridgeMessage(child, { type: "kill" }),
+    kill: () => {
+      if (terminating) return
+      terminating = true
+      terminateBridgeChild(child)
+    },
     onData: (handler) => {
       dataHandlers.push(handler)
       for (const chunk of pendingData.splice(0)) handler(chunk)

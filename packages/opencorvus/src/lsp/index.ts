@@ -14,9 +14,21 @@ import { entries, values as objectValues } from "@/util/object"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
+  let clientIdleTtlMs = Number.parseInt(process.env.OPENCORVUS_LSP_CLIENT_IDLE_TTL_MS ?? "600000", 10)
+  let brokenTtlMs = Number.parseInt(process.env.OPENCORVUS_LSP_BROKEN_TTL_MS ?? "600000", 10)
 
   export const Event = {
     Updated: BusEvent.define("lsp.updated", z.object({})),
+  }
+
+  export function setRetentionForTest(input: { clientIdleTtlMs?: number; brokenTtlMs?: number }) {
+    const previous = { clientIdleTtlMs, brokenTtlMs }
+    if (input.clientIdleTtlMs !== undefined) clientIdleTtlMs = input.clientIdleTtlMs
+    if (input.brokenTtlMs !== undefined) brokenTtlMs = input.brokenTtlMs
+    return () => {
+      clientIdleTtlMs = previous.clientIdleTtlMs
+      brokenTtlMs = previous.brokenTtlMs
+    }
   }
 
   export const Range = z
@@ -78,7 +90,7 @@ export namespace LSP {
   }
 
   type State = {
-    broken: Set<string>
+    broken: Map<string, number>
     servers: Record<string, LSPServer.Info>
     clients: LSPClient.Info[]
     spawning: Map<string, Promise<LSPClient.Info | undefined>>
@@ -86,7 +98,7 @@ export namespace LSP {
   }
 
   const createState = (servers: Record<string, LSPServer.Info>, clients: LSPClient.Info[] = []): State => ({
-    broken: new Set<string>(),
+    broken: new Map<string, number>(),
     servers,
     clients,
     spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
@@ -101,6 +113,43 @@ export namespace LSP {
         error: String(error),
       })
     })
+  }
+
+  async function disposeHandle(handle: LSPServer.Handle) {
+    if (handle.dispose) {
+      await handle.dispose()
+      return
+    }
+    const owned = handle.process as typeof handle.process & { opencorvusDispose?: () => Promise<void> }
+    if (owned.opencorvusDispose) {
+      await owned.opencorvusDispose()
+      return
+    }
+    handle.process.kill()
+  }
+
+  function markBroken(state: State, key: string) {
+    state.broken.set(key, Date.now())
+  }
+
+  function pruneBroken(state: State, now: number) {
+    if (!Number.isFinite(brokenTtlMs) || brokenTtlMs <= 0) return
+    for (const [key, failedAt] of state.broken) {
+      if (now - failedAt > brokenTtlMs) state.broken.delete(key)
+    }
+  }
+
+  async function pruneIdleClients(state: State, now: number) {
+    if (!Number.isFinite(clientIdleTtlMs) || clientIdleTtlMs <= 0) return
+    const keep: LSPClient.Info[] = []
+    const stale: LSPClient.Info[] = []
+    for (const client of state.clients) {
+      if (now - client.lastUsedAt > clientIdleTtlMs) stale.push(client)
+      else keep.push(client)
+    }
+    if (stale.length === 0) return
+    state.clients = keep
+    await Promise.all(stale.map(disposeClient))
   }
 
   const state = lazyInstanceState(
@@ -203,6 +252,9 @@ export namespace LSP {
   async function getClients(file: string) {
     const s = await state()
     if (s.disposed) return []
+    const now = Date.now()
+    pruneBroken(s, now)
+    await pruneIdleClients(s, now)
     const extension = path.parse(file).ext || file
     const result: LSPClient.Info[] = []
 
@@ -211,18 +263,18 @@ export namespace LSP {
       const handle = await server
         .spawn(root)
         .then((value) => {
-          if (!value) s.broken.add(key)
+          if (!value) markBroken(s, key)
           return value
         })
         .catch((err) => {
-          s.broken.add(key)
+          markBroken(s, key)
           log.error(`Failed to spawn LSP server ${server.id}`, { error: err })
           return undefined
         })
 
       if (!handle) return undefined
       if (s.disposed) {
-        await (handle.dispose?.() ?? Promise.resolve(handle.process.kill()))
+        await disposeHandle(handle)
         return undefined
       }
       log.info("spawned lsp server", { serverID: server.id })
@@ -232,14 +284,14 @@ export namespace LSP {
         server: handle,
         root,
       }).catch(async (err) => {
-        s.broken.add(key)
-        await (handle.dispose?.() ?? Promise.resolve(handle.process.kill()))
+        markBroken(s, key)
+        await disposeHandle(handle)
         log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
         return undefined
       })
 
       if (!client) {
-        await (handle.dispose?.() ?? Promise.resolve(handle.process.kill()))
+        await disposeHandle(handle)
         return undefined
       }
       if (s.disposed) {
@@ -249,7 +301,7 @@ export namespace LSP {
 
       const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
       if (existing) {
-        await (handle.dispose?.() ?? Promise.resolve(handle.process.kill()))
+        await disposeHandle(handle)
         return existing
       }
 
@@ -267,6 +319,7 @@ export namespace LSP {
 
       const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
       if (match) {
+        match.touch()
         result.push(match)
         continue
       }
@@ -301,6 +354,7 @@ export namespace LSP {
 
   export async function hasClients(file: string) {
     const s = await state()
+    pruneBroken(s, Date.now())
     const extension = path.parse(file).ext || file
     for (const server of objectValues(s.servers)) {
       if (server.extensions.length && !server.extensions.includes(extension)) continue

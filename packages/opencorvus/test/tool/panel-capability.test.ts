@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test"
-import { panelCapabilities, panelCapabilityActionSet } from "../../src/panel/capability"
+import z from "zod"
+import { PanelActionSchema, panelCapabilities, panelCapabilityActionSet } from "../../src/panel/capability"
+import { PanelTool } from "../../src/tool/panel"
 
 test("filters panel-only actions by surface", () => {
   const panel = panelCapabilities("panel")
@@ -33,6 +35,9 @@ test("exposes local action metadata and input schemas", () => {
       routing: {
         type: "object",
       },
+      title: {
+        type: "string",
+      },
       queue: {
         type: "boolean",
       },
@@ -45,6 +50,31 @@ test("exposes local action metadata and input schemas", () => {
       },
     },
   })
+})
+
+test("mission panel tool schema requires create_task semantic title", async () => {
+  const tool = await PanelTool.init({
+    agent: {
+      name: "mission",
+      mode: "primary",
+      options: {},
+    },
+  })
+  const schema = z.toJSONSchema(tool.parameters)
+  const createTask = (schema as any).anyOf.find(
+    (item: any) => item?.properties?.action?.const === "create_task",
+  )
+
+  expect(createTask.required).toContain("title")
+  expect(tool.parameters.safeParse({ action: "create_task", request: "do thing" }).success).toBe(false)
+  expect(
+    tool.parameters.safeParse({
+      action: "create_task",
+      title: "Implement settings route",
+      request: "do thing",
+    }).success,
+  ).toBe(true)
+  expect(PanelActionSchema.safeParse({ action: "create_task", request: "do thing" }).success).toBe(true)
 })
 
 test("right sidebar capabilities come from the panel registry without session-management or screenshot grants", () => {

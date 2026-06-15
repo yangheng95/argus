@@ -41,6 +41,23 @@ function findMissionSessionID(missionID: string) {
   )
 }
 
+function findMissionSessionIDByDirectory(input: { missionID: string; directory: string }) {
+  return Database.use(
+    (db) =>
+      db
+        .select({ id: SessionTable.id })
+        .from(SessionTable)
+        .where(
+          and(
+            eq(SessionTable.directory, input.directory),
+            eq(SessionTable.kind, "mission"),
+            sql`json_extract(${SessionTable.metadata}, '$.mission.id') = ${input.missionID}`,
+          ),
+        )
+        .get()?.id,
+  )
+}
+
 function missionSessionConditions(
   input?: {
     directory?: string
@@ -102,6 +119,20 @@ export async function getMissionSession(missionID: string): Promise<MissionSessi
   const session = await Session.get(sessionID)
   const parsedMissionID = missionIDFromInfo(session)
   if (parsedMissionID !== missionID) throw new NotFoundError({ message: `Mission not found: ${missionID}` })
+  return withMissionID(session, parsedMissionID)
+}
+
+export async function getMissionSessionByDirectory(input: {
+  missionID: string
+  directory: string
+}): Promise<MissionSession> {
+  const sessionID = findMissionSessionIDByDirectory(input)
+  if (!sessionID) throw new NotFoundError({ message: `Mission not found: ${input.missionID}` })
+  const session = await Session.get(sessionID)
+  const parsedMissionID = missionIDFromInfo(session)
+  if (parsedMissionID !== input.missionID || session.directory !== input.directory) {
+    throw new NotFoundError({ message: `Mission not found: ${input.missionID}` })
+  }
   return withMissionID(session, parsedMissionID)
 }
 

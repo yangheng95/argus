@@ -109,6 +109,7 @@ const terminatedSessions = new Map<string, SessionTermination>()
 const intentionalSessionClose = new Set<string>()
 let browser: Browser | null = null
 let browserLaunch: Promise<Browser> | null = null
+let browserShutdownGeneration = 0
 
 const log = (msg: string) => console.error(`[browser-mcp] ${new Date().toISOString()} ${msg}`)
 
@@ -120,11 +121,16 @@ const acquireBrowser = async (): Promise<Browser> => {
   if (browser?.isConnected()) return browser
   browser = null
   if (!browserLaunch) {
+    const launchGeneration = browserShutdownGeneration
     browserLaunch = BrowserRuntime.launchPlaywrightBrowserInNodeProcess({
       headless: HEADLESS,
       proxyServer: PROXY_SERVER,
     })
-      .then((launched) => {
+      .then(async (launched) => {
+        if (launchGeneration !== browserShutdownGeneration) {
+          await launched.close().catch(() => {})
+          throw new Error("Browser launch cancelled by shutdown")
+        }
         browser = launched
         launched.on("disconnected", () => {
           if (browser === launched) browser = null
@@ -808,18 +814,24 @@ setInterval(async () => {
   }
 }, 60_000).unref()
 
-const cleanup = async () => {
+export const shutdownBrowserSessions = async () => {
+  browserShutdownGeneration++
+  const pendingLaunch = browserLaunch
   await Promise.all([...profiles.keys()].map(closeProfile))
+  const launched = await pendingLaunch?.catch(() => undefined)
+  if (launched && launched !== browser) await launched.close().catch(() => {})
   if (browser) await browser.close().catch(() => {})
+  browser = null
+  browserLaunch = null
 }
 process.on("exit", () => {
   browser?.close()
 })
 process.on("SIGINT", async () => {
-  await cleanup()
+  await shutdownBrowserSessions()
   process.exit(0)
 })
 process.on("SIGTERM", async () => {
-  await cleanup()
+  await shutdownBrowserSessions()
   process.exit(0)
 })

@@ -120,7 +120,6 @@ describe("build-artifact", () => {
   test("packaged native modules load through runtime package resolver", () => {
     const watcherSource = readFileSync(resolve(import.meta.dir, "../../src/file/watcher.ts"), "utf8")
     const screenshotSource = readFileSync(resolve(import.meta.dir, "../../src/gui/screenshot.ts"), "utf8")
-    const buildScreenshotSource = readFileSync(resolve(import.meta.dir, "../../src/build/screenshot-tool.ts"), "utf8")
     const capabilitySource = readFileSync(resolve(import.meta.dir, "../../src/platform/capability.ts"), "utf8")
     const ptyHostSource = readFileSync(resolve(import.meta.dir, "../../src/pty/host.ts"), "utf8")
 
@@ -129,8 +128,6 @@ describe("build-artifact", () => {
     expect(watcherSource).toContain('requireRuntimePackage<typeof import("@parcel/watcher")>("@parcel/watcher")')
     expect(screenshotSource).not.toContain('from "node-screenshots"')
     expect(screenshotSource).toContain('requireRuntimePackage<typeof import("node-screenshots")>')
-    expect(buildScreenshotSource).not.toContain('from "sharp"')
-    expect(buildScreenshotSource).toContain('requireRuntimePackage<typeof import("sharp")>')
     expect(capabilitySource).toContain('requireRuntimePackage("node-screenshots")')
     expect(capabilitySource).toContain('requireRuntimePackage("@parcel/watcher")')
     expect(ptyHostSource).not.toContain('from "@lydell/node-pty"')

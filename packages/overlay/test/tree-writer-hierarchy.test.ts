@@ -1202,7 +1202,7 @@ test("session.status preserves terminal reason when status arrives before the ca
   })
 
   const card = cardTreeStore.cards["requirements:session:ses_pending_terminal:message:msg_pending_terminal"]!
-  expect(card.status).toBe("error")
+  expect(card.status).toBe("completed")
   expect(card.terminalReason).toBe("aborted")
   expect(card.timeCompleted).toBe(1_776_000_010_000)
   expect(statusBadge(card)).toEqual({ tone: "cancelled", glyph: "⊘" })
@@ -2091,6 +2091,95 @@ test("phase-absorbed empty build messages do not create timestamp-only boundarie
   expect(phaseCard).toBeDefined()
   expect(phaseCard.parts.some((part: any) => part.type === "boundary" && part.messageID === messageID)).toBe(true)
   expect(phaseCard.parts.some((part: any) => part.type === "text" && part.text === "visible build output")).toBe(true)
+})
+
+test("phase-absorbed build card orders prompt parts before later assistant output by message time", () => {
+  seedTurnBoard("visual contract prompt order")
+
+  const goalID = "goal_phase_prompt_order"
+  const sessionID = "ses_phase_prompt_order"
+  const promptMessageID = "msg_phase_prompt_order_user"
+  const assistantMessageID = "msg_phase_prompt_order_assistant"
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: assistantMessageID,
+        sessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        goalID,
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("build", {
+        id: "prt_phase_prompt_order_assistant",
+        messageID: assistantMessageID,
+        sessionID,
+        type: "text",
+        text: "assistant started implementation",
+        parentSessionID: ROOT_SID,
+        goalID,
+      }),
+    },
+  })
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: promptMessageID,
+        sessionID,
+        role: "user",
+        resolvedRole: "user",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        goalID,
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("build", {
+        id: "prt_phase_prompt_order_user",
+        messageID: promptMessageID,
+        sessionID,
+        type: "text",
+        text: "## Visual Reference Contract (binding for this dispatch)\nreference.png",
+        parentSessionID: ROOT_SID,
+        goalID,
+      }),
+    },
+  })
+
+  const phaseCard = Object.values(cardTreeStore.cards).find((card: any) => card?.phaseSessionID === sessionID) as any
+  expect(phaseCard).toBeDefined()
+  expect(
+    phaseCard.parts
+      .filter((part: any) => part.type === "text" || part.type === "boundary")
+      .map((part: any) => part.messageID),
+  ).toEqual([promptMessageID, promptMessageID, assistantMessageID, assistantMessageID])
+  expect(
+    phaseCard.parts
+      .filter((part: any) => part.type === "text")
+      .map((part: any) => part.text),
+  ).toEqual([
+    "## Visual Reference Contract (binding for this dispatch)\nreference.png",
+    "assistant started implementation",
+  ])
 })
 
 test("hydrate skips empty build transcript messages before boundary projection", () => {

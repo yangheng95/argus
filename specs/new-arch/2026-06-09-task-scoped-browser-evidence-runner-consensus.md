@@ -105,7 +105,7 @@ it.
 | Browser preview route clients        | `packages/overlay/src/services/browser-preview.ts`, `packages/overlay/src/components/BrowserPreviewPanel.tsx`, `packages/sdk/js/src/gen/types.gen.ts`, `packages/opencorvus/test/server/browser-preview-routes.test.ts`                                                                                                                         | `targetID` is optional or tests bless missing `targetID`.                                                     | Make capture request `targetID` required in overlay, SDK, generated types, panel calls, and tests.                                                         |
 | Overlay preview UI                   | `packages/overlay/src/services/browser-preview.ts`, `packages/overlay/src/components/BrowserPreviewPanel.tsx`                                                                                                                                                                                                                                   | Shows backend target and calls capture route; also renders iframe.                                            | Keep iframe as live view only; capture evidence comes only from backend runner manifest.                                                                   |
 | SDK/OpenAPI/docs                     | `packages/sdk/openapi.json`, `packages/sdk/js/src/gen/sdk.gen.ts`, `packages/sdk/js/src/gen/types.gen.ts`, `packages/web/src/content/docs/reference/api.mdx`, `packages/web/src/content/docs/zh-cn/reference/api.mdx`                                                                                                                           | Describe existing preview capture contract.                                                                   | Regenerate/update when route response and required request fields change.                                                                                  |
-| Build screenshot tool                | `packages/opencorvus/src/build/screenshot-tool.ts`, `packages/opencorvus/src/build/agent.ts`, `packages/opencorvus/src/build/prompt-context.ts`, `packages/opencorvus/test/build-agent/visual-reference-prompt.test.ts`                                                                                                                         | Captures via runtime path and registers screenshot/prompt evidence text.                                      | Remove as task evidence surface until migrated, or migrate in Phase 3; no non-task product branch.                                                         |
+| Build screenshot tool                | Retired. Build no longer owns a direct `screenshot` runtime tool.                                                                                                                                                                                                                                                                               | Formerly captured via runtime path and registered screenshot/prompt evidence text.                            | Use task-scoped backend browser evidence or Browser MCP screenshot/observe; do not reintroduce a build-local screenshot tool.                              |
 | Frontend design reference capture    | `packages/opencorvus/src/frontend-design/capture-gate.ts`, `packages/opencorvus/src/frontend-design/url-screenshot-tool.ts`                                                                                                                                                                                                                     | One-shot sidecar capture.                                                                                     | Later source-capture runner operation.                                                                                                                     |
 | Frontend design dynamic prompt/tools | `packages/opencorvus/src/frontend-design/agent.ts`, `packages/opencorvus/src/frontend-design/static-tools.ts`, `packages/opencorvus/src/agent/agent.ts`                                                                                                                                                                                         | Prompt and tool registries expose webpage render/evaluate/vision flows.                                       | Remove deferred browser evidence tools from task evidence surfaces until migrated, or migrate them in the same PR.                                         |
 | Webpage extract                      | `packages/opencorvus/src/browser/webpage/extract.ts`, `packages/opencorvus/src/frontend-design/tools/webpage-extract.ts`                                                                                                                                                                                                                        | One-shot sidecar and calls SingleFile from tool wrapper.                                                      | Later runner extraction operation; SingleFile must not remain fallback.                                                                                    |
@@ -222,9 +222,9 @@ Exit criteria:
 - Prompt tests assert that UI verification asks for backend runner artifacts and
   does not contain the mixed phrases from the bug report.
 - Tool exposure tests show Browser MCP, SingleFile-backed webpage extraction,
-  webpage render/evaluate/text/vision tools, build screenshot capture, research
-  webpage evidence, and acceptance walkthrough are either runner-backed or not
-  advertised as task evidence surfaces.
+  webpage render/evaluate/text/vision tools, the retired build screenshot path,
+  research webpage evidence, and acceptance walkthrough are either runner-backed
+  or not advertised as task evidence surfaces.
 
 ### Phase 1: Minimal Runner PR
 
@@ -249,7 +249,7 @@ Deferred from Phase 1:
   `webpage_text_diff` after they have been removed from active task evidence
   exposure or migrated in the same PR
 - SingleFile capture
-- build screenshot tool
+- retired build screenshot tool
 - acceptance walkthrough
 - Browser MCP lifecycle refactor beyond the explicit task-evidence prohibition
 
@@ -294,13 +294,15 @@ Exit criteria:
 
 Scope:
 
-- Migrate build screenshot capture and acceptance walkthrough task usage to
-  runner operations.
+- Keep build screenshot capture retired and migrate acceptance walkthrough task
+  usage to runner operations.
 - Keep any non-task browser harness private to tests/benchmarks.
 
 Exit criteria:
 
-- Product build and acceptance evidence use runner manifests for task work.
+- Product build evidence uses task-scoped backend browser evidence or Browser
+  MCP screenshot/observe, and acceptance evidence uses runner manifests for
+  task work.
 - Non-task harnesses are not imported by product routes, overlay, orchestrator,
   frontend-design, or build agents.
 

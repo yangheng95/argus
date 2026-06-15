@@ -29,6 +29,7 @@ import {
   FolderOpen,
   Globe,
   GripVertical,
+  Images,
   Info,
   Layers,
   ListTodo,
@@ -76,6 +77,7 @@ export type IconName =
   | "message"
   | "workflow"
   | "notifications"
+  | "screenshots"
   | "terminal-powershell"
   | "terminal-command-prompt"
   | "terminal-bash"
@@ -206,6 +208,7 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   message: { component: MessageSquare },
   workflow: { component: Workflow },
   notifications: { component: Bell },
+  screenshots: { component: Images },
   "terminal-powershell": { component: Terminal },
   "terminal-command-prompt": { component: Terminal },
   "terminal-bash": { component: Terminal },

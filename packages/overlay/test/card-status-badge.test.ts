@@ -58,6 +58,11 @@ describe("statusBadge — terminal outcome disambiguation", () => {
     expect(statusBadge(node)).toEqual({ tone: "cancelled", glyph: "⊘" })
   })
 
+  test("completed with terminalReason aborted → outline ⊘", () => {
+    const node: any = { ...base, status: "completed", terminalReason: "aborted" }
+    expect(statusBadge(node)).toEqual({ tone: "cancelled", glyph: "⊘" })
+  })
+
   test("error without terminalReason → red ✗", () => {
     const node: any = { ...base, status: "error" }
     expect(statusBadge(node)).toEqual({ tone: "error", glyph: "✗" })

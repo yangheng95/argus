@@ -52,7 +52,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     input: payload,
     stream: !!onEvent,
   })
-  const model = await resolveModel()
+  const model = await resolveModel(input.model)
   if (!model) {
     const result = ControlMessageResult.parse({
       kind: "panel_response",
@@ -202,7 +202,7 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
   })
 }
 
-async function resolveModel() {
+async function resolveModel(explicitModel?: string) {
   // Single model resolver (spec §13.1/§13.2). Agent.defaultAgent throws on
   // config issues (no visible agent, hidden default) — those surface.
   // resolveAgentModelRef gives base agent.<name>.model then base cfg.model
@@ -211,7 +211,9 @@ async function resolveModel() {
   // declared a model there is no safe pick — it must throw, not return
   // undefined into downstream prompts.
   const { resolveAgentModelRef } = await import("@/agent/model")
-  return resolveAgentModelRef(await Agent.defaultAgent())
+  return resolveAgentModelRef(await Agent.defaultAgent(), {
+    explicitModel: explicitModel ? Provider.parseModel(explicitModel) : null,
+  })
 }
 
 async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {

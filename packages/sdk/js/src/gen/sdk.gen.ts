@@ -299,6 +299,7 @@ import type {
   TaskListResponses,
   TaskMessageErrors,
   TaskMessageResponses,
+  TaskMessageTarget,
   TaskOperatorModelContextErrors,
   TaskOperatorModelContextResponses,
   TaskProgressErrors,
@@ -4552,7 +4553,7 @@ export class Control2 extends HeyApiClient {
             action: "send_task_message"
             taskID: string
             text: string
-            source?: string
+            source: string
             user_id?: string
           }
         | {
@@ -5549,7 +5550,6 @@ export class Conversation extends HeyApiClient {
     parameters: {
       taskID: string
       sessionID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5560,7 +5560,6 @@ export class Conversation extends HeyApiClient {
           args: [
             { in: "path", key: "taskID" },
             { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
           ],
         },
       ],
@@ -5584,7 +5583,6 @@ export class Conversation extends HeyApiClient {
   public history<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
       before: number
       before_id?: string
       limit?: number
@@ -5597,7 +5595,6 @@ export class Conversation extends HeyApiClient {
         {
           args: [
             { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
             { in: "query", key: "before" },
             { in: "query", key: "before_id" },
             { in: "query", key: "limit" },
@@ -5624,7 +5621,6 @@ export class Conversation extends HeyApiClient {
   public events<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
       after?: number
       until?: number
       limit?: number
@@ -5638,7 +5634,6 @@ export class Conversation extends HeyApiClient {
         {
           args: [
             { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
             { in: "query", key: "after" },
             { in: "query", key: "until" },
             { in: "query", key: "limit" },
@@ -6316,21 +6311,10 @@ export class Task extends HeyApiClient {
   public delete<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).delete<TaskDeleteResponses, TaskDeleteErrors, ThrowOnError>({
       url: "/task/{taskID}",
       ...options,
@@ -6520,7 +6504,6 @@ export class Task extends HeyApiClient {
   public conversation<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
       tail_limit?: number
     },
     options?: Options<never, ThrowOnError>,
@@ -6531,7 +6514,6 @@ export class Task extends HeyApiClient {
         {
           args: [
             { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
             { in: "query", key: "tail_limit" },
           ],
         },
@@ -6726,7 +6708,8 @@ export class Task extends HeyApiClient {
       taskID: string
       directory?: string
       text: string
-      source?: string
+      source: string
+      target?: TaskMessageTarget
       user_id?: string
       attachments?: Array<{
         mime: string
@@ -6747,6 +6730,7 @@ export class Task extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "text" },
             { in: "body", key: "source" },
+            { in: "body", key: "target" },
             { in: "body", key: "user_id" },
             { in: "body", key: "attachments" },
             { in: "body", key: "resolvedRole" },

@@ -1,13 +1,46 @@
 import { Hono } from "hono"
+import path from "node:path"
 import { describeRoute, validator } from "hono-openapi"
 import { resolver } from "hono-openapi"
 import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { Vcs } from "../../project/vcs"
 import { Worktree } from "../../worktree"
+import { Ownership } from "../../engine/ownership"
+import { WorktreeGC } from "../../worktree/gc"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+
+const OwnershipMarker = z.object({
+  taskID: z.string(),
+  sessionID: z.string(),
+  cwd: z.string(),
+  ownerPid: z.number(),
+  goalID: z.string().optional(),
+  runID: z.string().optional(),
+  createdAt: z.number(),
+  kind: z.enum(["worktree", "process"]),
+})
+
+const OwnershipCandidate = z.object({
+  marker: OwnershipMarker,
+  markerPath: z.string(),
+  reason: z.string(),
+  worktreeDir: z.string().optional(),
+})
+
+const WorktreeGCCandidate = z.object({
+  projectID: z.string(),
+  primaryDir: z.string(),
+  directory: z.string(),
+})
+
+const CleanupCandidates = z.object({
+  worktreeOrphans: OwnershipCandidate.array(),
+  processOrphans: OwnershipCandidate.array(),
+  worktreeGCCandidates: WorktreeGCCandidate.array(),
+})
 
 export const ProjectRoutes = lazy(() =>
   new Hono()
@@ -111,6 +144,39 @@ export const ProjectRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await Worktree.listProjectWorktrees(Instance.project.id))
+      },
+    )
+    .get(
+      "/current/cleanup-candidates",
+      describeRoute({
+        summary: "Inspect current project cleanup candidates",
+        description:
+          "Read-only inspection of orphan ownership markers and worktree GC candidates. This route does not delete files, kill processes, or mutate markers.",
+        operationId: "project.current.cleanupCandidates",
+        responses: {
+          200: {
+            description: "Cleanup candidates",
+            content: {
+              "application/json": {
+                schema: resolver(CleanupCandidates),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      async (c) => {
+        const [worktreeOrphans, processOrphans, gcPlan] = await Promise.all([
+          Ownership.Worktree.orphans({ primaryWorktreeDir: Instance.directory }),
+          Ownership.Process.orphans({ primaryWorktreeDir: Instance.directory }),
+          WorktreeGC.inspect(),
+        ])
+        const current = path.resolve(Instance.directory)
+        return c.json({
+          worktreeOrphans,
+          processOrphans,
+          worktreeGCCandidates: gcPlan.candidates.filter((candidate) => path.resolve(candidate.primaryDir) === current),
+        })
       },
     )
     .delete(

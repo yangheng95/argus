@@ -4,10 +4,10 @@
  * 系统只内置两条路径：
  *   1. **direct**   — build
  *      用于显式 kind=build 的单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
- *   2. **pipeline** — (frontend_design + frontend_research) → analyze_intent → requirements → architect → per-goal[build] → integrity
+ *   2. **pipeline** — (frontend_design + frontend_research) → analyze_intent → requirements → architect → per-goal[build] → visual_qa → integrity
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
- * Pipeline 以 build 做实现、以 integrity 做 session-bound final gate。deliver
+ * Pipeline 以 build 做实现、以 visual_qa 做 batch-level frontend review、以 integrity 做 session-bound final gate。deliver
  * host gate 已禁用，不再作为推荐 workflow 的验收步骤。
  *
  * MiniWorkflow 不是状态机，不是固定 pipeline。Orchestrator 仍可基于 agent 推理偏离推荐
@@ -161,14 +161,14 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity → visual_qa(按 frontend 修复需要)；
- *  integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。visual_qa 是 integrity 之后的 frontend 修复/证据阶段，修后仍回 integrity。
+ *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → visual_qa(每个 frontend goal batch 后一次) → integrity；
+ *  visual_qa 是 terminal frontend goal batch 后的视觉/可见功能复核阶段；integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
   description:
-    "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity → visual_qa(按修复需要)。多文件功能 / UI 复刻 / 跨模块重构。",
+    "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → visual_qa(每个 frontend goal batch 后一次) → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "frontend_design",
@@ -233,22 +233,22 @@ const PIPELINE: MiniWorkflow = {
       phases: [{ id: "build", label: "Build", sessionKind: "build" }],
     },
     {
-      id: "integrity",
-      tool: "integrity",
-      label: "Review",
-      hint: "最终系统完整性 gate：在所有 blocking goal build 完成后调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
-      scope: "task",
-      skippable: false,
-      after: ["build"],
-    },
-    {
       id: "visual_qa",
       tool: "visual_qa",
       label: "Visual QA",
-      hint: "post-integrity 前端 GUI 修复/证据阶段。GUI=Graphical User Interface，图形用户界面。仅在 integrity 非 pass 指向 frontend/GUI/组件/视觉或可见功能缺陷时调用；消费 integrity/frontend_design/build 的 task-scoped evidence，先修组件真实性和可见功能（例如占位/虚假图表必须替换为真实图表实现），再修布局结构，最后才做样式微调。它不是 host gate；若修改文件，完成后必须回到 integrity 复核。",
+      hint: "terminal frontend goal batch 后执行一次的前端 GUI 复核/修复阶段。GUI=Graphical User Interface，图形用户界面。每批 blocking goal build 终态后、下一批 build 或最终 integrity 前调用一次；消费 frontend_design/build 与可用 integrity evidence，以专业设计 QA 视角列出 production_blockers，不以固定相似度分数作为唯一 verdict；先修组件真实性和可见功能（例如占位/虚假图表必须替换为真实图表实现），再修布局结构，最后才做样式微调。它不是 host gate；若修改文件或返回阻断项，先路由修复，再进入下一批 build 或最终 integrity。",
       scope: "task",
       skippable: true,
-      after: ["integrity"],
+      after: ["build"],
+    },
+    {
+      id: "integrity",
+      tool: "integrity",
+      label: "Review",
+      hint: "最终系统完整性 gate：在所有 blocking goal build 终态且本轮 frontend goal batch 的 visual_qa 已完成后调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
+      scope: "task",
+      skippable: false,
+      after: ["visual_qa"],
     },
   ],
   goalLoopStepIDs: ["build"],
@@ -396,16 +396,63 @@ function taskStepStatusByTool(
       return verdict === "pass" ? "completed" : "failed"
     }
     case "visual_qa":
-      return createDecisionLog(taskID)
-        .readByPhase("visual_qa")
-        .some((entry) => entry.key === "latest_summary" || entry.key.startsWith("report_"))
-        ? "completed"
-        : "pending"
+      return visualQaProjectedStatus(taskID)
     case "build":
       // direct workflow: any run (artifact kind="run") means a build occurred
       return findRuns(taskID).length > 0 ? "completed" : "pending"
     default:
       return "pending"
+  }
+}
+
+function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
+  const entries = createDecisionLog(taskID).readByPhase("visual_qa")
+  const latestCompletedBuildAt = latestCompletedGoalRunTime(taskID)
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]
+    if (entry.key.startsWith("report_")) {
+      const report = parseVisualQaReportProjection(entry.value)
+      if (!report) return "failed"
+      if (latestCompletedBuildAt && latestCompletedBuildAt > entry.timeCreated) return "pending"
+      return report.accepted && report.productionBlockers === 0 ? "completed" : "failed"
+    }
+    if (entry.key === "latest_summary") {
+      const summary = parseVisualQaSummaryProjection(entry.value)
+      if (!summary) return "failed"
+      if (latestCompletedBuildAt && latestCompletedBuildAt > entry.timeCreated) return "pending"
+      return summary.accepted && summary.productionBlockers === 0 ? "completed" : "failed"
+    }
+  }
+  return "pending"
+}
+
+function latestCompletedGoalRunTime(taskID: string): number | undefined {
+  const completedTimes = listGoalRunsForTask(taskID)
+    .filter((run) => run.status === "completed")
+    .map((run) => run.time_completed ?? run.time_updated ?? run.time_created)
+  return completedTimes.length > 0 ? Math.max(...completedTimes) : undefined
+}
+
+function parseVisualQaReportProjection(value: string): { accepted: boolean; productionBlockers: number } | undefined {
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>
+    if (typeof parsed.accepted !== "boolean") return undefined
+    if (!Array.isArray(parsed.production_blockers)) return undefined
+    const blockers = parsed.production_blockers.length
+    return { accepted: parsed.accepted, productionBlockers: blockers }
+  } catch {
+    return undefined
+  }
+}
+
+function parseVisualQaSummaryProjection(value: string): { accepted: boolean; productionBlockers: number } | undefined {
+  const accepted = /^accepted=(true|false)$/m.exec(value)
+  if (!accepted) return undefined
+  const blockers = /^production_blockers=(\d+)$/m.exec(value)
+  if (!blockers) return undefined
+  return {
+    accepted: accepted[1] === "true",
+    productionBlockers: Number.parseInt(blockers[1], 10),
   }
 }
 

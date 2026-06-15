@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "0e5c55f1fe46b529"
+    "panel_revision": "7811e58e1dd92d1c"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -41,6 +41,7 @@
   "activity.tooltip.memory": "Inspect memory entries associated with the selected task and session.",
   "activity.tooltip.mission": "View Missions and the tasks they created.",
   "activity.tooltip.notifications": "Open task and system notifications.",
+  "activity.tooltip.screenshots": "Browse screenshots that appeared in the selected task, grouped by agent.",
   "activity.tooltip.skill": "Manage installed Skills. Drop a SKILL.md file, folder, or .zip anywhere on the panel to install it into this project's .opencorvus/skill directory.",
   "activity.tooltip.tasks": "View and switch recent tasks.",
   "activity.tooltip.workflow": "Show or hide the main workflow conversation for the selected task.",
@@ -361,7 +362,7 @@
   "chat.thinking": "Thinking…",
   "chat.tip": "Drag files here · Drag the top edge to resize",
   "chat.title": "Workflow",
-  "chat.assistant_title": "Assistant",
+  "chat.panel_title": "Chat",
   "coding_assistant.title": "Coding Assistant",
   "coding_assistant.chat.new": "New Chat",
   "coding_assistant.chat.new_title": "New assistant chat",
@@ -697,6 +698,10 @@
   "browser_preview.viewport.label": "Preview viewport",
   "browser_preview.viewport.mobile": "Mobile",
   "browser_preview.viewport.tablet": "Tablet",
+  "screenshots.count": "{{count}} screenshots",
+  "screenshots.empty": "Screenshots from task messages and tool results will appear here.",
+  "screenshots.group_count": "{{count}}",
+  "screenshots.title": "Screenshots",
   "explorer.search_placeholder": "Search files",
   "explorer.empty": "No files in this directory",
   "explorer.load_failed": "Unable to load files",
@@ -779,6 +784,7 @@
   "task.reorder_button_title": "Drag to reorder queued tasks.",
   "task.load_failed": "Failed to load tasks",
   "task.ledger.title": "Recent Tasks",
+  "task.panel_title": "Task",
   "task.ledger.new": "New Task",
   "task.ledger.empty": "No tasks yet",
   "task.project.unknown": "Unassigned project",

@@ -10,12 +10,12 @@ import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
-describe("SessionShell browser preview target materialization", () => {
+describe("SessionShell browser preview target isolation", () => {
   afterEach(async () => {
     await resetDatabase()
   })
 
-  test("persists a reachable task preview target from streamed stdout and stderr", async () => {
+  test("does not persist a reachable task preview target from streamed stdout and stderr", async () => {
     const preview = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -86,7 +86,7 @@ describe("SessionShell browser preview target materialization", () => {
             restore()
           }
 
-          expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(previewUrl)
+          expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
         },
       })
     } finally {
@@ -94,7 +94,7 @@ describe("SessionShell browser preview target materialization", () => {
     }
   }, 10_000)
 
-  test("persists a reachable task preview target from frontend command port without URL output", async () => {
+  test("does not persist a reachable task preview target from frontend command port without URL output", async () => {
     const preview = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -161,7 +161,7 @@ describe("SessionShell browser preview target materialization", () => {
             restore()
           }
 
-          expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(`http://127.0.0.1:${preview.port}/`)
+          expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
         },
       })
     } finally {

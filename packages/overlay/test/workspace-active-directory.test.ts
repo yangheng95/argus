@@ -141,12 +141,14 @@ describe("workspace active directory", () => {
   test("closeProject stops the task-list SSE stream bound to the old directory", () => {
     let openCalls = 0
     let closeCalls = 0
+    let streamDirectory = ""
     __setHostTransportForTest({
       kind: "browser",
       capabilities: HOST_CAPABILITIES.browser,
       request: async () => ({ status: 200, ok: true, headers: {}, body: null }),
-      openStream: () => {
+      openStream: (input) => {
         openCalls += 1
+        streamDirectory = String(input.query?.directory ?? "")
         return {
           close: () => {
             closeCalls += 1
@@ -161,6 +163,7 @@ describe("workspace active directory", () => {
 
     startTaskListSSE()
     expect(openCalls).toBe(1)
+    expect(streamDirectory).toBe("D:/repo/current")
     expect(closeCalls).toBe(0)
 
     closeProject()

@@ -58,7 +58,7 @@
             <div class="brand-guide-section">
               <div class="brand-guide-title" data-i18n="brand.guide_positioning_title">What This Panel Is For</div>
               <p class="brand-guide-copy" data-i18n="brand.guide_positioning_body">
-                This workspace is for conversations and acceptance evidence: left selects recent chats, center drives execution, right keeps documents, plan, evaluation, and file changes together.
+                This workspace is for conversations and acceptance evidence: left selects recent tasks, center drives execution, right keeps documents, plan, evaluation, and file changes together.
               </p>
             </div>
             <div class="brand-guide-section">
@@ -67,7 +67,7 @@
                 <div class="brand-guide-step">
                   <span class="brand-guide-step-index" aria-hidden="true">1</span>
                   <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_1">
-                    Choose the workspace folder and recent chat before sending anything.
+                    Choose the workspace folder and recent task before sending anything.
                   </span>
                 </div>
                 <div class="brand-guide-step">
@@ -112,15 +112,15 @@
   <!-- Main Panel -->
   <main class="panel">
 
-    <!-- Horizontal body: chat left, sections right -->
+    <!-- Horizontal body: task ledger left, workflow center, sections right -->
     <div class="panel-body" id="panelBody">
       <div class="left-activity-shell" id="leftActivityShell">
         <div id="solidLeftActivityToolbar" class="side-activity-toolbar-mount left-activity-toolbar-mount" data-i18n-aria-label="activity.left"></div>
         <aside class="sidebar" id="sidebar" data-collapsed="false">
         <div class="side-panel-content sidebar-content">
           <div class="sidebar-header oc-surface-header">
-            <div class="sidebar-title oc-surface-header__title" id="leftPanelTitle" data-i18n="sidebar.title">Recent Chats</div>
-            <div class="sidebar-header-actions oc-surface-header__actions" id="leftPanelTaskActions" data-activity-actions="tasks" role="toolbar" aria-label="Recent Chats" data-i18n-aria-label="sidebar.title">
+            <div class="sidebar-title oc-surface-header__title" id="leftPanelTitle" data-i18n="task.ledger.title">Recent Tasks</div>
+            <div class="sidebar-header-actions oc-surface-header__actions" id="leftPanelTaskActions" data-activity-actions="tasks" role="toolbar" aria-label="Recent Tasks" data-i18n-aria-label="task.ledger.title">
               <button
                 type="button"
                 class="oc-button"
@@ -129,13 +129,50 @@
                 data-size="md"
                 data-tone="accent"
                 data-ui="sidebar-new-task-button"
-                data-i18n-title="task.new"
-                data-i18n-aria-label="task.new"
-                title="New Chat"
-                aria-label="New Chat"
+                data-left-action="tasks"
+                data-i18n-title="task.ledger.new"
+                data-i18n-aria-label="task.ledger.new"
+                title="New Task"
+                aria-label="New Task"
               >
                 <span class="sidebar-btn-icon" data-oc-icon="plus" data-oc-icon-size="13" aria-hidden="true"></span>
-                <span class="sidebar-btn-label" data-i18n="task.new">New Chat</span>
+                <span class="sidebar-btn-label" data-i18n="task.ledger.new">New Task</span>
+              </button>
+              <button
+                type="button"
+                class="oc-button"
+                id="btnCreateMission"
+                data-variant="solid"
+                data-size="md"
+                data-tone="accent"
+                data-ui="mission-new"
+                data-left-action="mission"
+                data-i18n-title="mission.new_title"
+                data-i18n-aria-label="mission.new"
+                title="New Mission"
+                aria-label="New Mission"
+                hidden
+              >
+                <span class="sidebar-btn-icon" data-oc-icon="plus" data-oc-icon-size="13" aria-hidden="true"></span>
+                <span class="sidebar-btn-label" data-i18n="mission.new">New Mission</span>
+              </button>
+              <button
+                type="button"
+                class="oc-button"
+                id="btnCreateCodingAssistantSession"
+                data-variant="solid"
+                data-size="md"
+                data-tone="accent"
+                data-ui="coding-assistant-new"
+                data-left-action="assistant"
+                data-i18n-title="coding_assistant.chat.new_title"
+                data-i18n-aria-label="coding_assistant.chat.new"
+                title="New Chat"
+                aria-label="New Chat"
+                hidden
+              >
+                <span class="sidebar-btn-icon" data-oc-icon="plus" data-oc-icon-size="13" aria-hidden="true"></span>
+                <span class="sidebar-btn-label" data-i18n="coding_assistant.chat.new">New Chat</span>
               </button>
             </div>
           </div>
@@ -233,6 +270,9 @@
           </div>
           <div class="center-workbench-view" id="centerWorkbenchBrowser" data-workbench-view="browser" data-open="false" data-active="false">
             <div id="solidBrowserPreviewMount" class="center-workbench-activity chat-browser-preview-activity"></div>
+          </div>
+          <div class="center-workbench-view" id="centerWorkbenchScreenshots" data-workbench-view="screenshots" data-open="false" data-active="false">
+            <div id="solidScreenshotBrowserMount" class="center-workbench-activity screenshot-browser-activity"></div>
           </div>
           <div class="center-workbench-view" id="centerWorkbenchInspector" data-workbench-view="inspector" data-open="false" data-active="false">
             <div class="center-workbench-activity sections" id="sections" data-right-activity="inspector">

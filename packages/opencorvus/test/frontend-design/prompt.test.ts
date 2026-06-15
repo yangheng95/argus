@@ -757,7 +757,7 @@ describe("frontend-design prompt assembly", () => {
         generationTool: "host-prepared:create_frontend_skeleton_project",
         warnings: [],
         visualIterationMatrix:
-          "desktop-reference 1366x768 (primary_reference, capture_viewport): Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement. mobile-review 390x844 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+          "desktop-reference 1366x768 (primary_reference, capture_viewport): Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement. mobile-review 390x844 (responsive_review, matching_reference, web-clone-source/reference-mobile.png): Run measured webpage_evaluate against web-clone-source/reference-mobile.png for the mobile viewport before claiming responsive parity. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
         compactEvidence: [
           "## source-ir/component-tree.json",
           '{"components":[{"name":"ProductPage"}]}',
@@ -796,6 +796,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("desktop-reference 1366x768")
     expect(prompt).toContain("capture_viewport")
     expect(prompt).toContain("mobile-review 390x844")
+    expect(prompt).toContain("web-clone-source/reference-mobile.png")
     expect(prompt).toContain("wide-review 1920x1080")
     expect(prompt).toContain("source-region traceable visual restoration")
     expect(prompt).toContain("rawproject source nodes/regions/assets/reference screenshots")
@@ -1245,6 +1246,7 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
   png.data.fill(255)
   const referenceBytes = PNG.sync.write(png)
   await fs.writeFile(path.join(sourcePackage, "reference.png"), referenceBytes)
+  await fs.writeFile(path.join(sourcePackage, "reference-mobile.png"), referenceBytes)
   await fs.writeFile(
     path.join(sourcePackage, "source-skeleton", "index.html"),
     `
@@ -1350,6 +1352,14 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
             height: 1,
             bytes: referenceBytes.length,
           },
+          mobileReference: {
+            path: "reference-mobile.png",
+            sha256: referenceSha256,
+            width: 1,
+            height: 1,
+            bytes: referenceBytes.length,
+            viewport: { width: 390, height: 844 },
+          },
         },
         files: [
           {
@@ -1357,6 +1367,12 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
             sha256: referenceSha256,
             bytes: referenceBytes.length,
             source: "webpage-evidence/reference.png",
+          },
+          {
+            path: "reference-mobile.png",
+            sha256: referenceSha256,
+            bytes: referenceBytes.length,
+            source: "webpage-evidence/reference-mobile.png",
           },
         ],
       },

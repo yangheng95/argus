@@ -2,11 +2,11 @@
 
 这是一个多阶段任务。目标不是像素级复制 TradingView 的品牌视觉，而是在保留 TradingView 页面信息架构、模块结构、布局密度和交互语义的前提下，严格用 AInvest 设计系统实现生产可合入页面。
 
-你需要基于OpenCorvus的Frontend Design 和 Frontend Researcb等Agent编排两个 task。
+你需要基于 OpenCorvus 的 Frontend Design 和 Frontend Research 等 Agent 编排两个 task。frontend_design / frontend_research 是按当前网页作用域一次性产出证据 handoff / brief 的 agent，不用于重复执行、重复修复或重复爬取；后续修复必须消费它们已落盘的证据进入 requirements / architect / build / visual_qa / integrity 链路。
 
 阶段 1：目标网页资源抽取 + 设计方案 + 模块实现 (architect > 20 goals，每个页面主要组件至少 1 个 goal)
 
-使用 frontend_design / frontend_research 获取目标网页资源和详细 PRD。必须输出可追溯证据，而不是主观描述。
+使用 frontend_design / frontend_research 一次性获取目标网页资源、视觉/功能调查证据和详细 PRD 输入。必须输出可追溯证据，而不是主观描述；不得把这两个 agent 当成后续 region 修复循环。
 
 每个 region 必须至少包含：
 
@@ -38,7 +38,7 @@
 
 阶段 2：逐模块检查、修复、二次验收  (architect > 20 goals，每个页面主要组件至少 1 个 goal)
 
-使用 Playwright 或 Browser MCP 对每个 region 做 Reference vs Implementation 单独对比。不能只跑 typecheck。
+使用 task-scoped backend browser evidence runner 对每个 region 做 Reference vs Implementation 单独对比。不能只跑 typecheck。
 
 每个 region 必须检查：
 

@@ -33,11 +33,11 @@
 >   `Requirement Status Snapshot` 与 `contract_audit` / `ContractIR` /
 >   `architect/linker.ts` 链路。
 > - Acceptance review/tool/service surface 已删除；runtime screenshot capture 归属
->   `build/screenshot-tool.ts` + `runtime/page-capture.ts`，最终验收归属 `integrity/`。
+>   task-scoped backend browser evidence 和 Browser MCP screenshot/observe，最终验收归属 `integrity/`。
 >
 > 对应代码：`src/engine/engine.sql.ts` (EngineArtifactTable) · `src/engine/persist.ts` ·
 > `src/engine/store.ts` · `src/acceptance/checks/` · `src/acceptance/arbiter.ts` ·
-> `src/runtime/page-capture.ts` · `src/build/screenshot-tool.ts` · `src/acceptance/contract-audit.ts` · `src/acceptance/types.ts` ·
+> `src/runtime/page-capture.ts` · Browser MCP screenshot/observe · `src/acceptance/contract-audit.ts` · `src/acceptance/types.ts` ·
 > `src/orchestrator/tools.ts` · `src/verification/persist.ts` · `src/verification/query.ts`
 
 ## 一句话

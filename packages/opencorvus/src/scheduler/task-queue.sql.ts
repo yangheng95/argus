@@ -4,10 +4,16 @@ import { Timestamps } from "@/storage/schema.sql"
 
 export type TaskQueuePriority = "high" | "normal" | "low"
 export type TaskQueueStatus = "queued" | "retrying" | "running" | "completed" | "failed"
-export type TaskQueueMetadata = {
-  kind: "session_prompt"
-  input: Record<string, unknown>
-}
+export type TaskQueueMetadata =
+  | {
+      kind: "session_prompt"
+      input: Record<string, unknown>
+    }
+  | {
+      kind: "session_wake"
+      messageID: string
+      input: Record<string, unknown>
+    }
 
 export const TaskQueueTable = sqliteTable(
   "a2a_task_queue",

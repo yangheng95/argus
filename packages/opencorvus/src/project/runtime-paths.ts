@@ -51,6 +51,14 @@ export namespace ProjectRuntimePaths {
     )
   }
 
+  export function isSourceEnumerationAllowed(relativePath: string): boolean {
+    return !isInternalRuntimeRelativePath(relativePath)
+  }
+
+  export function isSourceArchiveAllowed(relativePath: string): boolean {
+    return isSourceEnumerationAllowed(relativePath)
+  }
+
   export function isEvidenceInputRelativePath(input: string): boolean {
     const normalized = input.replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/+$/, "")
     return (

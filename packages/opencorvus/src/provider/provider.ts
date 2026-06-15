@@ -40,7 +40,6 @@ import { ProviderTransform } from "./transform"
 import { applyProviderPolicy } from "./policy"
 import { CUSTOM_LOADERS, smallModelPriority, type CustomModelLoader } from "./vendor"
 import { installProvider, loadProviderModule } from "./install"
-import { discoverHexinModelsForStartup } from "./hexin-discovery"
 import { InvalidModelReferenceError as ProviderInvalidModelReferenceError, parseModelReference } from "./model-ref"
 import { proxiedFetchInit, resolveNetworkProxy } from "../util/network-proxy"
 
@@ -388,35 +387,6 @@ export namespace Provider {
 
     const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
 
-    // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models.
-    // Even when the generated registry snapshot contains a `hexin` provider,
-    // replace it here: the gateway's /models endpoint exposes IDs only, and
-    // Hexin capability data has a single source in hexin-profiles.ts.
-    // discoverHexinModelsForStartup is fault-isolated by contract: a hexin
-    // upstream outage (budget exceeded, 401, DNS) MUST NOT reject state(),
-    // because that would 500 /config/providers and erase every other provider
-    // from the Settings UI — leaving the operator no way to switch keys or
-    // disable hexin. The helper falls back cache → empty and never throws.
-    if (!disabled.has("hexin")) {
-      const key = await hexinApiKey(config)
-      const outcome = await discoverHexinModelsForStartup({ apiKey: key })
-      if (outcome.error) {
-        log.warn("hexin discovery failed on startup; provider registered with fallback list", {
-          source: outcome.source,
-          modelCount: Object.keys(outcome.models).length,
-          error: outcome.error.message,
-        })
-      }
-      database["hexin"] = {
-        id: "hexin",
-        name: "Hexin OpenAI Gateway",
-        env: ["HEXIN_API_KEY"],
-        options: {},
-        source: "custom",
-        models: outcome.models,
-      }
-    }
-
     function mergeProvider(providerID: string, provider: Partial<Info>) {
       const existing = providers[providerID]
       if (existing) {
@@ -519,7 +489,7 @@ export namespace Provider {
 
     // load env
     const env = Env.all()
-    // DashScope providers share keys via fallback: try provider-specific env vars first,
+    // DashScope providers share keys: try provider-specific env vars first,
     // then the shared DASHSCOPE_API_KEY.
     const dashscopeCommonKeys = ["DASHSCOPE_API_KEY"]
     for (const [providerID, provider] of entries(database)) {
@@ -943,7 +913,7 @@ export namespace Provider {
   }
 
   export async function getModel(providerID: string, modelID: string, opts?: { config?: Config.Info }) {
-    let s = await stateFor(opts?.config)
+    const s = await stateFor(opts?.config)
     const provider = s.providers[providerID]
     if (!provider) {
       const availableProviders = Object.keys(s.providers)
@@ -952,27 +922,9 @@ export namespace Provider {
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
 
-    let info = provider.models[modelID]
-    let refreshedModels: Record<string, Model> | undefined
-    if (!info && providerID === "hexin") {
-      try {
-        const { refreshHexinCache } = await import("./hexin-discovery")
-        const cfg = opts?.config ?? (await Config.get())
-        const apiKey = await hexinApiKey(cfg)
-        refreshedModels = await refreshHexinCache(apiKey)
-        reset()
-        info = refreshedModels[modelID]
-      } catch (error) {
-        log.warn("hexin model miss refresh failed", {
-          providerID,
-          modelID,
-          error,
-        })
-      }
-    }
-
+    const info = provider.models[modelID]
     if (!info) {
-      const availableModels = Object.keys(refreshedModels ?? s.providers[providerID]?.models ?? provider.models)
+      const availableModels = Object.keys(provider.models)
       const matches = fuzzysort.go(modelID, availableModels, { limit: 3, threshold: -10000 })
       const suggestions = matches.map((m) => m.target)
       throw new ModelNotFoundError({ providerID, modelID, suggestions })

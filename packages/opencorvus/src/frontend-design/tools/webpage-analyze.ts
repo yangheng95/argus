@@ -21,6 +21,7 @@ function renderPrdEvidenceSummary(input: {
   segments: WebCloneSegment[]
   paths: {
     referencePath: string
+    mobileReferencePath: string
     pageIrPath: string
     assetManifestPath: string
     segmentsPath: string
@@ -48,6 +49,7 @@ function renderPrdEvidenceSummary(input: {
     "",
     "## Canonical Evidence Files",
     `- Pixel reference: ${input.paths.referencePath}`,
+    `- Mobile pixel reference: ${input.paths.mobileReferencePath}`,
     `- Structure IR: ${input.paths.pageIrPath}`,
     `- Asset graph: ${input.paths.assetManifestPath}`,
     `- Visual segments: ${input.paths.segmentsPath}`,
@@ -64,7 +66,7 @@ function renderPrdEvidenceSummary(input: {
     "## Source Handoff Rules",
     "- Treat `web-clone-source/implementation-blueprint.md`, `source-ir/*`, `source-skeleton/critical.css`, and reusable assets as the downstream build source.",
     "- Use `source-skeleton/index.html` only for hierarchy/source ids and missing text; do not mechanically convert it into a single framework component.",
-    "- Use `reference.png` as visual truth and measure target screenshots with `webpage_evaluate`.",
+    "- Use `reference.png` and `reference-mobile.png` as visual truth and measure target screenshots with `webpage_evaluate`.",
     `- Sidecar asset count: ${input.assetCount}`,
   ].join("\n")
 }
@@ -163,6 +165,7 @@ Use this only after \`webpage_compile\` has produced \`page.ir.json\` and \`asse
           segments: handoff.segments.segments,
           paths: {
             referencePath: path.join(outputDir, "reference.png"),
+            mobileReferencePath: path.join(outputDir, "reference-mobile.png"),
             pageIrPath,
             assetManifestPath,
             segmentsPath: path.join(outputDir, "segments.json"),

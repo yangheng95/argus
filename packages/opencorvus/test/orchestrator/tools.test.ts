@@ -462,6 +462,7 @@ async function writePassingSourceSkeletonHandoff(projectDir: string) {
   await fs.mkdir(skeletonDir, { recursive: true })
   await fs.mkdir(sourceIrDir, { recursive: true })
   await fs.writeFile(path.join(sourcePackageDir, "reference.png"), minimalPngBytes())
+  await fs.writeFile(path.join(sourcePackageDir, "reference-mobile.png"), minimalPngBytes())
   await fs.writeFile(
     path.join(skeletonDir, "index.html"),
     '<!doctype html><body data-reference-image="../reference.png"><main data-source-node-id="main"><h1>Economic calendar</h1></main></body>',
@@ -536,6 +537,14 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
             height: 1,
             bytes: minimalPngBytes().length,
           },
+          mobileReference: {
+            path: "reference-mobile.png",
+            sha256: referenceSha256,
+            width: 1,
+            height: 1,
+            bytes: minimalPngBytes().length,
+            viewport: { width: 390, height: 844 },
+          },
         },
         files: [
           {
@@ -543,6 +552,12 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
             sha256: referenceSha256,
             bytes: minimalPngBytes().length,
             source: "webpage-evidence/reference.png",
+          },
+          {
+            path: "reference-mobile.png",
+            sha256: referenceSha256,
+            bytes: minimalPngBytes().length,
+            source: "webpage-evidence/reference-mobile.png",
           },
         ],
       },
@@ -657,6 +672,43 @@ describe("orchestrator tools", () => {
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
+  })
+
+  test("inject_operator_message reads the current wake message without creating a second task message", async () => {
+    const injectMessage = spyOn(EngineService, "injectMessage").mockResolvedValue({
+      appended: true,
+      orchestratorWoken: true,
+      executorResumed: false,
+      resumed: false,
+      status: "active",
+    })
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_operator_projection",
+      agentSessionID: "ses_orchestrator_projection",
+      signal: new AbortController().signal,
+      operatorMessage: {
+        text: "resume only the failed build",
+        source: "overlay_build_steer",
+        messageID: "msg_operator_projection",
+        target: {
+          kind: "build_session",
+          sessionID: "ses_build_projection",
+          goalID: "goal_projection",
+        },
+      },
+    })
+
+    const result = await tools.inject_operator_message.execute(
+      { reason: "need the latest operator guidance" },
+      buildToolOptions("inject_operator_message"),
+    )
+
+    expect(injectMessage).not.toHaveBeenCalled()
+    expect(result).toContain("Operator message is already recorded")
+    expect(result).toContain("source=overlay_build_steer")
+    expect(result).toContain("messageID=msg_operator_projection")
+    expect(result).toContain('"sessionID":"ses_build_projection"')
+    expect(result).toContain("resume only the failed build")
   })
 
   test("fail_task marks the task terminal and interrupts its task loop", async () => {
@@ -893,6 +945,8 @@ describe("orchestrator tools", () => {
 
         expect(result).toContain("Build agent finished")
         expect(result).toContain("Direct workflow build completed")
+        expect(result).toContain("run `visual_qa` once for the terminal goal batch")
+        expect(result).toContain("final `integrity`")
         expect(workflowState.workflowID).toBe("pipeline")
         const run = findActiveRunForTask(taskID)
         expect(run).toBeDefined()
@@ -2026,7 +2080,7 @@ describe("orchestrator tools", () => {
             agent: "orchestrator",
             path: { cwd: tmp.path, root: tmp.path },
             cost: 0,
-            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+            tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
           },
           parts: [
             {

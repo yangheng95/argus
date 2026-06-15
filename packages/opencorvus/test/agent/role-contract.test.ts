@@ -235,6 +235,10 @@ test("deep-research and frontend-design role descriptions keep document research
     "not the owner for PRD/SPEC/report webpage research",
   )
   expect(AgentRoleContract.description("frontend-design")).toContain("UI implementation or replication")
+  expect(AgentRoleContract.description("frontend-design")).toContain("Single-shot task-scope evidence/handoff producer")
+  expect(AgentRoleContract.description("frontend-design")).toContain(
+    "do not use it as a repeatable repair, retry, or implementation iteration agent",
+  )
 
   expect(AgentRoleContract.description("deep-research")).toContain("PRD/SPEC/report source material")
   expect(AgentRoleContract.description("deep-research")).toContain(
@@ -258,6 +262,12 @@ test("deep-research and frontend-design role descriptions keep document research
   expect(AgentRoleContract.description("frontend-research")).toContain("does not call build")
   expect(AgentRoleContract.description("frontend-research")).toContain(
     "does not create the frontend implementation template",
+  )
+  expect(AgentRoleContract.description("frontend-research")).toContain(
+    "Single-shot task-scope investigation publisher",
+  )
+  expect(AgentRoleContract.description("frontend-research")).toContain(
+    "do not use it as a repeatable crawler, repair, retry, or implementation iteration agent",
   )
 })
 

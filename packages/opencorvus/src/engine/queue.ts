@@ -34,6 +34,16 @@ const log = Log.create({ service: "engine.queue" })
 const loopInFlight = new Map<string, number>()
 const queuedTaskEvents = new Map<string, OrchestratorEvent>()
 
+export function discardQueuedTaskEvent(taskID: string): void {
+  queuedTaskEvents.delete(taskID)
+}
+
+export function queuedTaskEventStats() {
+  return {
+    tasks: queuedTaskEvents.size,
+  }
+}
+
 function loopInFlightFor(taskID: string): boolean {
   return (loopInFlight.get(taskID) ?? 0) > 0
 }
@@ -468,6 +478,7 @@ export async function dispatchTaskLoop(input: {
     return "ignored"
   }
   if (isTaskTerminal(task)) {
+    discardQueuedTaskEvent(task.id)
     log.info("dispatchTaskLoop: terminal task ignored", {
       taskID: task.id,
       status: deriveTaskStatus(task),
@@ -483,26 +494,6 @@ export async function dispatchTaskLoop(input: {
 
   const liveOwners = listLiveOrchestratorToolOwnership(task.id)
   if (liveOwners.length > 0 && loopInFlightFor(task.id)) {
-    if (input.interrupt === true) {
-      const { abortLiveOrchestratorToolOwnership } = await import("./writer")
-      const reason = input.event?.note
-        ? `operator interrupt while orchestrator tool ownership was live: ${input.event.note}`
-        : "operator interrupt while orchestrator tool ownership was live"
-      const aborted = await abortLiveOrchestratorToolOwnership({
-        taskID: task.id,
-        ownerships: liveOwners,
-        reason,
-        originSite: "engine.queue.dispatchTaskLoop.interrupt-live-ownership",
-        metadata: { operator_interrupt: true },
-      })
-      log.warn("dispatchTaskLoop: interrupted live orchestrator tool ownership", {
-        taskID: task.id,
-        liveOwners: liveOwners.map((owner) => owner.ownershipID),
-        aborted,
-      })
-      attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event, true))
-      return "started"
-    }
     if (input.event) queuedTaskEvents.set(task.id, input.event)
     log.info("dispatchTaskLoop: queued wake behind live orchestrator tool ownership", {
       taskID: task.id,

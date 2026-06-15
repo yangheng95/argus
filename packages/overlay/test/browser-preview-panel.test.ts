@@ -47,6 +47,7 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("currentTarget()?.viewports")
   expect(component).toContain("currentTarget()?.candidates")
   expect(component).toContain("selectedCandidate")
+  expect(component).not.toContain("candidates()[0]")
   expect(component).toContain("loadTaskBrowserPreviewTarget")
   expect(component).toContain("selectTaskBrowserPreviewTarget")
   expect(component).toContain("targetID: candidate.id")
@@ -61,6 +62,9 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("renderedEvidence")
   expect(component).toContain("captureImageUrl")
   expect(component).toContain("liveImageUrl")
+  expect(component).toContain('data-ui="browser-preview-live-loading"')
+  expect(component).toContain('data-ui="browser-preview-live-error"')
+  expect(component).toContain('data-ui="browser-preview-target-failed"')
   expect(component).toContain('data-ui="browser-preview-live"')
   expect(component).toContain('data-ui="browser-preview-live-screenshot"')
   expect(component).toContain("handleLivePointerDown")
@@ -72,6 +76,11 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("evidenceFromVerification")
   expect(component).toContain("scope: { taskID: string; targetID: string }")
   expect(component).toContain("targetID: scope.targetID")
+  expect(component).toContain("Browser preview verification missing persisted evidence ID")
+  expect(component).toContain("id: evidenceID")
+  expect(component).not.toContain("id: evidenceID ??")
+  expect(component).not.toContain("timeCompleted: Date.now()")
+  expect(component).not.toContain("timeCreated: Date.now()")
   expect(component).not.toContain('input.target.id ?? ""')
   expect(component).not.toContain('input.target.taskID ?? ""')
   expect(component).not.toContain('input.target.id ?? "target"')
@@ -101,6 +110,12 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).not.toContain("browser_preview.viewport.toggle")
   expect(component).toContain('data-ui="browser-preview-evidence"')
   expect(component).toContain('data-ui="browser-preview-evidence-missing"')
+  expect(component.indexOf('data-ui="browser-preview-live-error"')).toBeLessThan(
+    component.indexOf('data-ui="browser-preview-evidence-missing"'),
+  )
+  expect(component.indexOf('data-ui="browser-preview-target-failed"')).toBeLessThan(
+    component.indexOf('data-ui="browser-preview-evidence-missing"'),
+  )
   expect(component).toContain("browser-preview-evidence-facts")
   expect(component).not.toContain("<select")
   expect(component).not.toContain("<iframe")

@@ -56,6 +56,7 @@ test("index.html declares toolbar workbench activities without a separate Inspec
   expect(html).toContain('id="centerWorkbenchExplorer"')
   expect(html).toContain('id="centerWorkbenchDiff"')
   expect(html).toContain('id="centerWorkbenchBrowser"')
+  expect(html).toContain('id="centerWorkbenchScreenshots"')
   expect(html).not.toContain('id="centerWorkbenchAssistant"')
   expect(html).not.toContain('id="solidCodingAssistantMount"')
   expect(html).toContain('id="centerWorkbenchFile"')
@@ -90,6 +91,7 @@ test("index.html declares toolbar workbench activities without a separate Inspec
   expect(html).not.toContain('id="solidTuiHostMount"')
   expect(html).not.toContain('id="chatBrowserPreviewPane"')
   expect(html).toContain('id="solidBrowserPreviewMount"')
+  expect(html).toContain('id="solidScreenshotBrowserMount"')
   expect(html).not.toContain('id="rightPanelTui"')
   expect(html).not.toContain('id="rightPanelBrowser"')
   expect(html).not.toContain('id="rightPaneResizer"')
@@ -151,6 +153,7 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain('document.getElementById("solidLeftCollapsedRailControl")')
   expect(main).not.toContain("LeftPanelHeaderCollapseControl")
   expect(main).toContain('document.getElementById("solidBrowserPreviewMount")')
+  expect(main).toContain('document.getElementById("solidScreenshotBrowserMount")')
   expect(main).not.toContain('document.getElementById("solidFileEditorToggleMount")')
   expect(main).not.toContain('document.getElementById("solidAgentWorkflowMount")')
   expect(main).not.toContain('document.getElementById("solidRightPanelTabs")')
@@ -163,9 +166,8 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain("selectLeftActivity")
   expect(main).toContain("selectRightActivity")
   expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
-  expect(main).toContain(
-    'type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"',
-  )
+  expect(main).toContain("type CenterWorkbenchPanel =")
+  expect(main).toContain('| "screenshots"')
   expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchPanel, "file">')
   expect(main).toContain(
     'id: "workflow", icon: "workflow", labelKey: "chat.title", tooltipKey: "activity.tooltip.workflow"',
@@ -180,6 +182,10 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain(
     'id: "browser", icon: "web-search", labelKey: "browser_preview.title", tooltipKey: "activity.tooltip.browser"',
   )
+  expect(main).toContain('id: "screenshots"')
+  expect(main).toContain('icon: "screenshots"')
+  expect(main).toContain('labelKey: "screenshots.title"')
+  expect(main).toContain('tooltipKey: "activity.tooltip.screenshots"')
   expect(main).toContain('id: "notifications"')
   expect(main).toContain('icon: "notifications"')
   expect(main).toContain('labelKey: "notify.center_label"')
@@ -190,7 +196,7 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain(
     'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
   )
-  expect(main).toContain('id: "tasks", icon: "tasks", labelKey: "sidebar.title", tooltipKey: "activity.tooltip.tasks"')
+  expect(main).toContain('id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks"')
   expect(main).toContain(
     'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
   )
@@ -201,18 +207,37 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain(
     'const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])',
   )
+  expect(main).toContain(
+    'const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>("workflow")',
+  )
+  expect(main).toContain("const activeRightActivity = () => selectedRightActivity()")
+  expect(main).toContain('setSelectedRightActivity(panel === "task" ? "workflow" : null)')
+  expect(main).toContain('if (panel !== "file") setSelectedRightActivity(panel)')
+  expect(main).toContain("const selected = untrack(selectedRightActivity)")
+  expect(main).toContain("active={activeRightActivity}")
   expect(main).not.toContain("centerWorkbenchTabs")
   expect(main).not.toContain("activeCenterWorkbenchTab")
   expect(main).toContain('workflow: document.getElementById("centerWorkbenchWorkflow")')
   expect(main).toContain('inspector: document.getElementById("centerWorkbenchInspector")')
   expect(main).toContain('notifications: document.getElementById("centerWorkbenchNotifications")')
-  expect(main).toContain('isCodingAssistantSource() ? t("chat.assistant_title") : t("chat.title")')
+  expect(main).toContain('screenshots: document.getElementById("centerWorkbenchScreenshots")')
+  expect(main).toContain("primaryCenterPanel")
+  expect(main).toContain('t("chat.panel_title")')
+  expect(main).toContain('t("task.panel_title")')
+  expect(main).toContain('t("mission.title")')
   expect(main).not.toContain('render(() => <NotificationCenter surface="panel" />, notificationPanelEl)')
   expect(main).toContain('render(() => <NotificationCenter surface="toast" />, notificationHost)')
   expect(main).toContain("<CodingAssistantSessionList")
   expect(main).toContain("loadCodingAssistantSessions({ signal: controller.signal })")
   expect(main).toContain("selectCodingAssistantSession({ sessionID: session.id })")
-  expect(main).toContain('boardStore.selectedSource?.kind === "session" && activity !== "mission"')
+  expect(main).toContain('type PrimaryCenterPanel = "task" | "mission" | "chat"')
+  expect(main).toContain("leftActivityCenterPanel")
+  expect(main).toContain("focusedLeftActivityOwnsPrimaryPanel")
+  expect(main).toContain("resetCenterWorkbenchToFocusedPanel")
+  expect(main).toContain('setCenterWorkbenchPanels(["workflow"])')
+  expect(main).toContain(
+    'boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())',
+  )
   expect(main).toContain("CENTER_WORKBENCH_PANEL_ORDER")
   expect(main).toContain("startCenterWorkbenchPanelResize")
   expect(main).toContain("centerWorkbenchPanelWeights")
@@ -222,6 +247,7 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain("<TuiHostPanel")
   expect(main).not.toContain("<TuiRuntimePanel")
   expect(main).toContain("<BrowserPreviewPanel")
+  expect(main).toContain("<ScreenshotBrowserPanel")
   expect(main).toContain("<FileExplorerPanel")
   expect(main).toContain("<FileChangesPanel")
   expect(main).not.toContain("<FileEditorPane")
@@ -373,7 +399,6 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "browser_preview.capture_loading",
     "browser_preview.viewport.desktop",
     "coding_assistant.title",
-    "chat.assistant_title",
   ]
   // i18n keys are flat strings with literal dots, not nested paths — use
   // `key in obj` instead of toHaveProperty (which would mis-traverse).

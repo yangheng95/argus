@@ -875,6 +875,33 @@ export namespace SessionLoop {
     return "stop" as const
   }
 
+  function alreadyCompactedPromptBudgetError(input: {
+    sourceUserID: string
+    reason: string
+    systemTokensEst: number
+    messagePayloadChars: number
+    toolSchemaChars: number
+    systemChars: number
+    usableBudget: number
+    limit: number
+    toolNames: string
+  }) {
+    return new Message.PromptBudgetOverflowError({
+      message:
+        `${input.reason} after source user ${input.sourceUserID} already had ` +
+        `a valid structured compaction summary. Queueing another same-source ` +
+        `compaction cannot reduce the remaining filtered prompt.`,
+      systemTokensEst: input.systemTokensEst,
+      messagePayloadChars: input.messagePayloadChars,
+      toolSchemaChars: input.toolSchemaChars,
+      compressibleMessageChars: input.messagePayloadChars,
+      nonCompressiblePromptChars: input.systemChars + input.toolSchemaChars,
+      usableBudget: input.usableBudget,
+      limit: input.limit,
+      toolNames: input.toolNames,
+    }).toObject()
+  }
+
   /**
    * Single source of truth for "transform a raw JSON Schema into the
    * provider-bound JSON Schema we ship to streamText". Used by both the
@@ -1382,7 +1409,10 @@ export namespace SessionLoop {
     )
   }
 
-  function hasCompletedCompactionForSource(messages: Message.WithParts[], sourceUserMessageID: string): boolean {
+  export function hasCompletedCompactionForSource(
+    messages: Message.WithParts[],
+    sourceUserMessageID: string,
+  ): boolean {
     const source = messages.find(
       (msg) =>
         msg.info.id === sourceUserMessageID &&
@@ -1959,6 +1989,26 @@ export namespace SessionLoop {
           messagePayloadChars,
           topPayloadParts,
         })
+        if (hasCompletedCompactionForSource(input.msgs, input.lastUser.id)) {
+          return stopTurnWithPredictiveBudgetError({
+            processor,
+            sessionID: input.sessionID,
+            error: alreadyCompactedPromptBudgetError({
+              sourceUserID: input.lastUser.id,
+              reason:
+                `Predictive compaction cannot recover this turn because the filtered ` +
+                `prompt is still estimated at ${totalTokensEst} tokens over ` +
+                `limit=${predictiveBudget.limit}`,
+              systemTokensEst,
+              messagePayloadChars,
+              toolSchemaChars,
+              systemChars,
+              usableBudget: predictiveBudget.usableBudget,
+              limit: predictiveBudget.limit,
+              toolNames,
+            }),
+          })
+        }
         const autoCompaction = automaticCompactionDecision({
           session: input.session,
           source: input.lastUser,
@@ -2080,6 +2130,28 @@ export namespace SessionLoop {
         source: input.lastUser,
         model: input.model,
       })
+      if (hasCompletedCompactionForSource(input.msgs, input.lastUser.id)) {
+        const usableBudget = ContextBudget.usable({ config, model: input.model })
+        processor.message.error = alreadyCompactedPromptBudgetError({
+          sourceUserID: input.lastUser.id,
+          reason: "Provider reported context overflow",
+          systemTokensEst,
+          messagePayloadChars,
+          toolSchemaChars,
+          systemChars,
+          usableBudget,
+          limit: Math.floor(usableBudget * ContextBudget.threshold({ config })),
+          toolNames: Object.keys(tools).join(","),
+        })
+        processor.message.finish = "error"
+        processor.message.time.completed = Date.now()
+        await Session.updateMessage(processor.message)
+        Bus.publish(Session.Event.Error, {
+          sessionID: input.sessionID,
+          error: processor.message.error,
+        })
+        return "stop" as const
+      }
       if (!autoCompaction.decision.enabled) {
         processor.message.error = new Message.ContextOverflowError({
           message:
@@ -2199,6 +2271,7 @@ export namespace SessionLoop {
     sessionID: string
     abort: AbortSignal
     resultMode: "reply" | "summary"
+    directory?: string
   }) {
     const candidates: Message.WithParts[] = []
     for await (const item of Message.stream(input.sessionID)) {
@@ -2208,12 +2281,12 @@ export namespace SessionLoop {
 
     const selected = selectPromptFinalMessageFromNewest(candidates)
     if (selected.type === "message") {
-      flushCallbacks(input.sessionID, selected.message)
+      flushCallbacks(input.sessionID, selected.message, input.directory)
       return
     }
 
     if (selected.type === "maintenance-summary" && input.resultMode === "summary") {
-      flushCallbacks(input.sessionID, selected.message)
+      flushCallbacks(input.sessionID, selected.message, input.directory)
       return
     }
 
@@ -2225,22 +2298,23 @@ export namespace SessionLoop {
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input
     const resultMode = input.result_mode ?? "reply"
+    const session = await Session.get(sessionID)
+    const directory = session.directory
 
-    const abort = resume_existing ? resume(sessionID) : start(sessionID)
+    const abort = resume_existing ? resume(sessionID, directory) : start(sessionID, directory)
     if (!abort) {
       return new Promise<Message.WithParts>((resolve, reject) => {
-        state()[sessionID].callbacks.push({ resolve, reject })
+        state(directory)[sessionID].callbacks.push({ resolve, reject })
       })
     }
 
     const firstResult = new Promise<Message.WithParts>((resolve, reject) => {
-      state()[sessionID].callbacks.push({ resolve, reject })
+      state(directory)[sessionID].callbacks.push({ resolve, reject })
     })
 
     void (async () => {
       try {
         let step = 0
-        const session = await Session.get(sessionID)
         while (true) {
           SessionStatus.set(sessionID, { type: "streaming" })
           log.info("loop", { step, sessionID })
@@ -2261,7 +2335,7 @@ export namespace SessionLoop {
           if (!runRuntimeContractTurn && controls.length === 0 && shouldEnterStandby({ lastUser, lastAssistant })) {
             if (!lastAssistant) break
             const lastResult = msgs.find((m) => m.info.id === lastAssistant.id)
-            if (lastResult) flushCallbacks(sessionID, lastResult)
+            if (lastResult) flushCallbacks(sessionID, lastResult, directory)
 
             await enterStandby({
               sessionID,
@@ -2414,69 +2488,74 @@ export namespace SessionLoop {
             lastFinished.summary !== true &&
             (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model, sessionID }))
           ) {
-            const autoCompaction = automaticCompactionDecision({
-              session,
-              source: lastUser,
-              model,
-            })
-            if (!autoCompaction.decision.enabled) {
-              const assistantMessage = (await Session.updateMessage({
-                id: Identifier.ascending("message"),
-                parentID: lastUser.id,
-                role: "assistant",
-                agent: lastUser.agent,
-                variant: lastUser.variant,
-                path: {
-                  cwd: Instance.directory,
-                  root: Instance.worktree,
-                },
-                cost: 0,
-                tokens: {
-                  total: 0,
-                  input: 0,
-                  output: 0,
-                  reasoning: 0,
-                  cache: { read: 0, write: 0 },
-                },
-                modelID: model.id,
-                providerID: model.providerID,
-                error: new Message.ContextOverflowError({
-                  message:
-                    `${disabledAutomaticCompactionMessage({
-                      sessionKind: session.kind,
-                      reason: autoCompaction.decision.reason,
-                      error: autoCompaction.error,
-                    })}; ` + `the previous turn exceeded the configured context budget.`,
-                }).toObject(),
-                finish: "error",
-                time: {
-                  created: Date.now(),
-                  completed: Date.now(),
-                },
+            // A completed same-source summary means another control record
+            // cannot shrink the filtered prompt; let processTurn run the real
+            // prompt estimator and produce the visible typed budget error.
+            if (!hasCompletedCompactionForSource(msgs, lastUser.id)) {
+              const autoCompaction = automaticCompactionDecision({
+                session,
+                source: lastUser,
+                model,
+              })
+              if (!autoCompaction.decision.enabled) {
+                const assistantMessage = (await Session.updateMessage({
+                  id: Identifier.ascending("message"),
+                  parentID: lastUser.id,
+                  role: "assistant",
+                  agent: lastUser.agent,
+                  variant: lastUser.variant,
+                  path: {
+                    cwd: Instance.directory,
+                    root: Instance.worktree,
+                  },
+                  cost: 0,
+                  tokens: {
+                    total: 0,
+                    input: 0,
+                    output: 0,
+                    reasoning: 0,
+                    cache: { read: 0, write: 0 },
+                  },
+                  modelID: model.id,
+                  providerID: model.providerID,
+                  error: new Message.ContextOverflowError({
+                    message:
+                      `${disabledAutomaticCompactionMessage({
+                        sessionKind: session.kind,
+                        reason: autoCompaction.decision.reason,
+                        error: autoCompaction.error,
+                      })}; ` + `the previous turn exceeded the configured context budget.`,
+                  }).toObject(),
+                  finish: "error",
+                  time: {
+                    created: Date.now(),
+                    completed: Date.now(),
+                  },
+                  sessionID,
+                })) as Message.Assistant
+                await Session.updatePart({
+                  id: Identifier.ascending("part"),
+                  sessionID,
+                  messageID: assistantMessage.id,
+                  type: "text",
+                  text:
+                    assistantMessage.error?.data?.message ??
+                    "Automatic compaction is disabled for this workflow session.",
+                  time: {
+                    start: Date.now(),
+                    end: Date.now(),
+                  },
+                } satisfies Message.TextPart)
+                break
+              }
+              await SessionCompaction.create({
                 sessionID,
-              })) as Message.Assistant
-              await Session.updatePart({
-                id: Identifier.ascending("part"),
-                sessionID,
-                messageID: assistantMessage.id,
-                type: "text",
-                text:
-                  assistantMessage.error?.data?.message ??
-                  "Automatic compaction is disabled for this workflow session.",
-                time: {
-                  start: Date.now(),
-                  end: Date.now(),
-                },
-              } satisfies Message.TextPart)
-              break
+                source: lastUser,
+                auto: true,
+                overflow: false,
+              })
+              continue
             }
-            await SessionCompaction.create({
-              sessionID,
-              source: lastUser,
-              auto: true,
-              overflow: false,
-            })
-            continue
           }
 
           const turn = await processTurn({
@@ -2499,16 +2578,16 @@ export namespace SessionLoop {
           continue
         }
         SessionCompaction.prune({ sessionID })
-        await flushPromptFinalMessage({ sessionID, abort, resultMode })
+        await flushPromptFinalMessage({ sessionID, abort, resultMode, directory })
       } catch (e) {
-        const s = state()[sessionID]
+        const s = state(directory)[sessionID]
         if (s) {
           for (const q of s.callbacks) q.reject(e)
           s.callbacks = []
         }
       } finally {
-        const s = state()[sessionID]
-        if (s?.abort.signal === abort) finish(sessionID, abort)
+        const s = state(directory)[sessionID]
+        if (s?.abort.signal === abort) finish(sessionID, abort, directory)
       }
     })()
 

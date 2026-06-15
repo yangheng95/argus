@@ -16,6 +16,7 @@ import { LogViewer } from "./components/LogViewer"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { FileChangesPanel, type FileChangesActiveView } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
+import { ScreenshotBrowserPanel } from "./components/ScreenshotBrowserPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
 import { McpPanel, SkillsPanel } from "./components/settings/SkillMarketPanel"
 import { MemoryPanel } from "./components/MemoryPanel"
@@ -29,7 +30,7 @@ import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, 
 import { canComposeChat, stopChatRequest } from "./services/chat"
 import { isTaskInterruptable } from "./store/board"
 import { loadAllLocales, localeTag, setLocale } from "./utils/i18n"
-import { apiJson, apiRequest, configure as configureApi, getServerUrl } from "./services/api"
+import { apiJson, apiRequest, configure as configureApi } from "./services/api"
 import { t } from "./utils/i18n"
 import { renderMarkdown } from "./utils/markdown"
 import { aggregateUsageAcrossSessions, formatUsageStrip } from "./utils/format-usage"
@@ -42,7 +43,7 @@ import {
   installSystemThemeListener,
   toggleDevtools,
 } from "./services/theme"
-import { settingsStore, setSettingsStore, saveSettings } from "./store/settings"
+import { bumpWorkspaceEpoch, settingsStore, setSettingsStore, saveSettings } from "./store/settings"
 import {
   initPaneResizers,
   cancelPaneResize,
@@ -80,6 +81,7 @@ import { wakeMission, type MissionWakeResult } from "./services/mission"
 import { startSSE, stopSSE } from "./services/sse"
 import { resetWriter } from "./services/tree-writer"
 import { openImagePreview } from "./services/image-preview"
+import { buildChatDebugBlob, buildTaskDebugBlob, writeDebugClipboard } from "./utils/debug-info"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -170,9 +172,19 @@ const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePat
 const [fileChangesActiveView, setFileChangesActiveView] = createSignal<FileChangesActiveView>("changes")
 const [browserPreviewLinkRefresh, setBrowserPreviewLinkRefresh] = createSignal(0)
 
-type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"
+type CenterWorkbenchPanel =
+  | "workflow"
+  | "inspector"
+  | "notifications"
+  | "explorer"
+  | "diff"
+  | "browser"
+  | "screenshots"
+  | "file"
 type RightActivity = Exclude<CenterWorkbenchPanel, "file">
 type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"
+type PrimaryLeftActivity = "tasks" | "mission" | "assistant"
+type PrimaryCenterPanel = "task" | "mission" | "chat"
 
 const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
 const CENTER_WORKBENCH_MIN_PANEL_WIDTH = 128
@@ -181,6 +193,7 @@ const CENTER_WORKBENCH_PANEL_ORDER: readonly CenterWorkbenchPanel[] = [
   "explorer",
   "diff",
   "browser",
+  "screenshots",
   "inspector",
   "notifications",
   "file",
@@ -193,6 +206,12 @@ const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
   { id: "diff", icon: "files", labelKey: "workspace.diff", tooltipKey: "activity.tooltip.diff" },
   { id: "browser", icon: "web-search", labelKey: "browser_preview.title", tooltipKey: "activity.tooltip.browser" },
   {
+    id: "screenshots",
+    icon: "screenshots",
+    labelKey: "screenshots.title",
+    tooltipKey: "activity.tooltip.screenshots",
+  },
+  {
     id: "notifications",
     icon: "notifications",
     labelKey: "notify.center_label",
@@ -201,7 +220,7 @@ const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
 ]
 
 const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
-  { id: "tasks", icon: "tasks", labelKey: "sidebar.title", tooltipKey: "activity.tooltip.tasks" },
+  { id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks" },
   { id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission" },
   { id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant" },
   { id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory" },
@@ -214,6 +233,7 @@ const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActi
 const activeRightActivity = () => selectedRightActivity()
 const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
 const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("tasks")
+const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("task")
 const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
 const [missionLauncherActive, setMissionLauncherActive] = createSignal(false)
 const [missionLauncherSubmitting, setMissionLauncherSubmitting] = createSignal(false)
@@ -237,10 +257,24 @@ function activateCodingAssistantSessionList(): void {
   if (isMissionSessionSource()) void selectTask("")
   const controller = new AbortController()
   codingAssistantActivationController = controller
-  openCenterWorkbenchPanel("workflow")
+  bumpWorkspaceEpoch()
+  resetCenterWorkbenchToFocusedPanel("assistant")
   setSelectedLeftActivity("assistant")
   setSelectedLeftPanelActivity("assistant")
-  void loadCodingAssistantSessions({ signal: controller.signal })
+  void (async () => {
+    await loadCodingAssistantSessions({ signal: controller.signal })
+    if (controller.signal.aborted) throw controller.signal.reason
+    const selectedID = codingAssistantStore.selectedSessionID
+    const sessionID =
+      selectedID && codingAssistantStore.sessions.some((session) => session.id === selectedID)
+        ? selectedID
+        : (codingAssistantStore.sessions[0]?.id ?? "")
+    if (sessionID) {
+      await selectCodingAssistantSession({ sessionID, signal: controller.signal })
+    } else {
+      await createCodingAssistantSession({ signal: controller.signal })
+    }
+  })()
     .catch((error) => {
       if (isAbortError(error)) return
       reportOverlayRuntimeError("coding-assistant.sessions", error)
@@ -255,12 +289,45 @@ function isCenterWorkbenchPanelOpen(panel: CenterWorkbenchPanel): boolean {
 }
 
 function isRightActivityOpen(activity: RightActivity): boolean {
+  if (activity === "workflow") return primaryCenterPanel() === "task" && isCenterWorkbenchPanelOpen("workflow")
   return isCenterWorkbenchPanelOpen(activity)
 }
 
 function isLeftActivityOpen(activity: LeftActivity): boolean {
-  if (activity === "assistant") return selectedLeftActivity() === "assistant" && isCenterWorkbenchPanelOpen("workflow")
+  if (activity === "assistant") {
+    return selectedLeftActivity() === "assistant" && primaryCenterPanel() === "chat" && isCenterWorkbenchPanelOpen("workflow")
+  }
   return selectedLeftActivity() === activity
+}
+
+const LEFT_PRIMARY_CENTER_PANEL: Record<PrimaryLeftActivity, PrimaryCenterPanel> = {
+  tasks: "task",
+  mission: "mission",
+  assistant: "chat",
+}
+
+function isPrimaryLeftActivity(activity: LeftActivity): activity is PrimaryLeftActivity {
+  return activity === "tasks" || activity === "mission" || activity === "assistant"
+}
+
+function leftActivityCenterPanel(activity: PrimaryLeftActivity): PrimaryCenterPanel {
+  return LEFT_PRIMARY_CENTER_PANEL[activity]
+}
+
+function focusedLeftActivityOwnsPrimaryPanel(activity: LeftActivity = selectedLeftActivity()): activity is PrimaryLeftActivity {
+  return isPrimaryLeftActivity(activity)
+}
+
+function resetCenterWorkbenchToFocusedPanel(activity: PrimaryLeftActivity): void {
+  const panel = leftActivityCenterPanel(activity)
+  setWorkspaceOpen(false)
+  closeFileEditor()
+  setPrimaryCenterPanel(panel)
+  setCenterWorkbenchPanels(["workflow"])
+  setSelectedRightActivity(panel === "task" ? "workflow" : null)
+  queueMicrotask(() => {
+    getCenterWorkbenchViews().workflow?.scrollIntoView({ block: "nearest", inline: "nearest" })
+  })
 }
 
 function hasWorkspaceDiffTarget(): boolean {
@@ -289,6 +356,11 @@ function selectDiffActivity(): void {
 function selectRightActivity(activity: RightActivity): void {
   if (activity === "diff") {
     selectDiffActivity()
+    return
+  }
+  const leftActivity = untrack(selectedLeftActivity)
+  if (activity === "workflow" && focusedLeftActivityOwnsPrimaryPanel(leftActivity)) {
+    resetCenterWorkbenchToFocusedPanel(leftActivity)
     return
   }
   if (untrack(centerWorkbenchPanels).includes(activity)) {
@@ -321,8 +393,15 @@ function selectLeftActivity(activity: LeftActivity): void {
   }
   abortCodingAssistantActivation()
   if (activity !== "mission") setMissionLauncherActive(false)
-  if (boardStore.selectedSource?.kind === "session" && activity !== "mission") void selectTask("")
-  openCenterWorkbenchPanel("workflow")
+  if (boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())) {
+    void selectTask("")
+  }
+  if (focusedLeftActivityOwnsPrimaryPanel(activity)) {
+    resetCenterWorkbenchToFocusedPanel(activity)
+  } else {
+    setPrimaryCenterPanel("task")
+    openCenterWorkbenchPanel("workflow")
+  }
   setSelectedLeftActivity(activity)
   setSelectedLeftPanelActivity(activity)
 }
@@ -333,7 +412,7 @@ function isMissionSessionSource(): boolean {
 
 function selectMissionTask(taskID: string): void {
   setMissionLauncherActive(false)
-  openCenterWorkbenchPanel("workflow")
+  resetCenterWorkbenchToFocusedPanel("tasks")
   setSelectedLeftActivity("tasks")
   setSelectedLeftPanelActivity("tasks")
   void selectTask(taskID)
@@ -341,7 +420,7 @@ function selectMissionTask(taskID: string): void {
 
 function openMissionLauncher(): void {
   abortCodingAssistantActivation()
-  openCenterWorkbenchPanel("workflow")
+  resetCenterWorkbenchToFocusedPanel("mission")
   setSelectedLeftActivity("mission")
   setSelectedLeftPanelActivity("mission")
   setMissionLauncherActive(true)
@@ -377,6 +456,7 @@ function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
 }
 
 function closeCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
+  if (panel === "workflow" && focusedLeftActivityOwnsPrimaryPanel(untrack(selectedLeftActivity))) return
   if (panel === "diff") setWorkspaceOpen(false)
   if (panel === "file") closeFileEditor()
   setCenterWorkbenchPanels((current) => current.filter((item) => item !== panel))
@@ -412,6 +492,7 @@ function getCenterWorkbenchViews(): Record<CenterWorkbenchPanel, HTMLElement | n
     explorer: document.getElementById("centerWorkbenchExplorer"),
     diff: document.getElementById("centerWorkbenchDiff"),
     browser: document.getElementById("centerWorkbenchBrowser"),
+    screenshots: document.getElementById("centerWorkbenchScreenshots"),
     inspector: document.getElementById("centerWorkbenchInspector"),
     notifications: document.getElementById("centerWorkbenchNotifications"),
     file: document.getElementById("centerWorkbenchFile"),
@@ -450,297 +531,6 @@ function renderCenterWorkbenchPanelWeights(): void {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
-}
-
-/** Format a millisecond timestamp for the debug blob. Returns "—" for
- *  missing / zero values so the blob stays aligned when fields are empty. */
-function formatDebugTime(ms: unknown): string {
-  const n = typeof ms === "number" ? ms : Number(ms)
-  if (!Number.isFinite(n) || n <= 0) return "—"
-  return new Date(n)
-    .toISOString()
-    .replace("T", " ")
-    .replace(/\.\d{3}Z$/, "Z")
-}
-
-function debugGoalBoardFiles(gw: any): string {
-  const steps = Array.isArray(gw?.steps) ? gw.steps : []
-  let changedFiles = 0
-  let changedFileDiffs = 0
-  const commitRefs = new Set<string>()
-  let statFiles: number | undefined
-  let additions: number | undefined
-  let deletions: number | undefined
-  for (const step of steps) {
-    const payload = step?.payload
-    if (!payload || typeof payload !== "object") continue
-    if (Array.isArray(payload.changedFiles)) changedFiles += payload.changedFiles.length
-    if (Array.isArray(payload.changedFileDiffs)) changedFileDiffs += payload.changedFileDiffs.length
-    if (typeof payload.commitRef === "string" && payload.commitRef.trim()) commitRefs.add(payload.commitRef.trim())
-    const stats = payload.diffStats
-    if (stats && typeof stats === "object") {
-      if (typeof stats.files === "number") statFiles = (statFiles ?? 0) + stats.files
-      if (typeof stats.additions === "number") additions = (additions ?? 0) + stats.additions
-      if (typeof stats.deletions === "number") deletions = (deletions ?? 0) + stats.deletions
-    }
-  }
-  const statText = statFiles === undefined ? "—" : `${statFiles} files, +${additions ?? 0}/-${deletions ?? 0}`
-  return `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; commits=${commitRefs.size ? Array.from(commitRefs).join(",") : "none"}; diffStats=${statText}`
-}
-
-function psSingleQuote(value: unknown): string {
-  return String(value ?? "").replace(/'/g, "''")
-}
-
-/**
- * Build a plain-text debug blob for the currently selected task board.
- * Contains everything an operator needs to triage a stuck / mis-merged task
- * directly from the DB: identity + paths + per-goal worktree coords + ready
- * SQL. Returns `""` when no task is selected so the caller can show a hint.
- */
-function buildTaskDebugBlob(board: any): string {
-  const task = board?.task
-  const id = typeof task?.id === "string" ? task.id : ""
-  if (!id) return ""
-  const taskDirectory = String(task?.directory ?? "—")
-  const serverUrl = getServerUrl()
-  const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : []
-  const lines: string[] = []
-  const push = (...l: string[]) => lines.push(...l)
-
-  push(
-    `# Task Debug Info (double-click 任务 → clipboard)`,
-    `# Generated: ${formatDebugTime(Date.now())}`,
-    ``,
-    `task.id:        ${id}`,
-    `task.title:     ${String(task?.title ?? "—")}`,
-    `task.status:    ${String(task?.status ?? "—")}`,
-    `task.directory: ${taskDirectory}`,
-    `server.url:     ${serverUrl}`,
-    `task.session:   ${String(task?.sessionID ?? "—")}`,
-    `task.run.id:    ${String(task?.activeRunID ?? "—")}`,
-    `task.time.created: ${formatDebugTime(task?.time?.created)}`,
-    `task.time.updated: ${formatDebugTime(task?.time?.updated ?? task?.time?.created)}`,
-    ``,
-    `Goals (${goalWorkflows.length}):`,
-  )
-  if (goalWorkflows.length === 0) {
-    push(`  (none — task has not produced goals yet)`)
-  } else {
-    for (const gw of goalWorkflows) {
-      const gid = String(gw?.goalID ?? "?")
-      const n = typeof gw?.orderIndex === "number" ? gw.orderIndex + 1 : "?"
-      push(
-        `  #${n}  ${gid}  ${String(gw?.goalStatus ?? "?")}  ${String(gw?.goalTitle ?? "").slice(0, 80)}`,
-        `      retry:     ${gw?.retryCount ?? 0}`,
-        `      workspace: ${String(gw?.workspaceDir ?? "—")}`,
-        `      branch:    ${String(gw?.workspaceBranch ?? "—")}`,
-        `      files:     ${debugGoalBoardFiles(gw)}`,
-      )
-    }
-  }
-  push(
-    ``,
-    `Notes:`,
-    `  - engine_goal stores the goal contract only. workspace_dir / workspace_branch / workspace_base_ref / retry_count / status / cascade_state were retired (2026-05-05); workspace + retry live on the latest engine_artifact[kind='goal_run_attempt'].payload row, goal status is derived live via engine/describe.ts::goalStatusByID from the goal_run chain.`,
-    `  - engine_artifact is the append-only single source: run / goal_run_attempt / acceptance / verification-evidence / architect_contract_graph / integrity_attempt / orchestrator-stream-error all live here. Latest-per-id wins by time_created desc.`,
-    `  - Right-side Files panel reads board.goalWorkflows[].steps[].payload.changedFiles / changedFileDiffs / commitRef, which are projected from per-goal engine_artifact[kind='acceptance']. If SQL shows acceptance rows but the panel omits a goal, debug overlay refresh/resource keys before suspecting DB writes.`,
-    `  - Project-scoped HTTP routes require task.directory as ?directory= or x-opencorvus-directory. /global/health is control-plane only; it confirms server health and global paths, not whether this task exists in the selected project instance.`,
-    `  - goal_run liveness is owner-stamped: engine_artifact[kind='goal_run_attempt'].payload.owner = the process (pid:boot-ts:rand) that drove the attempt live. A live-status attempt whose owner ≠ the current server process is a restart orphan (engine/orphan.ts::isGoalRunOrphaned) — describe renders it not-running + ORPHANED and the orchestrator re-dispatches it; a half-streamed goal turn cannot resume.`,
-    `  - LLM stream stalls bound through llm/activity.ts (withLLMActivity): first-byte gate, idle gate (default 180s = session_llm_idle_ms), total deadline (default 30 min). Exactly one terminal event per call — done | failed | aborted. Board "running" past the total deadline with no events ⇒ bug at withLLMActivity or its sink wiring, NOT a missing stalled-detection heuristic elsewhere.`,
-    ``,
-    `# Project-scoped HTTP probes (run these before direct SQLite; they use the same directory context as Overlay)`,
-    `$server = '${psSingleQuote(serverUrl)}'`,
-    `$dir = '${psSingleQuote(taskDirectory)}'`,
-    `$task = '${psSingleQuote(id)}'`,
-    `Invoke-RestMethod -Uri "$server/task/$task/board" -Headers @{ 'x-opencorvus-directory' = $dir } | ConvertTo-Json -Depth 40`,
-    `Invoke-RestMethod -Uri "$server/task/$task/progress" -Headers @{ 'x-opencorvus-directory' = $dir } | ConvertTo-Json -Depth 30`,
-    `Invoke-RestMethod -Uri "$server/task/$task/conversation" -Headers @{ 'x-opencorvus-directory' = $dir } | ConvertTo-Json -Depth 30`,
-    `Invoke-RestMethod -Uri "$server/global/health" | ConvertTo-Json -Depth 10  # control-plane only; do not use this alone as task DB proof`,
-    ``,
-    `# SQL templates (read-only — open the verified DB with bun:sqlite readonly:true)`,
-    `# Runtime DB path (single source):`,
-    `#  - /global/health -> paths.database: ${appStore.enginePaths?.database ?? "<not yet known — engine offline; reconnect and retry>"}`,
-    `# If SELECT * FROM engine_task returns 0 rows for this task, stop using that DB and use the project-scoped HTTP probes above; do not infer missing goals/contracts from an empty wrong DB.`,
-    ``,
-    `-- Task snapshot (no status column — derive via deriveTaskStatus from (time_started, time_completed, error, metadata.cancelled))`,
-    `SELECT * FROM engine_task WHERE id = '${id}';`,
-    ``,
-    `-- Goal contracts (LLM-autonomous redesign: slug/objective/depends_on/owned_paths/requirement_ids are goal inputs; cross-goal handoffs live in architect_contract_graph)`,
-    `SELECT id, slug, title, kind, source, priority, plan_version_id, milestone_id, order_index,`,
-    `       objective, depends_on, owned_paths, requirement_ids, acceptance_specs,`,
-    `       time_updated`,
-    `FROM engine_goal WHERE task_id = '${id}' ORDER BY order_index;`,
-    ``,
-    `-- Active architect contract graph (task-scoped artifact; latest by time_created desc, id desc)`,
-    `SELECT id, label, payload, time_created, time_updated`,
-    `FROM engine_artifact`,
-    `WHERE task_id = '${id}' AND kind='architect_contract_graph'`,
-    `ORDER BY time_created DESC, id DESC LIMIT 1;`,
-    ``,
-    `-- Plan versions promoted by the planner (goals link via plan_version_id; status='active' is the live one)`,
-    `SELECT id, version, status, summary, spec_snapshot_id, time_created, time_updated`,
-    `FROM engine_plan_version WHERE task_id = '${id}' ORDER BY version;`,
-    ``,
-    `-- Run snapshots (engine_run table was removed; current state is latest payload per run_id)`,
-    `SELECT run_id, label,`,
-    `       json_extract(payload, '$.status') AS status,`,
-    `       json_extract(payload, '$.phase') AS phase,`,
-    `       json_extract(payload, '$.executor') AS executor,`,
-    `       json_extract(payload, '$.session_id') AS session_id,`,
-    `       json_extract(payload, '$.blocking_reason') AS blocking_reason,`,
-    `       json_extract(payload, '$.error') AS error,`,
-    `       time_created, time_updated`,
-    `FROM engine_artifact`,
-    `WHERE task_id = '${id}' AND kind='run'`,
-    `ORDER BY time_created;`,
-    ``,
-    `-- Goal run attempts (one per begin-build-attempt; workspace + retry pointers live in payload here, not on engine_goal)`,
-    `SELECT goal_run_id, run_id, label,`,
-    `       json_extract(payload, '$.goal_id') AS goal_id,`,
-    `       json_extract(payload, '$.session_id') AS session_id,`,
-    `       json_extract(payload, '$.status') AS status,`,
-    `       json_extract(payload, '$.retry_count') AS retry_count,`,
-    `       json_extract(payload, '$.blocking_reason') AS blocking_reason,`,
-    `       json_extract(payload, '$.superseded_reason') AS superseded_reason,`,
-    `       json_extract(payload, '$.error') AS error,`,
-    `       json_extract(payload, '$.workspace_dir') AS workspace_dir,`,
-    `       json_extract(payload, '$.workspace_branch') AS workspace_branch,`,
-    `       json_extract(payload, '$.workspace_base_ref') AS workspace_base_ref,`,
-    `       json_extract(payload, '$.merge_ref') AS merge_ref,`,
-    `       time_created, time_updated`,
-    `FROM engine_artifact`,
-    `WHERE task_id = '${id}' AND kind='goal_run_attempt'`,
-    `ORDER BY time_created;`,
-    ``,
-    `-- Per-goal acceptance file projection (right-side Files panel backend source; latest delivered attempt per goal, not necessarily the live tip after retry/reset)`,
-    `WITH latest_goal_run AS (`,
-    `  SELECT goal_run_id, payload, time_created, id,`,
-    `         row_number() OVER (PARTITION BY goal_run_id ORDER BY time_created DESC, id DESC) AS rn`,
-    `  FROM engine_artifact`,
-    `  WHERE task_id = '${id}' AND kind='goal_run_attempt'`,
-    `), delivered AS (`,
-    `  SELECT json_extract(gr.payload, '$.goal_id') AS goal_id,`,
-    `         gr.goal_run_id,`,
-    `         json_extract(gr.payload, '$.retry_count') AS retry_count,`,
-    `         d.acceptance_id, d.time_created AS acceptance_time,`,
-    `         json_extract(d.payload, '$.result.commit_ref') AS commit_ref,`,
-    `         json_extract(d.payload, '$.result.changed_files') AS changed_files,`,
-    `         json_array_length(json_extract(d.payload, '$.result.changed_files')) AS changed_file_count,`,
-    `         json_array_length(json_extract(d.payload, '$.result.diffs')) AS diff_count,`,
-    `         json_extract(d.payload, '$.result.stats.additions') AS additions,`,
-    `         json_extract(d.payload, '$.result.stats.deletions') AS deletions,`,
-    `         row_number() OVER (PARTITION BY json_extract(gr.payload, '$.goal_id') ORDER BY d.time_created DESC, d.id DESC) AS acceptance_rank`,
-    `  FROM latest_goal_run gr`,
-    `  JOIN engine_artifact d ON d.goal_run_id = gr.goal_run_id AND d.kind='acceptance'`,
-    `  WHERE gr.rn = 1`,
-    `)`,
-    `SELECT g.order_index + 1 AS goal_number,`,
-    `       'G' || (g.order_index + 1) || 'V' || (coalesce(delivered.retry_count, 0) + 1) AS delivered_label,`,
-    `       g.id AS goal_id, g.title, delivered.goal_run_id, delivered.acceptance_id,`,
-    `       delivered.commit_ref, delivered.changed_file_count, delivered.diff_count, delivered.additions, delivered.deletions,`,
-    `       delivered.changed_files, delivered.acceptance_time`,
-    `FROM engine_goal g`,
-    `LEFT JOIN delivered ON delivered.goal_id = g.id AND delivered.acceptance_rank = 1`,
-    `WHERE g.task_id = '${id}'`,
-    `ORDER BY g.order_index;`,
-    ``,
-    `-- Raw per-goal acceptance artifacts (all delivered attempts, useful when a retry label differs from the delivered diff label)`,
-    `WITH latest_goal_run AS (`,
-    `  SELECT goal_run_id, payload, time_created, id,`,
-    `         row_number() OVER (PARTITION BY goal_run_id ORDER BY time_created DESC, id DESC) AS rn`,
-    `  FROM engine_artifact`,
-    `  WHERE task_id = '${id}' AND kind='goal_run_attempt'`,
-    `)`,
-    `SELECT d.acceptance_id, d.goal_run_id,`,
-    `       json_extract(gr.payload, '$.goal_id') AS goal_id,`,
-    `       json_extract(gr.payload, '$.retry_count') AS retry_count,`,
-    `       json_extract(d.payload, '$.status') AS status,`,
-    `       json_extract(d.payload, '$.result.commit_ref') AS commit_ref,`,
-    `       json_array_length(json_extract(d.payload, '$.result.changed_files')) AS changed_file_count,`,
-    `       json_array_length(json_extract(d.payload, '$.result.diffs')) AS diff_count,`,
-    `       json_extract(d.payload, '$.result.stats.additions') AS additions,`,
-    `       json_extract(d.payload, '$.result.stats.deletions') AS deletions,`,
-    `       json_extract(d.payload, '$.result.changed_files') AS changed_files,`,
-    `       d.time_created, d.time_updated`,
-    `FROM engine_artifact d`,
-    `LEFT JOIN latest_goal_run gr ON gr.goal_run_id = d.goal_run_id AND gr.rn = 1`,
-    `WHERE d.task_id = '${id}' AND d.kind='acceptance' AND d.goal_run_id IS NOT NULL`,
-    `ORDER BY d.time_created;`,
-    ``,
-    `-- Orchestrator fatal stream errors (rule-23 single source — empty result = no fatal so far)`,
-    `SELECT id, run_id, goal_run_id, label,`,
-    `       json_extract(payload, '$.error') AS error,`,
-    `       json_extract(payload, '$.phase') AS phase,`,
-    `       time_created`,
-    `FROM engine_artifact`,
-    `WHERE task_id = '${id}' AND kind='orchestrator-stream-error'`,
-    `ORDER BY time_created;`,
-    ``,
-    `-- Pending interactions (permission asks / clarifying questions — the most common "why is it stuck?" answer)`,
-    `SELECT id, run_id, session_id, request_type, status, title, time_resolved, time_created`,
-    `FROM engine_interaction_request`,
-    `WHERE task_id = '${id}'`,
-    `ORDER BY time_created;`,
-    ``,
-    `-- Sessions belonging to this task (root/orchestrator/build children)`,
-    `WITH RECURSIVE session_tree(id) AS (`,
-    `  SELECT session_id FROM engine_task WHERE id = '${id}'`,
-    `  UNION ALL`,
-    `  SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id`,
-    `)`,
-    `SELECT s.id, s.parent_id, s.kind, s.goal_id, s.title, s.directory, s.time_created, s.time_updated`,
-    `FROM session s JOIN session_tree st ON s.id = st.id`,
-    `ORDER BY s.time_created;`,
-    ``,
-    `-- Recent messages in task sessions (unfinished assistant rows often reveal stream stalls)`,
-    `WITH RECURSIVE session_tree(id) AS (`,
-    `  SELECT session_id FROM engine_task WHERE id = '${id}'`,
-    `  UNION ALL`,
-    `  SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id`,
-    `)`,
-    `SELECT m.id, m.session_id, json_extract(m.data, '$.role') AS role,`,
-    `       json_extract(m.data, '$.agent') AS agent,`,
-    `       json_extract(m.data, '$.finish') AS finish,`,
-    `       json_extract(m.data, '$.tokens.total') AS total_tokens,`,
-    `       m.time_created, m.time_updated`,
-    `FROM message m JOIN session_tree st ON m.session_id = st.id`,
-    `ORDER BY m.time_created DESC LIMIT 80;`,
-    ``,
-    `-- Recent parts in task sessions (tool calls, pending tools, patches, and text deltas)`,
-    `WITH RECURSIVE session_tree(id) AS (`,
-    `  SELECT session_id FROM engine_task WHERE id = '${id}'`,
-    `  UNION ALL`,
-    `  SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id`,
-    `)`,
-    `SELECT p.id, p.message_id, p.session_id,`,
-    `       json_extract(p.data, '$.type') AS part_type,`,
-    `       json_extract(p.data, '$.tool') AS tool,`,
-    `       json_extract(p.data, '$.state.status') AS tool_status,`,
-    `       json_extract(p.data, '$.state.title') AS title,`,
-    `       p.time_created, p.time_updated`,
-    `FROM part p JOIN session_tree st ON p.session_id = st.id`,
-    `ORDER BY p.time_created DESC LIMIT 120;`,
-    ``,
-    `-- Workflow step transitions (architect / requirements / frontend_design / planner)`,
-    `SELECT type, source, emitted_at, run_id, goal_run_id,`,
-    `       json_extract(payload, '$.stepID') AS step_id,`,
-    `       json_extract(payload, '$.status') AS step_status,`,
-    `       json_extract(payload, '$.summary') AS summary`,
-    `FROM protocol_event WHERE task_id = '${id}' AND type='workflow.step.updated'`,
-    `ORDER BY emitted_at;`,
-    ``,
-    `-- Integrity-review lifecycle (started / progress / completed) — useful when stuck post-architect`,
-    `SELECT type, source, emitted_at, payload FROM protocol_event`,
-    `WHERE task_id = '${id}' AND (type LIKE 'integrity%' OR source LIKE 'architect.integrity%')`,
-    `ORDER BY emitted_at;`,
-    ``,
-    `-- Recent non-stream events (skip session.bridge token noise to see real progress)`,
-    `SELECT type, source, emitted_at, run_id, goal_run_id FROM protocol_event`,
-    `WHERE task_id = '${id}' AND source <> 'session.bridge'`,
-    `ORDER BY emitted_at DESC LIMIT 60;`,
-  )
-  return lines.join("\n")
 }
 
 /** Open the workspace panel. */
@@ -992,6 +782,15 @@ if (fileExplorerMountEl) {
   )
 }
 
+const screenshotBrowserMountEl = document.getElementById("solidScreenshotBrowserMount")
+if (screenshotBrowserMountEl) {
+  screenshotBrowserMountEl.innerHTML = ""
+  render(
+    () => <ScreenshotBrowserPanel active={() => isCenterWorkbenchPanelOpen("screenshots")} />,
+    screenshotBrowserMountEl,
+  )
+}
+
 // ── Sidebar title backdoor: double-click resets DB ──
 // Hidden operator escape hatch. Confirms before invoking POST /global/db/reset,
 // then reloads to repopulate from a clean schema.
@@ -1058,7 +857,7 @@ const LEFT_ACTIVITY_BODY_IDS: Record<LeftActivity, string> = {
 }
 
 const LEFT_ACTIVITY_TITLE_KEYS: Record<LeftActivity, string> = {
-  tasks: "sidebar.title",
+  tasks: "task.ledger.title",
   mission: "mission.title",
   assistant: "coding_assistant.title",
   memory: "memory.title",
@@ -1077,7 +876,13 @@ disposers.push(
       const title = document.getElementById("leftPanelTitle")
       if (title) title.textContent = t(LEFT_ACTIVITY_TITLE_KEYS[activity])
       const taskActions = document.getElementById("leftPanelTaskActions")
-      if (taskActions) taskActions.dataset.active = activity === "tasks" ? "true" : "false"
+      if (taskActions) {
+        const hasCreateAction = activity === "tasks" || activity === "mission" || activity === "assistant"
+        taskActions.dataset.active = hasCreateAction ? "true" : "false"
+        for (const button of taskActions.querySelectorAll<HTMLElement>("[data-left-action]")) {
+          button.hidden = button.dataset.leftAction !== activity
+        }
+      }
     })
     return dispose
   }),
@@ -1089,7 +894,10 @@ if (taskListEl) {
   render(
     () => (
       <TaskList
-        onSelectTask={(taskID) => void selectTask(taskID)}
+        onSelectTask={(taskID) => {
+          resetCenterWorkbenchToFocusedPanel("tasks")
+          void selectTask(taskID)
+        }}
         onDeleteTask={(taskID) => void deleteTask(taskID)}
         onCancelTask={(taskID) => void cancelTask(taskID)}
         onRenameTask={(taskID, title) => void renameTask(taskID, title)}
@@ -1120,15 +928,9 @@ if (codingAssistantListEl) {
           })
         }}
         onSelectSession={(session) => {
-          openCenterWorkbenchPanel("workflow")
+          resetCenterWorkbenchToFocusedPanel("assistant")
           void selectCodingAssistantSession({ sessionID: session.id }).catch((error) => {
             reportOverlayRuntimeError("coding-assistant.select", error)
-          })
-        }}
-        onCreateSession={() => {
-          openCenterWorkbenchPanel("workflow")
-          void createCodingAssistantSession().catch((error) => {
-            reportOverlayRuntimeError("coding-assistant.create", error)
           })
         }}
         onRenameSession={(session, title) =>
@@ -1182,7 +984,6 @@ if (missionListEl) {
       <Mission
         active={selectedLeftPanelActivity() === "mission"}
         refreshToken={missionSharedRefreshToken()}
-        onCreateMission={openMissionLauncher}
         onSelectTask={selectMissionTask}
       />
     ),
@@ -1274,7 +1075,8 @@ if (composerEl) {
             }
             setMissionLauncherSubmitting(true)
             try {
-              const result = await wakeMission({ text })
+              const model = typeof appStore.config?.model === "string" ? appStore.config.model : undefined
+              const result = await wakeMission({ text, model })
               await openMissionSession(result)
               setMissionLauncherActive(false)
               return result
@@ -1466,9 +1268,19 @@ function bindSidebarStaticControls(): void {
     // Deselect current task and focus the composer — the user types their
     // request directly in the ChatComposer, no modal dialog needed.
     setMissionLauncherActive(false)
+    resetCenterWorkbenchToFocusedPanel("tasks")
     void selectTask("")
     const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
     textarea?.focus()
+  })
+  document.getElementById("btnCreateMission")?.addEventListener("click", () => {
+    openMissionLauncher()
+  })
+  document.getElementById("btnCreateCodingAssistantSession")?.addEventListener("click", () => {
+    resetCenterWorkbenchToFocusedPanel("assistant")
+    void createCodingAssistantSession().catch((error) => {
+      reportOverlayRuntimeError("coding-assistant.create", error)
+    })
   })
 
   // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer
@@ -1527,11 +1339,9 @@ disposers.push(
     })
 
     // ── Debug-copy (double-click `任务` header) ──
-    // Dumps a plain-text debug blob with everything a human needs to diagnose a
-    // stuck / mis-merged task from the DB: task id, project dir, session, active
-    // run, per-goal worktree path + branch + retry count, plus ready-to-paste
-    // SQL queries keyed on the task id. Reads `boardStore.board` — the live
-    // projection for the currently selected task — so no extra fetch.
+    // Dumps a concise plain-text debug blob for the selected workflow task or
+    // standalone chat session. Reads the live board/card projections, so the
+    // copy action does not issue a second fetch.
     //
     // Triggered by a double-click on the Conversation tab. Single
     // click remains free for future use. The same button flashes a "已复制"
@@ -1540,7 +1350,7 @@ disposers.push(
       const title = document.querySelector("#chatViewTitle") as HTMLElement | null
       if (title) {
         title.style.cursor = "copy"
-        title.title = "双击复制调试信息 (task id / directory / session / run / worktrees + SQL)"
+        title.title = "双击复制调试信息 (task/chat id / directory / session / run)"
         const flash = (text: string) => {
           title.dataset.copied = "true"
           const prev = title.textContent ?? ""
@@ -1552,13 +1362,17 @@ disposers.push(
         }
         title.addEventListener("dblclick", async (ev) => {
           ev.preventDefault()
-          const blob = buildTaskDebugBlob(boardStore.board)
+          const selectedSource = boardStore.selectedSource
+          const blob =
+            selectedSource?.kind === "session"
+              ? buildChatDebugBlob(boardStore.board, selectedSource, cardTreeStore)
+              : buildTaskDebugBlob(boardStore.board)
           if (!blob) {
-            flash("无任务")
+            flash(selectedSource?.kind === "session" ? "无会话" : "无任务")
             return
           }
           try {
-            await navigator.clipboard.writeText(blob)
+            await writeDebugClipboard(blob)
             flash("已复制")
           } catch (err) {
             console.error("[chat-view-title dblclick] clipboard write failed", err)
@@ -1576,13 +1390,16 @@ disposers.push(
       settingsStore.locale
       boardStore.selectedSource
       missionLauncherActive()
+      primaryCenterPanel()
       const title = document.querySelector("#chatViewTitle") as HTMLElement | null
       if (title) {
         title.textContent = missionLauncherActive()
           ? t("mission.launcher.title")
-          : isCodingAssistantSource()
-            ? t("chat.assistant_title")
-            : t("chat.title")
+          : primaryCenterPanel() === "mission"
+            ? t("mission.title")
+            : primaryCenterPanel() === "chat" || isCodingAssistantSource()
+              ? t("chat.panel_title")
+              : t("task.panel_title")
       }
     })
 
@@ -1599,6 +1416,7 @@ disposers.push(
       const workbench = document.getElementById("centerWorkbench")
       const resizer = document.getElementById("centerWorkbenchResizer")
       const views = getCenterWorkbenchViews()
+      if (views.workflow) views.workflow.dataset.workbenchView = primaryCenterPanel()
       if (workbench) {
         workbench.dataset.open = String(panels.length > 0)
         workbench.hidden = panels.length === 0

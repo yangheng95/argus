@@ -1,7 +1,7 @@
 import z from "zod"
 import { persistBrowserPreviewTarget } from "@/browser-preview/persist"
 import { deriveBrowserPreviewUrlsFromDevServerCommand } from "@/browser-preview/dev-server-command"
-import { extractBrowserPreviewUrlsFromText, persistBrowserPreviewUrls } from "@/browser-preview/extract"
+import { extractBrowserPreviewUrlsFromText } from "@/browser-preview/extract"
 import { waitForBrowserPreviewUrlReachable } from "@/browser-preview/liveness"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "@/browser-preview/target"
 import { Instance } from "@/project/instance"
@@ -9,6 +9,15 @@ import { BashTool } from "./bash"
 import { Tool } from "./tool"
 
 const DEFAULT_PREVIEW_SERVICE_DESCRIPTION = "Start browser preview service"
+
+type BrowserPreviewStartupCandidateSource = "explicit" | "process-output" | "command"
+type BrowserPreviewStartupCandidate = {
+  source: BrowserPreviewStartupCandidateSource
+  url: string
+  reachable?: boolean
+  persistedTargetID?: string
+  skipReason?: string
+}
 
 export const BrowserPreviewToolParameters = z.object({
   command: z
@@ -52,6 +61,11 @@ export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx)
         )
       }
 
+      const explicitUrl = normalizeBrowserPreviewUrl(params.url)
+      if (params.url && !explicitUrl) {
+        throw new Error(`Invalid browser preview URL: ${params.url}`)
+      }
+
       const startup = await bash.execute(
         {
           command: params.command,
@@ -65,32 +79,74 @@ export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx)
       )
 
       let explicitUrlPersisted = false
-      let explicitUrlDiagnostic: string | undefined
-      const explicitUrl = normalizeBrowserPreviewUrl(params.url)
-      if (params.url && !explicitUrl) {
-        throw new Error(`Invalid browser preview URL: ${params.url}`)
-      }
+      const startupCandidates: BrowserPreviewStartupCandidate[] = []
       if (explicitUrl) {
-        if (await waitForBrowserPreviewUrlReachable(explicitUrl)) {
-          await persistBrowserPreviewTarget({ taskID, url: explicitUrl })
+        const reachable = await waitForBrowserPreviewUrlReachable(explicitUrl)
+        if (reachable) {
+          const persisted = await persistBrowserPreviewTarget({ taskID, url: explicitUrl })
           explicitUrlPersisted = true
+          startupCandidates.push({
+            source: "explicit",
+            url: explicitUrl,
+            reachable,
+            persistedTargetID: persisted.id,
+          })
         } else {
-          explicitUrlDiagnostic = `Explicit preview URL was not reachable: ${explicitUrl}`
+          startupCandidates.push({
+            source: "explicit",
+            url: explicitUrl,
+            reachable,
+            skipReason: "explicit preview URL was not reachable",
+          })
         }
       }
       const startupOutput = typeof startup.metadata.output === "string" ? startup.metadata.output : ""
-      const startupTargets = await persistBrowserPreviewUrls({
-        taskID,
-        urls: [
-          ...extractBrowserPreviewUrlsFromText(startupOutput),
-          ...deriveBrowserPreviewUrlsFromDevServerCommand(params.command),
-        ],
-      })
+      if (!explicitUrl) {
+        for (const url of extractBrowserPreviewUrlsFromText(startupOutput)) {
+          const reachable = await waitForBrowserPreviewUrlReachable(url)
+          if (!reachable) {
+            startupCandidates.push({
+              source: "process-output",
+              url,
+              reachable,
+              skipReason: "process output preview URL was not reachable",
+            })
+            continue
+          }
+          const persisted = await persistBrowserPreviewTarget({ taskID, url })
+          startupCandidates.push({
+            source: "process-output",
+            url,
+            reachable,
+            persistedTargetID: persisted.id,
+          })
+        }
+      } else {
+        for (const url of extractBrowserPreviewUrlsFromText(startupOutput)) {
+          startupCandidates.push({
+            source: "process-output",
+            url,
+            skipReason: "explicit preview URL owns target selection",
+          })
+        }
+      }
+      for (const url of deriveBrowserPreviewUrlsFromDevServerCommand(params.command)) {
+        const reachable = await waitForBrowserPreviewUrlReachable(url)
+        startupCandidates.push({
+          source: "command",
+          url,
+          reachable,
+          skipReason: "command-derived URL is diagnostic only; pass url to persist it",
+        })
+      }
 
       const target = await resolveBrowserPreviewTarget({
         projectRoot: Instance.directory,
         taskID,
       })
+      const startupTargets = startupCandidates
+        .filter((item) => item.persistedTargetID)
+        .map((item) => ({ id: item.persistedTargetID!, url: item.url, source: item.source }))
       const payload = {
         kind: "browser_preview_service",
         taskID,
@@ -104,10 +160,11 @@ export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx)
           source: target.source,
         },
         explicitUrlPersisted,
-        startupTargets: startupTargets.map((item) => ({ id: item.id, url: item.url })),
+        startupCandidates,
+        startupTargets,
         diagnostics: [
           ...target.diagnostics,
-          ...(explicitUrlDiagnostic ? [explicitUrlDiagnostic] : []),
+          ...(startupTargets.length === 0 ? ["No browser_preview_target was persisted for this service startup."] : []),
           "Overlay Preview opens from the task-scoped browser_preview_target artifact.",
         ],
       }
@@ -125,6 +182,7 @@ export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx)
           targetStatus: target.status,
           explicitUrlPersisted,
           startupTargets: startupTargets.map((item) => item.id),
+          startupCandidates,
         },
       }
     },

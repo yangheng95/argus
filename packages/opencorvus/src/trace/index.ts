@@ -45,19 +45,21 @@
  *     SessionPrompt.prompt resolves. Carries the finishReason, the assistant
  *     text content, and stream errors.
  *
- * Optional env `OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS=1` strips
- * `data:` URL bodies from file/image parts (replaces with a length marker)
- * so trace files do not balloon with multimodal attachment base64. Default
- * is verbatim (the user asked for "real" input).
+ * `data:` URL bodies are stripped from trace payloads by default so trace files
+ * do not balloon with multimodal attachment base64. Set
+ * `OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS=0` only for explicit local
+ * development captures; event and blob byte budgets still apply.
  */
 import fs from "node:fs"
 import path from "node:path"
+import crypto from "node:crypto"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { SessionObservability } from "@/util/session-observability"
 import { Identifier } from "@/id/id"
 import type { AgentReport } from "@/agent/report"
+import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 
 const log = Log.create({ service: "agent-trace" })
 
@@ -68,8 +70,23 @@ export namespace AgentTrace {
   // tracing on by design.
   const DISABLED_VALUES = new Set(["0", "false", "no", "off"])
   const ENABLED = !DISABLED_VALUES.has((process.env.OPENCORVUS_AGENT_TRACE ?? "").toLowerCase())
-  const REDACT_ATTACHMENTS = process.env.OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS === "1"
   const READ_TAIL_BYTES = 2 * 1024 * 1024
+  const DEFAULT_EVENT_BYTES = 512 * 1024
+  const DEFAULT_SINGLE_BLOB_BYTES = 2 * 1024 * 1024
+  const DEFAULT_TASK_BLOB_BYTES = 32 * 1024 * 1024
+  const metrics = {
+    eventsWritten: 0,
+    bytesWritten: 0,
+    boundedEvents: 0,
+    blobRefs: 0,
+    truncatedPayloads: 0,
+    blobBytesWritten: 0,
+  }
+
+  ServeRuntimeMemoryMetrics.register({
+    id: "trace",
+    snapshot: () => ({ ...metrics }),
+  })
 
   export function isEnabled(): boolean {
     return ENABLED
@@ -115,6 +132,10 @@ export namespace AgentTrace {
 
   function indexFile(taskID: string): string {
     return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(traceDir(), taskID, "trace", "_index.jsonl")
+  }
+
+  function blobDir(taskID: string): string {
+    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(traceDir(), taskID, "trace", "blobs")
   }
 
   type TraceBucket = { sessionID: string } | { domain: string }
@@ -182,6 +203,140 @@ export namespace AgentTrace {
     })
   }
 
+  function envBytes(name: string, fallback: number): number {
+    const raw = process.env[name]
+    if (!raw) return fallback
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
+  }
+
+  function redactAttachmentsEnabled(): boolean {
+    return !DISABLED_VALUES.has((process.env.OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS ?? "1").toLowerCase())
+  }
+
+  function byteLength(value: string): number {
+    return Buffer.byteLength(value, "utf8")
+  }
+
+  function redactDataURL(value: string): string {
+    if (!redactAttachmentsEnabled()) return value
+    if (!value.startsWith("data:")) return value
+    const comma = value.indexOf(",")
+    const media = comma >= 0 ? value.slice(0, Math.min(comma, 80)) : "data:"
+    return `[redacted data URL, ${value.length} chars, ${media}]`
+  }
+
+  function redactValue(value: unknown): unknown {
+    const seen = new WeakMap<object, unknown>()
+    const visit = (input: unknown): unknown => {
+      if (typeof input === "string") return redactDataURL(input)
+      if (!input || typeof input !== "object") return input
+      if (input instanceof Error) return input
+      const existing = seen.get(input)
+      if (existing) return existing
+      if (Array.isArray(input)) {
+        const out: unknown[] = []
+        seen.set(input, out)
+        for (const item of input) out.push(visit(item))
+        return out
+      }
+      const out: Record<string, unknown> = {}
+      seen.set(input, out)
+      for (const [key, val] of Object.entries(input)) out[key] = visit(val)
+      return out
+    }
+    return visit(value)
+  }
+
+  function taskBlobBytes(taskID: string): number {
+    let total = 0
+    try {
+      for (const name of fs.readdirSync(blobDir(taskID))) {
+        try {
+          const stat = fs.statSync(path.join(blobDir(taskID), name))
+          if (stat.isFile()) total += stat.size
+        } catch {}
+      }
+    } catch {}
+    return total
+  }
+
+  function summarizePayload(payload: unknown): unknown {
+    if (!payload || typeof payload !== "object") return typeof payload
+    if (Array.isArray(payload)) return { type: "array", length: payload.length }
+    const record = payload as Record<string, unknown>
+    return {
+      type: "object",
+      keys: Object.keys(record).slice(0, 20),
+    }
+  }
+
+  function payloadReference(taskID: string, event: { kind: string; payload?: unknown }) {
+    if (event.payload === undefined) return undefined
+    const payloadJSON = safeStringify(event.payload)
+    const bytes = byteLength(payloadJSON)
+    const singleLimit = envBytes("OPENCORVUS_AGENT_TRACE_BLOB_MAX_BYTES", DEFAULT_SINGLE_BLOB_BYTES)
+    const taskLimit = envBytes("OPENCORVUS_AGENT_TRACE_TASK_BLOB_MAX_BYTES", DEFAULT_TASK_BLOB_BYTES)
+    if (bytes > singleLimit) {
+      return {
+        tracePayloadTruncated: true,
+        reason: "single_blob_limit",
+        bytes,
+        maxBytes: singleLimit,
+        summary: summarizePayload(event.payload),
+      }
+    }
+    const current = taskBlobBytes(taskID)
+    if (current + bytes > taskLimit) {
+      return {
+        tracePayloadTruncated: true,
+        reason: "task_blob_limit",
+        bytes,
+        taskBytes: current,
+        maxTaskBytes: taskLimit,
+        summary: summarizePayload(event.payload),
+      }
+    }
+    const sha256 = crypto.createHash("sha256").update(payloadJSON).digest("hex")
+    const filename = `${sha256}.json`
+    const absolute = path.join(blobDir(taskID), filename)
+    fs.mkdirSync(path.dirname(absolute), { recursive: true })
+    if (!fs.existsSync(absolute)) {
+      fs.writeFileSync(absolute, payloadJSON, "utf8")
+      metrics.blobBytesWritten += bytes
+    }
+    metrics.blobRefs++
+    return {
+      tracePayloadRef: {
+        sha256,
+        bytes,
+        path: path.posix.join(".opencorvus", "runtime", "tasks", Identifier.shortPath(taskID), "trace", "blobs", filename),
+      },
+      summary: summarizePayload(event.payload),
+    }
+  }
+
+  function boundedEvent(
+    event: Record<string, unknown> & {
+      taskID?: string
+      kind: string
+      payload?: unknown
+    },
+  ): Record<string, unknown> & { taskID?: string; kind: string } {
+    const redacted = redactValue(event) as Record<string, unknown> & { taskID?: string; kind: string; payload?: unknown }
+    const max = envBytes("OPENCORVUS_AGENT_TRACE_EVENT_MAX_BYTES", DEFAULT_EVENT_BYTES)
+    const line = safeStringify(redacted)
+    if (byteLength(line) <= max || typeof redacted.taskID !== "string" || redacted.payload === undefined) return redacted
+    const ref = payloadReference(redacted.taskID, redacted)
+    return {
+      ...redacted,
+      payload: ref,
+      traceBounded: true,
+      originalEventBytes: byteLength(line),
+      eventMaxBytes: max,
+    }
+  }
+
   function append(
     bucket: TraceBucket,
     event: Record<string, unknown> & {
@@ -194,16 +349,22 @@ export namespace AgentTrace {
     if (!ENABLED) return
     try {
       ensureDir()
+      if (typeof event.taskID !== "string" || event.taskID.length === 0) {
+        throw new Error(`trace event ${event.kind} missing taskID`)
+      }
       maybeWriteIndex(bucket, {
         parentSessionID: event.parentSessionID,
         taskID: event.taskID,
         agentName: event.agentName,
         kind: event.kind,
       })
-      const line = safeStringify(event) + "\n"
-      if (typeof event.taskID !== "string" || event.taskID.length === 0) {
-        throw new Error(`trace event ${event.kind} missing taskID`)
-      }
+      const bounded = boundedEvent(event)
+      const line = safeStringify(bounded) + "\n"
+      metrics.eventsWritten++
+      metrics.bytesWritten += byteLength(line) * 2
+      if (bounded.traceBounded === true) metrics.boundedEvents++
+      const payload = bounded.payload as Record<string, unknown> | undefined
+      if (payload?.tracePayloadTruncated === true) metrics.truncatedPayloads++
       if ("sessionID" in bucket) {
         const file = sessionFile(bucket.sessionID, event.taskID)
         fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -258,22 +419,7 @@ export namespace AgentTrace {
   }
 
   function redactMessages(messages: unknown[]): unknown[] {
-    if (!REDACT_ATTACHMENTS) return messages
-    return messages.map((raw) => {
-      const msg = raw as { role?: string; content?: unknown }
-      if (!Array.isArray(msg.content)) return msg
-      const redactedContent = msg.content.map((rawPart) => {
-        const part = rawPart as { type?: string; data?: unknown; image?: unknown }
-        if (part.type === "file" && typeof part.data === "string" && part.data.startsWith("data:")) {
-          return { ...part, data: `[redacted data URL, ${part.data.length} chars]` }
-        }
-        if (part.type === "image" && typeof part.image === "string" && part.image.startsWith("data:")) {
-          return { ...part, image: `[redacted data URL, ${part.image.length} chars]` }
-        }
-        return part
-      })
-      return { ...msg, content: redactedContent }
-    })
+    return redactValue(messages) as unknown[]
   }
 
   /** Capture the LLM request at `LLM.stream` entry. */

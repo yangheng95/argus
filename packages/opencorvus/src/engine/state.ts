@@ -28,6 +28,9 @@ const log = Log.create({ service: "engine-state" })
 export type TaskUpdateValues = Omit<Partial<typeof EngineTaskTable.$inferInsert>, "status"> & {
   status?: "queued" | "active" | "completed" | "failed" | "cancelled"
 }
+export type TaskUpdateOptions = {
+  projectDir?: string
+}
 
 const TERMINAL_TASK_RUN_STATUS = {
   completed: "completed",
@@ -35,7 +38,7 @@ const TERMINAL_TASK_RUN_STATUS = {
   cancelled: "aborted",
 } as const satisfies Partial<Record<NonNullable<TaskUpdateValues["status"]>, RunRow["status"]>>
 
-export async function updateTask(row: TaskRow, values: TaskUpdateValues, summary: string) {
+export async function updateTask(row: TaskRow, values: TaskUpdateValues, summary: string, options?: TaskUpdateOptions) {
   const { status: intent, ...rest } = values
   const now = Date.now()
 
@@ -113,7 +116,7 @@ export async function updateTask(row: TaskRow, values: TaskUpdateValues, summary
     nextStarted === row.time_started &&
     nextCompleted === row.time_completed
   ) {
-    await finalizeLiveRunForTerminalTask(row, intent, resolved, summary)
+    await finalizeLiveRunForTerminalTask(row, intent, resolved, summary, options)
     return row
   }
 
@@ -186,7 +189,7 @@ export async function updateTask(row: TaskRow, values: TaskUpdateValues, summary
     })
   })
   const result = updated ?? requireTask(row.id)
-  await finalizeLiveRunForTerminalTask(result, intent, resolved, summary)
+  await finalizeLiveRunForTerminalTask(result, intent, resolved, summary, options)
   return result
 }
 
@@ -205,6 +208,7 @@ async function finalizeLiveRunForTerminalTask(
   intent: TaskUpdateValues["status"],
   resolved: Partial<typeof EngineTaskTable.$inferInsert>,
   summary: string,
+  options?: TaskUpdateOptions,
 ) {
   const runStatus = intent ? TERMINAL_TASK_RUN_STATUS[intent] : undefined
   if (!runStatus) return
@@ -225,7 +229,7 @@ async function finalizeLiveRunForTerminalTask(
   // Flagged for codex re-consensus in
   // artifacts/2026-05-18-decision-log-disk-materialization.md §11.
   try {
-    await DecisionLogBundle.write(Instance.directory, task.id)
+    await DecisionLogBundle.write(options?.projectDir ?? Instance.directory, task.id)
   } catch (err) {
     log.error("terminal decision-log bundle write failed (task termination unaffected)", {
       taskID: task.id,

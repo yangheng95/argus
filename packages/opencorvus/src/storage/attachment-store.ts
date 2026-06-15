@@ -545,7 +545,7 @@ export namespace AttachmentStore {
     if (slash <= 0) return undefined
     const projectID = rest.slice(0, slash)
     const name = rest.slice(slash + 1)
-    if (!projectID || !name || name.includes("/") || name.includes("\\")) return undefined
+    if (!projectID || !name || /[/\\?#]/.test(name)) return undefined
     return { projectID, name }
   }
 

@@ -141,25 +141,32 @@ describe("tool.browser_preview", () => {
   )
 
   test(
-    "starts a background service and opens preview from explicit URL",
+    "starts a background service and keeps explicit URL ahead of printed URLs",
     async () => {
       const preview = await startReachablePreviewServer()
+      const printed = await startReachablePreviewServer()
       try {
         await using tmp = await tmpdir({ git: true })
         const taskID = await seedTask(tmp.path)
         await Instance.provide({
           directory: tmp.path,
           fn: async () => {
-            const restore = ProcessSupervisor.setFactoryForTest(async () => ({
-              pid: 9102,
-              stdin: null,
-              stdout: new PassThrough(),
-              stderr: new PassThrough(),
-              exited: new Promise<number>(() => {}),
-              terminate: async () => {},
-              dispose: async () => {},
-              unref: () => {},
-            }))
+            const restore = ProcessSupervisor.setFactoryForTest(async () => {
+              const stdout = new PassThrough()
+              queueMicrotask(() => {
+                stdout.write(`Local: ${printed.url}\n`)
+              })
+              return {
+                pid: 9102,
+                stdin: null,
+                stdout,
+                stderr: new PassThrough(),
+                exited: new Promise<number>(() => {}),
+                terminate: async () => {},
+                dispose: async () => {},
+                unref: () => {},
+              }
+            })
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
@@ -176,6 +183,11 @@ describe("tool.browser_preview", () => {
               expect(result.metadata.explicitUrlPersisted).toBe(true)
               expect(result.metadata.targetUrl).toBe(preview.url)
               expect(payload.explicitUrlPersisted).toBe(true)
+              expect(payload.startupCandidates).toContainEqual({
+                source: "process-output",
+                url: printed.url,
+                skipReason: "explicit preview URL owns target selection",
+              })
               expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
             } finally {
               restore()
@@ -184,13 +196,14 @@ describe("tool.browser_preview", () => {
         })
       } finally {
         await preview.close()
+        await printed.close()
       }
     },
     { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
   )
 
   test(
-    "starts a background service and opens preview from command port",
+    "keeps command-derived preview URLs diagnostic only",
     async () => {
       const preview = await startReachablePreviewServer()
       try {
@@ -222,9 +235,19 @@ describe("tool.browser_preview", () => {
               )
               const payload = JSON.parse(result.output)
 
-              expect(result.metadata.targetUrl).toBe(preview.url)
-              expect(payload.startupTargets).toEqual([{ id: result.metadata.targetID, url: preview.url }])
-              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+              expect(result.metadata.targetStatus).toBe("missing")
+              expect(result.metadata.targetUrl).toBeUndefined()
+              expect(payload.startupTargets).toEqual([])
+              expect(payload.startupCandidates).toEqual([
+                {
+                  source: "command",
+                  url: preview.url,
+                  reachable: true,
+                  skipReason: "command-derived URL is diagnostic only; pass url to persist it",
+                },
+              ])
+              expect(payload.diagnostics.join("\n")).toContain("No browser_preview_target was persisted")
+              expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
             } finally {
               restore()
             }
@@ -233,6 +256,51 @@ describe("tool.browser_preview", () => {
       } finally {
         await preview.close()
       }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "rejects an invalid explicit URL before starting a background service",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          let spawned = false
+          const restore = ProcessSupervisor.setFactoryForTest(async () => {
+            spawned = true
+            return {
+              pid: 9104,
+              stdin: null,
+              stdout: new PassThrough(),
+              stderr: new PassThrough(),
+              exited: new Promise<number>(() => {}),
+              terminate: async () => {},
+              dispose: async () => {},
+              unref: () => {},
+            }
+          })
+          try {
+            const tool = await BrowserPreviewTool.init()
+            await expect(
+              tool.execute(
+                {
+                  command: "npm run dev",
+                  url: "file:///tmp/index.html",
+                  timeout: 20,
+                  leaseTimeout: 200,
+                },
+                { ...baseCtx, extra: { taskID } },
+              ),
+            ).rejects.toThrow("Invalid browser preview URL")
+            expect(spawned).toBe(false)
+          } finally {
+            restore()
+          }
+        },
+      })
     },
     { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
   )

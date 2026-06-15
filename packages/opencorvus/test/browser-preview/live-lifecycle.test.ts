@@ -16,8 +16,10 @@ test("interactive browser preview sessions have bounded resource lifetimes", () 
   expect(live).toContain("this.idleTimer.unref?.()")
   expect(live).toContain("private clearIdleTimer(): void")
   expect(live).toContain("this.clearIdleTimer()")
-  expect(live).toContain('this.child.kill("SIGTERM")')
-  expect(live).toContain('this.child.kill("SIGKILL")')
+  expect(live).toContain("detached: process.platform !== \"win32\"")
+  expect(live).toContain('terminateChildTree(this.child, "SIGTERM")')
+  expect(live).toContain('terminateChildTree(this.child, "SIGKILL")')
+  expect(live).toContain("process.kill(-pid, signal)")
 })
 
 test("interactive browser preview command abort and timeout paths release listeners", () => {
@@ -25,9 +27,7 @@ test("interactive browser preview command abort and timeout paths release listen
 
   expect(live).toContain("const pending = this.pending.get(id)")
   expect(live).toContain("pending.reject(new Error(`Browser preview live command timed out.")
-  expect(live).toContain(
-    'pending.reject(signal?.reason instanceof Error ? signal.reason : new Error("Browser preview live command aborted."))',
-  )
+  expect(live).toContain('new Error("Browser preview live command aborted.")')
   expect(live).toContain('signal?.removeEventListener("abort", abort)')
 })
 

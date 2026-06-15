@@ -10,7 +10,7 @@
 //   * Settings tabs (openConfigDialog + switchConfigTab)
 //   * Theme switcher (settingsStore.theme + applyTheme)
 //   * Locale switcher
-//   * New Chat (focus composer)
+//   * New Task (focus composer)
 //
 // Filtering: case-insensitive substring on command label + description +
 // keywords. Up/Down navigate, Enter runs, Esc closes. The selected
@@ -78,7 +78,7 @@ export function CommandPalette() {
 
     cmds.push({
       id: "task:new",
-      label: t("task.new"),
+      label: t("task.ledger.new"),
       hint: t("cmdk.group.task"),
       group: t("cmdk.group.task"),
       keywords: "new task create",

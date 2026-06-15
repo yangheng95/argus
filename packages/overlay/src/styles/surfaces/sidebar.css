@@ -837,7 +837,9 @@
   flex-shrink: 0;
 }
 
-.oc-button[data-ui="sidebar-new-task-button"][data-variant="solid"] {
+.oc-button[data-ui="sidebar-new-task-button"][data-variant="solid"],
+.oc-button[data-ui="mission-new"][data-variant="solid"],
+.oc-button[data-ui="coding-assistant-new"][data-variant="solid"] {
   --oc-button-height: calc(28px * var(--ui-scale));
   --oc-button-padding-x: calc(10px * var(--ui-scale));
   --oc-button-gap: calc(2px * var(--ui-scale));
@@ -846,9 +848,13 @@
   --oc-button-color: var(--surface);
   letter-spacing: var(--ui-letter-spacing-normal);
   box-shadow: none;
+  flex: 0 0 auto;
+  border-radius: 0;
 }
 
-.oc-button[data-ui="sidebar-new-task-button"] .sidebar-btn-icon {
+.oc-button[data-ui="sidebar-new-task-button"] .sidebar-btn-icon,
+.oc-button[data-ui="mission-new"] .sidebar-btn-icon,
+.oc-button[data-ui="coding-assistant-new"] .sidebar-btn-icon {
   width: calc(16px * var(--ui-scale));
   height: calc(16px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
@@ -857,13 +863,19 @@
 }
 
 .oc-button[data-ui="sidebar-new-task-button"]:hover,
-.oc-button[data-ui="sidebar-new-task-button"]:focus-visible {
+.oc-button[data-ui="sidebar-new-task-button"]:focus-visible,
+.oc-button[data-ui="mission-new"]:hover,
+.oc-button[data-ui="mission-new"]:focus-visible,
+.oc-button[data-ui="coding-assistant-new"]:hover,
+.oc-button[data-ui="coding-assistant-new"]:focus-visible {
   --oc-button-bg: var(--accent-hover);
   --oc-button-border: 0 solid transparent;
   --oc-button-color: var(--surface);
 }
 
-.oc-button[data-ui="sidebar-new-task-button"]:focus-visible {
+.oc-button[data-ui="sidebar-new-task-button"]:focus-visible,
+.oc-button[data-ui="mission-new"]:focus-visible,
+.oc-button[data-ui="coding-assistant-new"]:focus-visible {
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
@@ -1031,16 +1043,12 @@
 
 /* ─────────────────────────────────────────────────────────────
    Header equal-height button row. Chat header controls use the same
-   22px cap while the sidebar keeps only the New Chat command.
+   22px cap while left ledgers share one new-action button contract.
    ───────────────────────────────────────────────────────────── */
 
 .chat-header .chat-task-status {
   height: calc(22px * var(--ui-scale));
   min-height: calc(22px * var(--ui-scale));
   max-height: calc(22px * var(--ui-scale));
-  box-shadow: none;
-}
-
-.sidebar-header .oc-button[data-ui="sidebar-new-task-button"] {
   box-shadow: none;
 }

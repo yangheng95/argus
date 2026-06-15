@@ -1159,6 +1159,29 @@ export namespace Message {
       if (msg.info.role === "user" && completed.has(msg.info.id)) {
         const part = msg.parts.find((item): item is Message.CompactionPart => item.type === "compaction")
         if (!part) continue
+        if (part.anchor_id === msg.info.id) {
+          const markerIndex = result.length - 1
+          const summaryIndex = result.findIndex(
+            (candidate) =>
+              candidate.info.role === "assistant" &&
+              candidate.info.parentID === msg.info.id &&
+              CompactionHandoff.isValidSummaryMessage(candidate.info),
+          )
+          if (summaryIndex < 0) break
+          const newer = result.slice(0, summaryIndex)
+          const summary = result[summaryIndex]!
+          if (part.tail_start_id) {
+            const tailIndex = result.findIndex((candidate) => candidate.info.id === part.tail_start_id)
+            const tail = tailIndex >= 0 ? result[tailIndex] : undefined
+            if (tail && tail.info.role === "user" && tailIndex > summaryIndex && tailIndex < markerIndex) {
+              const tailBlock = result.slice(summaryIndex + 1, tailIndex + 1)
+              result.splice(0, result.length, ...newer, ...tailBlock, summary, msg)
+              break
+            }
+          }
+          result.splice(0, result.length, ...newer, summary, msg)
+          break
+        }
         if (!part.tail_start_id && !part.anchor_id) break
         retain = {
           tailID: part.tail_start_id,

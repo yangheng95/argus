@@ -270,7 +270,9 @@ describe("browser preview verification", () => {
     const routeSource = readFileSync(new URL("../../src/server/routes/browser-preview.ts", import.meta.url), "utf8")
 
     expect(source).toContain("runBrowserPreviewEvidenceJob")
-    expect(source).toContain("export async function verifyBrowserPreview(input: BrowserPreviewVerificationInput)")
+    expect(source).toMatch(
+      /export async function verifyBrowserPreview\(\s*input: BrowserPreviewVerificationInput,\s*\)/,
+    )
     expect(source).toContain("runBrowserPreviewVerification")
     expect(source).not.toContain("export async function verifyBrowserPreviewForTest")
     expect(source).not.toContain("captureForTest")

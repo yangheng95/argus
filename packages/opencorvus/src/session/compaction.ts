@@ -610,7 +610,8 @@ export namespace SessionCompaction {
       const tailMessage = tailIndex >= 0 ? messages[tailIndex] : undefined
       if (!tailMessage || tailMessage.info.role !== "user") return undefined
     }
-    const endIndex = tailIndex >= 0 ? tailIndex : latest.userIndex
+    const markerOnAnchor = markerPart.anchor_id === marker.info.id
+    const endIndex = tailIndex >= 0 ? tailIndex : markerOnAnchor ? latest.assistantIndex : latest.userIndex
     if (endIndex <= anchorIndex + 1) return undefined
     return {
       startIndex: anchorIndex + 1,

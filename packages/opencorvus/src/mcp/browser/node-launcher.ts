@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process"
+import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 import os from "node:os"
@@ -29,11 +29,26 @@ export namespace BrowserMCPNodeLauncher {
       delete env.OPENCORVUS_BROWSER_MCP_PACKAGED
     }
     const child = spawn(node, [bundle, transport], {
-      cwd: process.cwd(),
-      env,
-      stdio: "inherit",
-      windowsHide: true,
+      ...childSpawnOptions({ env }),
     })
+    let terminating = false
+    const terminate = async (signal: NodeJS.Signals = "SIGTERM") => {
+      if (terminating) return
+      terminating = true
+      await terminateChildTree(child, signal)
+    }
+    const sigint = () => {
+      void terminate("SIGINT").finally(() => process.exit(130))
+    }
+    const sigterm = () => {
+      void terminate("SIGTERM").finally(() => process.exit(143))
+    }
+    const stdinClosed = () => {
+      void terminate("SIGTERM")
+    }
+    process.once("SIGINT", sigint)
+    process.once("SIGTERM", sigterm)
+    process.stdin.once("close", stdinClosed)
     await new Promise<void>((resolve, reject) => {
       child.once("error", (error) => {
         const code = (error as NodeJS.ErrnoException).code
@@ -44,6 +59,9 @@ export namespace BrowserMCPNodeLauncher {
         reject(error)
       })
       child.once("exit", (code, signal) => {
+        process.off("SIGINT", sigint)
+        process.off("SIGTERM", sigterm)
+        process.stdin.off("close", stdinClosed)
         if (code === 0 || signal === "SIGTERM" || signal === "SIGINT") return resolve()
         reject(new Error(`browser MCP node ${transport} process exited with ${signal ?? code}`))
       })
@@ -89,6 +107,61 @@ export namespace BrowserMCPNodeLauncher {
 
   async function resolveSourceBundle(transport: "http" | "stdio") {
     return buildSourceBundle(transport)
+  }
+
+  export function childSpawnOptions(input: {
+    env: NodeJS.ProcessEnv
+    platform?: NodeJS.Platform
+  }): SpawnOptions {
+    return {
+      cwd: process.cwd(),
+      env: input.env,
+      stdio: "inherit",
+      windowsHide: true,
+      detached: (input.platform ?? process.platform) !== "win32",
+    }
+  }
+
+  async function waitForProcessExit(child: ChildProcess): Promise<void> {
+    if (child.exitCode !== null || child.signalCode !== null) return
+    await new Promise<void>((resolve) => {
+      child.once("exit", () => resolve())
+    })
+  }
+
+  async function terminateChildTree(child: ChildProcess, signal: NodeJS.Signals): Promise<void> {
+    const pid = child.pid
+    if (!pid) return
+    if (process.platform === "win32") {
+      await new Promise<void>((resolve) => {
+        const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+          stdio: "ignore",
+          windowsHide: true,
+        })
+        killer.once("exit", () => resolve())
+        killer.once("error", () => {
+          child.kill(signal)
+          resolve()
+        })
+      })
+      await waitForProcessExit(child)
+      return
+    }
+    try {
+      process.kill(-pid, signal)
+    } catch {
+      child.kill(signal)
+    }
+    const force = setTimeout(() => {
+      try {
+        process.kill(-pid, "SIGKILL")
+      } catch {
+        child.kill("SIGKILL")
+      }
+    }, 2_000)
+    force.unref()
+    await waitForProcessExit(child)
+    clearTimeout(force)
   }
 
   async function buildSourceBundle(transport: "http" | "stdio") {

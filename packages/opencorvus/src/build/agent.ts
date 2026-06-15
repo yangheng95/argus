@@ -89,7 +89,6 @@ import { Question } from "@/question"
 import { buildBuildAgentReport } from "./report"
 import { InstructionPrompt } from "@/session/instruction"
 import { renderBuildPromptOverlays } from "./prompt-context"
-import { createBuildScreenshotTool } from "./screenshot-tool"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
@@ -693,11 +692,6 @@ export namespace BuildAgent {
       const buildCollector: BuildCollector = {}
       const buildBuildReport = () => buildBuildAgentReport(buildCollector)
       const createBuildRuntimeTools = (): ToolSet => ({
-        screenshot: createBuildScreenshotTool({
-          projectID: Instance.project.id,
-          projectDir: Instance.project.worktree,
-          taskID: input.task.id,
-        }),
         ...(input.additionalRuntimeTools ?? {}),
         report_build_result: tool({
           description:

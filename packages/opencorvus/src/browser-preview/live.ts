@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { resolveBrowserNodeSidecarRuntime, type BrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
 import { BrowserRuntime } from "@/browser/runtime"
 import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./viewport"
+import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 
 const LIVE_COMMAND_TIMEOUT_MILLISECONDS = 60_000
 const LIVE_NAVIGATION_TIMEOUT_MILLISECONDS = 20_000
@@ -89,6 +90,31 @@ type BrowserPreviewLiveResult = {
 }
 
 const liveSessions = new Map<string, BrowserPreviewLiveSidecar>()
+const liveMetrics = {
+  created: 0,
+  closed: 0,
+  idleClosed: 0,
+  forcedKilled: 0,
+  errors: 0,
+}
+
+ServeRuntimeMemoryMetrics.register({
+  id: "browser-preview-live",
+  snapshot: () => {
+    let pendingCommands = 0
+    let stderrBytes = 0
+    for (const session of liveSessions.values()) {
+      pendingCommands += session.pendingCommands
+      stderrBytes += session.stderrBytes
+    }
+    return {
+      active: liveSessions.size,
+      pendingCommands,
+      stderrBytes,
+      ...liveMetrics,
+    }
+  },
+})
 
 async function browserPreviewLiveSession(input: {
   taskID: string
@@ -101,15 +127,34 @@ async function browserPreviewLiveSession(input: {
   const runtime = await resolveBrowserNodeSidecarRuntime()
   const executablePath = await BrowserRuntime.findBrowserExecutable()
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(undefined)
-  const session = new BrowserPreviewLiveSidecar(runtime, executablePath, launchTimeoutMs, () => {
-    if (liveSessions.get(key) === session) liveSessions.delete(key)
-  })
+  const session = new BrowserPreviewLiveSidecar(
+    {
+      taskID: input.taskID,
+      targetID: input.targetID,
+      viewportID: input.viewportID,
+    },
+    runtime,
+    executablePath,
+    launchTimeoutMs,
+    () => {
+      if (liveSessions.get(key) === session) liveSessions.delete(key)
+    },
+  )
   liveSessions.set(key, session)
   return session
 }
 
+export function browserPreviewLiveStats() {
+  return {
+    active: liveSessions.size,
+    ...liveMetrics,
+  }
+}
+
 class BrowserPreviewLiveSidecar {
   readonly child: ChildProcessWithoutNullStreams
+  readonly createdAt = Date.now()
+  lastActiveAt = this.createdAt
   private readonly pending = new Map<
     number,
     {
@@ -125,11 +170,17 @@ class BrowserPreviewLiveSidecar {
   closed = false
 
   constructor(
+    readonly owner: {
+      taskID: string
+      targetID: string
+      viewportID: BrowserPreviewViewportID
+    },
     runtime: BrowserNodeSidecarRuntime,
     executablePath: string,
     launchTimeoutMs: number,
     private readonly onClose: () => void,
   ) {
+    liveMetrics.created++
     this.child = spawn(runtime.nodeExecutable, ["-e", BROWSER_PREVIEW_LIVE_SCRIPT], {
       cwd: process.cwd(),
       env: {
@@ -141,6 +192,7 @@ class BrowserPreviewLiveSidecar {
       },
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
+      detached: process.platform !== "win32",
     })
     this.child.stdout.setEncoding("utf8")
     this.child.stderr.setEncoding("utf8")
@@ -158,6 +210,14 @@ class BrowserPreviewLiveSidecar {
     )
   }
 
+  get pendingCommands(): number {
+    return this.pending.size
+  }
+
+  get stderrBytes(): number {
+    return Buffer.byteLength(this.stderr, "utf8")
+  }
+
   command(command: BrowserPreviewLiveCommand, signal?: AbortSignal): Promise<BrowserPreviewLiveResult> {
     if (this.closed) return Promise.reject(new Error("Browser preview live sidecar is closed."))
     if (signal?.aborted) {
@@ -165,6 +225,7 @@ class BrowserPreviewLiveSidecar {
         signal.reason instanceof Error ? signal.reason : new Error("Browser preview live command aborted."),
       )
     }
+    this.lastActiveAt = Date.now()
     const id = ++this.sequence
     const line = `${JSON.stringify({ id, command })}\n`
     return new Promise<BrowserPreviewLiveResult>((resolve, reject) => {
@@ -187,12 +248,14 @@ class BrowserPreviewLiveSidecar {
         resolve: (result) => {
           signal?.removeEventListener("abort", abort)
           clearTimeout(timer)
+          this.lastActiveAt = Date.now()
           this.armIdleTimer()
           resolve(result)
         },
         reject: (error) => {
           signal?.removeEventListener("abort", abort)
           clearTimeout(timer)
+          this.lastActiveAt = Date.now()
           this.armIdleTimer()
           reject(error)
         },
@@ -237,6 +300,7 @@ class BrowserPreviewLiveSidecar {
     if (this.closed) return
     this.clearIdleTimer()
     this.idleTimer = setTimeout(() => {
+      liveMetrics.idleClosed++
       void this.close()
     }, LIVE_IDLE_TIMEOUT_MILLISECONDS)
     this.idleTimer.unref?.()
@@ -251,6 +315,8 @@ class BrowserPreviewLiveSidecar {
   private closeWithError(error: Error, onClose: () => void): void {
     if (this.closed) return
     this.closed = true
+    liveMetrics.errors++
+    liveMetrics.closed++
     this.clearIdleTimer()
     for (const [id, pending] of this.pending) {
       this.pending.delete(id)
@@ -263,6 +329,7 @@ class BrowserPreviewLiveSidecar {
   async close(): Promise<void> {
     if (this.closed) return
     this.closed = true
+    liveMetrics.closed++
     this.clearIdleTimer()
     for (const [id, pending] of this.pending) {
       this.pending.delete(id)
@@ -277,9 +344,10 @@ class BrowserPreviewLiveSidecar {
       }
       this.child.once("exit", () => resolve())
     })
-    this.child.kill("SIGTERM")
+    terminateChildTree(this.child, "SIGTERM")
     const forceKillTimer = setTimeout(() => {
-      this.child.kill("SIGKILL")
+      liveMetrics.forcedKilled++
+      terminateChildTree(this.child, "SIGKILL")
     }, LIVE_CLOSE_TIMEOUT_MILLISECONDS)
     forceKillTimer.unref?.()
     try {
@@ -287,6 +355,20 @@ class BrowserPreviewLiveSidecar {
     } finally {
       clearTimeout(forceKillTimer)
     }
+  }
+}
+
+function terminateChildTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+  const pid = child.pid
+  if (!pid) return
+  if (process.platform === "win32") {
+    child.kill(signal)
+    return
+  }
+  try {
+    process.kill(-pid, signal)
+  } catch {
+    child.kill(signal)
   }
 }
 
@@ -316,7 +398,7 @@ async function ensurePage(command) {
     browser = await chromium.launch({
       executablePath: process.env.OPENCORVUS_BROWSER_EXECUTABLE,
       headless: true,
-      args: JSON.parse(process.env.OPENCORVUS_BROWSER_LAUNCH_ARGS || "[]"),
+      args: JSON.parse(process.env.OPENCORVUS_BROWSER_LAUNCH_ARGS),
       timeout: Number(process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS || "300000"),
     });
   }

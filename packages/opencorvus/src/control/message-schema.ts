@@ -2,6 +2,8 @@ import z from "zod"
 import { ChannelSurface } from "@/channel/catalog"
 import { isModelReference } from "@/provider/model-ref"
 
+const STORED_ATTACHMENT_URL = /^\/attachment\/[^/\\?#]+\/[^/\\?#]+$/
+
 export const ControlLocalAction = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("set_executor"),
@@ -27,6 +29,12 @@ export const ControlAttachment = z.object({
   filename: z.string().optional(),
 })
 
+export const ControlStoredAttachment = ControlAttachment.extend({
+  url: z
+    .string()
+    .regex(STORED_ATTACHMENT_URL, "Control result attachments must reference stored /attachment/<projectID>/<name> resources"),
+})
+
 export const ControlMessageResult = z.object({
   kind: z.enum(["panel_response", "created", "message", "interaction", "progress", "task_list", "cancelled"]),
   message: z.string(),
@@ -34,7 +42,7 @@ export const ControlMessageResult = z.object({
   interaction_id: z.string().optional(),
   session_id: z.string().optional(),
   local_action: ControlLocalAction.optional(),
-  attachments: ControlAttachment.array().optional(),
+  attachments: ControlStoredAttachment.array().optional(),
 })
 
 export const ControlMessageInput = z.object({

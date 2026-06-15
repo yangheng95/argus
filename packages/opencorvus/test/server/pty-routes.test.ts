@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
 import path from "node:path"
 import { Bus } from "../../src/bus"
 import { Pty } from "../../src/pty"
@@ -332,4 +333,13 @@ describe("server.pty-routes", () => {
       },
     })
   }, 15_000)
+
+  test("Node PTY bridge kill escalates by child PID after protocol kill", async () => {
+    const source = await fs.readFile(path.join(__dirname, "../../src/pty/host.ts"), "utf8")
+
+    expect(source).toContain('bridgeMessage(child, { type: "kill" })')
+    expect(source).toContain('nodeSpawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"]')
+    expect(source).toContain('child.kill("SIGKILL")')
+    expect(source).not.toContain("/IM")
+  })
 })

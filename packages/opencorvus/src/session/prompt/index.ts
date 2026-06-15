@@ -13,8 +13,8 @@ import { SessionPromptState } from "./state"
 
 export namespace SessionPrompt {
   export const assertNotBusy = SessionPromptState.assertNotBusy
-  export const cancel = (sessionID: string) => {
-    return SessionPromptState.cancel(sessionID)
+  export const cancel = (sessionID: string, directory?: string) => {
+    return SessionPromptState.cancel(sessionID, directory)
   }
 
   export const {

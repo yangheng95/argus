@@ -60,6 +60,7 @@ import {
 import { Session } from "@/session"
 import { SessionContext } from "@/session/context"
 import { SessionPrompt } from "@/session/prompt"
+import { SessionStatus } from "@/session/status"
 import { Message } from "@/session/message"
 import { Bus } from "@/bus"
 import { Instance } from "@/project/instance"
@@ -84,7 +85,7 @@ import {
   renderWorkflowPrompt,
 } from "@/engine"
 import { EngineProtocol } from "@/engine/protocol"
-import { Event as EngineEvent } from "@/engine/model"
+import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
 import { describeTask, renderTaskDescription } from "@/engine/describe"
 import { deriveTaskStatus, isTaskTerminal } from "@/engine/task-status"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
@@ -237,6 +238,9 @@ export interface OrchestratorEvent {
   operatorMessage?: {
     text: string
     attachmentSummary?: string
+    source?: string
+    target?: TaskMessageTargetInput
+    messageID?: string
   }
 }
 
@@ -816,18 +820,29 @@ async function orchestratorSessionForTask(task: TaskRow): Promise<Session.Info> 
     .filter((session) => session.kind === "orchestrator")
     .sort((left, right) => left.time.created - right.time.created)
 
-  const primary = existing[0]
+  const terminal = existing.filter((session) => SessionStatus.get(session.id).type === "terminal")
+  const reusable = existing.filter((session) => SessionStatus.get(session.id).type !== "terminal")
+  const primary = reusable[0]
   if (primary) {
-    if (existing.length > 1) {
-      log.warn("task has multiple orchestrator sessions; reusing earliest", {
+    if (reusable.length > 1 || terminal.length > 0) {
+      log.warn("task has multiple orchestrator sessions; reusing earliest live session", {
         taskID: task.id,
         rootSessionID: task.session_id,
         primarySessionID: primary.id,
-        duplicateSessionIDs: existing.slice(1).map((session) => session.id),
+        duplicateSessionIDs: reusable.slice(1).map((session) => session.id),
+        terminalSessionIDs: terminal.map((session) => session.id),
       })
     }
     await Session.touch(primary.id)
     return primary
+  }
+
+  if (terminal.length > 0) {
+    log.info("creating new orchestrator session because prior sessions are terminal", {
+      taskID: task.id,
+      rootSessionID: task.session_id,
+      terminalSessionIDs: terminal.map((session) => session.id),
+    })
   }
 
   return Session.createNext({

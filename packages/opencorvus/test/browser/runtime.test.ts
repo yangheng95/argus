@@ -83,7 +83,7 @@ describe("BrowserRuntime", () => {
     expect(BrowserRuntime.defaultLaunchArgs()).toContain("--disable-remote-fonts")
   })
 
-  test("adds Chromium proxy launch arguments from the process proxy environment", () => {
+  test("adds Chromium proxy launch arguments from HTTPS_PROXY", () => {
     const args = BrowserRuntime.defaultLaunchArgs({
       env: {
         HTTPS_PROXY: "http://172.25.160.1:6268",
@@ -92,6 +92,30 @@ describe("BrowserRuntime", () => {
     })
 
     expect(args).toContain("--proxy-server=http://172.25.160.1:6268")
+    expect(args).toContain("--proxy-bypass-list=localhost;127.0.0.1;::1;*.local")
+  })
+
+  test("adds Chromium proxy launch arguments from HTTP_PROXY", () => {
+    const args = BrowserRuntime.defaultLaunchArgs({
+      env: {
+        HTTP_PROXY: "172.25.160.1:6268",
+        NO_PROXY: "localhost,127.0.0.1,::1,*.local",
+      },
+    })
+
+    expect(args).toContain("--proxy-server=http://172.25.160.1:6268")
+    expect(args).toContain("--proxy-bypass-list=localhost;127.0.0.1;::1;*.local")
+  })
+
+  test("adds Chromium proxy launch arguments from ALL_PROXY", () => {
+    const args = BrowserRuntime.defaultLaunchArgs({
+      env: {
+        ALL_PROXY: "socks5://127.0.0.1:1080",
+        NO_PROXY: "localhost,127.0.0.1,::1,*.local",
+      },
+    })
+
+    expect(args).toContain("--proxy-server=socks5://127.0.0.1:1080")
     expect(args).toContain("--proxy-bypass-list=localhost;127.0.0.1;::1;*.local")
   })
 
@@ -105,6 +129,25 @@ describe("BrowserRuntime", () => {
 
     expect(args).toContain("--proxy-server=socks5://127.0.0.1:1080")
     expect(args).not.toContain("--proxy-server=http://172.25.160.1:6268")
+  })
+
+  test("passes shared proxy-aware launch arguments into every webpage evidence Node sidecar", async () => {
+    const files: Array<{ path: string; snippet: string }> = [
+      { path: "src/browser/webpage/extract.ts", snippet: "launchArgs: BrowserRuntime.defaultLaunchArgs({" },
+      { path: "src/browser/webpage/render.ts", snippet: "launchArgs: BrowserRuntime.defaultLaunchArgs({" },
+      { path: "src/browser/webpage/runtime-state.ts", snippet: "launchArgs: BrowserRuntime.defaultLaunchArgs({" },
+      { path: "src/browser-preview/evidence-runner.ts", snippet: "launchArgs: BrowserRuntime.defaultLaunchArgs()," },
+      {
+        path: "src/browser-preview/live.ts",
+        snippet: "OPENCORVUS_BROWSER_LAUNCH_ARGS: JSON.stringify(BrowserRuntime.defaultLaunchArgs()),",
+      },
+    ]
+
+    for (const file of files) {
+      const source = await fs.readFile(path.resolve(import.meta.dir, "../../", file.path), "utf8")
+      expect(source).toContain(file.snippet)
+      expect(source).not.toContain('args: []')
+    }
   })
 
   test("resolves source Playwright from the package root", async () => {

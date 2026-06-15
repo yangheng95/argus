@@ -8,36 +8,63 @@ function source(path: string): string {
   return readFileSync(join(OVERLAY_ROOT, path), "utf8")
 }
 
-test("task debug info includes the Files panel board projection fields", () => {
+test("task debug info keeps the concise workflow identity header", () => {
+  const debugInfo = source("src/utils/debug-info.ts")
   const main = source("src/main.tsx")
 
-  expect(main).toContain("files:     ${debugGoalBoardFiles(gw)}")
-  expect(main).toContain(
+  expect(debugInfo).toContain("# Task Debug Info (double-click 任务 → clipboard)")
+  expect(debugInfo).toContain("task.id:")
+  expect(debugInfo).toContain("task.directory:")
+  expect(debugInfo).toContain("server.url:")
+  expect(debugInfo).toContain("task.session:")
+  expect(debugInfo).toContain("task.run.id:")
+  expect(debugInfo).toContain("Goals (${goalWorkflows.length}):")
+  expect(main).toContain("buildTaskDebugBlob(boardStore.board)")
+})
+
+test("task debug info includes only the compact Files panel board projection summary", () => {
+  const debugInfo = source("src/utils/debug-info.ts")
+
+  expect(debugInfo).toContain("files:     ${debugGoalBoardFiles(gw)}")
+  expect(debugInfo).toContain(
     "changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; commits=${commitRefs.size",
   )
-  expect(main).toContain("board.goalWorkflows[].steps[].payload.changedFiles / changedFileDiffs / commitRef")
 })
 
-test("task debug info SQL exposes per-goal acceptance artifacts for diff triage", () => {
-  const main = source("src/main.tsx")
+test("task debug info omits the old redundant notes, HTTP probes, and SQL templates", () => {
+  const debugInfo = source("src/utils/debug-info.ts")
 
-  expect(main).toContain("Per-goal acceptance file projection")
-  expect(main).toContain("latest delivered attempt per goal")
-  expect(main).toContain("json_extract(d.payload, '$.result.commit_ref') AS commit_ref")
-  expect(main).toContain("json_extract(d.payload, '$.result.changed_files') AS changed_files")
-  expect(main).toContain("Raw per-goal acceptance artifacts")
-  expect(main).toContain("row_number() OVER (PARTITION BY goal_run_id ORDER BY time_created DESC, id DESC)")
+  expect(debugInfo).not.toContain("Notes:")
+  expect(debugInfo).not.toContain("Project-scoped HTTP probes")
+  expect(debugInfo).not.toContain("Invoke-RestMethod")
+  expect(debugInfo).not.toContain("SQL templates")
+  expect(debugInfo).not.toContain("Runtime DB path (single source)")
+  expect(debugInfo).not.toContain("SELECT * FROM engine_task")
+  expect(debugInfo).not.toContain("protocol_event WHERE task_id")
 })
 
-test("task debug info leads with project-scoped probes before direct DB triage", () => {
+test("mission debug info is copyable from mission rows without using rename double click", () => {
+  const debugInfo = source("src/utils/debug-info.ts")
+  const missionList = source("src/components/MissionList.tsx")
+
+  expect(debugInfo).toContain("# Mission Debug Info (double-click mission → clipboard)")
+  expect(debugInfo).toContain("mission.id:")
+  expect(debugInfo).toContain("mission.session:")
+  expect(debugInfo).toContain("Task counts:")
+  expect(debugInfo).toContain("Tasks (${tasks.length}):")
+  expect(missionList).toContain("buildMissionDebugBlob(props.mission)")
+  expect(missionList).toContain("[mission-row dblclick] clipboard write failed")
+  expect(missionList).toContain("<MissionRenameButton onClick={beginRename} />")
+})
+
+test("chat debug info is copyable from the conversation title for standalone sessions", () => {
+  const debugInfo = source("src/utils/debug-info.ts")
   const main = source("src/main.tsx")
 
-  expect(main).toContain("server.url:")
-  expect(main).toContain("Project-scoped HTTP probes")
-  expect(main).toContain("'x-opencorvus-directory' = $dir")
-  expect(main).toContain("/global/health is control-plane only")
-  expect(main).toContain("Runtime DB path (single source)")
-  expect(main).toContain("/global/health -> paths.database")
-  expect(main).toContain("do not infer missing goals/contracts from an empty wrong DB")
-  expect(main).not.toContain("DB path (resolved by engine at runtime via /global/health)")
+  expect(debugInfo).toContain("# Chat Debug Info (double-click chat → clipboard)")
+  expect(debugInfo).toContain("chat.session:")
+  expect(debugInfo).toContain("selected.source: ${source.kind}:${source.id}")
+  expect(debugInfo).toContain("top.level: ${cardTree.order.length}")
+  expect(main).toContain("buildChatDebugBlob(boardStore.board, selectedSource, cardTreeStore)")
+  expect(main).toContain("selectedSource?.kind === \"session\"")
 })

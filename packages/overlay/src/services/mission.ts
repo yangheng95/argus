@@ -58,6 +58,8 @@ export interface MissionWakeInput {
   text: string
   /** Optional human-readable title for the mission (not yet persisted). */
   title?: string
+  /** Explicit OpenCorvus model reference for this wake. */
+  model?: string
   signal?: AbortSignal
 }
 
@@ -274,6 +276,7 @@ export async function wakeMission(input: MissionWakeInput): Promise<MissionWakeR
     text,
     ...(input.missionID ? { missionID: input.missionID } : {}),
     ...(input.title ? { title: input.title } : {}),
+    ...(input.model ? { model: input.model } : {}),
   })
   return (await apiJson(`mission/wake`, {
     method: "POST",

@@ -29,7 +29,7 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(main).toContain("selectLeftActivity")
   expect(main).toContain('setSelectedLeftActivity("assistant")')
   expect(main).toContain("isLeftActivityOpen")
-  expect(main).toContain('id: "tasks", icon: "tasks", labelKey: "sidebar.title", tooltipKey: "activity.tooltip.tasks"')
+  expect(main).toContain('id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks"')
   expect(main).toContain(
     'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
   )
@@ -83,6 +83,7 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
     "activity.tooltip.explorer",
     "activity.tooltip.diff",
     "activity.tooltip.browser",
+    "activity.tooltip.screenshots",
     "activity.tooltip.notifications",
   ]) {
     expect(en).toContain(`"${key}"`)

@@ -6,12 +6,12 @@ import { Installation } from "../installation"
 import { Flag } from "../flag/flag"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "../util/filesystem"
-import { HEXIN_GATEWAY_URL } from "./hexin-discovery"
 import { profileFor } from "./hexin-profiles"
 
 export namespace ModelsDev {
   const log = Log.create({ service: "models.dev" })
   const filepath = path.join(Global.Path.cache, "models.json")
+  export const HEXIN_GATEWAY_URL = "https://aimemodeldev.myhexin.com/litellm/v1"
   const LOCAL_HEXIN_MODEL_IDS = [
     "gpt-5.5",
     "gpt-5.4",
@@ -27,6 +27,9 @@ export namespace ModelsDev {
     "claude-sonnet-4-6-v2",
     "cy-claude-sonnet-4-6",
   ] as const
+
+  const OPENCORVUS_API_URL = "https://api.opencorvus.ai/v1"
+  const KILO_API_URL = "https://api.kilo.ai/api/gateway"
 
   export const Model = z.object({
     id: z.string(),
@@ -129,18 +132,108 @@ export namespace ModelsDev {
     }
   }
 
+  function hexinProvider(input?: Provider): Provider {
+    const ids = Object.keys(input?.models ?? {})
+    const modelIDs = ids.length > 0 ? ids : Array.from(LOCAL_HEXIN_MODEL_IDS)
+    const models = Object.fromEntries(modelIDs.map((id) => [id, hexinModel(id)]))
+    return {
+      id: "hexin",
+      env: input?.env ?? ["HEXIN_API_KEY"],
+      npm: "@ai-sdk/openai-compatible",
+      api: HEXIN_GATEWAY_URL,
+      name: input?.name ?? "Hexin OpenAI Gateway",
+      models,
+    }
+  }
+
+  function opencorvusModel(id: string): Model {
+    return {
+      id,
+      name: id === "gpt-5-nano" ? "GPT-5 Nano" : id,
+      family: "gpt-nano",
+      attachment: true,
+      reasoning: true,
+      tool_call: true,
+      temperature: false,
+      release_date: "",
+      modalities: {
+        input: ["text", "image", "pdf"],
+        output: ["text"],
+      },
+      limit: {
+        context: 400_000,
+        input: 272_000,
+        output: 128_000,
+      },
+      cost: {
+        input: 0,
+        output: 0,
+        cache_read: 0,
+        cache_write: 0,
+      },
+      options: {},
+    }
+  }
+
+  function opencorvusProvider(input?: Provider): Provider {
+    const ids = Object.keys(input?.models ?? {})
+    const modelIDs = ids.length > 0 ? ids : ["gpt-5-nano"]
+    return {
+      id: "opencorvus",
+      env: input?.env ?? ["OPENCORVUS_API_KEY"],
+      npm: "@ai-sdk/openai-compatible",
+      api: input?.api ?? OPENCORVUS_API_URL,
+      name: input?.name ?? "OpenCorvus",
+      models: Object.fromEntries(modelIDs.map((id) => [id, input?.models?.[id] ?? opencorvusModel(id)])),
+    }
+  }
+
+  function kiloModel(id: string): Model {
+    return {
+      id,
+      name: id === "inclusionai/ling-2.6-1t" ? "inclusionAI: Ling-2.6-1T" : id,
+      family: "ling",
+      attachment: false,
+      reasoning: false,
+      tool_call: true,
+      temperature: true,
+      release_date: "2026-04-23",
+      modalities: {
+        input: ["text"],
+        output: ["text"],
+      },
+      limit: {
+        context: 262_144,
+        output: 32_768,
+      },
+      cost: {
+        input: 0.3,
+        output: 2.5,
+        cache_read: 0.06,
+      },
+      options: {},
+    }
+  }
+
+  function kiloProvider(input?: Provider): Provider {
+    const ids = Object.keys(input?.models ?? {})
+    const modelIDs = ids.length > 0 ? ids : ["inclusionai/ling-2.6-1t"]
+    return {
+      id: "kilo",
+      env: input?.env ?? ["KILO_API_KEY"],
+      npm: "@ai-sdk/openai-compatible",
+      api: input?.api ?? KILO_API_URL,
+      name: input?.name ?? "Kilo Gateway",
+      models: Object.fromEntries(modelIDs.map((id) => [id, input?.models?.[id] ?? kiloModel(id)])),
+    }
+  }
+
   export function withLocalProviders(input: Record<string, Provider>): Record<string, Provider> {
-    const models = Object.fromEntries(LOCAL_HEXIN_MODEL_IDS.map((id) => [id, hexinModel(id)]))
     return {
       ...input,
-      hexin: {
-        id: "hexin",
-        env: ["HEXIN_API_KEY"],
-        npm: "@ai-sdk/openai-compatible",
-        api: HEXIN_GATEWAY_URL,
-        name: "Hexin OpenAI Gateway",
-        models,
-      },
+      hexin: hexinProvider(input.hexin),
+      opencorvus: opencorvusProvider(input.opencorvus),
+      kilo: kiloProvider(input.kilo),
     }
   }
 
@@ -149,14 +242,14 @@ export namespace ModelsDev {
   }
 
   // Catalog resolution is strictly offline-first:
-  //   1. user-supplied JSON at OPENCORVUS_MODELS_PATH or the per-instance
-  //      cache (./models.json) populated by the most recent explicit
-  //      refresh,
-  //   2. the snapshot embedded at build time (script/build.ts pulls from
+  //   1. the per-instance cache (./models.json) populated by the most recent
+  //      explicit refresh,
+  //   2. user-supplied JSON at OPENCORVUS_MODELS_PATH,
+  //   3. the snapshot embedded at build time (script/build.ts pulls from
   //      models.dev once during the matrix build and writes
   //      provider/models-snapshot.ts),
-  //   3. empty record — never silently network-fetch.
-  // The third tier was previously a fallback `fetch(models.dev/api.json)`
+  //   4. empty record — never silently network-fetch.
+  // This resolver previously performed an implicit `fetch(models.dev/api.json)`
   // plus a top-level auto-refresh + hourly setInterval; both removed so
   // every outbound network call to the registry is the result of an
   // explicit `refresh()` invocation (UI button, CLI `models --refresh`,
@@ -164,10 +257,15 @@ export namespace ModelsDev {
   // startup, makes air-gapped deployments correct by default, and keeps
   // the catalog deterministic for the duration of a process.
   export const Data = lazy(async () => {
-    const result = await Filesystem.readJson(Flag.OPENCORVUS_MODELS_PATH ?? filepath).catch(() => {})
+    const cached = await Filesystem.readJson(filepath).catch(() => {})
+    if (cached) return withLocalProviders(cached as Record<string, Provider>)
+    const result = Flag.OPENCORVUS_MODELS_PATH
+      ? await Filesystem.readJson(Flag.OPENCORVUS_MODELS_PATH).catch(() => {})
+      : undefined
     if (result) return withLocalProviders(result as Record<string, Provider>)
     // Try to import bundled snapshot (generated at build time). It is
-    // gitignored in dev worktrees, so runtime fallback is intentional.
+    // gitignored in dev worktrees, so the empty tier keeps development
+    // worktrees deterministic when no snapshot is present.
     // @ts-ignore models-snapshot.ts is generated by build.ts.
     const snapshot = await import("./models-snapshot")
       .then((m) => m.snapshot as Record<string, unknown>)
@@ -209,5 +307,20 @@ export namespace ModelsDev {
       log.error("registry refresh failed", { error })
       return { ok: false, error }
     }
+  }
+
+  export async function refreshHexinProvider(ids: string[]): Promise<Provider> {
+    const provider = hexinProvider({
+      id: "hexin",
+      env: ["HEXIN_API_KEY"],
+      npm: "@ai-sdk/openai-compatible",
+      api: HEXIN_GATEWAY_URL,
+      name: "Hexin OpenAI Gateway",
+      models: Object.fromEntries(ids.map((id) => [id, hexinModel(id)])),
+    })
+    const current = await get()
+    await Filesystem.writeJson(filepath, withLocalProviders({ ...current, hexin: provider }), 0o600)
+    ModelsDev.Data.reset()
+    return provider
   }
 }

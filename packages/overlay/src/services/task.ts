@@ -36,7 +36,7 @@ import {
 import { appStore, setAppStore } from "../store/app"
 import { taskScopedPath } from "./task-path"
 import { applyDirectory } from "./workspace"
-import { resetWriter } from "./tree-writer"
+import { ingestPersistedConversationMessage, resetWriter } from "./tree-writer"
 import { cancelConversationReplay, hydrateTaskConversation } from "./conversation"
 import { resetSelectedLiveCursor } from "./selected-stream-cursor"
 import { ackTaskNotificationIfPresent } from "./notify"
@@ -118,6 +118,11 @@ function inactivityTimeoutError(timeoutMs: number): DOMException {
   return new DOMException(`Panel stream inactive for ${timeoutMs}ms`, "TimeoutError")
 }
 
+function currentOpenCorvusModel(): string | undefined {
+  const model = appStore.config?.model
+  return typeof model === "string" && model.includes("/") && model.trim() === model ? model : undefined
+}
+
 function relayAbort(source: AbortSignal | undefined, controller: AbortController): () => void {
   if (!source) return () => undefined
   const abort = () => {
@@ -147,6 +152,7 @@ export function panelRequestBody(
     time_created: Date.now(),
     taskID,
     executor: sanitizeExecutor(executor),
+    model: currentOpenCorvusModel(),
     request_id: requestID || undefined,
     allow_create: true,
     allow_session_mutation: false,
@@ -448,7 +454,7 @@ export async function submitMessage(
   const selectedSource = boardStore.selectedSource
   if (selectedSource?.kind === "session") {
     try {
-      return await apiJson(`session/${encodeURIComponent(selectedSource.id)}/prompt_async`, {
+      const result = await apiJson(`session/${encodeURIComponent(selectedSource.id)}/prompt_async`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -463,6 +469,8 @@ export async function submitMessage(
         }),
         signal: controller.signal,
       })
+      ingestPersistedConversationMessage(result.user_message)
+      return result
     } finally {
       if (inactivityTimer) clearTimeout(inactivityTimer)
       cleanupRelay()
@@ -712,7 +720,7 @@ export async function replyToAgentSession(taskID: string, sessionID: string, mes
 export async function sendTaskOperatorMessage(
   taskID: string,
   message: string,
-  options: { source?: string } = {},
+  options: { source: string; target?: { kind: "build_session"; sessionID: string; goalID?: string } },
 ): Promise<void> {
   const text = message.trim()
   if (!taskID || !text) return
@@ -721,7 +729,8 @@ export async function sendTaskOperatorMessage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       text,
-      source: options.source ?? "overlay_operator_message",
+      source: options.source,
+      ...(options.target ? { target: options.target } : {}),
     }),
   })
 }

@@ -14,6 +14,14 @@
 
 ---
 
+## 前端视觉验收 Principle（独立硬约束）
+
+build agent 处理任何前端页面、组件、可视化、overlay、preview、UI/UX 相关任务时，必须负责启动真实页面、截图、亲自查看页面，并根据视觉反馈修改代码后复测。截图必须绑定到当前 goal / region / 交付面，不能只使用全局共享截图或只记录 browser/runtime diagnostics。任何只通过 lint、typecheck、build、DOM 文本、console clean、benchmark 分数或口头描述而没有截图查看和视觉拨乱反正的前端交付，一律不算完成。发现截图与目标不一致时，必须继续修复并重新截图，直到视觉问题被根治或按 rule 28b 坦诚标记未达成验收。
+
+当任务要求复刻 / port / clone / parity，但同时说明“不是像素级复制”“不复制品牌视觉”“使用目标设计系统”时，这些措辞只能放松明确点名的 token、组件 primitive、图标来源、品牌资产等维度，不能放松信息架构、模块结构、区域顺序、布局密度、间距节奏、响应式行为和交互语义。禁止把 reference parity 任务改写成“目标设计系统风格的新页面”。已有 reference screenshot / source DOM / style-profile / interaction evidence 证明的不一致，不能写成 accepted variance；只能修复，或按 rule 28b 明确标记未达成验收。
+
+---
+
 ## 一、核心思维原则（先想清楚，再动手）
 
 **1.** 看见 bug 要思考本质问题，要探索全部资料和代码寻找证据，不要企图胡说八道蒙混过关。任何掩盖问题的补丁都不应视为合格修复。
@@ -141,6 +149,20 @@
 - 修改服务端中间件 / 路由装载顺序：测试同时覆盖控制平面（health/event/config）与项目作用域（tasks/path/vcs）路由的差异化行为。
 
 **37.** 所有涉及codex和claude code的需求都需要你自己调用它们来完成，不要让用户来调用。你需要根据需求分析和设计方案，主动使用 codex 或 claude code 来生成代码、修复 bug、编写测试等（最高权限,bypass permissions，no sandbox）。禁止让用户直接调用这些工具来完成任务，因为这会导致不必要的复杂性和错误。
+
+### 6.4 Host / WSL 工作区同步
+
+**38.** Windows host 与 WSL（Windows Subsystem for Linux，用于在 Windows 上运行 Linux 用户态环境）存在两份工作区时，禁止手工复制零散文件。必须使用 `script/sync-host-wsl.ps1` 作为唯一同步入口。
+
+- Windows host 是唯一 git 记录和代码编辑准源。所有代码、文档、测试修改必须先落在 Windows host 工作区；WSL 只作为运行镜像，不允许直接编辑 WSL 文件，也不允许在 WSL 里制造 git 记录。
+- 如果 WSL 中出现未同步的新内容，必须先用同步脚本把差异带回 Windows host 进行人工审查和合并；合并完成后再从 Windows host 同步回 WSL。禁止绕过 Windows host 直接把 WSL 作为准源继续开发。
+- 同步边界只包含源码、配置、文档、测试和静态资源。构建产物 / 运行产物（例如 `dist-vite`、`dist`、二进制包、缓存目录）不得作为跨端同步对象；WSL 运行所需产物必须在 WSL 内基于已同步源码重新编译生成。
+- 默认先执行 dry-run：`powershell -ExecutionPolicy Bypass -File script/sync-host-wsl.ps1`。
+- 确认无冲突后再执行：`powershell -ExecutionPolicy Bypass -File script/sync-host-wsl.ps1 -Apply`。
+- 脚本会在 `.scratch/sync-host-wsl-*` 下保存两边 `HEAD`、changed 列表、diff 和文件备份；禁止绕过备份直接覆盖。
+- 两边都改且内容不同、或两边 `HEAD` 不同导致 clean tracked 文件内容不同，默认必须视为冲突并停止；不要猜测哪边更新。
+- 冲突只能在人工检查 `conflicts.tsv` 后显式指定方向解决：host 确认为准时使用 `-PreferHostForConflicts`，WSL 确认为准时使用 `-PreferWslForConflicts`。脚本会把这类覆盖写入 `resolved-conflicts.tsv`。
+- 同步代码不会让已经启动的 OpenCorvus 进程自动加载新代码。是否重启必须作为独立操作显式确认，不能混在同步步骤里。
 
 ---
 

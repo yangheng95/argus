@@ -266,7 +266,7 @@ export namespace BrowserRuntime {
 
     const platform = input?.platform ?? process.platform
     const browserCommands = input?.browserCommands ?? DEFAULT_BROWSER_COMMANDS
-    const pathEntries = envPath.split(pathListDelimiter(platform)).filter(Boolean)
+    const pathEntries = splitPathList(envPath, platform)
     const extensions = platform === "win32" ? windowsPathExtensions(input?.pathExt) : [""]
 
     const candidates: string[] = []
@@ -310,6 +310,15 @@ export namespace BrowserRuntime {
 
   function pathListDelimiter(platform: NodeJS.Platform): string {
     return platform === "win32" ? ";" : ":"
+  }
+
+  function splitPathList(envPath: string, platform: NodeJS.Platform): string[] {
+    const trimmed = envPath.trim()
+    if (!trimmed) return []
+    if (platform !== "win32" && /(^|;)[A-Za-z]:[\\/]/.test(trimmed)) {
+      return trimmed.split(";").filter(Boolean)
+    }
+    return trimmed.split(pathListDelimiter(platform)).filter(Boolean)
   }
 
   function normalizeProxyServer(value: string | undefined): string | undefined {

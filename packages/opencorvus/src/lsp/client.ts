@@ -39,6 +39,53 @@ export namespace LSPClient {
     ),
   }
 
+  async function disposeServer(input: LSPServer.Handle) {
+    if (input.dispose) {
+      await input.dispose()
+      return
+    }
+    const owned = input.process as typeof input.process & { opencorvusDispose?: () => Promise<void> }
+    if (owned.opencorvusDispose) {
+      await owned.opencorvusDispose()
+      return
+    }
+    input.process.kill()
+  }
+
+  function processExited(input: LSPServer.Handle) {
+    return input.process.exitCode !== null || input.process.signalCode !== null
+  }
+
+  async function rejectOnServerExit<T>(input: LSPServer.Handle, promise: Promise<T>): Promise<T> {
+    if (processExited(input)) throw new Error("LSP server exited before initialize completed")
+    return await new Promise<T>((resolve, reject) => {
+      const onExit = (exitCode: number | null, signal: NodeJS.Signals | null) => {
+        cleanup()
+        reject(new Error(`LSP server exited before initialize completed: ${exitCode ?? signal ?? "unknown"}`))
+      }
+      const onError = (error: Error) => {
+        cleanup()
+        reject(error)
+      }
+      const cleanup = () => {
+        input.process.off("exit", onExit)
+        input.process.off("error", onError)
+      }
+      input.process.once("exit", onExit)
+      input.process.once("error", onError)
+      promise.then(
+        (value) => {
+          cleanup()
+          resolve(value)
+        },
+        (error) => {
+          cleanup()
+          reject(error)
+        },
+      )
+    })
+  }
+
   export async function create(input: { serverID: string; server: LSPServer.Handle; root: string }) {
     const l = log.clone().tag("serverID", input.serverID)
     l.info("starting client")
@@ -79,42 +126,52 @@ export namespace LSPClient {
     connection.listen()
 
     l.info("sending initialize")
-    await withTimeout(
-      connection.sendRequest("initialize", {
-        rootUri: pathToFileURL(input.root).href,
-        processId: input.server.process.pid,
-        workspaceFolders: [
-          {
-            name: "workspace",
-            uri: pathToFileURL(input.root).href,
-          },
-        ],
-        initializationOptions: {
-          ...input.server.initialization,
-        },
-        capabilities: {
-          window: {
-            workDoneProgress: true,
-          },
-          workspace: {
-            configuration: true,
-            didChangeWatchedFiles: {
-              dynamicRegistration: true,
+    try {
+      await withTimeout(
+        rejectOnServerExit(
+          input.server,
+          connection.sendRequest("initialize", {
+            rootUri: pathToFileURL(input.root).href,
+            processId: input.server.process.pid,
+            workspaceFolders: [
+              {
+                name: "workspace",
+                uri: pathToFileURL(input.root).href,
+              },
+            ],
+            initializationOptions: {
+              ...input.server.initialization,
             },
-          },
-          textDocument: {
-            synchronization: {
-              didOpen: true,
-              didChange: true,
+            capabilities: {
+              window: {
+                workDoneProgress: true,
+              },
+              workspace: {
+                configuration: true,
+                didChangeWatchedFiles: {
+                  dynamicRegistration: true,
+                },
+              },
+              textDocument: {
+                synchronization: {
+                  didOpen: true,
+                  didChange: true,
+                },
+                publishDiagnostics: {
+                  versionSupport: true,
+                },
+              },
             },
-            publishDiagnostics: {
-              versionSupport: true,
-            },
-          },
-        },
-      }),
-      45_000,
-    ).catch((err) => {
+          }),
+        ),
+        45_000,
+      )
+    } catch (err) {
+      connection.end()
+      connection.dispose()
+      await disposeServer(input.server).catch((error) => {
+        l.warn("server dispose failed after initialize error", { error: String(error) })
+      })
       l.error("initialize error", { error: err })
       throw new InitializeError(
         { serverID: input.serverID },
@@ -122,7 +179,7 @@ export namespace LSPClient {
           cause: err,
         },
       )
-    })
+    }
 
     await connection.sendNotification("initialized", {})
 
@@ -138,6 +195,10 @@ export namespace LSPClient {
 
     const result = {
       root: input.root,
+      lastUsedAt: Date.now(),
+      touch() {
+        this.lastUsedAt = Date.now()
+      },
       get serverID() {
         return input.serverID
       },
@@ -146,6 +207,7 @@ export namespace LSPClient {
       },
       notify: {
         async open(input: { path: string }) {
+          result.touch()
           input.path = path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path)
           const text = await Filesystem.readText(input.path)
           const extension = path.extname(input.path)
@@ -241,11 +303,7 @@ export namespace LSPClient {
         await connection.sendNotification("exit").catch(() => {})
         connection.end()
         connection.dispose()
-        if (input.server.dispose) {
-          await input.server.dispose()
-        } else {
-          input.server.process.kill()
-        }
+        await disposeServer(input.server)
         l.info("shutdown")
       },
     }

@@ -50,10 +50,15 @@ describe("panel.create_task actor provenance", () => {
   // metadata.mission.id.
   async function runCreateTask(
     agent: string,
-    opts: { userMetadata?: Record<string, unknown>; missionSession?: boolean; source?: string } = {},
+    opts: {
+      userMetadata?: Record<string, unknown>
+      missionSession?: boolean
+      source?: string
+      title?: string
+    } = {},
   ) {
     await using tmp = await tmpdir({ git: true })
-    let captured: { metadata?: Record<string, unknown>; source?: string } | undefined
+    let captured: { metadata?: Record<string, unknown>; source?: string; title?: string } | undefined
     let missionID: string | undefined
     await Instance.provide({
       directory: tmp.path,
@@ -73,6 +78,7 @@ describe("panel.create_task actor provenance", () => {
             request: "do thing",
             allow_create: true,
             queue: false,
+            ...(opts.title ? { title: opts.title } : {}),
             ...(opts.userMetadata ? { metadata: opts.userMetadata } : {}),
             ...(opts.source ? { source: opts.source } : {}),
           },
@@ -88,10 +94,10 @@ describe("panel.create_task actor provenance", () => {
           },
         )
         expect(createSpy).toHaveBeenCalledTimes(1)
-        captured = createSpy.mock.calls[0]?.[0] as { metadata?: Record<string, unknown>; source?: string }
+        captured = createSpy.mock.calls[0]?.[0] as { metadata?: Record<string, unknown>; source?: string; title?: string }
       },
     })
-    return { metadata: captured?.metadata ?? {}, source: captured?.source, missionID }
+    return { metadata: captured?.metadata ?? {}, source: captured?.source, title: captured?.title, missionID }
   }
 
   test("control agent stamps actor=control_agent into task metadata", async () => {
@@ -100,15 +106,36 @@ describe("panel.create_task actor provenance", () => {
   })
 
   test("mission agent stamps actor=mission + source=mission + metadata.mission.{id,session_id}", async () => {
-    const { metadata, source, missionID } = await runCreateTask("mission", {
+    const { metadata, source, title, missionID } = await runCreateTask("mission", {
       missionSession: true,
       source: "forged-source",
+      title: "Implement settings route",
     })
     expect(metadata.actor).toBe(PanelActor.enum.mission)
     expect(source).toBe("mission")
+    expect(title).toBe("Implement settings route")
     const mission = metadata.mission as { id?: string; session_id?: string } | undefined
     expect(mission?.id).toBe(missionID)
     expect(mission?.session_id).toMatch(/^ses_/)
+  })
+
+  test("mission agent passes semantic task title to EngineService", async () => {
+    const { title } = await runCreateTask("mission", {
+      missionSession: true,
+      title: "Verify delivery evidence",
+    })
+    expect(title).toBe("Verify delivery evidence")
+  })
+
+  test("mission agent create_task without title is rejected before task creation", async () => {
+    let error: unknown
+    try {
+      await runCreateTask("mission", { missionSession: true })
+    } catch (err) {
+      error = err
+    }
+    expect(error).toBeInstanceOf(Error)
+    expect(String((error as Error).message)).toContain("requires create_task.title")
   })
 
   test("mission agent in a non-mission session is rejected (no mission.id to attribute to)", async () => {

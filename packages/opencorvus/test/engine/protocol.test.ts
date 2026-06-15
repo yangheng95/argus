@@ -313,6 +313,55 @@ describe("orchestrator protocol", () => {
     })
   })
 
+  test("task terminal protocol events release live replay sequence metadata", async () => {
+    ProtocolStore.compactLiveReplay(Date.now() + 1_000_000)
+    ProtocolStore.dispatchEphemeral({
+      type: "message.part.updated",
+      aggregate: "task",
+      taskID,
+      sessionID: "ses_terminal_release",
+      source: "test.protocol",
+      payload: {
+        part: {
+          id: "part_terminal_release",
+          messageID: "msg_terminal_release",
+          sessionID: "ses_terminal_release",
+          type: "text",
+          text: "done",
+        },
+      },
+    })
+    const emitted = ProtocolStore.listTaskLiveEventsAfter(taskID, 0)
+    expect(emitted.expired).toBe(false)
+    if (emitted.expired) throw new Error("unexpected expired replay")
+    const beforeCompact = ProtocolStore.liveReplayStats()
+    ProtocolStore.compactLiveReplay(emitted.events[0]!.time.emitted + 30_001)
+    expect(ProtocolStore.liveReplayStats()).toMatchObject({
+      tasks: beforeCompact.tasks - 1,
+      events: beforeCompact.events - 1,
+      sequenceTasks: beforeCompact.sequenceTasks,
+      retentionFloorTasks: beforeCompact.retentionFloorTasks + 1,
+    })
+
+    const beforeTerminal = ProtocolStore.liveReplayStats()
+    await ProtocolStore.appendEvent({
+      kind: "event",
+      type: Event.TaskCancelled.type,
+      aggregate: "task",
+      aggregate_id: taskID,
+      task_id: taskID,
+      source: "test.protocol",
+      payload: { taskID, status: "cancelled", summary: "Task cancelled" },
+    })
+
+    expect(ProtocolStore.liveReplayStats()).toMatchObject({
+      tasks: beforeTerminal.tasks,
+      events: beforeTerminal.events,
+      sequenceTasks: beforeTerminal.sequenceTasks - 1,
+      retentionFloorTasks: beforeTerminal.retentionFloorTasks - 1,
+    })
+  })
+
   test("live replay epoch mismatch fails loudly", () => {
     const replay = ProtocolStore.listTaskLiveEventsAfter(taskID, 0, {
       liveEpoch: ProtocolStore.currentTaskLiveEpoch() + 1,

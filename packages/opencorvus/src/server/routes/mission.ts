@@ -7,6 +7,7 @@ import {
   ensureMissionSession,
   findExistingMissionSession,
   getMissionSession,
+  getMissionSessionByDirectory,
   listGlobalMissionSessions,
 } from "@/mission/session"
 import { MissionID } from "@/mission/schema"
@@ -23,6 +24,8 @@ import { compileBoard } from "@/workbench/board"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionWake } from "@/session/wake"
+import { Provider } from "@/provider/provider"
+import { isModelReference } from "@/provider/model-ref"
 
 function newMissionID(): string {
   return randomBytes(8).toString("hex")
@@ -32,6 +35,12 @@ const MissionWakeInput = z.object({
   missionID: MissionID.optional(),
   text: z.string().min(1).max(32_000),
   title: z.string().min(1).max(120).optional(),
+  model: z
+    .string()
+    .refine(isModelReference, {
+      message: 'Model must be in the format "provider/model".',
+    })
+    .optional(),
 })
 
 const MissionWakeResult = z.object({
@@ -101,6 +110,10 @@ const MissionTitleInput = z.object({
 
 type MissionSessionRecord = Awaited<ReturnType<typeof getMissionSession>>
 type MissionTaskProjectionValue = z.infer<typeof MissionTaskProjection>
+
+function missionRouteSession(missionID: string): Promise<MissionSessionRecord> {
+  return getMissionSessionByDirectory({ missionID, directory: Instance.directory })
+}
 
 function missionTaskStats(tasks: MissionTaskProjectionValue[]): z.infer<typeof MissionTaskStats> {
   return tasks.reduce(
@@ -215,7 +228,7 @@ export function MissionRoutes() {
       }),
       validator("param", MissionParam),
       async (c) => {
-        const session = await getMissionSession(c.req.valid("param").missionID)
+        const session = await missionRouteSession(c.req.valid("param").missionID)
         return c.json(missionStatusRecord(session))
       },
     )
@@ -236,7 +249,7 @@ export function MissionRoutes() {
       validator("json", MissionTitleInput),
       async (c) => {
         const missionID = c.req.valid("param").missionID
-        const session = await getMissionSession(missionID)
+        const session = await missionRouteSession(missionID)
         const updated = await Session.setTitle({ sessionID: session.id, title: c.req.valid("json").title })
         return c.json(missionRecord({ ...updated, missionID }))
       },
@@ -256,8 +269,8 @@ export function MissionRoutes() {
       }),
       validator("param", MissionParam),
       async (c) => {
-        const session = await getMissionSession(c.req.valid("param").missionID)
-        SessionPrompt.cancel(session.id)
+        const session = await missionRouteSession(c.req.valid("param").missionID)
+        SessionPrompt.cancel(session.id, session.directory)
         return c.json(true)
       },
     )
@@ -276,8 +289,8 @@ export function MissionRoutes() {
       }),
       validator("param", MissionParam),
       async (c) => {
-        const session = await getMissionSession(c.req.valid("param").missionID)
-        await Session.remove(session.id)
+        const session = await missionRouteSession(c.req.valid("param").missionID)
+        await Session.removeInProject({ sessionID: session.id, projectID: session.projectID })
         return c.json(true)
       },
     )
@@ -315,6 +328,7 @@ export function MissionRoutes() {
           sessionID: session.id,
           prompt: input.text,
           agent: "mission",
+          model: input.model ? Provider.parseModel(input.model) : undefined,
           reason: {
             source: "mission.operator",
             missionID,

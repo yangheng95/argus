@@ -1,6 +1,8 @@
 import { test, expect } from "bun:test"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+import { installRealOverlayI18n } from "./fixtures/i18n"
 
+installRealOverlayI18n()
 const { applyEvent, flushBufferedPartDeltas, resetWriter, hasProjectedPart } = await import(
   "../src/services/tree-writer"
 )
@@ -70,6 +72,107 @@ test("part projection materializes the deterministic turn when the part arrives 
   expect(cardTreeStore.cards[cardID]).toBeDefined()
   expect(Object.keys(cardTreeStore.cards).filter((id) => id.includes("ses_before_message"))).toEqual([cardID])
   expect(cardTreeStore.cards[cardID]?.time).toBe(1_780_000_000_000)
+})
+
+test("part-first card survives regroup until its message metadata arrives", () => {
+  resetWriter()
+
+  applyEvent({
+    type: "message.part.updated",
+    emittedAt: 1_780_000_000_010,
+    properties: {
+      taskID: "tsk_projection",
+      part: stampedPart("orchestrator", {
+        id: "prt_part_first_text",
+        messageID: "msg_part_first",
+        sessionID: "ses_part_first_regroup",
+        type: "text",
+        text: "visible before metadata",
+      }),
+    },
+  })
+
+  const partFirstCardID = "orchestrator:session:ses_part_first_regroup:message:msg_part_first"
+  expect(cardTreeStore.cards[partFirstCardID]?.parts).toEqual([
+    expect.objectContaining({
+      id: "prt_part_first_text",
+      text: "visible before metadata",
+    }),
+  ])
+
+  for (const [id, created] of [
+    ["msg_later_a", 1_780_000_000_100],
+    ["msg_later_b", 1_780_000_000_200],
+  ] as const) {
+    applyEvent({
+      type: "message.updated",
+      emittedAt: created,
+      properties: {
+        taskID: "tsk_projection",
+        info: stampedInfo("orchestrator", {
+          id,
+          sessionID: "ses_part_first_regroup",
+          role: "assistant",
+          time: { created },
+        }),
+      },
+    })
+  }
+
+  expect(cardTreeStore.cards[partFirstCardID]?.parts).toContainEqual(
+    expect.objectContaining({
+      id: "prt_part_first_text",
+      text: "visible before metadata",
+    }),
+  )
+
+  expect(() =>
+    applyEvent({
+      type: "message.part.updated",
+      emittedAt: 1_780_000_000_250,
+      properties: {
+        taskID: "tsk_projection",
+        part: stampedPart("orchestrator", {
+          id: "prt_part_first_finish",
+          messageID: "msg_part_first",
+          sessionID: "ses_part_first_regroup",
+          type: "step-finish",
+          reason: "tool-calls",
+        }),
+      },
+    }),
+  ).not.toThrow()
+
+  applyEvent({
+    type: "message.updated",
+    emittedAt: 1_780_000_000_300,
+    properties: {
+      taskID: "tsk_projection",
+      info: stampedInfo("orchestrator", {
+        id: "msg_part_first",
+        sessionID: "ses_part_first_regroup",
+        role: "assistant",
+        time: { created: 1_780_000_000_050 },
+      }),
+    },
+  })
+
+  expect(cardTreeStore.cards[partFirstCardID]?.parts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: "prt_part_first_text",
+        text: "visible before metadata",
+      }),
+      expect.objectContaining({
+        id: "prt_part_first_finish",
+        type: "step-finish",
+        reason: "tool-calls",
+      }),
+    ]),
+  )
+  expect(Object.keys(cardTreeStore.cards).filter((id) => id.includes("ses_part_first_regroup"))).toEqual([
+    partFirstCardID,
+  ])
 })
 
 test("non-reconstructable message stream events stay loud for selected-task recovery", () => {

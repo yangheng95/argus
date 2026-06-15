@@ -69,6 +69,7 @@ const taskLiveSequences = new Map<string, number>()
 const taskLiveReplayEvents = new Map<string, EventView[]>()
 const taskLiveRetentionFloors = new Map<string, number>()
 let taskLiveReplaySweepStarted = false
+const TASK_TERMINAL_EVENT_TYPES = new Set(["task.completed", "task.failed", "task.cancelled"])
 
 function eventKey(input: { aggregate: ProtocolAggregate; aggregate_id: string }) {
   return `${input.aggregate}:${input.aggregate_id}`
@@ -175,6 +176,12 @@ function compactTaskLiveReplay(now: number) {
   for (const taskID of [...taskLiveReplayEvents.keys()]) {
     trimTaskLiveReplay(taskID, now)
   }
+}
+
+function clearTaskLiveReplay(taskID: string) {
+  taskLiveReplayEvents.delete(taskID)
+  taskLiveSequences.delete(taskID)
+  taskLiveRetentionFloors.delete(taskID)
 }
 
 function ensureTaskLiveReplaySweep() {
@@ -342,6 +349,9 @@ export namespace ProtocolStore {
         time_updated: now,
       })
       dispatchEvent(event)
+      if (input.aggregate === "task" && TASK_TERMINAL_EVENT_TYPES.has(input.type)) {
+        clearTaskLiveReplay(input.aggregate_id)
+      }
       return event
     }
 
@@ -522,6 +532,8 @@ export namespace ProtocolStore {
     return {
       tasks: taskLiveReplayEvents.size,
       events,
+      sequenceTasks: taskLiveSequences.size,
+      retentionFloorTasks: taskLiveRetentionFloors.size,
       subscriptions: globalSubscriptions.size,
     }
   }

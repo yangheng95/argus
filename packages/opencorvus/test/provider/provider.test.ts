@@ -5,6 +5,8 @@ import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
+import { ModelsDev } from "../../src/provider/models"
+import { CUSTOM_LOADERS } from "../../src/provider/vendor"
 import { Env } from "../../src/env"
 import { Global } from "../../src/global"
 import { Auth } from "../../src/auth"
@@ -33,6 +35,26 @@ test("stable providers retain the five minute minimum fetch inactivity timeout",
   expect(Provider.resolveFetchInactivityMs("anthropic", 30_000)).toBe(300_000)
   expect(Provider.resolveFetchInactivityMs("anthropic", 600_000)).toBe(600_000)
   expect(Provider.resolveFetchInactivityMs("anthropic", false)).toBe(0)
+})
+
+test("local model catalog includes every custom-loader provider", async () => {
+  ModelsDev.Data.reset()
+  const catalog = await ModelsDev.get()
+  for (const providerID of Object.keys(CUSTOM_LOADERS)) {
+    expect(catalog[providerID], providerID).toBeDefined()
+  }
+  expect(catalog.opencorvus?.models["gpt-5-nano"]).toBeDefined()
+  expect(catalog.kilo?.models["inclusionai/ling-2.6-1t"]).toBeDefined()
+
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const model = await Provider.getModel("opencorvus", "gpt-5-nano")
+      expect(model.providerID).toBe("opencorvus")
+      expect(model.id).toBe("gpt-5-nano")
+    },
+  })
 })
 
 test("provider fetch init injects configured Bun proxy", () => {
@@ -1612,7 +1634,7 @@ test("model headers are preserved", async () => {
   })
 })
 
-test("provider env fallback - second env var used if first missing", async () => {
+test("provider with multiple env candidates does not guess a replacement key", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -1620,10 +1642,10 @@ test("provider env fallback - second env var used if first missing", async () =>
         JSON.stringify({
           $schema: "https://opencorvus.ai/config.json",
           provider: {
-            "fallback-env": {
-              name: "Fallback Env Provider",
+            "multi-env": {
+              name: "Multi Env Provider",
               npm: "@ai-sdk/openai-compatible",
-              env: ["PRIMARY_KEY", "FALLBACK_KEY"],
+              env: ["PRIMARY_KEY", "SECONDARY_KEY"],
               models: {
                 model: {
                   name: "Model",
@@ -1641,13 +1663,13 @@ test("provider env fallback - second env var used if first missing", async () =>
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      // Only set fallback, not primary
-      Env.set("FALLBACK_KEY", "fallback-api-key")
+      Env.set("SECONDARY_KEY", "secondary-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      // Provider should load because fallback env var is set
-      expect(providers["fallback-env"]).toBeDefined()
+      expect(providers["multi-env"]).toBeDefined()
+      expect(providers["multi-env"].source).toBe("config")
+      expect(providers["multi-env"].key).toBeUndefined()
     },
   })
 })

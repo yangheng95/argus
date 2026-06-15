@@ -30,6 +30,14 @@ function validateVisualQaReport(report: VisualQaReport): string[] {
       `accepted=true is incompatible with open critical/major findings: ${openBlocking.map((finding) => finding.id).join(", ")}.`,
     )
   }
+  if (report.accepted && report.production_blockers.length > 0) {
+    issues.push(
+      `accepted=true is incompatible with production blockers: ${report.production_blockers.map((blocker) => blocker.id).join(", ")}.`,
+    )
+  }
+  if (!report.accepted && report.production_blockers.length === 0 && openBlocking.length === 0) {
+    issues.push("accepted=false requires production_blockers or open critical/major findings with actionable evidence.")
+  }
   return issues
 }
 
@@ -38,6 +46,10 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
   const report = collector.final
   const findingLines = report.findings.map(
     (finding) => `${finding.id} [${finding.severity}/${finding.status}] ${finding.region}: ${finding.claim}`,
+  )
+  const blockerLines = report.production_blockers.map(
+    (blocker) =>
+      `${blocker.id} [${blocker.principle_ids.join(", ")}] ${blocker.region}: ${blocker.reason}; impact=${blocker.impact}; required=${blocker.required_correction}`,
   )
   const coverageLines = report.coverage.map(
     (coverage) =>
@@ -50,6 +62,7 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
       `## Summary\n${requireReportString(report.summary, "visual QA summary")}`,
       `## Coverage\n${coverageLines.length ? markdownList(coverageLines) : "- no coverage submitted"}`,
       `## Findings\n${findingLines.length ? markdownList(findingLines) : "- no findings"}`,
+      `## Production Blockers\n${blockerLines.length ? markdownList(blockerLines) : "- none"}`,
       `## Evidence\n${report.evidence.length ? markdownList(report.evidence.map((item) => `${item.type}: ${item.ref} — ${item.note}`)) : "- no evidence submitted"}`,
       `## Repairs\n${report.repairs.length ? markdownList(report.repairs.map((repair) => `${repair.files_changed.join(", ") || "(no files)"}: ${repair.reason}`)) : "- no repairs"}`,
       `## Commands\n${report.commands.length ? markdownList(report.commands.map((command) => `${command.passed ? "passed" : "failed"} ${command.command}: ${command.detail}`)) : "- no commands"}`,
@@ -65,7 +78,7 @@ export function createVisualQaOutputTools() {
     submit_visual_qa_report: tool({
       description:
         "Submit the final frontend visual GUI fidelity and functional QA report. GUI means Graphical User Interface. " +
-        "Use accepted=true only with fresh visual and functional evidence and no open critical/major findings.",
+        "Use accepted=true only with fresh visual and functional evidence, no open critical/major findings, and no production_blockers.",
       inputSchema: VisualQaReportSchema,
       execute: async (raw) => {
         if (collector.final)

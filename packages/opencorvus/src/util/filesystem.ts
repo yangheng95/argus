@@ -3,6 +3,7 @@ import { createWriteStream, existsSync, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
 import { basename, dirname, isAbsolute, join, parse, relative, resolve as pathResolve, normalize } from "path"
+import { homedir } from "os"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import z from "zod"
@@ -219,7 +220,14 @@ export namespace Filesystem {
     return new RegExp(`^\\/(?:${mounts})\\/[a-zA-Z]\\/`).test(p)
   }
 
+  function expandHomePath(p: string): string {
+    if (p === "~") return homedir()
+    if (p.startsWith("~/") || p.startsWith("~\\")) return join(homedir(), p.slice(2))
+    return p
+  }
+
   export function resolve(p: string): string {
+    p = expandHomePath(p)
     if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(p)) {
       throw new InvalidDirectoryError({
         value: p,

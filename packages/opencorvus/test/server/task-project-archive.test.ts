@@ -53,9 +53,24 @@ describe("task project archive route", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await fs.mkdir(path.join(tmp.path, ".opencorvus", "runtime"), { recursive: true })
+        await fs.mkdir(path.join(tmp.path, ".opencorvus", "worktrees"), { recursive: true })
+        await fs.mkdir(path.join(tmp.path, ".opencorvus-worktrees"), { recursive: true })
+        await fs.writeFile(path.join(tmp.path, ".opencorvus", "runtime", "forced.txt"), "runtime must not archive\n")
+        await fs.writeFile(path.join(tmp.path, ".opencorvus", "worktrees", "forced.txt"), "worktree must not archive\n")
+        await fs.writeFile(
+          path.join(tmp.path, ".opencorvus-worktrees", "forced.txt"),
+          "legacy worktree must not archive\n",
+        )
+        await fs.writeFile(path.join(tmp.path, ".opencorvus-meta.json"), "{}\n")
+        await $`git add -f .opencorvus/runtime/forced.txt .opencorvus/worktrees/forced.txt .opencorvus-worktrees/forced.txt .opencorvus-meta.json`
+          .cwd(tmp.path)
+          .quiet()
+
         const taskID = Identifier.ascending("task")
         const runID = Identifier.ascending("run")
         const interactionID = Identifier.ascending("interaction")
+        const longProtocolBody = "protocol-big-marker-" + "x".repeat(20_000)
         const now = Date.now()
         Database.use((db) =>
           db
@@ -139,6 +154,7 @@ describe("task project archive route", () => {
                 status: "completed",
                 summary: "archive protocol db row",
                 archiveMarker: "protocol-db-row",
+                longProtocolBody,
               },
               time_created: now + 5,
               time_updated: now + 5,
@@ -162,11 +178,21 @@ describe("task project archive route", () => {
         expect(entries.has("project/spaced name .txt")).toBe(false)
         expect(entries.get("project/src/untracked.txt")).toBe("untracked file\n")
         expect(entries.has("project/dist/ignored.txt")).toBe(false)
+        expect(entries.has("project/.opencorvus/runtime/forced.txt")).toBe(false)
+        expect(entries.has("project/.opencorvus/worktrees/forced.txt")).toBe(false)
+        expect(entries.has("project/.opencorvus-worktrees/forced.txt")).toBe(false)
+        expect(entries.has("project/.opencorvus-meta.json")).toBe(false)
 
         const manifest = JSON.parse(entries.get("opencorvus-task-execution-flow/manifest.json") || "{}")
         expect(manifest.taskID).toBe(taskID)
         expect(manifest.project.id).toBe(Instance.project.id)
         expect(manifest.projectFileSelection).toContain("git ls-files")
+        expect(manifest.projectFileSelection).toContain("OpenCorvus runtime filter")
+        expect(manifest.executionFlowBounds).toMatchObject({
+          maxStringChars: 16_384,
+          maxArrayItems: 500,
+          maxDepth: 12,
+        })
         expect(entries.get("opencorvus-task-execution-flow/task.json")).toContain(taskID)
         expect(entries.get("opencorvus-task-execution-flow/board.json")).toContain(taskID)
         const runs = JSON.parse(entries.get("opencorvus-task-execution-flow/runs.json") || "[]")
@@ -212,15 +238,21 @@ describe("task project archive route", () => {
               runID,
               interactionID,
               summary: "archive protocol db row",
-              payload: {
+              payload: expect.objectContaining({
                 stepID: "archive-step",
                 status: "completed",
                 summary: "archive protocol db row",
                 archiveMarker: "protocol-db-row",
-              },
+                longProtocolBody: expect.objectContaining({
+                  truncated: true,
+                  reason: "string_limit",
+                  chars: longProtocolBody.length,
+                }),
+              }),
             }),
           ]),
         )
+        expect(JSON.stringify(protocolEvents)).not.toContain(longProtocolBody)
         expect(entries.get("opencorvus-task-execution-flow/transcript.json")).toContain("[")
       },
     })

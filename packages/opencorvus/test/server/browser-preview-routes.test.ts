@@ -102,7 +102,9 @@ describe("browser preview routes", () => {
         expect(body.viewports?.map((viewport) => viewport.id)).toEqual(["desktop", "tablet", "mobile"])
         expect(body.candidates?.map((candidate) => ({ url: candidate.url, selected: candidate.selected }))).toEqual([
           { url: liveUrl, selected: true },
+          { url: "http://127.0.0.1:9/dead", selected: false },
         ])
+        expect(JSON.stringify(body)).toContain("Saved browser preview target is unreachable")
 
         const artifact = Database.use((db) =>
           db
@@ -116,6 +118,41 @@ describe("browser preview routes", () => {
       } finally {
         preview.stop(true)
       }
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "GET /task/:taskID/browser-preview reports saved unreachable targets as failed",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const app = Server.App()
+      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead" })
+
+      const response = await app.request(`/task/${taskID}/browser-preview`, {
+        headers: {
+          "x-opencorvus-directory": tmp.path,
+        },
+      })
+
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as {
+        id?: string
+        status: string
+        url?: string
+        source: string
+        candidates?: { id: string; url: string; selected: boolean }[]
+        diagnostics?: string[]
+      }
+      expect(body.id).toBe(target.id)
+      expect(body.status).toBe("failed")
+      expect(body.url).toBe("http://127.0.0.1:9/dead")
+      expect(body.source).toBe("task-artifact")
+      expect(
+        body.candidates?.map((candidate) => ({ id: candidate.id, url: candidate.url, selected: candidate.selected })),
+      ).toEqual([{ id: target.id, url: "http://127.0.0.1:9/dead", selected: true }])
+      expect(body.diagnostics?.join("\n")).toContain("Saved browser preview target is unreachable")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
