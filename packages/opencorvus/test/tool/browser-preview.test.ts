@@ -370,4 +370,46 @@ describe("tool.browser_preview", () => {
     },
     { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
   )
+
+  test(
+    "compare regions tool rejects raw URL and output directory parameters",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const tool = await BrowserPreviewCompareRegionsTool.init()
+          await expect(
+            tool.execute(
+              {
+                targetID: "art_previewtarget_missing",
+                url: "http://127.0.0.1:5174/other",
+                outDir: ".opencorvus/r/tsk/browser-preview/job",
+                viewportIDs: ["desktop"],
+                inlineBindings: [
+                  {
+                    region_id: "economy",
+                    viewport_id: "desktop",
+                    region_scope: "page-section",
+                    source: {
+                      reference_artifact_id: "reference.png",
+                      bbox: { x: 0, y: 0, width: 100, height: 80 },
+                      semantic_role: "economy section",
+                    },
+                    implementation: {
+                      route: "/",
+                      locator: { kind: "data-oc-region", value: "economy" },
+                    },
+                  },
+                ],
+              } as any,
+              { ...baseCtx, extra: { taskID } },
+            ),
+          ).rejects.toThrow("invalid arguments")
+        },
+      })
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
 })

@@ -12,7 +12,11 @@ import {
   resolveSourceReferencePath,
   type BrowserPreviewRegionBinding,
 } from "../../src/browser-preview/region-comparison"
-import { findReadableBrowserPreviewEvidenceByID, resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
+import {
+  findReadableBrowserPreviewEvidenceByID,
+  persistBrowserPreviewTarget,
+  resolveRuntimeRelativePath,
+} from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -78,6 +82,7 @@ describe("browser preview region comparison", () => {
         .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
       const server = await startPreviewServer()
       try {
+        const target = await persistBrowserPreviewTarget({ taskID, url: server.url })
         const binding: BrowserPreviewRegionBinding = {
           region_id: "economy",
           viewport_id: "desktop",
@@ -101,8 +106,7 @@ describe("browser preview region comparison", () => {
         const result = await compareBrowserPreviewRegions({
           projectRoot: tmp.path,
           taskID,
-          targetID: "art_regioncomparison_target",
-          url: server.url,
+          targetID: target.id,
           viewportIDs: ["desktop"],
           bindings: [binding],
           includeDiff: true,
@@ -138,6 +142,21 @@ describe("browser preview region comparison", () => {
     },
     { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
   )
+
+  test("requires a persisted browser preview target", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = await seedTask(tmp.path)
+
+    await expect(
+      compareBrowserPreviewRegions({
+        projectRoot: tmp.path,
+        taskID,
+        targetID: "art_regioncomparison_missing",
+        viewportIDs: ["desktop"],
+        bindings: [],
+      }),
+    ).rejects.toThrow("Browser preview target not found: art_regioncomparison_missing")
+  })
 })
 
 async function seedTask(directory: string) {
