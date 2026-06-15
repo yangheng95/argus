@@ -179,14 +179,10 @@ export namespace FactCheckAgent {
       items: input.factCheckItems.length,
     })
 
-    const retrievalTools = await filterAgentTools(
-      createReadonlyRetrievalTools(undefined, { websearch: false }),
-      "fact-check",
-      {
-        taskID: input.taskID,
-        sessionID: input.orchestratorSessionID,
-      },
-    )
+    const retrievalTools = await filterAgentTools(createReadonlyRetrievalTools(), "fact-check", {
+      taskID: input.taskID,
+      sessionID: input.orchestratorSessionID,
+    })
     const outputToolKit = createFactCheckOutputTools()
     // Load target message text up-front so the prompt builder has it.
     const targetMessageText = await loadTargetMessageText(input.targetSessionID, input.targetMessageID)

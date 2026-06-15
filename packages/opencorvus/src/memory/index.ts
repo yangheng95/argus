@@ -722,9 +722,40 @@ export namespace Memory {
     return fromFile(row)
   }
 
+  export function getFileInProject(input: { fileId: string; projectId: string }) {
+    const row = Database.use((db) =>
+      db
+        .select()
+        .from(MemoryFileTable)
+        .where(and(eq(MemoryFileTable.id, input.fileId), eq(MemoryFileTable.project_id, input.projectId)))
+        .get(),
+    )
+    if (!row) return null
+    return fromFile(row)
+  }
+
   export function getChunks(fileId: string) {
     const rows = Database.use((db) =>
       db.select().from(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).all(),
+    )
+    return rows.map((row) => ({
+      id: row.id,
+      fileId: row.file_id,
+      projectId: row.project_id,
+      content: row.content,
+      tokenCount: row.token_count,
+      timeCreated: row.time_created,
+      timeUpdated: row.time_updated,
+    }))
+  }
+
+  export function getChunksInProject(input: { fileId: string; projectId: string }) {
+    const rows = Database.use((db) =>
+      db
+        .select()
+        .from(MemoryChunkTable)
+        .where(and(eq(MemoryChunkTable.file_id, input.fileId), eq(MemoryChunkTable.project_id, input.projectId)))
+        .all(),
     )
     return rows.map((row) => ({
       id: row.id,

@@ -2375,10 +2375,9 @@ Output: Creates directory 'foo'"
         "type": "number",
       },
       "livecrawl": {
-        "default": "fallback",
-        "description": "Live crawl mode - 'fallback': use live crawling as backup if cached content unavailable, 'preferred': prioritize live crawling",
+        "default": "preferred",
+        "description": "Live crawl mode. The tool always prioritizes live crawling for current web evidence.",
         "enum": [
-          "fallback",
           "preferred",
         ],
         "type": "string",

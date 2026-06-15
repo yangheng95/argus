@@ -115,7 +115,7 @@ async function createTerminalSessionWithAssistant(text: string): Promise<{ sessi
     path: { cwd: "/tmp/fc-e2e", root: "/tmp/fc-e2e" },
     time: { created: Date.now() },
     cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    tokens: { input: 0, output: 0, reasoning: 0, total: 0, cache: { read: 0, write: 0 } },
   } as any)
   await Session.updatePart({
     id: Identifier.ascending("part"),
