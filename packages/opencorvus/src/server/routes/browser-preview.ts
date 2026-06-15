@@ -7,22 +7,29 @@ import z from "zod"
 import { requireTask } from "@/engine/store"
 import {
   findReadableBrowserPreviewEvidenceByID,
+  findReadableBrowserPreviewEvidenceArtifactPath,
   findReadableBrowserPreviewEvidenceCapturePath,
   findBrowserPreviewTargetByID,
   persistBrowserPreviewTarget,
   promoteBrowserPreviewTarget,
   PersistedBrowserPreviewEvidence,
+  resolveRuntimeRelativePath,
+  stripRuntimePathRefs,
 } from "../../browser-preview/persist"
 import {
   BrowserPreviewTarget,
   failedBrowserPreviewTarget,
-  normalizeBrowserPreviewUrl,
   resolveBrowserPreviewTarget,
   taskBrowserPreviewTarget,
 } from "../../browser-preview/target"
 import { BrowserPreviewVerification, verifyBrowserPreview } from "../../browser-preview/verification"
 import { BrowserPreviewViewportID } from "../../browser-preview/viewport"
 import { captureBrowserPreviewLiveSnapshot, interactBrowserPreviewLive } from "../../browser-preview/live"
+import {
+  BrowserPreviewRegionComparisonRequest,
+  BrowserPreviewRegionComparisonResult,
+  compareBrowserPreviewRegions,
+} from "../../browser-preview/region-comparison"
 
 const BrowserPreviewLiveRequest = z.object({
   targetID: z.string().min(1),
@@ -31,20 +38,9 @@ const BrowserPreviewLiveRequest = z.object({
 
 const BrowserPreviewTargetSelectionRequest = z
   .object({
-    targetID: z.string().min(1).optional(),
-    url: z.string().min(1).optional(),
+    targetID: z.string().min(1),
   })
   .strict()
-  .superRefine((value, ctx) => {
-    const count = Number(typeof value.targetID === "string") + Number(typeof value.url === "string")
-    if (count !== 1) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["targetID"],
-        message: "Provide exactly one browser preview target selector: targetID or url.",
-      })
-    }
-  })
 
 const BrowserPreviewLiveInputRequest = BrowserPreviewLiveRequest.extend({
   input: z.discriminatedUnion("kind", [
@@ -127,7 +123,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         requireTask(taskID)
         const evidence = await findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID })
         if (!evidence) return c.json({ message: `Browser preview evidence not found: ${evidenceID}` }, 404)
-        return c.json(evidence)
+        return c.json(stripRuntimePathRefs(evidence) as PersistedBrowserPreviewEvidence)
       },
     )
     .get(
@@ -153,7 +149,47 @@ export const BrowserPreviewRoutes = lazy(() =>
         requireTask(taskID)
         const capturePath = await findReadableBrowserPreviewEvidenceCapturePath({ taskID, evidenceID })
         if (!capturePath) return c.json({ message: `Browser preview evidence capture not found: ${evidenceID}` }, 404)
-        const bytes = await fs.readFile(capturePath)
+        const bytes = await fs.readFile(resolveRuntimeRelativePath(Instance.directory, capturePath))
+        return new Response(bytes, {
+          headers: {
+            "content-type": "image/png",
+            "cache-control": "no-store",
+          },
+        })
+      },
+    )
+    .get(
+      "/task/:taskID/browser-preview/evidence/:evidenceID/artifact/:artifactName",
+      describeRoute({
+        summary: "Read browser preview region comparison artifact",
+        description: "Return a persisted source, implementation, side-by-side, or diff PNG for region comparison evidence.",
+        operationId: "browserPreview.readTaskEvidenceArtifact",
+        responses: {
+          200: {
+            description: "Persisted browser preview region comparison PNG artifact",
+            content: {
+              "image/png": {
+                schema: resolver(z.string().meta({ format: "binary" })),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          taskID: z.string().min(1),
+          evidenceID: z.string().min(1),
+          artifactName: z.enum(["source", "implementation", "side-by-side", "diff"]),
+        }),
+      ),
+      async (c) => {
+        const { taskID, evidenceID, artifactName } = c.req.valid("param")
+        requireTask(taskID)
+        const artifactPath = await findReadableBrowserPreviewEvidenceArtifactPath({ taskID, evidenceID, artifactName })
+        if (!artifactPath)
+          return c.json({ message: `Browser preview evidence artifact not found: ${evidenceID}/${artifactName}` }, 404)
+        const bytes = await fs.readFile(resolveRuntimeRelativePath(Instance.directory, artifactPath))
         return new Response(bytes, {
           headers: {
             "content-type": "image/png",
@@ -167,7 +203,7 @@ export const BrowserPreviewRoutes = lazy(() =>
       describeRoute({
         summary: "Select task browser preview target",
         description:
-          "Promote an existing task browser preview target artifact, or persist an explicit operator URL as the task preview target.",
+          "Promote an existing task browser preview target artifact as the task preview target.",
         operationId: "browserPreview.selectTaskTarget",
         responses: {
           200: {
@@ -186,33 +222,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         const { taskID } = c.req.valid("param")
         const body = c.req.valid("json")
         requireTask(taskID)
-        if ("url" in body && typeof body.url === "string") {
-          const url = normalizeBrowserPreviewUrl(body.url)
-          if (!url) {
-            return c.json(
-              failedBrowserPreviewTarget({
-                projectRoot: Instance.directory,
-                taskID,
-                diagnostics: [`Invalid browser preview URL: ${body.url}`],
-              }),
-              400,
-            )
-          }
-          const persisted = await persistBrowserPreviewTarget({ taskID, url })
-          return c.json(
-            taskBrowserPreviewTarget({
-              id: persisted.id,
-              taskID,
-              projectRoot: Instance.directory,
-              url: persisted.url,
-              diagnostics: [`Selected task browser preview target ${persisted.id}.`],
-            }) satisfies BrowserPreviewTarget,
-          )
-        }
         const targetID = body.targetID
-        if (!targetID) {
-          throw new Error("BrowserPreviewTargetSelectionRequest validation accepted a body without targetID or url.")
-        }
         const persisted = await promoteBrowserPreviewTarget({ taskID, targetID })
         if (!persisted)
           return c.json(
@@ -287,6 +297,47 @@ export const BrowserPreviewRoutes = lazy(() =>
           signal: c.req.raw.signal,
         })
         return c.json(verification)
+      },
+    )
+    .post(
+      "/task/:taskID/browser-preview/compare",
+      describeRoute({
+        summary: "Compare browser preview regions against source visual evidence",
+        description:
+          "Capture task-scoped local regions from the persisted preview target and persist source/local side-by-side comparison artifacts.",
+        operationId: "browserPreview.compareTaskTargetRegions",
+        responses: {
+          200: {
+            description: "Browser preview region comparison result",
+            content: {
+              "application/json": {
+                schema: resolver(BrowserPreviewRegionComparisonResult),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ taskID: z.string().min(1) })),
+      validator("json", BrowserPreviewRegionComparisonRequest),
+      async (c) => {
+        const { taskID } = c.req.valid("param")
+        const body = c.req.valid("json")
+        requireTask(taskID)
+        const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
+        if (!target) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: Instance.directory,
+          taskID,
+          targetID: body.targetID,
+          url: target.url,
+          viewportIDs: body.viewportIDs,
+          bindings: body.inlineBindings,
+          includeFullpageOverview: body.output.include_fullpage_overview,
+          includeSideBySide: body.output.include_side_by_side,
+          includeDiff: body.output.include_diff,
+          signal: c.req.raw.signal,
+        })
+        return c.json(result)
       },
     )
     .post(

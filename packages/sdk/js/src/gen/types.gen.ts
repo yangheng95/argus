@@ -3552,7 +3552,7 @@ export type ProjectCurrentInitGitResponses = {
 export type ProjectCurrentInitGitResponse = ProjectCurrentInitGitResponses[keyof ProjectCurrentInitGitResponses]
 
 export type ProjectCurrentWorktreesDeleteData = {
-  body: WorktreeRemoveInput
+  body?: WorktreeRemoveInput
   path?: never
   query?: {
     /**
@@ -3696,7 +3696,7 @@ export type ProjectCurrentCleanupCandidatesResponse =
   ProjectCurrentCleanupCandidatesResponses[keyof ProjectCurrentCleanupCandidatesResponses]
 
 export type ProjectUpdateData = {
-  body: {
+  body?: {
     name?: string
     icon?: {
       url?: string
@@ -3829,7 +3829,7 @@ export type ConfigGetResponses = {
 export type ConfigGetResponse = ConfigGetResponses[keyof ConfigGetResponses]
 
 export type ConfigUpdateData = {
-  body: {
+  body?: {
     [key: string]: unknown
   }
   path?: never
@@ -4319,7 +4319,7 @@ export type ToolListResponses = {
 export type ToolListResponse = ToolListResponses[keyof ToolListResponses]
 
 export type WorktreeRemoveData = {
-  body: WorktreeRemoveInput
+  body?: WorktreeRemoveInput
   path?: never
   query?: {
     /**
@@ -4370,7 +4370,7 @@ export type WorktreeListResponses = {
 export type WorktreeListResponse = WorktreeListResponses[keyof WorktreeListResponses]
 
 export type WorktreeCreateData = {
-  body: WorktreeCreateInput
+  body?: WorktreeCreateInput
   path?: never
   query?: {
     /**
@@ -4496,7 +4496,7 @@ export type ExperimentalWorkspaceListResponse =
   ExperimentalWorkspaceListResponses[keyof ExperimentalWorkspaceListResponses]
 
 export type WorktreeResetData = {
-  body: WorktreeResetInput
+  body?: WorktreeResetInput
   path?: never
   query?: {
     /**
@@ -5011,7 +5011,7 @@ export type SessionConfigGetResponses = {
 export type SessionConfigGetResponse = SessionConfigGetResponses[keyof SessionConfigGetResponses]
 
 export type SessionConfigUpdateData = {
-  body: {
+  body?: {
     model?: string | null
     prompt?: {
       [key: string]: string | null
@@ -5282,7 +5282,7 @@ export type SessionGetResponses = {
 export type SessionGetResponse = SessionGetResponses[keyof SessionGetResponses]
 
 export type SessionUpdateData = {
-  body: {
+  body?: {
     title?: string
     time?: {
       archived?: number
@@ -5441,7 +5441,7 @@ export type SessionInitResponses = {
 export type SessionInitResponse = SessionInitResponses[keyof SessionInitResponses]
 
 export type SessionForkData = {
-  body: {
+  body?: {
     messageID?: string
   }
   path: {
@@ -5810,7 +5810,7 @@ export type PartDeleteResponses = {
 export type PartDeleteResponse = PartDeleteResponses[keyof PartDeleteResponses]
 
 export type PartUpdateData = {
-  body: Part
+  body?: Part
   path: {
     /**
      * Session ID
@@ -6449,7 +6449,7 @@ export type ProviderDiscoverModelsResponses = {
 export type ProviderDiscoverModelsResponse = ProviderDiscoverModelsResponses[keyof ProviderDiscoverModelsResponses]
 
 export type ProviderTestData = {
-  body: {
+  body?: {
     modelID?: string
   }
   path: {
@@ -6876,7 +6876,7 @@ export type SkillInstallResponses = {
 export type SkillInstallResponse = SkillInstallResponses[keyof SkillInstallResponses]
 
 export type SkillImportFileData = {
-  body: {
+  body?: {
     filename?: string
     content?: string
     sourceName?: string
@@ -7589,7 +7589,7 @@ export type CodingSessionGetResponses = {
 export type CodingSessionGetResponse = CodingSessionGetResponses[keyof CodingSessionGetResponses]
 
 export type CodingSessionUpdateData = {
-  body: {
+  body?: {
     title?: string
   }
   path: {
@@ -7878,7 +7878,7 @@ export type GatewayControlMessageResponses = {
 export type GatewayControlMessageResponse = GatewayControlMessageResponses[keyof GatewayControlMessageResponses]
 
 export type GatewayControlActionData = {
-  body:
+  body?:
     | {
         action: "view_plan"
         taskID: string
@@ -8685,6 +8685,12 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
     taskID: string
     targetID: string
     viewportID: string
+    operationKind: "preview-capture" | "reference-comparison"
+    regionID?: string
+    manifestPath?: string
+    artifactPaths?: {
+      [key: string]: string
+    }
     status: "passed" | "failed"
     summary: string
     capture?: unknown
@@ -8722,10 +8728,35 @@ export type BrowserPreviewReadTaskEvidenceCaptureResponses = {
 export type BrowserPreviewReadTaskEvidenceCaptureResponse =
   BrowserPreviewReadTaskEvidenceCaptureResponses[keyof BrowserPreviewReadTaskEvidenceCaptureResponses]
 
+export type BrowserPreviewReadTaskEvidenceArtifactData = {
+  body?: never
+  path: {
+    taskID: string
+    evidenceID: string
+    artifactName: "source" | "implementation" | "side-by-side" | "diff"
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}"
+}
+
+export type BrowserPreviewReadTaskEvidenceArtifactResponses = {
+  /**
+   * Persisted browser preview region comparison PNG artifact
+   */
+  200: Blob | File
+}
+
+export type BrowserPreviewReadTaskEvidenceArtifactResponse =
+  BrowserPreviewReadTaskEvidenceArtifactResponses[keyof BrowserPreviewReadTaskEvidenceArtifactResponses]
+
 export type BrowserPreviewSelectTaskTargetData = {
   body: {
-    targetID?: string
-    url?: string
+    targetID: string
   }
   path: {
     taskID: string
@@ -8867,6 +8898,116 @@ export type BrowserPreviewCaptureTaskTargetResponses = {
 
 export type BrowserPreviewCaptureTaskTargetResponse =
   BrowserPreviewCaptureTaskTargetResponses[keyof BrowserPreviewCaptureTaskTargetResponses]
+
+export type BrowserPreviewCompareTaskTargetRegionsData = {
+  body: {
+    targetID: string
+    viewportIDs: Array<"desktop" | "tablet" | "mobile">
+    inlineBindings: Array<{
+      region_id: string
+      viewport_id: "desktop" | "tablet" | "mobile"
+      state_id?: string
+      region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
+      source: {
+        reference_artifact_id: string
+        bbox: {
+          x: number
+          y: number
+          width: number
+          height: number
+        }
+        semantic_role: string
+        text_anchors?: Array<string>
+        source_refs?: Array<string>
+      }
+      implementation: {
+        route?: string
+        locator:
+          | {
+              kind: "test-id"
+              value: string
+            }
+          | {
+              kind: "data-oc-region"
+              value: string
+            }
+          | {
+              kind: "role"
+              role: string
+              name: string
+            }
+          | {
+              kind: "selector"
+              value: string
+              owner_file: string
+            }
+        component_files?: Array<string>
+      }
+      acceptance_refs?: Array<string>
+    }>
+    output?: {
+      include_fullpage_overview?: boolean
+      include_side_by_side?: boolean
+      include_diff?: boolean
+    }
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/compare"
+}
+
+export type BrowserPreviewCompareTaskTargetRegionsResponses = {
+  /**
+   * Browser preview region comparison result
+   */
+  200: {
+    status: "passed" | "failed"
+    manifestPath: string
+    jobID: string
+    taskID: string
+    targetID: string
+    operation: "reference-comparison"
+    evidenceIDs: {
+      [key: string]: string
+    }
+    regions: Array<{
+      region_id: string
+      viewport_id: "desktop" | "tablet" | "mobile"
+      status: "completed" | "failed"
+      reason?: string
+      source_bbox?: {
+        x: number
+        y: number
+        width: number
+        height: number
+      }
+      implementation_bbox?: {
+        x: number
+        y: number
+        width: number
+        height: number
+      }
+      artifacts?: {
+        source_crop: string
+        implementation_crop: string
+        side_by_side: string
+        diff?: string
+      }
+      diagnostics: Array<string>
+    }>
+    diagnostics: Array<string>
+  }
+}
+
+export type BrowserPreviewCompareTaskTargetRegionsResponse =
+  BrowserPreviewCompareTaskTargetRegionsResponses[keyof BrowserPreviewCompareTaskTargetRegionsResponses]
 
 export type BrowserPreviewLiveSnapshotData = {
   body: {
@@ -9513,10 +9654,13 @@ export type TaskListResponses = {
         projectID: string
         directory?: string
         sessionID?: string | null
+        activePlanVersionID?: string | null
+        activeRunID?: string | null
         requestID?: string
         parentTaskID?: string | null
         source: string
         title: string
+        request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
         priority: "critical" | "high" | "normal" | "low"
         queue?: {
@@ -9524,6 +9668,23 @@ export type TaskListResponses = {
           revision?: string
         }
         kind?: "workflow" | "build"
+        blockingReason?: string
+        error?: string
+        budget?: {
+          maxExecutorGroups?: number
+        }
+        metadata?: {
+          [key: string]: unknown
+        }
+        attachments?: Array<{
+          sha: string
+          url: string
+          mime: string
+          size: number
+          filename?: string
+          intent?: string
+          source?: string
+        }>
         time: {
           created: number
           updated: number
@@ -9536,6 +9697,67 @@ export type TaskListResponses = {
         name?: string
         worktree: string
       } | null
+      plan?: {
+        id: string
+        taskID: string
+        version: number
+        status: "active" | "superseded"
+        summary: string
+        prompt: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      run?: {
+        id: string
+        taskID: string
+        planVersionID?: string | null
+        sessionID?: string | null
+        executor: "opencorvus" | "codex" | "claude-code"
+        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+        blockingReason?: string
+        error?: string
+        retryCount: number
+        executorRef?: {
+          sessionID?: string
+          queueTaskID?: string
+        }
+        metadata?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+          started?: number
+          completed?: number
+        }
+      }
+      evaluation?: {
+        id: string
+        taskID: string
+        runID: string
+        acceptanceID?: string | null
+        status: "pending" | "passed" | "failed" | "inconclusive"
+        verdict: "accepted" | "rejected" | "inconclusive"
+        summary: string
+        checks: Array<{
+          name: string
+          label?: string
+          family?: string
+          status: "passed" | "failed" | "skipped" | "inconclusive"
+          evidence?: string
+        }>
+        time: {
+          created: number
+          updated: number
+          completed?: number
+        }
+      }
       active_sessions: Array<{
         sessionID: string
         kind: string
@@ -9607,10 +9829,13 @@ export type TaskGlobalListResponses = {
         projectID: string
         directory?: string
         sessionID?: string | null
+        activePlanVersionID?: string | null
+        activeRunID?: string | null
         requestID?: string
         parentTaskID?: string | null
         source: string
         title: string
+        request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
         priority: "critical" | "high" | "normal" | "low"
         queue?: {
@@ -9618,6 +9843,23 @@ export type TaskGlobalListResponses = {
           revision?: string
         }
         kind?: "workflow" | "build"
+        blockingReason?: string
+        error?: string
+        budget?: {
+          maxExecutorGroups?: number
+        }
+        metadata?: {
+          [key: string]: unknown
+        }
+        attachments?: Array<{
+          sha: string
+          url: string
+          mime: string
+          size: number
+          filename?: string
+          intent?: string
+          source?: string
+        }>
         time: {
           created: number
           updated: number
@@ -9630,6 +9872,67 @@ export type TaskGlobalListResponses = {
         name?: string
         worktree: string
       } | null
+      plan?: {
+        id: string
+        taskID: string
+        version: number
+        status: "active" | "superseded"
+        summary: string
+        prompt: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      run?: {
+        id: string
+        taskID: string
+        planVersionID?: string | null
+        sessionID?: string | null
+        executor: "opencorvus" | "codex" | "claude-code"
+        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+        blockingReason?: string
+        error?: string
+        retryCount: number
+        executorRef?: {
+          sessionID?: string
+          queueTaskID?: string
+        }
+        metadata?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+          started?: number
+          completed?: number
+        }
+      }
+      evaluation?: {
+        id: string
+        taskID: string
+        runID: string
+        acceptanceID?: string | null
+        status: "pending" | "passed" | "failed" | "inconclusive"
+        verdict: "accepted" | "rejected" | "inconclusive"
+        summary: string
+        checks: Array<{
+          name: string
+          label?: string
+          family?: string
+          status: "passed" | "failed" | "skipped" | "inconclusive"
+          evidence?: string
+        }>
+        time: {
+          created: number
+          updated: number
+          completed?: number
+        }
+      }
       active_sessions: Array<{
         sessionID: string
         kind: string
@@ -13685,7 +13988,7 @@ export type PtyGetResponses = {
 export type PtyGetResponse = PtyGetResponses[keyof PtyGetResponses]
 
 export type PtyUpdateData = {
-  body: {
+  body?: {
     title?: string
     size?: {
       rows: number
@@ -14155,7 +14458,7 @@ export type GlobalConfigGetResponses = {
 export type GlobalConfigGetResponse = GlobalConfigGetResponses[keyof GlobalConfigGetResponses]
 
 export type GlobalConfigUpdateData = {
-  body: Config
+  body?: Config
   path?: never
   query?: never
   url: "/global/config"
@@ -14392,7 +14695,7 @@ export type AuthRemoveResponses = {
 export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
 
 export type AuthSetData = {
-  body: Auth
+  body?: Auth
   path: {
     providerID: string
   }

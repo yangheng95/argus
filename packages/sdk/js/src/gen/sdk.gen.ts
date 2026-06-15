@@ -16,8 +16,10 @@ import type {
   AuthSetErrors,
   AuthSetResponses,
   BrowserPreviewCaptureTaskTargetResponses,
+  BrowserPreviewCompareTaskTargetRegionsResponses,
   BrowserPreviewLiveInputResponses,
   BrowserPreviewLiveSnapshotResponses,
+  BrowserPreviewReadTaskEvidenceArtifactResponses,
   BrowserPreviewReadTaskEvidenceCaptureResponses,
   BrowserPreviewReadTaskEvidenceResponses,
   BrowserPreviewSelectTaskTargetResponses,
@@ -409,9 +411,9 @@ export class Worktrees extends HeyApiClient {
    * Remove a git worktree registered for the current project.
    */
   public delete<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      worktreeRemoveInput: WorktreeRemoveInput
+      worktreeRemoveInput?: WorktreeRemoveInput
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -698,9 +700,9 @@ export class Config extends HeyApiClient {
    * Partially update OpenCorvus configuration per RFC 7396. Only include fields to change; set a field to null to delete it.
    */
   public update<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      body: {
+      body?: {
         [key: string]: unknown
       }
     },
@@ -1143,9 +1145,9 @@ export class Worktree extends HeyApiClient {
    * Remove a git worktree and delete its branch.
    */
   public remove<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      worktreeRemoveInput: WorktreeRemoveInput
+      worktreeRemoveInput?: WorktreeRemoveInput
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1197,9 +1199,9 @@ export class Worktree extends HeyApiClient {
    * Create a new git worktree for the current project and run any configured startup scripts.
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      worktreeCreateInput: WorktreeCreateInput
+      worktreeCreateInput?: WorktreeCreateInput
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1232,9 +1234,9 @@ export class Worktree extends HeyApiClient {
    * Reset a worktree branch to the primary default branch.
    */
   public reset<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      worktreeResetInput: WorktreeResetInput
+      worktreeResetInput?: WorktreeResetInput
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2784,7 +2786,7 @@ export class Part extends HeyApiClient {
       messageID: string
       partID: string
       directory?: string
-      part: Part2
+      part?: Part2
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4421,9 +4423,9 @@ export class Control2 extends HeyApiClient {
    * Execute a structured gateway capability action without LLM interpretation.
    */
   public action<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      body:
+      body?:
         | {
             action: "view_plan"
             taskID: string
@@ -5235,16 +5237,51 @@ export class BrowserPreview extends HeyApiClient {
   }
 
   /**
+   * Read browser preview region comparison artifact
+   *
+   * Return a persisted source, implementation, side-by-side, or diff PNG for region comparison evidence.
+   */
+  public readTaskEvidenceArtifact<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      evidenceID: string
+      artifactName: "source" | "implementation" | "side-by-side" | "diff"
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "path", key: "evidenceID" },
+            { in: "path", key: "artifactName" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<BrowserPreviewReadTaskEvidenceArtifactResponses, unknown, ThrowOnError>(
+      {
+        url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}",
+        ...options,
+        ...params,
+      },
+    )
+  }
+
+  /**
    * Select task browser preview target
    *
-   * Promote an existing task browser preview target artifact, or persist an explicit operator URL as the task preview target.
+   * Promote an existing task browser preview target artifact as the task preview target.
    */
   public selectTaskTarget<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
       directory?: string
-      targetID?: string
-      url?: string
+      targetID: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5256,7 +5293,6 @@ export class BrowserPreview extends HeyApiClient {
             { in: "path", key: "taskID" },
             { in: "query", key: "directory" },
             { in: "body", key: "targetID" },
-            { in: "body", key: "url" },
           ],
         },
       ],
@@ -5310,6 +5346,96 @@ export class BrowserPreview extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  /**
+   * Compare browser preview regions against source visual evidence
+   *
+   * Capture task-scoped local regions from the persisted preview target and persist source/local side-by-side comparison artifacts.
+   */
+  public compareTaskTargetRegions<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      targetID: string
+      viewportIDs: Array<"desktop" | "tablet" | "mobile">
+      inlineBindings: Array<{
+        region_id: string
+        viewport_id: "desktop" | "tablet" | "mobile"
+        state_id?: string
+        region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
+        source: {
+          reference_artifact_id: string
+          bbox: {
+            x: number
+            y: number
+            width: number
+            height: number
+          }
+          semantic_role: string
+          text_anchors?: Array<string>
+          source_refs?: Array<string>
+        }
+        implementation: {
+          route?: string
+          locator:
+            | {
+                kind: "test-id"
+                value: string
+              }
+            | {
+                kind: "data-oc-region"
+                value: string
+              }
+            | {
+                kind: "role"
+                role: string
+                name: string
+              }
+            | {
+                kind: "selector"
+                value: string
+                owner_file: string
+              }
+          component_files?: Array<string>
+        }
+        acceptance_refs?: Array<string>
+      }>
+      output?: {
+        include_fullpage_overview?: boolean
+        include_side_by_side?: boolean
+        include_diff?: boolean
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "targetID" },
+            { in: "body", key: "viewportIDs" },
+            { in: "body", key: "inlineBindings" },
+            { in: "body", key: "output" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<BrowserPreviewCompareTaskTargetRegionsResponses, unknown, ThrowOnError>(
+      {
+        url: "/task/{taskID}/browser-preview/compare",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
   }
 
   /**
@@ -8614,8 +8740,8 @@ export class Config3 extends HeyApiClient {
    * Update global OpenCorvus configuration settings and preferences.
    */
   public update<ThrowOnError extends boolean = false>(
-    parameters: {
-      config: Config4
+    parameters?: {
+      config?: Config4
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -8807,7 +8933,7 @@ export class Auth3 extends HeyApiClient {
   public set<ThrowOnError extends boolean = false>(
     parameters: {
       providerID: string
-      auth: Auth4
+      auth?: Auth4
     },
     options?: Options<never, ThrowOnError>,
   ) {

@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm"
 import crypto from "node:crypto"
 import fs from "node:fs/promises"
+import path from "node:path"
 import z from "zod"
 import { EngineArtifactTable } from "@/engine/engine.sql"
 import { Event } from "@/engine/model"
@@ -8,6 +9,8 @@ import { EngineProtocol } from "@/engine/protocol"
 import { requireTask } from "@/engine/store"
 import { deriveTaskStatus } from "@/engine/task-status"
 import { Identifier } from "@/id/id"
+import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Database } from "@/storage/db"
 
 export const BROWSER_PREVIEW_TARGET_KIND = "browser_preview_target" as const
@@ -28,6 +31,10 @@ export const PersistedBrowserPreviewEvidence = z.object({
   taskID: z.string(),
   targetID: z.string(),
   viewportID: z.string(),
+  operationKind: z.enum(["preview-capture", "reference-comparison"]).default("preview-capture"),
+  regionID: z.string().optional(),
+  manifestPath: z.string().optional(),
+  artifactPaths: z.record(z.string(), z.string()).optional(),
   status: z.enum(["passed", "failed"]),
   summary: z.string(),
   capture: z.unknown().optional(),
@@ -275,6 +282,20 @@ function findBrowserPreviewEvidenceByID(input: {
   const payload = row.payload as Record<string, unknown>
   const targetID = typeof payload.target_id === "string" ? payload.target_id : undefined
   const viewportID = typeof payload.viewport_id === "string" ? payload.viewport_id : undefined
+  const operationKind =
+    payload.operation_kind === "reference-comparison" || payload.operation_kind === "preview-capture"
+      ? payload.operation_kind
+      : "preview-capture"
+  const regionID = typeof payload.region_id === "string" ? payload.region_id : undefined
+  const manifestPath = typeof payload.manifest_path === "string" ? payload.manifest_path : undefined
+  const artifactPaths =
+    payload.artifact_paths && typeof payload.artifact_paths === "object" && !Array.isArray(payload.artifact_paths)
+      ? Object.fromEntries(
+          Object.entries(payload.artifact_paths as Record<string, unknown>).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string",
+          ),
+        )
+      : undefined
   const status = payload.status === "passed" || payload.status === "failed" ? payload.status : undefined
   const summary = typeof payload.summary === "string" ? payload.summary : undefined
   const diagnostics = Array.isArray(payload.diagnostics)
@@ -287,6 +308,10 @@ function findBrowserPreviewEvidenceByID(input: {
     taskID: row.task_id,
     targetID,
     viewportID,
+    operationKind,
+    regionID,
+    manifestPath,
+    artifactPaths,
     status,
     summary,
     capture: payload.capture === null ? undefined : payload.capture,
@@ -315,10 +340,31 @@ export async function findReadableBrowserPreviewEvidenceCapturePath(input: {
   return browserPreviewCaptureArtifacts(evidence.capture)[0]?.path
 }
 
+export async function findReadableBrowserPreviewEvidenceArtifactPath(input: {
+  taskID: string
+  evidenceID: string
+  artifactName: "source" | "implementation" | "side-by-side" | "diff"
+}): Promise<string | undefined> {
+  const evidence = await findReadableBrowserPreviewEvidenceByID(input)
+  if (!evidence) return undefined
+  const keyByName: Record<typeof input.artifactName, string> = {
+    source: "source_crop",
+    implementation: "implementation_crop",
+    "side-by-side": "side_by_side",
+    diff: "diff",
+  }
+  return evidence.artifactPaths?.[keyByName[input.artifactName]]
+}
+
 export function persistBrowserPreviewEvidence(input: {
+  projectRoot: string
   taskID: string
   targetID: string
   viewportID: string
+  operationKind?: "preview-capture" | "reference-comparison"
+  regionID?: string
+  manifestPath?: string
+  artifactPaths?: Record<string, string | undefined>
   status: "passed" | "failed"
   summary: string
   capture?: unknown
@@ -327,6 +373,14 @@ export function persistBrowserPreviewEvidence(input: {
 }): string {
   const now = input.now ?? Date.now()
   const id = Identifier.ascending("artifact")
+  const projectRoot = input.projectRoot
+  const artifactPaths = input.artifactPaths
+    ? Object.fromEntries(
+        Object.entries(input.artifactPaths)
+          .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)
+          .map(([key, value]) => [key, toRuntimeRelativePath(projectRoot, value)]),
+      )
+    : undefined
   Database.use((db) =>
     db
       .insert(EngineArtifactTable)
@@ -341,9 +395,13 @@ export function persistBrowserPreviewEvidence(input: {
         payload: {
           target_id: input.targetID,
           viewport_id: input.viewportID,
+          operation_kind: input.operationKind ?? "preview-capture",
+          ...(input.regionID ? { region_id: input.regionID } : {}),
+          ...(input.manifestPath ? { manifest_path: toRuntimeRelativePath(projectRoot, input.manifestPath) } : {}),
+          ...(artifactPaths ? { artifact_paths: artifactPaths } : {}),
           status: input.status,
           summary: input.summary,
-          capture: input.capture ?? null,
+          capture: input.capture === undefined ? null : normalizeRuntimePathRefs(projectRoot, input.capture),
           diagnostics: input.diagnostics,
           time_completed: now,
         },
@@ -356,12 +414,16 @@ export function persistBrowserPreviewEvidence(input: {
 }
 
 async function browserPreviewEvidenceArtifactsReadable(evidence: PersistedBrowserPreviewEvidence): Promise<boolean> {
-  const artifacts = browserPreviewCaptureArtifacts(evidence.capture)
+  const artifacts: Array<{ path: string; sha?: string }> = [
+    ...browserPreviewCaptureArtifacts(evidence.capture),
+    ...Object.values(evidence.artifactPaths ?? {}).map((artifactPath) => ({ path: artifactPath })),
+  ]
   if (evidence.status === "passed" && artifacts.length === 0) return false
   for (const artifact of artifacts) {
+    const filePath = resolveRuntimeRelativePath(Instance.directory, artifact.path)
     let bytes: Buffer
     try {
-      bytes = await fs.readFile(artifact.path)
+      bytes = await fs.readFile(filePath)
     } catch {
       return false
     }
@@ -392,6 +454,82 @@ function browserPreviewCaptureArtifacts(capture: unknown): Array<{ path: string;
   return artifacts
 }
 
+export function toRuntimeRelativePath(projectRoot: string, input: string): string {
+  const normalized = input.replaceAll("\\", "/")
+  if (
+    normalized === ProjectRuntimePaths.relativeRuntimeRoot() ||
+    normalized.startsWith(`${ProjectRuntimePaths.relativeRuntimeRoot()}/`)
+  ) {
+    return normalized
+  }
+  if (!path.isAbsolute(input)) {
+    throw new Error(`Browser preview artifact path must be runtime-relative or absolute: ${input}`)
+  }
+  const absolute = path.resolve(input)
+  const runtimeRoot = path.resolve(ProjectRuntimePaths.projectRuntimeRoot(projectRoot))
+  if (absolute !== runtimeRoot && !absolute.startsWith(runtimeRoot + path.sep)) {
+    throw new Error(`Browser preview artifact path is outside task runtime: ${input}`)
+  }
+  return path.relative(path.resolve(projectRoot), absolute).replaceAll(path.sep, "/")
+}
+
+export function resolveRuntimeRelativePath(projectRoot: string, input: string): string {
+  const normalized = input.replaceAll("\\", "/")
+  if (
+    !(
+      normalized === ProjectRuntimePaths.relativeRuntimeRoot() ||
+      normalized.startsWith(`${ProjectRuntimePaths.relativeRuntimeRoot()}/`)
+    )
+  ) {
+    throw new Error(`Browser preview artifact path is not a runtime-relative path: ${input}`)
+  }
+  if (normalized.split("/").includes("..")) {
+    throw new Error(`Browser preview artifact path escapes runtime root: ${input}`)
+  }
+  return path.resolve(projectRoot, ...normalized.split("/"))
+}
+
+export function normalizeRuntimePathRefs(projectRoot: string, input: unknown): unknown {
+  if (Array.isArray(input)) return input.map((item) => normalizeRuntimePathRefs(projectRoot, item))
+  if (!input || typeof input !== "object") return input
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (key === "artifactPaths" && Array.isArray(value)) {
+      out[key] = value.map((item) => (typeof item === "string" ? toRuntimeRelativePath(projectRoot, item) : item))
+    } else if (typeof value === "string" && isPathRefKey(key)) {
+      out[key] = toRuntimeRelativePath(projectRoot, value)
+    } else {
+      out[key] = normalizeRuntimePathRefs(projectRoot, value)
+    }
+  }
+  return out
+}
+
+export function stripRuntimePathRefs(input: unknown): unknown {
+  if (Array.isArray(input)) return input.map((item) => stripRuntimePathRefs(item))
+  if (!input || typeof input !== "object") return input
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (isPathRefKey(key) || key === "artifactPaths" || key === "artifact_paths") continue
+    out[key] = stripRuntimePathRefs(value)
+  }
+  return out
+}
+
+function isPathRefKey(key: string): boolean {
+  return (
+    key === "path" ||
+    key === "screenshot_path" ||
+    key === "manifestPath" ||
+    key === "manifest_path" ||
+    key === "diagnosticsPath" ||
+    key === "source_crop" ||
+    key === "implementation_crop" ||
+    key === "side_by_side" ||
+    key === "diff"
+  )
+}
+
 export function latestBrowserPreviewEvidenceIDs(input: {
   taskID: string
   targetID: string
@@ -418,6 +556,7 @@ export function latestBrowserPreviewEvidenceIDs(input: {
 function sqlEvidenceMeta(payload: unknown): { targetID: string; viewportID: string } | undefined {
   if (!payload || typeof payload !== "object") return undefined
   const record = payload as Record<string, unknown>
+  if (record.operation_kind === "reference-comparison") return undefined
   const targetID = typeof record.target_id === "string" ? record.target_id : undefined
   const viewportID = typeof record.viewport_id === "string" ? record.viewport_id : undefined
   if (!targetID || !viewportID) return undefined

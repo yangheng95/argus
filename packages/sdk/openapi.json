@@ -246,8 +246,7 @@
                 "$ref": "#/components/schemas/WorktreeRemoveInput"
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -570,8 +569,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
@@ -768,8 +766,7 @@
                 "additionalProperties": {}
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -1972,8 +1969,7 @@
                 "$ref": "#/components/schemas/WorktreeCreateInput"
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -2063,8 +2059,7 @@
                 "$ref": "#/components/schemas/WorktreeRemoveInput"
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -2308,8 +2303,7 @@
                 "$ref": "#/components/schemas/WorktreeResetInput"
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -3599,8 +3593,7 @@
                 "additionalProperties": false
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
@@ -4326,8 +4319,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
@@ -4618,8 +4610,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
@@ -5424,8 +5415,7 @@
                 "$ref": "#/components/schemas/Part"
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
@@ -6995,8 +6985,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
@@ -8026,8 +8015,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -9781,8 +9769,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
@@ -11955,8 +11942,7 @@
                 ]
               }
             }
-          },
-          "required": true
+          }
         },
         "parameters": [
           {
@@ -13590,6 +13576,29 @@
                     "viewportID": {
                       "type": "string"
                     },
+                    "operationKind": {
+                      "default": "preview-capture",
+                      "type": "string",
+                      "enum": [
+                        "preview-capture",
+                        "reference-comparison"
+                      ]
+                    },
+                    "regionID": {
+                      "type": "string"
+                    },
+                    "manifestPath": {
+                      "type": "string"
+                    },
+                    "artifactPaths": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -13722,11 +13731,80 @@
         ]
       }
     },
+    "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}": {
+      "get": {
+        "operationId": "browserPreview.readTaskEvidenceArtifact",
+        "summary": "Read browser preview region comparison artifact",
+        "description": "Return a persisted source, implementation, side-by-side, or diff PNG for region comparison evidence.",
+        "responses": {
+          "200": {
+            "description": "Persisted browser preview region comparison PNG artifact",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "evidenceID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "artifactName",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "source",
+                "implementation",
+                "side-by-side",
+                "diff"
+              ]
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.readTaskEvidenceArtifact({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/browser-preview/target": {
       "put": {
         "operationId": "browserPreview.selectTaskTarget",
         "summary": "Select task browser preview target",
-        "description": "Promote an existing task browser preview target artifact, or persist an explicit operator URL as the task preview target.",
+        "description": "Promote an existing task browser preview target artifact as the task preview target.",
         "responses": {
           "200": {
             "description": "Persisted browser preview target",
@@ -13900,12 +13978,11 @@
                   "targetID": {
                     "type": "string",
                     "minLength": 1
-                  },
-                  "url": {
-                    "type": "string",
-                    "minLength": 1
                   }
                 },
+                "required": [
+                  "targetID"
+                ],
                 "additionalProperties": false
               }
             }
@@ -14277,6 +14354,492 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.captureTaskTarget({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/task/{taskID}/browser-preview/compare": {
+      "post": {
+        "operationId": "browserPreview.compareTaskTargetRegions",
+        "summary": "Compare browser preview regions against source visual evidence",
+        "description": "Capture task-scoped local regions from the persisted preview target and persist source/local side-by-side comparison artifacts.",
+        "responses": {
+          "200": {
+            "description": "Browser preview region comparison result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "passed",
+                        "failed"
+                      ]
+                    },
+                    "manifestPath": {
+                      "type": "string"
+                    },
+                    "jobID": {
+                      "type": "string"
+                    },
+                    "taskID": {
+                      "type": "string"
+                    },
+                    "targetID": {
+                      "type": "string"
+                    },
+                    "operation": {
+                      "type": "string",
+                      "const": "reference-comparison"
+                    },
+                    "evidenceIDs": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "regions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "region_id": {
+                            "type": "string"
+                          },
+                          "viewport_id": {
+                            "type": "string",
+                            "enum": [
+                              "desktop",
+                              "tablet",
+                              "mobile"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "completed",
+                              "failed"
+                            ]
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "source_bbox": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y",
+                              "width",
+                              "height"
+                            ]
+                          },
+                          "implementation_bbox": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y",
+                              "width",
+                              "height"
+                            ]
+                          },
+                          "artifacts": {
+                            "type": "object",
+                            "properties": {
+                              "source_crop": {
+                                "type": "string"
+                              },
+                              "implementation_crop": {
+                                "type": "string"
+                              },
+                              "side_by_side": {
+                                "type": "string"
+                              },
+                              "diff": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "source_crop",
+                              "implementation_crop",
+                              "side_by_side"
+                            ]
+                          },
+                          "diagnostics": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "region_id",
+                          "viewport_id",
+                          "status",
+                          "diagnostics"
+                        ]
+                      }
+                    },
+                    "diagnostics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "manifestPath",
+                    "jobID",
+                    "taskID",
+                    "targetID",
+                    "operation",
+                    "evidenceIDs",
+                    "regions",
+                    "diagnostics"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetID": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "viewportIDs": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "desktop",
+                        "tablet",
+                        "mobile"
+                      ]
+                    }
+                  },
+                  "inlineBindings": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "region_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "viewport_id": {
+                          "type": "string",
+                          "enum": [
+                            "desktop",
+                            "tablet",
+                            "mobile"
+                          ]
+                        },
+                        "state_id": {
+                          "default": "default",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "region_scope": {
+                          "type": "string",
+                          "enum": [
+                            "page-section",
+                            "card",
+                            "content",
+                            "title",
+                            "chart",
+                            "table",
+                            "control",
+                            "navigation"
+                          ]
+                        },
+                        "source": {
+                          "type": "object",
+                          "properties": {
+                            "reference_artifact_id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "bbox": {
+                              "type": "object",
+                              "properties": {
+                                "x": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "y": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "width": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
+                                "height": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                }
+                              },
+                              "required": [
+                                "x",
+                                "y",
+                                "width",
+                                "height"
+                              ]
+                            },
+                            "semantic_role": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "text_anchors": {
+                              "default": [],
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "source_refs": {
+                              "default": [],
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            }
+                          },
+                          "required": [
+                            "reference_artifact_id",
+                            "bbox",
+                            "semantic_role"
+                          ]
+                        },
+                        "implementation": {
+                          "type": "object",
+                          "properties": {
+                            "route": {
+                              "default": "/",
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "locator": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "test-id"
+                                    },
+                                    "value": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "value"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "data-oc-region"
+                                    },
+                                    "value": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "value"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "role"
+                                    },
+                                    "role": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "name": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "role",
+                                    "name"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "selector"
+                                    },
+                                    "value": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "owner_file": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "value",
+                                    "owner_file"
+                                  ]
+                                }
+                              ]
+                            },
+                            "component_files": {
+                              "default": [],
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            }
+                          },
+                          "required": [
+                            "locator"
+                          ]
+                        },
+                        "acceptance_refs": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": [
+                        "region_id",
+                        "viewport_id",
+                        "region_scope",
+                        "source",
+                        "implementation"
+                      ]
+                    }
+                  },
+                  "output": {
+                    "default": {
+                      "include_fullpage_overview": false,
+                      "include_side_by_side": true,
+                      "include_diff": false
+                    },
+                    "type": "object",
+                    "properties": {
+                      "include_fullpage_overview": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "include_side_by_side": {
+                        "default": true,
+                        "type": "boolean"
+                      },
+                      "include_diff": {
+                        "default": false,
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "targetID",
+                  "viewportIDs",
+                  "inlineBindings"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.compareTaskTargetRegions({\n  ...\n})"
           }
         ]
       }
@@ -16255,6 +16818,28 @@
                                   }
                                 ]
                               },
+                              "activePlanVersionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^pln.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "activeRunID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^run.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
                               "requestID": {
                                 "type": "string"
                               },
@@ -16273,6 +16858,9 @@
                                 "type": "string"
                               },
                               "title": {
+                                "type": "string"
+                              },
+                              "request": {
                                 "type": "string"
                               },
                               "status": {
@@ -16316,6 +16904,66 @@
                                   "build"
                                 ]
                               },
+                              "blockingReason": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string"
+                              },
+                              "budget": {
+                                "type": "object",
+                                "properties": {
+                                  "maxExecutorGroups": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "attachments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sha": {
+                                      "type": "string"
+                                    },
+                                    "url": {
+                                      "type": "string"
+                                    },
+                                    "mime": {
+                                      "type": "string"
+                                    },
+                                    "size": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "filename": {
+                                      "type": "string"
+                                    },
+                                    "intent": {
+                                      "type": "string"
+                                    },
+                                    "source": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "sha",
+                                    "url",
+                                    "mime",
+                                    "size"
+                                  ]
+                                }
+                              },
                               "time": {
                                 "type": "object",
                                 "properties": {
@@ -16343,6 +16991,7 @@
                               "projectID",
                               "source",
                               "title",
+                              "request",
                               "status",
                               "priority",
                               "time"
@@ -16371,6 +17020,304 @@
                               {
                                 "type": "null"
                               }
+                            ]
+                          },
+                          "plan": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^pln.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "version": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "superseded"
+                                ]
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "prompt": {
+                                "type": "string"
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "version",
+                              "status",
+                              "summary",
+                              "prompt",
+                              "time"
+                            ]
+                          },
+                          "run": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "planVersionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^pln.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "sessionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^ses.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "executor": {
+                                "type": "string",
+                                "enum": [
+                                  "opencorvus",
+                                  "codex",
+                                  "claude-code"
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "queued",
+                                  "accepted",
+                                  "running",
+                                  "blocked",
+                                  "completed",
+                                  "failed",
+                                  "aborted"
+                                ]
+                              },
+                              "phase": {
+                                "type": "string",
+                                "enum": [
+                                  "plan",
+                                  "execute",
+                                  "evaluate",
+                                  "deliver",
+                                  "dispatch",
+                                  "retry"
+                                ]
+                              },
+                              "blockingReason": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string"
+                              },
+                              "retryCount": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "executorRef": {
+                                "type": "object",
+                                "properties": {
+                                  "sessionID": {
+                                    "type": "string",
+                                    "pattern": "^ses.*"
+                                  },
+                                  "queueTaskID": {
+                                    "type": "string",
+                                    "pattern": "^tsk.*"
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  },
+                                  "started": {
+                                    "type": "number"
+                                  },
+                                  "completed": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "executor",
+                              "status",
+                              "phase",
+                              "retryCount",
+                              "time"
+                            ]
+                          },
+                          "evaluation": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^evl.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "runID": {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              "acceptanceID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^dlv.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "passed",
+                                  "failed",
+                                  "inconclusive"
+                                ]
+                              },
+                              "verdict": {
+                                "type": "string",
+                                "enum": [
+                                  "accepted",
+                                  "rejected",
+                                  "inconclusive"
+                                ]
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "checks": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "family": {
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "type": "string",
+                                      "enum": [
+                                        "passed",
+                                        "failed",
+                                        "skipped",
+                                        "inconclusive"
+                                      ]
+                                    },
+                                    "evidence": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "status"
+                                  ]
+                                }
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  },
+                                  "completed": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "runID",
+                              "status",
+                              "verdict",
+                              "summary",
+                              "checks",
+                              "time"
                             ]
                           },
                           "active_sessions": {
@@ -16680,6 +17627,28 @@
                                   }
                                 ]
                               },
+                              "activePlanVersionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^pln.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "activeRunID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^run.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
                               "requestID": {
                                 "type": "string"
                               },
@@ -16698,6 +17667,9 @@
                                 "type": "string"
                               },
                               "title": {
+                                "type": "string"
+                              },
+                              "request": {
                                 "type": "string"
                               },
                               "status": {
@@ -16741,6 +17713,66 @@
                                   "build"
                                 ]
                               },
+                              "blockingReason": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string"
+                              },
+                              "budget": {
+                                "type": "object",
+                                "properties": {
+                                  "maxExecutorGroups": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "attachments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sha": {
+                                      "type": "string"
+                                    },
+                                    "url": {
+                                      "type": "string"
+                                    },
+                                    "mime": {
+                                      "type": "string"
+                                    },
+                                    "size": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "filename": {
+                                      "type": "string"
+                                    },
+                                    "intent": {
+                                      "type": "string"
+                                    },
+                                    "source": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "sha",
+                                    "url",
+                                    "mime",
+                                    "size"
+                                  ]
+                                }
+                              },
                               "time": {
                                 "type": "object",
                                 "properties": {
@@ -16768,6 +17800,7 @@
                               "projectID",
                               "source",
                               "title",
+                              "request",
                               "status",
                               "priority",
                               "time"
@@ -16796,6 +17829,304 @@
                               {
                                 "type": "null"
                               }
+                            ]
+                          },
+                          "plan": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^pln.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "version": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "superseded"
+                                ]
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "prompt": {
+                                "type": "string"
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "version",
+                              "status",
+                              "summary",
+                              "prompt",
+                              "time"
+                            ]
+                          },
+                          "run": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "planVersionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^pln.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "sessionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^ses.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "executor": {
+                                "type": "string",
+                                "enum": [
+                                  "opencorvus",
+                                  "codex",
+                                  "claude-code"
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "queued",
+                                  "accepted",
+                                  "running",
+                                  "blocked",
+                                  "completed",
+                                  "failed",
+                                  "aborted"
+                                ]
+                              },
+                              "phase": {
+                                "type": "string",
+                                "enum": [
+                                  "plan",
+                                  "execute",
+                                  "evaluate",
+                                  "deliver",
+                                  "dispatch",
+                                  "retry"
+                                ]
+                              },
+                              "blockingReason": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string"
+                              },
+                              "retryCount": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "executorRef": {
+                                "type": "object",
+                                "properties": {
+                                  "sessionID": {
+                                    "type": "string",
+                                    "pattern": "^ses.*"
+                                  },
+                                  "queueTaskID": {
+                                    "type": "string",
+                                    "pattern": "^tsk.*"
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  },
+                                  "started": {
+                                    "type": "number"
+                                  },
+                                  "completed": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "executor",
+                              "status",
+                              "phase",
+                              "retryCount",
+                              "time"
+                            ]
+                          },
+                          "evaluation": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^evl.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "runID": {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              "acceptanceID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^dlv.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "passed",
+                                  "failed",
+                                  "inconclusive"
+                                ]
+                              },
+                              "verdict": {
+                                "type": "string",
+                                "enum": [
+                                  "accepted",
+                                  "rejected",
+                                  "inconclusive"
+                                ]
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "checks": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "family": {
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "type": "string",
+                                      "enum": [
+                                        "passed",
+                                        "failed",
+                                        "skipped",
+                                        "inconclusive"
+                                      ]
+                                    },
+                                    "evidence": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "status"
+                                  ]
+                                }
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  },
+                                  "completed": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "runID",
+                              "status",
+                              "verdict",
+                              "summary",
+                              "checks",
+                              "time"
                             ]
                           },
                           "active_sessions": {
@@ -29770,8 +31101,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
@@ -30709,8 +32039,7 @@
                 "$ref": "#/components/schemas/Config"
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
@@ -31297,8 +32626,7 @@
                 "$ref": "#/components/schemas/Auth"
               }
             }
-          },
-          "required": true
+          }
         },
         "x-codeSamples": [
           {
