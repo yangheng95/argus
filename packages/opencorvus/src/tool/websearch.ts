@@ -14,11 +14,9 @@ export const WebSearchTool = Tool.define("websearch", async () => {
       query: z.string().describe("Websearch query"),
       numResults: z.number().optional().describe("Number of search results to return"),
       livecrawl: z
-        .enum(["fallback", "preferred"])
-        .default("fallback")
-        .describe(
-          "Live crawl mode - 'fallback': use live crawling as backup if cached content unavailable, 'preferred': prioritize live crawling",
-        ),
+        .enum(["preferred"])
+        .default("preferred")
+        .describe("Live crawl mode. The tool always prioritizes live crawling for current web evidence."),
       type: z
         .enum(["auto", "fast", "deep"])
         .optional()

@@ -14,11 +14,6 @@ import z from "zod"
 import { createCodebaseTools } from "@/engine/codebase-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
-import { Log } from "@/util/log"
-import { exaMcpCall } from "@/tool/exa-mcp"
-import { executeWebFetch, WebFetchDescription, WebFetchParameters } from "@/tool/webfetch"
-
-const log = Log.create({ service: "agent-context-tools" })
 
 /**
  * Creates the full shared context tool set for read-only stage agents.
@@ -29,19 +24,13 @@ const log = Log.create({ service: "agent-context-tools" })
  * Includes:
  * - 4 codebase tools: read_file, find_files, search_code, list_directory
  * - 2 memory tools: memory_search, memory_get
- * - 1 web search tool: websearch (same canonical name as the registry tool;
- *   each stage agent must still list `websearch` in its tools.include — the
- *   shared set offers the capability, the agent contract opts in)
+ * Network retrieval tools such as websearch and webfetch are registry tools.
+ * Do not add same-name runtime extras here, because extras are merged after
+ * registry tools by SessionLoop and would shadow permission/plugin wrappers.
  */
 export function createAgentContextTools(taskWorkDir?: string) {
   const codebase = createCodebaseTools(taskWorkDir)
-  let projectId: string
-  try {
-    projectId = Instance.project.id
-  } catch {
-    projectId = "default"
-    log.warn("context tools: Instance.project.id unavailable, using 'default'")
-  }
+  const projectId = Instance.project.id
 
   return {
     // --- Codebase exploration (inherited) ---
@@ -59,25 +48,20 @@ export function createAgentContextTools(taskWorkDir?: string) {
         max_results: z.number().default(8).describe("Max results to return"),
       }),
       execute: async ({ query, scope, max_results }) => {
-        try {
-          const results = Memory.search({
-            query,
-            projectId,
-            scope,
-            limit: max_results,
-            minScore: 0.1,
-          })
-          if (results.length === 0) return "No memories found for this query."
-          return results
-            .map(
-              (r, i) =>
-                `[${i + 1}] ${r.fileTitle} (${r.kind}/${r.scope}, score: ${r.score.toFixed(2)}, id: ${r.fileId})\n${r.content.slice(0, 600)}`,
-            )
-            .join("\n\n---\n\n")
-        } catch (err) {
-          log.warn("memory search failed in context tools", { query, err })
-          return "Memory search unavailable."
-        }
+        const results = Memory.search({
+          query,
+          projectId,
+          scope,
+          limit: max_results,
+          minScore: 0.1,
+        })
+        if (results.length === 0) return "No memories found for this query."
+        return results
+          .map(
+            (r, i) =>
+              `[${i + 1}] ${r.fileTitle} (${r.kind}/${r.scope}, score: ${r.score.toFixed(2)}, id: ${r.fileId})\n${r.content.slice(0, 600)}`,
+          )
+          .join("\n\n---\n\n")
       },
     }),
 
@@ -89,67 +73,11 @@ export function createAgentContextTools(taskWorkDir?: string) {
         file_id: z.string().describe("Memory file ID from memory_search results"),
       }),
       execute: async ({ file_id }) => {
-        try {
-          const file = Memory.getFile(file_id)
-          if (!file) return `Memory file ${file_id} not found.`
-          const chunks = Memory.getChunks(file_id)
-          const text = chunks.map((c) => c.content).join("\n\n")
-          return `# ${file.title}\nKind: ${file.kind} | Scope: ${file.scope} | Source: ${file.source}\n\n${text}`
-        } catch (err) {
-          log.warn("memory get failed in context tools", { file_id, err })
-          return "Failed to read memory file."
-        }
-      },
-    }),
-
-    // --- Web search (Exa) — single source via exaMcpCall, canonical name
-    // `websearch` (matches the registry WebSearchTool). Always offered here;
-    // per-agent opt-in is the tools.include whitelist in agent.ts. There is
-    // intentionally no enable/disable env switch — disabling websearch for an
-    // agent is done by leaving it out of that agent's include list (rule 7/10:
-    // one mechanism, no dead parallel switch).
-    webfetch: tool({
-      description: WebFetchDescription,
-      inputSchema: WebFetchParameters,
-      execute: async (params, options) => {
-        return executeWebFetch(params, {
-          sessionID: "",
-          messageID: "",
-          agent: "context-tools",
-          abort: options?.abortSignal ?? new AbortController().signal,
-          callID: options?.toolCallId,
-          extra: {},
-          messages: [],
-          metadata: () => {},
-          ask: async () => {},
-        })
-      },
-    }),
-
-    websearch: tool({
-      description:
-        "Search the web for current documentation, API references, changelogs, best practices, " +
-        "framework comparisons, and recommended tooling. USE PROACTIVELY for any greenfield project " +
-        "or when choosing frameworks/libraries. Do NOT assume — verify what is current and recommended.",
-      inputSchema: z.object({
-        query: z.string().describe("Web search query"),
-        num_results: z.number().default(5).describe("Number of results"),
-      }),
-      execute: async ({ query, num_results }, options) => {
-        const text = await exaMcpCall({
-          name: "web_search_exa",
-          arguments: {
-            query,
-            type: "auto",
-            numResults: num_results,
-            livecrawl: "fallback",
-          },
-          timeoutMs: 20_000,
-          signal: options?.abortSignal,
-          label: "Web search",
-        })
-        if (!text) throw new Error("Web search returned no results")
-        return text.length > 4000 ? text.slice(0, 4000) + "\n... (truncated)" : text
+        const file = Memory.getFileInProject({ fileId: file_id, projectId })
+        if (!file) throw new Error(`Memory file ${file_id} not found`)
+        const chunks = Memory.getChunksInProject({ fileId: file_id, projectId })
+        const text = chunks.map((c) => c.content).join("\n\n")
+        return `# ${file.title}\nKind: ${file.kind} | Scope: ${file.scope} | Source: ${file.source}\n\n${text}`
       },
     }),
   }
@@ -169,23 +97,19 @@ export function prefetchContext(taskTitle: string, taskRequest: string): string 
   const projectId = Instance.project.id
 
   // 1. Auto-recall memory with task keywords
-  try {
-    const keywords = extractKeywords(`${taskTitle} ${taskRequest}`)
-    const recalled = keywords
-      ? Memory.promptSection({
-          query: keywords,
-          projectId,
-          scope: "all",
-          limit: 5,
-          minScore: 0.15,
-          heading: "Auto-Recalled Memory",
-          includeEpisodes: true,
-        })
-      : null
-    if (recalled) sections.push(recalled)
-  } catch {
-    // best-effort
-  }
+  const keywords = extractKeywords(`${taskTitle} ${taskRequest}`)
+  const recalled = keywords
+    ? Memory.promptSection({
+        query: keywords,
+        projectId,
+        scope: "all",
+        limit: 5,
+        minScore: 0.15,
+        heading: "Auto-Recalled Memory",
+        includeEpisodes: true,
+      })
+    : null
+  if (recalled) sections.push(recalled)
 
   return sections.length > 0 ? sections.join("\n\n") : ""
 }

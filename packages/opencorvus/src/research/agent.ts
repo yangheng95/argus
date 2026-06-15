@@ -116,7 +116,7 @@ export async function runResearchSession(
   }
   const retrievalTools =
     config.retrievalTools === "readonly"
-      ? await filterAgentTools(createReadonlyRetrievalTools(undefined, { websearch: false }), config.kind, {
+      ? await filterAgentTools(createReadonlyRetrievalTools(), config.kind, {
           taskID: input.taskID,
           sessionID: input.parentSessionID,
         })
