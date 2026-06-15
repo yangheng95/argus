@@ -1,0 +1,37 @@
+# Orchestrator Workflow And Prompt Alignment (2026-06-15)
+
+## Goal
+
+Audit the OpenCorvus orchestration chain, agent workflow guidance, prompts, and public architecture notes for stale or contradictory facts, then repair the runtime single source and tests without adding fallback, gates, or host-side routing shortcuts.
+
+## Evidence
+
+| Surface | Finding | Decision |
+| --- | --- | --- |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | Current prompt says `architect -> workload_analysis -> per-goal build -> integrity`, and says `visual_qa` runs once after each terminal frontend goal batch before the next build wave. | Treat this as the current agent-algorithm contract. Keep Visual QA and Integrity as peer review agents; Integrity remains final acceptance. |
+| `specs/new-arch/2026-06-15-visual-qa-after-goal-batch.md` | Same current contract is already landed as a dated spec with call-point inventory. | Implement the spec in `engine/workflow.ts` and regression tests. |
+| `packages/opencorvus/src/engine/workflow.ts` | Pipeline still renders `architect -> build -> integrity -> visual_qa`, omits `workload_analysis`, and describes Visual QA as post-integrity repair only. | Add `workload_analysis` after `architect`; make `build.after=["workload_analysis"]`; make `visual_qa.after=["build"]`, with no dependency edge between `visual_qa` and `integrity`. |
+| `packages/opencorvus/test/engine/workflow-pipeline-workload.test.ts` | Already expects `workload_analysis`, proving runtime workflow drift from tests/spec. | Keep the test and make runtime pass. |
+| `packages/opencorvus/test/engine/workflow-integrity-step.test.ts` | Still asserts old integrity-before-visual_qa ordering. | Update to assert peer post-build ordering and no Visual QA after Integrity dependency. |
+| `packages/opencorvus/src/orchestrator/tools.ts` | Tool descriptions and build next-step guidance already mention batch Visual QA, peer review, and final Integrity. | No code change needed here. |
+| `packages/opencorvus/src/orchestrator/tools.ts` + `packages/opencorvus/src/agent/agent.ts` | `wait` existed in the orchestrator tool factory and prompt, but the orchestrator agent include list did not expose it. Mission also needed the same tool, but Mission uses ToolRegistry rather than the orchestrator self-built tool set. | Move wait bounds/execution/schema into `src/tool/wait.ts`; expose it through ToolRegistry for Mission; keep orchestrator's self-built wait tool as a wrapper around the shared implementation; add `wait` to both agent include lists. |
+| `packages/overlay/src/components/InteractionDialogHost.tsx` + `packages/overlay/src/services/tree-writer.ts` | Raw Mission `question.asked` events projected only into standalone session cards; the popup host read only `board.interactions`, so Mission questions had no popup and could hang unattended. Background Mission questions were also dropped when the currently selected source was a task. | Use card-tree normalized `interaction-*` parts as the popup source; retain known Mission session questions even when Mission is in the background; keep task questions deduplicated through `board.interactions`. |
+| `packages/overlay/src/services/tree-writer.ts` | Root/orchestrator turns were regrouped by visible adjacency, so a child/phase session could split one logical session into a ghost second card; terminal status then landed on the wrong card. | Regroup non-phase message turns by real `sessionID + stage + goalID`; phase-absorbed sessions still do not materialize separate cards. |
+| `packages/overlay/test/tree-writer-hierarchy.test.ts` | Test harness used `t(...)` without installing real locale data, emitting false `MissingI18nKeyError` logs despite source locale JSON containing the keys. | Install the real overlay locale bundle in the test harness; do not add runtime fallback. |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` + `packages/opencorvus/src/orchestrator/tools.ts` + `packages/opencorvus/src/agent/agent.ts` | Prompt and tool factory define current `add_goal` behavior for one concrete in-scope operator-added surface, but the Orchestrator agent include list did not expose the tool. | Add `add_goal` to the Orchestrator include list and pin it in tool-surface tests/docs. |
+| `packages/opencorvus/src/build/types.ts` | BuildResult comment still says orchestrator decides whether to call `deliver`, and says `deliver` double-checks build. | Replace with Integrity-based wording; no schema change. |
+| `specs/new-arch/01-agents.md`, `README.md`, `08-agent-tool-adapter.md` | Public architecture notes still list `deliver` / `publish_acceptance`, stale tool counts, and old acceptance-review wording. | Update docs to the current tool family: no deliver/publish_acceptance; include `workload_analysis`, `visual_qa`, `deep_research`, `browser_preview`, `explore`, `wait`, and current Integrity ownership. |
+| `specs/tc_clone_prompt.md` | Request text has typo `Frontend Researcb`. | Correct to `Frontend Research` so mission/task prompt source is not factually wrong. |
+
+## Acceptance
+
+- Runtime workflow includes `workload_analysis` between `architect` and goal builds.
+- Runtime workflow projects `visual_qa` and `integrity` as peer task-scope post-build review steps with `after=["build"]`, not a post-integrity-only repair lane.
+- Tests pin both `workload_analysis` and the Visual QA peer-review topology.
+- No retired `deliver` / `publish_acceptance` acceptance path remains in current workflow docs or build contract comments.
+- `wait` is available to both Mission and Orchestrator through one shared implementation, with tests covering ToolRegistry and orchestrator tool-factory wiring.
+- Mission `question` requests show in the shared interaction popup whether Mission is selected or running in the background; task questions remain single-sourced through board interactions.
+- Non-phase root/orchestrator session turns remain one complete session card across child/phase interruptions, and `session.status` terminal updates that complete card.
+- Overlay tree-writer tests install real i18n data and run without missing-key noise.
+- Orchestrator prompt/tool factory/agent include list agree that `add_goal` is available for one concrete in-scope new goal.
+- Targeted tests pass: workflow projection, workload workflow wiring, deliver retirement prompt test, and role-contract public docs hygiene.

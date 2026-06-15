@@ -7,6 +7,22 @@ export interface DialogInteractionCandidate {
   }
 }
 
+export function collectDialogInteractions(cards: Record<string, any> | null | undefined): DialogInteractionCandidate[] {
+  if (!cards || typeof cards !== "object") return []
+  const byID = new Map<string, DialogInteractionCandidate>()
+  for (const card of Object.values(cards)) {
+    const parts = Array.isArray(card?.parts) ? card.parts : []
+    for (const part of parts) {
+      if (part?.type !== "interaction-question" && part?.type !== "interaction-permission") continue
+      const interaction = part?.interaction
+      const id = typeof interaction?.id === "string" ? interaction.id : ""
+      if (!id || byID.has(id)) continue
+      byID.set(id, interaction)
+    }
+  }
+  return [...byID.values()]
+}
+
 export function pickDialogInteraction<T extends DialogInteractionCandidate>(
   interactions: readonly T[] | null | undefined,
   dismissed: ReadonlySet<string>,

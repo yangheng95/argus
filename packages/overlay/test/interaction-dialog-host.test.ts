@@ -15,7 +15,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-import { pickDialogInteraction } from "../src/utils/interaction-dialog"
+import { collectDialogInteractions, pickDialogInteraction } from "../src/utils/interaction-dialog"
 import type { InteractionData } from "../src/components/InteractionCard"
 
 const OVERLAY_ROOT = join(import.meta.dir, "../")
@@ -79,6 +79,26 @@ describe("pickDialogInteraction", () => {
     ]
     expect(pickDialogInteraction(list, new Set())?.id).toBe("perm")
   })
+
+  test("collects normalized pending interactions from card tree parts", () => {
+    const question = makeInteraction({ id: "que_mission_popup", type: "question", createdAt: 100 })
+    const permission = makeInteraction({ id: "int_permission_popup", type: "permission", createdAt: 80 })
+    const cards = {
+      "mission:session:ses_mission:message:msg_1": {
+        parts: [{ type: "text", text: "thinking" }],
+      },
+      "interaction-card:ctx:interaction:que_mission_popup": {
+        parts: [{ type: "interaction-question", interaction: question }],
+      },
+      "interaction-card:ctx:interaction:int_permission_popup": {
+        parts: [{ type: "interaction-permission", interaction: permission }],
+      },
+    }
+
+    const collected = collectDialogInteractions(cards)
+    expect(collected.map((item) => item.id).sort()).toEqual(["int_permission_popup", "que_mission_popup"])
+    expect(pickDialogInteraction(collected, new Set())?.id).toBe("int_permission_popup")
+  })
 })
 
 describe("InteractionDialogHost — wiring", () => {
@@ -98,6 +118,9 @@ describe("InteractionDialogHost — wiring", () => {
     expect(source).toContain('from "../utils/interaction-dialog"')
     expect(source).not.toContain("export function pickDialogInteraction")
     expect(selector).toContain("export function pickDialogInteraction")
+    expect(selector).toContain("export function collectDialogInteractions")
+    expect(source).toContain("collectDialogInteractions(cardTreeStore.cards)")
+    expect(source).not.toContain("boardStore.board?.interactions")
     expect(source).toContain("InteractionCard")
     expect(source).toContain("<InteractionCard")
     expect(source).toContain("<Dialog")

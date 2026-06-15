@@ -10,9 +10,10 @@
 > **§实施进度（2026-05-18）**：`codex/agent-boundary-role-contract` 分支已落地**阶段一**：
 > `packages/opencorvus/src/agent/role-contract.ts` 定义了 `AgentRoleContract` 接口（含
 > `id`、`description`、`promptEditable`、`defaultPromptRequired`、`promptConfigMode` 等字段）
-> 与 `AgentRoleID` 联合类型（覆盖全部 16 个 native agent 角色：`coding` · `build` · `general` ·
-> `explore` · `compaction` · `title` · `summary` · `control` · `acceptance` · `orchestrator` ·
-> `requirements` · `architect` · `frontend-design` · `intent-analysis` · `integrity` · `prosecutor`）。
+> 与 `AgentRoleID` 联合类型（当前覆盖 native agent 角色：`coding` · `build` · `visual-qa` ·
+> `general` · `explore` · `compaction` · `title` · `summary` · `control` · `orchestrator` ·
+> `mission` · `requirements` · `architect` · `frontend-design` · `frontend-research` ·
+> `intent-analysis` · `integrity` · `fact-check` · `deep-research` · `goal-workload-analyst`）。
 > OOP 继承体系（`BaseAgent` / `AgentMailbox` / `AgentRegistry`）及 mailbox 数据库表仍**待实现**。
 >
 > 抽象修正：本文把未来 agent 家族拆成 `PipelineAgent` / `SessionAgent`，这是对当前
@@ -289,7 +290,7 @@ abstract class SessionAgent<TIn extends z.ZodType, TOut extends z.ZodType> exten
 | 目录                | 存放内容                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/agent/prompt/` | SessionAgent 的 prompt（实际盘上：`coding.txt` / `general.txt` / `explore.txt` / `compaction.txt` / `title.txt` / `judge.txt`，**无** `summary.txt`）                                                                                                                                                                                                                                                    |
-| `src/prompt/core/`  | PipelineAgent 的 prompt（实际盘上：`requirements-core.txt` / `architect-core.txt` / `acceptance-core.txt` / `frontend-design-core.txt` / `intent-analysis-core.txt` / `orchestrator-core.txt` / `integrity-core.txt` / `prosecutor-core.txt` / `build-core.txt`——`build-core.txt` 服务于 `build/agent.ts` 这条 pipeline-agent 路径；direct interactive SessionAgent 路径使用 `agent/prompt/coding.txt`） |
+| `src/prompt/core/`  | PipelineAgent 的 prompt（实际盘上：`requirements-core.txt` / `architect-core.txt` / `frontend-design-core.txt` / `frontend-research-core.txt` / `goal-workload-analyst-core.txt` / `visual-qa-core.txt` / `intent-analysis-core.txt` / `orchestrator-core.txt` / `integrity-team-core.txt` / `fact-check-core.txt` / `deep-research-core.txt` / `mission-core.txt` / `build-core.txt`；direct interactive SessionAgent 路径使用 `agent/prompt/coding.txt`） |
 
 **迁移状态（2026-05-12）**：
 
@@ -386,28 +387,33 @@ private loadPromptFile(): string {
 
 ### 5.3 当前通信拓扑白名单
 
-> **2026-05-12 数据现状**：`planner` agent 已下线（the removed planning package 整目录删除），从下表
-> 移除；`integrity` / `prosecutor` 在 orchestrator tool 集里已实装（见 §七表格），
-> 一并补入。orchestrator 实际可调用的子 agent 集合权威来源是
-> `agent/agent.ts:276-310` 的 `orchestrator.tools.include`。
+> **2026-06-15 数据现状**：`planner` / `acceptance` / `prosecutor` agent 已下线；
+> final acceptance 归 `integrity`，对抗性复核职责也并入 integrity reviewer team。
+> orchestrator 实际可调用的子 agent / tool 集合权威来源是
+> `agent/agent.ts` 的 `orchestrator.tools.include` 与
+> `orchestrator/tools.ts::createOrchestratorTools()`。
 
 ```
 agent              receiveWhitelist              sendWhitelist
 ──────────────────────────────────────────────────────────────
 orchestrator       [system_entry]                [requirements, architect,
-                                                  frontend-design, acceptance,
+                                                  frontend-design, frontend-research,
+                                                  workload-analysis, visual-qa,
                                                   build, intent-analysis,
-                                                  integrity, prosecutor,
+                                                  integrity, fact-check, deep-research,
                                                   cancel_subagent（task-control tool，
                                                   不派发新 agent，终止现有子 session）]
 
 requirements       [orchestrator]                [orchestrator]
 architect          [orchestrator]                [orchestrator]
 frontend-design     [orchestrator]                [orchestrator]
-acceptance           [orchestrator]                [orchestrator]
+frontend-research    [orchestrator]                [orchestrator]
+workload-analysis    [orchestrator]                [orchestrator]
+visual-qa            [orchestrator]                [orchestrator]
 intent-analysis    [orchestrator]                [orchestrator]
 integrity          [orchestrator]                [orchestrator]
-prosecutor         [orchestrator]                [orchestrator]
+fact-check         [orchestrator]                [orchestrator]
+deep-research      [orchestrator]                [orchestrator]
 
 build              [orchestrator]                [orchestrator, general, explore]
 general            [build, orchestrator]          [orchestrator]
@@ -483,16 +489,16 @@ Orchestrator system prompt 中明确指引：
 | `ArchitectAgent.coordinate()`                                                                          | `PipelineAgent` | `ArchitectInputSchema`      | `ArchitectResultSchema`      | 已在 `.txt`，无需迁移                                                                           |
 | `FrontendDesignAgent.analyze()`                                                                        | `PipelineAgent` | `FrontendDesignInputSchema` | `FrontendDesignResultSchema` | 已在 `.txt`，无需迁移                                                                           |
 | ~~`planGoal()` 函数~~                                                                                  | —               | —                           | —                            | **已删除**：the removed planning package 整目录下线，build agent 直接读 architect contract 推进 |
-| `AcceptanceReview.verify()`                                                                            | `PipelineAgent` | `AcceptanceInputSchema`     | `AcceptanceVerdictSchema`    | ✅ 已迁移：`ACCEPTANCE_AGENT_SYSTEM = ACCEPTANCE_CORE`                                          |
+| ~~`AcceptanceReview.verify()`~~                                                                        | —               | —                           | —                            | **已退役**：最终验收职责并入 `integrity`；不再有独立 acceptance/deliver 路径                  |
 | `Orchestrator.runTaskLoop()`                                                                           | `PipelineAgent` | `OrchestratorTriggerSchema` | `z.void()`                   | ✅ 已迁移：`ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_CORE`                                      |
 | `IntentAnalysisAgent.analyze()`                                                                        | `PipelineAgent` | `IntentInputSchema`         | `IntentResultSchema`         | 已在 `.txt`，已接线 `analyze_intent` tool                                                       |
 | `reviewIntegrity()` （`integrity/agent.ts:257`，函数式入口；本文 §三的 `IntegrityAgent` 类是未来形态） | `PipelineAgent` | `IntegrityInputSchema`      | `IntegrityResultSchema`      | 已在 `.txt`，已接线 orchestrator `integrity` tool（`tools.ts:2811`）                            |
-| `runProsecutor()` （`prosecutor/agent.ts:322`，函数式入口；本文 §三的 `ProsecutorAgent` 类是未来形态） | `PipelineAgent` | `ProsecutorInputSchema`     | `ProsecutorResultSchema`     | 已在 `.txt`，已接线 orchestrator `prosecute` tool（`tools.ts:2858`）                            |
+| ~~`runProsecutor()`~~                                                                                  | —               | —                           | —                            | **已删除**：不再有 `prosecute` tool；对抗性复核职责归入 `integrity` review team               |
 | `Agent.Info["build"]` via `SessionPrompt`                                                              | `SessionAgent`  | `BuildInputSchema`          | `BuildSummarySchema`         | 已在 `.txt`，无需迁移                                                                           |
 | `Agent.Info["general"]`                                                                                | `SessionAgent`  | `GeneralInputSchema`        | `GeneralSummarySchema`       | 已在 `.txt`，无需迁移                                                                           |
 | `Agent.Info["explore"]`                                                                                | `SessionAgent`  | `ExploreInputSchema`        | `ExploreSummarySchema`       | 已在 `.txt`，无需迁移                                                                           |
 
-**迁移状态（2026-05-12）**：Orchestrator + Acceptance 内联 prompt 已全部移到 `.txt`。整张表的所有 `.txt` 迁移项已完成；剩下未完成的只有 base-class / mailbox / whitelist 等结构性抽象，本文整体仍标记 "未来方案"。
+**迁移状态（2026-06-15 修正）**：Orchestrator prompt 仍由 `.txt` 真源驱动；Acceptance / Deliver / Prosecutor 相关行是历史设计，当前 runtime 已退役这些 agent/tool。剩下未完成的只有 base-class / mailbox / whitelist 等结构性抽象，本文整体仍标记 "未来方案"。
 
 ---
 

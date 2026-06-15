@@ -7,6 +7,7 @@ import { Config } from "../../src/config/config"
 import { PermissionNext } from "../../src/permission/next"
 import { SystemPrompt } from "../../src/session/system"
 import { ToolRegistry } from "../../src/tool/registry"
+import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import {
   WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS,
   WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS,
@@ -274,10 +275,12 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
     fn: async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
+      expect(orchestrator?.tools?.include).toContain("steer_subagent")
       expect(orchestrator?.tools?.include).toContain("cancel_subagent")
       expect(orchestrator?.tools?.include).toContain("propose_task")
+      expect(orchestrator?.tools?.include).toContain("add_goal")
       expect(orchestrator?.tools?.include).toContain("browser_preview")
-      expect(orchestrator?.tools?.include).toContain("bash")
+      expect(orchestrator?.tools?.include).toContain("wait")
       expect(orchestrator?.tools?.include).not.toContain("panel")
       expect(orchestrator?.tools?.include).not.toContain("task")
       expect(orchestrator?.tools?.include).not.toContain("skill")
@@ -290,7 +293,6 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(tools.map((tool) => tool.id)).not.toContain("skill")
       expect(tools.map((tool) => tool.id)).not.toContain("task_report")
       expect(tools.map((tool) => tool.id)).not.toContain("memory")
-      expect(tools.map((tool) => tool.id)).toContain("bash")
     },
   })
 })
@@ -620,19 +622,42 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         "retry_task",
         "restart_from_stage",
         "inject_operator_message",
+        "steer_subagent",
         "cancel_subagent",
+        "add_goal",
+        "wait",
       ]) {
         expect(include).toContain(tool)
       }
       expect(include).toContain("integrity")
       expect(include).toContain("browser_preview")
-      expect(include).toContain("bash")
       expect(include).toContain("deep_research")
       expect(include).not.toContain("research")
       expect(include).toContain("frontend_research")
       expect(include).not.toContain("deliver")
       expect(include).not.toContain("publish_acceptance")
       expect(orchestrator?.prompt).toContain("propose_task")
+    },
+  })
+})
+
+test("orchestrator include list covers every self-built orchestrator tool", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const orchestrator = await Agent.get("orchestrator")
+      expect(orchestrator).toBeDefined()
+      const include = new Set(orchestrator?.tools?.include ?? [])
+      const { tools } = createOrchestratorTools({
+        taskID: "tsk_orchestrator_tool_surface_audit",
+        agentSessionID: "ses_orchestrator_tool_surface_audit",
+        signal: new AbortController().signal,
+      })
+
+      for (const toolName of Object.keys(tools)) {
+        expect(include.has(toolName), `${toolName} is implemented but hidden from the orchestrator agent`).toBe(true)
+      }
     },
   })
 })
@@ -1341,9 +1366,8 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
  * `mission` is a hidden primary agent — a full coordinator that reads and
  * analyses the project, plans, and dispatches squad/team work, but is NOT a
  * coding executor. The orchestrator-core comment block (see agent.ts) is the
- * historical reason a coordination agent must NOT hold edit/write/apply_patch,
- * and why bash must stay limited to user-authorized command evidence: otherwise
- * the agent drifts into executing work itself instead of delegating. These
+ * historical reason a coordination agent must NOT hold bash/edit/write: such
+ * an agent drifts into executing work itself instead of delegating. These
  * assertions guard that boundary.
  */
 test("mission is hidden primary with the coordinator prompt", async () => {
@@ -1387,7 +1411,7 @@ test("mission is hidden primary with the coordinator prompt", async () => {
   })
 })
 
-test("mission's resolved tool surface is coordinator plus user-authorized command evidence", async () => {
+test("mission's resolved tool surface is the coordinator set (read/analyse + dispatch, no execution)", async () => {
   // ToolRegistry.tools() does first-time tool-init on every registered
   // tool (~25 of them, several of which do real I/O on init), so this
   // assertion needs more headroom than the 5 s default. Matches the
@@ -1407,7 +1431,6 @@ test("mission's resolved tool surface is coordinator plus user-authorized comman
         "read",
         "glob",
         "search_code",
-        "bash",
         "mission_state",
         "panel",
         "webfetch",
@@ -1420,10 +1443,12 @@ test("mission's resolved tool surface is coordinator plus user-authorized comman
         expect(ids).toContain(allowed)
       }
 
-      // Reverse: no code-authoring / generic dispatch tools. Bash is allowed
-      // only as user-authorized command evidence; Mission still delegates
-      // implementation to an orchestrator-led squad/team.
+      // Reverse: no EXECUTION tools, ever. If any of these fires, Mission
+      // has acquired the ability to do work itself instead of delegating to
+      // an orchestrator-led squad/team — re-read the orchestrator-core
+      // comment block before "fixing".
       for (const forbidden of [
+        "bash",
         "edit",
         "write",
         "apply_patch",

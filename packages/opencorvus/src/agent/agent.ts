@@ -327,18 +327,18 @@ export namespace Agent {
         //
         // Capability set = COORDINATOR (updated 2026-06-15): it reads and
         // analyses the project, maintains mission state, plans, dispatches
-        // squad/team work, reconciles outcomes, talks to the user, and may run
-        // user-authorized command evidence through bash. It does NOT write code
-        // or use shell as an executor — implementation is delegated to
-        // orchestrator-led squad/team tasks.
+        // squad/team work, reconciles outcomes, waits for named external
+        // events, and talks to the user. It does NOT write code or run shell
+        // commands — implementation is delegated to orchestrator-led
+        // squad/team tasks.
         //
         // Deliberately EXCLUDED (each on purpose): edit / write / apply_patch
         // (it is not a coding executor — would let it bypass the orchestrator,
         // rule 11); url_screenshot / webpage_* (crawling/visual capture belong
         // to frontend-design inside a dispatched task); task (generic sub-agent
         // dispatch is not Mission's engine-task dispatch path; Mission creates
-        // engine tasks through panel.create_task). Bash is included only for
-        // user-authorized command evidence, not autonomous execution.
+        // engine tasks through panel.create_task); bash (command evidence and
+        // shell execution belong to a dispatched task/orchestrator context).
         //
         // panel is allowed but action-filtered to the coordination set by
         // panel.ts execute (actor-based whitelist on derivePanelActor value):
@@ -351,7 +351,6 @@ export namespace Agent {
             "read",
             "glob",
             "search_code",
-            "bash",
             // `lsp` is experimental (flag-gated in the tool registry); it
             // resolves only when OPENCORVUS_EXPERIMENTAL_LSP_TOOL is on, same
             // as the explore agent. Directory listing is covered by `glob`.
@@ -361,6 +360,7 @@ export namespace Agent {
             "mission_state",
             "panel",
             "memory",
+            "wait",
             "todoread",
             "todowrite",
             "question",
@@ -371,10 +371,10 @@ export namespace Agent {
             read: "allow",
             glob: "allow",
             search_code: "allow",
-            bash: "allow",
             lsp: "allow",
             panel: "allow",
             mission_state: "allow",
+            wait: "allow",
             webfetch: "allow",
             websearch: "allow",
             memory: "allow",
@@ -405,7 +405,7 @@ export namespace Agent {
         // the per-agent step budget should not constrain normal flow. A tight
         // per-session cap was the dominant failure mode (3-goal pipeline
         // burned the original 20-step cap on dispatch alone, never reaching
-        // deliver). The stream-idle watchdog and signal abort still bound a
+        // final integrity review). The stream-idle watchdog and signal abort still bound a
         // genuinely wedged LLM.
         steps: 1000,
         // Whitelist: orchestrator is a SCHEDULER, not an executor. The benchmark
@@ -445,6 +445,7 @@ export namespace Agent {
             "propose_task",
             "analyze_intent",
             "explore",
+            "add_goal",
             "modify_goal",
             "refine",
             "restart_from_stage",
@@ -452,6 +453,7 @@ export namespace Agent {
             "cancel_task",
             "retry_task",
             "inject_operator_message",
+            "steer_subagent",
             "cancel_subagent",
             // observation (read-only views of task state)
             "query_failed_goals",
@@ -460,6 +462,7 @@ export namespace Agent {
             "analytics",
             "browser_preview",
             "bash",
+            "wait",
             // user interaction
             "question",
             // own bookkeeping
