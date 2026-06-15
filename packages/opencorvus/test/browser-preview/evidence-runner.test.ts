@@ -4,8 +4,10 @@ import path from "node:path"
 import { PNG } from "pngjs"
 import {
   finalizeBrowserPreviewSidecarCapture,
+  runBrowserPreviewEvidenceJob,
   writeBrowserEvidenceManifest,
 } from "../../src/browser-preview/evidence-runner"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import type { RuntimeCaptureSuccess } from "../../src/runtime/capture-contract"
 import { tmpdir } from "../fixture/fixture"
 
@@ -35,6 +37,21 @@ describe("browser preview evidence runner contract", () => {
     expect(inputType).not.toContain("outDir:")
     expect(source).toContain("findBrowserPreviewTargetByID")
     expect(source).toContain("ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID)")
+  })
+
+  test("product runner rejects an unknown target before creating a runtime job", async () => {
+    await using tmp = await tmpdir()
+    const taskID = "tsk_preview_missing_target"
+
+    await expect(
+      runBrowserPreviewEvidenceJob({
+        projectRoot: tmp.path,
+        taskID,
+        targetID: "art_preview_missing_target",
+        viewportIDs: ["desktop"],
+      }),
+    ).rejects.toThrow("Browser preview target not found: art_preview_missing_target")
+    await expect(fs.stat(ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp"))).rejects.toThrow()
   })
 
   test("manifest records viewport IDs and diagnostics path as runner evidence metadata", async () => {
