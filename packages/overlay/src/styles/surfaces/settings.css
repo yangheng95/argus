@@ -1282,6 +1282,7 @@
 }
 
 .config-resizer:hover::before,
+.config-resizer:focus-visible::before,
 .config-resizer[data-active="true"]::before {
   background: var(--accent);
 }
