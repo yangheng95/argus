@@ -3623,6 +3623,78 @@ export type ProjectCurrentWorktreesResponses = {
 
 export type ProjectCurrentWorktreesResponse = ProjectCurrentWorktreesResponses[keyof ProjectCurrentWorktreesResponses]
 
+export type ProjectCurrentCleanupCandidatesData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current/cleanup-candidates"
+}
+
+export type ProjectCurrentCleanupCandidatesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectCurrentCleanupCandidatesError =
+  ProjectCurrentCleanupCandidatesErrors[keyof ProjectCurrentCleanupCandidatesErrors]
+
+export type ProjectCurrentCleanupCandidatesResponses = {
+  /**
+   * Cleanup candidates
+   */
+  200: {
+    worktreeOrphans: Array<{
+      marker: {
+        taskID: string
+        sessionID: string
+        cwd: string
+        ownerPid: number
+        goalID?: string
+        runID?: string
+        createdAt: number
+        kind: "worktree" | "process"
+      }
+      markerPath: string
+      reason: string
+      worktreeDir?: string
+    }>
+    processOrphans: Array<{
+      marker: {
+        taskID: string
+        sessionID: string
+        cwd: string
+        ownerPid: number
+        goalID?: string
+        runID?: string
+        createdAt: number
+        kind: "worktree" | "process"
+      }
+      markerPath: string
+      reason: string
+      worktreeDir?: string
+    }>
+    worktreeGCCandidates: Array<{
+      projectID: string
+      primaryDir: string
+      directory: string
+    }>
+  }
+}
+
+export type ProjectCurrentCleanupCandidatesResponse =
+  ProjectCurrentCleanupCandidatesResponses[keyof ProjectCurrentCleanupCandidatesResponses]
+
 export type ProjectUpdateData = {
   body?: {
     name?: string
@@ -7826,6 +7898,7 @@ export type GatewayControlActionData = {
       }
     | {
         action: "create_task"
+        title?: string
         request: string
         request_id?: string
         executor?: "opencorvus" | "codex" | "claude-code"
@@ -8512,6 +8585,7 @@ export type MissionWakeData = {
     missionID?: string
     text: string
     title?: string
+    model?: string
   }
   path?: never
   query?: {
@@ -9426,13 +9500,10 @@ export type TaskListResponses = {
         projectID: string
         directory?: string
         sessionID?: string | null
-        activePlanVersionID?: string | null
-        activeRunID?: string | null
         requestID?: string
         parentTaskID?: string | null
         source: string
         title: string
-        request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
         priority: "critical" | "high" | "normal" | "low"
         queue?: {
@@ -9440,23 +9511,6 @@ export type TaskListResponses = {
           revision?: string
         }
         kind?: "workflow" | "build"
-        blockingReason?: string
-        error?: string
-        budget?: {
-          maxExecutorGroups?: number
-        }
-        metadata?: {
-          [key: string]: unknown
-        }
-        attachments?: Array<{
-          sha: string
-          url: string
-          mime: string
-          size: number
-          filename?: string
-          intent?: string
-          source?: string
-        }>
         time: {
           created: number
           updated: number
@@ -9469,67 +9523,6 @@ export type TaskListResponses = {
         name?: string
         worktree: string
       } | null
-      plan?: {
-        id: string
-        taskID: string
-        version: number
-        status: "active" | "superseded"
-        summary: string
-        prompt: string
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      run?: {
-        id: string
-        taskID: string
-        planVersionID?: string | null
-        sessionID?: string | null
-        executor: "opencorvus" | "codex" | "claude-code"
-        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-        blockingReason?: string
-        error?: string
-        retryCount: number
-        executorRef?: {
-          sessionID?: string
-          queueTaskID?: string
-        }
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-          started?: number
-          completed?: number
-        }
-      }
-      evaluation?: {
-        id: string
-        taskID: string
-        runID: string
-        acceptanceID?: string | null
-        status: "pending" | "passed" | "failed" | "inconclusive"
-        verdict: "accepted" | "rejected" | "inconclusive"
-        summary: string
-        checks: Array<{
-          name: string
-          label?: string
-          family?: string
-          status: "passed" | "failed" | "skipped" | "inconclusive"
-          evidence?: string
-        }>
-        time: {
-          created: number
-          updated: number
-          completed?: number
-        }
-      }
       active_sessions: Array<{
         sessionID: string
         kind: string
@@ -9601,13 +9594,10 @@ export type TaskGlobalListResponses = {
         projectID: string
         directory?: string
         sessionID?: string | null
-        activePlanVersionID?: string | null
-        activeRunID?: string | null
         requestID?: string
         parentTaskID?: string | null
         source: string
         title: string
-        request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
         priority: "critical" | "high" | "normal" | "low"
         queue?: {
@@ -9615,23 +9605,6 @@ export type TaskGlobalListResponses = {
           revision?: string
         }
         kind?: "workflow" | "build"
-        blockingReason?: string
-        error?: string
-        budget?: {
-          maxExecutorGroups?: number
-        }
-        metadata?: {
-          [key: string]: unknown
-        }
-        attachments?: Array<{
-          sha: string
-          url: string
-          mime: string
-          size: number
-          filename?: string
-          intent?: string
-          source?: string
-        }>
         time: {
           created: number
           updated: number
@@ -9644,67 +9617,6 @@ export type TaskGlobalListResponses = {
         name?: string
         worktree: string
       } | null
-      plan?: {
-        id: string
-        taskID: string
-        version: number
-        status: "active" | "superseded"
-        summary: string
-        prompt: string
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-        }
-      }
-      run?: {
-        id: string
-        taskID: string
-        planVersionID?: string | null
-        sessionID?: string | null
-        executor: "opencorvus" | "codex" | "claude-code"
-        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
-        blockingReason?: string
-        error?: string
-        retryCount: number
-        executorRef?: {
-          sessionID?: string
-          queueTaskID?: string
-        }
-        metadata?: {
-          [key: string]: unknown
-        }
-        time: {
-          created: number
-          updated: number
-          started?: number
-          completed?: number
-        }
-      }
-      evaluation?: {
-        id: string
-        taskID: string
-        runID: string
-        acceptanceID?: string | null
-        status: "pending" | "passed" | "failed" | "inconclusive"
-        verdict: "accepted" | "rejected" | "inconclusive"
-        summary: string
-        checks: Array<{
-          name: string
-          label?: string
-          family?: string
-          status: "passed" | "failed" | "skipped" | "inconclusive"
-          evidence?: string
-        }>
-        time: {
-          created: number
-          updated: number
-          completed?: number
-        }
-      }
       active_sessions: Array<{
         sessionID: string
         kind: string

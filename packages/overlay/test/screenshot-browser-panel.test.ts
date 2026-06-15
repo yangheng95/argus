@@ -258,6 +258,9 @@ describe("screenshot browser panel", () => {
     expect(css).toContain(".screenshot-browser-panel")
     expect(css).toContain(".screenshot-browser-grid")
     expect(css).toContain("grid-template-rows: calc(86px * var(--ui-scale))")
+    expect(css).toContain(".screenshot-browser__thumb-trigger .screenshot-browser__thumb-image")
+    expect(css).toContain("max-width: none")
+    expect(css).toContain("max-height: none")
     for (const key of [
       "screenshots.title",
       "screenshots.empty",

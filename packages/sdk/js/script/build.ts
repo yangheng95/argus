@@ -180,14 +180,15 @@ await writeFileWithRetry(
 )
 await writeFileWithRetry(path.join(dir, "src", "gen", "client", "index.ts"), "export {}\n")
 
-await $`bun ./script/generate-openapi.ts > ${openapi}`.cwd(path.resolve(dir, "../../opencorvus"))
+const generatedOpenapi = await $`bun ./script/generate-openapi.ts`.cwd(path.resolve(dir, "../../opencorvus")).text()
+await writeFileWithRetry(openapi, generatedOpenapi)
 await writeFileWithRetry(rootOpenapi, await Bun.file(openapi).text())
 await rmWithinPackage("src/gen", { recursive: true })
 await rmWithinPackage("dist", { recursive: true })
 
 const generate = async (output: string) =>
   createClient({
-    input: "./openapi.json",
+    input: openapi,
     output: {
       path: output,
       tsConfigPath: path.join(dir, "tsconfig.json"),

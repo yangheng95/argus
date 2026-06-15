@@ -46,36 +46,39 @@ function conversationPayload() {
       goalWorkflows: [],
       interactions: [],
     },
-    transcript: [],
+    transcript: [
+      {
+        info: {
+          id: "msg_visual",
+          sessionID: "ses_visual",
+          role: "assistant",
+          resolvedRole: "visual-qa",
+          agent: "visual-qa",
+          channel: "visual-qa",
+          time: { created: 1_780_000_010_000, completed: 1_780_000_011_000 },
+        },
+        parts: [
+          {
+            id: "part_screenshot",
+            messageID: "msg_visual",
+            sessionID: "ses_visual",
+            type: "file",
+            mime: "image/png",
+            url: "/attachment/project/screenshot.png",
+            filename: "visual-check.png",
+          },
+        ],
+      },
+    ],
     timeline: [],
     events: [],
     eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
     history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view: {
       rootID: "root",
-      order: ["visual-card"],
-      cards: {
-        "visual-card": {
-          id: "visual-card",
-          kind: "agent",
-          stage: "visual-qa",
-          title: "chat.role.visual-qa",
-          status: "completed",
-          time: 1_780_000_010_000,
-          messageID: "msg_visual",
-          sessionID: "ses_visual",
-          parts: [
-            {
-              id: "part_screenshot",
-              type: "file",
-              mime: "image/png",
-              url: "/attachment/project/screenshot.png",
-              filename: "visual-check.png",
-            },
-          ],
-          childIDs: [],
-        },
-      },
+      order: [],
+      cards: {},
+      sessions: [],
     },
     agentView: { rootID: "root", cards: {}, order: [] },
     messageWatermark: 0,
@@ -177,9 +180,30 @@ test("right screenshots activity opens grouped thumbnails from the visible card 
       cardCount: 1,
     })
 
+    const thumbLayout = await page.evaluate(() => {
+      const trigger = document.querySelector<HTMLElement>(".screenshot-browser__thumb-trigger")
+      const image = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
+      const triggerRect = trigger?.getBoundingClientRect()
+      const imageRect = image?.getBoundingClientRect()
+      return {
+        triggerWidth: triggerRect?.width ?? 0,
+        triggerHeight: triggerRect?.height ?? 0,
+        imageWidth: imageRect?.width ?? 0,
+        imageHeight: imageRect?.height ?? 0,
+        naturalWidth: image?.naturalWidth ?? 0,
+        naturalHeight: image?.naturalHeight ?? 0,
+      }
+    })
+    assert.ok(thumbLayout.triggerWidth >= 120, JSON.stringify(thumbLayout))
+    assert.ok(thumbLayout.triggerHeight >= 80, JSON.stringify(thumbLayout))
+    assert.ok(thumbLayout.imageWidth >= thumbLayout.triggerWidth - 1, JSON.stringify(thumbLayout))
+    assert.ok(thumbLayout.imageHeight >= thumbLayout.triggerHeight - 1, JSON.stringify(thumbLayout))
+
     const screenshotPath = resolve(".scratch/screenshot-browser-panel-browser.png")
     mkdirSync(resolve(".scratch"), { recursive: true })
-    writeFileSync(screenshotPath, await page.screenshot({ fullPage: false }))
+    const screenshot = await page.screenshot({ fullPage: false })
+    assert.ok(screenshot.length > 0)
+    writeFileSync(screenshotPath, screenshot)
   } finally {
     await browser.close()
     await server.close()

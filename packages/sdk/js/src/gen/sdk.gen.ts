@@ -153,6 +153,8 @@ import type {
   PermissionReplyErrors,
   PermissionReplyResponses,
   PermissionRuleset,
+  ProjectCurrentCleanupCandidatesErrors,
+  ProjectCurrentCleanupCandidatesResponses,
   ProjectCurrentInitGitErrors,
   ProjectCurrentInitGitResponses,
   ProjectCurrentResponses,
@@ -483,6 +485,29 @@ export class Current extends HeyApiClient {
       ThrowOnError
     >({
       url: "/project/current/worktrees",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Inspect current project cleanup candidates
+   *
+   * Read-only inspection of orphan ownership markers and worktree GC candidates. This route does not delete files, kill processes, or mutate markers.
+   */
+  public cleanupCandidates<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<
+      ProjectCurrentCleanupCandidatesResponses,
+      ProjectCurrentCleanupCandidatesErrors,
+      ThrowOnError
+    >({
+      url: "/project/current/cleanup-candidates",
       ...options,
       ...params,
     })
@@ -4418,6 +4443,7 @@ export class Control2 extends HeyApiClient {
           }
         | {
             action: "create_task"
+            title?: string
             request: string
             request_id?: string
             executor?: "opencorvus" | "codex" | "claude-code"
@@ -5082,6 +5108,7 @@ export class Mission extends HeyApiClient {
       missionID?: string
       text: string
       title?: string
+      model?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5094,6 +5121,7 @@ export class Mission extends HeyApiClient {
             { in: "body", key: "missionID" },
             { in: "body", key: "text" },
             { in: "body", key: "title" },
+            { in: "body", key: "model" },
           ],
         },
       ],

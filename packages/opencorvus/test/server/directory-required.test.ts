@@ -410,7 +410,9 @@ describe("project-scope middleware: directory required", () => {
     expect(item.task.attachments).toBeUndefined()
     expect(item.task.budget).toBeUndefined()
 
-    const full = await app.request(`/task/${taskID}`, { method: "GET" })
+    const full = await app.request(`/task/${taskID}?directory=${encodeURIComponent("C:/work/lean-task-list")}`, {
+      method: "GET",
+    })
     expect(full.status).toBe(200)
     const fullBody = (await full.json()) as { request?: string; metadata?: unknown; attachments?: unknown[] }
     expect(fullBody.request).toBe(largeText)

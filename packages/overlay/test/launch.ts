@@ -430,6 +430,8 @@ function decode(value: JsonValue): JsonValue {
 }
 
 function decodeBuffer(value: JsonValue): Buffer {
+  if (Buffer.isBuffer(value)) return value
+  if (value instanceof Uint8Array) return Buffer.from(value)
   const decoded = decode(value)
   if (Buffer.isBuffer(decoded)) return decoded
   if (
