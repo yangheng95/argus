@@ -2,11 +2,11 @@ import path from "node:path"
 import z from "zod"
 import { isBrowserPreviewTargetVisible } from "./liveness"
 import {
-  latestBrowserPreviewEvidenceID,
+  latestBrowserPreviewEvidenceIDs,
   findRecentBrowserPreviewTargets,
   type PersistedBrowserPreviewTarget,
 } from "./persist"
-import { BROWSER_PREVIEW_VIEWPORTS, BrowserPreviewViewport } from "./viewport"
+import { BROWSER_PREVIEW_VIEWPORTS, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
 
 export const BrowserPreviewCandidate = z.object({
   id: z.string(),
@@ -21,7 +21,13 @@ export type BrowserPreviewCandidate = z.infer<typeof BrowserPreviewCandidate>
 export const BrowserPreviewTarget = z.object({
   id: z.string().optional(),
   taskID: z.string().optional(),
-  latestEvidenceID: z.string().optional(),
+  latestEvidenceIDs: z
+    .object({
+      desktop: z.string().optional(),
+      tablet: z.string().optional(),
+      mobile: z.string().optional(),
+    })
+    .optional(),
   kind: z.enum(["task-url", "missing", "failed"]),
   status: z.enum(["ready", "missing", "failed"]),
   projectRoot: z.string(),
@@ -71,7 +77,7 @@ export async function resolveBrowserPreviewTarget(input: {
     url: persisted.url,
     candidates: browserPreviewCandidates(persistedTargets, persisted.id),
     diagnostics: [`Using task browser preview target ${persisted.id}.`, ...unreachableDiagnostics],
-    latestEvidenceID: latestBrowserPreviewEvidenceID({ taskID, targetID: persisted.id }),
+    latestEvidenceIDs: latestBrowserPreviewEvidenceIDs({ taskID, targetID: persisted.id }),
   })
 }
 
@@ -80,14 +86,14 @@ export function taskBrowserPreviewTarget(input: {
   taskID: string
   id: string
   url: string
-  latestEvidenceID?: string
+  latestEvidenceIDs?: Partial<Record<BrowserPreviewViewportID, string>>
   diagnostics: string[]
   candidates?: BrowserPreviewCandidate[]
 }): BrowserPreviewTarget {
   return {
     id: input.id,
     taskID: input.taskID,
-    latestEvidenceID: input.latestEvidenceID,
+    latestEvidenceIDs: input.latestEvidenceIDs,
     kind: "task-url",
     status: "ready",
     projectRoot: path.resolve(input.projectRoot),

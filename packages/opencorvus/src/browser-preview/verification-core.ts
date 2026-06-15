@@ -161,7 +161,7 @@ export async function runBrowserPreviewVerification(
   return {
     status,
     projectRoot,
-    target: { ...input.target, latestEvidenceID: evidenceIDs[viewports[0]?.id ?? ""] },
+    target: { ...input.target, latestEvidenceIDs: evidenceIDs },
     viewports,
     captures: responseCaptures,
     evidenceIDs,

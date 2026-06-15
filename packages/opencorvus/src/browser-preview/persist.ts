@@ -392,7 +392,10 @@ function browserPreviewCaptureArtifacts(capture: unknown): Array<{ path: string;
   return artifacts
 }
 
-export function latestBrowserPreviewEvidenceID(input: { taskID: string; targetID: string }): string | undefined {
+export function latestBrowserPreviewEvidenceIDs(input: {
+  taskID: string
+  targetID: string
+}): Partial<Record<string, string>> {
   const rows = Database.use((db) =>
     db
       .select({ id: EngineArtifactTable.id, payload: EngineArtifactTable.payload })
@@ -401,14 +404,22 @@ export function latestBrowserPreviewEvidenceID(input: { taskID: string; targetID
         and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_EVIDENCE_KIND)),
       )
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
-      .limit(20)
       .all(),
   )
-  return rows.find((row) => sqlTargetID(row.payload) === input.targetID)?.id
+  const latest: Partial<Record<string, string>> = {}
+  for (const row of rows) {
+    const meta = sqlEvidenceMeta(row.payload)
+    if (meta?.targetID !== input.targetID) continue
+    latest[meta.viewportID] ??= row.id
+  }
+  return latest
 }
 
-function sqlTargetID(payload: unknown): string | undefined {
+function sqlEvidenceMeta(payload: unknown): { targetID: string; viewportID: string } | undefined {
   if (!payload || typeof payload !== "object") return undefined
-  const value = (payload as Record<string, unknown>).target_id
-  return typeof value === "string" ? value : undefined
+  const record = payload as Record<string, unknown>
+  const targetID = typeof record.target_id === "string" ? record.target_id : undefined
+  const viewportID = typeof record.viewport_id === "string" ? record.viewport_id : undefined
+  if (!targetID || !viewportID) return undefined
+  return { targetID, viewportID }
 }
