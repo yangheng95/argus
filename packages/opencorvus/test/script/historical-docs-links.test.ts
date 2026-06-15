@@ -85,6 +85,29 @@ function retiredRefs(): Set<string> {
   )
 }
 
+function rootSpecFiles(): string[] {
+  return fs
+    .readdirSync(path.join(repoRoot, "specs"), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && markdownExtensions.has(path.extname(entry.name).toLowerCase()))
+    .map((entry) => entry.name)
+    .filter((name) => !["README.md", "retired-reference-ledger.md"].includes(name))
+    .sort()
+}
+
+function indexedRootSpecs(): Map<string, string> {
+  const readme = fs.readFileSync(path.join(repoRoot, "specs/README.md"), "utf8")
+  const rows = new Map<string, string>()
+  for (const match of readme.matchAll(/^\| `([^`]+)` \| ([^|]+) \|/gm)) {
+    rows.set(match[1]!, match[2]!.trim())
+  }
+  for (const match of readme.matchAll(/^\| `([^`]+)`, `([^`]+)`, `([^`]+)` \| ([^|]+) \|/gm)) {
+    rows.set(match[1]!, match[4]!.trim())
+    rows.set(match[2]!, match[4]!.trim())
+    rows.set(match[3]!, match[4]!.trim())
+  }
+  return rows
+}
+
 function missingReferences(files: string[], retired: Set<string>): string[] {
   const missing: string[] = []
   for (const file of files) {
@@ -116,5 +139,24 @@ describe("historical docs repository links", () => {
     const missing = missingReferences(walkRepository(repoRoot), retiredRefs())
 
     expect(missing).toEqual([])
+  })
+
+  test("root historical specs are indexed", () => {
+    const indexed = indexedRootSpecs()
+
+    expect(rootSpecFiles().filter((file) => !indexed.has(file))).toEqual([])
+  })
+
+  test("root specs marked superseded have a top-of-file banner", () => {
+    const indexed = indexedRootSpecs()
+    const missingBanner = Array.from(indexed.entries())
+      .filter(([, status]) => status === "Superseded")
+      .map(([file]) => file)
+      .filter((file) => {
+        const firstLines = fs.readFileSync(path.join(repoRoot, "specs", file), "utf8").split(/\r?\n/).slice(0, 6).join("\n")
+        return !/superseded/i.test(firstLines)
+      })
+
+    expect(missingBanner).toEqual([])
   })
 })
