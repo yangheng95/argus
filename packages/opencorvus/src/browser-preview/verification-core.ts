@@ -4,7 +4,7 @@ import type { RuntimeCaptureResult } from "@/runtime/capture-contract"
 import { Identifier } from "@/id/id"
 import z from "zod"
 import type { BrowserEvidenceManifestSummary } from "./evidence-runner"
-import { persistBrowserPreviewEvidence } from "./persist"
+import { normalizeRuntimePathRefs, persistBrowserPreviewEvidence, stripRuntimePathRefs } from "./persist"
 import { BrowserPreviewTarget } from "./target"
 import { browserPreviewViewportByID, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
 
@@ -50,7 +50,6 @@ export type BrowserPreviewVerificationInput = {
   taskID: string
   targetID: string
   signal?: AbortSignal
-  outDir?: string
 }
 
 export type BrowserPreviewVerificationCaptureJobInput = {
@@ -120,8 +119,7 @@ export async function runBrowserPreviewVerification(
   }
 
   const captureID = Identifier.ascending("artifact")
-  const outDir =
-    input.outDir ?? ProjectRuntimePaths.taskAbsolute(projectRoot, input.taskID, "browser-preview", captureID)
+  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, captureID)
   const { captures, manifest } = await captureJob({
     taskID: input.taskID,
     targetID: input.targetID,
@@ -139,9 +137,13 @@ export async function runBrowserPreviewVerification(
   for (const viewport of viewports) {
     const result = captures[viewport.id]
     if (!result) continue
-    responseCaptures[viewport.id] = { ...result, manifest }
+    responseCaptures[viewport.id] = normalizeRuntimePathRefs(projectRoot, {
+      ...result,
+      manifest,
+    }) as BrowserPreviewCaptureSummary
     const status = result.captured && result.passed ? "passed" : "failed"
     evidenceIDs[viewport.id] = persistBrowserPreviewEvidence({
+      projectRoot,
       taskID: input.taskID,
       targetID: input.targetID,
       viewportID: viewport.id,
@@ -163,7 +165,7 @@ export async function runBrowserPreviewVerification(
     projectRoot,
     target: { ...input.target, latestEvidenceIDs: evidenceIDs },
     viewports,
-    captures: responseCaptures,
+    captures: stripRuntimePathRefs(responseCaptures) as Record<string, BrowserPreviewCaptureSummary>,
     evidenceIDs,
     diagnostics,
   }

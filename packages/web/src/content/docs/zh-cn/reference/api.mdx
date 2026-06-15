@@ -93,7 +93,9 @@ description: "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
 | GET | `/task/{taskID}/brief` | Get task brief | `task.brief` |
 | GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target | `browserPreview.taskTarget` |
 | POST | `/task/{taskID}/browser-preview/capture` | Capture browser preview verification evidence | `browserPreview.captureTaskTarget` |
+| POST | `/task/{taskID}/browser-preview/compare` | Compare browser preview regions against source visual evidence | `browserPreview.compareTaskTargetRegions` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence | `browserPreview.readTaskEvidence` |
+| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}` | Read browser preview region comparison artifact | `browserPreview.readTaskEvidenceArtifact` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png` | Read browser preview evidence screenshot | `browserPreview.readTaskEvidenceCapture` |
 | POST | `/task/{taskID}/browser-preview/live/input` | Send input to interactive browser preview | `browserPreview.liveInput` |
 | POST | `/task/{taskID}/browser-preview/live/snapshot` | Capture interactive browser preview snapshot | `browserPreview.liveSnapshot` |
