@@ -33,7 +33,6 @@ export interface HtmlSkeletonWorkflowCheckInput {
   worstThreshold: number
   browserLaunchTimeoutMs?: number
   headless: boolean
-  artifactsOnly?: boolean
 }
 
 export interface HtmlSkeletonWorkflowCheckReport {
@@ -100,7 +99,6 @@ export function parseHtmlSkeletonWorkflowCheckArgs(): HtmlSkeletonWorkflowCheckI
       Number(process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000),
     ),
     headless: process.argv.includes("--headless") || process.env.OPENCORVUS_VISUAL_DIFF_HEADLESS === "1",
-    artifactsOnly: process.argv.includes("--artifacts-only"),
   }
 }
 
@@ -118,7 +116,7 @@ export async function runHtmlSkeletonWorkflowCheck(
   const visualRenderPrerequisitesPassed = checks
     .filter((check) => VISUAL_RENDER_PREREQUISITE_CHECK_IDS.has(check.id))
     .every((check) => check.passed)
-  if (!input.artifactsOnly && visualRenderPrerequisitesPassed) {
+  if (visualRenderPrerequisitesPassed) {
     const server = await serveRenderedDir(resolved.visualRoot)
     try {
       visualDiff = await runVisualDiff({
@@ -135,7 +133,7 @@ export async function runHtmlSkeletonWorkflowCheck(
     }
   }
 
-  const passed = artifactChecksPassed && (input.artifactsOnly || visualDiff?.passed === true)
+  const passed = artifactChecksPassed && visualDiff?.passed === true
   const report: HtmlSkeletonWorkflowCheckReport = {
     passed,
     outDir: resolved.outDir,
@@ -649,9 +647,7 @@ async function main() {
   const report = await runHtmlSkeletonWorkflowCheck(parseHtmlSkeletonWorkflowCheckArgs())
   const visual = report.visualDiff
     ? ` ${summarizeVisualReport(report.visualDiff)}`
-    : process.argv.includes("--artifacts-only")
-      ? " artifacts-only"
-      : " visual-skipped"
+    : " visual-skipped"
   console.log(
     `[html-skeleton-workflow-check] ${report.passed ? "PASS" : "FAIL"}${visual} report=${path.join(report.outDir, "html-skeleton-workflow-report.json")}`,
   )
