@@ -3,6 +3,7 @@ import { resolveBrowserNodeSidecarRuntime, type BrowserNodeSidecarRuntime } from
 import { BrowserRuntime } from "@/browser/runtime"
 import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./viewport"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
+import { findBrowserPreviewTargetByID } from "./persist"
 
 const LIVE_COMMAND_TIMEOUT_MILLISECONDS = 60_000
 const LIVE_NAVIGATION_TIMEOUT_MILLISECONDS = 20_000
@@ -18,15 +19,15 @@ export type BrowserPreviewLiveInput =
 export async function captureBrowserPreviewLiveSnapshot(input: {
   taskID: string
   targetID: string
-  url: string
   viewportID: BrowserPreviewViewportID
   signal?: AbortSignal
 }): Promise<Buffer> {
+  const target = browserPreviewLiveTarget(input)
   const session = await browserPreviewLiveSession(input)
   const result = await session.command(
     {
       kind: "snapshot",
-      url: input.url,
+      url: target.url,
       viewport: browserPreviewViewportByID(input.viewportID),
       navigationTimeoutMs: LIVE_NAVIGATION_TIMEOUT_MILLISECONDS,
       settleMs: LIVE_SETTLE_MILLISECONDS,
@@ -39,16 +40,16 @@ export async function captureBrowserPreviewLiveSnapshot(input: {
 export async function interactBrowserPreviewLive(input: {
   taskID: string
   targetID: string
-  url: string
   viewportID: BrowserPreviewViewportID
   input: BrowserPreviewLiveInput
   signal?: AbortSignal
 }): Promise<Buffer> {
+  const target = browserPreviewLiveTarget(input)
   const session = await browserPreviewLiveSession(input)
   const result = await session.command(
     {
       kind: "input",
-      url: input.url,
+      url: target.url,
       viewport: browserPreviewViewportByID(input.viewportID),
       navigationTimeoutMs: LIVE_NAVIGATION_TIMEOUT_MILLISECONDS,
       settleMs: LIVE_SETTLE_MILLISECONDS,
@@ -63,6 +64,19 @@ export async function closeBrowserPreviewLiveSessions(): Promise<void> {
   const sessions = [...liveSessions.values()]
   liveSessions.clear()
   await Promise.all(sessions.map((session) => session.close()))
+}
+
+export class BrowserPreviewLiveTargetNotFoundError extends Error {
+  constructor(readonly targetID: string) {
+    super(`Browser preview target not found: ${targetID}`)
+    this.name = "BrowserPreviewLiveTargetNotFoundError"
+  }
+}
+
+function browserPreviewLiveTarget(input: { taskID: string; targetID: string }) {
+  const target = findBrowserPreviewTargetByID({ taskID: input.taskID, targetID: input.targetID })
+  if (!target) throw new BrowserPreviewLiveTargetNotFoundError(input.targetID)
+  return target
 }
 
 type BrowserPreviewLiveCommand =
