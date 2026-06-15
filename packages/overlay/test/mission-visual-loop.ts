@@ -204,7 +204,7 @@ const DECOMPOSE_FIXTURE = {
       description:
         "Walk every visible string in the composer and proposal flows. Cross-check against zh-CN.json and en-US.json for tone parity, replace ambiguous verbs, and run the panel-revision bump if any visible label changes.",
       acceptance: [
-        "All composer / proposal labels match the operator-tone glossary in docs/product/zh-CN/index.md",
+        "All composer / proposal labels match the operator-tone glossary in packages/web/src/content/docs/zh-cn/index.mdx",
         "panel_revision bumped via script/bump-panel-revision.ts",
         "Snapshot test packages/overlay/test/gateway-component.test.ts updated with new copy assertions",
       ],
@@ -222,7 +222,7 @@ const DECOMPOSE_FIXTURE = {
       acceptance: [
         "New script packages/overlay/script/check-design-tokens.ts wired into typecheck",
         "Coverage test for gateway.css extends flat-redesign-color-literal-coverage",
-        "Documentation in docs/product/zh-CN/concepts/architecture.md gains the lint pointer",
+        "Documentation in packages/web/src/content/docs/zh-cn/concepts/architecture.mdx gains the lint pointer",
       ],
       priority: "high",
       executor: "codex",

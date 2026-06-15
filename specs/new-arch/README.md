@@ -73,6 +73,13 @@
 2. **每个 MD 顶部必须写「对应代码位置」**，做到一键跳转。
 3. **新概念先加 MD，再改 SVG**。SVG 只是图形化概要。
 4. **禁止把 MD 长文字塞进 SVG `<text>`**。SVG 只留标题和关键词。
+5. **产品文档只写 `packages/web/src/content/docs/**`**。`docs/product/**` 已在 2026-06-15 删除，历史 spec 只能引用它作为已退休路径，不能把新内容写回旧树。
+
+## 历史文档整并状态
+
+- 2026-06-15：`docs/product/**` 遗留产品文档树已删除；网站文档唯一源为 `packages/web/src/content/docs/**`。
+- 2026-06-15：新增 `2026-06-15-historical-docs-consolidation.md`，记录本轮全仓文档扫描、断链修复和验收命令。
+- 历史实现笔记继续保留在 `specs/**`；缺失的外部旧笔记用 `Retired external note` 标注，不再补建空文件。
 
 ## 迁移进度
 

@@ -19,8 +19,8 @@ rg -n "ainvest-design-system|aivest-design-system|ainvestDesignSystem" packages 
 | `packages/opencorvus/test/skill/skill.test.ts` built-in registration test                      | Replace positive registration test with a removed-builtin assertion.                                 |
 | `packages/opencorvus/test/tool/skill.test.ts` build-agent load assertion                       | Replace positive load assertion with not-visible/search and not-loadable exact-name assertions.      |
 | `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` fixture skill payload    | Remove mocked Aivest/Ainvest built-in row so the browser skill panel reflects the new built-in list. |
-| `docs/product/en/opencorvus/skills.md` and `packages/web/src/content/docs/skills.mdx`          | Update built-in list from two skills to one skill.                                                   |
-| `docs/product/zh-CN/opencorvus/skills.md` and `packages/web/src/content/docs/zh-cn/skills.mdx` | Update built-in list from two skills to one skill and fix trust-count text.                          |
+| `packages/web/src/content/docs/skills.mdx`          | Update built-in list from two skills to one skill.                                                   |
+| `packages/web/src/content/docs/zh-cn/skills.mdx` | Update built-in list from two skills to one skill and fix trust-count text.                          |
 
 ## Validation
 

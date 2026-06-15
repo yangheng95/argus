@@ -98,8 +98,8 @@
 
 - `specs/new-arch/10-worktree-lifecycle.md`：worktree 生命周期未变。
 - `specs/new-arch/02-data.md`、`05-config.md`、`16-unified-teardown.md`：数据模型未变。
-- `docs/product/.../goal-run-task.md`：产品文档不涉及 UI 位置。
-- `docs/superpowers/plans/2026-05-05-inspector-panel-redesign.md`：历史 redesign 计划，已实施落地，本次为该 panel 的增量改动，无需回填该文档。
+- `packages/web/src/content/docs/{concepts/goal-run-task,zh-cn/concepts/goal-run-task}.mdx`：产品文档不涉及 UI 位置。
+- Retired external note docs/superpowers/plans/2026-05-05-inspector-panel-redesign.md：历史 redesign 计划，已实施落地，本次为该 panel 的增量改动，无需回填该文档。
 
 ---
 
