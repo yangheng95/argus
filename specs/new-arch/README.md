@@ -46,6 +46,7 @@
 | 文件                                            | 说明                                   |
 | ----------------------------------------------- | -------------------------------------- |
 | [\_archive-old-arch.svg](_archive-old-arch.svg) | 原 `specs/new-arch.svg`（1336 行）归档 |
+| [HISTORY.md](HISTORY.md)                        | 按日期索引 `specs/new-arch/**` 历史方案 |
 
 ## 三张总览框图（SVG 瘦身目标）
 

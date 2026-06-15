@@ -7,7 +7,7 @@ This directory stores implementation notes, product requirements, and investigat
 | Surface | Current source |
 | --- | --- |
 | Public product docs | `packages/web/src/content/docs/**` |
-| Architecture map | `specs/new-arch/README.md` |
+| Architecture map | `specs/new-arch/README.md`; historical new-arch notes are indexed in `specs/new-arch/HISTORY.md` |
 | API reference | `packages/web/src/content/docs/{reference/api,zh-cn/reference/api}.mdx`, generated from `packages/sdk/openapi.json` |
 | Package-local OpenCorvus notes | `packages/opencorvus/specs/README.md` |
 | Retired missing historical references | `specs/retired-reference-ledger.md` |

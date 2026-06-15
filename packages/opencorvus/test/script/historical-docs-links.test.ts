@@ -126,6 +126,26 @@ function packageSpecFiles(): string[] {
     .sort()
 }
 
+function newArchHistoricalFiles(): string[] {
+  return fs
+    .readdirSync(path.join(repoRoot, "specs/new-arch"), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => entry.name)
+    .filter((name) => !["README.md", "HISTORY.md"].includes(name))
+    .filter((name) => !/^(0[1-9]|1[0-6]|99)-/.test(name))
+    .sort()
+}
+
+function indexedNewArchHistory(): Set<string> {
+  const history = fs.readFileSync(path.join(repoRoot, "specs/new-arch/HISTORY.md"), "utf8")
+  return new Set(
+    history
+      .split(/\r?\n/)
+      .map((line) => line.match(/^\| \[([^\]]+\.md)\]\([^)]+\) \|/)?.[1])
+      .filter((file): file is string => Boolean(file)),
+  )
+}
+
 function missingReferences(files: string[], retired: Set<string>): string[] {
   const missing: string[] = []
   for (const file of files) {
@@ -187,6 +207,12 @@ describe("historical docs repository links", () => {
     const indexed = indexedSpecTable(path.join(repoRoot, "packages/opencorvus/specs/README.md"))
 
     expect(packageSpecFiles().filter((file) => !indexed.has(file))).toEqual([])
+  })
+
+  test("new-arch historical notes are indexed", () => {
+    const indexed = indexedNewArchHistory()
+
+    expect(newArchHistoricalFiles().filter((file) => !indexed.has(file))).toEqual([])
   })
 
   test("root specs marked superseded have a top-of-file banner", () => {
