@@ -17,11 +17,11 @@ const ROOT = path.resolve(PROJECT_DIR)
 const REPORT_DIR = path.join(ROOT, ".scratch", "audit-report")
 await fs.mkdir(REPORT_DIR, { recursive: true })
 
-type Finding = { id: string; req: string; status: "pass" | "fail" | "warn" | "skip"; note: string }
+type Finding = { id: string; req: string; status: "pass" | "fail"; note: string }
 const findings: Finding[] = []
 function record(id: string, req: string, status: Finding["status"], note: string) {
   findings.push({ id, req, status, note })
-  const tag = status === "pass" ? "PASS" : status === "fail" ? "FAIL" : status === "warn" ? "WARN" : "SKIP"
+  const tag = status === "pass" ? "PASS" : "FAIL"
   console.log(`[${tag}] ${id} ${req} — ${note}`)
 }
 
@@ -94,7 +94,7 @@ if (!hasNodeModules) {
   if (r.code !== 0) {
     record("BUILD-INSTALL", "npm install", "fail", `exit=${r.code}\n${r.err.slice(-1500)}`)
   } else record("BUILD-INSTALL", "npm install", "pass", "ok")
-} else record("BUILD-INSTALL", "npm install", "skip", "node_modules already exists")
+} else record("BUILD-INSTALL", "npm install", "pass", "node_modules already exists")
 
 const pkgJson = pkg ? JSON.parse(pkg) : {}
 const hasBuild = !!pkgJson.scripts?.build
@@ -103,7 +103,7 @@ if (hasBuild) {
   const r = await run("npm", ["run", "build"], { timeoutMs: 300_000 })
   if (r.code !== 0) record("BUILD", "npm run build", "fail", `exit=${r.code}\n${(r.err || r.out).slice(-2000)}`)
   else record("BUILD", "npm run build", "pass", "ok")
-} else record("BUILD", "npm run build", "warn", "no build script")
+} else record("BUILD", "npm run build", "fail", "no build script")
 
 // --- 3. boot preview ------------------------------------------------------
 let preview: ChildProcess | null = null
@@ -256,7 +256,7 @@ if (page && baseURL) {
   const usesEval = /\beval\s*\(/.test(codeBundle.replace(/\beval\s*ate[A-Za-z]*\b/g, ""))
   record("R2-no-eval", "no use of eval()", usesEval ? "fail" : "pass", usesEval ? "found eval(" : "not found")
 
-  // R3: %, x², √, 1/x, ±  — best-effort by clicking labels
+  // R3: %, x², √, 1/x, ± — verify required function keys by visible labels.
   const fnLabels = ["%", "x²", "√", "1/x", "±"]
   const fnPresent = await page.evaluate((labels) => {
     const buttons = Array.from(document.querySelectorAll("button, [role=button]"))
@@ -284,14 +284,37 @@ if (page && baseURL) {
   }
 
   // R5: live expression display under main result
-  const liveExpr = /currentExpression|live[-_ ]expression|expression-display|active.*operand|highlight/i.test(
+  const liveExprSource = /currentExpression|live[-_ ]expression|expression-display|active.*operand|highlight/i.test(
     codeBundle,
   )
+  const liveExprRendered = await page.evaluate(() => {
+    const selectorEvidence = [
+      ".current-expression",
+      ".live-expression",
+      ".expression-display",
+      ".operand-highlight",
+      "[data-testid=expression]",
+      "[data-testid=live-expression]",
+    ].some((selector) => {
+      const element = document.querySelector(selector)
+      return !!element && !!(element.textContent || "").trim()
+    })
+    if (selectorEvidence) return true
+    return Array.from(document.querySelectorAll("body *")).some((element) => {
+      const className =
+        typeof (element as HTMLElement).className === "string" ? (element as HTMLElement).className : ""
+      return /expression|operand|highlight/i.test(className) && !!(element.textContent || "").trim()
+    })
+  })
   record(
     "R5-live-expr",
     "live expression / current operand highlight",
-    liveExpr ? "pass" : "warn",
-    liveExpr ? "code refs found" : "no code reference; visual-only check pending",
+    liveExprRendered ? "pass" : "fail",
+    liveExprRendered
+      ? "rendered live expression evidence found"
+      : liveExprSource
+        ? "source references found but no rendered live expression evidence"
+        : "no rendered live expression evidence",
   )
 
   // R6: history panel — exists, max 20, click-to-fill, clear-history
@@ -307,12 +330,12 @@ if (page && baseURL) {
   record(
     "R6-cap20",
     "history cap = 20",
-    histRefs.cap20 ? "pass" : "warn",
-    histRefs.cap20 ? "" : "no obvious cap-20 in code; could still be there",
+    histRefs.cap20 ? "pass" : "fail",
+    histRefs.cap20 ? "" : "no cap-20 evidence",
   )
   record("R6-clear", "clear history present", histRefs.clearHistory ? "pass" : "fail", "")
-  record("R6-fillback", "click history to fill back", histRefs.clickToFill ? "pass" : "warn", "")
-  record("R6-persist", "history persisted to localStorage", histRefs.persist ? "pass" : "warn", "")
+  record("R6-fillback", "click history to fill back", histRefs.clickToFill ? "pass" : "fail", "")
+  record("R6-persist", "history persisted to localStorage", histRefs.persist ? "pass" : "fail", "")
 
   // R7: keyboard already exercised (R1).  Now confirm Escape clears.
   await pressKey("Escape").catch(() => {})
@@ -332,7 +355,7 @@ if (page && baseURL) {
   record(
     "R8-pressed",
     "pressed-state visual feedback",
-    pressedFeedback ? "pass" : "warn",
+    pressedFeedback ? "pass" : "fail",
     "css :active or active class",
   )
 
@@ -355,9 +378,9 @@ if (page && baseURL) {
     storage: /localStorage.*theme|theme.*localStorage/i.test(codeBundle),
     darkClass: /\bdata-theme\b|\btheme-dark\b|\.dark\b|prefers-color-scheme/i.test(codeBundle),
   }
-  record("R10-toggle", "theme toggle exists", themeRefs.toggle ? "pass" : "warn", "")
-  record("R10-storage", "theme persisted to localStorage", themeRefs.storage ? "pass" : "warn", "")
-  record("R10-dark-default", "dark theme as default", themeRefs.darkClass ? "pass" : "warn", "")
+  record("R10-toggle", "theme toggle exists", themeRefs.toggle ? "pass" : "fail", "")
+  record("R10-storage", "theme persisted to localStorage", themeRefs.storage ? "pass" : "fail", "")
+  record("R10-dark-default", "dark theme as default", themeRefs.darkClass ? "pass" : "fail", "")
   // capture light-theme screenshot if a toggle is clickable
   const togglerSelectors = [
     "[data-testid=theme-toggle]",
@@ -410,19 +433,19 @@ if (page && baseURL) {
   record(
     "R11-grid",
     "approximately 4-column grid",
-    cols.size >= 3 && cols.size <= 6 ? "pass" : "warn",
+    cols.size >= 3 && cols.size <= 6 ? "pass" : "fail",
     `unique x-buckets=${cols.size}`,
   )
   record(
     "R11-mono",
     "monospace font on display",
-    /mono|courier|consolas|menlo/i.test(layout.display?.font || "") ? "pass" : "warn",
+    /mono|courier|consolas|menlo/i.test(layout.display?.font || "") ? "pass" : "fail",
     `font=${layout.display?.font}`,
   )
   record(
     "R11-right-align",
     "display right-aligned",
-    /right|end/i.test(layout.display?.textAlign || "") ? "pass" : "warn",
+    /right|end/i.test(layout.display?.textAlign || "") ? "pass" : "fail",
     `textAlign=${layout.display?.textAlign}`,
   )
 
@@ -442,7 +465,7 @@ if (page && baseURL) {
   record(
     "R12-mobile",
     "mobile 360px renders without horizontal scroll",
-    mobileCheck && mobileCheck.scrollWidth <= 380 ? "pass" : "warn",
+    mobileCheck && mobileCheck.scrollWidth <= 380 ? "pass" : "fail",
     JSON.stringify(mobileCheck),
   )
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -464,7 +487,7 @@ if (page && baseURL) {
   record(
     "R14-pure-frontend",
     "no backend / no external API",
-    !reactsHasBackend || /https?:\/\/(localhost|127\.0\.0\.1)/.test(codeBundle) ? "pass" : "warn",
+    !reactsHasBackend || /https?:\/\/(localhost|127\.0\.0\.1)/.test(codeBundle) ? "pass" : "fail",
     "",
   )
   const hasIndexHtml = await fileExists(path.join(ROOT, "index.html"))
@@ -478,7 +501,7 @@ if (page && baseURL) {
   const readmeHasRunInstructions = /(npm\s+(?:install|run\s+(?:dev|build|preview))|bun\s+run|yarn|pnpm)/i.test(readme)
   const readmeHasShortcuts = /(快捷键|shortcuts?|键盘|keyboard)/i.test(readme)
   record("R16-readme-run", "README has run instructions", readmeHasRunInstructions ? "pass" : "fail", "")
-  record("R16-readme-shortcuts", "README documents keyboard shortcuts", readmeHasShortcuts ? "pass" : "warn", "")
+  record("R16-readme-shortcuts", "README documents keyboard shortcuts", readmeHasShortcuts ? "pass" : "fail", "")
 
   // Console errors are a hard fail per the spec.
   record(
@@ -489,13 +512,13 @@ if (page && baseURL) {
   )
 }
 
-// --- 5. tests / typecheck (best-effort) -----------------------------------
+// --- 5. tests / typecheck -------------------------------------------------
 if (pkgJson.scripts?.["test:run"] || pkgJson.scripts?.test) {
   const r = await run("npm", ["run", pkgJson.scripts?.["test:run"] ? "test:run" : "test", "--", "--reporter=basic"], {
     timeoutMs: 180_000,
   })
-  record("TESTS", "unit tests", r.code === 0 ? "pass" : "warn", `exit=${r.code}\n${(r.err || r.out).slice(-1500)}`)
-} else record("TESTS", "unit tests", "skip", "no test script in package.json")
+  record("TESTS", "unit tests", r.code === 0 ? "pass" : "fail", `exit=${r.code}\n${(r.err || r.out).slice(-1500)}`)
+} else record("TESTS", "unit tests", "fail", "no test script in package.json")
 
 // --- 6. cleanup -----------------------------------------------------------
 try {
@@ -509,11 +532,9 @@ try {
 // --- 7. report ------------------------------------------------------------
 const passed = findings.filter((f) => f.status === "pass").length
 const failed = findings.filter((f) => f.status === "fail").length
-const warned = findings.filter((f) => f.status === "warn").length
-const skipped = findings.filter((f) => f.status === "skip").length
-const summary = { project: ROOT, baseURL, totals: { passed, failed, warned, skipped }, findings, consoleErrors }
+const summary = { project: ROOT, baseURL, totals: { passed, failed }, findings, consoleErrors }
 await fs.writeFile(path.join(REPORT_DIR, "report.json"), JSON.stringify(summary, null, 2))
 
-console.log(`\n[audit] ${passed} pass / ${failed} fail / ${warned} warn / ${skipped} skip`)
+console.log(`\n[audit] ${passed} pass / ${failed} fail`)
 console.log(`[audit] report → ${REPORT_DIR}`)
 process.exit(failed > 0 ? 1 : 0)
