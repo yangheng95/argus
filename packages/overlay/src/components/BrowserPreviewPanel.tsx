@@ -69,9 +69,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [latestEvidence] = createResource(
     () => {
       const taskID = props.taskID()
-      const evidenceID = currentTarget()?.latestEvidenceID
-      if (!taskID || !evidenceID) return undefined
-      return { taskID, evidenceID }
+      const targetID = currentTarget()?.id
+      const evidenceID = currentTarget()?.latestEvidenceIDs?.[viewportID()]
+      if (!taskID || !targetID || !evidenceID) return undefined
+      return { taskID, evidenceID, targetID, viewportID: viewportID() }
     },
     (scope) => loadTaskBrowserPreviewEvidence(scope),
   )
@@ -113,7 +114,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         targetID: request.targetID,
       })
     }
-    return latestEvidence()
+    const evidence = latestEvidence()
+    const taskID = props.taskID()
+    const targetID = currentTarget()?.id
+    if (!evidence || !taskID || !targetID) return undefined
+    if (evidence.taskID !== taskID || evidence.targetID !== targetID || evidence.viewportID !== viewportID()) {
+      return undefined
+    }
+    return evidence
   })
   const [captureImageUrl] = createResource(
     () => {
@@ -163,7 +171,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const resolved = currentTarget()
     const viewportIDs = viewports().map((viewport) => viewport.id)
     if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.url || !resolved.id) return
-    if (viewportIDs.length === 0 || resolved.latestEvidenceID || currentVerificationLoading()) return
+    const latestEvidenceIDs = resolved.latestEvidenceIDs ?? {}
+    if (viewportIDs.length === 0 || viewportIDs.every((id) => latestEvidenceIDs[id]) || currentVerificationLoading()) {
+      return
+    }
     const key = `${taskID}:${resolved.id}:${viewportIDs.join(",")}`
     if (lastAutoCapturedPreviewKey() === key) return
     setLastAutoCapturedPreviewKey(key)
@@ -432,6 +443,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                       size="sm"
                       tone="neutral"
                       data-ui="browser-preview-viewport"
+                      data-viewport-id={item.id}
                     >
                       {viewportLabel(item.id)}
                     </Tab>
@@ -462,7 +474,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 ? "failed"
                 : currentVerificationError()
                   ? "failed"
-                  : (currentVerification()?.status ?? (currentVerificationLoading() ? "loading" : "idle"))
+                  : (currentVerification()?.status ?? renderedEvidence()?.status ?? (currentVerificationLoading() ? "loading" : "idle"))
             }
           >
             <Switch>
@@ -491,6 +503,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                   <>
                     <Icon name={resolved().status === "passed" ? "status-completed" : "status-failed"} size={14} />
                     <span>{resolved().captures[viewportID()]?.summary ?? resolved().diagnostics.join(" ")}</span>
+                  </>
+                )}
+              </Match>
+              <Match when={renderedEvidence()}>
+                {(evidence) => (
+                  <>
+                    <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={14} />
+                    <span>{evidence().summary}</span>
                   </>
                 )}
               </Match>

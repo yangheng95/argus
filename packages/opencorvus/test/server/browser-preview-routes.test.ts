@@ -192,6 +192,61 @@ describe("browser preview routes", () => {
   )
 
   test(
+    "GET /task/:taskID/browser-preview returns latest evidence IDs per viewport",
+    async () => {
+      await using tmp = await tmpdir()
+      const preview = servePreview()
+      const taskID = await seedTask(tmp.path)
+      try {
+        const target = await persistBrowserPreviewTarget({ taskID, url: preview.url.href })
+        const desktopPath = path.join(tmp.path, "desktop.png")
+        const mobilePath = path.join(tmp.path, "mobile.png")
+        await fs.writeFile(desktopPath, "desktop-evidence")
+        await fs.writeFile(mobilePath, "mobile-evidence")
+        const desktopEvidenceID = persistBrowserPreviewEvidence({
+          taskID,
+          targetID: target.id,
+          viewportID: "desktop",
+          status: "passed",
+          summary: "desktop persisted evidence",
+          capture: { captured: true, passed: true, path: desktopPath, sha: sha16("desktop-evidence") },
+          diagnostics: ["desktop persisted evidence"],
+          now: 1000,
+        })
+        const mobileEvidenceID = persistBrowserPreviewEvidence({
+          taskID,
+          targetID: target.id,
+          viewportID: "mobile",
+          status: "passed",
+          summary: "mobile persisted evidence",
+          capture: { captured: true, passed: true, path: mobilePath, sha: sha16("mobile-evidence") },
+          diagnostics: ["mobile persisted evidence"],
+          now: 2000,
+        })
+        const app = Server.App()
+
+        const response = await app.request(`/task/${taskID}/browser-preview`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          latestEvidenceID?: string
+          latestEvidenceIDs?: { desktop?: string; mobile?: string }
+        }
+        expect(body.latestEvidenceID).toBeUndefined()
+        expect(body.latestEvidenceIDs?.desktop).toBe(desktopEvidenceID)
+        expect(body.latestEvidenceIDs?.mobile).toBe(mobileEvidenceID)
+      } finally {
+        preview.stop(true)
+      }
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "PUT /task/:taskID/browser-preview/target selects an existing saved target",
     async () => {
       await using tmp = await tmpdir()

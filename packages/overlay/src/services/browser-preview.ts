@@ -19,7 +19,7 @@ export interface BrowserPreviewCandidate {
 export interface BrowserPreviewTarget {
   id?: string
   taskID?: string
-  latestEvidenceID?: string
+  latestEvidenceIDs?: Partial<Record<BrowserPreviewViewportID, string>>
   kind: "task-url" | "missing" | "failed"
   status: "ready" | "missing" | "failed"
   projectRoot: string
