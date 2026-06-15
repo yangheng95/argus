@@ -881,11 +881,14 @@
    the log lines. The 520px max-height was already calc-wrapped
    in styles.css; everything else converted here. */
 .log-viewer {
+  height: clamp(calc(220px * var(--ui-scale)), calc(100vh - calc(160px * var(--ui-scale))), calc(520px * var(--ui-scale)));
   max-height: calc(520px * var(--ui-scale));
+  min-height: calc(220px * var(--ui-scale));
   overflow-y: auto;
   background: var(--surface-inset);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
+  box-sizing: border-box;
   padding: calc(8px * var(--ui-scale));
   font-family: var(--mono);
   font-size: var(--ui-font-control);

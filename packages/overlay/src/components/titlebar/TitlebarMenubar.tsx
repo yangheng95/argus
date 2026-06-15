@@ -262,6 +262,11 @@ export function TitlebarMenubar() {
     void openDocumentationEntry(id, settingsStore.locale).finally(closeMenu)
   }
 
+  function openLogs() {
+    window.dispatchEvent(new CustomEvent("oc:open-logs"))
+    closeMenu()
+  }
+
   async function handlePatchGoalParallelism(value: number) {
     await patchConfig({ assistant: { max_executor_groups: value } })
   }
@@ -629,6 +634,9 @@ export function TitlebarMenubar() {
                         {t("titlebar.sdk")}
                       </MenuItem>
                     </Show>
+                    <MenuItem onClick={openLogs} meta={t("titlebar.logs_hint")} testid="titlebar-help-logs">
+                      {t("titlebar.logs")}
+                    </MenuItem>
                     <Show when={nativeCommands["devtools.toggle"]}>
                       <MenuItem
                         onClick={() => {
