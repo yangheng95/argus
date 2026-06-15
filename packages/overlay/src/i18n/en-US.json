@@ -694,8 +694,6 @@
   "browser_preview.status.ready": "Preview ready",
   "browser_preview.title": "Preview",
   "browser_preview.url_label": "Preview URL",
-  "browser_preview.url_placeholder": "localhost:5173",
-  "browser_preview.url_submit": "Save preview URL",
   "browser_preview.viewport.desktop": "Desktop",
   "browser_preview.viewport.label": "Preview viewport",
   "browser_preview.viewport.mobile": "Mobile",
