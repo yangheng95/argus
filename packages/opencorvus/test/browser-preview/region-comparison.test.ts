@@ -27,6 +27,19 @@ describe("browser preview region comparison", () => {
     await resetDatabase()
   })
 
+  test("delegates browser runtime capture to the evidence runner", async () => {
+    const source = await fs.readFile(
+      path.resolve(import.meta.dir, "../../src/browser-preview/region-comparison.ts"),
+      "utf8",
+    )
+
+    expect(source).toContain("runBrowserPreviewRegionComparisonCapture")
+    expect(source).not.toContain("runBrowserNodeSidecar")
+    expect(source).not.toContain("BrowserRuntime")
+    expect(source).not.toContain("resolveBrowserNodeSidecarRuntime")
+    expect(source).not.toContain("REGION_COMPARISON_SCRIPT")
+  })
+
   test("resolves only canonical source reference screenshots", async () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_regioncomparisonresolve"
