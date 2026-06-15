@@ -26,6 +26,7 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
+import { ProviderSchema } from "../provider/schema"
 import { SystemPrompt } from "./system"
 import { EffectiveConfig } from "@/config/effective"
 import { resolveAgentModel } from "@/agent/model"
@@ -903,21 +904,15 @@ export namespace SessionLoop {
   }
 
   /**
-   * Single source of truth for "transform a raw JSON Schema into the
-   * provider-bound JSON Schema we ship to streamText". Used by both the
-   * registry tool wrapper and the MCP tool wrapper below — there must NOT
-   * be two parallel `ProviderTransform.schema(...)` call sites that can
-   * drift, otherwise the estimator (which reads the wrapper after the
-   * fact) silently sees a different shape than what was wired into the
-   * tool. See specs/new-arch/2026-04-28-structured-output-systemic-fix.md
-   * §A — the helper is the only schema-normalisation entry point on the
-   * tool-payload side; the estimator never re-runs the transform.
+   * Compatibility wrapper for tests and estimator contracts that need the
+   * provider-bound JSON Schema shape. The implementation lives in
+   * ProviderSchema so tool inputs and structured outputs cannot drift.
    */
   export function normalizeToolSchemaForProvider<T>(
     model: Provider.Model,
     rawJsonSchema: T,
   ): ReturnType<typeof ProviderTransform.schema> {
-    return ProviderTransform.schema(model, rawJsonSchema as never)
+    return ProviderSchema.normalize(model, rawJsonSchema as never)
   }
 
   /**
@@ -931,10 +926,10 @@ export namespace SessionLoop {
    * inflated count was triggering predictive compaction on context-cold
    * sessions (see specs/new-arch/2026-04-28-structured-output-systemic-fix.md
    * §A). Counting `name + description + jsonSchema` keeps the estimate tied
-   * to what the provider really receives. The estimator is read-only:
-   * `normalizeToolSchemaForProvider` is the only path that runs the
-   * provider transform; here we just unwrap the already-normalised schema
-   * via `asSchema(...)`.
+   * to what the provider really receives. ProviderSchema is the single
+   * schema-normalisation entry point; the estimator never re-runs the
+   * transform and only unwraps the already-normalised schema via
+   * `asSchema(...)`.
    */
   export function estimateToolPayloadChars(tools: Record<string, AITool>): number {
     let total = 0
@@ -977,9 +972,7 @@ export namespace SessionLoop {
       throw new ToolInputSchemaError(`tool ${input.name} from ${input.source} is missing inputSchema`)
     }
     try {
-      const rawJsonSchema = asSchema(input.inputSchema as never).jsonSchema
-      const normalized = normalizeToolSchemaForProvider(input.model, rawJsonSchema)
-      return jsonSchema(normalized as any)
+      return ProviderSchema.input(input.model, input.inputSchema)
     } catch (err) {
       throw new ToolInputSchemaError(
         `tool ${input.name} from ${input.source} has invalid inputSchema: ${
