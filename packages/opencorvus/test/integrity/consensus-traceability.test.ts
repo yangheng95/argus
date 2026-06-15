@@ -79,6 +79,11 @@ function replayContext(): IntegrityReplayContext {
 }
 
 mock.module("@/agent/runner", () => ({
+  AgentRunError: class AgentRunError extends Error {},
+  buildHardErrorFromFinalMessage: () => null,
+  extractInformationMissingBlock: () => undefined,
+  messageHasInformationMissing: () => false,
+  toolErrorPartsFromFinalMessage: () => [],
   runAgentSession: async (input: any) => {
     const session = { id: `ses_integrity_${++sessionCounter}` }
     input.onSessionCreated?.(session)

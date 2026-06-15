@@ -11,7 +11,7 @@ import os from "os"
 // so the archive requirement remains load-bearing: presence passes,
 // absence fails with the documented error.
 
-const CHECK_SCRIPT = path.resolve(import.meta.dir, "..", "script", "check-release-assets.ts")
+const CHECK_SCRIPT = path.resolve(import.meta.dir, "../../../..", "script", "check-release-assets.ts")
 
 interface RunResult {
   ok: boolean
