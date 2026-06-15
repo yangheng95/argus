@@ -119,34 +119,28 @@ export namespace Memory {
     return Math.max(0, Math.min(100, Math.round(value)))
   }
 
-  function ftsInsert(chunkId: string, projectId: string, content: string) {
-    try {
-      Database.use((db) =>
-        db.run(
-          sql`INSERT INTO memory_fts (content, chunk_id, project_id) VALUES (${content}, ${chunkId}, ${projectId})`,
-        ),
-      )
-    } catch (err) {
-      log.warn("FTS insert failed (FTS5 may not be available)", { chunkId, err })
-    }
+  function ftsInsert(db: Database.TxOrDb, chunkId: string, projectId: string, content: string) {
+    db.run(
+      sql`INSERT INTO memory_fts (content, chunk_id, project_id) VALUES (${content}, ${chunkId}, ${projectId})`,
+    )
   }
 
-  function ftsDelete(chunkId: string) {
-    try {
-      Database.use((db) => db.run(sql`DELETE FROM memory_fts WHERE chunk_id = ${chunkId}`))
-    } catch (err) {
-      log.warn("FTS delete failed", { chunkId, err })
-    }
+  function ftsDelete(db: Database.TxOrDb, chunkId: string) {
+    db.run(sql`DELETE FROM memory_fts WHERE chunk_id = ${chunkId}`)
   }
 
-  function ftsDeleteByFile(fileId: string) {
+  function ftsDeleteByFile(db: Database.TxOrDb, fileId: string) {
     try {
-      const chunkIds = Database.use((db) =>
-        db.select({ id: MemoryChunkTable.id }).from(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).all(),
-      )
-      for (const { id } of chunkIds) ftsDelete(id)
+      const chunkIds = db
+        .select({ id: MemoryChunkTable.id })
+        .from(MemoryChunkTable)
+        .where(eq(MemoryChunkTable.file_id, fileId))
+        .all()
+      for (const { id } of chunkIds) ftsDelete(db, id)
     } catch (err) {
-      log.warn("FTS delete by file failed", { fileId, err })
+      throw new Error(`FTS delete by file failed for ${fileId}: ${err instanceof Error ? err.message : String(err)}`, {
+        cause: err,
+      })
     }
   }
 
@@ -406,9 +400,8 @@ export namespace Memory {
     const chunks: MemoryChunk[] = []
     const now = Date.now()
 
-    ftsDeleteByFile(fileId)
-
     Database.transaction((db) => {
+      ftsDeleteByFile(db, fileId)
       db.delete(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).run()
       for (const text of texts) {
         const id = Identifier.ascending("memchunk")
@@ -431,11 +424,10 @@ export namespace Memory {
           timeCreated: now,
           timeUpdated: now,
         })
+        ftsInsert(db, id, projectId, text)
       }
       db.update(MemoryFileTable).set({ time_updated: now }).where(eq(MemoryFileTable.id, fileId)).run()
     })
-
-    for (const chunk of chunks) ftsInsert(chunk.id, projectId, chunk.content)
 
     log.info("wrote memory chunks", { fileId, count: chunks.length })
     return chunks
@@ -453,44 +445,46 @@ export namespace Memory {
     importance?: number
     confidence?: number
   }) {
-    const scope = input.scope ?? "global"
-    const kind = input.kind ?? "note"
-    const key = input.key ? normalizeKey(input.key) : undefined
-    const existing = key
-      ? findByKey({
+    return Database.transaction(() => {
+      const scope = input.scope ?? "global"
+      const kind = input.kind ?? "note"
+      const key = input.key ? normalizeKey(input.key) : undefined
+      const existing = key
+        ? findByKey({
+            projectId: input.projectId,
+            scope,
+            sessionID: scope === "session" ? input.sessionID : undefined,
+            kind,
+            key,
+          })
+        : null
+      const file =
+        existing ??
+        createFile({
+          title: input.title,
+          source: input.source,
           projectId: input.projectId,
           scope,
           sessionID: scope === "session" ? input.sessionID : undefined,
           kind,
           key,
+          importance: input.importance,
+          confidence: input.confidence,
         })
-      : null
-    const file =
-      existing ??
-      createFile({
-        title: input.title,
-        source: input.source,
-        projectId: input.projectId,
-        scope,
-        sessionID: scope === "session" ? input.sessionID : undefined,
-        kind,
-        key,
-        importance: input.importance,
-        confidence: input.confidence,
-      })
-    if (existing) {
-      updateFile({
-        fileId: existing.id,
-        title: input.title,
-        source: input.source,
-        kind,
-        key,
-        importance: input.importance,
-        confidence: input.confidence,
-      })
-    }
-    writeChunks(file.id, input.projectId, input.content)
-    return getFile(file.id)!
+      if (existing) {
+        updateFile({
+          fileId: existing.id,
+          title: input.title,
+          source: input.source,
+          kind,
+          key,
+          importance: input.importance,
+          confidence: input.confidence,
+        })
+      }
+      writeChunks(file.id, input.projectId, input.content)
+      return getFile(file.id)!
+    })
   }
 
   export function captureEpisode(input: {
@@ -769,8 +763,8 @@ export namespace Memory {
   }
 
   export function deleteFile(fileId: string) {
-    ftsDeleteByFile(fileId)
     Database.transaction((db) => {
+      ftsDeleteByFile(db, fileId)
       db.delete(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).run()
       db.delete(MemoryFileTable).where(eq(MemoryFileTable.id, fileId)).run()
     })

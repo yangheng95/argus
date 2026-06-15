@@ -1,9 +1,20 @@
 import { describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { Memory } from "../../src/memory"
 import { EngineMemoryBridge } from "../../src/engine/memory-bridge"
 import { MemoryInjection } from "../../src/memory/injection"
+import { Session } from "../../src/session"
+import { Database, sql } from "../../src/storage/db"
 import { tmpdir } from "../fixture/fixture"
+
+const MEMORY_FTS_DDL = /* sql */ `
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
+  content,
+  chunk_id UNINDEXED,
+  project_id UNINDEXED
+)`
 
 /**
  * Multi-stage memory read/write integration tests.
@@ -13,6 +24,107 @@ import { tmpdir } from "../fixture/fixture"
  * can be recalled at later stages.
  */
 describe("memory multi-stage lifecycle", () => {
+  test("memory search and FTS writes fail explicitly instead of falling back to LIKE", async () => {
+    const searchSource = await fs.readFile(path.resolve(import.meta.dir, "../../src/memory/search.ts"), "utf8")
+    const memorySource = await fs.readFile(path.resolve(import.meta.dir, "../../src/memory/index.ts"), "utf8")
+
+    expect(searchSource).not.toContain("falling back to LIKE")
+    expect(searchSource).not.toContain("searchLike")
+    expect(memorySource).not.toContain("FTS insert failed")
+    expect(memorySource).not.toContain("FTS delete failed")
+  })
+
+  test("FTS query failure is visible and does not use a LIKE fallback", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        recreateMemoryFts()
+        const projectId = Instance.project.id
+        Memory.writeFile({
+          title: "Fact: Search index corruption sentinel",
+          content: "## Sentinel\nThe query fallback sentinel phrase should not be reachable through LIKE.",
+          source: "agent",
+          projectId,
+          kind: "fact",
+        })
+
+        Database.use((db) => db.run(sql`DROP TABLE memory_fts`))
+        try {
+          expect(() =>
+            Memory.search({
+              query: "fallback sentinel phrase",
+              projectId,
+              limit: 5,
+            }),
+          ).toThrow()
+        } finally {
+          recreateMemoryFts()
+        }
+      },
+    })
+  })
+
+  test("FTS write failure is visible instead of being logged and ignored", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        recreateMemoryFts()
+        const projectId = Instance.project.id
+        Database.use((db) => db.run(sql`DROP TABLE memory_fts`))
+        try {
+          expect(() =>
+            Memory.writeFile({
+              title: "Fact: Missing FTS table",
+              content: "## Missing FTS\nThis write must fail when the FTS table is unavailable.",
+              source: "agent",
+              projectId,
+              kind: "fact",
+            }),
+          ).toThrow()
+        } finally {
+          recreateMemoryFts()
+        }
+        const files = Memory.listFiles({ projectId })
+        expect(files.some((file) => file.title === "Fact: Missing FTS table")).toBe(false)
+      },
+    })
+  })
+
+  test("FTS delete failure rolls back ordinary memory deletion", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        recreateMemoryFts()
+        const projectId = Instance.project.id
+        const file = Memory.writeFile({
+          title: "Fact: Delete rollback sentinel",
+          content: "## Delete rollback\nDeleting this memory must not alter ordinary tables when FTS delete fails.",
+          source: "agent",
+          projectId,
+          kind: "fact",
+        })
+        const chunks = Memory.getChunks(file.id)
+        expect(chunks.length).toBeGreaterThan(0)
+
+        Database.use((db) => db.run(sql`DROP TABLE memory_fts`))
+        try {
+          expect(() => Memory.deleteFile(file.id)).toThrow()
+        } finally {
+          recreateMemoryFts()
+        }
+
+        expect(Memory.getFile(file.id)).not.toBeNull()
+        expect(Memory.getChunks(file.id).length).toBe(chunks.length)
+      },
+    })
+  })
+
   test("stage 1: competitive research — writes facts, searchable later", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -317,9 +429,10 @@ describe("memory multi-stage lifecycle", () => {
         expect(section).toContain("Auto-Recalled Memory")
 
         // Verify injection includes recall policy
+        const laterSession = await Session.create({ kind: "root", title: "Later memory injection stage" })
         const injected = await MemoryInjection.systemPromptSection({
           projectID: projectId,
-          sessionID: "ses_later_stage",
+          sessionID: laterSession.id,
           query: "CSS custom properties",
           memoryToolAvailable: true,
         })
@@ -522,3 +635,7 @@ describe("memory multi-stage lifecycle", () => {
     })
   })
 })
+
+function recreateMemoryFts() {
+  Database.use((db) => db.run(sql.raw(MEMORY_FTS_DDL)))
+}
