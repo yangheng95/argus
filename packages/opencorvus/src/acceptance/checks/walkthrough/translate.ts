@@ -84,7 +84,7 @@ export async function translateScenarioToStepsWithDependencies(
   for await (const part of result.fullStream) {
     if (isErrorPart(part)) throw new Error(`scenario walkthrough translation failed: ${String(part.error)}`)
     if (isToolCallPart(part) && part.toolName === "submit_walkthrough_steps") {
-      steps = TranslateOutputSchema.parse(part.args).steps
+      steps = TranslateOutputSchema.parse(part.input).steps
     }
   }
   if (!steps) throw new Error(`scenario walkthrough translation did not submit steps for ${input.spec.id}`)
@@ -95,12 +95,13 @@ export async function translateScenarioToStepsWithDependencies(
   return WalkthroughStepsSchema.parse(steps)
 }
 
-function isToolCallPart(part: unknown): part is { type: string; toolName: string; args: unknown } {
+function isToolCallPart(part: unknown): part is { type: string; toolName: string; input: unknown } {
   return (
     typeof part === "object" &&
     part !== null &&
     (part as { type?: unknown }).type === "tool-call" &&
-    typeof (part as { toolName?: unknown }).toolName === "string"
+    typeof (part as { toolName?: unknown }).toolName === "string" &&
+    "input" in part
   )
 }
 

@@ -9,7 +9,7 @@ describe("scenario walkthrough translation", () => {
         {
           type: "tool-call",
           toolName: "submit_walkthrough_steps",
-          args: {
+          input: {
             steps: [
               { action: "goto", path: "/" },
               { action: "assertSelector", selector: "#app" },
@@ -29,7 +29,7 @@ describe("scenario walkthrough translation", () => {
           {
             type: "tool-call",
             toolName: "submit_walkthrough_steps",
-            args: {
+            input: {
               steps: [
                 { action: "goto", path: "/" },
                 { action: "assertText", text: "Ready" },
@@ -49,7 +49,7 @@ describe("scenario walkthrough translation", () => {
           {
             type: "tool-call",
             toolName: "submit_walkthrough_steps",
-            args: { steps: [{ action: "hover", selector: "#app" }] },
+            input: { steps: [{ action: "hover", selector: "#app" }] },
           },
         ]),
       ),
@@ -65,7 +65,7 @@ describe("scenario walkthrough translation", () => {
           {
             type: "tool-call",
             toolName: "submit_walkthrough_steps",
-            args: {
+            input: {
               steps: [
                 { action: "goto", path: "/" },
                 { action: "assertSelector", selector: "#app" },
@@ -79,6 +79,26 @@ describe("scenario walkthrough translation", () => {
     expect(prompts[0]).toContain("Example 1:")
     expect(prompts[0]).toContain('"assertPath","path":"/chat"')
     expect(prompts[0]).toContain('"present":false')
+  })
+
+  test("does not accept retired args-only tool-call parts as successful translation", async () => {
+    await expect(
+      translateScenarioToStepsWithDependencies(
+        { spec: scenarioSpec() },
+        deps([
+          {
+            type: "tool-call",
+            toolName: "submit_walkthrough_steps",
+            args: {
+              steps: [
+                { action: "goto", path: "/" },
+                { action: "assertSelector", selector: "#app" },
+              ],
+            },
+          },
+        ]),
+      ),
+    ).rejects.toThrow("did not submit steps")
   })
 })
 
