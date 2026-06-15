@@ -290,7 +290,45 @@ describe("benchmark quality gates", () => {
     })
 
     expect(verdict.verdict).toBe("rejected")
-    expect(verdict.failures.some((item) => item.message.includes("was not executed"))).toBe(true)
+    expect(verdict.failures.some((item) => item.message.includes("did not complete"))).toBe(true)
+  })
+
+  test("quality gate rejects missing local verification execution record", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
+    await Bun.write(path.join(tmp.path, "src", "feature.ts"), "export const feature = 1\n")
+    const changedFiles = ["src/feature.ts"]
+    const metrics = await deriveRunMetrics({
+      rootDir: tmp.path,
+      changedFiles,
+      completedAt: Date.now(),
+      evaluationChecks: [{ status: "passed", name: "build" }],
+      events: [{ summary: "implemented feature" }],
+    })
+    const verdict = evaluateQualityGates({
+      artifactAudit: await auditWorkspace({
+        rootDir: tmp.path,
+        changedFiles,
+        request: "Implement the feature.",
+      }),
+      runMetrics: metrics,
+      taskStatus: "completed",
+      evaluationVerdict: "accepted",
+      localVerify: {
+        status: "not_run",
+        exitCode: null,
+        command: null,
+      },
+    })
+
+    expect(verdict.verdict).toBe("rejected")
+    expect(verdict.failures).toContainEqual(
+      expect.objectContaining({
+        category: "verification_gap",
+        message: "Local verification command did not complete",
+        evidence: "command=, status=not_run",
+      }),
+    )
   })
 
   test("package lockfiles are config files, not scaffold expansion flags", async () => {

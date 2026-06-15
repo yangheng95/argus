@@ -91,6 +91,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
+import { Shell } from "../../src/shell/shell"
 import { parseSSE } from "../../src/util/sse"
 import { ensureStandaloneGitRepo } from "./git"
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
@@ -167,7 +168,6 @@ const KNOWN_FLAGS = new Set<string>([
   "--figma-url",
   // boolean (no value) switches
   "--no-keep",
-  "--skip-local-verify",
   "--no-browser",
   "--stop-after-architect",
 ])
@@ -204,6 +204,16 @@ validateFlags()
 
 const maxRuns = Number(flag("--max-runs")) || 20
 const maxFixRuns = Number(flag("--max-fix-runs")) || 8
+function parsePositiveInt(name: string, defaultValue: number): number {
+  const raw = flag(name)
+  if (!raw) return defaultValue
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer, got ${raw}`)
+  }
+  return value
+}
+const idleTimeoutMs = parsePositiveInt("--idle-timeout-ms", 45 * 60 * 1000)
 const report = stripWrappingQuotes(flag("--report"))
 const keep = !process.argv.includes("--no-keep")
 // Resume mode: re-attach to an existing task rather than creating a new one.
@@ -231,7 +241,6 @@ if (requestFile && requestAttachment) {
 }
 const figmaUrl = flag("--figma-url")?.trim() || undefined
 const acceptanceVerifyCmd = flag("--acceptance-verify-cmd")
-const skipLocalVerify = process.argv.includes("--skip-local-verify")
 // `--no-browser` bypasses the puppeteer-driven overlay UI and drives the
 // benchmark entirely through HTTP API polling. The downstream code already
 // guards every puppeteer call with `if (page)` — this flag activates those
@@ -247,9 +256,9 @@ const WEB_CLONE_VISUAL_WORST_THRESHOLD = process.env.OPENCORVUS_WEB_CLONE_BENCHM
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark"
 // The default brief is a text-only chat-app spec — there is no canonical
-// visual reference for it. Visual-diff gating only activates when the caller
-// passes `--reference-images <path>`; otherwise the run completes without an
-// SSIM gate.
+// visual reference for it. A benchmark run still needs an explicit local
+// acceptance command, either provided by the caller or derived from reference
+// images, so acceptance cannot pass without executable evidence.
 const referenceImages = rawReferenceImages
 const DEFAULT_TASK_REQUEST = `帮我做一个生产级的多模型 AI Chat Web 应用（Vite + React + TypeScript），整体定位对标 ChatGPT / Claude.ai / Poe，UI/UX 现代专业，深色/浅色主题切换，可在 Chrome 桌面端正常运行，本地启动后即可进入。
 
@@ -447,7 +456,7 @@ process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
 process.env.OPENCORVUS_MAX_ACCEPTANCE_ITERATIONS = "6"
 
 console.log(
-  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} idle_timeout_ms=disabled`,
+  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} idle_timeout_ms=${idleTimeoutMs}`,
 )
 
 // Force-remove SQLite WAL/SHM before reset — prevents previous benchmark's
@@ -584,9 +593,11 @@ await fs.mkdir(path.dirname(reportFile), { recursive: true })
       })
       .join(" && ")
   }
-  ACCEPTANCE_VERIFY_CMD = skipLocalVerify
-    ? ""
-    : acceptanceVerifyCmd?.trim() || (referenceImages.length > 0 ? buildHtmlSkeletonWorkflowCmd(referenceImages) : "")
+  ACCEPTANCE_VERIFY_CMD =
+    acceptanceVerifyCmd?.trim() || (referenceImages.length > 0 ? buildHtmlSkeletonWorkflowCmd(referenceImages) : "")
+  if (!ACCEPTANCE_VERIFY_CMD) {
+    throw new Error("acceptance verification command is required")
+  }
   if (ACCEPTANCE_VERIFY_CMD) {
     console.log(`[overlay-benchmark] verify_cmd=${ACCEPTANCE_VERIFY_CMD}`)
   }
@@ -1521,41 +1532,34 @@ pnpm-lock.yaml
   return sections.join("\n")
 }
 
-async function runLocalVerify(cwd: string, cmd: string) {
-  if (!cmd) {
-    return {
-      mode: "skipped",
-      command: null,
-      exitCode: null,
-      stdout: "",
-      stderr: "",
-      status: "not_run",
-    }
-  }
-  const shell = process.platform === "win32" ? ["cmd", "/c", cmd] : ["bash", "-lc", cmd]
-  const proc = Bun.spawn(shell, {
+async function runLocalVerify(cwd: string, cmd: string, taskID?: string) {
+  if (!cmd.trim()) throw new Error("acceptance verification command is required")
+  const result = await Shell.run(cmd, {
     cwd,
-    stdout: "pipe",
-    stderr: "pipe",
+    env: {
+      ...(taskID ? { OPENCORVUS_TASK_ID: taskID } : {}),
+      OPENCORVUS_PROJECT_DIR: cwd,
+    },
+    idleTimeoutMs,
   })
   return {
     mode: "command",
     command: cmd,
-    exitCode: await proc.exited,
-    stdout: (await new Response(proc.stdout).text()).trim(),
-    stderr: (await new Response(proc.stderr).text()).trim(),
-    status: "completed",
+    exitCode: result.exitCode,
+    stdout: result.stdout.trim(),
+    stderr: result.stderr.trim(),
+    status: result.idleTimedOut ? "idle_timeout" : "completed",
   }
 }
 
-function skippedLocalVerify(reason: string, cmd: string) {
+function blockedLocalVerify(reason: string, cmd: string) {
   return {
-    mode: cmd ? "command" : "skipped",
-    command: cmd || null,
+    mode: "command",
+    command: cmd,
     exitCode: null,
     stdout: "",
     stderr: reason,
-    status: "not_run",
+    status: "blocked",
   }
 }
 
@@ -1621,13 +1625,13 @@ async function buildBenchmarkReport(error?: unknown) {
   )
   const localVerify =
     reportError || currentTaskStatus !== "completed"
-      ? skippedLocalVerify(
+      ? blockedLocalVerify(
           reportError
-            ? `skipped because benchmark ended before task completion: ${reportError}`
-            : `skipped because task status is ${currentTaskStatus || "unknown"}, not completed`,
+            ? `blocked because benchmark ended before task completion: ${reportError}`
+            : `blocked because task status is ${currentTaskStatus || "unknown"}, not completed`,
           ACCEPTANCE_VERIFY_CMD,
         )
-      : await runLocalVerify(temp.dir, ACCEPTANCE_VERIFY_CMD)
+      : await runLocalVerify(temp.dir, ACCEPTANCE_VERIFY_CMD, taskID)
   const acceptanceChangedFiles =
     progress?.acceptance?.result?.changedFiles ?? currentFinalBoard?.acceptance?.result?.changedFiles ?? []
   // Acceptance changedFiles may only contain internal .opencorvus/ files while

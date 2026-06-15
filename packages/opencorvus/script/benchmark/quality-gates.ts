@@ -233,18 +233,18 @@ export function evaluateQualityGates(input: {
       evidence: `taskStatus=${input.taskStatus}, evaluationVerdict=${input.evaluationVerdict || ""}`,
     })
   }
+  if (input.localVerify && input.localVerify.status !== "completed") {
+    failures.push({
+      category: "verification_gap",
+      message: "Local verification command did not complete",
+      evidence: `command=${input.localVerify.command || ""}, status=${input.localVerify.status || "unknown"}`,
+    })
+  }
   if (input.localVerify?.status === "completed" && input.localVerify.exitCode !== 0) {
     failures.push({
       category: "verification_gap",
       message: "Configured local verification command failed",
       evidence: `command=${input.localVerify.command || ""}, exitCode=${input.localVerify.exitCode}`,
-    })
-  }
-  if (input.localVerify?.command && input.localVerify.status !== "completed") {
-    failures.push({
-      category: "verification_gap",
-      message: "Configured local verification command was not executed",
-      evidence: `command=${input.localVerify.command}, status=${input.localVerify.status || "unknown"}`,
     })
   }
   if (

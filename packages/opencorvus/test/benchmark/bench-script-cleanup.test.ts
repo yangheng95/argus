@@ -87,9 +87,13 @@ test("resume mode attaches read-only unless an explicit message is provided", ()
   expect(src).not.toContain("resume message inject failed")
 })
 
-test("benchmark timeout mechanism stays disabled instead of using stale inactivity heuristics", () => {
+test("benchmark local verification uses shared inactivity timeout", () => {
   expect(src).toContain("--idle-timeout-ms")
-  expect(src).toContain("idle_timeout_ms=disabled")
+  expect(src).toContain("const idleTimeoutMs = parsePositiveInt")
+  expect(src).toContain("idle_timeout_ms=${idleTimeoutMs}")
+  expect(src).toContain("Shell.run(cmd, {")
+  expect(src).toContain("idleTimeoutMs")
+  expect(src).toContain('status: result.idleTimedOut ? "idle_timeout" : "completed"')
   expect(src).not.toContain("function assertRecentBenchmarkActivity")
   expect(src).not.toContain("had no benchmark activity")
   expect(src).not.toContain("Date.now() - lastActivityLogAt")
@@ -121,10 +125,14 @@ test("benchmark git changed-file evidence fails loudly", () => {
 })
 
 test("benchmark local visual verification waits for completed tasks", () => {
-  expect(src).toContain("skippedLocalVerify")
+  expect(src).not.toContain("--skip-local-verify")
+  expect(src).not.toContain("skipLocalVerify")
+  expect(src).not.toContain("skippedLocalVerify")
+  expect(src).toContain("blockedLocalVerify")
   expect(src).toContain('currentTaskStatus !== "completed"')
-  expect(src).toContain("skipped because task status is")
-  expect(src).toContain("skipped because benchmark ended before task completion")
+  expect(src).toContain("blocked because task status is")
+  expect(src).toContain("blocked because benchmark ended before task completion")
+  expect(src).toContain('throw new Error("acceptance verification command is required")')
 })
 
 test("benchmark auto verification uses task-scoped HTML skeleton workflow thresholds", () => {
