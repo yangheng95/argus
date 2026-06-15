@@ -1622,6 +1622,122 @@ describe("ProviderTransform.message - anthropic empty content filtering", () => 
   })
 })
 
+describe("ProviderTransform.message - vendor tool call ID normalization", () => {
+  const claudeModel = {
+    id: "anthropic/claude-3-5-sonnet",
+    providerID: "anthropic",
+    api: {
+      id: "claude-3-5-sonnet-20241022",
+      url: "https://api.anthropic.com",
+      npm: "@ai-sdk/anthropic",
+    },
+    name: "Claude 3.5 Sonnet",
+    capabilities: {
+      temperature: true,
+      reasoning: false,
+      attachment: true,
+      toolcall: true,
+      input: { text: true, audio: false, image: false, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+    limit: { context: 200_000, output: 8192 },
+    status: "active",
+    options: {},
+    headers: {},
+  } as any
+
+  const mistralModel = {
+    ...claudeModel,
+    id: "mistral/mistral-large",
+    providerID: "mistral",
+    api: {
+      id: "mistral-large-latest",
+      url: "https://api.mistral.ai",
+      npm: "@ai-sdk/mistral",
+    },
+    name: "Mistral Large",
+  } as any
+
+  test("keeps colliding Claude tool call IDs distinct and paired with their results", async () => {
+    const original = [
+      {
+        role: "assistant",
+        content: [
+          { type: "tool-call", toolCallId: "call:a", toolName: "first", input: {} },
+          { type: "tool-call", toolCallId: "call/a", toolName: "second", input: {} },
+        ],
+      },
+      {
+        role: "tool",
+        content: [
+          { type: "tool-result", toolCallId: "call:a", toolName: "first", output: "first" },
+          { type: "tool-result", toolCallId: "call/a", toolName: "second", output: "second" },
+        ],
+      },
+    ] as any[]
+
+    const result = (await ProviderTransform.message(original, claudeModel, {})) as any[]
+    const callIDs = result[0].content.map((part: any) => part.toolCallId)
+    const resultIDs = result[1].content.map((part: any) => part.toolCallId)
+
+    expect(new Set(callIDs).size).toBe(2)
+    expect(resultIDs).toEqual(callIDs)
+    expect(callIDs.every((id: string) => /^[a-zA-Z0-9_-]+$/.test(id))).toBe(true)
+    expect(original[0].content.map((part: any) => part.toolCallId)).toEqual(["call:a", "call/a"])
+  })
+
+  test("keeps colliding Mistral nine-character tool call IDs distinct and paired", async () => {
+    const original = [
+      {
+        role: "assistant",
+        content: [
+          { type: "tool-call", toolCallId: "abcdefghi1", toolName: "first", input: {} },
+          { type: "tool-call", toolCallId: "abcdefghi2", toolName: "second", input: {} },
+        ],
+      },
+      {
+        role: "tool",
+        content: [
+          { type: "tool-result", toolCallId: "abcdefghi1", toolName: "first", output: "first" },
+          { type: "tool-result", toolCallId: "abcdefghi2", toolName: "second", output: "second" },
+        ],
+      },
+    ] as any[]
+
+    const result = (await ProviderTransform.message(original, mistralModel, {})) as any[]
+    const callIDs = result[0].content.map((part: any) => part.toolCallId)
+    const resultIDs = result[1].content.map((part: any) => part.toolCallId)
+
+    expect(new Set(callIDs).size).toBe(2)
+    expect(resultIDs).toEqual(callIDs)
+    expect(callIDs.every((id: string) => /^[a-zA-Z0-9]{9}$/.test(id))).toBe(true)
+    expect(original[0].content.map((part: any) => part.toolCallId)).toEqual(["abcdefghi1", "abcdefghi2"])
+  })
+
+  test("does not insert a synthetic Mistral assistant bridge between tool and user messages", async () => {
+    const result = (await ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [{ type: "tool-call", toolCallId: "call_1", toolName: "first", input: {} }],
+        },
+        {
+          role: "tool",
+          content: [{ type: "tool-result", toolCallId: "call_1", toolName: "first", output: "ok" }],
+        },
+        { role: "user", content: "continue" },
+      ] as any[],
+      mistralModel,
+      {},
+    )) as any[]
+
+    expect(result.map((msg) => msg.role)).toEqual(["assistant", "tool", "user"])
+    expect(JSON.stringify(result)).not.toContain("Done.")
+  })
+})
+
 describe("ProviderTransform.message - strip openai metadata when store=false", () => {
   const openaiModel = {
     id: "openai/gpt-5",
