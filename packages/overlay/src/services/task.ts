@@ -35,6 +35,7 @@ import {
 } from "../store/settings"
 import { appStore, setAppStore } from "../store/app"
 import { taskScopedPath } from "./task-path"
+import { activeProjectDirectory } from "./project-directory"
 import { applyDirectory } from "./workspace"
 import { ingestPersistedConversationMessage, resetWriter } from "./tree-writer"
 import { cancelConversationReplay, hydrateTaskConversation } from "./conversation"
@@ -90,7 +91,7 @@ export interface SelectTaskOptions {}
 
 function taskPath(taskID: string, suffix = ""): string {
   const item = taskByID(taskID)
-  const directory = typeof item?.task?.directory === "string" ? item.task.directory : ""
+  const directory = typeof item?.task?.directory === "string" && item.task.directory.trim() ? item.task.directory : activeDirectory()
   return taskScopedPath(taskID, directory, suffix)
 }
 
@@ -111,7 +112,7 @@ function chatRequestTimeoutMs(): number {
 }
 
 function activeDirectory(): string {
-  return boardStore.board?.task?.directory || settingsStore.directory || ""
+  return activeProjectDirectory()
 }
 
 function inactivityTimeoutError(timeoutMs: number): DOMException {
