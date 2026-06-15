@@ -229,11 +229,11 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
 ]
 
 const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
-const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>("workflow")
+const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)
 const activeRightActivity = () => selectedRightActivity()
-const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
-const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("tasks")
-const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("task")
+const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")
+const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("mission")
+const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")
 const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
 const [missionLauncherActive, setMissionLauncherActive] = createSignal(false)
 const [missionLauncherSubmitting, setMissionLauncherSubmitting] = createSignal(false)
