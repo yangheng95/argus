@@ -119,8 +119,8 @@
         <aside class="sidebar" id="sidebar" data-collapsed="false">
         <div class="side-panel-content sidebar-content">
           <div class="sidebar-header oc-surface-header">
-            <div class="sidebar-title oc-surface-header__title" id="leftPanelTitle" data-i18n="task.ledger.title">Recent Tasks</div>
-            <div class="sidebar-header-actions oc-surface-header__actions" id="leftPanelTaskActions" data-activity-actions="tasks" role="toolbar" aria-label="Recent Tasks" data-i18n-aria-label="task.ledger.title">
+            <div class="sidebar-title oc-surface-header__title" id="leftPanelTitle" data-i18n="mission.title">Mission</div>
+            <div class="sidebar-header-actions oc-surface-header__actions" id="leftPanelTaskActions" data-activity-actions="mission" role="toolbar" aria-label="Mission" data-i18n-aria-label="mission.title">
               <button
                 type="button"
                 class="oc-button"
@@ -134,6 +134,7 @@
                 data-i18n-aria-label="task.ledger.new"
                 title="New Task"
                 aria-label="New Task"
+                hidden
               >
                 <span class="sidebar-btn-icon" data-oc-icon="plus" data-oc-icon-size="13" aria-hidden="true"></span>
                 <span class="sidebar-btn-label" data-i18n="task.ledger.new">New Task</span>
@@ -151,7 +152,6 @@
                 data-i18n-aria-label="mission.new"
                 title="New Mission"
                 aria-label="New Mission"
-                hidden
               >
                 <span class="sidebar-btn-icon" data-oc-icon="plus" data-oc-icon-size="13" aria-hidden="true"></span>
                 <span class="sidebar-btn-label" data-i18n="mission.new">New Mission</span>
@@ -177,7 +177,7 @@
             </div>
           </div>
 
-          <div class="side-activity-body sidebar-activity-body" id="leftPanelTasks" data-side-activity="tasks" data-active="true">
+          <div class="side-activity-body sidebar-activity-body" id="leftPanelTasks" data-side-activity="tasks" data-active="false">
             <div class="sidebar-body">
               <div class="sidebar-list session-list-panel sidebar-session-list" id="taskListPanel"></div>
             </div>
@@ -189,7 +189,7 @@
             </div>
           </div>
 
-          <div class="side-activity-body sidebar-activity-body" id="leftPanelMissions" data-side-activity="mission" data-active="false">
+          <div class="side-activity-body sidebar-activity-body" id="leftPanelMissions" data-side-activity="mission" data-active="true">
             <div class="sidebar-body">
               <div class="sidebar-list session-list-panel mission-session-list" id="missionListPanel"></div>
             </div>

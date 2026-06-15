@@ -515,8 +515,8 @@ test(
       }
 
       assertMatchObject(await activeState(), {
-        leftTasks: "true",
-        leftMission: "false",
+        leftTasks: "false",
+        leftMission: "true",
         leftAssistant: "false",
         rightInspector: "false",
         centerOpen: "true",
@@ -528,17 +528,17 @@ test(
         centerPreview: "false",
         leftToolbarExists: true,
         leftActivityButtons: 6,
-        leftTasksButton: "true",
-        leftMissionButton: "false",
+        leftTasksButton: "false",
+        leftMissionButton: "true",
         leftAssistantButton: "false",
         leftSkillButton: "false",
         leftMcpButton: "false",
         leftMemoryButton: "false",
         rightToolbarDisplay: "flex",
         centerResizerHidden: true,
-        rightActivityButtons: 6,
+        rightActivityButtons: 7,
         rightTuiButtonExists: false,
-        rightWorkflowButton: "true",
+        rightWorkflowButton: "false",
         rightExplorerButton: "false",
         rightDiffButton: "false",
         rightAssistantButtonExists: false,
@@ -549,7 +549,7 @@ test(
         notificationPanelExists: true,
         taskStatusInWorkflowHeader: true,
         centerWorkbenchHeaderExists: false,
-        chatTitle: "Task",
+        chatTitle: "Mission",
         rightTitle: "Inspector",
         notificationTitle: "Notifications",
         workbenchStartsAtWorkspace: true,
@@ -591,10 +591,9 @@ test(
         shellContainsSidebar: true,
         missionActivityInHeader: false,
       })
-      assert.equal(narrowLeftActivityLayout.headerActionText.includes("Mission"), false)
+      assert.equal(narrowLeftActivityLayout.headerActionText.includes("Mission"), true)
       await page.setViewport({ width: 1440, height: 900 })
 
-      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
       for (let attempt = 0; attempt < 50; attempt += 1) {
         const state = await activeState()
         if (state.leftMission === "true" && state.missionRows === 1 && state.selectedSourceKind !== "session") break

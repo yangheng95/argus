@@ -68,6 +68,19 @@ test("main.tsx mounts Mission through the left activity system", () => {
   expect(MAIN).not.toContain("document.body.dataset.pageMode")
 })
 
+test("Mission is the default startup left activity and center panel", () => {
+  expect(HTML).toContain('id="leftPanelTitle" data-i18n="mission.title"')
+  expect(HTML).toContain('id="leftPanelTaskActions" data-activity-actions="mission"')
+  expect(HTML).toContain('id="leftPanelTasks" data-side-activity="tasks" data-active="false"')
+  expect(HTML).toContain('id="leftPanelMissions" data-side-activity="mission" data-active="true"')
+  expect(MAIN).toContain('const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)')
+  expect(MAIN).toContain('const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")')
+  expect(MAIN).toContain(
+    'const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("mission")',
+  )
+  expect(MAIN).toContain('const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")')
+})
+
 test("Mission activity opens session conversations through the shared center chat", () => {
   expect(MISSION).toContain("openMissionSession(mission.sessionID, mission.directory)")
   expect(MISSION).toContain('setBoardStore("selectedSource", source)')
