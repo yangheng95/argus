@@ -39,6 +39,19 @@ describe("browser preview evidence runner contract", () => {
     expect(source).toContain("ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID)")
   })
 
+  test("owns browser runtime launch for preview and region comparison evidence", async () => {
+    const source = await fs.readFile(
+      path.resolve(import.meta.dir, "../../src/browser-preview/evidence-runner.ts"),
+      "utf8",
+    )
+
+    expect(source).toContain("runBrowserNodeSidecar")
+    expect(source).toContain("BROWSER_PREVIEW_REGION_COMPARISON_SCRIPT")
+    expect(source).toContain("runBrowserPreviewRegionComparisonCapture")
+    expect(source).toContain('import type { BrowserPreviewRegionBinding, BrowserPreviewRegionBox } from "./region-comparison"')
+    expect(source).not.toContain('import { BrowserPreviewRegionBinding')
+  })
+
   test("product runner rejects an unknown target before creating a runtime job", async () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_preview_missing_target"
