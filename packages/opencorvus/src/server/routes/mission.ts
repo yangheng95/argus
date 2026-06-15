@@ -21,7 +21,7 @@ import {
   taskStatusDetailFromBoard,
 } from "@/status/task-status-snapshot"
 import { compileBoard } from "@/workbench/board"
-import { Session } from "@/session"
+import { Session, SessionStatus } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionWake } from "@/session/wake"
 import { Provider } from "@/provider/provider"
@@ -82,6 +82,7 @@ const MissionRecord = z.object({
   created: z.number(),
   updated: z.number(),
   archived: z.number().optional(),
+  interruptible: z.boolean(),
   tasks: MissionTaskProjection.array(),
   taskStats: MissionTaskStats,
 })
@@ -149,6 +150,7 @@ function projectMissionTasks(session: MissionSessionRecord): MissionTaskProjecti
 
 function missionRecord(session: MissionSessionRecord): z.infer<typeof MissionRecord> {
   const tasks = projectMissionTasks(session)
+  const status = SessionStatus.get(session.id)
   return MissionRecord.parse({
     missionID: session.missionID,
     sessionID: session.id,
@@ -157,6 +159,7 @@ function missionRecord(session: MissionSessionRecord): z.infer<typeof MissionRec
     created: session.time.created,
     updated: session.time.updated,
     archived: session.time.archived,
+    interruptible: status.type === "streaming" || status.type === "retry",
     tasks,
     taskStats: missionTaskStats(tasks),
   })

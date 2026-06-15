@@ -104,7 +104,7 @@
 }
 
 .mission-row.task-row-mini {
-  --task-row-actions-width: calc(84px * var(--ui-scale));
+  --task-row-actions-width: calc(64px * var(--ui-scale));
 }
 
 .mission-row-kind-badge {
@@ -114,37 +114,6 @@
 
 .mission-row-kind-badge::before {
   display: none;
-}
-
-.mission-row-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(2px * var(--ui-scale));
-  opacity: var(--ui-opacity-hidden);
-  pointer-events: none;
-  transition: opacity var(--ui-duration-fast) var(--ui-timing-standard);
-}
-
-.task-row-mini:hover .mission-row-actions,
-.task-row-mini:focus-within .mission-row-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.mission-row-abort-icon[data-icon="confirm"],
-.mission-row-delete-icon[data-icon="confirm"] {
-  display: none;
-}
-
-.oc-button[data-ui="mission-row-abort"][data-confirm="true"] .mission-row-abort-icon[data-icon="abort"],
-.oc-button[data-ui="mission-row-delete"][data-confirm="true"] .mission-row-delete-icon[data-icon="delete"] {
-  display: none;
-}
-
-.oc-button[data-ui="mission-row-abort"][data-confirm="true"] .mission-row-abort-icon[data-icon="confirm"],
-.oc-button[data-ui="mission-row-delete"][data-confirm="true"] .mission-row-delete-icon[data-icon="confirm"] {
-  display: inline-flex;
 }
 
 .mission-row-rename-input {

@@ -8341,6 +8341,7 @@ export type MissionListResponses = {
     created: number
     updated: number
     archived?: number
+    interruptible: boolean
     tasks: Array<{
       id: string
       title: string
@@ -8508,6 +8509,7 @@ export type MissionRenameResponses = {
     created: number
     updated: number
     archived?: number
+    interruptible: boolean
     tasks: Array<{
       id: string
       title: string

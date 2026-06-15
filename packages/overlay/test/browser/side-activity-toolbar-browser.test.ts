@@ -106,7 +106,7 @@ function persistedUserMessage(sessionID: string, messageID: string, text: string
   }
 }
 
-function missionListPayload() {
+function missionListPayload(interruptible = true) {
   return [
     {
       missionID: "mis_side_activity",
@@ -115,6 +115,7 @@ function missionListPayload() {
       directory: "D:/overlay/workspace/app",
       created: 1_735_689_600_000,
       updated: 1_735_689_660_000,
+      interruptible,
       taskStats: { total: 1, queued: 0, active: 1, completed: 0, failed: 0, cancelled: 0 },
       tasks: [
         {
@@ -146,6 +147,7 @@ test(
     assert.equal(typeof globalThis.Bun, "undefined")
 
     const requestLog: Array<{ method: string; path: string }> = []
+    let missionInterruptible = true
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
@@ -155,7 +157,11 @@ test(
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks" || path === "/global/tasks") return send(taskListPayload())
-      if (path === "/mission") return send(missionListPayload())
+      if (path === "/mission") return send(missionListPayload(missionInterruptible))
+      if (path === "/mission/mis_side_activity/abort") {
+        missionInterruptible = false
+        return send(true)
+      }
       if (path === "/session/ses_mission_side_activity/conversation") {
         return send({
           board: {
@@ -476,6 +482,7 @@ test(
             selectedSourceKind: (window as any).boardStore?.selectedSource?.kind ?? "",
             selectedSourceID: (window as any).boardStore?.selectedSource?.id ?? "",
             missionRows: document.querySelectorAll('[data-ui="mission-row"]').length,
+            missionAbortButtons: document.querySelectorAll('.mission-ledger [data-ui="task-row-cancel"]').length,
             missionTaskProjectionButtons: document.querySelectorAll('[data-ui="mission-task-projection-select"]')
               .length,
             renderedCardCount: Array.isArray((window as any).renderConversation?.())
@@ -594,6 +601,7 @@ test(
       assert.equal(narrowLeftActivityLayout.headerActionText.includes("Mission"), true)
       await page.setViewport({ width: 1440, height: 900 })
 
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
       for (let attempt = 0; attempt < 50; attempt += 1) {
         const state = await activeState()
         if (state.leftMission === "true" && state.missionRows === 1 && state.selectedSourceKind !== "session") break
@@ -608,6 +616,7 @@ test(
         selectedSourceKind: "task",
         selectedSourceID: "tsk_side_activity",
         missionRows: 1,
+        missionAbortButtons: 1,
         missionTaskProjectionButtons: 1,
       })
       assert.deepEqual((await activeState()).openPanels, ["mission"])
@@ -635,6 +644,16 @@ test(
           (entry) => entry.method === "GET" && entry.path === "/session/ses_mission_side_activity/conversation",
         ),
         false,
+      )
+
+      await clickButton('.mission-ledger [data-ui="task-row-cancel"]')
+      await clickButton('.mission-ledger [data-ui="task-row-cancel"][data-confirm="true"]')
+      await waitForState(
+        "mission abort button should disappear after accepted abort",
+        (state) => state.missionAbortButtons === 0,
+      )
+      assert.ok(
+        requestLog.some((entry) => entry.method === "POST" && entry.path === "/mission/mis_side_activity/abort"),
       )
 
       await page.click('[data-ui="mission-row"][data-session-id="ses_mission_side_activity"]')

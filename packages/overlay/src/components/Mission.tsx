@@ -123,6 +123,15 @@ function MissionContent(props: MissionProps) {
   async function handleMissionAbort(mission: MissionRecord): Promise<void> {
     await withBusy(`abort:${mission.missionID}`, async () => {
       await abortMission(mission)
+      const current = missionRecords()
+      if (current) {
+        missionRecordsCtl.mutate({
+          ...current,
+          records: current.records.map((record) =>
+            record.missionID === mission.missionID ? { ...record, interruptible: false } : record,
+          ),
+        })
+      }
       setMissionRefreshToken((value) => value + 1)
     })
   }

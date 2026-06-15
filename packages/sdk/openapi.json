@@ -12287,6 +12287,9 @@
                       "archived": {
                         "type": "number"
                       },
+                      "interruptible": {
+                        "type": "boolean"
+                      },
                       "tasks": {
                         "type": "array",
                         "items": {
@@ -12396,6 +12399,7 @@
                       "directory",
                       "created",
                       "updated",
+                      "interruptible",
                       "tasks",
                       "taskStats"
                     ]
@@ -13024,6 +13028,9 @@
                     "archived": {
                       "type": "number"
                     },
+                    "interruptible": {
+                      "type": "boolean"
+                    },
                     "tasks": {
                       "type": "array",
                       "items": {
@@ -13133,6 +13140,7 @@
                     "directory",
                     "created",
                     "updated",
+                    "interruptible",
                     "tasks",
                     "taskStats"
                   ]
