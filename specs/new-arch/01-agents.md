@@ -139,7 +139,7 @@ orchestrator/loop.ts — runTaskLoop()
 
 **Acceptance review 已删除**：最终验收归属 `integrity`，运行时截图证据归属 Build；旧 acceptance tool/service surface 不再存在。
 
-**`orchestrator/tools.ts` 当前导出 22 个 tool**（2026-05-18，下面按职责分组；文件内的实际出现顺序为 `requirements` · `frontend_design` · `architect` · `integrity` · `prosecute` · `analyze_intent` · `modify_goal` · `query_failed_goals` · `read_context` · `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` · `steer_subagent` · `cancel_subagent` · `restart_from_stage` · `deliver` · `publish_acceptance` · `refine` · `question` · `propose_task` · `build`）：
+**`orchestrator/tools.ts` 导出 task-level orchestration tools**（职责分组如下；以源码为准，避免在文档中维护易过期的数量）：
 
 1. **Stage 调用**：`requirements`、`frontend_design`、`frontend_research`、`architect`、`build`、`deliver`
 2. **Post-acceptance artifact export**：`publish_acceptance`（不决定 task lifecycle；accepted `deliver` 已完成 task）
@@ -150,7 +150,8 @@ orchestrator/loop.ts — runTaskLoop()
    `steer_subagent`、`cancel_subagent`（中止指定子 agent session；session 级恢复手段，
    取消后须显式重新 dispatch 同一 goal/stage）、`restart_from_stage`、`refine`
 7. **用户交互**：`question`
-8. **任务繁衍**：`propose_task`（拟新建关联任务，需用户确认后才落 `EngineService.createTask`）
+8. **用户授权命令证据**：`bash`（仅当当前用户 / operator 消息明确需要命令结果或直接回答该需求需要一个小命令结果；不是执行器、不是测试循环、不是 repo 调查入口）
+9. **任务繁衍**：`propose_task`（拟新建关联任务，需用户确认后才落 `EngineService.createTask`）
 
 **Planning tool role 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同 `engine/goal-pool.ts` 一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
 
