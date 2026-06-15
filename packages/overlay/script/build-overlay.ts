@@ -191,7 +191,7 @@ try {
     // Last resort: PowerShell force removal
     if (isWindows) {
       console.log("Binary locked, attempting PowerShell removal...")
-      await $`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Force -Path '${builtOverlay}' -ErrorAction SilentlyContinue"`
+      await $`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Force -LiteralPath $args[0] -ErrorAction SilentlyContinue" ${builtOverlay}`
         .quiet()
         .nothrow()
     }
