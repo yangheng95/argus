@@ -72,4 +72,38 @@ describe("check-release-assets cli --require-archives", () => {
     const res = await runCheck(workdir, [])
     expect(res.ok).toBe(true)
   })
+
+  test("validates every requested CLI variant archive", async () => {
+    seedPlatformDir(workdir, "linux-x64")
+    seedPlatformDir(workdir, "linux-x64-baseline")
+    seedPlatformDir(workdir, "linux-x64-musl")
+    seedPlatformDir(workdir, "linux-x64-baseline-musl")
+    fs.writeFileSync(path.join(workdir, "opencorvus-linux-x64.tar.gz"), "")
+    fs.writeFileSync(path.join(workdir, "opencorvus-linux-x64-baseline.tar.gz"), "")
+    fs.writeFileSync(path.join(workdir, "opencorvus-linux-x64-musl.tar.gz"), "")
+    fs.writeFileSync(path.join(workdir, "opencorvus-linux-x64-baseline-musl.tar.gz"), "")
+
+    const proc = Bun.spawn(
+      [
+        "bun",
+        CHECK_SCRIPT,
+        "cli",
+        "--dir",
+        workdir,
+        "--platforms",
+        "linux-x64,linux-x64-baseline,linux-x64-musl,linux-x64-baseline-musl",
+        "--version",
+        "9.9.9",
+        "--require-archives",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    )
+    const exitCode = await proc.exited
+    const stdout = await new Response(proc.stdout).text()
+    const stderr = await new Response(proc.stderr).text()
+
+    expect(stderr).toBe("")
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain("linux-x64-baseline-musl")
+  })
 })
