@@ -80,6 +80,26 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("Do not bind default shared ports such as 3000, 5173, or 4173")
   })
 
+  test("requires product-manager screenshot review before frontend success", async () => {
+    const prompt = await readBuildPrompt()
+    const normalized = prompt.replace(/\s+/g, " ")
+
+    expect(prompt).toContain("## Product Readiness Review")
+    expect(normalized).toContain("review your final screenshots as a product manager")
+    expect(normalized).toContain("Product manager means the person accountable")
+    expect(normalized).toContain("product-grade, not merely compiling, test-passing, or visually nonblank")
+    expect(normalized).toContain("must not look like an unfinished generated draft")
+    expect(normalized).toContain("Block premature code and premature design before reporting success")
+    expect(normalized).toContain("fake charts/maps/tables")
+    expect(normalized).toContain("placeholder widgets")
+    expect(normalized).toContain("dead controls")
+    expect(normalized).toContain("bypassing the target component system")
+    expect(normalized).toContain("marketing-style redesign of an operational surface")
+    expect(normalized).toContain("reference-structure drift")
+    expect(normalized).toContain('Never call `report_build_result(status="passed")`')
+    expect(normalized).toContain("latest screenshot still looks premature or not product-grade")
+  })
+
   test("keeps reference parity boundaries when target design system adaptation is requested", async () => {
     const prompt = await readBuildPrompt()
     const normalized = prompt.replace(/\s+/g, " ")

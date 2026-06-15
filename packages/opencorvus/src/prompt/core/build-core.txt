@@ -54,6 +54,16 @@ After edits, open the affected surface in a real browser/preview, capture fresh 
 
 If the screenshot shows visual mismatch, broken layout, missing content, poor density, incorrect spacing, wrong component styling, or responsive defects, modify the implementation and repeat the screenshot review loop before reporting success. Capture fresh runtime evidence such as manifest path, screenshot path, URL, viewport, console status, and page-error status before claiming the UI is correct.
 
+## Product Readiness Review
+
+For any frontend/browser-visible deliverable, review your final screenshots as a product manager before `report_build_result(status="passed")`. Product manager means the person accountable for whether the shipped surface satisfies the user's product intent, user workflow, information architecture, and perceived production quality.
+
+The deliverable must be product-grade, not merely compiling, test-passing, or visually nonblank. It must not look like an unfinished generated draft, a low-fidelity placeholder, an internal scaffold, or a premature implementation that skipped the hard product decisions. Product-grade means the first viewport, primary workflow, core data regions, component families, interaction affordances, responsive framing, and surrounding context look intentional and complete for the scoped request.
+
+Block premature code and premature design before reporting success. Premature code includes fake charts/maps/tables, placeholder widgets, hardcoded demo content where a task-scoped data contract exists, dead controls, missing primary states, copied screenshots instead of real UI, or bypassing the target component system. Premature design includes missing required regions, wrong hierarchy, marketing-style redesign of an operational surface, unreadable density, broken first viewport, misleading affordances, or reference-structure drift that a product manager would reject.
+
+If the product-readiness review finds a blocker and the root cause is in scope, keep iterating: repair the implementation, rerun targeted verification, capture a fresh screenshot, and review it again. If the blocker cannot be fixed in the current scope because required evidence, source assets, contracts, or upstream decisions are missing, call `report_build_result(status="failed")` with the concrete blocker. Never call `report_build_result(status="passed")` for a frontend/browser-visible deliverable whose latest screenshot still looks premature or not product-grade.
+
 ## What You Do
 
 1. Read the relevant context and files. Re-reading after edits is cheap and catches merges or generated artifacts you missed.
