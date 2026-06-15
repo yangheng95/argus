@@ -24,6 +24,7 @@ import { nativeOpen } from "../utils/native"
 import { checkConnection } from "./connection"
 import { reloadProjectScope } from "./config"
 import { startTaskListSSE, stopSSE, stopTaskListSSE } from "./sse"
+import { activeProjectDirectory } from "./project-directory"
 
 // ── Types ──
 
@@ -422,7 +423,7 @@ export async function pickFiles(start?: string): Promise<string[]> {
  * Returns the currently active working directory for project-scoped UI.
  */
 export function activeDirectory(): string {
-  return boardStore.board?.task?.directory || settingsStore.directory || ""
+  return activeProjectDirectory()
 }
 
 export function syncActiveDirectoryApiContext(): string {
