@@ -46,6 +46,9 @@ describe("visual-qa agent", () => {
     expect(prompt).not.toContain("UX means User Experience")
     expect(prompt).toContain("picky professional product designer")
     expect(prompt).toContain("Do not give draft-quality")
+    expect(prompt).toContain("not a style-only pass")
+    expect(prompt).toContain("removing/replacing/rebuilding that component")
+    expect(prompt).toContain("instead of CSS tweaking")
     expect(prompt).toContain("Integrity Review Context")
     expect(prompt).toContain("fake chart must become a real data-bound chart")
     expect(prompt).toContain("Repair coarse-to-fine")
@@ -57,5 +60,22 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("Use Node for Playwright")
     expect(prompt).toContain("no follow_up_task")
     expect(prompt).toContain("include follow_up_task with a complete new-round task request")
+  })
+
+  test("product design principles render abstract prompt criteria without fixture examples", () => {
+    const prompt = VisualQaTestHooks.buildVisualQaUserPrompt({
+      taskTitle: "Visual review",
+      taskRequest: "Review the page.",
+      reason: "Need a product-grade visual QA pass.",
+    })
+
+    expect(prompt).toContain("# Product Design QA Principles")
+    expect(prompt).toContain("component-truth")
+    expect(prompt).toContain("reference-structure")
+    expect(prompt).not.toContain("Blocker examples:")
+    expect(prompt).not.toContain("low-fidelity-map-surface.png")
+    expect(prompt).not.toContain("clipped-primary-navigation.png")
+    expect(prompt).not.toContain("codex-clipboard-326e150e")
+    expect(prompt).not.toContain("codex-clipboard-de608ec0")
   })
 })
