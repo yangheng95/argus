@@ -192,7 +192,11 @@ describe("historical docs repository links", () => {
 
   test("retired reference ledger entries are still referenced", () => {
     const retired = retiredRefs()
-    const referenced = referencedRetiredPaths(walkRepository(repoRoot), retired)
+    const ledgerPath = path.join(repoRoot, "specs/retired-reference-ledger.md")
+    const referenced = referencedRetiredPaths(
+      walkRepository(repoRoot).filter((file) => file !== ledgerPath),
+      retired,
+    )
 
     expect(Array.from(retired).filter((ref) => !referenced.has(ref))).toEqual([])
   })

@@ -12,6 +12,7 @@ This ledger records historical spec paths that are still referenced by source co
 | `specs/acceptance-fresh-eyes-decoupling-2026-05-18.md` | Historical acceptance-decoupling note; current source is the acceptance arbiter and engine artifact logic. |
 | `specs/card-duration-single-source-2026-05-11.md` | Historical overlay card-duration note; current source is the overlay card-duration tests and rendering code. |
 | `specs/coding-agent-craft-prompt-2026-05-18.md` | Historical engineering-craft prompt note; current source is `packages/opencorvus/src/prompt/core/engineering-craft.txt` and prompt composition tests. |
+| `specs/coding-agent-tui-overlay-plugin-decoupling-2026-06-06.md` | Superseded root TUI ownership draft; current source is `specs/coding-agent-tui-independent-plugin-2026-06-06.md`. |
 | `specs/deliver-accepted-completes-task-2026-05-16.md` | Historical deliver lifecycle note; current architecture summary is in `specs/new-arch/2026-05-12-agent-boundary-refactor-blueprint.md`. |
 | `specs/engine-stream-error-wedge-2026-04-30.md` | Historical engine stream-error note; current coverage is in engine stream-error tests. |
 | `specs/fact-check-agent-2026-05-25.md` | Historical fact-check agent note; current source is `packages/opencorvus/src/fact-check/**` plus fact-check prompt/tool tests. |
@@ -22,5 +23,6 @@ This ledger records historical spec paths that are still referenced by source co
 | `specs/notification-reliability-2026-05-18.md` | Historical notification reliability note; current follow-up context is in `specs/new-arch/2026-05-19-overlay-selected-sse-recovery.md`. |
 | `specs/overlay-flat-redesign/plan.md` | Historical overlay flat-redesign plan; current enforcement lives in overlay flat-redesign tests and design tokens. |
 | `specs/overlay-settings-primitives-2026-05-26.md` | Historical settings primitives note; current source is settings primitives code/tests. |
+| `specs/research-bundle-structured-tool-input-2026-06-04.md` | Superseded root research bundle draft; current source is `specs/new-arch/2026-06-04-research-brief-chunked-collector.md`. |
 | `specs/scheduler-collab-audit-2026-04-30.md` | Historical scheduler collaboration audit; current coverage is in engine/session regression tests. |
 | `specs/scheduler-fix-plan-2026-04-30.md` | Historical scheduler fix plan; current coverage is in build-agent/engine/pipeline regression tests. |

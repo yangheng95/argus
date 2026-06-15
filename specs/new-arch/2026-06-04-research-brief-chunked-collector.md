@@ -1,5 +1,7 @@
 # Research Brief Chunked Collector
 
+Supersedes retired root note `specs/research-bundle-structured-tool-input-2026-06-04.md`.
+
 ## Problem
 
 `submit_research_brief` is still a giant terminal schema. Even after structured

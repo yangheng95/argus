@@ -18,9 +18,7 @@ Do not recreate `docs/product/**`. It was removed on 2026-06-15 because it dupli
 
 | File | Status | Notes |
 | --- | --- | --- |
-| `coding-agent-tui-independent-plugin-2026-06-06.md` | Current TUI plugin architecture note | Supersedes the backend ownership conclusion in `coding-agent-tui-overlay-plugin-decoupling-2026-06-06.md`. |
-| `coding-agent-tui-overlay-plugin-decoupling-2026-06-06.md` | Superseded | Kept as evidence for the generic PTY failure and initial OpenTUI sidecar investigation. |
-| `research-bundle-structured-tool-input-2026-06-04.md` | Superseded | Superseded by `new-arch/2026-06-04-research-brief-chunked-collector.md`. |
+| `coding-agent-tui-independent-plugin-2026-06-06.md` | Current TUI plugin architecture note | Supersedes the removed backend-ownership draft listed in `retired-reference-ledger.md`. |
 | `2026-06-10-cancelled-task-message-input.md` | Historical implementation note | Cancelled-task composer behavior. |
 | `2026-06-10-tradingview-world-economy-clone.md` | Historical implementation note | TradingView clone task record. |
 | `db-schema-drift-reset-2026-06-03.md` | Historical implementation note | Database reset/drift handling. |
