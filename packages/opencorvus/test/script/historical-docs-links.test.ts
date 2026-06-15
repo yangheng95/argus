@@ -3,9 +3,24 @@ import fs from "node:fs"
 import path from "node:path"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
-const scanRoots = ["specs", "packages/opencorvus/specs", "packages/web/src/content/docs"]
+const docsScanRoots = ["specs", "packages/opencorvus/specs", "packages/web/src/content/docs"]
 const rootDocs = ["README.md", "CONTRIBUTING.md", "RELEASE.md", "AGENTS.md", "CLAUDE.md"]
 const markdownExtensions = new Set([".md", ".mdx", ".txt"])
+const repositoryExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".md", ".mdx", ".txt", ".json", ".css", ".rs", ".toml", ".yml", ".yaml"])
+const skippedRepositoryDirs = new Set([
+  ".git",
+  ".opencorvus",
+  ".scratch",
+  ".tmp",
+  ".turbo",
+  "dist",
+  "dist-vite",
+  "node_modules",
+  "opencorvus-dist",
+  "target",
+  "tmp",
+])
+const skippedRepositoryPrefixes = [path.join("packages", "opencorvus", "test", "fixture", "skills")]
 
 function walkDocs(dir: string, out: string[] = []): string[] {
   if (!fs.existsSync(dir)) return out
@@ -16,6 +31,23 @@ function walkDocs(dir: string, out: string[] = []): string[] {
       continue
     }
     if (markdownExtensions.has(path.extname(entry.name).toLowerCase())) {
+      out.push(fullPath)
+    }
+  }
+  return out
+}
+
+function walkRepository(dir: string, out: string[] = []): string[] {
+  if (!fs.existsSync(dir)) return out
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name)
+    const relativePath = path.relative(repoRoot, fullPath)
+    if (skippedRepositoryPrefixes.some((prefix) => relativePath.startsWith(prefix))) continue
+    if (entry.isDirectory()) {
+      if (!skippedRepositoryDirs.has(entry.name)) walkRepository(fullPath, out)
+      continue
+    }
+    if (repositoryExtensions.has(path.extname(entry.name).toLowerCase())) {
       out.push(fullPath)
     }
   }
@@ -36,7 +68,8 @@ function refsIn(text: string): string[] {
   const refs: string[] = []
   const markdownLink = /(?<!!?)\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
   const codeSpanPath = /`([^`]*(?:specs|docs|packages\/web\/src\/content\/docs|packages\/opencorvus\/specs)[^`]*\.(?:md|mdx|txt))`/g
-  for (const pattern of [markdownLink, codeSpanPath]) {
+  const plainPath = /(?:^|[\s"'()`])((?:specs|docs\/superpowers|packages\/opencorvus\/specs)\/[A-Za-z0-9_./@%+\-]+\.(?:md|mdx|txt))(?:#[A-Za-z0-9_./%+\-]+)?/g
+  for (const pattern of [markdownLink, codeSpanPath, plainPath]) {
     let match: RegExpExecArray | null
     while ((match = pattern.exec(text))) {
       refs.push(match[1]!)
@@ -45,29 +78,42 @@ function refsIn(text: string): string[] {
   return refs
 }
 
-describe("historical docs repository links", () => {
-  test("local historical doc references resolve or are marked retired", () => {
-    const files = scanRoots
-      .flatMap((dir) => walkDocs(path.join(repoRoot, dir)))
-      .concat(rootDocs.map((rel) => path.join(repoRoot, rel)).filter((filePath) => fs.existsSync(filePath)))
-    const missing: string[] = []
+function retiredRefs(): Set<string> {
+  const ledger = fs.readFileSync(path.join(repoRoot, "specs/retired-reference-ledger.md"), "utf8")
+  return new Set(
+    Array.from(ledger.matchAll(/\| `([^`]+)` \|/g), (match) => match[1]!).filter((ref) => ref.endsWith(".md")),
+  )
+}
 
-    for (const file of files) {
-      const text = fs.readFileSync(file, "utf8")
-      const retiredLines = text
-        .split(/\r?\n/)
-        .filter((line) => line.includes("Retired external note"))
-        .join("\n")
-      for (const ref of refsIn(text)) {
-        if (/\s/.test(ref)) continue
-        if (ref.includes("{") || ref.includes("*") || ref.includes("...")) continue
-        if (retiredLines.includes(ref)) continue
-        const candidates = candidatesFor(file, ref)
-        if (candidates.length > 0 && !candidates.some((candidate) => fs.existsSync(candidate))) {
-          missing.push(`${path.relative(repoRoot, file)} -> ${ref}`)
-        }
+function missingReferences(files: string[], retired: Set<string>): string[] {
+  const missing: string[] = []
+  for (const file of files) {
+    const text = fs.readFileSync(file, "utf8")
+    for (const ref of refsIn(text)) {
+      if (/\s/.test(ref)) continue
+      if (ref.includes("{") || ref.includes("*") || ref.includes("...")) continue
+      if (retired.has(ref)) continue
+      const candidates = candidatesFor(file, ref)
+      if (candidates.length > 0 && !candidates.some((candidate) => fs.existsSync(candidate))) {
+        missing.push(`${path.relative(repoRoot, file)} -> ${ref}`)
       }
     }
+  }
+  return missing
+}
+
+describe("historical docs repository links", () => {
+  test("local historical doc references resolve or are marked retired", () => {
+    const files = docsScanRoots
+      .flatMap((dir) => walkDocs(path.join(repoRoot, dir)))
+      .concat(rootDocs.map((rel) => path.join(repoRoot, rel)).filter((filePath) => fs.existsSync(filePath)))
+    const missing = missingReferences(files, retiredRefs())
+
+    expect(missing).toEqual([])
+  })
+
+  test("repository historical doc references resolve or are listed in retired ledger", () => {
+    const missing = missingReferences(walkRepository(repoRoot), retiredRefs())
 
     expect(missing).toEqual([])
   })

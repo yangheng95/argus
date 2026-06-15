@@ -4,11 +4,10 @@
  * translated to executable checks + rubric evaluations by
  * `src/spec/translator.ts`, and executed by the per-goal evaluator.
  *
- * Shape follows the cross-framework convergence documented in
- * `docs/spec-acceptance-eval-protocol.md` (Inspect AI, Braintrust autoevals,
- * MLflow make_judge, Ragas rubric metrics, DeepEval G-Eval, AutoUAT). Three
- * scorer families — heuristic / llm_judge / prebuilt — cover every case
- * without inventing a new DSL.
+ * Shape follows cross-framework convergence from Inspect AI, Braintrust
+ * autoevals, MLflow make_judge, Ragas rubric metrics, DeepEval G-Eval, and
+ * AutoUAT. Three scorer families — heuristic / llm_judge / prebuilt — cover
+ * every case without inventing a new DSL.
  */
 import z from "zod"
 
