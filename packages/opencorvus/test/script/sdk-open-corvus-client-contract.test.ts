@@ -89,7 +89,7 @@ describe("SDK OpenCorvus client contract", () => {
     expect(guard).not.toContain('const good = "@opencorvus-ai/sdk"')
   })
 
-  test("browser preview SDK requires persisted target IDs for select and capture", () => {
+  test("browser preview SDK accepts explicit select URLs while capture still requires target IDs", () => {
     const sdk = readRepoFile("packages", "sdk", "js", "src", "gen", "sdk.gen.ts")
     const types = readRepoFile("packages", "sdk", "js", "src", "gen", "types.gen.ts")
     const openapi = JSON.parse(readRepoFile("packages", "sdk", "openapi.json")) as {
@@ -106,19 +106,23 @@ describe("SDK OpenCorvus client contract", () => {
         >
       >
     }
+    const selectSchema =
+      openapi.paths["/task/{taskID}/browser-preview/target"]?.put?.requestBody?.content?.["application/json"]?.schema
     const captureSchema =
       openapi.paths["/task/{taskID}/browser-preview/capture"]?.post?.requestBody?.content?.["application/json"]?.schema
 
     expect(openapi.paths["/task/{taskID}/browser-preview/target"]?.put?.requestBody?.required).toBe(true)
     expect(openapi.paths["/task/{taskID}/browser-preview/capture"]?.post?.requestBody?.required).toBe(true)
+    expect(selectSchema?.properties).toHaveProperty("targetID")
+    expect(selectSchema?.properties).toHaveProperty("url")
     expect(captureSchema?.required).toContain("targetID")
     expect(captureSchema?.required).toContain("viewportIDs")
-    expect(sdk).not.toContain("targetID?: string")
-    expect(sdk).not.toContain('viewportID?: "desktop" | "tablet" | "mobile"')
-    expect(sdk).not.toContain('viewportID: "desktop" | "tablet" | "mobile"')
+    expect(sdk).not.toContain("viewportID?:")
+    expect(sdk).toContain("url?: string")
     expect(sdk).toContain("targetID: string")
     expect(sdk).toContain('viewportIDs: Array<"desktop" | "tablet" | "mobile">')
     expect(types).toContain("export type BrowserPreviewSelectTaskTargetData = {\n  body: {")
+    expect(types).toContain("url?: string")
     expect(types).toContain("export type BrowserPreviewCaptureTaskTargetData = {\n  body: {")
     expect(types).toContain('viewportIDs: Array<"desktop" | "tablet" | "mobile">')
   })

@@ -694,6 +694,8 @@
   "browser_preview.status.ready": "预览就绪",
   "browser_preview.title": "预览",
   "browser_preview.url_label": "预览 URL",
+  "browser_preview.url_placeholder": "localhost:5173",
+  "browser_preview.url_submit": "保存预览 URL",
   "browser_preview.viewport.desktop": "桌面",
   "browser_preview.viewport.label": "预览视口",
   "browser_preview.viewport.mobile": "手机",

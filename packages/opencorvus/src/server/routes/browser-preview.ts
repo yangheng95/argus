@@ -9,12 +9,14 @@ import {
   findReadableBrowserPreviewEvidenceByID,
   findReadableBrowserPreviewEvidenceCapturePath,
   findBrowserPreviewTargetByID,
+  persistBrowserPreviewTarget,
   promoteBrowserPreviewTarget,
   PersistedBrowserPreviewEvidence,
 } from "../../browser-preview/persist"
 import {
   BrowserPreviewTarget,
   failedBrowserPreviewTarget,
+  normalizeBrowserPreviewUrl,
   resolveBrowserPreviewTarget,
   taskBrowserPreviewTarget,
 } from "../../browser-preview/target"
@@ -26,6 +28,23 @@ const BrowserPreviewLiveRequest = z.object({
   targetID: z.string().min(1),
   viewportID: BrowserPreviewViewportID,
 })
+
+const BrowserPreviewTargetSelectionRequest = z
+  .object({
+    targetID: z.string().min(1).optional(),
+    url: z.string().min(1).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const count = Number(typeof value.targetID === "string") + Number(typeof value.url === "string")
+    if (count !== 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["targetID"],
+        message: "Provide exactly one browser preview target selector: targetID or url.",
+      })
+    }
+  })
 
 const BrowserPreviewLiveInputRequest = BrowserPreviewLiveRequest.extend({
   input: z.discriminatedUnion("kind", [
@@ -148,7 +167,7 @@ export const BrowserPreviewRoutes = lazy(() =>
       describeRoute({
         summary: "Select task browser preview target",
         description:
-          "Promote an existing task browser preview target artifact. Arbitrary operator URLs are not accepted as preview targets.",
+          "Promote an existing task browser preview target artifact, or persist an explicit operator URL as the task preview target.",
         operationId: "browserPreview.selectTaskTarget",
         responses: {
           200: {
@@ -162,11 +181,38 @@ export const BrowserPreviewRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1) })),
-      validator("json", z.object({ targetID: z.string().min(1) })),
+      validator("json", BrowserPreviewTargetSelectionRequest),
       async (c) => {
         const { taskID } = c.req.valid("param")
-        const { targetID } = c.req.valid("json")
+        const body = c.req.valid("json")
         requireTask(taskID)
+        if ("url" in body && typeof body.url === "string") {
+          const url = normalizeBrowserPreviewUrl(body.url)
+          if (!url) {
+            return c.json(
+              failedBrowserPreviewTarget({
+                projectRoot: Instance.directory,
+                taskID,
+                diagnostics: [`Invalid browser preview URL: ${body.url}`],
+              }),
+              400,
+            )
+          }
+          const persisted = await persistBrowserPreviewTarget({ taskID, url })
+          return c.json(
+            taskBrowserPreviewTarget({
+              id: persisted.id,
+              taskID,
+              projectRoot: Instance.directory,
+              url: persisted.url,
+              diagnostics: [`Selected task browser preview target ${persisted.id}.`],
+            }) satisfies BrowserPreviewTarget,
+          )
+        }
+        const targetID = body.targetID
+        if (!targetID) {
+          throw new Error("BrowserPreviewTargetSelectionRequest validation accepted a body without targetID or url.")
+        }
         const persisted = await promoteBrowserPreviewTarget({ taskID, targetID })
         if (!persisted)
           return c.json(

@@ -63,6 +63,16 @@ describe("app routes", () => {
     expect(parameterNames(paths["/log/files"]?.get)).toEqual([])
   })
 
+  test("Server.openapi marks JSON request bodies required even when fields are refined", async () => {
+    const spec = await Server.openapi()
+    const requestBody = spec.paths?.["/task/{taskID}/browser-preview/target"]?.put?.requestBody
+    const schema = requestBody?.content?.["application/json"]?.schema
+
+    expect(requestBody?.required).toBe(true)
+    expect(schema?.properties?.targetID?.type).toBe("string")
+    expect(schema?.properties?.url?.type).toBe("string")
+  })
+
   test("POST /shutdown returns 503 without a registered handler", async () => {
     const app = Server.App()
     const response = await app.request("/shutdown", { method: "POST" })
