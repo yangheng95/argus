@@ -3708,7 +3708,8 @@ export function createOrchestratorTools(input: {
         "Use once after each terminal frontend goal batch as peer post-build review evidence before the next goal batch: desktop/mobile screenshots, " +
         "interaction-state checks, visual comparison, console/network review, or direct repair of visual or functional defects. " +
         "It consumes task-scoped frontend_design/build evidence plus any prior integrity evidence and repairs coarse-to-fine: component truth and visible functionality first, layout/composition second, micro-style polish last. " +
-        "It reviews from a professional design QA perspective, lists production_blockers when the product cannot ship, and does not use a fixed similarity score as the only verdict. " +
+        "It reviews from a picky professional design QA perspective, lists production_blockers when the product cannot ship, and does not use a fixed similarity score as the only verdict. " +
+        "If it returns accepted=false with follow_up_task, call propose_task from that evidence instead of ending passively. " +
         "It may use skills, bash/edit/write/apply_patch, and webpage_render/evaluate/text_diff/vision_judge. " +
         "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final. Visual QA and integrity are peer review agents; visual_qa does not replace integrity and is not integrity's workflow prerequisite.",
       inputSchema: VisualQaInputSchema,
@@ -3777,6 +3778,7 @@ export function createOrchestratorTools(input: {
               `coverage=${result.report.coverage.length}`,
               `findings=${result.report.findings.length}`,
               `production_blockers=${result.report.production_blockers.length}`,
+              `follow_up_task=${result.report.follow_up_task ? result.report.follow_up_task.title : "(none)"}`,
               `evidence=${result.report.evidence.length}`,
               `changed_files=${result.report.changed_files.join(", ") || "(none)"}`,
             ].join("\n"),
@@ -3793,6 +3795,7 @@ export function createOrchestratorTools(input: {
               ["coverage", String(result.report.coverage.length)],
               ["findings", String(result.report.findings.length)],
               ["production_blockers", String(result.report.production_blockers.length)],
+              ["follow_up_task", result.report.follow_up_task ? result.report.follow_up_task.title : "(none)"],
               ["evidence", String(result.report.evidence.length)],
               ["repairs", String(result.report.repairs.length)],
               ["changed_files", result.report.changed_files.join(", ") || "(none)"],
@@ -5593,6 +5596,7 @@ export function createOrchestratorTools(input: {
         "instead of build/integrity on the current task, and do not call generic `task` or control-plane `panel`. " +
         "Create at most one follow-up task per orchestrator turn; wait for the created task to be recorded and for a later wake before proposing another. " +
         "Use propose_task when execution evidence, artifact state, integrity history, or the obvious product path shows separate inheriting work: supplemental features, deeper implementation detail, quality hardening, tests, docs, operations, performance, or project-improvement suggestions. " +
+        "Use it when failed visual_qa evidence includes follow_up_task for unrepairable production blockers; translate that request into the inheriting task instead of ending with the failed report. " +
         "It is also the right path when reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
       inputSchema: z.object({
         title: z.string().min(1).describe("Concise title for the proposed new task."),
@@ -6873,7 +6877,7 @@ export function createOrchestratorTools(input: {
             `### Next step\n` +
             `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
             `When the current eligible wave reaches terminal state, choose visual_qa / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting. ` +
-            `For frontend/browser-visible work, run \`visual_qa\` once for the terminal goal batch as peer post-build review evidence before the next build wave. ` +
+            `For frontend/browser-visible work, run \`visual_qa\` once for the terminal goal batch as peer post-build review evidence before the next build wave. If visual_qa returns accepted=false with follow_up_task, call \`propose_task\` from that evidence instead of ending passively. ` +
             `Call \`integrity\` as the final workflow gate after all blocking builds are terminal; visual_qa and integrity are peer review agents, not replacements for each other. Before final acceptance, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
           )
         } catch (err) {
