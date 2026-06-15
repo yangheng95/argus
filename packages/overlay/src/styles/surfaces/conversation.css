@@ -961,6 +961,41 @@
   outline: none;
 }
 
+.oc-button[data-ui="project-init-git"] {
+  --oc-button-height: calc(24px * var(--ui-scale));
+  --oc-button-padding-x: calc(6px * var(--ui-scale));
+  --oc-button-gap: calc(4px * var(--ui-scale));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 38%, var(--oc-control-border));
+  --oc-button-bg: var(--accent-dim);
+  --oc-button-color: var(--accent);
+  --oc-button-shadow: var(--oc-control-shadow);
+
+  min-width: 0;
+  font-size: var(--ui-font-meta);
+  flex-shrink: 0;
+  transition:
+    background var(--ui-duration-fast),
+    border-color var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+
+.oc-button[data-ui="project-init-git"]:hover,
+.oc-button[data-ui="project-init-git"]:focus-visible {
+  --oc-button-bg: color-mix(in srgb, var(--accent-dim) 72%, var(--surface-hover));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 54%, var(--oc-control-border));
+  --oc-button-color: var(--text-strong);
+
+  outline: none;
+}
+
+.project-init-git-label {
+  min-width: 0;
+  max-width: calc(70px * var(--ui-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .project-worktree-count {
   min-width: calc(20px * var(--ui-scale));
   padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
