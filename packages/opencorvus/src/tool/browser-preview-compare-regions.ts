@@ -24,7 +24,7 @@ export type BrowserPreviewCompareRegionsToolParameters = z.infer<typeof BrowserP
 
 export const BrowserPreviewCompareRegionsTool = Tool.define("browser_preview_compare_regions", {
   description:
-    "Capture local implementation regions for a persisted browser_preview_target, crop matching source reference regions, persist comparison evidence, and return source/local side-by-side PNG attachments directly in the build agent message.",
+    "Preferred frontend visual repair-loop tool when source/reference evidence and a persisted browser_preview_target both exist. Capture local implementation regions, crop matching source reference regions, persist comparison evidence, and return source/local side-by-side PNG attachments directly in the build agent message. Use before standalone screenshot review for reference-parity regions with bindings.",
   parameters: BrowserPreviewCompareRegionsToolParameters,
   async execute(params: BrowserPreviewCompareRegionsToolParameters, ctx: Tool.Context) {
     const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID.trim() : ""
