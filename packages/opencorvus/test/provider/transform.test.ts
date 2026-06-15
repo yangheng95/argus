@@ -8,6 +8,15 @@ import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { tmpdir } from "../fixture/fixture"
 
+function deepFreeze<T>(value: T): T {
+  if (!value || typeof value !== "object") return value
+  Object.freeze(value)
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(child)
+  }
+  return value
+}
+
 describe("ProviderTransform.schema - GPT strict tool schemas", () => {
   const hexinGptModel = {
     id: "hexin/gpt-5.5",
@@ -1479,6 +1488,24 @@ describe("ProviderTransform.message - anthropic empty content filtering", () => 
     options: {},
     headers: {},
   } as any
+
+  test("does not mutate caller-owned messages while adding cache markers", async () => {
+    const msgs = [
+      { role: "system", content: "System prompt" },
+      { role: "user", content: [{ type: "text", text: "Hello" }] },
+      { role: "assistant", content: [{ type: "text", text: "Working" }] },
+      { role: "user", content: [{ type: "text", text: "Continue" }] },
+    ] as any[]
+    const before = JSON.stringify(msgs)
+    deepFreeze(msgs)
+
+    const result = (await ProviderTransform.message(msgs, anthropicModel, {})) as any[]
+
+    expect(JSON.stringify(msgs)).toBe(before)
+    expect(result[0].providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral", ttl: "1h" })
+    expect(result[2].providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" })
+    expect(result[3].providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" })
+  })
 
   test("filters out messages with empty string content", async () => {
     const msgs = [
