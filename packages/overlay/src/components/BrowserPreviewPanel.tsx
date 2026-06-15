@@ -86,6 +86,17 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
   const selectedViewport = createMemo(() => viewports().find((viewport) => viewport.id === viewportID()))
   const targetUrl = createMemo(() => currentTarget()?.url)
+  const currentVerificationRequest = createMemo(() => {
+    const request = verificationRequest()
+    const taskID = props.taskID()
+    const resolved = currentTarget()
+    if (!request || !taskID || !resolved?.id) return undefined
+    if (request.taskID !== taskID || request.targetID !== resolved.id) return undefined
+    return request
+  })
+  const currentVerification = createMemo(() => (currentVerificationRequest() ? verification() : undefined))
+  const currentVerificationError = createMemo(() => (currentVerificationRequest() ? verification.error : undefined))
+  const currentVerificationLoading = createMemo(() => Boolean(currentVerificationRequest() && verification.loading))
   const liveScope = createMemo(() => {
     const taskID = props.taskID()
     const resolved = currentTarget()
@@ -94,8 +105,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     return { taskID, targetID: resolved.id, viewportID: viewport.id, viewport }
   })
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
-    const verified = verification()
-    const request = verificationRequest()
+    const verified = currentVerification()
+    const request = currentVerificationRequest()
     if (verified && request) {
       return evidenceFromVerification(verified, viewportID(), {
         taskID: request.taskID,
@@ -152,7 +163,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const resolved = currentTarget()
     const viewportIDs = viewports().map((viewport) => viewport.id)
     if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.url || !resolved.id) return
-    if (viewportIDs.length === 0 || resolved.latestEvidenceID || verification.loading) return
+    if (viewportIDs.length === 0 || resolved.latestEvidenceID || currentVerificationLoading()) return
     const key = `${taskID}:${resolved.id}:${viewportIDs.join(",")}`
     if (lastAutoCapturedPreviewKey() === key) return
     setLastAutoCapturedPreviewKey(key)
@@ -437,7 +448,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             tone="neutral"
             title={t("browser_preview.capture_title")}
             aria-label={t("browser_preview.capture_title")}
-            disabled={!props.taskID() || !targetUrl() || !currentTarget()?.id || verification.loading}
+            disabled={!props.taskID() || !targetUrl() || !currentTarget()?.id || currentVerificationLoading()}
             onClick={captureEvidence}
           >
             <Icon name="inspect" size={13} />
@@ -449,9 +460,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             data-status={
               manualUrlError()
                 ? "failed"
-                : verification.error
+                : currentVerificationError()
                   ? "failed"
-                  : (verification()?.status ?? (verification.loading ? "loading" : "idle"))
+                  : (currentVerification()?.status ?? (currentVerificationLoading() ? "loading" : "idle"))
             }
           >
             <Switch>
@@ -463,7 +474,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                   </>
                 )}
               </Match>
-              <Match when={verification.error}>
+              <Match when={currentVerificationError()}>
                 {(error) => (
                   <>
                     <Icon name="status-failed" size={14} />
@@ -471,11 +482,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                   </>
                 )}
               </Match>
-              <Match when={verification.loading}>
+              <Match when={currentVerificationLoading()}>
                 <span class="card__spinner" />
                 <span>{t("browser_preview.capture_loading")}</span>
               </Match>
-              <Match when={verification()}>
+              <Match when={currentVerification()}>
                 {(resolved) => (
                   <>
                     <Icon name={resolved().status === "passed" ? "status-completed" : "status-failed"} size={14} />

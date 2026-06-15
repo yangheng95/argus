@@ -112,6 +112,8 @@ test(
     const alternatePreviewTarget = () => `${serverOrigin}/preview-target-alt`
     const selectedPreviewTarget = () =>
       selectedTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget()
+    const captureSummary = (target: string) =>
+      target === alternateTargetID ? "alternate target desktop capture passed" : "primary target desktop capture passed"
     const viewports = [
       { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1440, height: 900 },
       { id: "tablet", labelKey: "browser_preview.viewport.tablet", width: 834, height: 1112 },
@@ -278,17 +280,21 @@ test(
       if (path === `/task/${taskID}/browser-preview/capture` && req.method === "POST") {
         const body = await req.json()
         captureBodies.push(body)
+        const responseTargetID = body?.targetID === alternateTargetID ? alternateTargetID : targetID
+        if (responseTargetID === alternateTargetID) {
+          await new Promise((resolve) => setTimeout(resolve, 1_200))
+        }
         return send({
           status: "passed",
           projectRoot,
           target: {
-            id: selectedTargetID,
+            id: responseTargetID,
             taskID,
             latestEvidenceID: evidenceID,
             kind: "task-url",
             status: "ready",
             projectRoot,
-            url: selectedPreviewTarget(),
+            url: responseTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget(),
             viewports,
             diagnostics: ["Resolved saved browser preview target."],
             candidates: [],
@@ -299,10 +305,10 @@ test(
             desktop: {
               captured: true,
               passed: true,
-              url: selectedPreviewTarget(),
+              url: responseTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget(),
               requested_viewport: { width: 1440, height: 900 },
               viewport: { width: 1440, height: 900, capped: false },
-              summary: "manifest-backed desktop capture passed",
+              summary: captureSummary(responseTargetID),
               path: `${projectRoot}/.opencorvus/tasks/${taskID}/browser-preview/desktop.png`,
               manifest: {
                 operations: [{ viewportIDs: ["desktop", "tablet", "mobile"], diagnosticsPath: "diagnostics.json" }],
@@ -311,7 +317,7 @@ test(
             tablet: {
               captured: true,
               passed: true,
-              url: selectedPreviewTarget(),
+              url: responseTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget(),
               requested_viewport: { width: 834, height: 1112 },
               viewport: { width: 834, height: 1112, capped: false },
               summary: "manifest-backed tablet capture passed",
@@ -323,7 +329,7 @@ test(
             mobile: {
               captured: true,
               passed: true,
-              url: selectedPreviewTarget(),
+              url: responseTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget(),
               requested_viewport: { width: 390, height: 844 },
               viewport: { width: 390, height: 844, capped: false },
               summary: "manifest-backed mobile capture passed",
@@ -339,7 +345,7 @@ test(
             mobile: "art_previewevidence_mobile",
           },
           diagnostics: [
-            "manifest-backed desktop capture passed",
+            captureSummary(responseTargetID),
             "manifest-backed tablet capture passed",
             "manifest-backed mobile capture passed",
           ],
@@ -432,8 +438,14 @@ test(
         "online connection badge",
         () => ({ errors, requestLog }),
       )
-      await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`)
-      await page.click(`.task-row-main[data-task-id="${taskID}"]`)
+      await waitForPageState(
+        page,
+        () =>
+          document.querySelector<HTMLElement>(".global-task-row[data-active='true'] .task-row-main")?.dataset.taskId ===
+          "tsk_browserpreview_e2e",
+        "restored browser preview task selection",
+        () => ({ errors, requestLog }),
+      )
       await waitForPageState(
         page,
         () =>
@@ -473,6 +485,13 @@ test(
       await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await waitForPageText(page, alternatePreviewTarget(), "alternate preview target text")
+      await waitForPageState(
+        page,
+        () => !(document.body.textContent || "").includes("primary target desktop capture passed"),
+        "stale preview evidence hidden after alternate target selection",
+        () => ({ errors, requestLog, captureBodies }),
+      )
+      await waitForPageText(page, "alternate target desktop capture passed", "alternate target evidence summary")
       for (
         let i = 0;
         i < 100 && !liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID));
@@ -517,11 +536,16 @@ test(
       })
       assert.equal(preview.status, "ready")
       assert.equal(preview.imageLoaded, true)
-      assert.match(preview.text, /manifest-backed desktop capture passed/)
+      assert.match(preview.text, /alternate target desktop capture passed/)
+      assert.doesNotMatch(preview.text, /primary target desktop capture passed/)
       assert.match(preview.text, new RegExp(alternatePreviewTarget().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
       assert.deepEqual(selectedTargets, [{ targetID: alternateTargetID }])
       assert.deepEqual(JSON.parse(JSON.stringify(captureBodies[0])), {
         targetID,
+        viewportIDs: ["desktop", "tablet", "mobile"],
+      })
+      assert.deepEqual(JSON.parse(JSON.stringify(captureBodies[1])), {
+        targetID: alternateTargetID,
         viewportIDs: ["desktop", "tablet", "mobile"],
       })
       assert.ok(
