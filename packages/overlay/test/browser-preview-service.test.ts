@@ -110,27 +110,6 @@ test("browser preview service selects an existing backend target by ID", async (
   })
 })
 
-test("browser preview service asks the backend to persist an explicit URL target", async () => {
-  let captured: TransportRequest | undefined
-  __setHostTransportForTest(
-    fakePreviewTransport((req) => {
-      captured = req
-    }),
-  )
-
-  await selectTaskBrowserPreviewTarget({ taskID: TASK_ID, url: "localhost:5173" })
-
-  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/target`)
-  expect(captured?.method).toBe("PUT")
-  expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
-  expect(captured?.body).toEqual({
-    kind: "json",
-    value: {
-      url: "localhost:5173",
-    },
-  })
-})
-
 test("browser preview service asks the backend to persist Playwright evidence", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest({
@@ -224,7 +203,6 @@ test("browser preview service loads persisted evidence through the task-scoped a
             captured: true,
             passed: true,
             url: "http://127.0.0.1:5173/",
-            path: "D:/workspace/app/.opencorvus/browser-preview/desktop.png",
           },
           diagnostics: ["all runtime capture layers passed"],
           timeCompleted: 100,
@@ -240,7 +218,7 @@ test("browser preview service loads persisted evidence through the task-scoped a
   })
 
   expect(evidence.status).toBe("passed")
-  expect(evidence.capture?.path).toContain("desktop.png")
+  expect(evidence.capture?.captured).toBe(true)
   expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/evidence/art_previewevidence00000001`)
   expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
 })
@@ -311,6 +289,55 @@ test("browser preview service loads interactive live snapshot bytes through Host
       viewportID: "desktop",
     },
   })
+})
+
+test("browser preview service decodes JSON error bodies from live snapshot binary responses", async () => {
+  __setHostTransportForTest({
+    ...fakePreviewTransport(() => {}),
+    async request<T>(): Promise<TransportResponse<T>> {
+      return {
+        status: 404,
+        ok: false,
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: new TextEncoder().encode(
+          JSON.stringify({ message: "Browser preview target not found: art_previewtarget_stale" }),
+        ) as T,
+      }
+    },
+  })
+
+  await expect(
+    loadTaskBrowserPreviewLiveSnapshotObjectUrl({
+      taskID: TASK_ID,
+      targetID: "art_previewtarget_stale",
+      viewportID: "desktop",
+    }),
+  ).rejects.toThrow("API 404 task/tsk_browserpreviewservice0001/browser-preview/live/snapshot: Browser preview target not found: art_previewtarget_stale")
+})
+
+test("browser preview service decodes JSON error bodies from evidence capture binary responses", async () => {
+  __setHostTransportForTest({
+    ...fakePreviewTransport(() => {}),
+    async request<T>(): Promise<TransportResponse<T>> {
+      return {
+        status: 404,
+        ok: false,
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: new TextEncoder().encode(
+          JSON.stringify({ message: "Browser preview evidence capture not found: art_previewevidence_missing" }),
+        ) as T,
+      }
+    },
+  })
+
+  await expect(
+    loadTaskBrowserPreviewEvidenceCaptureObjectUrl({
+      taskID: TASK_ID,
+      evidenceID: "art_previewevidence_missing",
+    }),
+  ).rejects.toThrow(
+    "API 404 task/tsk_browserpreviewservice0001/browser-preview/evidence/art_previewevidence_missing/capture.png: Browser preview evidence capture not found: art_previewevidence_missing",
+  )
 })
 
 test("browser preview service sends live input without URL bodies", async () => {
