@@ -72,6 +72,7 @@ describe("requirements maturity word discipline", () => {
         description: "输入 DeepSeek API Key 后可以聊天。",
         acceptance: "输入有效 Key 后，用户发送消息会看到中文界面中的助手回复。",
         non_goals: "本 REQ 不覆盖多账号同步、云端历史或后台管理。",
+        evidence_refs: [],
       },
     ])
   })
@@ -100,6 +101,7 @@ describe("requirements maturity word discipline", () => {
       description: "Stored requirement description.",
       acceptance: "observable success",
       non_goals: "nearby non-goal",
+      evidence_refs: [],
     })
   })
 })
