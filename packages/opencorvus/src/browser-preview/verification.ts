@@ -1,4 +1,3 @@
-import { Identifier } from "@/id/id"
 import {
   runBrowserPreviewVerification,
   type BrowserPreviewVerification,
@@ -20,11 +19,9 @@ async function captureWithBrowserEvidenceRunner(
   input: BrowserPreviewVerificationCaptureJobInput,
 ): Promise<BrowserPreviewVerificationCaptureJobResult> {
   const job = await runBrowserPreviewEvidenceJob({
-    jobID: Identifier.ascending("artifact"),
+    projectRoot: input.projectRoot,
     taskID: input.taskID,
     targetID: input.targetID,
-    url: input.url,
-    outDir: input.outDir,
     viewportIDs: input.viewportIDs,
     signal: input.signal,
   })

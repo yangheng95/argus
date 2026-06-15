@@ -21,6 +21,22 @@ describe("browser preview evidence runner contract", () => {
     expect(source).not.toContain("clip: { x: 0, y: 0")
   })
 
+  test("product runner input derives URL and output directory from task scoped authorities", async () => {
+    const source = await fs.readFile(
+      path.resolve(import.meta.dir, "../../src/browser-preview/evidence-runner.ts"),
+      "utf8",
+    )
+    const inputType = source.match(/type BrowserPreviewEvidenceRunnerInput = \{[\s\S]*?\n\}/)?.[0] ?? ""
+
+    expect(inputType).toContain("projectRoot: string")
+    expect(inputType).toContain("taskID: string")
+    expect(inputType).toContain("targetID: string")
+    expect(inputType).not.toContain("url:")
+    expect(inputType).not.toContain("outDir:")
+    expect(source).toContain("findBrowserPreviewTargetByID")
+    expect(source).toContain("ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID)")
+  })
+
   test("manifest records viewport IDs and diagnostics path as runner evidence metadata", async () => {
     await using tmp = await tmpdir()
     const desktopPath = path.join(tmp.path, "desktop.png")

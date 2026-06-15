@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import { readFileSync } from "node:fs"
+import path from "node:path"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { findReadableBrowserPreviewEvidenceByID, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
@@ -57,21 +58,21 @@ describe("browser preview verification", () => {
       targetID: target.id!,
       target,
       viewportIDs: ["tablet"],
-      outDir: tmp.path,
       async captureForTest(input) {
         capturedInput = input
+        const screenshotPath = path.join(input.outDir, "tablet.png")
         return {
           captured: true,
           passed: true,
           url: input.url,
           target_url: input.url,
-          path: `${tmp.path}/tablet.png`,
+          path: screenshotPath,
           sha: "abc123",
           bytes: 128,
           size: { width: 834, height: 1112 },
           requested_viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0 },
           viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0, capped: false },
-          layers: passedLayers(`${tmp.path}/tablet.png`),
+          layers: passedLayers(screenshotPath),
           dom: {
             textLength: 12,
             nodeCount: 8,
@@ -107,21 +108,21 @@ describe("browser preview verification", () => {
       targetID: target.id!,
       target,
       viewportIDs: ["desktop", "mobile"],
-      outDir: tmp.path,
       async captureForTest(input) {
         capturedInputs.push(input)
+        const screenshotPath = path.join(input.outDir, `${input.fileLabel}.png`)
         return {
           captured: true,
           passed: input.fileLabel !== "mobile",
           url: input.url,
           target_url: input.url,
-          path: `${tmp.path}/${input.fileLabel}.png`,
+          path: screenshotPath,
           sha: `${input.fileLabel}-sha`,
           bytes: 128,
           size: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0 },
           requested_viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0 },
           viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0, capped: false },
-          layers: passedLayers(`${tmp.path}/${input.fileLabel}.png`),
+          layers: passedLayers(screenshotPath),
           dom: {
             textLength: 12,
             nodeCount: 8,
@@ -216,7 +217,6 @@ describe("browser preview verification", () => {
       targetID: persisted.id,
       target,
       viewportIDs: ["desktop"],
-      outDir: tmp.path,
       async captureForTest(input) {
         return {
           captured: false,
