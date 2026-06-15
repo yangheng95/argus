@@ -59,19 +59,18 @@ export async function tryMaterializeVisualEvidenceBundle(input: {
   const renderPath = path.join(input.outputDir, "render-result.json")
 
   const [evalRaw, visionRaw, renderRaw] = await Promise.all([
-    readJson(evalPath),
-    readJson(visionPath),
-    readJson(renderPath),
+    readExistingJson(evalPath),
+    readExistingJson(visionPath),
+    readExistingJson(renderPath),
   ])
   if (!evalRaw || !visionRaw || !renderRaw) return undefined
 
-  const evalResult = EvalResultSchema.safeParse(evalRaw)
-  const vision = VisionJudgeSchema.safeParse(visionRaw)
-  const render = RenderResultSchema.safeParse(renderRaw)
-  if (!evalResult.success || !vision.success || !render.success) return undefined
+  const evalResult = EvalResultSchema.parse(evalRaw)
+  const vision = VisionJudgeSchema.parse(visionRaw)
+  const render = RenderResultSchema.parse(renderRaw)
 
-  const reference = await readPngEvidence(evalResult.data.referencePath)
-  const rendered = await readPngEvidence(evalResult.data.renderedPath)
+  const reference = await readPngEvidence(evalResult.referencePath)
+  const rendered = await readPngEvidence(evalResult.renderedPath)
   if (
     !reference.valid ||
     !rendered.valid ||
@@ -82,7 +81,7 @@ export async function tryMaterializeVisualEvidenceBundle(input: {
     !rendered.width ||
     !rendered.height
   ) {
-    return undefined
+    throw new Error(`Invalid visual evidence PNGs: reference=${evalResult.referencePath} rendered=${evalResult.renderedPath}`)
   }
 
   const bundle = VisualEvidenceBundleSchema.parse({
@@ -100,33 +99,33 @@ export async function tryMaterializeVisualEvidenceBundle(input: {
       sha256: rendered.sha256,
       width: rendered.width,
       height: rendered.height,
-      capturedAt: render.data.generatedAt ?? evalResult.data.generatedAt ?? new Date().toISOString(),
-      viewport: render.data.viewport,
-      appURL: render.data.url,
-      projectDirectory: input.projectDirectory ?? render.data.projectDirectory ?? path.dirname(input.outputDir),
+      capturedAt: render.generatedAt ?? evalResult.generatedAt ?? new Date().toISOString(),
+      viewport: render.viewport,
+      appURL: render.url,
+      projectDirectory: input.projectDirectory ?? render.projectDirectory ?? path.dirname(input.outputDir),
       commitRef: input.commitRef,
     },
     evaluation: {
       path: evalPath,
-      overallScore: evalResult.data.overallScore,
-      passThreshold: evalResult.data.passThreshold,
-      passed: evalResult.data.passed,
-      ssimScore: evalResult.data.ssimScore,
-      pixelDiffPercent: evalResult.data.pixelDiffPercent,
-      dimensionsMatch: evalResult.data.dimensionsMatch,
+      overallScore: evalResult.overallScore,
+      passThreshold: evalResult.passThreshold,
+      passed: evalResult.passed,
+      ssimScore: evalResult.ssimScore,
+      pixelDiffPercent: evalResult.pixelDiffPercent,
+      dimensionsMatch: evalResult.dimensionsMatch,
     },
     vision: {
       path: visionPath,
-      accepted: vision.data.accepted,
-      differenceCount: vision.data.differences.length,
-      criticalCount: vision.data.differences.filter((item) => item.severity === "critical").length,
-      majorCount: vision.data.differences.filter((item) => item.severity === "major").length,
-      minorCount: vision.data.differences.filter((item) => item.severity === "minor").length,
+      accepted: vision.accepted,
+      differenceCount: vision.differences.length,
+      criticalCount: vision.differences.filter((item) => item.severity === "critical").length,
+      majorCount: vision.differences.filter((item) => item.severity === "major").length,
+      minorCount: vision.differences.filter((item) => item.severity === "minor").length,
     },
     regions: buildRegions({
-      differences: vision.data.differences,
+      differences: vision.differences,
       evidenceRefs: [reference.path, rendered.path, evalPath, visionPath],
-      passing: evalResult.data.passed && vision.data.accepted,
+      passing: evalResult.passed && vision.accepted,
     }),
   })
 
@@ -134,11 +133,15 @@ export async function tryMaterializeVisualEvidenceBundle(input: {
   return bundle
 }
 
-async function readJson(file: string): Promise<unknown | undefined> {
+async function readExistingJson(file: string): Promise<unknown | undefined> {
   try {
     return JSON.parse(await fs.readFile(file, "utf8"))
-  } catch {
-    return undefined
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
+    if (error instanceof SyntaxError) {
+      throw new Error(`Invalid visual evidence JSON: ${file}: ${error.message}`, { cause: error })
+    }
+    throw error
   }
 }
 
