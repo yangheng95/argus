@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { boardTag, currentGoalRunFromRows, compileBoard } from "../../src/workbench/board"
+import { compileBrief } from "../../src/workbench/brief"
 import { latestDeliveredGoalRunFromRows } from "../../src/engine/store"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -7,6 +8,7 @@ import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src
 import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { Instance } from "../../src/project/instance"
+import { Memory } from "../../src/memory"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { Identifier } from "../../src/id/id"
 import { resetDatabase } from "../fixture/db"
@@ -114,6 +116,50 @@ test("compileBoard does not retain a mutable process board between hydrations", 
       expect(after.task.request).toBe("initial request")
     },
   })
+})
+
+test("compileBrief surfaces memory recall backend errors", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const projectID = `project_brief_memory_error_${now}`
+  const taskID = `tsk_${now.toString(16)}BriefMemoryError`
+
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Brief memory error",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Brief memory error",
+        request: "Recall relevant memory while preparing the workbench brief",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+  })
+
+  const originalRecall = Memory.recall
+  try {
+    ;(Memory as typeof Memory & { recall: typeof Memory.recall }).recall = () => {
+      throw new Error("memory index unavailable")
+    }
+
+    expect(() => compileBrief({ taskID })).toThrow("memory index unavailable")
+  } finally {
+    ;(Memory as typeof Memory & { recall: typeof Memory.recall }).recall = originalRecall
+  }
 })
 
 test("board snapshot tag and task-scope status include workflow step protocol events", async () => {
