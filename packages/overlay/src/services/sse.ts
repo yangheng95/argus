@@ -300,6 +300,10 @@ let taskListRefreshTimer: VisibilityInterval | null = null
 
 export const TASK_LIST_REFRESH_INTERVAL_MS = 30_000
 
+function taskListDirectory(): string {
+  return (boardStore.board?.task?.directory || settingsStore.directory || "").trim()
+}
+
 function startTaskListRefreshTimer() {
   stopTaskListRefreshTimer()
   taskListRefreshTimer = createVisibilityInterval(() => {
@@ -319,10 +323,11 @@ function stopTaskListRefreshTimer() {
 export function startTaskListSSE() {
   stopTaskListSSE()
   startTaskListRefreshTimer()
-  if (!settingsStore.directory.trim()) return
+  const directory = taskListDirectory()
+  if (!directory) return
   const transport = getHostTransport()
   const handle = transport.openStream(
-    { path: "task/events" },
+    { path: "task/events", query: { directory } },
     {
       onOpen: () => {
         recomputeBadgeFromTasks()

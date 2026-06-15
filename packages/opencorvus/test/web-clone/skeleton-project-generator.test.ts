@@ -25,6 +25,7 @@ describe("web-clone skeleton project generator", () => {
     expect(await Bun.file(path.join(outputDir, "src", "skeleton.css")).exists()).toBe(true)
     expect(await Bun.file(path.join(outputDir, "src", "slots.json")).exists()).toBe(true)
     expect(await Bun.file(path.join(outputDir, "reference.png")).exists()).toBe(true)
+    expect(await Bun.file(path.join(outputDir, "reference-mobile.png")).exists()).toBe(true)
 
     const html = await Bun.file(path.join(outputDir, "public", "source.html")).text()
     expect(html).toContain('data-asset-d="../assets/svg/asset_000001.path.txt"')
@@ -110,6 +111,7 @@ describe("web-clone skeleton project generator", () => {
 async function writeFixtureSourcePackage(root: string): Promise<string> {
   const sourcePackageDir = path.join(root, "web-clone-source")
   await Bun.write(path.join(sourcePackageDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(sourcePackageDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(path.join(sourcePackageDir, "assets", "svg", "asset_000001.path.txt"), "M0 0H10V10Z")
   await Bun.write(path.join(sourcePackageDir, "assets", "asset_000002.svg"), "<svg />")
   await Bun.write(

@@ -26,13 +26,14 @@ test("index.html exposes Mission as a left activity body and removes the standal
   expect(HTML).not.toContain('id="solidMissionMount"')
 })
 
-test("Mission activity cannot render as a task header action", () => {
+test("Mission and Chat header actions are scoped by the focused left activity", () => {
   const taskActionsIndex = HTML.indexOf('id="leftPanelTaskActions"')
   const taskActionsEnd = HTML.indexOf("</div>", taskActionsIndex)
   const taskActions = HTML.slice(taskActionsIndex, taskActionsEnd)
-  expect(taskActions).not.toContain("mission")
-  expect(taskActions).not.toContain("Mission")
-  expect(taskActions).not.toContain('data-activity="mission"')
+  expect(taskActions).toContain('data-left-action="tasks"')
+  expect(taskActions).toContain('data-left-action="mission"')
+  expect(taskActions).toContain('data-left-action="assistant"')
+  expect(MAIN).toContain('button.hidden = button.dataset.leftAction !== activity')
 })
 
 test("project directory bar remains page-level chrome above the panel", () => {
@@ -52,11 +53,14 @@ test("main.tsx mounts Mission through the left activity system", () => {
   expect(MAIN).toContain('document.getElementById("missionListPanel")')
   expect(MAIN).toContain("<Mission")
   expect(MAIN).toContain("refreshToken={missionSharedRefreshToken()}")
-  expect(MAIN).toContain("onCreateMission={openMissionLauncher}")
+  expect(MAIN).toContain('document.getElementById("btnCreateMission")?.addEventListener("click"')
+  expect(MAIN).toContain("openMissionLauncher()")
   expect(MAIN).toContain("onSelectTask={selectMissionTask}")
   expect(MAIN).toContain('setSelectedLeftPanelActivity("tasks")')
   expect(MAIN).toContain("function isMissionSessionSource(): boolean")
-  expect(MAIN).toContain('boardStore.selectedSource?.kind === "session" && activity !== "mission"')
+  expect(MAIN).toContain(
+    'boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())',
+  )
   expect(MAIN).not.toContain('document.getElementById("btnMission")')
   expect(MAIN).not.toContain('document.getElementById("solidMissionMount")')
   expect(MAIN).not.toContain("setPageMode")

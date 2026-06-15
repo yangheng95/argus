@@ -1590,6 +1590,33 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
   }
 }
 
+export function viewTaskListTask(row: TaskRow, input?: { directory?: string; queueRevision?: string }) {
+  return {
+    id: row.id,
+    projectID: row.project_id,
+    directory: input?.directory,
+    sessionID: row.session_id ?? undefined,
+    requestID: row.request_id ?? undefined,
+    parentTaskID:
+      ((row.metadata as Record<string, unknown> | null | undefined)?.parent_task_id as string | undefined) ?? undefined,
+    source: row.source,
+    title: row.title,
+    status: deriveTaskStatus(row),
+    priority: row.priority,
+    queue: {
+      order: row.queue_order,
+      revision: input?.queueRevision,
+    },
+    kind: row.kind ?? "workflow",
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+      started: row.time_started ?? undefined,
+      completed: row.time_completed ?? undefined,
+    },
+  }
+}
+
 export function viewPlan(row: PlanRow) {
   return {
     id: row.id,

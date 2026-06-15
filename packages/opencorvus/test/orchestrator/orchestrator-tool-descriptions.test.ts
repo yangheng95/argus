@@ -64,8 +64,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
 
     expect(tools.visual_qa.description).toContain("visual GUI fidelity and functional testing")
     expect(tools.visual_qa.description).toContain("GUI means Graphical User Interface")
-    expect(tools.visual_qa.description).toContain("post-integrity")
-    expect(tools.visual_qa.description).toContain("non-pass integrity review")
+    expect(tools.visual_qa.description).toContain("post-goal-batch")
+    expect(tools.visual_qa.description).toContain("once after each terminal frontend goal batch")
     expect(tools.visual_qa.description).toContain("component truth and visible functionality first")
     expect(tools.visual_qa.description).toContain("layout/composition second")
     expect(tools.visual_qa.description).toContain("micro-style polish last")

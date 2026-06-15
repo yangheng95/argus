@@ -3,6 +3,7 @@ import {
   advanceQueue,
   directoryQueueSnapshot,
   dispatchTaskLoop,
+  queuedTaskEventStats,
   reorderQueuedTasksForCwd,
   taskCwd,
 } from "../../src/engine/queue"
@@ -55,7 +56,7 @@ describe("engine queue", () => {
   })
 
   test("dispatchTaskLoop preserves the caller's event through the queue claim", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -94,7 +95,7 @@ describe("engine queue", () => {
   })
 
   test("createTask with queue=false starts immediately when the cwd is idle", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -172,10 +173,35 @@ describe("engine queue", () => {
     })
   })
 
+  test("createTask without explicit or configured model fails before persisting task", async () => {
+    await using tmp = await tmpdir({ git: true, config: {} })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+        await expect(
+          EngineService.createTask({
+            request: "missing model should fail",
+            title: "missing model task",
+            executor: "opencorvus",
+            queue: false,
+          }),
+        ).rejects.toThrow("No `model` configured")
+
+        const tasks = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.project_id, Instance.project.id)).all(),
+        )
+        expect(tasks).toHaveLength(0)
+      },
+    })
+  })
+
   test(
     "createTask with queue=false bypasses an active task in the same cwd",
     async () => {
-      await using tmp = await tmpdir({ git: true })
+      await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
       await Instance.provide({
         directory: tmp.path,
@@ -222,7 +248,7 @@ describe("engine queue", () => {
   )
 
   test("createTask with queue=true waits behind an active task in the same cwd", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -262,8 +288,58 @@ describe("engine queue", () => {
     })
   })
 
+  test("cancelled queued tasks release retained wake events", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const activeID = `task_queue_active_${now}`
+        const queuedID = `task_queue_cancelled_${now}`
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: activeID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "active task",
+              request: "holds cwd slot",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: queuedID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "queued task",
+              request: "will be cancelled before start",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        await dispatchTaskLoop({ taskID: queuedID, event: { note: "queued wake retained until start" } })
+        expect(queuedTaskEventStats()).toMatchObject({ tasks: 1 })
+
+        await EngineService.cancelTask(queuedID)
+
+        expect(queuedTaskEventStats()).toMatchObject({ tasks: 0 })
+        expect(taskStatus(queuedID)).toBe("cancelled")
+      },
+    })
+  })
+
   test("internal event to a terminal task is ignored instead of reopening it", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -306,7 +382,7 @@ describe("engine queue", () => {
   test(
     "operator message wake to a terminal task is ignored even with an active same-cwd task",
     async () => {
-      await using tmp = await tmpdir({ git: true })
+      await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
       await Instance.provide({
         directory: tmp.path,
@@ -366,7 +442,7 @@ describe("engine queue", () => {
   )
 
   test("runTaskLoop ignores terminal tasks before orchestrator processing", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -406,8 +482,8 @@ describe("engine queue", () => {
     })
   })
 
-  test("interrupting a live-owned active task aborts the child goal and starts a new wake", async () => {
-    await using tmp = await tmpdir({ git: true })
+  test("interrupting a live-owned active task queues the wake until ownership closes", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -433,7 +509,7 @@ describe("engine queue", () => {
               project_id: Instance.project.id,
               source: "test",
               title: "live owned task",
-              request: "operator must be able to interrupt a running child agent",
+              request: "operator message must not interrupt a running child agent",
               priority: "normal",
               time_started: now,
               time_created: now,
@@ -448,9 +524,9 @@ describe("engine queue", () => {
             .values({
               id: goalID,
               task_id: taskID,
-              title: "Interrupt live goal",
-              slug: "interrupt-live-goal",
-              objective: "Prove operator interrupt closes the running goal.",
+              title: "Live goal",
+              slug: "live-goal",
+              objective: "Prove operator wake waits behind live ownership.",
               acceptance_specs: [],
               owned_paths: [],
               depends_on: [],
@@ -496,25 +572,18 @@ describe("engine queue", () => {
           now,
         })
 
-        await dispatchTaskLoop({
+        const result = await dispatchTaskLoop({
           taskID,
           event: { note: "stop the running agent and reconsider" },
           interrupt: true,
         })
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        for (let i = 0; i < 10; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 0))
-          if (runTaskLoop.mock.calls.length >= 2) break
-        }
-        expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "task loop dispatch interrupt")
-        expect(runTaskLoop).toHaveBeenCalledTimes(2)
-        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
-          taskID,
-          event: { note: "stop the running agent and reconsider" },
-        })
-        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
-        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+        expect(result).toBe("queued")
+        expect(interruptTaskLoop).not.toHaveBeenCalled()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
 
         completeOrchestratorToolOwnership({
           taskID,
@@ -526,12 +595,141 @@ describe("engine queue", () => {
 
         release!()
         await holdLoop
+        for (let i = 0; i < 10; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          if (runTaskLoop.mock.calls.length >= 2) break
+        }
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
+          taskID,
+          event: { note: "stop the running agent and reconsider" },
+        })
+      },
+    })
+  })
+
+  test("operator wake with multiple live owners does not abort sibling goal ownership", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = `task_queue_multi_owner_${now}`
+        let release: (() => void) | undefined
+        const holdLoop = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async () => {
+          await holdLoop
+        })
+        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop")
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "multi owner task",
+              request: "operator wake must not abort sibling live owners",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+
+        const owners: Array<{ goalRunID: string; ownershipID: string }> = []
+        for (const suffix of ["a", "b"]) {
+          const goalID = `goal_queue_multi_${suffix}_${now}`
+          Database.use((db) =>
+            db
+              .insert(EngineGoalTable)
+              .values({
+                id: goalID,
+                task_id: taskID,
+                title: `Live goal ${suffix}`,
+                slug: `live-goal-${suffix}`,
+                objective: `Keep live goal ${suffix} running.`,
+                acceptance_specs: [],
+                owned_paths: [],
+                depends_on: [],
+                kind: "feature",
+                requirement_ids: [],
+                priority: "blocking",
+                source: "test",
+                order_index: owners.length,
+                time_created: now,
+                time_updated: now,
+              })
+              .run(),
+          )
+          const childSessionID = `ses_build_${suffix}_${now}`
+          const goalRunID = beginBuildAttempt({
+            taskID,
+            goalID,
+            sessionID: childSessionID,
+            now,
+          })
+          const ownershipPayload = createOrchestratorToolOwnershipPayload({
+            taskID,
+            orchestratorSessionID: `ses_orchestrator_${now}`,
+            orchestratorMessageID: `msg_orchestrator_${now}`,
+            toolCallID: `cal_build_${suffix}_${now}`,
+            toolPartID: `prt_build_${suffix}_${now}`,
+            childSessionID,
+            scope: "goal",
+            goalID,
+            goalRunID,
+            now,
+          })
+          insertOrchestratorToolOwnershipArtifact({
+            taskID,
+            goalRunID,
+            label: "tool-ownership-start",
+            payload: ownershipPayload,
+            now,
+          })
+          owners.push({ goalRunID, ownershipID: ownershipPayload.ownership_id })
+        }
+
+        await dispatchTaskLoop({ taskID })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        const result = await dispatchTaskLoop({
+          taskID,
+          event: {
+            note: "operator guidance for one failed build",
+            operatorMessage: {
+              text: "resume only the failed build",
+              source: "overlay_build_steer",
+              target: { kind: "build_session", sessionID: `ses_build_a_${now}`, goalID: `goal_queue_multi_a_${now}` },
+            },
+          },
+          interrupt: true,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result).toBe("queued")
+        expect(interruptTaskLoop).not.toHaveBeenCalled()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(2)
+        for (const owner of owners) {
+          expect(findGoalRun(owner.goalRunID)?.status).toBe("running")
+        }
+
+        release!()
+        await holdLoop
       },
     })
   })
 
   test("loop exit flips the queued sibling in the same cwd to active", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -619,7 +817,7 @@ describe("engine queue", () => {
   })
 
   test("advanceQueue forwards queued work without synthesising a trigger", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -685,7 +883,7 @@ describe("engine queue", () => {
   })
 
   test("reordered queued siblings are claimed by directory queue order", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -735,7 +933,7 @@ describe("engine queue", () => {
   })
 
   test("startQueuedTaskNow directly claims a queued task when the cwd is idle", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -777,7 +975,7 @@ describe("engine queue", () => {
   })
 
   test("startQueuedTaskNow starts the clicked task instead of a higher-priority queued sibling", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -829,7 +1027,7 @@ describe("engine queue", () => {
   })
 
   test("startQueuedTaskNow starts the clicked task even when another same-cwd task is active", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -887,7 +1085,7 @@ describe("engine queue", () => {
   })
 
   test("reorder rejects active tasks and partial directory queues", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
       directory: tmp.path,

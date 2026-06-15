@@ -8,6 +8,7 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Database } from "../../src/storage/db"
 import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { Ownership } from "../../src/engine/ownership"
 import { Instance } from "../../src/project/instance"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Project } from "../../src/project/project"
@@ -185,5 +186,68 @@ describe("project routes", () => {
       fn: () => Project.get(Instance.project.id),
     })
     expect(project?.sandboxes).not.toContain(expiredDir)
+  }, 30_000)
+
+  test("GET /project/current/cleanup-candidates is read-only ownership inspection", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const deadPid = 999_999_991
+    const missingWorktree = path.join(tmp.path, "missing-worktree")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Ownership.Process.record({
+          primaryWorktreeDir: tmp.path,
+          pid: deadPid,
+          cwd: tmp.path,
+          taskID: "tsk_dead_process",
+          sessionID: "ses_dead_process",
+        })
+        await Ownership.Process.record({
+          primaryWorktreeDir: tmp.path,
+          pid: process.pid,
+          cwd: tmp.path,
+          taskID: "tsk_live_process",
+          sessionID: "ses_live_process",
+        })
+        await Ownership.Worktree.record({
+          primaryWorktreeDir: tmp.path,
+          worktreeDir: missingWorktree,
+          taskID: "tsk_missing_worktree",
+          sessionID: "ses_missing_worktree",
+        })
+      },
+    })
+
+    const beforeProcessMarkers = await Ownership.Process.list(tmp.path)
+    const beforeWorktreeMarkers = await Ownership.Worktree.list(tmp.path)
+    const response = await app.request("/project/current/cleanup-candidates", {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      processOrphans: Array<{ marker: { taskID: string; ownerPid: number }; reason: string }>
+      worktreeOrphans: Array<{ marker: { taskID: string }; reason: string }>
+      worktreeGCCandidates: unknown[]
+    }
+    expect(body.processOrphans).toContainEqual(
+      expect.objectContaining({
+        marker: expect.objectContaining({ taskID: "tsk_dead_process", ownerPid: deadPid }),
+        reason: "owner-process-dead",
+      }),
+    )
+    expect(body.processOrphans.some((entry) => entry.marker.taskID === "tsk_live_process")).toBe(false)
+    expect(body.worktreeOrphans).toContainEqual(
+      expect.objectContaining({
+        marker: expect.objectContaining({ taskID: "tsk_missing_worktree" }),
+        reason: "target-missing",
+      }),
+    )
+    expect(await Ownership.Process.list(tmp.path)).toHaveLength(beforeProcessMarkers.length)
+    expect(await Ownership.Worktree.list(tmp.path)).toHaveLength(beforeWorktreeMarkers.length)
   }, 30_000)
 })

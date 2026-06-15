@@ -36,7 +36,6 @@ const MISSION_LIST_PAGE_SIZE = 10
 export interface MissionProps {
   active: boolean
   refreshToken?: number
-  onCreateMission: () => void
   onSelectTask: (taskID: string) => void
 }
 
@@ -121,10 +120,6 @@ function MissionContent(props: MissionProps) {
     props.onSelectTask(taskID)
   }
 
-  function handleNewMission(): void {
-    props.onCreateMission()
-  }
-
   async function handleMissionAbort(mission: MissionRecord): Promise<void> {
     await withBusy(`abort:${mission.missionID}`, async () => {
       await abortMission(mission)
@@ -188,27 +183,6 @@ function MissionContent(props: MissionProps) {
     setBoardStore("board", null)
   }
 
-  createEffect(() => {
-    if (!props.active) return
-    if (searchQuery().trim()) return
-    if (boardStore.selectedSource?.kind === "session") return
-    if (missionRecords.loading) return
-    const mission = missionRecords()?.records[0]
-    if (!mission) return
-    void handleMissionSelect(mission)
-  })
-
-  createEffect(() => {
-    if (!props.active) return
-    if (searchQuery().trim()) return
-    const selected = selectedMissionSessionID()
-    if (!selected || missionRecords.loading) return
-    const rows = missionRecords()?.records ?? []
-    if (!rows.some((mission) => mission.sessionID === selected)) {
-      handleCloseMission()
-    }
-  })
-
   return (
     <div class="mission-left-panel" data-ui="mission-left-panel">
       <Show when={actionError()}>
@@ -246,7 +220,6 @@ function MissionContent(props: MissionProps) {
         onAbortMission={(mission) => void handleMissionAbort(mission)}
         onDeleteMission={(mission) => void handleMissionDelete(mission)}
         onRenameMission={(mission, title) => void handleMissionRename(mission, title)}
-        onCreateMission={handleNewMission}
         onRetry={() => void missionRecordsCtl.refetch()}
         hasMore={missionRecords()?.hasMore}
         loadingMore={missionsLoadingMore()}

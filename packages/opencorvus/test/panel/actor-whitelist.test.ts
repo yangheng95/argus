@@ -25,7 +25,7 @@ const MISSION_ALLOWED = [
   ["view_board", {}],
   ["view_plan", { taskID: "task_1" }],
   ["view_tasks", {}],
-  ["send_task_message", { taskID: "task_1", text: "hi" }],
+  ["send_task_message", { taskID: "task_1", text: "hi", source: "mission" }],
   ["cancel_task", { taskID: "task_1" }],
   ["reply_interaction", { interactionID: "i_1" }],
   ["reject_interaction", { interactionID: "i_1" }],

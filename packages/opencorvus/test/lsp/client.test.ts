@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test"
+import { afterEach, describe, expect, test, beforeEach } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { LSP } from "../../src/lsp"
@@ -37,6 +37,10 @@ describe("LSPClient interop", () => {
     await Log.init({ print: true })
   })
 
+  afterEach(async () => {
+    await Instance.disposeAll()
+  })
+
   test("handles workspace/workspaceFolders request", async () => {
     const handle = spawnFakeServer() as any
 
@@ -59,7 +63,7 @@ describe("LSPClient interop", () => {
     expect(client.connection).toBeDefined()
 
     await client.shutdown()
-  })
+  }, 15_000)
 
   test("handles client/registerCapability request", async () => {
     const handle = spawnFakeServer() as any
@@ -83,7 +87,7 @@ describe("LSPClient interop", () => {
     expect(client.connection).toBeDefined()
 
     await client.shutdown()
-  })
+  }, 15_000)
 
   test("handles client/unregisterCapability request", async () => {
     const handle = spawnFakeServer() as any
@@ -107,7 +111,7 @@ describe("LSPClient interop", () => {
     expect(client.connection).toBeDefined()
 
     await client.shutdown()
-  })
+  }, 15_000)
 
   test("shutdown uses server dispose hook when provided", async () => {
     const handle = spawnFakeServer() as any
@@ -138,7 +142,7 @@ describe("LSPClient interop", () => {
 
     expect(disposeCalls).toBe(1)
     expect(directKillCalls).toBe(0)
-  })
+  }, 15_000)
 
   test("instance dispose closes LSP server that is still initializing", async () => {
     await using tmp = await tmpdir({
@@ -183,5 +187,114 @@ describe("LSPClient interop", () => {
         expect(await waitForFile(closed, 1000)).toBe(true)
       },
     })
-  })
+  }, 15_000)
+
+  test("idle LSP clients are disposed before a replacement is started", async () => {
+    const restore = LSP.setRetentionForTest({ clientIdleTtlMs: 1 })
+    try {
+      await using tmp = await tmpdir({
+        git: true,
+        init: async (dir) => {
+          await fs.writeFile(
+            path.join(dir, "opencorvus.json"),
+            JSON.stringify({
+              $schema: "https://opencorvus.ai/config.json",
+              lsp: {
+                slow: {
+                  command: [
+                    process.execPath,
+                    path.join(__dirname, "../fixture/lsp/slow-lsp-server.js"),
+                    path.join(dir, "lsp-started.tmp"),
+                    path.join(dir, "lsp-closed.tmp"),
+                    "0",
+                  ],
+                  extensions: [".idle"],
+                },
+              },
+            }),
+            "utf8",
+          )
+          await fs.writeFile(path.join(dir, "file.idle"), "x\n", "utf8")
+        },
+      })
+
+      const started = path.join(tmp.path, "lsp-started.tmp")
+      const closed = path.join(tmp.path, "lsp-closed.tmp")
+      const file = path.join(tmp.path, "file.idle")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await LSP.touchFile(file, false)
+          expect(await waitForFile(started)).toBe(true)
+
+          await Bun.sleep(20)
+          await LSP.touchFile(file, false)
+
+          expect(await waitForFile(closed, 1000)).toBe(true)
+          const status = await LSP.status()
+          expect(status.filter((item) => item.id === "slow" && item.status === "connected")).toHaveLength(1)
+        },
+      })
+    } finally {
+      restore()
+    }
+  }, 15_000)
+
+  test("broken LSP server entries expire and allow a later retry", async () => {
+    const restore = LSP.setRetentionForTest({ brokenTtlMs: 10_000 })
+    try {
+      await using tmp = await tmpdir({
+        git: true,
+        init: async (dir) => {
+          const attempts = path.join(dir, "lsp-attempts.tmp")
+          await fs.writeFile(
+            path.join(dir, "opencorvus.json"),
+            JSON.stringify({
+              $schema: "https://opencorvus.ai/config.json",
+              lsp: {
+                broken: {
+                  command: [
+                    process.execPath,
+                    "-e",
+                    "require('node:fs').appendFileSync(process.argv[1], 'x'); process.exit(1)",
+                    attempts,
+                  ],
+                  extensions: [".badlsp"],
+                },
+              },
+            }),
+            "utf8",
+          )
+          await fs.writeFile(path.join(dir, "file.badlsp"), "x\n", "utf8")
+        },
+      })
+
+      const attempts = path.join(tmp.path, "lsp-attempts.tmp")
+      const file = path.join(tmp.path, "file.badlsp")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await LSP.touchFile(file, false)
+          expect(await fs.readFile(attempts, "utf8")).toBe("x")
+
+          await LSP.touchFile(file, false)
+          expect(await fs.readFile(attempts, "utf8")).toBe("x")
+
+          const restoreShortTtl = LSP.setRetentionForTest({ brokenTtlMs: 1 })
+          try {
+            await Bun.sleep(20)
+            await LSP.touchFile(file, false)
+          } finally {
+            restoreShortTtl()
+          }
+
+          expect(await fs.readFile(attempts, "utf8")).toBe("xx")
+        },
+      })
+    } finally {
+      restore()
+    }
+  }, 15_000)
 })

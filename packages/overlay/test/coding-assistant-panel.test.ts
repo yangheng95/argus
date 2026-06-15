@@ -41,9 +41,8 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(html).not.toContain('id="chatTuiPane"')
   expect(html).not.toContain('id="solidTuiHostMount"')
 
-  expect(main).toContain(
-    'type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"',
-  )
+  expect(main).toContain("type CenterWorkbenchPanel =")
+  expect(main).toContain('| "screenshots"')
   expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchPanel, "file">')
   expect(main).toContain('type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mcp"')
   expect(main).toContain(
@@ -53,19 +52,26 @@ test("coding assistant activity selects an independent session in the shared mes
     'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
   )
   expect(main).toContain('setSelectedLeftActivity("assistant")')
-  expect(main).toContain('openCenterWorkbenchPanel("workflow")')
+  expect(main).toContain('type PrimaryCenterPanel = "task" | "mission" | "chat"')
+  expect(main).toContain("leftActivityCenterPanel")
+  expect(main).toContain("focusedLeftActivityOwnsPrimaryPanel")
+  expect(main).toContain("resetCenterWorkbenchToFocusedPanel")
+  expect(main).toContain('setCenterWorkbenchPanels(["workflow"])')
   expect(main).toContain("abortCodingAssistantActivation()")
   expect(main).toContain(
     'boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())',
   )
   expect(main).toContain('missionLauncherActive()')
   expect(main).toContain('t("mission.launcher.title")')
-  expect(main).toContain('t("chat.assistant_title")')
+  expect(main).toContain('t("chat.panel_title")')
   expect(main).toContain("<CodingAssistantSessionList")
   expect(main).toContain("activateCodingAssistantSessionList")
-  expect(main).toContain("loadCodingAssistantSessions({ signal: controller.signal })")
+  expect(main).toContain("bumpWorkspaceEpoch()")
+  expect(main).toContain("await loadCodingAssistantSessions({ signal: controller.signal })")
   expect(main).toContain("selectCodingAssistantSession({ sessionID: session.id })")
+  expect(main).toContain("await selectCodingAssistantSession({ sessionID, signal: controller.signal })")
   expect(main).toContain("createCodingAssistantSession()")
+  expect(main).toContain("await createCodingAssistantSession({ signal: controller.signal })")
   expect(main).not.toContain('document.getElementById("solidCodingAssistantMount")')
   expect(main).not.toContain('assistant: document.getElementById("centerWorkbenchAssistant")')
   expect(service).toContain("export async function loadCodingAssistantSessions")
@@ -103,8 +109,8 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(icons).toContain("message: { component: MessageSquare }")
   expect(en).toContain('"coding_assistant.title": "Coding Assistant"')
   expect(zh).toContain('"coding_assistant.title": "Coding Assistant"')
-  expect(en).toContain('"chat.assistant_title": "Assistant"')
-  expect(zh).toContain('"chat.assistant_title": "Assistant"')
+  expect(en).toContain('"chat.panel_title": "Chat"')
+  expect(zh).toContain('"chat.panel_title": "Chat"')
 })
 
 test("retired embedded TUI plugin is absent from overlay packaging and source", () => {

@@ -4,6 +4,7 @@
  * Launches a headless browser, pulls the DOM tree + computed styles + full-
  * page screenshot, and writes five primary artifacts to the worktree:
  *   - `<outputDir>/reference.png`          reference screenshot (binary)
+ *   - `<outputDir>/reference-mobile.png`   mobile viewport reference screenshot (binary)
  *   - `<outputDir>/capture.html`           post-load archive HTML snapshot
  *   - `<outputDir>/singlefile.html`        archived HTML/CSS visual baseline
  *   - `<outputDir>/extracted-page.json`    full ExtractedPage (tree + tokens + assets)
@@ -27,11 +28,17 @@ import { captureSingleFileHtml } from "@/web-clone/singlefile-capture"
 
 const log = Log.create({ service: "webpage-evidence.tool.webpage_extract" })
 
+const DEFAULT_MOBILE_REFERENCE_VIEWPORT = {
+  width: 390,
+  height: 844,
+} as const
+
 export const WebpageExtractTool = Tool.define("webpage_extract", {
   description: `Extract a live webpage via headless Chrome. Captures the DOM tree, ~33 computed CSS properties per element, and a full-page PNG screenshot.
 
 Writes to the output directory (defaults to the worktree):
   - reference.png                the reference screenshot — visual target for later scoring
+  - reference-mobile.png         the mobile viewport reference screenshot for responsive scoring
   - capture.html                 post-load archive HTML snapshot for canonical structure IR + asset graph compilation
   - extracted-page.json          the full ExtractedPage object (DOM + tokens + assets)
   - images/*                     downloaded image assets (so the clone can reference local paths)
@@ -49,6 +56,20 @@ Use this only when URL evidence is missing for the requested output directory. D
       .optional(),
     viewport_width: z.number().int().positive().describe("Viewport width in logical pixels. Default 1440.").optional(),
     viewport_height: z.number().int().positive().describe("Viewport height in logical pixels. Default 900.").optional(),
+    mobile_viewport_width: z
+      .number()
+      .int()
+      .positive()
+      .describe(`Mobile reference viewport width in logical pixels. Default ${DEFAULT_MOBILE_REFERENCE_VIEWPORT.width}.`)
+      .optional(),
+    mobile_viewport_height: z
+      .number()
+      .int()
+      .positive()
+      .describe(
+        `Mobile reference viewport height in logical pixels. Default ${DEFAULT_MOBILE_REFERENCE_VIEWPORT.height}.`,
+      )
+      .optional(),
     scope_selector: z.string().describe("CSS selector scoping the extraction (default: <body>).").optional(),
     keep_images: z
       .boolean()
@@ -93,12 +114,25 @@ Use this only when URL evidence is missing for the requested output directory. D
 
     // Save reference screenshot as a real PNG (binary, not base64).
     const referencePath = path.join(outputDir, "reference.png")
-    if (page.screenshotUrl.startsWith("data:image/png;base64,")) {
-      const refBase64 = page.screenshotUrl.replace(/^data:image\/png;base64,/, "")
-      await fs.writeFile(referencePath, Buffer.from(refBase64, "base64"))
-    } else {
-      await fs.copyFile(path.join(outputDir, page.screenshotUrl), referencePath)
+    await writeReferencePng({ screenshotUrl: page.screenshotUrl, outputDir, referencePath })
+
+    const mobileViewport = {
+      width: params.mobile_viewport_width ?? DEFAULT_MOBILE_REFERENCE_VIEWPORT.width,
+      height: params.mobile_viewport_height ?? DEFAULT_MOBILE_REFERENCE_VIEWPORT.height,
     }
+    log.info("extracting mobile webpage reference", { url: params.url, outputDir, mobileViewport })
+    const mobilePage = await extractPage({
+      url: params.url,
+      viewport: mobileViewport,
+      scopeSelector: params.scope_selector ?? null,
+      waitMs: 3000,
+      noScreenshots: false,
+      downloadImages: false,
+      signal: ctx.abort,
+      onProgress: (msg) => log.info(`mobile reference: ${msg}`),
+    })
+    const mobileReferencePath = path.join(outputDir, "reference-mobile.png")
+    await writeReferencePng({ screenshotUrl: mobilePage.screenshotUrl, outputDir, referencePath: mobileReferencePath })
 
     const jsonPath = path.join(outputDir, "extracted-page.json")
     await fs.writeFile(jsonPath, JSON.stringify(page, null, 2), "utf8")
@@ -135,7 +169,9 @@ Use this only when URL evidence is missing for the requested output directory. D
       url: params.url,
       title: page.title,
       viewport: page.viewport,
+      mobileViewport,
       referencePath,
+      mobileReferencePath,
       captureHtmlPath,
       extractedPagePath: jsonPath,
       singleFilePath: singleFile?.outputPath,
@@ -166,6 +202,7 @@ Use this only when URL evidence is missing for the requested output directory. D
           (summary.assets.imagesDownloaded > 0 ? `, ${summary.assets.imagesDownloaded} downloaded` : ""),
         "",
         `**Reference screenshot:** \`${referencePath}\``,
+        `**Mobile reference screenshot:** \`${mobileReferencePath}\``,
         `**HTML capture:** \`${captureHtmlPath}\``,
         `**Full extracted page JSON:** \`${jsonPath}\``,
         singleFile
@@ -178,3 +215,22 @@ Use this only when URL evidence is missing for the requested output directory. D
     }
   },
 })
+
+async function writeReferencePng(input: {
+  screenshotUrl: string
+  outputDir: string
+  referencePath: string
+}): Promise<void> {
+  if (!input.screenshotUrl) {
+    throw new Error(`Missing screenshot data for ${input.referencePath}`)
+  }
+  if (input.screenshotUrl.startsWith("data:image/png;base64,")) {
+    const refBase64 = input.screenshotUrl.replace(/^data:image\/png;base64,/, "")
+    await fs.writeFile(input.referencePath, Buffer.from(refBase64, "base64"))
+    return
+  }
+  const source = path.isAbsolute(input.screenshotUrl)
+    ? input.screenshotUrl
+    : path.join(input.outputDir, input.screenshotUrl)
+  await fs.copyFile(source, input.referencePath)
+}

@@ -2166,6 +2166,12 @@ export type AcceptanceDiffSummary = {
   status?: "added" | "deleted" | "modified"
 }
 
+export type TaskMessageTarget = {
+  kind: "build_session"
+  sessionID: string
+  goalID?: string
+}
+
 export type SessionRuntimeContractMissingError = {
   name: "SessionRuntimeContractMissingError"
   data: {
@@ -2794,8 +2800,10 @@ export type EventTaskMessage = {
     taskID: string
     kind: "goal" | "plan" | "note"
     source: string
+    target?: TaskMessageTarget
     text: string
     summary: string
+    messageID?: string
   }
 }
 
@@ -5831,6 +5839,10 @@ export type SessionPromptAsyncResponses = {
    */
   202: {
     taskID: string
+    user_message: {
+      info: Message
+      parts: Array<Part>
+    }
   }
 }
 
@@ -7949,7 +7961,7 @@ export type GatewayControlActionData = {
         action: "send_task_message"
         taskID: string
         text: string
-        source?: string
+        source: string
         user_id?: string
       }
     | {
@@ -9892,12 +9904,7 @@ export type TaskDeleteData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}"
 }
 
@@ -10448,10 +10455,6 @@ export type TaskConversationData = {
     taskID: string
   }
   query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
     tail_limit?: number
   }
   url: "/task/{taskID}/conversation"
@@ -10942,12 +10945,7 @@ export type TaskConversationSessionData = {
     taskID: string
     sessionID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/conversation/session/{sessionID}"
 }
 
@@ -11021,10 +11019,6 @@ export type TaskConversationHistoryData = {
     taskID: string
   }
   query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
     before: number
     before_id?: string
     limit?: number
@@ -11102,10 +11096,6 @@ export type TaskConversationEventsData = {
     taskID: string
   }
   query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
     after?: number
     until?: number
     limit?: number
@@ -11821,7 +11811,8 @@ export type TaskInteractionsResponse = TaskInteractionsResponses[keyof TaskInter
 export type TaskMessageData = {
   body: {
     text: string
-    source?: string
+    source: string
+    target?: TaskMessageTarget
     user_id?: string
     attachments?: Array<{
       mime: string

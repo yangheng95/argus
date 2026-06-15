@@ -12,7 +12,7 @@ import { createHash } from "node:crypto"
 import { Session } from "@/session"
 import type { AgentReport } from "@/agent/report"
 import { FactCheckItemListSchema, type FactCheckReport } from "@/fact-check/schema"
-import { resolveAgentModel, resolveAgentModelRef } from "@/agent/model"
+import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { Database, eq, and, inArray, sql } from "@/storage/db"
@@ -43,7 +43,7 @@ import { isHostKillingCommand } from "@/tool/bash"
 import { BrowserPreviewTool, BrowserPreviewToolParameters } from "@/tool/browser-preview"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
-import { Event as EngineEvent } from "@/engine/model"
+import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
 import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
@@ -1247,6 +1247,9 @@ export function createOrchestratorTools(input: {
   operatorMessage?: {
     text: string
     attachmentSummary?: string
+    source?: string
+    target?: TaskMessageTargetInput
+    messageID?: string
   }
 }) {
   const { taskID } = input
@@ -2495,6 +2498,7 @@ export function createOrchestratorTools(input: {
     frontend_design: tool({
       description: [
         "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a webpage-evidence-grounded frontend implementation template with fillable modules, component/material inventories, and visual/data contracts.",
+        "Single-shot task-scope handoff producer: dispatch once for the relevant visual scope, persist the handoff, then send later repair/refinement through downstream agents that consume the handoff. Do not use frontend_design as a repeated repair, retry, or implementation iteration tool after its public report/evidence manifest exists.",
         "Use when you decide the requested deliverable needs frontend/UI implementation, webpage/app replication, or visual parity evidence AND:",
         "  - Image attachments are provided (screenshots, mockups, design files)",
         "  - The request mentions a URL as a visual reference to clone, implement, reproduce, or refine",
@@ -3708,10 +3712,11 @@ export function createOrchestratorTools(input: {
 
     visual_qa: tool({
       description:
-        "Dedicated post-integrity frontend visual GUI fidelity and functional testing agent. GUI means Graphical User Interface. " +
-        "Use after a non-pass integrity review identifies frontend/GUI/component/visual or visible functional defects: desktop/mobile screenshots, " +
+        "Dedicated post-goal-batch frontend visual GUI fidelity and functional testing agent. GUI means Graphical User Interface. " +
+        "Use once after each terminal frontend goal batch, before the next goal batch or final integrity: desktop/mobile screenshots, " +
         "interaction-state checks, visual comparison, console/network review, or direct repair of visual or functional defects. " +
-        "It consumes task-scoped integrity/frontend_design/build evidence and repairs coarse-to-fine: component truth and visible functionality first, layout/composition second, micro-style polish last. " +
+        "It consumes task-scoped frontend_design/build evidence plus any prior integrity evidence and repairs coarse-to-fine: component truth and visible functionality first, layout/composition second, micro-style polish last. " +
+        "It reviews from a professional design QA perspective, lists production_blockers when the product cannot ship, and does not use a fixed similarity score as the only verdict. " +
         "It may use skills, bash/edit/write/apply_patch, and webpage_render/evaluate/text_diff/vision_judge. " +
         "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final.",
       inputSchema: VisualQaInputSchema,
@@ -3779,6 +3784,7 @@ export function createOrchestratorTools(input: {
               `summary=${result.report.summary}`,
               `coverage=${result.report.coverage.length}`,
               `findings=${result.report.findings.length}`,
+              `production_blockers=${result.report.production_blockers.length}`,
               `evidence=${result.report.evidence.length}`,
               `changed_files=${result.report.changed_files.join(", ") || "(none)"}`,
             ].join("\n"),
@@ -3794,6 +3800,7 @@ export function createOrchestratorTools(input: {
               ["accepted", String(result.report.accepted)],
               ["coverage", String(result.report.coverage.length)],
               ["findings", String(result.report.findings.length)],
+              ["production_blockers", String(result.report.production_blockers.length)],
               ["evidence", String(result.report.evidence.length)],
               ["repairs", String(result.report.repairs.length)],
               ["changed_files", result.report.changed_files.join(", ") || "(none)"],
@@ -4267,7 +4274,7 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL webpage/UI investigation publisher. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It persists a frontend_research_brief/webpage_contract artifact built from small registration tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
+        "OPTIONAL webpage/UI investigation publisher. Single-shot task-scope brief producer: dispatch once for the relevant webpage investigation scope, persist the brief, then send later repair/refinement through downstream agents that consume the brief. Do not use frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after its frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It persists a frontend_research_brief/webpage_contract artifact built from small registration tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: FrontendResearchInputSchema,
       execute: async ({ reason, source_urls, focus }) => {
         const task = requireTask(taskID)
@@ -5114,23 +5121,35 @@ export function createOrchestratorTools(input: {
 
     inject_operator_message: tool({
       description:
-        "Record the latest operator message on the task root session and wake the orchestrator. This does not resume a child executor/build session; use build({ goalID, request }) for build retry/continuation.",
+        "Read the latest already-recorded operator message for this orchestrator wake. This does not create another task message and does not resume a child executor/build session; use build({ goalID, request }) for build retry/continuation.",
       inputSchema: z.object({
         reason: z.string().describe("Why this operator message should be injected into the current execution"),
       }),
       execute: async ({ reason }) => {
-        const latest = input.operatorMessage?.text?.trim()
+        const message = input.operatorMessage
+        if (!message) {
+          return "No operator message is available on this trigger."
+        }
+        const latest = message.text.trim()
         if (!latest) {
           return "No operator message is available on this trigger."
         }
-        const payload = input.operatorMessage?.attachmentSummary
-          ? `${latest}\n\n${input.operatorMessage.attachmentSummary}`
-          : latest
-        const result = await EngineService.injectMessage(taskID, payload)
-        return (
-          `Operator message recorded on task session. Reason: ${reason}. ` +
-          `orchestratorWoken=${result.orchestratorWoken} executorResumed=${result.executorResumed} status=${result.status}`
-        )
+        const lines = [
+          `Operator message is already recorded on the task root session. Reason: ${reason}.`,
+          message.source ? `source=${message.source}` : "",
+          message.messageID ? `messageID=${message.messageID}` : "",
+          message.target
+            ? `target=${JSON.stringify({
+                kind: message.target.kind,
+                sessionID: message.target.sessionID,
+                ...(message.target.goalID ? { goalID: message.target.goalID } : {}),
+              })}`
+            : "",
+          "",
+          latest,
+          message.attachmentSummary ? `\n${message.attachmentSummary}` : "",
+        ].filter((line) => line.length > 0)
+        return lines.join("\n")
       },
     }),
 
@@ -5652,6 +5671,7 @@ export function createOrchestratorTools(input: {
           taskID +
           ":" +
           createHash("sha256").update(`${title}\0${request}`).digest("hex").slice(0, 16)
+        const inheritedModel = await resolveConfiguredModelRef({ taskID, sessionID: input.agentSessionID })
         const newTaskID = await EngineService.createTask({
           requestID,
           title,
@@ -5660,6 +5680,7 @@ export function createOrchestratorTools(input: {
           queue,
           kind,
           executor: task.executor,
+          model: `${inheritedModel.providerID}/${inheritedModel.modelID}`,
           source: "orchestrator:propose_task",
           metadata: {
             origin: "orchestrator_proposed_task",
@@ -6859,8 +6880,9 @@ export function createOrchestratorTools(input: {
             `${factBlock}\n\n` +
             `### Next step\n` +
             `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
-            `When the current eligible wave reaches terminal state, choose integrity / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting. ` +
-            `Call \`integrity\` as the final workflow gate after all blocking builds are terminal; before that, use it only when integrated evidence raises a real question about requirement mining or system integrity.`
+            `When the current eligible wave reaches terminal state, choose visual_qa / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting. ` +
+            `For frontend/browser-visible work, run \`visual_qa\` once for the terminal goal batch before the next build wave or final \`integrity\`. ` +
+            `Call \`integrity\` as the final workflow gate after all blocking builds are terminal and the current frontend batch has visual QA evidence; before that, use it only when integrated evidence raises a real question about requirement mining or system integrity.`
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)

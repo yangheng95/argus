@@ -368,6 +368,7 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
 
   // Skip if a workspace selection is already in progress (epoch > 0).
   if (settingsStore.workspaceEpoch > 0) return false
+  if (boardStore.selectedSource?.kind === "session") return false
 
   const base = activeDir || ""
   const directory = workspaceRestoreDirectory(workspaceDirectory || "")

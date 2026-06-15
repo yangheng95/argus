@@ -24,10 +24,16 @@ import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
 import open from "open"
 import { entries, values as objectValues } from "@/util/object"
+import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
   const DEFAULT_TIMEOUT = 30_000
+
+  ServeRuntimeMemoryMetrics.register({
+    id: "host-mcp",
+    snapshot: () => connectionStats(),
+  })
 
   export const Resource = z
     .object({
@@ -204,7 +210,34 @@ export namespace MCP {
   type McpState = {
     status: Record<string, Status>
     clients: Record<string, MCPClient>
+    connections: Record<string, McpConnection>
     connecting: Record<string, Promise<void> | undefined>
+  }
+
+  type ClosableTransport = { close: () => Promise<void> | void }
+
+  type McpConnection = {
+    key: string
+    type: Config.Mcp["type"]
+    client: MCPClient
+    transport?: ClosableTransport
+    command?: string[]
+    cwd?: string
+    createdAt: number
+    lastUsedAt: number
+    sharedProjectScoped: boolean
+  }
+
+  async function closeConnection(name: string, connection: McpConnection | undefined) {
+    if (!connection) return
+    await connection.client.close().catch((error) => {
+      log.error("Failed to close MCP client", { name, error })
+    })
+    if (connection.transport) {
+      await Promise.resolve(connection.transport.close()).catch((error) => {
+        log.error("Failed to close MCP transport", { name, error })
+      })
+    }
   }
 
   async function createSafely(key: string, mcp: Config.Mcp) {
@@ -219,6 +252,7 @@ export namespace MCP {
       })
       return {
         mcpClient: undefined,
+        mcpConnection: undefined,
         status: {
           status: "failed" as const,
           error: message,
@@ -232,6 +266,7 @@ export namespace MCP {
       const cfg = await Config.get()
       const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
       const clients: Record<string, MCPClient> = {}
+      const connections: Record<string, McpConnection> = {}
       const status: Record<string, Status> = {}
       const connecting: Record<string, Promise<void> | undefined> = {}
 
@@ -250,19 +285,14 @@ export namespace MCP {
       const snapshot = {
         status,
         clients,
+        connections,
         connecting,
       }
       return snapshot
     },
     async (state) => {
       await Promise.all(
-        objectValues(state.clients).map((client) =>
-          client.close().catch((error) => {
-            log.error("Failed to close MCP client", {
-              error,
-            })
-          }),
-        ),
+        objectValues(state.connections).map((connection) => closeConnection(connection.key, connection)),
       )
       pendingOAuthTransports.clear()
     },
@@ -277,14 +307,17 @@ export namespace MCP {
       .then(async () => {
         const result = await createSafely(key, mcp)
         state.status[key] = result.status
-        const existingClient = state.clients[key]
-        if (existingClient && existingClient !== result.mcpClient) {
-          await existingClient.close().catch((error) => {
-            log.error("Failed to close existing MCP client", { name: key, error })
-          })
+        const existingConnection = state.connections[key]
+        if (existingConnection && existingConnection !== result.mcpConnection) {
+          await closeConnection(key, existingConnection)
         }
-        if (result.mcpClient) state.clients[key] = result.mcpClient
-        else delete state.clients[key]
+        if (result.mcpConnection) {
+          state.connections[key] = result.mcpConnection
+          state.clients[key] = result.mcpConnection.client
+        } else {
+          delete state.connections[key]
+          delete state.clients[key]
+        }
       })
       .finally(() => {
         if (state.connecting[key] === connection) delete state.connecting[key]
@@ -357,20 +390,17 @@ export namespace MCP {
   export async function add(name: string, mcp: Config.Mcp) {
     const s = await state()
     const result = await createSafely(name, mcp)
-    if (!result.mcpClient) {
+    if (!result.mcpConnection) {
       s.status[name] = result.status
+      delete s.connections[name]
+      delete s.clients[name]
       return {
         status: s.status,
       }
     }
-    // Close existing client if present to prevent memory leaks
-    const existingClient = s.clients[name]
-    if (existingClient) {
-      await existingClient.close().catch((error) => {
-        log.error("Failed to close existing MCP client", { name, error })
-      })
-    }
-    s.clients[name] = result.mcpClient
+    await closeConnection(name, s.connections[name])
+    s.connections[name] = result.mcpConnection
+    s.clients[name] = result.mcpConnection.client
     s.status[name] = result.status
 
     return {
@@ -383,12 +413,15 @@ export namespace MCP {
       log.info("mcp server disabled", { key })
       return {
         mcpClient: undefined,
+        mcpConnection: undefined,
         status: { status: "disabled" as const },
       }
     }
 
     log.info("found", { key, type: mcp.type })
     let mcpClient: MCPClient | undefined
+    let mcpTransport: ClosableTransport | undefined
+    let connectionCwd: string | undefined
     let status: Status | undefined = undefined
 
     if (mcp.type === "remote") {
@@ -435,14 +468,16 @@ export namespace MCP {
       let lastError: Error | undefined
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       for (const { name, transport } of transports) {
+        let client: Client | undefined
         try {
-          const client = new Client({
+          client = new Client({
             name: "opencorvus",
             version: Installation.VERSION,
           })
           await withTimeout(client.connect(transport), connectTimeout)
           registerNotificationHandlers(client, key)
           mcpClient = client
+          mcpTransport = transport
           log.info("connected", { key, transport: name })
           status = { status: "connected" }
           break
@@ -477,6 +512,13 @@ export namespace MCP {
             break
           }
 
+          await client?.close().catch((closeError) => {
+            log.error("Failed to close failed remote MCP client", { key, transport: name, error: closeError })
+          })
+          await transport.close().catch((closeError) => {
+            log.error("Failed to close failed remote MCP transport", { key, transport: name, error: closeError })
+          })
+
           log.debug("transport connection failed", {
             key,
             transport: name,
@@ -494,6 +536,7 @@ export namespace MCP {
     if (mcp.type === "local") {
       const [cmd, ...args] = mcp.command
       const cwd = Instance.directory
+      connectionCwd = cwd
       const transport = new StdioClientTransport({
         stderr: "pipe",
         command: cmd,
@@ -522,6 +565,7 @@ export namespace MCP {
         await withTimeout(client.connect(transport), connectTimeout)
         registerNotificationHandlers(client, key)
         mcpClient = client
+        mcpTransport = transport
         status = {
           status: "connected",
         }
@@ -558,6 +602,7 @@ export namespace MCP {
     if (!mcpClient) {
       return {
         mcpClient: undefined,
+        mcpConnection: undefined,
         status,
       }
     }
@@ -572,12 +617,18 @@ export namespace MCP {
           error,
         })
       })
+      if (mcpTransport) {
+        await Promise.resolve(mcpTransport.close()).catch((error) => {
+          log.error("Failed to close MCP transport", { key, error })
+        })
+      }
       status = {
         status: "failed",
         error: "Failed to get tools",
       }
       return {
         mcpClient: undefined,
+        mcpConnection: undefined,
         status: {
           status: "failed" as const,
           error: "Failed to get tools",
@@ -586,8 +637,20 @@ export namespace MCP {
     }
 
     log.info("create() successfully created client", { key, toolCount: result.tools.length })
+    const mcpConnection: McpConnection = {
+      key,
+      type: mcp.type,
+      client: mcpClient,
+      transport: mcpTransport,
+      command: mcp.type === "local" ? mcp.command : undefined,
+      cwd: connectionCwd,
+      createdAt: Date.now(),
+      lastUsedAt: Date.now(),
+      sharedProjectScoped: key === BrowserMCPBuiltin.ServerName,
+    }
     return {
       mcpClient,
+      mcpConnection,
       status,
     }
   }
@@ -615,6 +678,19 @@ export namespace MCP {
     return state().then((state) => state.clients)
   }
 
+  export async function connectionStats() {
+    const s = await state()
+    const connections = objectValues(s.connections)
+    return {
+      connected: connections.length,
+      local: connections.filter((connection) => connection.type === "local").length,
+      remote: connections.filter((connection) => connection.type === "remote").length,
+      localStdioTransports: connections.filter((connection) => connection.type === "local" && connection.transport)
+        .length,
+      connecting: objectValues(s.connecting).filter(Boolean).length,
+    }
+  }
+
   export async function connect(name: string) {
     const cfg = await Config.get()
     const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
@@ -636,13 +712,9 @@ export namespace MCP {
 
   export async function disconnect(name: string) {
     const s = await state()
-    const client = s.clients[name]
-    if (client) {
-      await client.close().catch((error) => {
-        log.error("Failed to close MCP client", { name, error })
-      })
-      delete s.clients[name]
-    }
+    await closeConnection(name, s.connections[name])
+    delete s.connections[name]
+    delete s.clients[name]
     s.status[name] = { status: "disabled" }
   }
 
@@ -661,13 +733,15 @@ export namespace MCP {
 
     const toolsResults = await Promise.all(
       connectedClients.map(async ([clientName, client]) => {
-        const toolsResult = await client.listTools().catch((e) => {
+        const toolsResult = await client.listTools().catch(async (e) => {
           log.error("failed to get tools", { clientName, error: e.message })
           const failedStatus = {
             status: "failed" as const,
             error: e instanceof Error ? e.message : String(e),
           }
           s.status[clientName] = failedStatus
+          await closeConnection(clientName, s.connections[clientName])
+          delete s.connections[clientName]
           delete s.clients[clientName]
           return undefined
         })

@@ -1019,7 +1019,16 @@ export const SessionRoutes = lazy(() =>
         responses: {
           202: {
             description: "Prompt accepted",
-            content: { "application/json": { schema: resolver(z.object({ taskID: z.string() })) } },
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    taskID: z.string(),
+                    user_message: Message.WithParts,
+                  }),
+                ),
+              },
+            },
           },
           ...errors(400, 404),
         },
@@ -1034,12 +1043,13 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
-        const taskID = TaskQueueService.enqueuePrompt({
+        const result = await TaskQueueService.enqueuePromptAfterPersistingUserMessage({
           sessionID,
           prompt: await applySessionPromptRouteOverlay(sessionID, body),
           source: "session.prompt_async",
         })
-        return c.json({ taskID }, 202)
+        const [userMessage] = enrichStandaloneSessionTranscript([result.userMessage])
+        return c.json({ taskID: result.taskID, user_message: userMessage }, 202)
       },
     )
     .get(

@@ -27,6 +27,7 @@ import {
 } from "./static-tools"
 import { createVisualQaOutputTools, type VisualQaCollector } from "./output-tools"
 import type { VisualQaReport } from "./schema"
+import { renderVisualQaProductDesignPrinciples } from "./product-design-principles"
 
 import VISUAL_QA_CORE from "@/prompt/core/visual-qa-core.txt"
 
@@ -126,13 +127,14 @@ export namespace VisualQaAgent {
 
 function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
   const sections = [
-    "# Delegation\n\nOrchestrator is asking visual-qa to run post-integrity frontend visual GUI fidelity and functional testing. GUI means Graphical User Interface: the visible application screen and controls. Consume task-scoped integrity/frontend_design/build evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. Repair coarse-to-fine: component truth and visible functionality first, layout/composition second, spacing/typography/color/state-style polish last. If any reference image is present, it is the authoritative visual truth: require 1:1 layout and style fidelity. 1:1 means one-to-one visible geometry and styling, not a relaxed similarity standard.",
+    "# Delegation\n\nOrchestrator is asking visual-qa to run post-goal-batch frontend visual GUI fidelity and functional testing. GUI means Graphical User Interface: the visible application screen and controls. Consume task-scoped frontend_design/build evidence plus any prior integrity evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. Review like a professional product designer and design QA reviewer: decide whether the product is fit to generate or ship, and list concrete production blockers when it is not. Repair coarse-to-fine: component truth and visible functionality first, layout/composition second, spacing/typography/color/state-style polish last. If any reference image is present, it is the authoritative visual truth: require 1:1 layout and style fidelity. 1:1 means one-to-one visible geometry and styling, not a relaxed similarity standard. Numeric similarity scores are evidence, not the verdict; do not use a fixed score as the only pass/fail rule.",
     renderUserRequestSection({
       heading: "# Task",
       title: input.taskTitle,
       request: input.taskRequest,
       taskID: input.taskID,
     }),
+    renderVisualQaProductDesignPrinciples(),
     `# Dispatch Reason\n\n${input.reason}`,
   ]
   if (input.focus?.trim()) sections.push(`# Focus\n\n${input.focus}`)
@@ -151,7 +153,7 @@ function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
   pushContextSection(sections, "Prior Visual QA Context", input.priorVisualQa)
   sections.push(
     "# Required Output\n\n" +
-      "Call `submit_visual_qa_report` exactly once. A passing report needs fresh evidence paths or URLs, coverage of checked GUI regions/viewports/states/functions, no open critical/major finding, and evidence that coarse component/function defects named by integrity are actually repaired before style polish. With a reference image, accepted=true also requires evidence that the rendered screenshot matches the reference image's layout geometry, spacing, typography, colors, component styling, and visible state styling 1:1. If you repair files, include changed_files and verification evidence.",
+      "Call `submit_visual_qa_report` exactly once. A passing report needs fresh evidence paths or URLs, coverage of checked GUI regions/viewports/states/functions, no open critical/major finding, no production_blockers, and evidence that coarse component/function defects named by build evidence or integrity are actually repaired before style polish. With a reference image, accepted=true also requires evidence that the rendered screenshot matches the reference image's layout geometry, spacing, typography, colors, component styling, and visible state styling 1:1. If the surface is not production-ready, set accepted=false and list production_blockers with principle_ids, region, reason, user-visible impact, evidence refs, and required correction. If you repair files, include changed_files and verification evidence.",
   )
   return sections.join("\n\n")
 }

@@ -5,7 +5,7 @@ import { findChildrenOfTask } from "@/engine"
 import { Session } from "@/session"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
-import { PanelActionSchema, derivePanelActor, panelCapabilityActionSet } from "@/panel/capability"
+import { PanelActionSchema, derivePanelActor, panelActionSchemaForAgent, panelCapabilityActionSet } from "@/panel/capability"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE, isRightSidebarCodingAssistantSession } from "@/coding-assistant/session"
 
 // Action whitelist by actor. `mission` is a coordinator that drives
@@ -274,10 +274,20 @@ async function resolveCreateTaskQueueDecision(input: { queue?: boolean; ctx: Too
   throw new Error("Task creation cancelled before selecting a start mode.")
 }
 
-export const PanelTool = Tool.define("panel", {
+function requireMissionTaskSemanticTitle(input: unknown): string {
+  if (typeof input !== "string" || input.trim().length === 0) {
+    throw new Error(
+      "panel.create_task by actor \"mission\" requires create_task.title. " +
+        "Provide a short semantic title; the host formats the Mission prefix.",
+    )
+  }
+  return input.trim().replace(/\s+/g, " ")
+}
+
+export const PanelTool = Tool.define<typeof PanelActionSchema, {}>("panel", async (initCtx) => ({
   description:
     "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
-  parameters: PanelActionSchema,
+  parameters: panelActionSchemaForAgent(initCtx?.agent?.name),
   async execute(params, ctx) {
     // Actor-based action filter. Mission is a coordinator, not an executor —
     // it drives squad/team work through a bounded panel surface and must not
@@ -457,6 +467,7 @@ export const PanelTool = Tool.define("panel", {
             )
           }
           missionProvenance = { id: missionID, session_id: ctx.sessionID }
+          requireMissionTaskSemanticTitle(params.title)
         }
         // Server owns provenance — strip any client-supplied actor/mission so a
         // caller cannot forge the audit trail or fake Mission → Squad lineage.
@@ -476,6 +487,7 @@ export const PanelTool = Tool.define("panel", {
               : (params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"))
         const taskID = await EngineService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
+          title: params.title,
           request,
           executor: params.executor,
           model: params.model,
@@ -537,7 +549,7 @@ export const PanelTool = Tool.define("panel", {
           source:
             actor === "right_sidebar_assistant"
               ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
-              : (params.source ?? ctx.extra?.source ?? "panel"),
+              : params.source,
           user_id: params.user_id,
           ...(followBinaries.length > 0 ? { attachments: followBinaries } : {}),
         })
@@ -768,4 +780,4 @@ export const PanelTool = Tool.define("panel", {
         }
     }
   },
-})
+}))

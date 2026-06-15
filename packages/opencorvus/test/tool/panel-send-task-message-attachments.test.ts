@@ -69,6 +69,7 @@ describe("panel.send_task_message attachment forwarding", () => {
             action: "send_task_message",
             taskID,
             text: "Take another look.",
+            source: "panel",
           },
           {
             sessionID: Identifier.ascending("session"),
@@ -87,8 +88,9 @@ describe("panel.send_task_message attachment forwarding", () => {
 
         expect(handleSpy).toHaveBeenCalledTimes(1)
         const args = handleSpy.mock.calls[0]?.[1] as
-          | { attachments?: Array<{ mime: string; data: string; filename?: string }> }
+          | { source?: string; attachments?: Array<{ mime: string; data: string; filename?: string }> }
           | undefined
+        expect(args?.source).toBe("panel")
         expect(args?.attachments).toHaveLength(1)
         const att = args!.attachments![0]
         expect(att.mime).toBe("image/png")
@@ -141,6 +143,7 @@ describe("panel.send_task_message attachment forwarding", () => {
               action: "send_task_message",
               taskID,
               text: "Take a look.",
+              source: "panel",
             },
             {
               sessionID: Identifier.ascending("session"),

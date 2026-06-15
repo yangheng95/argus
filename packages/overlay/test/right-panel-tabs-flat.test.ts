@@ -37,6 +37,8 @@ describe("right side activity toolbar replaces horizontal panel tabs", () => {
     const css = readText("src/styles/surfaces/activity.css")
     const toolbar = readText("src/components/SideActivityToolbar.tsx")
     const buttonBody = ruleBody(css, '.side-activity-toolbar [data-ui="side-activity-button"]')
+    const toolbarBody = ruleBody(css, ".side-activity-toolbar")
+    const itemGroupBody = ruleBody(css, ".side-activity-toolbar__items,\n.side-activity-toolbar__trailing")
 
     expect(toolbar).toContain('data-ui="side-activity-button"')
     expect(toolbar).toContain("tooltipKey?: string")
@@ -46,5 +48,8 @@ describe("right side activity toolbar replaces horizontal panel tabs", () => {
     expect(buttonBody).toMatch(/border-radius:\s*0\b/)
     expect(buttonBody).toContain("width:")
     expect(buttonBody).toContain("height:")
+    expect(toolbarBody).toMatch(/gap:\s*0\b/)
+    expect(toolbarBody).toMatch(/padding:\s*0\b/)
+    expect(itemGroupBody).toMatch(/gap:\s*0\b/)
   })
 })

@@ -4,6 +4,7 @@ import { createServer } from "http"
 import { createMcpServer } from "./tools.js"
 import { handleMonitorRequest } from "./monitor.js"
 import { BrowserMCPBuiltin } from "./builtin"
+import { shutdownBrowserSessions } from "./sessions.js"
 
 export namespace BrowserMCP {
   export const ServerName = BrowserMCPBuiltin.ServerName
@@ -48,6 +49,17 @@ export namespace BrowserMCP {
   export async function serveStdio() {
     const server = createMcpServer()
     const transport = new StdioServerTransport()
+    let closing = false
+    const close = async () => {
+      if (closing) return
+      closing = true
+      await shutdownBrowserSessions()
+      await Promise.resolve(server.close())
+      await Promise.resolve(transport.close())
+    }
+    transport.onclose = () => {
+      void close()
+    }
     await server.connect(transport)
   }
 }

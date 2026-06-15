@@ -35,7 +35,8 @@ export interface SourceProjectVisualIterationViewport {
   width: number
   height: number
   evidenceRole: "primary_reference" | "responsive_review"
-  evidenceSource: "capture_viewport" | "reference_manifest" | "default"
+  evidenceSource: "capture_viewport" | "reference_manifest" | "matching_reference" | "default"
+  referenceImage?: string
   comparison: string
 }
 
@@ -74,9 +75,10 @@ function buildSourceProjectVisualIterationViewports(primary: {
       width: 390,
       height: 844,
       evidenceRole: "responsive_review",
-      evidenceSource: "default",
+      evidenceSource: "matching_reference",
+      referenceImage: "web-clone-source/reference-mobile.png",
       comparison:
-        "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+        "Run measured webpage_evaluate against web-clone-source/reference-mobile.png for the mobile viewport before claiming responsive parity.",
     },
     {
       name: "wide-review",
@@ -96,7 +98,7 @@ export function renderSourceProjectVisualIterationMatrix(
   return viewports
     .map(
       (viewport) =>
-        `${viewport.name} ${viewport.width}x${viewport.height} (${viewport.evidenceRole}, ${viewport.evidenceSource}): ${viewport.comparison}`,
+        `${viewport.name} ${viewport.width}x${viewport.height} (${viewport.evidenceRole}, ${viewport.evidenceSource}${viewport.referenceImage ? `, ${viewport.referenceImage}` : ""}): ${viewport.comparison}`,
     )
     .join(" ")
 }
@@ -1081,7 +1083,7 @@ export async function generateWebCloneSourceProject(
     await writeFile(path.join(outputDir, relativePath), content)
   }
   await copyPublicAssets(webpageEvidenceDir, outputDir, extractedAssets)
-  const copiedReference = await copyReferenceImage(webpageEvidenceDir, outputDir)
+  const copiedReferenceFiles = await copyReferenceImage(webpageEvidenceDir, outputDir)
   await writeJson(path.join(outputDir, "src/data/sourceProjectManifest.json"), {
     version: 1,
     purpose: "web-clone-source-project",
@@ -1118,15 +1120,15 @@ export async function generateWebCloneSourceProject(
     visualIteration,
     rules: [
       "Use sourceData.ts and framework components as the editable implementation surface.",
-      "Do not render reference.png, screenshot files, base64 payloads, or hidden semantic coverage layers as the clone.",
-      "Use reference.png only as visual validation evidence with webpage_evaluate or overlay comparison.",
+      "Do not render reference.png, reference-mobile.png, screenshot files, base64 payloads, or hidden semantic coverage layers as the clone.",
+      "Use reference.png and reference-mobile.png only as visual validation evidence with webpage_evaluate or overlay comparison.",
     ],
   })
 
   const writtenFiles = [
     ...files.keys(),
     "src/data/sourceProjectManifest.json",
-    ...(copiedReference ? ["reference.png"] : []),
+    ...copiedReferenceFiles,
   ].sort()
 
   return {
@@ -7627,11 +7629,19 @@ async function copyPublicAssets(
   }
 }
 
-async function copyReferenceImage(webpageEvidenceDir: string, outputDir: string): Promise<boolean> {
+async function copyReferenceImage(webpageEvidenceDir: string, outputDir: string): Promise<string[]> {
   const source = path.join(webpageEvidenceDir, "reference.png")
-  if (!(await exists(source))) return false
+  if (!(await exists(source))) {
+    throw new Error(`webpage evidence is missing required reference image: ${source}`)
+  }
+  const mobileSource = path.join(webpageEvidenceDir, "reference-mobile.png")
+  if (!(await exists(mobileSource))) {
+    throw new Error(`webpage evidence is missing required mobile reference image: ${mobileSource}`)
+  }
   await fs.copyFile(source, path.join(outputDir, "reference.png"))
-  return true
+  await fs.copyFile(mobileSource, path.join(outputDir, "reference-mobile.png"))
+  const copied = ["reference.png", "reference-mobile.png"]
+  return copied
 }
 
 async function copyDecodedImageAssets(sourceDir: string, targetDir: string): Promise<void> {

@@ -109,6 +109,16 @@ export namespace Bus {
     return raw("*", callback)
   }
 
+  export function subscriptionStats() {
+    const subscriptions = state().subscriptions
+    let callbacks = 0
+    for (const match of subscriptions.values()) callbacks += match.length
+    return {
+      types: subscriptions.size,
+      callbacks,
+    }
+  }
+
   export function once<Definition extends BusEvent.Definition>(
     def: Definition,
     callback: (event: {
@@ -153,6 +163,7 @@ export namespace Bus {
       const index = match.indexOf(callback)
       if (index === -1) return
       match.splice(index, 1)
+      if (match.length === 0) subscriptions.delete(type)
     }
   }
 }

@@ -108,6 +108,67 @@ describe("browser preview target resolver", () => {
     expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.id)).toEqual([first.id])
   })
 
+  test("reports saved unreachable preview targets as failed instead of missing", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const persisted = await persistBrowserPreviewTarget({
+      taskID,
+      url: "http://127.0.0.1:5173/task",
+      now: 100,
+    })
+
+    const target = await resolveBrowserPreviewTarget({
+      projectRoot: tmp.path,
+      taskID,
+      isVisible: async () => false,
+    })
+
+    expect(target.id).toBe(persisted.id)
+    expect(target.kind).toBe("failed")
+    expect(target.status).toBe("failed")
+    expect(target.source).toBe("task-artifact")
+    expect(target.url).toBe("http://127.0.0.1:5173/task")
+    expect(target.candidates).toEqual([
+      {
+        id: persisted.id,
+        url: "http://127.0.0.1:5173/task",
+        source: "task-artifact",
+        selected: true,
+        timeUpdated: persisted.timeUpdated,
+      },
+    ])
+    expect(target.diagnostics.join("\n")).toContain("Saved browser preview target is unreachable")
+  })
+
+  test("keeps unreachable saved candidates visible when selecting a reachable target", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const reachable = await persistBrowserPreviewTarget({
+      taskID,
+      url: "http://127.0.0.1:5173/reachable",
+      now: 100,
+    })
+    const unreachable = await persistBrowserPreviewTarget({
+      taskID,
+      url: "http://127.0.0.1:5174/unreachable",
+      now: 200,
+    })
+
+    const target = await resolveBrowserPreviewTarget({
+      projectRoot: tmp.path,
+      taskID,
+      isVisible: async (url) => url === reachable.url,
+    })
+
+    expect(target.id).toBe(reachable.id)
+    expect(target.status).toBe("ready")
+    expect(target.candidates.map((candidate) => ({ id: candidate.id, selected: candidate.selected }))).toEqual([
+      { id: unreachable.id, selected: false },
+      { id: reachable.id, selected: true },
+    ])
+    expect(target.diagnostics.join("\n")).toContain(unreachable.url)
+  })
+
   test("generic tool output does not materialize browser preview candidates", async () => {
     await using tmp = await tmpdir()
     const preview = Bun.serve({

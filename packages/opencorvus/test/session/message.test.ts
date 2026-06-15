@@ -1598,6 +1598,141 @@ describe("session.message.filterCompacted", () => {
     expect(result.map((message) => message.info.id)).toEqual([compactionUser, compactionSummary])
   })
 
+  test("compacts marker-on-anchor history without a preserved tail", async () => {
+    const anchor = "m-dispatch"
+    const summary = "m-compaction-summary"
+    const recentUser = "m-recent-user"
+    const recentAssistant = "m-recent-assistant"
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: assistantInfo(recentAssistant, recentUser),
+        parts: [{ ...basePart(recentAssistant, "p-recent-assistant"), type: "text", text: "recent answer" }],
+      },
+      {
+        info: userInfo(recentUser),
+        parts: [{ ...basePart(recentUser, "p-recent-user"), type: "text", text: "recent question" }],
+      },
+      {
+        info: {
+          ...assistantInfo(summary, anchor),
+          summary: true,
+          finish: "stop",
+          structured: handoffFixture(),
+        },
+        parts: [{ ...basePart(summary, "p-summary"), type: "text", text: "summary" }],
+      },
+      {
+        info: assistantInfo("m-covered-newer", anchor),
+        parts: [{ ...basePart("m-covered-newer", "p-covered-newer"), type: "text", text: "covered newer" }],
+      },
+      {
+        info: assistantInfo("m-covered-older", anchor),
+        parts: [{ ...basePart("m-covered-older", "p-covered-older"), type: "text", text: "covered older" }],
+      },
+      {
+        info: userInfo(anchor),
+        parts: [
+          { ...basePart(anchor, "p-anchor-text"), type: "text", text: "DISPATCH ANCHOR" },
+          { ...basePart(anchor, "p-anchor-compaction"), type: "compaction", auto: true, anchor_id: anchor },
+        ],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([anchor, summary, recentUser, recentAssistant])
+  })
+
+  test("compacts marker-on-anchor history while preserving a real user tail", async () => {
+    const anchor = "m-dispatch"
+    const summary = "m-compaction-summary"
+    const tailUser = "m-tail-user"
+    const tailAssistant = "m-tail-assistant"
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: {
+          ...assistantInfo(summary, anchor),
+          summary: true,
+          finish: "stop",
+          structured: handoffFixture(),
+        },
+        parts: [{ ...basePart(summary, "p-summary"), type: "text", text: "summary" }],
+      },
+      {
+        info: assistantInfo(tailAssistant, tailUser),
+        parts: [{ ...basePart(tailAssistant, "p-tail-assistant"), type: "text", text: "tail answer" }],
+      },
+      {
+        info: userInfo(tailUser),
+        parts: [{ ...basePart(tailUser, "p-tail-user"), type: "text", text: "tail request" }],
+      },
+      {
+        info: assistantInfo("m-covered", anchor),
+        parts: [{ ...basePart("m-covered", "p-covered"), type: "text", text: "covered history" }],
+      },
+      {
+        info: userInfo(anchor),
+        parts: [
+          { ...basePart(anchor, "p-anchor-text"), type: "text", text: "DISPATCH ANCHOR" },
+          {
+            ...basePart(anchor, "p-anchor-compaction"),
+            type: "compaction",
+            auto: true,
+            anchor_id: anchor,
+            tail_start_id: tailUser,
+          },
+        ],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([anchor, summary, tailUser, tailAssistant])
+  })
+
+  test("rejects marker-on-anchor tails that point to an assistant-only suffix", async () => {
+    const anchor = "m-dispatch"
+    const summary = "m-compaction-summary"
+    const tailUser = "m-tail-user"
+    const tailAssistant = "m-tail-assistant"
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: {
+          ...assistantInfo(summary, anchor),
+          summary: true,
+          finish: "stop",
+          structured: handoffFixture(),
+        },
+        parts: [{ ...basePart(summary, "p-summary"), type: "text", text: "summary" }],
+      },
+      {
+        info: assistantInfo(tailAssistant, tailUser),
+        parts: [{ ...basePart(tailAssistant, "p-tail-assistant"), type: "text", text: "assistant suffix" }],
+      },
+      {
+        info: userInfo(tailUser),
+        parts: [{ ...basePart(tailUser, "p-tail-user"), type: "text", text: "retained question" }],
+      },
+      {
+        info: userInfo(anchor),
+        parts: [
+          { ...basePart(anchor, "p-anchor-text"), type: "text", text: "DISPATCH ANCHOR" },
+          {
+            ...basePart(anchor, "p-anchor-compaction"),
+            type: "compaction",
+            auto: true,
+            anchor_id: anchor,
+            tail_start_id: tailAssistant,
+          },
+        ],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([anchor, summary])
+  })
+
   test("does not accept legacy prose summaries as compaction boundaries", async () => {
     const compactionUser = "m-compaction-user"
     const compactionSummary = "m-compaction-summary"

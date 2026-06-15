@@ -561,6 +561,28 @@ export function applyEvent(event: any): void {
   throw new Error(`tree-writer: unhandled event type "${type}"`)
 }
 
+export function ingestPersistedConversationMessage(input: { info: any; parts: any[] }): void {
+  if (!input?.info?.id) {
+    throw new Error("ingestPersistedConversationMessage: persisted message missing info.id")
+  }
+  if (!Array.isArray(input.parts)) {
+    throw new Error(`ingestPersistedConversationMessage: message ${input.info.id} missing parts array`)
+  }
+  batch(() => {
+    applyEvent({
+      type: "message.updated",
+      properties: { info: input.info },
+    })
+    for (const part of input.parts) {
+      if (!part) continue
+      applyEvent({
+        type: "message.part.updated",
+        properties: { part },
+      })
+    }
+  })
+}
+
 // ── Helpers ──
 
 function propsOf(event: any): Record<string, any> {
@@ -773,6 +795,7 @@ function handleMessageUpdated(event: any): void {
   // live arrival order is the regression this path avoids.
   if (isPhase && projectedMessageHasDisplayPart(id)) {
     ensureBoundaryPart(session, cardID, id, displayRole, timeCreated)
+    reorderPhaseCardParts(cardID)
   } else if (priorMessageCount > 0) {
     regroupTimelineSegments()
   } else if (
@@ -890,6 +913,10 @@ function handlePartUpdated(event: any): void {
       String(part?.resolvedRole || session.stage),
       message?.time || Date.now(),
     )
+    reorderPhaseCardParts(cardID)
+  }
+  if (conversationPartHasDisplay(part)) {
+    rebuildTopLevelOrder()
   }
   syncSessionTopLevelVisibility(session)
 }
@@ -932,6 +959,10 @@ function handlePartDelta(event: any): void {
     )
   }
   markCardStatsDirty(target.cardID)
+  if (conversationPartHasDisplay(cardTreeStore.cards[target.cardID]?.parts?.[target.index])) {
+    reorderPhaseCardParts(target.cardID)
+    rebuildTopLevelOrder()
+  }
   syncSessionTopLevelVisibility(session)
 }
 
@@ -1055,8 +1086,8 @@ function handleTaskChanged(event: any): void {
  *  idle              → idle (no spinner, "between turns / awaiting input")
  *  terminal.completed → completed
  *  terminal.error    → error
- *  terminal.aborted  → error + terminalReason=aborted (badge renders as
- *                      cancelled, while the card is still terminal) */
+ *  terminal.aborted  → completed + terminalReason=aborted (badge renders as
+ *                      cancelled, while the card is still non-error terminal) */
 function mapSessionStatusToCardStatus(status: any): CardStatus | undefined {
   const t = String(status?.type || "")
   if (t === "streaming" || t === "retry") return "running"
@@ -1064,7 +1095,8 @@ function mapSessionStatusToCardStatus(status: any): CardStatus | undefined {
   if (t === "terminal") {
     const reason = String(status?.reason || "")
     if (reason === "completed") return "completed"
-    if (reason === "error" || reason === "aborted") return "error"
+    if (reason === "aborted") return "completed"
+    if (reason === "error") return "error"
   }
   return undefined
 }
@@ -2138,10 +2170,6 @@ function timelineCardID(stage: string, sessionID: string, messageID: string): st
   return stage === "integrity" ? integrityCardID(sessionID) : messageTurnCardID(stage, sessionID, messageID)
 }
 
-function timelineSegmentKey(sessionID: string, stage: string): string {
-  return `${sessionID}:${stage}`
-}
-
 function isReviewStreamPart(part: any): boolean {
   return String(part?.partID || "").startsWith("review:integrity:")
 }
@@ -2178,6 +2206,123 @@ function clearTimelinePartIndexes(messageIDs: Set<string>): void {
   }
 }
 
+function clearMessageCardOwnershipForCard(cardID: string): void {
+  for (const session of sessions.values()) {
+    for (const [messageID, mappedCardID] of [...session.messageCardIDs]) {
+      if (mappedCardID === cardID) session.messageCardIDs.delete(messageID)
+    }
+    if (session.activeCardID === cardID) {
+      session.activeCardID = undefined
+      session.activeMessageID = undefined
+    }
+  }
+}
+
+function phaseMessagesForCard(cardID: string): MessageInfo[] {
+  const seen = new Set<string>()
+  const out: MessageInfo[] = []
+  for (const session of sessions.values()) {
+    for (const [messageID, mappedCardID] of session.messageCardIDs) {
+      if (mappedCardID !== cardID || seen.has(messageID)) continue
+      const message = messages.get(messageID)
+      if (!message) continue
+      seen.add(messageID)
+      out.push(message)
+    }
+  }
+  return out.sort(messageTimeOrder)
+}
+
+function clearPartIndexesForCard(cardID: string): void {
+  for (const session of sessions.values()) {
+    for (const [partID, target] of [...session.partIndex]) {
+      if (target.cardID === cardID) session.partIndex.delete(partID)
+    }
+  }
+}
+
+function indexPhasePart(part: any, cardID: string, index: number): void {
+  const sessionID = String(part?.sessionID || "")
+  const partID = String(part?.id || "")
+  if (!sessionID || !partID) return
+  const session = sessions.get(sessionID)
+  if (!session) return
+  session.partIndex.set(partID, { cardID, index })
+}
+
+function indexPhaseBoundary(part: any, cardID: string, index: number): void {
+  const messageID = String(part?.messageID || "")
+  if (!messageID) return
+  for (const session of sessions.values()) {
+    if (session.messageCardIDs.get(messageID) !== cardID) continue
+    session.partIndex.set(`__boundary__:${session.sessionID}:${messageID}`, { cardID, index })
+    return
+  }
+}
+
+function reorderPhaseCardParts(cardID: string): void {
+  const card = cardTreeStore.cards[cardID]
+  if (!card || card.kind !== "phase") return
+  const current = Array.isArray(card.parts) ? card.parts : []
+  if (current.length === 0) return
+
+  const orderedMessages = phaseMessagesForCard(cardID)
+  if (orderedMessages.length === 0) return
+  const knownMessageIDs = new Set(orderedMessages.map((message) => message.id))
+  const partsByMessage = new Map<string, any[]>()
+  const pendingPartFirst: any[] = []
+
+  for (const part of current) {
+    if (!part) continue
+    const messageID = String(part.messageID || "")
+    if (part.type === "boundary") {
+      if (!messageID || !knownMessageIDs.has(messageID)) pendingPartFirst.push(part)
+      continue
+    }
+    if (messageID && knownMessageIDs.has(messageID)) {
+      const list = partsByMessage.get(messageID)
+      if (list) list.push(part)
+      else partsByMessage.set(messageID, [part])
+    } else {
+      // A display part may arrive before its message row. There is no
+      // authoritative timestamp yet, so keep it after timestamped groups
+      // until message.updated lets this function place it precisely.
+      pendingPartFirst.push(part)
+    }
+  }
+
+  clearPartIndexesForCard(cardID)
+  const rebuilt: any[] = []
+  for (const message of orderedMessages) {
+    const parts = partsByMessage.get(message.id) ?? []
+    if (parts.some(conversationPartHasDisplay)) {
+      const session = sessions.get(message.sessionID)
+      const boundaryKey = `__boundary__:${message.sessionID}:${message.id}`
+      const boundary = {
+        type: "boundary",
+        messageID: message.id,
+        role: message.resolvedRole,
+        roleLabel: roleLabel(message.resolvedRole),
+        time: message.time > 0 ? message.time : undefined,
+      }
+      if (session) session.partIndex.set(boundaryKey, { cardID, index: rebuilt.length })
+      rebuilt.push(boundary)
+    }
+    for (const part of parts) {
+      indexPhasePart(part, cardID, rebuilt.length)
+      rebuilt.push(part)
+    }
+  }
+  for (const part of pendingPartFirst) {
+    if (part?.type === "boundary") indexPhaseBoundary(part, cardID, rebuilt.length)
+    else indexPhasePart(part, cardID, rebuilt.length)
+    rebuilt.push(part)
+  }
+
+  setCardTreeStore("cards", cardID, "parts", rebuilt)
+  markCardStatsDirty(cardID)
+}
+
 /** Rebuild non-phase message-turn card ownership from the authoritative
  *  message timeline. Live `message.*` events are ephemeral and can arrive
  *  out of chronological order, so "same session as the latest event" is not
@@ -2187,9 +2332,9 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   if (ordered.length === 0) return
 
   const segments: TimelineSegment[] = []
-  const segmentBySessionStage = new Map<string, TimelineSegment>()
   const desiredCardByMessage = new Map<string, string>()
   const targetMessageIDs = new Set<string>()
+  let currentSegment: TimelineSegment | undefined
 
   for (const message of ordered) {
     const session = sessions.get(message.sessionID)
@@ -2197,27 +2342,37 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
     const stage = message.stage || session.stage
     const goalID = message.goalID || session.goalID
     if (isPhaseAbsorbedSession(stage, goalID)) {
+      currentSegment = undefined
       continue
     }
 
-    const segmentKey = timelineSegmentKey(message.sessionID, stage)
-    let segment = segmentBySessionStage.get(segmentKey)
+    let segment =
+      currentSegment &&
+      currentSegment.session.sessionID === message.sessionID &&
+      currentSegment.stage === stage &&
+      currentSegment.goalID === goalID
+        ? currentSegment
+        : undefined
     if (!segment) {
       const cardID = timelineCardID(stage, message.sessionID, message.id)
       segment = { cardID, session, stage, goalID, messages: [] }
-      segmentBySessionStage.set(segmentKey, segment)
       segments.push(segment)
     }
     segment.messages.push(message)
+    currentSegment = segment
     desiredCardByMessage.set(message.id, segment.cardID)
     targetMessageIDs.add(message.id)
   }
   if (segments.length === 0) return
 
   const oldOwnedCardIDs = new Set<string>()
+  const pendingPartFirstCardIDs = new Set<string>()
   for (const session of sessions.values()) {
-    for (const cardID of session.messageCardIDs.values()) {
+    for (const [messageID, cardID] of session.messageCardIDs) {
       if (nonPhaseMessageTurnCardID(cardID)) oldOwnedCardIDs.add(cardID)
+      if (!messages.has(messageID) && nonPhaseMessageTurnCardID(cardID) && cardTreeStore.cards[cardID]) {
+        pendingPartFirstCardIDs.add(cardID)
+      }
     }
   }
 
@@ -2302,7 +2457,9 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
 
   const targetCardIDs = new Set(segments.map((segment) => segment.cardID))
   for (const cardID of oldOwnedCardIDs) {
-    if (!targetCardIDs.has(cardID)) removeCardReferences(cardID)
+    if (targetCardIDs.has(cardID) || pendingPartFirstCardIDs.has(cardID)) continue
+    clearMessageCardOwnershipForCard(cardID)
+    removeCardReferences(cardID)
   }
 
   for (const [sessionID, active] of activeBySession) {
@@ -2407,6 +2564,7 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
         sessionID,
       })
     }
+    if (isPhase) reorderPhaseCardParts(cardID)
     touched.add(sessionID)
   }
   regroupTimelineSegments({ deferHierarchy: true })

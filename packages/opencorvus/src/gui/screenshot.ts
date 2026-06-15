@@ -1,4 +1,6 @@
 import { requireRuntimePackage } from "@/runtime/package-require"
+import { Instance } from "@/project/instance"
+import { AttachmentStore } from "@/storage/attachment-store"
 
 type WindowInstance = InstanceType<typeof import("node-screenshots").Window>
 type WindowClass = typeof import("node-screenshots").Window
@@ -76,10 +78,11 @@ export async function captureWindowScreenshot(match?: string) {
 
   const png = target.captureImageSync().toPngSync()
   const title = text(target.title()) || text(target.appName()) || "OpenCorvus"
+  const ref = await AttachmentStore.write(Instance.project.id, png, "image/png", `${name(title)}.png`)
   return {
-    mime: "image/png",
-    filename: `${name(title)}.png`,
-    url: `data:image/png;base64,${png.toString("base64")}`,
+    mime: ref.mime,
+    filename: ref.filename,
+    url: ref.url,
     title,
     app: text(target.appName()),
     width: target.width(),

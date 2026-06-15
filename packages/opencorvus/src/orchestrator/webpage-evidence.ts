@@ -27,6 +27,7 @@ export interface LiveWebpageEvidencePipeline {
 
 const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
   "reference.png",
+  "reference-mobile.png",
   "capture.html",
   "extracted-page.json",
   "page.ir.json",
@@ -68,6 +69,7 @@ const PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES = [
   "web-clone-implementation-contract.json",
   "web-clone-source-manifest.json",
   "reference.png",
+  "reference-mobile.png",
   "visual-surface-candidates.json",
   "assets/manifest.json",
   "source-skeleton/index.html",
@@ -166,9 +168,11 @@ async function ensureVisibleSourcePackage(projectDir: string, worktreeDir: strin
 }
 
 export async function hasCompletePrimaryEvidence(webpageEvidenceDir: string, url?: string): Promise<boolean> {
-  if (!(await hasValidPngFile(path.join(webpageEvidenceDir, "reference.png")))) return false
+  for (const reference of ["reference.png", "reference-mobile.png"]) {
+    if (!(await hasValidPngFile(path.join(webpageEvidenceDir, reference)))) return false
+  }
   for (const relative of PRIMARY_WEBPAGE_EVIDENCE_FILES) {
-    if (relative === "reference.png") continue
+    if (relative === "reference.png" || relative === "reference-mobile.png") continue
     if (!(await hasNonEmptyFile(path.join(webpageEvidenceDir, relative)))) return false
   }
   if (!url) return true
@@ -179,7 +183,7 @@ export async function hasCompletePrimaryEvidence(webpageEvidenceDir: string, url
 export async function hasCompleteSourcePackage(sourcePackageDir: string): Promise<boolean> {
   for (const relative of PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES) {
     const file = path.join(sourcePackageDir, relative)
-    if (relative === "reference.png") {
+    if (relative === "reference.png" || relative === "reference-mobile.png") {
       if (!(await hasValidPngFile(file))) return false
       continue
     }
@@ -198,6 +202,8 @@ function defaultLiveWebpageEvidencePipeline(): LiveWebpageEvidencePipeline {
           outputDir,
           viewport_width: 1440,
           viewport_height: 900,
+          mobile_viewport_width: 390,
+          mobile_viewport_height: 844,
           keep_images: true,
         },
         signal,

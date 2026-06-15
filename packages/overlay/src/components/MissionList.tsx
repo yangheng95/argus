@@ -3,6 +3,7 @@ import type { MissionRecord, MissionTaskProjection, MissionTaskStatus } from "..
 import { detailStamp, relativeTime } from "../utils/time"
 import { t } from "../utils/i18n"
 import { projectDirectoryKey, projectDirectoryLabel } from "../utils/project-directory"
+import { buildMissionDebugBlob, writeDebugClipboard } from "../utils/debug-info"
 import { useArmedConfirm } from "../solid/armed-confirm"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -173,6 +174,7 @@ function MissionRow(props: {
 }) {
   const [editing, setEditing] = createSignal(false)
   const [draftTitle, setDraftTitle] = createSignal("")
+  const [debugCopied, setDebugCopied] = createSignal(false)
   let inputRef: HTMLInputElement | undefined
   const title = () => props.mission.title || props.mission.missionID
 
@@ -198,6 +200,12 @@ function MissionRow(props: {
     void props.onRenameMission(props.mission, next)
   }
 
+  async function copyMissionDebugInfo(): Promise<void> {
+    await writeDebugClipboard(buildMissionDebugBlob(props.mission))
+    setDebugCopied(true)
+    setTimeout(() => setDebugCopied(false), 1200)
+  }
+
   return (
     <div class="mission-row-shell" data-ui="mission-row-shell" data-mission-id={props.mission.missionID}>
       <div
@@ -208,7 +216,8 @@ function MissionRow(props: {
         data-mission-id={props.mission.missionID}
         data-session-id={props.mission.sessionID}
         data-active={props.selected ? "true" : undefined}
-        title={missionRowTip(props.mission)}
+        data-copied={debugCopied() ? "true" : undefined}
+        title={debugCopied() ? t("common.copied") : missionRowTip(props.mission)}
         onClick={() => {
           if (editing()) return
           props.onSelectMission(props.mission)
@@ -222,7 +231,10 @@ function MissionRow(props: {
         onDblClick={(event) => {
           event.stopPropagation()
           event.preventDefault()
-          beginRename()
+          if (editing()) return
+          void copyMissionDebugInfo().catch((error) => {
+            console.error("[mission-row dblclick] clipboard write failed", error)
+          })
         }}
       >
         <span class="task-row-badge mission-row-kind-badge" aria-hidden="true">
@@ -269,7 +281,7 @@ function MissionRow(props: {
             <button
               type="button"
               class="task-row-main mission-row-main"
-              title={missionRowTip(props.mission)}
+              title={debugCopied() ? t("common.copied") : missionRowTip(props.mission)}
               onClick={(event) => {
                 event.stopPropagation()
                 props.onSelectMission(props.mission)
@@ -277,7 +289,9 @@ function MissionRow(props: {
               onDblClick={(event) => {
                 event.stopPropagation()
                 event.preventDefault()
-                beginRename()
+                void copyMissionDebugInfo().catch((error) => {
+                  console.error("[mission-row-title dblclick] clipboard write failed", error)
+                })
               }}
             >
               <div class="task-row-head">

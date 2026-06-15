@@ -53,6 +53,7 @@ import {
   CheckConfig,
   UpdateGoalInput,
   UpdateTaskChecksInput,
+  type TaskMessageTargetInput,
 } from "@/engine/model"
 import { ORCHESTRATOR_POLL_INTERVAL_MS, budgetRow, deriveTitle, progressStatus } from "@/engine/helpers"
 import { orchestratorState } from "@/engine/orchestrator-state"
@@ -80,6 +81,7 @@ import {
   isTaskTerminal,
 } from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
+import { discardQueuedTaskEvent } from "@/engine/queue"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
 import { Orchestrator } from "@/orchestrator/agent"
@@ -111,6 +113,7 @@ import {
   findTask,
   findTaskByRequest,
   listGlobalTasks,
+  listMissionTasks,
   listProjectTasks,
   listTaskRows,
   searchProjectTasks,
@@ -135,6 +138,7 @@ import {
   viewRun,
   viewSnapshot,
   viewTask,
+  viewTaskListTask,
   type GoalRow,
   type TaskListRow,
   type TaskRow,
@@ -175,6 +179,51 @@ const CANCEL_ABORT_TIMEOUT_MS = 5_000
  * the API forever.
  */
 const CANCEL_CLEANUP_TIMEOUT_MS = 60_000
+
+function missionTaskTitleInput(input: z.infer<typeof CreateTaskInput>): {
+  missionID: string
+  sessionID: string
+  semanticTitle: string
+} | undefined {
+  if (input.source !== "mission") return undefined
+  const metadata = input.metadata
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined
+  if (metadata.actor !== "mission") return undefined
+  const mission = metadata.mission
+  if (!mission || typeof mission !== "object" || Array.isArray(mission)) return undefined
+  const missionID = (mission as Record<string, unknown>).id
+  const sessionID = (mission as Record<string, unknown>).session_id
+  if (typeof missionID !== "string" || missionID.length === 0) return undefined
+  if (typeof sessionID !== "string" || sessionID.length === 0) return undefined
+  const semanticTitle = input.title?.trim().replace(/\s+/g, " ")
+  if (!semanticTitle) {
+    throw new Error(
+      "Mission task creation requires title. " +
+        "Provide a short semantic title; EngineService formats the Mission ledger prefix.",
+    )
+  }
+  return { missionID, sessionID, semanticTitle }
+}
+
+function formatMissionTaskTitle(input: { ordinal: number; semanticTitle: string }): string {
+  return `Phase ${String(input.ordinal).padStart(2, "0")}: ${input.semanticTitle}`
+}
+
+function resolveTaskTitle(input: z.infer<typeof CreateTaskInput>): string {
+  const mission = missionTaskTitleInput(input)
+  if (mission) {
+    const existingMissionTasks = listMissionTasks({
+      projectID: Instance.project.id,
+      missionID: mission.missionID,
+      sessionID: mission.sessionID,
+    })
+    return formatMissionTaskTitle({
+      ordinal: existingMissionTasks.length + 1,
+      semanticTitle: mission.semanticTitle,
+    })
+  }
+  return input.title?.trim() || deriveTitle(input.request)
+}
 
 export interface CancelTaskOptions {
   /** Override the per-abort deadline (ms). Tests use this to keep wall time small. */
@@ -408,7 +457,13 @@ async function appendDirectAgentSessionReply(input: {
   }
 }
 
-async function continueTaskMessage(taskID: string, text: string, attachments: AttachmentStore.Reference[] = []) {
+async function continueTaskMessage(
+  taskID: string,
+  text: string,
+  source: string,
+  attachments: AttachmentStore.Reference[] = [],
+  target?: TaskMessageTargetInput,
+) {
   const attachmentSummary =
     attachments.length > 0
       ? [
@@ -424,7 +479,7 @@ async function continueTaskMessage(taskID: string, text: string, attachments: At
           }),
         ].join("\n")
       : undefined
-  const wake = await appendAndWakeTaskOperatorMessage({ taskID, text, attachments, attachmentSummary })
+  const wake = await appendAndWakeTaskOperatorMessage({ taskID, text, attachments, attachmentSummary, source, target })
 
   return {
     mode: "scheduler" as const,
@@ -439,6 +494,8 @@ async function appendAndWakeTaskOperatorMessage(input: {
   text: string
   attachments?: AttachmentStore.Reference[]
   attachmentSummary?: string
+  source: string
+  target?: TaskMessageTargetInput
 }): Promise<{ task: TaskRow; userMessage: { info: Message.User; parts: Message.Part[] }; resumed: boolean }> {
   const task = requireTask(input.taskID)
   assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
@@ -446,7 +503,21 @@ async function appendAndWakeTaskOperatorMessage(input: {
   // Append the user message to session history. The describe layer and
   // orchestrator prompt both read session messages, so this is the single
   // task-level operator-message owner for /message and /inject.
-  const userMessage = await appendTaskSessionMessage(task, input.text, input.attachments ?? [])
+  const source = input.source
+  const userMessage = await appendTaskSessionMessage(task, input.text, source, input.attachments ?? [], input.target)
+  await EngineProtocol.emit(
+    Event.TaskMessageRecorded,
+    {
+      taskID: input.taskID,
+      kind: "note",
+      source,
+      target: input.target,
+      text: input.text,
+      summary: "Operator note recorded",
+      messageID: userMessage.info.id,
+    },
+    { taskID: input.taskID, source: "service.message" },
+  )
   const wakeTask = isTaskCompleted(task)
     ? await reopenCompletedTaskFromOperatorMessage(task)
     : isTaskFailed(task)
@@ -466,6 +537,9 @@ async function appendAndWakeTaskOperatorMessage(input: {
       operatorMessage: {
         text: input.text,
         attachmentSummary: input.attachmentSummary,
+        source,
+        target: input.target,
+        messageID: userMessage.info.id,
       },
     },
     interrupt: true,
@@ -544,7 +618,9 @@ function missionProvenance(
 async function appendTaskSessionMessage(
   task: TaskRow,
   text: string,
+  source: string,
   attachments: AttachmentStore.Reference[] = [],
+  target?: TaskMessageTargetInput,
 ): Promise<{ info: Message.User; parts: Message.Part[] }> {
   // Rule 7: no silent fallback. A task without a session_id or whose
   // session has lost its agent/model context cannot accept a message —
@@ -574,6 +650,12 @@ async function appendTaskSessionMessage(
     },
     agent: ctx.agent,
     model: ctx.model,
+    extra: {
+      operator_message: {
+        source,
+        ...(target ? { target } : {}),
+      },
+    },
   } satisfies Message.User
   const meta = overlayMeta(task.session_id, task.session_id, info)
   const enrichedInfo = {
@@ -719,20 +801,13 @@ function taskItems(rows: TaskListRow[]) {
 
   return rows.map((item) => {
     const task = item.task
-    const plan = findActivePlanForTask(task.id)
-    const run = findActiveRunForTask(task.id)
-    const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const pendingInteractions = listInteractions(task.id).filter((entry) => entry.status === "pending")
-    const taskView = viewTask(task, { directory: item.directory })
-    if (taskView.queue && item.directory && isTaskQueued(task)) {
-      taskView.queue.revision = queueRevisions.get(item.directory)
-    }
     return {
-      task: taskView,
+      task: viewTaskListTask(task, {
+        directory: item.directory,
+        queueRevision: item.directory && isTaskQueued(task) ? queueRevisions.get(item.directory) : undefined,
+      }),
       project: item.project,
-      plan: plan ? viewPlan(plan) : undefined,
-      run: run ? viewRun(run) : undefined,
-      evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
       active_sessions: listActiveSessionsForTask(task.id),
       pending_interactions: pendingInteractions.length,
       pending_interaction_items: pendingInteractions.map(viewInteraction),
@@ -829,7 +904,7 @@ export namespace EngineService {
       const existing = findTaskByRequest(Instance.project.id, requestID)
       if (existing) return existing.id
     }
-    const title = input.title?.trim() || deriveTitle(input.request)
+    const title = resolveTaskTitle(input)
     const executor = input.executor ?? "opencorvus"
     if (executor !== "opencorvus" && !ExecutorRegistry.has(executor)) {
       await ExecutorBootstrap.autoRegister(true).catch((err) => {
@@ -837,6 +912,9 @@ export namespace EngineService {
       })
     }
     ExecutorRegistry.require(executor)
+    if (!input.model) {
+      await resolveConfiguredModelRef()
+    }
     // The task's root session: it holds the user's original request and the
     // pointer engine_task.session_id. Its children are the orchestrator's
     // own session and each sub-agent session (planner/executor/...).
@@ -1436,6 +1514,7 @@ export namespace EngineService {
 
   export async function deleteTask(taskID: string) {
     const task = requireTask(taskID)
+    discardQueuedTaskEvent(taskID)
     // Cancel if still active
     if (!isTaskTerminal(task)) {
       await cancelTask(taskID)
@@ -1444,7 +1523,7 @@ export namespace EngineService {
     await awaitPipelineSettled(taskID)
     // Delete session tree (CASCADE handles plans, goals, runs, etc.)
     if (task.session_id) {
-      await Session.remove(task.session_id)
+      await Session.removeInProject({ sessionID: task.session_id, projectID: task.project_id })
     }
     // Delete the task row itself (CASCADE handles plans, goals, runs, artifacts, etc.)
     // Snapshot disk reclaim is intentionally NOT triggered here: every tree
@@ -1590,6 +1669,8 @@ export namespace EngineService {
 
   export async function cancelTask(taskID: string, options?: CancelTaskOptions) {
     const task = requireTask(taskID)
+    discardQueuedTaskEvent(taskID)
+    const taskDirectory = taskCwd(taskID)
     const decisions = createDecisionLog(taskID)
     const abortTimeoutMs = options?.abortTimeoutMs ?? CANCEL_ABORT_TIMEOUT_MS
     const cleanupTimeoutMs = options?.cleanupTimeoutMs ?? CANCEL_CLEANUP_TIMEOUT_MS
@@ -1622,9 +1703,12 @@ export namespace EngineService {
     // Abort Orchestrator and any in-progress pipeline stage
     Orchestrator.abort(taskID)
     abortTaskPipeline(taskID)
-    const sessionIDs = task.session_id ? await Session.tree(task.session_id) : []
+    const sessionIDs = task.session_id
+      ? await Session.treeInProject({ sessionID: task.session_id, projectID: task.project_id })
+      : []
     for (const sessionID of sessionIDs.reverse()) {
-      SessionPrompt.cancel(sessionID)
+      const session = await Session.get(sessionID)
+      SessionPrompt.cancel(sessionID, session.directory)
     }
     const liveGoalRuns = listGoalRunsForTask(taskID).filter(
       (row) => !["completed", "failed", "aborted"].includes(row.status),
@@ -1691,6 +1775,7 @@ export namespace EngineService {
         time_completed: Date.now(),
       },
       "Task cancelled",
+      { projectDir: taskDirectory },
     )
     // Clean up channel bindings so the thread is not reused
     Database.use((db) =>
@@ -1818,31 +1903,10 @@ export namespace EngineService {
       }
     }
 
-    // Natural-language user messages are recorded verbatim as operator notes and
-    // forwarded to the Orchestrator. The agent reads notes in-context and decides
-    // whether the message implies a goal change, a plan hint, or is mere
-    // context — no separate LLM-based intent classifier, no keyword dispatch.
-    // This removes the "Intent analysis failed" failure mode and the /goal
-    // /plan prefix handlers (keyword-matching is forbidden by project rule 12).
-    recordNote({
-      taskID,
-      kind: "operator_note",
-      content: input.text,
-      source: input.source ?? "user_message",
-      userID: input.user_id,
-    })
-    await EngineProtocol.emit(
-      Event.TaskMessageRecorded,
-      {
-        taskID,
-        kind: "note",
-        source: input.source ?? "user_message",
-        text: input.text,
-        summary: "Operator note recorded",
-      },
-      { taskID, source: "service.message" },
-    )
-    const note = await continueTaskMessage(taskID, input.text, attachmentRefs)
+    // Natural-language user messages are recorded once as visible task-root
+    // user messages. Workbench notes are a separate note/constraint surface;
+    // duplicating this text there would create a target-less second source.
+    const note = await continueTaskMessage(taskID, input.text, input.source, attachmentRefs, input.target)
     const message = note.resumed ? "Operator note recorded. Scheduler notified." : "Operator note recorded."
     return {
       kind: "note" as const,
@@ -1882,7 +1946,7 @@ export namespace EngineService {
    * projection. Scoped agent steering must use /task/:id/session/:sessionID/reply.
    */
   export async function injectMessage(taskID: string, message: string) {
-    const wake = await appendAndWakeTaskOperatorMessage({ taskID, text: message })
+    const wake = await appendAndWakeTaskOperatorMessage({ taskID, text: message, source: "api_inject" })
     return {
       appended: true,
       orchestratorWoken: wake.resumed,

@@ -101,7 +101,7 @@ export namespace SessionStatus {
     activityGates[sessionID]?.abort(reason)
   }
 
-  export function set(sessionID: string, status: Info) {
+  export function set(sessionID: string, status: Info, options?: { publish?: boolean }) {
     // Single-source terminal guard (rule 8): once a session reaches a
     // terminal state, subsequent set() calls are silently dropped, except
     // artifact-missing integrity sessions which may be upgraded from an
@@ -141,14 +141,16 @@ export namespace SessionStatus {
     } else {
       state[sessionID] = status
     }
-    Bus.publish(Event.Status, {
-      sessionID,
-      status,
-    })
-    if (status.type === "idle") {
-      Bus.publish(Event.Idle, {
+    if (options?.publish !== false) {
+      Bus.publish(Event.Status, {
         sessionID,
+        status,
       })
+      if (status.type === "idle") {
+        Bus.publish(Event.Idle, {
+          sessionID,
+        })
+      }
     }
     // Terminal is kept in state (not deleted) so SessionStatus.get() can
     // distinguish a closed session from one that simply has no entry yet.

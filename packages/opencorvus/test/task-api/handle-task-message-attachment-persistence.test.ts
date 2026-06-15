@@ -77,6 +77,7 @@ describe("EngineService.handleTaskMessage — follow-up attachment persistence",
         try {
           await EngineService.handleTaskMessage(taskID, {
             text: "Here's the new screenshot.",
+            source: "test",
             attachments: [{ mime: "image/png", data: PNG_BASE64, filename: "follow-up.png" }],
           })
         } catch {
@@ -131,6 +132,7 @@ describe("EngineService.handleTaskMessage — follow-up attachment persistence",
         try {
           await EngineService.handleTaskMessage(taskID, {
             text: "Adding a markdown spec.",
+            source: "test",
             attachments: [
               {
                 mime: "text/markdown",
@@ -183,6 +185,7 @@ describe("EngineService.handleTaskMessage — follow-up attachment persistence",
         try {
           await EngineService.handleTaskMessage(taskID, {
             text: "Plain follow-up, no files.",
+            source: "test",
           })
         } catch {
           /* downstream session continuation isn't this test's concern */

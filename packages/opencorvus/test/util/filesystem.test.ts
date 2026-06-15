@@ -1,6 +1,7 @@
 import { afterEach, describe, test, expect } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
+import { homedir } from "os"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
@@ -392,6 +393,11 @@ describe("filesystem", () => {
       }
 
       expect(Filesystem.resolve("/c/Users/test")).toBe(path.resolve("/c/Users/test"))
+    })
+
+    test("expands shell-style home paths before resolving", () => {
+      expect(Filesystem.resolve("~/economy_2")).toBe(Filesystem.normalizePath(path.resolve(homedir(), "economy_2")))
+      expect(Filesystem.resolve("~")).toBe(Filesystem.normalizePath(path.resolve(homedir())))
     })
   })
 

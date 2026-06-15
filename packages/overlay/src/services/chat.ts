@@ -20,7 +20,7 @@ import { boardStore, setTasksData, loadBoard, loadTasks, activeTaskID, activeSes
 import { appStore, setConnectionStatus } from "../store/app"
 import { workspaceMode } from "./workspace"
 import { selectTask, createTask } from "./task"
-import { applyEvent as applyTreeWriterEvent } from "./tree-writer"
+import { ingestPersistedConversationMessage } from "./tree-writer"
 
 // ── Types ──
 
@@ -342,21 +342,6 @@ export function mergeMessages(left: any[], right: any[]): any[] {
   return mergeLoadedConversationMessages(left, right)
 }
 
-export function ingestPersistedConversationMessage(input: { info: any; parts: any[] }): void {
-  if (!input?.info?.id) return
-  applyTreeWriterEvent({
-    type: "message.updated",
-    properties: { info: input.info },
-  })
-  for (const part of input.parts ?? []) {
-    if (!part) continue
-    applyTreeWriterEvent({
-      type: "message.part.updated",
-      properties: { part },
-    })
-  }
-}
-
 function ensureTaskListEntry(taskID: string, requestID: string, requestText: string, resultMessage: string): void {
   if (!taskID) return
   const task = boardStore.board?.task && boardStore.board.task.id === taskID ? boardStore.board.task : null
@@ -439,7 +424,7 @@ export async function panelMessage(
       setConnectionStatus("online")
       request.target = { kind: "session", sessionID }
       setChatRequest(request as any)
-      return await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async`, {
+      const result = await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -447,6 +432,8 @@ export async function panelMessage(
         }),
         signal: controller.signal,
       })
+      ingestPersistedConversationMessage(result.user_message)
+      return result
     }
     const taskID = await resolvePanelMessageTaskID()
     setConnectionStatus("online")
@@ -492,9 +479,7 @@ export async function panelMessage(
     // round-trip lands. Single source: same id space as the SSE events that
     // follow, so the by-id merge in applyMessageEvent idempotently no-ops
     // when the matching `message.updated` arrives over the bus.
-    if (result?.user_message?.info?.id) {
-      ingestPersistedConversationMessage(result.user_message)
-    }
+    ingestPersistedConversationMessage(result.user_message)
     await loadBoard()
     // The server may return a control-plane acknowledgement here
     // (e.g. operator note recorded). The real conversation already comes

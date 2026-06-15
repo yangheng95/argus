@@ -21,6 +21,7 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
       },
     ],
     findings: [],
+    production_blockers: [],
     repairs: [],
     evidence: [
       {
@@ -81,6 +82,31 @@ describe("visual-qa output tools", () => {
     expect(kit.getCollector().final).toBeUndefined()
   })
 
+  test("accepted report cannot include production blockers", async () => {
+    const kit = createVisualQaOutputTools()
+    const blocked = await callTool(
+      kit.tools,
+      "submit_visual_qa_report",
+      validReport({
+        production_blockers: [
+          {
+            id: "blocker_map_fidelity",
+            principle_ids: ["component-truth"],
+            region: "world economy map",
+            reason: "The map is a low-fidelity placeholder instead of the required choropleth surface.",
+            impact: "Users would see a product surface that misrepresents the reference implementation.",
+            required_correction: "Replace the simplified map with the source-backed topology implementation.",
+            source_refs: ["frontend_design:reference_artifacts"],
+            evidence_refs: ["artifacts/map.png"],
+          },
+        ],
+      }),
+    )
+    expect(blocked).toContain("production blockers")
+    expect(blocked).toContain("blocker_map_fidelity")
+    expect(kit.getCollector().final).toBeUndefined()
+  })
+
   test("failed report may submit actionable findings without pretending acceptance", async () => {
     const kit = createVisualQaOutputTools()
     const result = await callTool(
@@ -108,5 +134,48 @@ describe("visual-qa output tools", () => {
     expect(result).toContain("PASS")
     expect(kit.getCollector().final?.accepted).toBe(false)
     expect(kit.buildReport().detail).toContain("finding_blank")
+  })
+
+  test("failed report must explain blockers or open critical and major findings", async () => {
+    const kit = createVisualQaOutputTools()
+    const blocked = await callTool(
+      kit.tools,
+      "submit_visual_qa_report",
+      validReport({
+        accepted: false,
+        findings: [],
+        production_blockers: [],
+      }),
+    )
+    expect(blocked).toContain("accepted=false requires production_blockers")
+    expect(kit.getCollector().final).toBeUndefined()
+  })
+
+  test("failed report renders production blockers in the terminal report", async () => {
+    const kit = createVisualQaOutputTools()
+    const result = await callTool(
+      kit.tools,
+      "submit_visual_qa_report",
+      validReport({
+        accepted: false,
+        production_blockers: [
+          {
+            id: "blocker_density",
+            principle_ids: ["reference-structure", "visual-hierarchy-readability"],
+            region: "hero",
+            reason: "The visual hierarchy no longer matches the authoritative reference.",
+            impact: "The first viewport reads as a different product surface.",
+            required_correction: "Restore the reference heading scale, spacing, and section order.",
+            source_refs: ["reference.png"],
+            evidence_refs: ["artifacts/hero.png"],
+          },
+        ],
+      }),
+    )
+    expect(result).toContain("PASS")
+    expect(kit.getCollector().final?.accepted).toBe(false)
+    expect(kit.buildReport().detail).toContain("## Production Blockers")
+    expect(kit.buildReport().detail).toContain("blocker_density")
+    expect(kit.buildReport().detail).toContain("reference-structure")
   })
 })

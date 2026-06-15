@@ -310,7 +310,9 @@ async function buildWorkspaceExportEvidence(input: {
   metadata?: Record<string, unknown>
   changedFiles: string[]
 }): Promise<AcceptanceReviewEvidence | undefined> {
-  const declaredChangedFiles = input.changedFiles.filter((item) => item.length > 0)
+  const declaredChangedFiles = input.changedFiles
+    .filter((item) => item.length > 0)
+    .filter(ProjectRuntimePaths.isSourceEnumerationAllowed)
   if (declaredChangedFiles.length === 0) return undefined
   const baseRef = readBaselineCommitFromMetadata(input.metadata)
   if (!baseRef) return undefined

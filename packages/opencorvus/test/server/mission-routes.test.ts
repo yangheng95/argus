@@ -3,6 +3,7 @@ import { Database, eq } from "../../src/storage/db"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
+import { ProjectTable } from "../../src/project/project.sql"
 import { ensureMissionSession } from "../../src/mission/session"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
@@ -354,7 +355,7 @@ describe("mission routes", () => {
 
         expect(response.status).toBe(200)
         expect(await response.json()).toBe(true)
-        expect(cancel).toHaveBeenCalledWith(session.id)
+        expect(cancel).toHaveBeenCalledWith(session.id, tmp.path)
         cancel.mockRestore()
       },
     })
@@ -411,6 +412,54 @@ describe("mission routes", () => {
     expect(
       Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, betaSession.id)).get()),
     ).toBeDefined()
+  }, 15_000)
+
+  test("DELETE /mission/:missionID follows the listed row directory when project identity drifted", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const now = Date.now()
+    const sessionID = Identifier.ascending("session")
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: "project-stale-mission-row",
+          name: "Stale Mission Row",
+          worktree: tmp.path,
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: "project-stale-mission-row",
+          slug: "stale-mission-row",
+          directory: tmp.path,
+          title: "Stale Mission Row",
+          version: "0.0.1",
+          kind: "mission",
+          metadata: { mission: { id: "m-stale-row", channelKey: "mission:m-stale-row", cwd: tmp.path } },
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+
+    const app = Server.App()
+    const list = await app.request(`/mission?directory=${encodeURIComponent(tmp.path)}`, { method: "GET" })
+    expect(list.status).toBe(200)
+    expect(await list.json()).toMatchObject([{ missionID: "m-stale-row", sessionID, directory: tmp.path }])
+
+    const response = await app.request(`/mission/m-stale-row?directory=${encodeURIComponent(tmp.path)}`, {
+      method: "DELETE",
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toBe(true)
+    expect(
+      Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get()),
+    ).toBeUndefined()
   }, 15_000)
 
   test("Mission actions do not target non-Mission sessions", async () => {

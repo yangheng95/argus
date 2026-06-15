@@ -107,12 +107,12 @@ export async function generateWebCloneSkeletonProject(
     await writeText(path.join(outputDir, relative), content)
   }
 
-  await copyReferenceImage(sourcePackageDir, outputDir)
+  const copiedReferenceFiles = await copyReferenceImage(sourcePackageDir, outputDir)
 
   return {
     sourcePackageDir,
     outputDir,
-    files: [...fileMap.keys(), "reference.png"].map((file) => path.join(outputDir, file)),
+    files: [...fileMap.keys(), ...copiedReferenceFiles].map((file) => path.join(outputDir, file)),
     stats: {
       htmlBytes: sourceDocument.bodyHtml.length,
       cssBytes: sourceDocument.headStylesHtml.length,
@@ -502,12 +502,21 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
 }
 
-async function copyReferenceImage(sourcePackageDir: string, outputDir: string): Promise<void> {
+async function copyReferenceImage(sourcePackageDir: string, outputDir: string): Promise<string[]> {
+  const copied: string[] = []
   try {
     await fs.copyFile(path.join(sourcePackageDir, "reference.png"), path.join(outputDir, "reference.png"))
+    copied.push("reference.png")
   } catch {
     // The generator can still emit a skeleton; audits will report missing visual truth.
   }
+  try {
+    await fs.copyFile(path.join(sourcePackageDir, "reference-mobile.png"), path.join(outputDir, "reference-mobile.png"))
+    copied.push("reference-mobile.png")
+  } catch {
+    // The generator can still emit a skeleton; audits will report missing mobile visual truth.
+  }
+  return copied
 }
 
 function renderPackageJson(packageName: string): string {
@@ -554,6 +563,7 @@ function renderReadme(input: {
     "- Extracted styles: `src/generated/singlefile-head-styles.html`",
     "- Fillable slots: `src/slots.json`",
     "- Visual truth: `reference.png`",
+    "- Mobile visual truth: `reference-mobile.png`",
     "",
     "Rules for downstream LLM work:",
     "- Do not present this raw extracted baseline as the final project.",

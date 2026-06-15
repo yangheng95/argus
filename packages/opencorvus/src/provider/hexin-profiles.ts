@@ -87,7 +87,7 @@ const MATCHERS: Matcher[] = [
   },
   // OpenAI GPT family
   // Order matters: specific matchers (mini / nano / codex) first, then the
-  // vision-capable GPT-5.x full model, then the generic fallback.
+  // vision-capable GPT-5.x full model, then the generic default.
   //
   // The vision capability of the `gpt-5.x` full model (here gpt-5.4) was
   // verified against the hexin gateway on 2026-04-21 with a multimodal
@@ -142,7 +142,7 @@ const MATCHERS: Matcher[] = [
     // Only the bare `gpt-5.X` id — no `-chat`, `-preview`, `-2025-xx` etc.
     // Variants were not probed individually and OpenAI has historically
     // differed on chat vs. base vs. preview capability matrices, so leave
-    // them to the generic fallback until there is evidence for each.
+    // them to the generic default until there is evidence for each.
     test: (id) => /^gpt-5\.\d+$/i.test(id),
     profile: {
       family: "gpt-5",

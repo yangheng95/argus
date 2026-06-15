@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineSpecSnapshotTable,
+  EngineTaskTable,
+  type EngineArtifactKind,
+} from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import {
   WorkflowRegistry,
@@ -32,8 +37,8 @@ describe("pipeline workflow architecture review step", () => {
       "requirements",
       "architect",
       "build",
-      "integrity",
       "visual_qa",
+      "integrity",
     ])
     expect(pipeline!.steps.find((step) => step.id === "frontend_design")?.after).toEqual([])
     expect(pipeline!.steps.find((step) => step.id === "frontend_research")?.after).toEqual([])
@@ -46,9 +51,9 @@ describe("pipeline workflow architecture review step", () => {
       "frontend_research",
     ])
     expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["architect"])
-    expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
-    expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.after).toEqual(["integrity"])
-    expect(stepIDs.indexOf("integrity")).toBeLessThan(stepIDs.indexOf("visual_qa"))
+    expect(pipeline!.steps.find((step) => step.id === "visual_qa")?.after).toEqual(["build"])
+    expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["visual_qa"])
+    expect(stepIDs.indexOf("visual_qa")).toBeLessThan(stepIDs.indexOf("integrity"))
   })
 
   test("rendered workflow prompt does not expose deleted architect or scheduler semantics", () => {
@@ -166,13 +171,273 @@ describe("pipeline workflow architecture review step", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "latest_summary",
-      value: "accepted=true\nsummary=real chart replaced placeholder",
+      value: "accepted=true\nsummary=real chart replaced placeholder\nproduction_blockers=0",
       reason: "Latest structured visual QA summary for integrity review.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
     expect(taskSteps.visual_qa?.status).toBe("completed")
+  })
+
+  test("projects visual_qa as pending when a newer completed goal batch exists", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_visual_qa_stale_${stamp}`
+    const taskID = `tsk_workflow_visual_qa_stale_${stamp}`
+    const completedAt = now + 10_000
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow stale visual QA step test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow stale visual QA status",
+          request: "Run visual QA after every frontend goal batch",
+          kind: "workflow",
+          priority: "normal",
+          design_specs: [],
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    createDecisionLog(taskID).append({
+      phase: "visual_qa",
+      key: "latest_summary",
+      value: "accepted=true\nsummary=first batch passed\nproduction_blockers=0",
+      reason: "Visual QA for the previous goal batch.",
+    })
+    Database.use((db) =>
+      db
+        .insert(EngineArtifactTable)
+        .values({
+          id: `art_goal_run_${stamp}`,
+          task_id: taskID,
+          run_id: `run_${stamp}`,
+          goal_run_id: `grun_${stamp}`,
+          kind: "goal_run_attempt" as EngineArtifactKind,
+          label: "goal-run-completed",
+          payload: {
+            goal_id: `goal_${stamp}`,
+            status: "completed",
+            retry_count: 0,
+            time_started: now,
+            time_completed: completedAt,
+          },
+          time_created: completedAt,
+          time_updated: completedAt,
+        })
+        .run(),
+    )
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.visual_qa?.status).toBe("pending")
+  })
+
+  test("projects visual_qa as failed when summary lacks acceptance semantics", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_visual_qa_unstructured_${stamp}`
+    const taskID = `tsk_workflow_visual_qa_unstructured_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow unstructured visual QA summary test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow unstructured visual QA status",
+          request: "Repair a frontend after integrity review",
+          kind: "workflow",
+          priority: "normal",
+          design_specs: [],
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    createDecisionLog(taskID).append({
+      phase: "visual_qa",
+      key: "latest_summary",
+      value: "summary=old visual qa summary without production blocker semantics",
+      reason: "Legacy summary must not project as accepted visual QA.",
+    })
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.visual_qa?.status).toBe("failed")
+  })
+
+  test("projects visual_qa as failed when structured summary is not accepted", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_visual_qa_failed_${stamp}`
+    const taskID = `tsk_workflow_visual_qa_failed_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow failed visual QA step test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow failed visual QA status",
+          request: "Repair a frontend after integrity review",
+          kind: "workflow",
+          priority: "normal",
+          design_specs: [],
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    createDecisionLog(taskID).append({
+      phase: "visual_qa",
+      key: "latest_summary",
+      value: "accepted=false\nsummary=map is not production-ready\nproduction_blockers=1",
+      reason: "Latest structured visual QA summary for integrity review.",
+    })
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.visual_qa?.status).toBe("failed")
+  })
+
+  test("projects visual_qa as failed when full report contains production blockers", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_visual_qa_blockers_${stamp}`
+    const taskID = `tsk_workflow_visual_qa_blockers_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow visual QA blocker report test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow visual QA blocker report status",
+          request: "Repair a frontend after integrity review",
+          kind: "workflow",
+          priority: "normal",
+          design_specs: [],
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    createDecisionLog(taskID).append({
+      phase: "visual_qa",
+      key: "report_1",
+      value: JSON.stringify({
+        accepted: true,
+        summary: "A report with blockers must not project as complete.",
+        production_blockers: [{ id: "blocker_map" }],
+      }),
+      reason: "Dedicated frontend GUI and functional QA report.",
+    })
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.visual_qa?.status).toBe("failed")
+  })
+
+  test("projects visual_qa as failed when full report lacks production blocker semantics", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_visual_qa_missing_blockers_${stamp}`
+    const taskID = `tsk_workflow_visual_qa_missing_blockers_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow visual QA missing blocker semantics test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow visual QA missing blocker semantics",
+          request: "Repair a frontend after integrity review",
+          kind: "workflow",
+          priority: "normal",
+          design_specs: [],
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    createDecisionLog(taskID).append({
+      phase: "visual_qa",
+      key: "report_1",
+      value: JSON.stringify({
+        accepted: true,
+        summary: "Legacy report without production blocker semantics.",
+      }),
+      reason: "Legacy report must not project as accepted visual QA.",
+    })
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
   test("projects integrity as completed when top-level pass has advisory concerns evidence", () => {

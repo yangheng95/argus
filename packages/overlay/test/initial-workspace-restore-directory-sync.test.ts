@@ -1,22 +1,15 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { apiUrl, configure } from "../src/services/api"
-import { __setHostTransportForTest, type HostTransport } from "../src/services/host-transport"
+import { HOST_CAPABILITIES, __setHostTransportForTest, type HostTransport } from "../src/services/host-transport"
 import { resetWriter } from "../src/services/tree-writer"
 import { boardStore, setBoardStore } from "../src/store/board"
 import { cardTreeStore, setCardTreeStore } from "../src/store/card-tree"
 import { setSettingsStore } from "../src/store/settings"
+import { stopSSE, stopTaskListSSE } from "../src/services/sse"
 
 mock.module("../src/services/conversation", () => ({
   cancelConversationReplay: () => undefined,
   hydrateTaskConversation: async () => 0,
-}))
-
-mock.module("../src/services/sse", () => ({
-  isSelectedTaskSSEConnected: () => false,
-  startSSE: () => undefined,
-  startTaskListSSE: () => undefined,
-  stopSSE: () => undefined,
-  stopTaskListSSE: () => undefined,
 }))
 
 const { restoreInitialWorkspace } = await import("../src/services/init")
@@ -24,6 +17,7 @@ const { restoreInitialWorkspace } = await import("../src/services/init")
 function fakeTransport(): HostTransport {
   return {
     kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
     async request() {
       return { status: 200, ok: true, headers: {}, body: null }
     },
@@ -74,6 +68,8 @@ describe("initial workspace restore directory sync", () => {
   })
 
   afterEach(() => {
+    stopSSE()
+    stopTaskListSSE()
     __setHostTransportForTest(undefined)
     configure({ directory: "" })
     setSettingsStore({
@@ -189,5 +185,44 @@ describe("initial workspace restore directory sync", () => {
     expect(boardStore.selectedSource).toEqual({ kind: "session", id: "ses_mission" })
     expect(boardStore.board?.sessionID).toBe("ses_mission")
     expect(cardTreeStore.order).toEqual(["sessionCard"])
+  })
+
+  test("does not overwrite an active standalone session with a restorable running task", async () => {
+    setBoardStore({
+      selectedSource: { kind: "session", id: "ses_assistant" },
+      board: {
+        kind: "session",
+        sessionID: "ses_assistant",
+        title: "Assistant",
+      },
+      tasks: [
+        {
+          task: {
+            id: "tsk_saved",
+            status: "active",
+            directory: "D:/projects/new",
+          },
+          pending_interactions: 0,
+        },
+      ],
+    })
+    setCardTreeStore("cards", {
+      assistantCard: {
+        id: "assistantCard",
+        kind: "agent",
+        stage: "assistant",
+        title: "Assistant card",
+        status: "idle",
+        parts: [],
+        childIDs: [],
+      } as any,
+    })
+    setCardTreeStore("order", ["assistantCard"])
+
+    await expect(restoreInitialWorkspace()).resolves.toBe(false)
+
+    expect(boardStore.selectedSource).toEqual({ kind: "session", id: "ses_assistant" })
+    expect(boardStore.board?.sessionID).toBe("ses_assistant")
+    expect(cardTreeStore.order).toEqual(["assistantCard"])
   })
 })

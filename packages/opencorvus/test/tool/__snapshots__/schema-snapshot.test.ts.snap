@@ -1013,6 +1013,9 @@ Output: Creates directory 'foo'"
             },
             "type": "object",
           },
+          "model": {
+            "type": "string",
+          },
           "platform": {
             "enum": [
               "slack",
@@ -1074,6 +1077,11 @@ Output: Creates directory 'foo'"
           "thread": {
             "type": "string",
           },
+          "title": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string",
+          },
         },
         "required": [
           "action",
@@ -1089,6 +1097,7 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "source": {
+            "minLength": 1,
             "type": "string",
           },
           "taskID": {
@@ -1105,6 +1114,7 @@ Output: Creates directory 'foo'"
           "action",
           "taskID",
           "text",
+          "source",
         ],
         "type": "object",
       },

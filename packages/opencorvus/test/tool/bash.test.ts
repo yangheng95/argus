@@ -58,15 +58,6 @@ async function startReachablePreviewServer(): Promise<{ url: string; close: () =
   }
 }
 
-async function waitForBrowserPreviewTarget(taskID: string, url: string): Promise<void> {
-  const deadline = Date.now() + 5_000
-  while (Date.now() <= deadline) {
-    if (findLatestBrowserPreviewTarget(taskID)?.url === url) return
-    await Bun.sleep(25)
-  }
-  throw new Error(`Browser preview target was not persisted for ${taskID}: ${url}`)
-}
-
 function isPidAlive(pid: number) {
   try {
     process.kill(pid, 0)
@@ -316,7 +307,7 @@ describe("tool.bash", () => {
     })
   })
 
-  test("background process output persists task browser preview target", async () => {
+  test("background process output does not persist task browser preview target", async () => {
     await resetDatabase()
     const preview = await startReachablePreviewServer()
     try {
@@ -369,8 +360,7 @@ describe("tool.bash", () => {
               { ...ctx, extra: { taskID } },
             )
 
-            const persisted = findLatestBrowserPreviewTarget(taskID)
-            expect(persisted?.url).toBe(preview.url)
+            expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
           } finally {
             restore()
           }
@@ -382,7 +372,7 @@ describe("tool.bash", () => {
     }
   })
 
-  test("background process output persists task browser preview target after tool return", async () => {
+  test("background process output still does not persist task browser preview target after tool return", async () => {
     await resetDatabase()
     const preview = await startReachablePreviewServer()
     try {
@@ -432,7 +422,8 @@ describe("tool.bash", () => {
 
             expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
             stdout.write(`\n  ➜  Local:   ${preview.url}\n`)
-            await waitForBrowserPreviewTarget(taskID, preview.url)
+            await Bun.sleep(50)
+            expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
           } finally {
             restore()
           }
@@ -444,7 +435,7 @@ describe("tool.bash", () => {
     }
   })
 
-  test("background frontend command port materializes task browser preview target without URL output", async () => {
+  test("background frontend command port does not materialize task browser preview target", async () => {
     await resetDatabase()
     const preview = await startReachablePreviewServer()
     try {
@@ -492,7 +483,7 @@ describe("tool.bash", () => {
               { ...ctx, extra: { taskID } },
             )
 
-            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+            expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
           } finally {
             restore()
           }
@@ -504,7 +495,7 @@ describe("tool.bash", () => {
     }
   }, 10_000)
 
-  test("background process output persists multiple task browser preview candidates", async () => {
+  test("background process output does not persist multiple task browser preview candidates", async () => {
     await resetDatabase()
     const first = await startReachablePreviewServer()
     const second = await startReachablePreviewServer()
@@ -562,7 +553,7 @@ describe("tool.bash", () => {
               findRecentBrowserPreviewTargets(taskID)
                 .map((target) => target.url)
                 .sort(),
-            ).toEqual([first.url, second.url].sort())
+            ).toEqual([])
           } finally {
             restore()
           }
@@ -773,11 +764,8 @@ describe("tool.bash permissions", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        // V31: agent required so Truncate.output can verify recovery
-        // path (build agent has the `task` tool). Pre-fix the
-        // command's `ls` over os.tmpdir() produced ~2 MB of
-        // output and Truncate threw because the test passed no
-        // agent.
+        // This test only needs the external workdir permission request; keep
+        // command output tiny so a large temp directory cannot dominate timing.
         const agent = await Agent.get("build")
         const bash = await BashTool.init({ agent })
         const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
@@ -789,9 +777,9 @@ describe("tool.bash permissions", () => {
         }
         await bash.execute(
           {
-            command: "ls",
+            command: "pwd",
             workdir: os.tmpdir(),
-            description: "List temp dir",
+            description: "Print temp dir",
           },
           testCtx,
         )

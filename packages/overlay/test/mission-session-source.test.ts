@@ -74,7 +74,8 @@ test("Mission launcher and Coding Assistant reuse the main ChatComposer with sep
   expect(MAIN_TSX).toContain('placeholder={missionLauncherActive() ? t("mission.launcher.placeholder") : undefined}')
   expect(MAIN_TSX).toContain('textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}')
   expect(MAIN_TSX).toContain("if (missionLauncherActive())")
-  expect(MAIN_TSX).toContain("const result = await wakeMission({ text })")
+  expect(MAIN_TSX).toContain('const model = typeof appStore.config?.model === "string" ? appStore.config.model : undefined')
+  expect(MAIN_TSX).toContain("const result = await wakeMission({ text, model })")
   expect(MAIN_TSX).toContain("await openMissionSession(result)")
   expect(MAIN_TSX).toContain("await panelMessage(text, attachments")
   expect(CHAT_SERVICE).toContain("const sessionID = activeSessionID()")
@@ -110,7 +111,8 @@ test("Mission ledger groups records by project directory", () => {
 })
 
 test("Mission launcher submits through wakeMission rather than task composition", () => {
-  expect(MAIN_TSX).toContain("const result = await wakeMission({ text })")
+  expect(MAIN_TSX).toContain('const model = typeof appStore.config?.model === "string" ? appStore.config.model : undefined')
+  expect(MAIN_TSX).toContain("const result = await wakeMission({ text, model })")
   expect(MAIN_TSX).toContain("missionLauncherActive()")
   expect(MAIN_TSX).toContain("await openMissionSession(result)")
   expect(MISSION_TSX).not.toContain("wakeMission")

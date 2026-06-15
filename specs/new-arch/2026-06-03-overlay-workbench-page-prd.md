@@ -103,7 +103,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - PERSONA-005 Frontend Engineer: 调整 overlay UI 的工程师，需要清楚布局、组件责任、响应式和成熟 primitive 约束。
 - PERSONA-006 Backend Engineer: 调整 server routes、engine artifact、file API 的工程师，需要清楚页面消费哪些 route。
 - PERSONA-007 QA Engineer: 负责回归的人，需要明确每个 state、route、error 和 visual acceptance。
-- PERSONA-008 Support Engineer: 排查用户环境问题的人，需要复制 task debug info、logs、health 和 project-scoped probes。
+- PERSONA-008 Support Engineer: 排查用户环境问题的人，需要复制精简 task debug info，并在需要时查看 logs、health 和 project-scoped probes。
 
 ## 5. 用户核心目标
 
@@ -240,7 +240,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - SURFACE-039 Channel runtime restart must show success or failure.
 - SURFACE-040 Log viewer tail failure must be an error state, not empty logs.
 - SURFACE-041 Notification center must receive startup and runtime failures.
-- SURFACE-042 Task debug blob must include project-scoped probes and read-only SQL templates.
+- SURFACE-042 Task debug blob must stay concise: task identity, directory, server URL, session/run, timestamps, and per-goal summary only. Project-scoped probes and SQL templates belong in separate diagnostics surfaces, not in the double-click copy blob.
 - SURFACE-043 DB reset must be hidden and confirmed.
 - SURFACE-044 Dialogs must preserve focus and visible submit errors.
 - SURFACE-045 Config dialog failures must not become empty settings.
@@ -347,7 +347,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 ## 16. User journeys
 
 - JOURNEY-001 Create task: user chooses workspace, clicks New Chat, enters request, sends, sees ledger row, watches conversation stream, checks Inspector, reviews Files diff, and follows up.
-- JOURNEY-002 Diagnose stuck task: user checks pending interactions, last unfinished card, goal workflow, Files acceptance, LogViewer, task debug blob, project-scoped probes, SQL templates, and then retries, replans, cancels, or reports the exact bug.
+- JOURNEY-002 Diagnose stuck task: user checks pending interactions, last unfinished card, goal workflow, Files acceptance, LogViewer, concise task debug blob, and then uses separate project-scoped probes or SQL diagnostics only when deeper triage is required before retrying, replanning, canceling, or reporting the exact bug.
 - JOURNEY-003 Browse and edit file: user opens Explorer, expands directory, searches file, opens text file, edits in CodeMirror, saves through PATCH /file/content, sees dirty clear or explicit error.
 - JOURNEY-004 Run Mission: user opens Mission, searches Mission records, selects a Mission row, hydrates session conversation, sends follow-up, wakes Mission, refreshes list, and returns to Panel with state preserved.
 - JOURNEY-005 Recover from startup failure: user sees notification/connection diagnostics, opens logs, reads concrete failing operation, fixes config or server, and reloads without guessing from empty screens.

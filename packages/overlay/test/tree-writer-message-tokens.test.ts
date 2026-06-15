@@ -36,6 +36,27 @@ function messageUpdated(info: Record<string, any>) {
   }
 }
 
+function partUpdated(input: { messageID: string; sessionID: string; partID: string; text: string; role: string }) {
+  return {
+    type: "message.part.updated",
+    sequence: 1,
+    timestamp: T0,
+    taskID: TASK_ID,
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: input.partID,
+        messageID: input.messageID,
+        sessionID: input.sessionID,
+        type: "text",
+        text: input.text,
+        resolvedRole: input.role,
+        channel: input.role,
+      },
+    },
+  }
+}
+
 // Regression: the overlay chat-usage strip was empty for any task whose
 // orchestrator / planner / chat agents run on the internal session loop.
 // Internal sessions write tokens onto `Message.Assistant.{tokens,cost}`
@@ -81,6 +102,118 @@ test("handleMessageUpdated projects info.tokens + info.cost onto the turn card",
   expect(agg.tokens).toBe(1_550)
   expect(agg.costUSD).toBe(0.0182)
   expect(agg.estimated).toBe(false)
+})
+
+test("live message regroup keeps user and assistant turns on the real timeline", async () => {
+  setBoardStore("board", {
+    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    goals: [],
+    interactions: [],
+    goalWorkflows: [],
+  } as any)
+  setBoardStore("selectedSource", { kind: "session", id: SID })
+  resetWriter()
+
+  for (const item of [
+    { id: "msg_user_1", role: "user", time: T0 + 100, text: "hello" },
+    { id: "msg_assistant_1", role: "assistant", time: T0 + 200, text: "Hello! How can I help?" },
+    { id: "msg_user_2", role: "user", time: T0 + 300, text: "你是什么模型" },
+    { id: "msg_assistant_2", role: "assistant", time: T0 + 400, text: "我是 OpenCorvus。" },
+  ]) {
+    applyEvent(
+      messageUpdated({
+        id: item.id,
+        sessionID: SID,
+        role: item.role,
+        time: { created: item.time },
+      }),
+    )
+    applyEvent(
+      partUpdated({
+        messageID: item.id,
+        sessionID: SID,
+        partID: `part_${item.id}`,
+        text: item.text,
+        role: item.role,
+      }),
+    )
+  }
+
+  expect(cardTreeStore.order.filter((id) => id.includes(`:session:${SID}:message:`))).toEqual([
+    `user:session:${SID}:message:msg_user_1`,
+    `assistant:session:${SID}:message:msg_assistant_1`,
+    `user:session:${SID}:message:msg_user_2`,
+    `assistant:session:${SID}:message:msg_assistant_2`,
+  ])
+})
+
+test("hydrateConversationView keeps user and assistant turns on the real timeline", async () => {
+  setBoardStore("board", {
+    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    goals: [],
+    interactions: [],
+    goalWorkflows: [],
+  } as any)
+  setBoardStore("selectedSource", { kind: "session", id: SID })
+  resetWriter()
+
+  hydrateConversationView({ sessions: [{ sessionID: SID, stage: "assistant" }] }, [
+    {
+      info: {
+        id: "msg_hydrate_user_1",
+        sessionID: SID,
+        role: "user",
+        resolvedRole: "user",
+        agent: "user",
+        channel: "user",
+        time: { created: T0 + 100 },
+      },
+      parts: [{ id: "part_hydrate_user_1", type: "text", text: "hello" }],
+    },
+    {
+      info: {
+        id: "msg_hydrate_assistant_1",
+        sessionID: SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        channel: "assistant",
+        time: { created: T0 + 200 },
+      },
+      parts: [{ id: "part_hydrate_assistant_1", type: "text", text: "Hello!" }],
+    },
+    {
+      info: {
+        id: "msg_hydrate_user_2",
+        sessionID: SID,
+        role: "user",
+        resolvedRole: "user",
+        agent: "user",
+        channel: "user",
+        time: { created: T0 + 300 },
+      },
+      parts: [{ id: "part_hydrate_user_2", type: "text", text: "你是什么模型" }],
+    },
+    {
+      info: {
+        id: "msg_hydrate_assistant_2",
+        sessionID: SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        channel: "assistant",
+        time: { created: T0 + 400 },
+      },
+      parts: [{ id: "part_hydrate_assistant_2", type: "text", text: "OpenCorvus." }],
+    },
+  ])
+
+  expect(cardTreeStore.order.filter((id) => id.includes(`:session:${SID}:message:`))).toEqual([
+    `user:session:${SID}:message:msg_hydrate_user_1`,
+    `assistant:session:${SID}:message:msg_hydrate_assistant_1`,
+    `user:session:${SID}:message:msg_hydrate_user_2`,
+    `assistant:session:${SID}:message:msg_hydrate_assistant_2`,
+  ])
 })
 
 test("handleMessageUpdated projects the actual assistant model from message info", async () => {

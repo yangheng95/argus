@@ -42,16 +42,35 @@ export async function resolveBrowserPreviewTarget(input: {
   const projectRoot = path.resolve(input.projectRoot)
   const taskID = input.taskID.trim()
   const persistedTargets = findRecentBrowserPreviewTargets(taskID)
-  const candidates = await visibleBrowserPreviewTargets(persistedTargets, input.isVisible)
-  const persisted = candidates[0]
-  if (!persisted) return missingBrowserPreviewTarget({ projectRoot, taskID })
+  if (persistedTargets.length === 0) return missingBrowserPreviewTarget({ projectRoot, taskID })
+  const assessed = await assessBrowserPreviewTargets(persistedTargets, input.isVisible)
+  const reachableTargets = assessed.filter((item) => item.visible).map((item) => item.target)
+  const persisted = reachableTargets[0]
+  const unreachableDiagnostics = assessed
+    .filter((item) => !item.visible)
+    .map((item) => `Saved browser preview target is unreachable: ${item.target.url}`)
+  if (!persisted) {
+    const latest = persistedTargets[0]
+    return failedBrowserPreviewTarget({
+      projectRoot,
+      taskID,
+      id: latest.id,
+      url: latest.url,
+      source: latest.source,
+      diagnostics:
+        unreachableDiagnostics.length > 0
+          ? unreachableDiagnostics
+          : ["Saved browser preview targets are not reachable."],
+      candidates: browserPreviewCandidates(persistedTargets, latest.id),
+    })
+  }
   return taskBrowserPreviewTarget({
     projectRoot,
     taskID,
     id: persisted.id,
     url: persisted.url,
-    candidates: browserPreviewCandidates(candidates, persisted.id),
-    diagnostics: [`Using task browser preview target ${persisted.id}.`],
+    candidates: browserPreviewCandidates(persistedTargets, persisted.id),
+    diagnostics: [`Using task browser preview target ${persisted.id}.`, ...unreachableDiagnostics],
     latestEvidenceID: latestBrowserPreviewEvidenceID({ taskID, targetID: persisted.id }),
   })
 }
@@ -100,17 +119,23 @@ export function missingBrowserPreviewTarget(input: {
 export function failedBrowserPreviewTarget(input: {
   projectRoot: string
   taskID: string
+  id?: string
+  url?: string
+  source?: "task-artifact"
+  candidates?: BrowserPreviewCandidate[]
   diagnostics: string[]
 }): BrowserPreviewTarget {
   return {
+    id: input.id,
     kind: "failed",
     status: "failed",
     projectRoot: path.resolve(input.projectRoot),
     taskID: input.taskID,
+    url: input.url,
     viewports: [...BROWSER_PREVIEW_VIEWPORTS],
     diagnostics: input.diagnostics,
-    candidates: [],
-    source: "none",
+    candidates: input.candidates ?? [],
+    source: input.source ?? "none",
   }
 }
 
@@ -137,18 +162,18 @@ function normalizeSchemeLessLoopbackUrl(text: string): string | undefined {
   return `http://${match[1]}:${port}${match[3] ?? "/"}`
 }
 
-async function visibleBrowserPreviewTargets(
+async function assessBrowserPreviewTargets(
   targets: PersistedBrowserPreviewTarget[],
   isVisible: ((url: string) => Promise<boolean>) | undefined,
-): Promise<PersistedBrowserPreviewTarget[]> {
+): Promise<Array<{ target: PersistedBrowserPreviewTarget; visible: boolean }>> {
   const probe = isVisible ?? ((url: string) => isBrowserPreviewTargetVisible({ url }))
-  const result: PersistedBrowserPreviewTarget[] = []
+  const result: Array<{ target: PersistedBrowserPreviewTarget; visible: boolean }> = []
   const concurrency = 4
   for (let index = 0; index < targets.length; index += concurrency) {
     const batch = targets.slice(index, index + concurrency)
     const visible = await Promise.all(batch.map((target) => probe(target.url)))
     for (let offset = 0; offset < batch.length; offset++) {
-      if (visible[offset]) result.push(batch[offset])
+      result.push({ target: batch[offset], visible: visible[offset] === true })
     }
   }
   return result

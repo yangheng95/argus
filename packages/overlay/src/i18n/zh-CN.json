@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "0e5c55f1fe46b529"
+    "panel_revision": "7811e58e1dd92d1c"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -41,6 +41,7 @@
   "activity.tooltip.memory": "查看当前任务和会话关联的记忆条目。",
   "activity.tooltip.mission": "查看 Mission 及其创建的任务。",
   "activity.tooltip.notifications": "打开任务和系统通知。",
+  "activity.tooltip.screenshots": "按 Agent 浏览当前任务消息和工具结果中出现过的截图。",
   "activity.tooltip.skill": "管理已安装 Skill。把 SKILL.md、skill 文件夹或 .zip 拖到整个面板任意位置，即可安装到当前项目的 .opencorvus/skill。",
   "activity.tooltip.tasks": "查看并切换最近任务。",
   "activity.tooltip.workflow": "显示或隐藏当前任务的主 Workflow 对话。",
@@ -361,7 +362,7 @@
   "chat.thinking": "思考中…",
   "chat.tip": "支持拖拽文件 · 拖动上边缘调整输入框大小",
   "chat.title": "Workflow",
-  "chat.assistant_title": "Assistant",
+  "chat.panel_title": "Chat",
   "coding_assistant.title": "Coding Assistant",
   "coding_assistant.chat.new": "新建对话",
   "coding_assistant.chat.new_title": "新建 Coding Assistant 对话",
@@ -697,6 +698,10 @@
   "browser_preview.viewport.label": "预览视口",
   "browser_preview.viewport.mobile": "手机",
   "browser_preview.viewport.tablet": "平板",
+  "screenshots.count": "{{count}} 张截图",
+  "screenshots.empty": "任务消息和工具结果中的截图会显示在这里。",
+  "screenshots.group_count": "{{count}}",
+  "screenshots.title": "截图",
   "explorer.search_placeholder": "搜索文件",
   "explorer.empty": "当前目录没有文件",
   "explorer.load_failed": "无法加载文件",
@@ -779,6 +784,7 @@
   "task.reorder_button_title": "拖动调整排队任务顺序。",
   "task.load_failed": "任务列表加载失败",
   "task.ledger.title": "最近任务",
+  "task.panel_title": "Task",
   "task.ledger.new": "新建任务",
   "task.ledger.empty": "暂无任务",
   "task.project.unknown": "未指定项目",

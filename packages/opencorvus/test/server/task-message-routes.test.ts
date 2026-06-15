@@ -1,12 +1,25 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
-import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { WorkbenchTaskNoteTable } from "../../src/workbench/workbench.sql"
+import { beginBuildAttempt } from "../../src/engine/persist"
+import { findGoalRun } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import * as Queue from "../../src/engine/queue"
+import * as TaskLoop from "../../src/orchestrator/loop"
+import { Orchestrator } from "../../src/orchestrator/agent"
+import {
+  completeOrchestratorToolOwnership,
+  createOrchestratorToolOwnershipPayload,
+  insertOrchestratorToolOwnershipArtifact,
+  listLiveOrchestratorToolOwnership,
+} from "../../src/engine/tool-ownership"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
+import { SessionStatus } from "../../src/session/status"
 import { Log } from "../../src/util/log"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import type { ExecutorAdapter } from "../../src/executor/contract"
@@ -214,6 +227,11 @@ describe("task message routes", () => {
             .run(),
         )
 
+        const target = {
+          kind: "build_session" as const,
+          sessionID: "ses_build_route_target",
+          goalID: "goal_route_target",
+        }
         const response = await app.request(`/task/${taskID}/message`, {
           method: "POST",
           headers: {
@@ -223,6 +241,7 @@ describe("task message routes", () => {
           body: JSON.stringify({
             text: "把当前任务停下来，重新评估策略后继续。",
             source: "panel",
+            target,
           }),
         })
 
@@ -232,7 +251,7 @@ describe("task message routes", () => {
           message: string
           should_resume: boolean
           user_message?: {
-            info: { id: string; sessionID: string }
+            info: { id: string; sessionID: string; extra?: Record<string, unknown> }
             parts: Array<{ type: string; text?: string }>
           }
         }
@@ -241,6 +260,12 @@ describe("task message routes", () => {
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
         expect(body.user_message?.info.sessionID).toBe(root.id)
+        expect(body.user_message?.info.extra).toEqual({
+          operator_message: {
+            source: "panel",
+            target,
+          },
+        })
         expect(body.user_message?.parts).toHaveLength(1)
         expect(body.user_message?.parts[0]).toMatchObject({
           type: "text",
@@ -259,6 +284,9 @@ describe("task message routes", () => {
             operatorMessage: {
               text: "把当前任务停下来，重新评估策略后继续。",
               attachmentSummary: undefined,
+              source: "panel",
+              target,
+              messageID: body.user_message?.info.id,
             },
           },
           interrupt: true,
@@ -285,6 +313,16 @@ describe("task message routes", () => {
           type: "text",
           text: "把当前任务停下来，重新评估策略后继续。",
         })
+        expect(latest?.info.extra).toEqual({
+          operator_message: {
+            source: "panel",
+            target,
+          },
+        })
+        const workbenchNotes = Database.use((db) =>
+          db.select().from(WorkbenchTaskNoteTable).where(eq(WorkbenchTaskNoteTable.task_id, taskID)).all(),
+        )
+        expect(workbenchNotes).toEqual([])
       },
     })
   })
@@ -556,6 +594,83 @@ describe("task message routes", () => {
     })
   })
 
+  test("cancelled continuation uses a new orchestrator session when the prior one is terminal", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "hexin/gpt-5.5" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "terminal orchestrator continuation" })
+        await seedRootSession(root.id)
+        const oldOrchestrator = await Session.createNext({
+          kind: "orchestrator",
+          parentID: root.id,
+          title: "old orchestrator",
+          directory: tmp.path,
+        })
+        SessionStatus.set(oldOrchestrator.id, { type: "terminal", reason: "aborted" })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "terminal orchestrator continuation",
+              request: "terminal orchestrator continuation",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+          info: {
+            id: Identifier.ascending("message"),
+            role: "assistant",
+            sessionID: "placeholder",
+            time: { created: now },
+            agent: "orchestrator",
+            providerID: "hexin",
+            modelID: "gpt-5.5",
+          },
+          parts: [
+            {
+              id: Identifier.ascending("part"),
+              messageID: Identifier.ascending("message"),
+              sessionID: "placeholder",
+              type: "text",
+              text: "done",
+              time: { start: now, end: now },
+            },
+          ],
+        } as any)
+
+        await Orchestrator.processTask(taskID, {
+          note: "operator continuation",
+          operatorMessage: {
+            text: "继续这个任务。",
+            source: "panel",
+            messageID: Identifier.ascending("message"),
+          },
+        })
+
+        expect(prompt).toHaveBeenCalledTimes(1)
+        const promptInput = prompt.mock.calls[0]?.[0] as { sessionID?: string } | undefined
+        expect(promptInput?.sessionID).toBeDefined()
+        expect(promptInput?.sessionID).not.toBe(oldOrchestrator.id)
+        const children = await Session.children(root.id)
+        expect(children.filter((session) => session.kind === "orchestrator")).toHaveLength(2)
+      },
+    })
+  })
+
   test("POST /task/:taskID/message rejects empty text without attachments before creating a message card", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
@@ -605,6 +720,56 @@ describe("task message routes", () => {
         expect(body.name).toBe("TaskEmptyMessageError")
         expect(body.data.taskID).toBe(taskID)
         expect(body.data.message).toContain("empty task-level message")
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(1)
+      },
+    })
+  })
+
+  test("POST /task/:taskID/message rejects missing source before creating a message card", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "missing source input" })
+        await seedRootSession(root.id)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "missing source input",
+              request: "missing source input",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "message without a structured source",
+          }),
+        })
+
+        expect(response.status).toBe(400)
+        await new Promise((resolve) => setTimeout(resolve, 0))
         expect(dispatchTaskLoop).not.toHaveBeenCalled()
         expect(await Session.messages({ sessionID: root.id })).toHaveLength(1)
       },
@@ -746,6 +911,124 @@ describe("task message routes", () => {
         expect(event.operatorMessage.attachmentSummary).toContain("spec.txt")
         expect(event.operatorMessage.attachmentSummary).toContain("text/plain")
         expect((dispatchTaskLoop.mock.calls[0]?.[0] as { interrupt?: boolean }).interrupt).toBe(true)
+      },
+    })
+  })
+
+  test("POST /task/:taskID/inject queues behind live build ownership without aborting it", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const goalID = Identifier.ascending("goal")
+        const childSessionID = `ses_build_inject_${now}`
+        let release: (() => void) | undefined
+        const holdLoop = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async () => {
+          await holdLoop
+        })
+        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop")
+        const root = await Session.create({ kind: "root", title: "inject live owner" })
+        await seedRootSession(root.id)
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "inject live owner",
+              request: "inject live owner",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "Live build goal",
+              slug: "live-build-goal",
+              objective: "Keep the live build running while /inject wakes the task.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: childSessionID,
+          now,
+        })
+
+        await Queue.dispatchTaskLoop({ taskID })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: `ses_orchestrator_${now}`,
+          orchestratorMessageID: `msg_orchestrator_${now}`,
+          toolCallID: `cal_build_${now}`,
+          toolPartID: `prt_build_${now}`,
+          childSessionID,
+          scope: "goal",
+          goalID,
+          goalRunID,
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+
+        const response = await app.request(`/task/${taskID}/inject`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            message: "继续推进这个失败点。",
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(interruptTaskLoop).not.toHaveBeenCalled()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownershipPayload.ownership_id,
+          outcome: "completed",
+          now: now + 1,
+        })
+        release!()
+        await holdLoop
       },
     })
   })

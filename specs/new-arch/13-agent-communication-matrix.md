@@ -2,7 +2,7 @@
 
 > 对应代码（2026-05-12 真源）：`src/orchestrator/tools.ts` · `src/orchestrator/loop.ts` ·
 > `src/goal/runner.ts`（build tool 的 worktree+executor 执行体） ·
-> `src/build/agent.ts`（build agent；独立包 `agent.ts` / `index.ts` / `report.ts` / `types.ts` / `screenshot-tool.ts`） ·
+> `src/build/agent.ts`（build agent；独立包 `agent.ts` / `index.ts` / `report.ts` / `types.ts`） ·
 > `src/agent/sub-agent-protocol.ts`（共享 sub-agent 协议） ·
 > `src/tool/task.ts` · `src/agent/agent.ts` ·
 > `src/intent-analysis/agent.ts` · `src/integrity/agent.ts` · `src/prosecutor/agent.ts` ·
@@ -234,7 +234,7 @@ flowchart LR
 - `src/orchestrator/tools.ts`：orchestrator tools（含 `requirements / frontend_design / architect / build / analyze_intent / integrity / prosecute / propose_task / steer_subagent / cancel_subagent / refine` 等）
 - `src/orchestrator/loop.ts`：`runTaskLoop` 决策入口
 - `src/goal/runner.ts`：build tool 落到 worktree + executor 的执行体
-- `src/build/agent.ts`：build agent 入口（`build/` 独立包：`agent.ts` / `index.ts` / `report.ts` / `types.ts` / `screenshot-tool.ts`）
+- `src/build/agent.ts`：build agent 入口（`build/` 独立包：`agent.ts` / `index.ts` / `report.ts` / `types.ts`）
 - `src/agent/sub-agent-protocol.ts`：共享 sub-agent 协议（不在 `build/`）
 - `src/tool/task.ts`：`general / explore` subagent 的 direct 调用边界
 - `src/agent/agent.ts`：哪些 agent 是 `primary`，哪些是 `subagent`

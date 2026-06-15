@@ -20,6 +20,7 @@ import { OverlayUI } from "./overlay-ui"
 import { DEFAULT_SERVER_PORT } from "./defaults"
 import { requestID, serverErrorResponse } from "./error-handler"
 import { configureCorsOrigins, isAllowedCorsOrigin } from "./cors"
+import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 
 muteAISdkWarnings()
 
@@ -42,6 +43,7 @@ export namespace Server {
 
   let _url: URL | undefined
   let projectRoutesApp: Hono | undefined
+  let projectRoutesAppPromise: Promise<Hono> | undefined
 
   export function url(): URL {
     if (!_url) throw new Error("Server.url() called before serve() — server not started")
@@ -50,9 +52,23 @@ export namespace Server {
 
   async function loadProjectRoutesApp(root: Hono) {
     if (projectRoutesApp) return projectRoutesApp
-    const { AppRoutes } = await import("./routes/app")
-    projectRoutesApp = AppRoutes(root)
-    return projectRoutesApp
+    if (!projectRoutesAppPromise) {
+      projectRoutesAppPromise = import("./routes/app")
+        .then(({ AppRoutes }) => {
+          projectRoutesApp = AppRoutes(root)
+          return projectRoutesApp
+        })
+        .catch((error) => {
+          projectRoutesAppPromise = undefined
+          throw error
+        })
+    }
+    return projectRoutesAppPromise
+  }
+
+  export function resetProjectRoutesAppForTest() {
+    projectRoutesApp = undefined
+    projectRoutesAppPromise = undefined
   }
 
   export async function routeInventoryApp(): Promise<Hono> {
@@ -312,8 +328,10 @@ export namespace Server {
       log.warn("mDNS enabled but hostname is loopback; skipping mDNS publish")
     }
 
+    const runtimeMemoryMetrics = ServeRuntimeMemoryMetrics.start()
     const originalStop = server.stop.bind(server)
     server.stop = async (closeActiveConnections?: boolean) => {
+      runtimeMemoryMetrics.stop()
       if (shouldPublishMDNS) MDNS.unpublish()
       return originalStop(closeActiveConnections)
     }

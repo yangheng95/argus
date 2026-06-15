@@ -4,12 +4,7 @@ import { Instance } from "@/project/instance"
 import { Database, and, asc, eq } from "@/storage/db"
 import { ControlMessageTable } from "./control.sql"
 import { ChannelSurface } from "@/channel/catalog"
-
-const TimelineAttachment = z.object({
-  mime: z.string(),
-  url: z.string(),
-  filename: z.string().optional(),
-})
+import { ControlStoredAttachment } from "./message-schema"
 
 export const TimelineQuery = z.object({
   taskID: z.string().optional(),
@@ -135,7 +130,7 @@ export namespace ControlTimeline {
 function view(row: typeof ControlMessageTable.$inferSelect) {
   const metadata =
     row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : undefined
-  const attachments = TimelineAttachment.array().safeParse(metadata?.attachments).data ?? []
+  const attachments = ControlStoredAttachment.array().safeParse(metadata?.attachments).data ?? []
   return {
     info: {
       id: row.id,

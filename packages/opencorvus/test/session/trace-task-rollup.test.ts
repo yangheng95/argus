@@ -8,11 +8,23 @@ import { Identifier } from "../../src/id/id"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 const previousTraceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
+const previousRedactAttachments = process.env.OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS
+const previousEventMaxBytes = process.env.OPENCORVUS_AGENT_TRACE_EVENT_MAX_BYTES
+const previousBlobMaxBytes = process.env.OPENCORVUS_AGENT_TRACE_BLOB_MAX_BYTES
+const previousTaskBlobMaxBytes = process.env.OPENCORVUS_AGENT_TRACE_TASK_BLOB_MAX_BYTES
 let tempDir = ""
 
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}
+
 afterEach(() => {
-  if (previousTraceDir === undefined) delete process.env.OPENCORVUS_AGENT_TRACE_DIR
-  else process.env.OPENCORVUS_AGENT_TRACE_DIR = previousTraceDir
+  restoreEnv("OPENCORVUS_AGENT_TRACE_DIR", previousTraceDir)
+  restoreEnv("OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS", previousRedactAttachments)
+  restoreEnv("OPENCORVUS_AGENT_TRACE_EVENT_MAX_BYTES", previousEventMaxBytes)
+  restoreEnv("OPENCORVUS_AGENT_TRACE_BLOB_MAX_BYTES", previousBlobMaxBytes)
+  restoreEnv("OPENCORVUS_AGENT_TRACE_TASK_BLOB_MAX_BYTES", previousTaskBlobMaxBytes)
   if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true })
   tempDir = ""
 })
@@ -250,6 +262,119 @@ test("task trace reader parses only the bounded tail of large trace files", asyn
 
       const events = AgentTrace.readTaskEvents(taskID)
       expect(events.map((event) => event.agentName)).toEqual(["tail"])
+    },
+  })
+})
+
+test("llm request trace redacts data URLs by default", async () => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-redact-"))
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir
+  const { AgentTrace } = await import("../../src/trace")
+  const sessionID = Identifier.create("session", false)
+  const taskID = Identifier.create("task", false)
+  const dataURL = `data:image/png;base64,${"a".repeat(2048)}`
+
+  await Instance.provide({
+    directory: tempDir,
+    fn: async () => {
+      AgentTrace.recordLLMRequest({
+        sessionID,
+        taskID,
+        agentName: "build",
+        model: { providerID: "test", modelID: "model" },
+        system: ["system"],
+        messages: [{ role: "user", content: [{ type: "image", image: dataURL }] }],
+        tools: [],
+      })
+
+      const raw = fs.readFileSync(ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(tempDir, taskID, "trace.jsonl"), "utf8")
+      expect(raw).not.toContain(dataURL)
+      expect(raw).toContain("[redacted data URL")
+    },
+  })
+})
+
+test("oversized trace payloads are stored behind a blob reference", async () => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-blob-"))
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir
+  process.env.OPENCORVUS_AGENT_TRACE_EVENT_MAX_BYTES = "1024"
+  process.env.OPENCORVUS_AGENT_TRACE_BLOB_MAX_BYTES = "200000"
+  process.env.OPENCORVUS_AGENT_TRACE_TASK_BLOB_MAX_BYTES = "200000"
+  const { AgentTrace } = await import("../../src/trace")
+  const taskID = Identifier.create("task", false)
+  const largeText = "trace-blob-marker-" + "x".repeat(10_000)
+
+  await Instance.provide({
+    directory: tempDir,
+    fn: async () => {
+      AgentTrace.recordHelperLLMCall({
+        taskID,
+        agentName: "helper",
+        model: { providerID: "test", modelID: "model" },
+        messages: [{ role: "user", content: largeText }],
+        output: { ok: true },
+      })
+
+      const events = AgentTrace.readTaskEvents(taskID)
+      expect(events).toHaveLength(1)
+      const ref = (events[0]?.payload as any)?.tracePayloadRef
+      expect(typeof ref?.sha256).toBe("string")
+      const sha256 = ref.sha256
+      expect(events[0]).toMatchObject({
+        traceBounded: true,
+        payload: {
+          tracePayloadRef: {
+            bytes: expect.any(Number),
+            sha256: expect.any(String),
+          },
+          summary: { type: "object" },
+        },
+      })
+      const eventText = JSON.stringify(events[0])
+      expect(eventText).not.toContain(largeText)
+      const blobPath = ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(
+        tempDir,
+        taskID,
+        "trace",
+        "blobs",
+        `${sha256}.json`,
+      )
+      expect(fs.readFileSync(blobPath, "utf8")).toContain(largeText)
+    },
+  })
+})
+
+test("oversized trace payloads are explicitly truncated when blob quotas reject them", async () => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-truncate-"))
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir
+  process.env.OPENCORVUS_AGENT_TRACE_EVENT_MAX_BYTES = "1024"
+  process.env.OPENCORVUS_AGENT_TRACE_BLOB_MAX_BYTES = "2048"
+  process.env.OPENCORVUS_AGENT_TRACE_TASK_BLOB_MAX_BYTES = "2048"
+  const { AgentTrace } = await import("../../src/trace")
+  const taskID = Identifier.create("task", false)
+
+  await Instance.provide({
+    directory: tempDir,
+    fn: async () => {
+      AgentTrace.recordHelperLLMCall({
+        taskID,
+        agentName: "helper",
+        model: { providerID: "test", modelID: "model" },
+        messages: [{ role: "user", content: "x".repeat(10_000) }],
+        output: { ok: true },
+      })
+
+      const events = AgentTrace.readTaskEvents(taskID)
+      expect(events[0]).toMatchObject({
+        traceBounded: true,
+        payload: {
+          tracePayloadTruncated: true,
+          reason: "single_blob_limit",
+          summary: { type: "object" },
+        },
+      })
+      const blobRoot = ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(tempDir, taskID, "trace", "blobs")
+      expect(fs.existsSync(blobRoot)).toBe(false)
     },
   })
 })

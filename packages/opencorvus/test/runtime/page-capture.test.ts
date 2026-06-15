@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import fs from "node:fs/promises"
 import path from "node:path"
 import { normalizeRuntimeCaptureRequest, normalizeRuntimeCaptureViewport } from "../../src/runtime/capture-contract"
 
@@ -33,11 +32,11 @@ describe("runtime page capture", () => {
     })
   })
 
-  test("build screenshot tool delegates browser work to runtime capture", async () => {
-    const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/build/screenshot-tool.ts"), "utf8")
+  test("build agent does not expose the retired direct screenshot tool", async () => {
+    const source = await Bun.file(path.resolve(import.meta.dir, "../../src/build/agent.ts")).text()
 
-    expect(source).toContain("captureRuntimePage")
-    expect(source).not.toContain("Playwright.launch")
-    expect(source).not.toContain("networkidle0")
+    expect(source).not.toContain("./screenshot-tool")
+    expect(source).not.toContain("createBuildScreenshotTool")
+    expect(source).not.toContain("captureRuntimePage")
   })
 })

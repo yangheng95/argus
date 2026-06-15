@@ -29,8 +29,9 @@ export async function collectMainWorktreeDiff(
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((file) => !ProjectRuntimePaths.isEvidenceInputRelativePath(file))
+    .filter(ProjectRuntimePaths.isSourceEnumerationAllowed)
   const patchResult =
-    await $`git -c core.quotepath=false diff --no-ext-diff ${range} -- . ":(exclude)frontend-design-skeleton" ":(exclude)frontend-design-skeleton/**" ":(exclude)web-clone-source" ":(exclude)web-clone-source/**" ":(exclude)webpage-evidence" ":(exclude)webpage-evidence/**"`
+    await $`git -c core.quotepath=false diff --no-ext-diff ${range} -- . ":(exclude)frontend-design-skeleton" ":(exclude)frontend-design-skeleton/**" ":(exclude)web-clone-source" ":(exclude)web-clone-source/**" ":(exclude)webpage-evidence" ":(exclude)webpage-evidence/**" ":(exclude).opencorvus/runtime" ":(exclude).opencorvus/runtime/**" ":(exclude).opencorvus/worktrees" ":(exclude).opencorvus/worktrees/**" ":(exclude).opencorvus-worktrees" ":(exclude).opencorvus-worktrees/**" ":(exclude).opencorvus-meta.json"`
       .cwd(cwd)
       .quiet()
       .nothrow()

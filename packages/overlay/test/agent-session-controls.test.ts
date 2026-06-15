@@ -63,14 +63,26 @@ describe("agent session controls", () => {
       })
     }) as typeof fetch
 
-    await sendTaskOperatorMessage("tsk_1", "  Build session steering from overlay.\n\nuse hchart  ")
+    await sendTaskOperatorMessage("tsk_1", "  Build session steering from overlay.\n\nuse hchart  ", {
+      source: "overlay_build_steer",
+      target: {
+        kind: "build_session",
+        sessionID: "ses_build_1",
+        goalID: "goal_1",
+      },
+    })
 
     expect(calls.length).toBe(1)
     expect(calls[0].url).toBe("http://overlay.test/task/tsk_1/message")
     expect(calls[0].init?.method).toBe("POST")
     expect(JSON.parse(String(calls[0].init?.body))).toEqual({
       text: "Build session steering from overlay.\n\nuse hchart",
-      source: "overlay_operator_message",
+      source: "overlay_build_steer",
+      target: {
+        kind: "build_session",
+        sessionID: "ses_build_1",
+        goalID: "goal_1",
+      },
     })
   })
 
@@ -103,6 +115,9 @@ describe("agent session controls", () => {
       expect(source).toContain('"build" ? "task" : "session"')
       expect(source).toContain("Build session steering from overlay.")
       expect(source).toContain("overlay_build_steer")
+      expect(source).toContain('kind: "build_session"')
+      expect(source).toContain("sessionID")
+      expect(source).toContain("goalID")
       expect(source).toContain("replyToAgentSession(taskID, sessionID, message)")
     }
   })

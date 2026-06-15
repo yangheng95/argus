@@ -6,6 +6,7 @@ import { GlobalBus } from "@/bus/global"
 import { BusEvent } from "@/bus/bus-event"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
+import { SessionContext } from "@/session/context"
 import { SessionTable } from "@/session/session.sql"
 import { Message } from "@/session/message"
 import { Database, and, eq, inArray, sql, type SQL } from "@/storage/db"
@@ -27,10 +28,17 @@ export const TaskQueueEvent = {
   ),
 }
 
-const RawTaskMetadata = z.object({
-  kind: z.literal("session_prompt"),
-  input: z.unknown(),
-})
+const RawTaskMetadata = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("session_prompt"),
+    input: z.unknown(),
+  }),
+  z.object({
+    kind: z.literal("session_wake"),
+    messageID: z.string(),
+    input: z.unknown(),
+  }),
+])
 
 const EnqueuePromptInput = z.object({
   sessionID: Identifier.schema("session"),
@@ -163,6 +171,50 @@ export namespace TaskQueueService {
     )
     log.info("task queued", { id, sessionID: input.sessionID, source: input.source ?? "api" })
     return id
+  }
+
+  export async function enqueuePromptAfterPersistingUserMessage(raw: z.input<typeof EnqueuePromptInput>) {
+    const input = EnqueuePromptInput.parse(raw)
+    const id = Identifier.ascending("task")
+    const prompt = stampTaskQueueWakeReason(
+      applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt)),
+      { queueTaskID: id, queueSource: input.source ?? "api" },
+    )
+    const userMessage = await SessionPrompt.prompt({
+      sessionID: input.sessionID,
+      ...prompt,
+      noReply: true,
+    })
+    const now = Date.now()
+    Database.use((db) =>
+      db
+        .insert(TaskQueueTable)
+        .values({
+          id,
+          session_id: input.sessionID,
+          prompt: firstText(prompt),
+          priority: input.priority ?? "normal",
+          status: "queued",
+          source: input.source ?? "api",
+          retry_count: 0,
+          max_retries: input.maxRetries ?? 3,
+          metadata: {
+            kind: "session_wake",
+            messageID: userMessage.info.id,
+            input: { ...prompt },
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
+    )
+    log.info("task queued after visible user message persisted", {
+      id,
+      sessionID: input.sessionID,
+      messageID: userMessage.info.id,
+      source: input.source ?? "api",
+    })
+    return { taskID: id, userMessage }
   }
 
   export function cancelSessionPrompts(input: { sessionIDs: string[]; reason?: string; source?: string }): number {
@@ -399,11 +451,15 @@ export namespace TaskQueueService {
     }
     GlobalBus.on("event", handler)
     try {
-      await executePrompt({
-        sessionID: task.session_id,
-        prompt: metadata.data.input,
-        source: "task-queue-service",
-      })
+      if (metadata.data.kind === "session_prompt") {
+        await executePrompt({
+          sessionID: task.session_id,
+          prompt: metadata.data.input,
+          source: "task-queue-service",
+        })
+      } else {
+        await executeSessionWake(task.session_id)
+      }
     } finally {
       GlobalBus.off("event", handler)
     }
@@ -422,6 +478,16 @@ export namespace TaskQueueService {
     )
     log.info("task completed", { id: task.id, sessionID: task.session_id })
     Bus.publish(TaskQueueEvent.Completed, { queueTaskID: task.id, sessionID: task.session_id })
+  }
+
+  async function executeSessionWake(sessionID: string) {
+    const session = await Session.get(sessionID)
+    return SessionContext.provide(session, () =>
+      Instance.provide({
+        directory: session.directory,
+        fn: () => SessionPrompt.loop({ sessionID }),
+      }),
+    )
   }
 
   async function recover(now: number) {

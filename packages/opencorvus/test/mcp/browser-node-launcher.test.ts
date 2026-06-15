@@ -67,4 +67,10 @@ describe("browser MCP node launcher", () => {
       }),
     ).rejects.toThrow("Browser MCP packaged runtime is missing")
   })
+
+  test("spawns node sidecar in a killable process group on non-Windows", () => {
+    expect(BrowserMCPNodeLauncher.childSpawnOptions({ env: {}, platform: "linux" }).detached).toBe(true)
+    expect(BrowserMCPNodeLauncher.childSpawnOptions({ env: {}, platform: "darwin" }).detached).toBe(true)
+    expect(BrowserMCPNodeLauncher.childSpawnOptions({ env: {}, platform: "win32" }).detached).toBe(false)
+  })
 })

@@ -79,6 +79,33 @@ function taskConversationPayload() {
   }
 }
 
+function persistedUserMessage(sessionID: string, messageID: string, text: string, created: number) {
+  return {
+    info: {
+      id: messageID,
+      sessionID,
+      role: "user",
+      resolvedRole: "user",
+      agent: "user",
+      channel: "main",
+      time: { created },
+    },
+    parts: [
+      {
+        id: `${messageID}:text`,
+        messageID,
+        sessionID,
+        type: "text",
+        text,
+        role: "user",
+        resolvedRole: "user",
+        agent: "user",
+        channel: "main",
+      },
+    ],
+  }
+}
+
 function missionListPayload() {
   return [
     {
@@ -113,7 +140,7 @@ function assertMatchObject(actual: Record<string, unknown>, expected: Record<str
 }
 
 test(
-  "side activity toolbars open equal-width workbench panels while workflow keeps its header",
+  "side activity toolbars open the focused center panel and equal-width workbench panels",
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
@@ -148,9 +175,44 @@ test(
         })
       }
       if (path === "/session/ses_mission_side_activity/prompt_async") {
-        return send({ taskID: "tsk_mission_continue_prompt" }, { status: 202 })
+        return send(
+          {
+            taskID: "tsk_mission_continue_prompt",
+            user_message: persistedUserMessage(
+              "ses_mission_side_activity",
+              "msg_mission_continue_prompt",
+              "continue mission",
+              1_735_689_670_000,
+            ),
+          },
+          { status: 202 },
+        )
       }
       if (path === "/session/ses_mission_side_activity/events") {
+        return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+      }
+      if (path === "/mission/wake") {
+        return send({ missionID: "mis_mission_new", sessionID: "ses_mission_new", created: true })
+      }
+      if (path === "/session/ses_mission_new/conversation") {
+        return send({
+          board: {
+            kind: "session",
+            sessionID: "ses_mission_new",
+            status: "active",
+            title: "New mission",
+            directory: "D:/overlay/workspace/app",
+          },
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { rootID: "root", cards: {}, order: [] },
+          agentView: { rootID: "root", cards: {}, order: [] },
+          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          messageWatermark: 0,
+        })
+      }
+      if (path === "/session/ses_mission_new/events") {
         return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
       }
       if (path === "/task/tsk_side_activity/conversation") return send(taskConversationPayload())
@@ -215,7 +277,18 @@ test(
         })
       }
       if (path === "/session/ses_right_sidebar_assistant/prompt_async") {
-        return send({ taskID: "tsk_right_sidebar_prompt" }, { status: 202 })
+        return send(
+          {
+            taskID: "tsk_right_sidebar_prompt",
+            user_message: persistedUserMessage(
+              "ses_right_sidebar_assistant",
+              "msg_right_sidebar_prompt",
+              "ask assistant",
+              1_735_689_680_000,
+            ),
+          },
+          { status: 202 },
+        )
       }
       if (path === "/session/ses_right_sidebar_assistant/events") {
         return new Response(
@@ -396,6 +469,7 @@ test(
               )?.dataset.active ?? "",
             rightNotifications: active("#rightPanelNotifications"),
             notificationPanelExists: !!document.querySelector("#solidNotificationCenterMount"),
+            appDialogOpen: document.querySelector<HTMLElement>("#appDialog")?.style.pointerEvents === "auto",
             taskStatusInWorkflowHeader: !!document.querySelector("#chatSection .chat-header #solidTaskStatusMount"),
             centerWorkbenchHeaderExists: !!document.querySelector("#solidCenterWorkbenchTabs"),
             chatTitle: document.querySelector<HTMLElement>("#chatViewTitle")?.textContent ?? "",
@@ -425,6 +499,20 @@ test(
               document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")?.dataset.resizableNext ?? "",
           }
         })
+
+      const waitForState = async (
+        label: string,
+        predicate: (state: Record<string, unknown>) => boolean,
+        attempts = 50,
+      ) => {
+        let state = await activeState()
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+          state = await activeState()
+          if (predicate(state)) return state
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        throw new Error(`${label}: ${JSON.stringify(state)} requests=${JSON.stringify(requestLog.slice(-20))}`)
+      }
 
       assertMatchObject(await activeState(), {
         leftTasks: "true",
@@ -461,7 +549,7 @@ test(
         notificationPanelExists: true,
         taskStatusInWorkflowHeader: true,
         centerWorkbenchHeaderExists: false,
-        chatTitle: "Workflow",
+        chatTitle: "Task",
         rightTitle: "Inspector",
         notificationTitle: "Notifications",
         workbenchStartsAtWorkspace: true,
@@ -487,7 +575,10 @@ test(
           toolbarTopAlignedWithSidebar: Math.abs(toolbarRect.top - sidebarRect.top) <= 1,
           shellContainsToolbar: toolbarRect.left >= shellRect.left - 1 && toolbarRect.right <= shellRect.right + 1,
           shellContainsSidebar: sidebarRect.left >= shellRect.left - 1 && sidebarRect.right <= shellRect.right + 1,
-          headerActionText: (headerActions.textContent || "").trim(),
+          headerActionText: Array.from(headerActions.querySelectorAll<HTMLElement>("[data-left-action]:not([hidden])"))
+            .map((node) => node.textContent || "")
+            .join(" ")
+            .trim(),
           missionActivityInHeader: !!headerActions.querySelector('[data-activity="mission"]'),
         }
       })
@@ -506,13 +597,7 @@ test(
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
       for (let attempt = 0; attempt < 50; attempt += 1) {
         const state = await activeState()
-        if (
-          state.leftMission === "true" &&
-          state.missionRows === 1 &&
-          state.selectedSourceKind === "session" &&
-          state.selectedSourceID === "ses_mission_side_activity"
-        )
-          break
+        if (state.leftMission === "true" && state.missionRows === 1 && state.selectedSourceKind !== "session") break
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
       assertMatchObject(await activeState(), {
@@ -520,12 +605,45 @@ test(
         leftMission: "true",
         leftMissionButton: "true",
         leftTasksButton: "false",
-        selectedSourceKind: "session",
-        selectedSourceID: "ses_mission_side_activity",
+        chatTitle: "Mission",
+        selectedSourceKind: "task",
+        selectedSourceID: "tsk_side_activity",
         missionRows: 1,
         missionTaskProjectionButtons: 1,
       })
+      assert.deepEqual((await activeState()).openPanels, ["mission"])
+      await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
+      assertMatchObject(await activeState(), {
+        leftMission: "true",
+        centerOpen: "true",
+        centerWorkflow: "true",
+        rightWorkflowButton: "false",
+        chatTitle: "Mission",
+      })
+      const missionCreatePlacement = await page.evaluate(() => {
+        const header = document.querySelector<HTMLElement>("#leftPanelTaskActions")!
+        const button = document.querySelector<HTMLButtonElement>('[data-ui="mission-new"]')!
+        return {
+          inHeader: header.contains(button),
+          hidden: button.hidden,
+          listButtons: document.querySelectorAll('.mission-ledger-controls [data-ui="mission-new"]').length,
+        }
+      })
+      assert.deepEqual(missionCreatePlacement, { inHeader: true, hidden: false, listButtons: 0 })
       assert.ok(requestLog.some((entry) => entry.method === "GET" && entry.path === "/mission"))
+      assert.equal(
+        requestLog.some(
+          (entry) => entry.method === "GET" && entry.path === "/session/ses_mission_side_activity/conversation",
+        ),
+        false,
+      )
+
+      await page.click('[data-ui="mission-row"][data-session-id="ses_mission_side_activity"]')
+      await waitForState("mission row should select its session", (state) => state.selectedSourceID === "ses_mission_side_activity")
+      assertMatchObject(await activeState(), {
+        selectedSourceKind: "session",
+        selectedSourceID: "ses_mission_side_activity",
+      })
       assert.ok(
         requestLog.some(
           (entry) => entry.method === "GET" && entry.path === "/session/ses_mission_side_activity/conversation",
@@ -567,6 +685,43 @@ test(
         false,
       )
 
+      await clickButton('[data-ui="mission-new"]')
+      await waitForState(
+        "mission new should clear the old session",
+        (state) => state.selectedSourceKind === "" && state.chatTitle === "New Mission",
+      )
+      assertMatchObject(await activeState(), {
+        selectedSourceKind: "",
+        selectedSourceID: "",
+        chatTitle: "New Mission",
+      })
+
+      await page.$eval("#chatTextarea", (node) => {
+        const textarea = node as HTMLTextAreaElement
+        textarea.value = "start a fresh mission"
+        textarea.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            inputType: "insertText",
+            data: "start a fresh mission",
+          }),
+        )
+      })
+      await clickButton("#chatSend")
+      await waitForState("mission wake should select new session", (state) => state.selectedSourceID === "ses_mission_new")
+      assert.ok(requestLog.some((entry) => entry.method === "POST" && entry.path === "/mission/wake"))
+      assert.ok(
+        requestLog.some((entry) => entry.method === "GET" && entry.path === "/session/ses_mission_new/conversation"),
+      )
+      assertMatchObject(await activeState(), {
+        selectedSourceKind: "session",
+        selectedSourceID: "ses_mission_new",
+      })
+
+      await waitForState(
+        "mission task projection button should render after mission wake refresh",
+        (state) => state.missionTaskProjectionButtons === 1,
+      )
       await clickButton('[data-ui="mission-task-projection-select"]')
       await page.waitForFunction(
         () =>
@@ -695,9 +850,9 @@ test(
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
       assertMatchObject(await activeState(), {
-        centerOpen: "false",
-        centerWorkflow: "false",
-        rightWorkflowButton: "false",
+        centerOpen: "true",
+        centerWorkflow: "true",
+        rightWorkflowButton: "true",
         rightInspectorButton: "false",
       })
 
@@ -706,7 +861,7 @@ test(
         centerOpen: "true",
         centerWorkflow: "true",
         rightWorkflowButton: "true",
-        chatTitle: "Workflow",
+        chatTitle: "Task",
       })
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
@@ -716,8 +871,9 @@ test(
         centerInspector: "true",
         rightInspectorButton: "true",
         workflowResizableNext: "true",
+        appDialogOpen: false,
       })
-      assert.deepEqual(twoPanelState.openPanels, ["workflow", "inspector"])
+      assert.deepEqual(twoPanelState.openPanels, ["task", "inspector"])
       assert.ok(Math.abs(twoPanelState.openPanelWidths[0]! - twoPanelState.openPanelWidths[1]!) <= 2)
 
       const workflowEdge = await page.evaluate(() => {
@@ -729,7 +885,7 @@ test(
       await page.mouse.move(workflowEdge.x + 120, workflowEdge.y, { steps: 8 })
       await page.mouse.up()
       const resizedTwoPanelState = await activeState()
-      assert.deepEqual(resizedTwoPanelState.openPanels, ["workflow", "inspector"])
+      assert.deepEqual(resizedTwoPanelState.openPanels, ["task", "inspector"])
       assert.ok(resizedTwoPanelState.openPanelWidths[0]! - resizedTwoPanelState.openPanelWidths[1]! > 80)
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
@@ -761,7 +917,7 @@ test(
         centerExplorer: "true",
         rightPreviewButton: "true",
         rightInspector: "false",
-        chatTitle: "Workflow",
+        chatTitle: "Task",
       })
       const previewWidth = async () =>
         await page.evaluate(() =>
@@ -812,7 +968,7 @@ test(
       })
       assert.equal(inspectorOpenState.tabCount, 0)
       assert.deepEqual(inspectorOpenState.openPanels, [
-        "workflow",
+        "task",
         "explorer",
         "diff",
         "browser",
@@ -833,27 +989,82 @@ test(
           )?.dataset.active === "true",
       )
       await page.waitForSelector('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
+      await waitForState(
+        "assistant activity should select its focused chat session",
+        (state) => state.chatTitle === "Chat" && state.selectedSourceID === "ses_right_sidebar_assistant",
+      )
       assertMatchObject(await activeState(), {
         leftAssistant: "true",
         leftAssistantButton: "true",
-        chatTitle: "Workflow",
-        selectedSourceKind: "task",
-        selectedSourceID: "tsk_side_activity",
-      })
-      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
-      await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
-      assertMatchObject(await activeState(), {
-        centerPreview: "true",
-        centerWorkflow: "true",
-        leftAssistant: "true",
-        leftAssistantButton: "true",
-        rightPreviewButton: "true",
-        chatTitle: "Assistant",
+        centerPreview: "false",
+        rightPreviewButton: "false",
+        chatTitle: "Chat",
         selectedSourceKind: "session",
         selectedSourceID: "ses_right_sidebar_assistant",
       })
+      assert.deepEqual((await activeState()).openPanels, ["chat"])
+      const assistantCreatePlacement = await page.evaluate(() => {
+        const header = document.querySelector<HTMLElement>("#leftPanelTaskActions")!
+        const button = document.querySelector<HTMLButtonElement>('[data-ui="coding-assistant-new"]')!
+        return {
+          inHeader: header.contains(button),
+          hidden: button.hidden,
+          listButtons: document.querySelectorAll('.coding-assistant-ledger-toolbar [data-ui="coding-assistant-new"]')
+            .length,
+        }
+      })
+      assert.deepEqual(assistantCreatePlacement, { inHeader: true, hidden: false, listButtons: 0 })
+      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
+      await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
+      assertMatchObject(await activeState(), {
+        centerPreview: "false",
+        centerWorkflow: "true",
+        leftAssistant: "true",
+        leftAssistantButton: "true",
+        rightPreviewButton: "false",
+        chatTitle: "Chat",
+        selectedSourceKind: "session",
+        selectedSourceID: "ses_right_sidebar_assistant",
+      })
+      assert.deepEqual((await activeState()).openPanels, ["chat"])
+      await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
+      assertMatchObject(await activeState(), {
+        centerWorkflow: "true",
+        leftAssistant: "true",
+        leftAssistantButton: "true",
+        rightWorkflowButton: "false",
+        chatTitle: "Chat",
+      })
 
       assert.equal((await activeState()).tabCount, 0)
+
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      await waitForState(
+        "mission activity should clear assistant session",
+        (state) =>
+          state.leftMission === "true" &&
+          state.chatTitle === "Mission" &&
+          state.selectedSourceKind === "",
+      )
+      assertMatchObject(await activeState(), {
+        leftMission: "true",
+        leftAssistantButton: "false",
+        centerPreview: "false",
+        rightPreviewButton: "false",
+        chatTitle: "Mission",
+        selectedSourceKind: "",
+        selectedSourceID: "",
+        renderedCardCount: 0,
+      })
+      assert.deepEqual((await activeState()).openPanels, ["mission"])
+
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
+      await page.waitForSelector('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
+      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
+      await waitForState(
+        "assistant row should reselect assistant session",
+        (state) => state.selectedSourceID === "ses_right_sidebar_assistant",
+      )
 
       await page.$eval("#chatTextarea", (node) => {
         const textarea = node as HTMLTextAreaElement
@@ -903,18 +1114,21 @@ test(
       await page.waitForFunction(
         () =>
           document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true" &&
-          document.querySelector<HTMLElement>("#chatViewTitle")?.textContent === "Workflow" &&
+          document.querySelector<HTMLElement>("#chatViewTitle")?.textContent === "Task" &&
           !(window as any).boardStore?.selectedSource,
       )
       assertMatchObject(await activeState(), {
         centerWorkflow: "true",
+        centerPreview: "false",
         leftTasksButton: "true",
         leftAssistantButton: "false",
-        chatTitle: "Workflow",
+        rightPreviewButton: "false",
+        chatTitle: "Task",
         selectedSourceKind: "",
         selectedSourceID: "",
         renderedCardCount: 0,
       })
+      assert.deepEqual((await activeState()).openPanels, ["task"])
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
       await page.waitForFunction(
@@ -930,14 +1144,14 @@ test(
       await page.waitForFunction(
         () =>
           document.querySelector<HTMLElement>("#leftPanelSkills")?.dataset.active === "true" &&
-          document.querySelector<HTMLElement>("#chatViewTitle")?.textContent === "Workflow" &&
+          document.querySelector<HTMLElement>("#chatViewTitle")?.textContent === "Task" &&
           !(window as any).boardStore?.selectedSource,
       )
       assertMatchObject(await activeState(), {
         centerWorkflow: "true",
         leftSkillButton: "true",
         leftAssistantButton: "false",
-        chatTitle: "Workflow",
+        chatTitle: "Task",
         selectedSourceKind: "",
         selectedSourceID: "",
         renderedCardCount: 0,
@@ -949,8 +1163,8 @@ test(
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
       assertMatchObject(await activeState(), {
         centerOpen: "true",
-        centerPreview: "false",
-        rightPreviewButton: "false",
+        centerPreview: "true",
+        rightPreviewButton: "true",
       })
     } finally {
       await browser.close()

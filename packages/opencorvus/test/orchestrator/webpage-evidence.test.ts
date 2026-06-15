@@ -37,6 +37,7 @@ describe("live webpage evidence pipeline", () => {
     expect(await hasCompletePrimaryEvidence(evidenceDir, "https://example.com/markets")).toBe(true)
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/index.html"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "reference-mobile.png"))
     expect(result.artifacts).not.toContain(path.posix.join(paths.webpageEvidenceRelative, "singlefile.html"))
     expect(result.artifacts).toContain(
       path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/used-selectors.json"),
@@ -57,6 +58,7 @@ describe("live webpage evidence pipeline", () => {
       path.posix.join(paths.webpageEvidenceRelative, "visual-surface-scaffold.json"),
     )
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "README.md"))
+    expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "reference-mobile.png"))
     expect(result.artifacts).not.toContain(path.posix.join(paths.sourcePackageRelative, "singlefile.html"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "implementation-blueprint.md"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "source-skeleton/critical.css"))
@@ -102,6 +104,7 @@ describe("live webpage evidence pipeline", () => {
     expect(calls).toEqual([])
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "README.md"))
+    expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "reference-mobile.png"))
     expect(result.artifacts).not.toContain(path.posix.join(paths.sourcePackageRelative, "singlefile.html"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "implementation-blueprint.md"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "visual-surface-candidates.json"))
@@ -141,7 +144,9 @@ describe("live webpage evidence pipeline", () => {
     expect(await fileExists(path.join(tmp.path, "webpage-evidence", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(tmp.path, "web-clone-source", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(secondPaths.webpageEvidenceAbsolute, "reference.png"))).toBe(true)
+    expect(await fileExists(path.join(secondPaths.webpageEvidenceAbsolute, "reference-mobile.png"))).toBe(true)
     expect(await fileExists(path.join(secondPaths.sourcePackageAbsolute, "reference.png"))).toBe(true)
+    expect(await fileExists(path.join(secondPaths.sourcePackageAbsolute, "reference-mobile.png"))).toBe(true)
     expect(await fileExists(path.join(secondPaths.sourcePackageAbsolute, "singlefile.html"))).toBe(false)
   })
 
@@ -216,7 +221,7 @@ async function writeCompleteEvidence(evidenceDir: string, url: string): Promise<
     const relative = artifact.replace(/^webpage-evidence[\\/]/, "")
     const file = path.join(evidenceDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
-    if (relative === "reference.png") {
+    if (relative === "reference.png" || relative === "reference-mobile.png") {
       await fs.writeFile(file, minimalPngBytes())
       continue
     }

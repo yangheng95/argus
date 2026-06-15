@@ -202,7 +202,14 @@ export function Card(props: { node: CardNode; depth: number }) {
       ]
         .filter((line) => line.length > 0)
         .join("\n")
-      await sendTaskOperatorMessage(taskID, context, { source: "overlay_build_steer" })
+      await sendTaskOperatorMessage(taskID, context, {
+        source: "overlay_build_steer",
+        target: {
+          kind: "build_session",
+          sessionID,
+          ...(props.node.goalID ? { goalID: props.node.goalID } : {}),
+        },
+      })
       return
     }
     await replyToAgentSession(taskID, sessionID, message)

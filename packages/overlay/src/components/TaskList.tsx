@@ -966,7 +966,7 @@ export function TaskList(props: TaskListProps) {
               <div class="empty-hint">
                 {searchQuery()
                   ? t("task.search_empty", { query: searchQuery() })
-                  : (props.emptyLabel ?? t("task.none"))}
+                  : (props.emptyLabel ?? t("task.ledger.empty"))}
               </div>
             </Show>
           </Show>
