@@ -47,6 +47,13 @@ const BrowserPreviewTargetSelectionRequest = z
   })
   .strict()
 
+const BrowserPreviewCaptureRequest = z
+  .object({
+    targetID: z.string().min(1),
+    viewportIDs: BrowserPreviewViewportID.array().min(1),
+  })
+  .strict()
+
 const BrowserPreviewLiveInputRequest = BrowserPreviewLiveRequest.extend({
   input: z.discriminatedUnion("kind", [
     z.object({
@@ -268,31 +275,20 @@ export const BrowserPreviewRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1) })),
-      validator(
-        "json",
-        z.object({
-          targetID: z.string().min(1),
-          viewportIDs: BrowserPreviewViewportID.array().min(1),
-        }),
-      ),
+      validator("json", BrowserPreviewCaptureRequest),
       async (c) => {
         const { taskID } = c.req.valid("param")
         const body = c.req.valid("json")
         requireTask(taskID)
         const persisted = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
-        const target = persisted
-          ? taskBrowserPreviewTarget({
-              id: persisted.id,
-              taskID,
-              projectRoot: Instance.directory,
-              url: persisted.url,
-              diagnostics: [`Using task browser preview target ${persisted.id}.`],
-            })
-          : failedBrowserPreviewTarget({
-              projectRoot: Instance.directory,
-              taskID,
-              diagnostics: [`Browser preview target not found: ${body.targetID}`],
-            })
+        if (!persisted) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        const target = taskBrowserPreviewTarget({
+          id: persisted.id,
+          taskID,
+          projectRoot: Instance.directory,
+          url: persisted.url,
+          diagnostics: [`Using task browser preview target ${persisted.id}.`],
+        })
         const verification = await verifyBrowserPreview({
           projectRoot: Instance.directory,
           target,

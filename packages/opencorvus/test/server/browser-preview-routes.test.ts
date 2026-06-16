@@ -628,6 +628,34 @@ describe("browser preview routes", () => {
   )
 
   test(
+    "POST /task/:taskID/browser-preview/capture rejects direct URL-shaped input",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const app = Server.App()
+
+      const response = await app.request(`/task/${taskID}/browser-preview/capture`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({
+          targetID: target.id,
+          url: "http://127.0.0.1:5174/other",
+          outDir: ".opencorvus/r/tsk/browser-preview/job",
+          viewportIDs: ["desktop"],
+        }),
+      })
+
+      expect(response.status).toBe(400)
+      expect(JSON.stringify(await response.json())).toContain("Unrecognized")
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "POST /task/:taskID/browser-preview/compare requires a persisted targetID before launching comparison",
     async () => {
       await using tmp = await tmpdir()
@@ -861,7 +889,7 @@ describe("browser preview routes", () => {
   )
 
   test(
-    "POST /task/:taskID/browser-preview/capture does not replace an unknown targetID with the latest target",
+    "POST /task/:taskID/browser-preview/capture rejects an unknown targetID before verification",
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
@@ -877,23 +905,8 @@ describe("browser preview routes", () => {
         body: JSON.stringify({ targetID: "art_previewtarget_missing", viewportIDs: ["desktop"] }),
       })
 
-      expect(response.status).toBe(200)
-      const body = (await response.json()) as {
-        status: string
-        captures?: Record<string, unknown>
-        evidenceIDs?: Record<string, string>
-        target?: { status: string; url?: string; diagnostics?: string[] }
-        diagnostics?: string[]
-      }
-      expect(body.status).toBe("failed")
-      expect(body.captures).toEqual({})
-      expect(body.evidenceIDs).toEqual({})
-      expect(body.target?.status).toBe("failed")
-      expect(body.target?.url).toBeUndefined()
-      expect(body.target?.diagnostics?.join("\n")).toContain(
-        "Browser preview target not found: art_previewtarget_missing",
-      )
-      expect(body.diagnostics?.join("\n")).toContain("requires a resolved http(s) URL")
+      expect(response.status).toBe(404)
+      expect(JSON.stringify(await response.json())).toContain("Browser preview target not found: art_previewtarget_missing")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
