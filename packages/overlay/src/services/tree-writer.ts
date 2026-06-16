@@ -1225,13 +1225,6 @@ function drainPendingSessionStatus(sessionID: string): void {
   applyProjectedSessionStatus(activeCardID, projected)
 }
 
-function lifecycleEventTime(event: any, projected?: ProjectedSessionStatus): number {
-  const terminalTime = Number(projected?.timeCompleted || 0)
-  if (terminalTime > 0) return terminalTime
-  const emitted = Number(event?.emittedAt || event?.emitted_at || 0)
-  return emitted > 0 ? emitted : Date.now()
-}
-
 function lifecycleStageFromProps(props: Record<string, any>, existing?: SessionInfo): string {
   const channel = String(props.channel || "").trim()
   if (channel === "main") return "user"
@@ -1239,11 +1232,9 @@ function lifecycleStageFromProps(props: Record<string, any>, existing?: SessionI
   return existing?.stage || ""
 }
 
-/** Materialize a real session card from lifecycle-only evidence. Some
- *  frontend-design / frontend-research paths can fail during host-side
- *  evidence preparation before the agent writes any message row. The
- *  `session.status` event is still the real session lifecycle signal, so the
- *  card must be session-backed rather than synthesized as orchestrator text. */
+/** Index lifecycle metadata without creating display cards. Session cards are
+ *  message-turn projections; lifecycle-only events stay buffered until a real
+ *  message/part materializes the session card. */
 function ensureLifecycleSessionProjection(event: any, sessionID: string): SessionInfo | undefined {
   const props = propsOf(event)
   const existing = sessions.get(sessionID)
@@ -1251,33 +1242,11 @@ function ensureLifecycleSessionProjection(event: any, sessionID: string): Sessio
   if (stage === "filtered") return undefined
   if (!stage) return existing
 
-  const session = ensureSessionProjection(sessionID, {
+  return ensureSessionProjection(sessionID, {
     stage,
     parentSessionID: String(props.parentSessionID || existing?.parentSessionID || ""),
     goalID: String(props.goalID || existing?.goalID || ""),
   })
-  if (session.activeCardID && cardTreeStore.cards[session.activeCardID]) return session
-
-  const time = lifecycleEventTime(event)
-  if (isPhaseAbsorbedSession(session.stage, session.goalID)) {
-    const resolved = resolveTurnCardID(session.sessionID, session.stage, session.goalID, "", time)
-    session.activeCardID = resolved.cardID
-    rebuildCardHierarchy()
-    return session
-  }
-
-  const cardID =
-    session.stage === "integrity" ? integrityCardID(session.sessionID) : sessionCardID(session.stage, session.sessionID)
-  if (!cardTreeStore.cards[cardID]) {
-    setCardTreeStore(
-      "cards",
-      cardID,
-      createSessionCardNode(cardID, session.stage, session.goalID, time, session.sessionID, ""),
-    )
-  }
-  session.activeCardID = cardID
-  rebuildCardHierarchy()
-  return session
 }
 
 function handleInteraction(event: any): void {

@@ -9,6 +9,7 @@ import {
   hydrateTaskConversation,
   loadConversation,
   loadConversationHistoryUntilCard,
+  loadConversationSessionHistory,
 } from "../src/services/conversation"
 import { replayTaskEventToTree } from "../src/services/events"
 import {
@@ -473,7 +474,7 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
   expect(requests.map((req) => req.path)).toEqual(["task/tsk_lazy/conversation", "task/tsk_lazy/conversation/history"])
 })
 
-test("history paging replays lifecycle-only frontend agent cards", async () => {
+test("history paging replays lifecycle-only frontend agent events without blank cards", async () => {
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_history" })
   const requests: TransportRequest[] = []
@@ -625,12 +626,11 @@ test("history paging replays lifecycle-only frontend agent cards", async () => {
   )
 
   await expect(hydrateTaskConversation("tsk_lifecycle_history", { tailLimit: 1 })).resolves.toBe(8)
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID)
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).not.toContain("ses_frontend_lifecycle")
   expect(cardTreeStore.cards[cardID]).toBeUndefined()
 
-  await expect(loadConversationHistoryUntilCard(cardID, "tsk_lifecycle_history")).resolves.toBe(true)
-  expect(cardTreeStore.cards[cardID]).toBeDefined()
-  expect(cardTreeStore.cards[cardID]?.status).toBe("error")
+  await expect(loadConversationHistoryUntilCard(cardID, "tsk_lifecycle_history")).resolves.toBe(false)
+  expect(cardTreeStore.cards[cardID]).toBeUndefined()
   expect(requests.map((req) => req.path)).toEqual([
     "task/tsk_lifecycle_history/conversation",
     "task/tsk_lifecycle_history/conversation/history",
@@ -1044,7 +1044,7 @@ test("goal phase history can hydrate a build session directly by session id", as
   ])
 })
 
-test("session-scoped history replays lifecycle-only frontend agent cards", async () => {
+test("session-scoped history replays lifecycle-only frontend agent events without blank cards", async () => {
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_session" })
   const requests: TransportRequest[] = []
@@ -1196,15 +1196,11 @@ test("session-scoped history replays lifecycle-only frontend agent cards", async
   )
 
   await expect(hydrateTaskConversation("tsk_lifecycle_session", { tailLimit: 1 })).resolves.toBe(7)
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).not.toContain("ses_frontend_session")
   expect(cardTreeStore.cards[cardID]).toBeUndefined()
 
-  await expect(
-    loadConversationHistoryUntilCard(cardID, "tsk_lifecycle_session", {
-      sessionID: "ses_frontend_session",
-    }),
-  ).resolves.toBe(true)
-  expect(cardTreeStore.cards[cardID]).toBeDefined()
-  expect(cardTreeStore.cards[cardID]?.status).toBe("error")
+  await expect(loadConversationSessionHistory("ses_frontend_session", "tsk_lifecycle_session")).resolves.toBe(true)
+  expect(cardTreeStore.cards[cardID]).toBeUndefined()
   expect(requests.map((req) => req.path)).toEqual([
     "task/tsk_lifecycle_session/conversation",
     "task/tsk_lifecycle_session/conversation/session/ses_frontend_session",
