@@ -1659,7 +1659,8 @@ async function buildBenchmarkReport(error?: unknown) {
         pass:
           !expectsFrontendDesignCard ||
           (!!(currentOverlay as any)?.frontendDesignCard?.storePresent &&
-            !!(currentOverlay as any)?.frontendDesignCard?.renderedPresent),
+            !!(currentOverlay as any)?.frontendDesignCard?.renderedPresent &&
+            !!(currentOverlay as any)?.frontendDesignCard?.viewportVisible),
         expected: expectsFrontendDesignCard,
         sample: (currentOverlay as any)?.frontendDesignCard ?? currentOverlay,
       },
@@ -2294,18 +2295,12 @@ async function overlaySnapshot(page: Page) {
       : document.querySelector<HTMLElement>(
           '.chat-bubble-row[data-stage="frontend-design"], .card[data-stage="frontend-design"]',
         )
-    const frontendRect = frontendElement?.getBoundingClientRect()
     const frontendBody = frontendElement?.querySelector(".chat-bubble__body, .card__body")
     const frontendDesignCard = {
       expected: true,
       storePresent: !!frontendNode,
       renderedPresent: !!frontendElement,
-      viewportVisible:
-        !!frontendRect &&
-        frontendRect.bottom > 0 &&
-        frontendRect.top < window.innerHeight &&
-        frontendRect.right > 0 &&
-        frontendRect.left < window.innerWidth,
+      viewportVisible: viewportVisible(frontendElement),
       id: frontendCardID,
       orderIndex: frontendCardID ? order.indexOf(frontendCardID) : -1,
       status: String(frontendNode?.status || ""),
