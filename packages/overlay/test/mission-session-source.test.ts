@@ -54,6 +54,8 @@ test("composer draft keys are scoped to selected task, assistant session, and Mi
   expect(MAIN_TSX).toContain("const panelComposerDraftKey = () =>")
   expect(MAIN_TSX).toContain("if (missionSubmitActive())")
   expect(MAIN_TSX).toContain('composerDraftKey("mission", "new", directory)')
+  expect(MAIN_TSX).toContain('composerDraftKey("mission", "ledger", directory)')
+  expect(MAIN_TSX).toContain("canComposeChat() && !missionLedgerActive()")
   expect(MAIN_TSX).toContain('composerDraftKey("task", taskID)')
   expect(MAIN_TSX).toContain('composerDraftKey("task", "new", directory)')
   expect(MAIN_TSX).toContain('composerDraftKey("session", sessionID)')

@@ -221,8 +221,8 @@ const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
 ]
 
 const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
-  { id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks" },
   { id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission" },
+  { id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks" },
   { id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant" },
   { id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory" },
   { id: "skill", icon: "config-skill", labelKey: "skill.title", tooltipKey: "activity.tooltip.skill" },
@@ -230,11 +230,12 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
 ]
 
 const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
-const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>("workflow")
+const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)
 const activeRightActivity = () => selectedRightActivity()
-const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
-const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("tasks")
-const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("task")
+const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")
+const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("mission")
+const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")
+const [missionActivityActivationToken, setMissionActivityActivationToken] = createSignal(0)
 const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
 const [missionLauncherActive, setMissionLauncherActive] = createSignal(false)
 const [missionLauncherSubmitting, setMissionLauncherSubmitting] = createSignal(false)
@@ -398,7 +399,7 @@ function selectLeftActivity(activity: LeftActivity): void {
   }
   abortCodingAssistantActivation()
   setAssistantLauncherActive(false)
-  if (activity !== "mission") setMissionLauncherActive(false)
+  setMissionLauncherActive(false)
   if (boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())) {
     void selectTask("")
   }
@@ -408,6 +409,7 @@ function selectLeftActivity(activity: LeftActivity): void {
     setPrimaryCenterPanel("task")
     openCenterWorkbenchPanel("workflow")
   }
+  if (activity === "mission") setMissionActivityActivationToken((value) => value + 1)
   setSelectedLeftActivity(activity)
   setSelectedLeftPanelActivity(activity)
 }
@@ -1008,6 +1010,7 @@ if (missionListEl) {
     () => (
       <Mission
         active={selectedLeftPanelActivity() === "mission"}
+        activationToken={missionActivityActivationToken()}
         refreshToken={missionSharedRefreshToken()}
         onSelectTask={selectMissionTask}
       />
@@ -1099,6 +1102,10 @@ const panelComposerDraftKey = () => {
     const directory = activeDirectory()
     return directory ? composerDraftKey("mission", "new", directory) : composerDraftKey("mission", "new")
   }
+  if (missionLedgerActive()) {
+    const directory = activeDirectory()
+    return directory ? composerDraftKey("mission", "ledger", directory) : composerDraftKey("mission", "ledger")
+  }
   if (assistantSubmitActive()) {
     const directory = activeDirectory()
     return directory ? composerDraftKey("assistant", "new", directory) : composerDraftKey("assistant", "new")
@@ -1112,7 +1119,11 @@ const panelComposerDraftKey = () => {
 }
 
 function missionSubmitActive(): boolean {
-  return missionLauncherActive() || (primaryCenterPanel() === "mission" && !isMissionSessionSource())
+  return missionLauncherActive()
+}
+
+function missionLedgerActive(): boolean {
+  return primaryCenterPanel() === "mission" && !missionSubmitActive() && !isMissionSessionSource()
 }
 
 function assistantSubmitActive(): boolean {
@@ -1124,7 +1135,9 @@ if (composerEl) {
   render(
     () => (
       <ChatComposer
-        enabled={canComposeChat() && !missionLauncherSubmitting() && !assistantLauncherSubmitting()}
+        enabled={
+          canComposeChat() && !missionLedgerActive() && !missionLauncherSubmitting() && !assistantLauncherSubmitting()
+        }
         // Composer busy ≡ a send request is in flight (SSE stream open).
         // A running task no longer disables the composer: the user can queue
         // additional messages; `panelMessage` routes them as operator notes /

@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { messageStore, setChatAttachments } from "../src/store/messages"
+import {
+  canAcceptComposerAttachment,
+  setComposerAttachmentInputEnabled,
+} from "../src/services/composer-attachment-acceptance"
 import { isComposerAttachPayload } from "../src/services/composer-attach-validate"
+
+const CHAT_COMPOSER = readFileSync(join(import.meta.dir, "../src/components/ChatComposer.tsx"), "utf8")
+const COMPOSER_ATTACH = readFileSync(join(import.meta.dir, "../src/services/composer-attach.ts"), "utf8")
 
 /**
  * audit-2026-04-29 W2-V12 — single source of truth for staged chat
@@ -34,10 +43,12 @@ import { isComposerAttachPayload } from "../src/services/composer-attach-validat
 describe("composer.attach → messageStore.chatAttachments wire (audit W2-V12)", () => {
   beforeEach(() => {
     setChatAttachments([])
+    setComposerAttachmentInputEnabled(false)
   })
 
   afterEach(() => {
     setChatAttachments([])
+    setComposerAttachmentInputEnabled(false)
   })
 
   test("dispatching a valid payload adds it to messageStore.chatAttachments", () => {
@@ -97,5 +108,37 @@ describe("composer.attach → messageStore.chatAttachments wire (audit W2-V12)",
     expect((messageStore.chatAttachments as any[]).length).toBe(2)
     setChatAttachments([])
     expect((messageStore.chatAttachments as any[]).length).toBe(0)
+  })
+
+  test("disabled ChatComposer does not accept user drop or paste attachments", () => {
+    const addAttachment = CHAT_COMPOSER.slice(
+      CHAT_COMPOSER.indexOf("async function addAttachment"),
+      CHAT_COMPOSER.indexOf("function removeAttachment"),
+    )
+    const dragOver = CHAT_COMPOSER.slice(
+      CHAT_COMPOSER.indexOf("function handleDragOver"),
+      CHAT_COMPOSER.indexOf("function handleDragLeave"),
+    )
+    const drop = CHAT_COMPOSER.slice(
+      CHAT_COMPOSER.indexOf("async function handleDrop"),
+      CHAT_COMPOSER.indexOf("// ── Paste images"),
+    )
+    const paste = CHAT_COMPOSER.slice(
+      CHAT_COMPOSER.indexOf("async function handlePaste"),
+      CHAT_COMPOSER.indexOf("// ── Composer resize"),
+    )
+    expect(addAttachment).toContain("if (!canAcceptComposerAttachment()) return")
+    expect(dragOver).toContain("if (!canAcceptComposerAttachment())")
+    expect(drop).toContain("if (!canAcceptComposerAttachment()) return")
+    expect(paste).toContain("if (!canAcceptComposerAttachment()) return")
+    expect(CHAT_COMPOSER).toContain("<Show when={canAcceptComposerAttachment() && attachments().length > 0}>")
+  })
+
+  test("host-driven composer.attach shares the ChatComposer attachment acceptance predicate", () => {
+    expect(canAcceptComposerAttachment()).toBe(false)
+    setComposerAttachmentInputEnabled(true)
+    expect(canAcceptComposerAttachment()).toBe(true)
+    expect(CHAT_COMPOSER).toContain("setComposerAttachmentInputEnabled(props.enabled)")
+    expect(COMPOSER_ATTACH).toContain('if (!canAcceptComposerAttachment()) return')
   })
 })

@@ -12,27 +12,12 @@
 // (e.g. `value={text()}`) for the height to follow edits.
 
 import { createEffect, onMount, splitProps, type JSX } from "solid-js"
+import { autoGrowHeight, DEFAULT_MAX_VISIBLE_LINES } from "./AutoGrowTextareaMetrics"
 
 // Cap auto-grow at 10 visible lines by default; beyond that the textarea's
 // own overflow-y:auto takes over. Single source for the line cap so every
 // surface that adopts the primitive grows to the same ceiling.
-export const DEFAULT_MAX_VISIBLE_LINES = 10
-
-/**
- * Pure height resolver: the content height (`scrollHeight`) clamped to a
- * `maxLines`-line ceiling. Split out from the DOM read so the cap logic is
- * unit-testable without a textarea (Bun has no jsdom).
- */
-export function autoGrowHeight(opts: {
-  scrollHeight: number
-  lineHeight: number
-  padTop: number
-  padBottom: number
-  maxLines: number
-}): number {
-  const maxHeight = Math.ceil(opts.lineHeight * opts.maxLines + opts.padTop + opts.padBottom)
-  return Math.min(opts.scrollHeight, maxHeight)
-}
+export { autoGrowHeight, DEFAULT_MAX_VISIBLE_LINES } from "./AutoGrowTextareaMetrics"
 
 export interface AutoGrowTextareaProps extends Omit<JSX.TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "ref"> {
   /** Controlled value. Must be reactive for auto-grow to follow edits. */
