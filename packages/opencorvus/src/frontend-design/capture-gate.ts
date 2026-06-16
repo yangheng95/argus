@@ -3,8 +3,8 @@
  *
  * This module is the single capture path for live URL visual references.
  * Browser/navigation/screenshot failures are real acquisition failures and
- * still throw. Pixel-density heuristics are diagnostics only: they are useful
- * evidence for later investigation, but they must not block the workflow.
+ * still throw. Capture quality is part of acquisition: a blank or no-signal
+ * screenshot is not a usable visual reference for frontend_design.
  */
 import z from "zod"
 import path from "node:path"
@@ -59,7 +59,7 @@ export const CaptureManifest = z.object({
 })
 export type CaptureManifestType = z.infer<typeof CaptureManifest>
 
-/** Diagnostic thresholds. These produce warnings, never workflow failures. */
+/** Capture quality thresholds used by the live URL reference contract. */
 export const CAPTURE_DIAGNOSTIC_THRESHOLDS = {
   min_byte_size: 20_480,
   min_non_white_pixel_ratio: 0.05,
@@ -72,6 +72,19 @@ export interface CaptureDiagnosticWarning {
   threshold: number
   observed: number
 }
+
+export type CaptureManifestAssessment =
+  | {
+      ok: true
+      manifest: CaptureManifestType
+      diagnostics: CaptureDiagnosticWarning[]
+    }
+  | {
+      ok: false
+      manifest: CaptureManifestType
+      diagnostics: CaptureDiagnosticWarning[]
+      reason: string
+    }
 
 export class CaptureReferenceError extends Error {
   override readonly cause?: unknown
@@ -119,12 +132,23 @@ export function assessCaptureDiagnostics(manifest: CaptureManifestType): Capture
   return warnings
 }
 
-export function assessCaptureManifest(manifest: CaptureManifestType): {
-  ok: true
-  manifest: CaptureManifestType
-  diagnostics: CaptureDiagnosticWarning[]
-} {
-  return { ok: true, manifest, diagnostics: assessCaptureDiagnostics(manifest) }
+export function assessCaptureManifest(manifest: CaptureManifestType): CaptureManifestAssessment {
+  const diagnostics = assessCaptureDiagnostics(manifest)
+  const hasSparsePageEvidence =
+    manifest.text_length >= CAPTURE_DIAGNOSTIC_THRESHOLDS.min_sparse_text_length ||
+    manifest.reference_strings.length >= 3 ||
+    Object.keys(manifest.layout).length > 0
+  const hasPixelEvidence =
+    manifest.screenshot_byte_size >= CAPTURE_DIAGNOSTIC_THRESHOLDS.min_byte_size &&
+    manifest.non_white_pixel_ratio >= CAPTURE_DIAGNOSTIC_THRESHOLDS.min_non_white_pixel_ratio &&
+    manifest.unique_color_count >= CAPTURE_DIAGNOSTIC_THRESHOLDS.min_unique_color_count
+  if (hasSparsePageEvidence || hasPixelEvidence) return { ok: true, manifest, diagnostics }
+  return {
+    ok: false,
+    manifest,
+    diagnostics,
+    reason: `capture has no usable visual reference evidence: ${summarizeCaptureDiagnostics(diagnostics)}`,
+  }
 }
 
 export function summarizeCaptureDiagnostics(warnings: readonly CaptureDiagnosticWarning[]): string {
@@ -234,6 +258,8 @@ export async function captureReferenceManifest(input: {
       chrome: evidence.chromeVersion,
     },
   })
+  const assessment = assessCaptureManifest(manifest)
+  if (!assessment.ok) throw new CaptureReferenceError(assessment.reason, "content_paint")
 
   // 落盘
   await fs.mkdir(input.outDir, { recursive: true })
