@@ -89,6 +89,18 @@ describe("build-artifact", () => {
     expect(artifactEntrypoints("cli")).toEqual(["./src/launcher.ts"])
   })
 
+  test("compiled launchers turn entrypoint import failures into nonzero process exits", () => {
+    const binaryLauncherSource = readFileSync(resolve(import.meta.dir, "../../src/runtime/binary-launcher.ts"), "utf8")
+    const cliLauncherSource = readFileSync(resolve(import.meta.dir, "../../src/launcher.ts"), "utf8")
+    const overlayLauncherSource = readFileSync(resolve(import.meta.dir, "../../src/overlay-launcher.ts"), "utf8")
+
+    expect(cliLauncherSource).toContain('await runCompiledBinaryEntrypoint(() => import("./index.ts"))')
+    expect(overlayLauncherSource).toContain('await runCompiledBinaryEntrypoint(() => import("./overlay-server.ts"))')
+    expect(binaryLauncherSource).toContain("process.exitCode = 1")
+    expect(binaryLauncherSource).toContain("process.exit(1)")
+    expect(binaryLauncherSource).toContain("formatEntrypointError(error)")
+  })
+
   test("release artifacts never emit sourcemaps", () => {
     expect(artifactSourcemap()).toBe("none")
   })

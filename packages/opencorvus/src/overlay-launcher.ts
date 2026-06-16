@@ -1,4 +1,3 @@
-import { prepareCompiledBinaryRuntime } from "./runtime/binary-launcher"
+import { runCompiledBinaryEntrypoint } from "./runtime/binary-launcher"
 
-prepareCompiledBinaryRuntime()
-await import("./overlay-server.ts")
+await runCompiledBinaryEntrypoint(() => import("./overlay-server.ts"))
