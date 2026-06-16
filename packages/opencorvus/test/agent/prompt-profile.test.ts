@@ -17,7 +17,7 @@ describe("prompt profiles", () => {
       userAppend: "USER_APPEND",
       config,
     })
-    expect(prompt.startsWith("BASE\n\nImplement backend changes with deterministic state transitions")).toBe(true)
+    expect(prompt.startsWith("BASE\n\nCarry backend changes through to a verified behavior change.")).toBe(true)
     expect(prompt.endsWith("\n\nUSER_APPEND")).toBe(true)
   })
 
@@ -28,18 +28,20 @@ describe("prompt profiles", () => {
 
   test("built-in profiles expose direct target overlays without wrapper boilerplate", () => {
     expect(PromptProfile.builtIns.frontend.agents["frontend-design"]).toContain("visual structure")
-    expect(PromptProfile.builtIns.frontend.agents["orchestrator"]).toContain("visible UI outcomes")
+    expect(PromptProfile.builtIns.frontend.agents["orchestrator"]).toContain("exact surface")
     expect(PromptProfile.builtIns.backend.agents["deep-research"]).toContain("API behavior")
     expect(PromptProfile.builtIns.algorithm.agents["goal-workload-analyst"]).toContain("hidden complexity")
     expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
     expect(PromptProfile.builtIns.frontend.agents.build).not.toContain("Active prompt profile:")
+    expect(PromptProfile.builtIns.frontend.agents.mission).not.toContain("Coordinate frontend work")
+    expect(PromptProfile.builtIns.frontend.agents.orchestrator).not.toContain("bias planning and retries")
   })
 
   test("direct session agents also receive scene-specific overlays", () => {
     const config = Config.Info.parse({ prompt_profile: { active: "frontend" } })
     expect(PromptProfile.overlayFor("coding", config)).toContain("responsive behavior")
-    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("UI-facing")
-    expect(PromptProfile.overlayFor("mission", config)).toContain("visible outcomes")
+    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("frontend questions")
+    expect(PromptProfile.overlayFor("mission", config)).toContain("target surface")
   })
 
   test("profile catalog exposes target metadata and editable custom profile definitions", () => {

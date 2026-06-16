@@ -163,6 +163,17 @@ Prompt-content rules for those built-ins:
   prompt prose.
 - If an overlay needs to mention evidence or validation, it must say what the
   model should verify or produce, not just name a tool family.
+- Keep each overlay scoped to that role's own job boundary. Do not write the
+  same generic domain summary across `intent-analysis`, `requirements`,
+  `architect`, `build`, `integrity`, and `orchestrator`.
+- User-visible overlays must prefer concrete, checkable nouns such as
+  `surface`, `state`, `contract`, `failure mode`, `invariant`, and
+  `benchmark evidence` over abstract filler such as `reasoning`, `workflow`,
+  `ownership lines`, or `operational assumptions` when the latter do not map to
+  a visible check.
+- `mission`, `integrity`, and `orchestrator` overlays may define completion
+  criteria and evidence thresholds, but they must not leak dispatch mechanics,
+  retry strategy, or host-side workflow phrasing into user-visible prompt text.
 
 ## Composition Order
 
@@ -380,3 +391,11 @@ The following prompts remain outside prompt profiles in this design:
   - prevent built-in duplication from emitting built-in-only targets;
   - keep visible editable prompt surfaces aligned with what runtime save paths
     actually allow.
+- Independent prompt-writing audit on 2026-06-16 after the scope fix required a
+  third correction pass:
+  - strip orchestration and manager-style wrapper prose from user-visible
+    overlays;
+  - sharpen role boundaries so adjacent agents do not read like the same prompt
+    template with different nouns;
+  - rewrite evidence language in terms of concrete, checkable objects rather
+    than abstract quality signals.
