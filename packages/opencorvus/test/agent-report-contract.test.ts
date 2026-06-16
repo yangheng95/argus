@@ -8,7 +8,7 @@ import { createIntentOutputTools } from "../src/intent-analysis/output-tools"
 import { createFrontendTemplateOutputTools } from "../src/frontend-design/output-tools"
 import { buildBuildAgentReport } from "../src/build/report"
 import { buildGoalReport } from "../src/tool/goal-report"
-import { AgentTrace } from "../src/trace"
+import { ProjectRuntimePaths } from "../src/project/runtime-paths"
 
 const traceDir = join(tmpdir(), `opencorvus-agent-report-${process.pid}`)
 process.env.OPENCORVUS_AGENT_TRACE_DIR = traceDir
@@ -179,8 +179,9 @@ test("agent reports surface workload handoff guidance", () => {
   expect(goal.detail).toContain("goal workload brief")
 })
 
-test("recordAgentReport writes the typed report payload", () => {
+test("recordAgentReport writes the typed report payload", async () => {
   mkdirSync(traceDir, { recursive: true })
+  const { AgentTrace } = await import("../src/trace")
   AgentTrace.recordAgentReport({
     sessionID: "ses_report_contract",
     taskID: "tsk_report_contract",
@@ -194,7 +195,7 @@ test("recordAgentReport writes the typed report payload", () => {
   })
 
   const raw = readFileSync(
-    join(traceDir, "tasks", "tsk_report_contract", "sessions", "ses_report_contract", "trace.jsonl"),
+    ProjectRuntimePaths.tracePathFromRuntimeRoot(AgentTrace.getTraceDir(), "tsk_report_contract", "ses_report_contract"),
     "utf8",
   ).trim()
   const event = JSON.parse(raw)
