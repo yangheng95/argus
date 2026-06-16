@@ -78,8 +78,6 @@ bun run script/benchmark/mission-benchmark.ts \
 | `--acceptance-verify-cmd=CMD`                                              | 自定义 acceptance 阶段的 verify 命令                                                          |
 | `--resume-task-id=TID` / `--resume-home-dir=DIR` / `--resume-message=TEXT` | resume 模式（一般用 fresh bench，详见 [resume 注意](#resume-注意)）                           |
 | `--no-keep`                                                                | 任务结束删除临时目录                                                                          |
-| `--skip-local-verify`                                                      | 跳过本地二次验证                                                                              |
-| `--no-browser`                                                             | **不要用**——见下方 [headless 禁止](#-headless-overlay-benchmark)                              |
 
 > ~~`--stall-timeout-ms`~~ / ~~`--planning-stall-timeout-ms`~~ / ~~`--tool-timeout-ms`~~ —— 自 2026-04-30 起脚本不再接受这些 flag；现在由 engine 内部的 stream-activity 看门狗管理（180s idle abort）。运行 `bun run script/benchmark/overlay-web-benchmark.ts --help` 可查当前 flag 全集。
 
@@ -113,7 +111,7 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 
 ## 严禁 headless overlay benchmark
 
-CLAUDE.md rule 13：visual-related benchmark 必须以视觉呈现。`--no-browser` 让 Playwright 跳过 → overlay UI 完全没被压到，违背 benchmark 的本意。请**不要**用 `--no-browser`。
+CLAUDE.md rule 13：visual-related benchmark 必须以视觉呈现。Overlay benchmark 不接受无浏览器模式；Playwright 必须打开真实 overlay UI、执行可见性检查并产出截图。
 
 ## 二次复核（不只看 verdict）
 

@@ -72,8 +72,6 @@ accepted evaluation when present, and a passing local verification command.
 | `--acceptance-verify-cmd=CMD`                                              | custom acceptance verification command                                          |
 | `--resume-task-id=TID` / `--resume-home-dir=DIR` / `--resume-message=TEXT` | resume mode                                                                     |
 | `--no-keep`                                                                | delete tmp directory on finish                                                  |
-| `--skip-local-verify`                                                      | skip local re-verification                                                      |
-| `--no-browser`                                                             | **do not use** for visual benchmark runs; it bypasses overlay UI rendering      |
 
 > ~~`--stall-timeout-ms`~~ / ~~`--planning-stall-timeout-ms`~~ / ~~`--tool-timeout-ms`~~ are no longer accepted. The engine stream-activity watchdog owns inactivity aborts.
 
