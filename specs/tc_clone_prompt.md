@@ -1,6 +1,6 @@
 我需要复刻网页：<https://www.tradingview.com/markets/world-economy/>
 
-这是一个多阶段任务。像素级复制 TradingView 的品牌视觉，保留 TradingView 页面信息架构、模块结构、布局密度和交互语义的前提下，严格用 AInvest 设计系统实现生产可合入页面，特别是ainvest-ui-components库中的组件，禁止手写 primitive 或复制截图冒充实现。你需要基于OpenCorvus的Frontend Design 和 Frontend Research等Agent编排两个 task。
+这是一个多阶段任务。像素级复制 TradingView 的品牌视觉，保留 TradingView 页面信息架构、模块结构、布局密度和交互语义的前提下，严格用 AInvest 设计系统实现生产可合入页面，特别是ainvest-ui-components库中的组件，禁止手写 primitive 或复制截图冒充实现。你需要基于OpenCorvus的Frontend Design 和 Frontend Research等Agent编排两个 task。Frontend Design 必须为每个页面主要 region 输出可执行的 VisualRegionBinding 清单：包含 source reference artifact、source bbox、viewport、region_scope、目标 route、implementation locator、component_files。Build 不得用全页截图替代已有 binding 的 region comparison；若 binding 缺失，必须失败并说明缺失 region，而不是继续实现。
 
 阶段 1：目标网页资源抽取 + 设计方案 + 模块实现 (architect > 20 goals，每个页面主要组件至少 1 个 goal)
 
