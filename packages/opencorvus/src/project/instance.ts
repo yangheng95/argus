@@ -42,6 +42,38 @@ const disposal = {
   all: undefined as Promise<void> | undefined,
 }
 
+function needsProjectRefresh(ctx: Context) {
+  return ctx.project.id === "global" && ctx.worktree === "/" && Project.isGitRepo(ctx.directory)
+}
+
+async function bootstrapContext(ctx: Context, init?: () => Promise<unknown>) {
+  // .gitignore upkeep runs INSIDE context.provide because ensureGitignore()
+  // reads `Instance.directory` from the active context. Lazy import breaks the
+  // engine/git <-> instance cycle.
+  const { ensureGitignore } = await import("@/engine/git")
+  await ensureGitignore()
+  // Sweep orphan attachments on first bootstrap per project
+  // (specs/acceptance-attachment-store-single-source-2026-05-11.md).
+  // `AttachmentStore.write` is content-addressed and write-only — without
+  // this hook, removed parts / archived sessions leave bytes on disk forever.
+  // Skipped for the "global" pseudo-project (worktree="/") because reading
+  // C:\.opencorvus\ would fail and the global project never holds real
+  // attachments. Errors degrade to a log line — sweep failure must not turn
+  // into a 500-storm (rule 1 / W2-V32 lesson).
+  if (ctx.project.id !== "global") {
+    try {
+      const { AttachmentStore } = await import("@/storage/attachment-store")
+      await AttachmentStore.sweep(ctx.project.id)
+    } catch (err) {
+      Log.Default.warn("AttachmentStore.sweep failed during bootstrap", {
+        projectID: ctx.project.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  await init?.()
+}
+
 export const Instance: InstanceApi = {
   async provide<R>(input: { directory: string; init?: () => Promise<unknown>; fn: () => R }): Promise<R> {
     // Normalize project directories once so cache keys and boundary checks stay stable.
@@ -84,34 +116,7 @@ export const Instance: InstanceApi = {
           worktree: sandbox,
           project,
         }
-        await context.provide(ctx, async () => {
-          // .gitignore upkeep runs INSIDE context.provide because
-          // ensureGitignore() reads `Instance.directory` from the active
-          // context. Lazy import breaks the engine/git ↔ instance cycle.
-          const { ensureGitignore } = await import("@/engine/git")
-          await ensureGitignore()
-          // Sweep orphan attachments on first bootstrap per project
-          // (specs/acceptance-attachment-store-single-source-2026-05-11.md).
-          // `AttachmentStore.write` is content-addressed and write-only —
-          // without this hook, removed parts / archived sessions leave
-          // bytes on disk forever. Skipped for the "global" pseudo-
-          // project (worktree="/") because reading C:\.opencorvus\ would
-          // fail and the global project never holds real attachments.
-          // Errors degrade to a log line — sweep failure must not turn
-          // into a 500-storm (rule 1 / W2-V32 lesson).
-          if (project.id !== "global") {
-            try {
-              const { AttachmentStore } = await import("@/storage/attachment-store")
-              await AttachmentStore.sweep(project.id)
-            } catch (err) {
-              Log.Default.warn("AttachmentStore.sweep failed during bootstrap", {
-                projectID: project.id,
-                error: err instanceof Error ? err.message : String(err),
-              })
-            }
-          }
-          await input.init?.()
-        })
+        await context.provide(ctx, () => bootstrapContext(ctx, input.init))
         return ctx
       })
       // Remove rejected promises from cache so they can be retried on the next call.
@@ -120,7 +125,11 @@ export const Instance: InstanceApi = {
       })
       cache.set(directory, existing)
     }
-    const ctx = await existing
+    let ctx = await existing
+    if (needsProjectRefresh(ctx)) {
+      ctx = await Instance.refresh(directory)
+      await context.provide(ctx, () => bootstrapContext(ctx, input.init))
+    }
     return context.provide(ctx, async () => {
       return input.fn()
     })
