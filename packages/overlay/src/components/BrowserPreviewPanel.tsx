@@ -1,5 +1,5 @@
 import * as Select from "@kobalte/core/select"
-import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch, untrack } from "solid-js"
 import type { JSX } from "solid-js"
 import { ApiError } from "../services/api"
 import {
@@ -37,7 +37,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [refreshToken, setRefreshToken] = createSignal(0)
   const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
   const [lastAutoCapturedPreviewKey, setLastAutoCapturedPreviewKey] = createSignal("")
-  const [liveImageUrl, setLiveImageUrl] = createSignal("")
+  const [liveImage, setLiveImage] = createSignal<{ scopeKey: string; url: string }>()
   const [liveError, setLiveError] = createSignal("")
   const [liveLoading, setLiveLoading] = createSignal(false)
   const [verificationRequest, setVerificationRequest] = createSignal<{
@@ -97,6 +97,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.id || !viewport) return undefined
     return { taskID, targetID: resolved.id, viewportID: viewport.id, viewport }
   })
+  const liveScopeKey = (scope: NonNullable<ReturnType<typeof liveScope>>) =>
+    `${scope.taskID}:${scope.targetID}:${scope.viewportID}`
+  const liveImageUrl = createMemo(() => {
+    const scope = liveScope()
+    const image = liveImage()
+    if (!scope || !image || image.scopeKey !== liveScopeKey(scope)) return ""
+    return image.url
+  })
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
     const verified = verification()
     const request = verificationRequest()
@@ -126,8 +134,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   onCleanup(() => {
     const current = captureImageUrl()
     if (current) URL.revokeObjectURL(current)
-    const live = liveImageUrl()
-    if (live) URL.revokeObjectURL(live)
+    const live = liveImage()
+    if (live) URL.revokeObjectURL(live.url)
   })
 
   createEffect(() => {
@@ -182,21 +190,24 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   let liveFrameRequestSequence = 0
 
-  const replaceLiveImageUrl = (next: string) => {
-    const previous = liveImageUrl()
-    setLiveImageUrl(next)
-    if (previous && previous !== next) URL.revokeObjectURL(previous)
+  const replaceLiveImageUrl = (scopeKey: string, next: string) => {
+    const previous = untrack(liveImage)
+    setLiveImage({ scopeKey, url: next })
+    if (previous && previous.url !== next) URL.revokeObjectURL(previous.url)
   }
 
   const clearLiveImageUrl = () => {
-    const previous = liveImageUrl()
+    const previous = untrack(liveImage)
     if (!previous) return
-    setLiveImageUrl("")
-    URL.revokeObjectURL(previous)
+    setLiveImage(undefined)
+    URL.revokeObjectURL(previous.url)
   }
 
   const loadLiveFrame = async (scope: NonNullable<ReturnType<typeof liveScope>>, input?: BrowserPreviewLiveInput) => {
     const sequence = ++liveFrameRequestSequence
+    const scopeKey = liveScopeKey(scope)
+    const previous = untrack(liveImage)
+    if (previous && previous.scopeKey !== scopeKey) clearLiveImageUrl()
     setLiveLoading(true)
     setLiveError("")
     try {
@@ -207,7 +218,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         URL.revokeObjectURL(next)
         return
       }
-      replaceLiveImageUrl(next)
+      replaceLiveImageUrl(scopeKey, next)
     } catch (error) {
       if (sequence === liveFrameRequestSequence) {
         setLiveError(String(error))
@@ -236,6 +247,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const sendLiveInput = (input: BrowserPreviewLiveInput) => {
     const scope = liveScope()
     if (!scope) return
+    const image = untrack(liveImage)
+    if (!image || image.scopeKey !== liveScopeKey(scope)) return
     void loadLiveFrame(scope, input)
   }
 
