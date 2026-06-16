@@ -1,7 +1,10 @@
-import { describe, test, expect, afterAll } from "bun:test"
+import { describe, test, expect, afterAll, afterEach, beforeEach } from "bun:test"
 import { Truncate } from "../../src/tool/truncation"
 import { Identifier } from "../../src/id/id"
 import { Filesystem } from "../../src/util/filesystem"
+import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { tmpdir } from "../fixture/fixture"
 import fs from "fs/promises"
 import path from "path"
 
@@ -25,11 +28,40 @@ const AGENT_WITH_READ_SEARCH_CODE = {
   ],
 } as any
 
+function scoped(options: Truncate.Options = {}): Truncate.Options {
+  return {
+    taskID: "task_truncate_test",
+    sessionID: "session_truncate_test",
+    ...options,
+  }
+}
+
 describe("Truncate", () => {
   describe("output", () => {
+    let runtimeTmp: Awaited<ReturnType<typeof tmpdir>>
+
+    beforeEach(async () => {
+      runtimeTmp = await tmpdir()
+    })
+
+    afterEach(async () => {
+      await runtimeTmp?.[Symbol.asyncDispose]?.()
+    })
+
+    async function truncateOutput(
+      text: string,
+      options: Truncate.Options,
+      agent?: Parameters<typeof Truncate.output>[2],
+    ) {
+      return Instance.provide({
+        directory: runtimeTmp.path,
+        fn: () => Truncate.output(text, options, agent),
+      })
+    }
+
     test("truncates large json file by bytes", async () => {
       const content = await Filesystem.readText(path.join(FIXTURES_DIR, "models-api.json"))
-      const result = await Truncate.output(content, {}, AGENT_WITH_TASK)
+      const result = await truncateOutput(content, scoped(), AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("truncated...")
@@ -46,7 +78,7 @@ describe("Truncate", () => {
 
     test("truncates by line count", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
-      const result = await Truncate.output(lines, { maxLines: 10 }, AGENT_WITH_TASK)
+      const result = await truncateOutput(lines, scoped({ maxLines: 10 }), AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("...90 lines truncated...")
@@ -54,7 +86,7 @@ describe("Truncate", () => {
 
     test("truncates by byte count", async () => {
       const content = "a".repeat(1000)
-      const result = await Truncate.output(content, { maxBytes: 100 }, AGENT_WITH_TASK)
+      const result = await truncateOutput(content, scoped({ maxBytes: 100 }), AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("truncated...")
@@ -62,7 +94,7 @@ describe("Truncate", () => {
 
     test("truncates from head when explicitly requested", async () => {
       const lines = Array.from({ length: 10 }, (_, i) => `line${i}`).join("\n")
-      const result = await Truncate.output(lines, { maxLines: 3, direction: "head" }, AGENT_WITH_TASK)
+      const result = await truncateOutput(lines, scoped({ maxLines: 3, direction: "head" }), AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("line0")
@@ -73,7 +105,7 @@ describe("Truncate", () => {
 
     test("truncates from tail by default (most-relevant-info-last for logs/errors)", async () => {
       const lines = Array.from({ length: 10 }, (_, i) => `line${i}`).join("\n")
-      const result = await Truncate.output(lines, { maxLines: 3 }, AGENT_WITH_TASK)
+      const result = await truncateOutput(lines, scoped({ maxLines: 3 }), AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("line7")
@@ -89,7 +121,7 @@ describe("Truncate", () => {
 
     test("large single-line file truncates with byte message", async () => {
       const content = await Filesystem.readText(path.join(FIXTURES_DIR, "models-api.json"))
-      const result = await Truncate.output(content, {}, AGENT_WITH_TASK)
+      const result = await truncateOutput(content, scoped(), AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("bytes truncated...")
@@ -98,7 +130,7 @@ describe("Truncate", () => {
 
     test("writes full output to file when truncated", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
-      const result = await Truncate.output(lines, { maxLines: 10 }, AGENT_WITH_TASK)
+      const result = await truncateOutput(lines, scoped({ maxLines: 10 }), AGENT_WITH_TASK)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("The tool call succeeded but the output was truncated")
@@ -150,7 +182,7 @@ describe("Truncate", () => {
           { permission: "search_code", pattern: "*", action: "allow" as const },
         ],
       } as any
-      const result = await Truncate.output(lines, { maxLines: 10 }, rgOnly)
+      const result = await truncateOutput(lines, scoped({ maxLines: 10 }), rgOnly)
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("search_code")
       // No "Task tool" hint when task is denied
@@ -160,7 +192,7 @@ describe("Truncate", () => {
     test("suggests Task tool when agent has task permission", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
       const agent = { permission: [{ permission: "task", pattern: "*", action: "allow" as const }] }
-      const result = await Truncate.output(lines, { maxLines: 10 }, agent as any)
+      const result = await truncateOutput(lines, scoped({ maxLines: 10 }), agent as any)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("search_code")
@@ -177,7 +209,7 @@ describe("Truncate", () => {
           { permission: "search_code", pattern: "*", action: "allow" as const },
         ],
       }
-      const result = await Truncate.output(lines, { maxLines: 10 }, agent as any)
+      const result = await truncateOutput(lines, scoped({ maxLines: 10 }), agent as any)
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("search_code")
@@ -196,36 +228,45 @@ describe("Truncate", () => {
 
   describe("cleanup", () => {
     const DAY_MS = 24 * 60 * 60 * 1000
-    let oldFile: string
-    let recentFile: string
+    let oldFile = ""
+    let recentFile = ""
 
     afterAll(async () => {
-      await fs.unlink(oldFile).catch(() => {})
-      await fs.unlink(recentFile).catch(() => {})
+      if (oldFile) await fs.unlink(oldFile).catch(() => {})
+      if (recentFile) await fs.unlink(recentFile).catch(() => {})
     })
 
     test("deletes files older than 7 days and preserves recent files", async () => {
-      await fs.mkdir(Truncate.DIR, { recursive: true })
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const taskID = Identifier.create("task")
+          const sessionID = Identifier.create("session")
+          const outputDir = ProjectRuntimePaths.toolOutputDir(tmp.path, taskID, sessionID)
+          await fs.mkdir(outputDir, { recursive: true })
 
-      // Create an old file (10 days ago)
-      const oldTimestamp = Date.now() - 10 * DAY_MS
-      const oldId = Identifier.create("tool", false, oldTimestamp)
-      oldFile = path.join(Truncate.DIR, oldId)
-      await Filesystem.write(oldFile, "old content")
+          // Create an old file (10 days ago)
+          const oldTimestamp = Date.now() - 10 * DAY_MS
+          const oldId = Identifier.create("tool", false, oldTimestamp)
+          oldFile = path.join(outputDir, oldId)
+          await Filesystem.write(oldFile, "old content")
 
-      // Create a recent file (3 days ago)
-      const recentTimestamp = Date.now() - 3 * DAY_MS
-      const recentId = Identifier.create("tool", false, recentTimestamp)
-      recentFile = path.join(Truncate.DIR, recentId)
-      await Filesystem.write(recentFile, "recent content")
+          // Create a recent file (3 days ago)
+          const recentTimestamp = Date.now() - 3 * DAY_MS
+          const recentId = Identifier.create("tool", false, recentTimestamp)
+          recentFile = path.join(outputDir, recentId)
+          await Filesystem.write(recentFile, "recent content")
 
-      await Truncate.cleanup()
+          await Truncate.cleanup()
 
-      // Old file should be deleted
-      expect(await Filesystem.exists(oldFile)).toBe(false)
+          // Old file should be deleted
+          expect(await Filesystem.exists(oldFile)).toBe(false)
 
-      // Recent file should still exist
-      expect(await Filesystem.exists(recentFile)).toBe(true)
+          // Recent file should still exist
+          expect(await Filesystem.exists(recentFile)).toBe(true)
+        },
+      })
     })
   })
 })

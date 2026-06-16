@@ -133,7 +133,7 @@ describe("browser preview routes", () => {
           { url: liveUrl, selected: true },
           { url: "http://127.0.0.1:9/dead", selected: false },
         ])
-        expect(JSON.stringify(body)).toContain("Saved browser preview target is unreachable")
+        expect(JSON.stringify(body)).not.toContain("Saved browser preview target is unreachable")
 
         const artifact = Database.use((db) =>
           db
@@ -773,6 +773,39 @@ describe("browser preview routes", () => {
       })
 
       expect(latestBrowserPreviewEvidenceID({ taskID, targetID: target.id })).toBe(captureID)
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "latest browser preview evidence is filtered by target before recency ordering can hide older captures",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const firstTarget = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/first" })
+      const secondTarget = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/second" })
+      const firstCaptureID = persistBrowserPreviewEvidence({
+        taskID,
+        targetID: firstTarget.id,
+        viewportID: "desktop",
+        status: "failed",
+        summary: "first target capture",
+        diagnostics: ["first target capture"],
+        now: 1000,
+      })
+      for (let index = 0; index < 21; index++) {
+        persistBrowserPreviewEvidence({
+          taskID,
+          targetID: secondTarget.id,
+          viewportID: "desktop",
+          status: "failed",
+          summary: `second target capture ${index}`,
+          diagnostics: [`second target capture ${index}`],
+          now: 2000 + index,
+        })
+      }
+
+      expect(latestBrowserPreviewEvidenceID({ taskID, targetID: firstTarget.id })).toBe(firstCaptureID)
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )

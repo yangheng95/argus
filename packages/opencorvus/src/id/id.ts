@@ -1,5 +1,5 @@
 import z from "zod"
-import { randomBytes, randomUUID } from "crypto"
+import { createHash, randomBytes, randomUUID } from "crypto"
 
 export namespace Identifier {
   const prefixes = {
@@ -121,7 +121,10 @@ export namespace Identifier {
   }
 
   export const SHORT_PATH_BODY_LENGTH = 12
-  export const LEGACY_SHORT_PATH_BODY_LENGTH = 8
+  export const DIRECTORY_KEY_LENGTH = 8
+
+  const DIRECTORY_KEY_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  const DIRECTORY_KEY_SPACE = BigInt(DIRECTORY_KEY_ALPHABET.length) ** BigInt(DIRECTORY_KEY_LENGTH)
 
   /**
    * Returns prefix + '_' + the full timestamp/counter body for filesystem
@@ -138,13 +141,38 @@ export namespace Identifier {
     return `${prefix}_${body.slice(0, SHORT_PATH_BODY_LENGTH)}`
   }
 
-  export function legacyShortPath(fullID: string): string {
+  function base62Fixed(value: bigint, length: number): string {
+    const base = BigInt(DIRECTORY_KEY_ALPHABET.length)
+    let remaining = value
+    let output = ""
+    do {
+      const digit = Number(remaining % base)
+      output = DIRECTORY_KEY_ALPHABET[digit] + output
+      remaining /= base
+    } while (remaining > 0n)
+    if (output.length > length) throw new Error(`Directory key overflow: ${output}`)
+    return output.padStart(length, "0")
+  }
+
+  /**
+   * Returns a stable, non-readable 8-character filesystem key for a full ID.
+   * This hashes the complete ID instead of truncating the timestamp prefix, so
+   * same-millisecond IDs do not collapse onto the same runtime directory.
+   */
+  export function scopedDirectoryKey(scope: string, value: string): string {
+    if (!scope.trim()) throw new Error("Directory key scope is empty")
+    if (!value.trim()) throw new Error("Directory key value is empty")
+    const digest = createHash("sha256").update(`${scope}:${value}`).digest()
+    const valueBits = BigInt(`0x${digest.toString("hex")}`)
+    return base62Fixed(valueBits % DIRECTORY_KEY_SPACE, DIRECTORY_KEY_LENGTH)
+  }
+
+  export function directoryKey(fullID: string): string {
     const separator = fullID.lastIndexOf("_")
     if (separator <= 0) throw new Error(`Invalid ID for path segment: ${fullID}`)
-    const prefix = fullID.slice(0, separator)
     const body = fullID.slice(separator + 1)
     if (!body) throw new Error(`Invalid ID body for path segment: ${fullID}`)
-    return `${prefix}_${body.slice(0, LEGACY_SHORT_PATH_BODY_LENGTH)}`
+    return scopedDirectoryKey("id", fullID)
   }
 
   /** Extract timestamp from an ascending ID. Does not work with descending IDs. */

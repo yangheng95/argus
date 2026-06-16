@@ -180,7 +180,7 @@ async function writeCompleteEvidence(
     const relative = artifact.replace(/^webpage-evidence[\\/]/, "")
     const file = path.join(webpageEvidenceDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
-    if (relative === "reference.png") {
+    if (relative === "reference.png" || relative === "reference-mobile.png") {
       await fs.writeFile(file, minimalPngBytes())
       continue
     }

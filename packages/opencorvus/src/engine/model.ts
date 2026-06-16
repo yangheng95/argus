@@ -205,7 +205,7 @@ const TaskAttachmentInput = z.object({
 
 /**
  * Persisted attachment reference. Once the bytes live in AttachmentStore
- * (`<projectDir>/.opencorvus/runtime/blobs/attachments/<sha>.<ext>`), every downstream layer
+ * (`<projectDir>/.opencorvus/r/b/a/<sha>.<ext>`), every downstream layer
  * — queue table row, task loop, orchestrator, frontend-design, requirements — only
  * carries this small, URL-addressable reference. Agents that need the raw
  * bytes for multimodal LLM input read them back through AttachmentStore.
@@ -320,17 +320,6 @@ export const Task = z.object({
     started: z.number().optional(),
     completed: z.number().optional(),
   }),
-})
-
-export const TaskListTask = Task.omit({
-  activePlanVersionID: true,
-  activeRunID: true,
-  request: true,
-  blockingReason: true,
-  error: true,
-  budget: true,
-  metadata: true,
-  attachments: true,
 })
 
 export const PlanVersion = z.object({
@@ -915,8 +904,11 @@ export const TaskProject = z.object({
 })
 
 export const ProjectTaskSummary = z.object({
-  task: TaskListTask,
+  task: Task,
   project: TaskProject.nullable().optional(),
+  plan: PlanVersion.optional(),
+  run: Run.optional(),
+  evaluation: Evaluation.optional(),
   active_sessions: ActiveSession.array(),
   pending_interactions: z.number().int(),
   pending_interaction_items: Interaction.array(),

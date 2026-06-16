@@ -15,7 +15,7 @@ import {
 } from "../../src/research/prompt-section"
 import { validateResearchBriefTaskBoundary } from "../../src/research/schema"
 import { Instance } from "../../src/project/instance"
-import { Identifier } from "../../src/id/id"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { validResearchBrief } from "./fixtures"
@@ -25,13 +25,18 @@ const request = "research request"
 const INSTANCE_STARTUP_TIMEOUT_MS = 60_000
 
 function validResearchBriefForTask(taskID: string, overrides: Partial<ResearchBrief> = {}, stage = "deep-research") {
+  const sessionID = "ses_research_bundle"
+  const paths =
+    stage === "frontend-research"
+      ? ProjectRuntimePaths.frontendResearchPaths("", taskID, sessionID)
+      : ProjectRuntimePaths.deepResearchPaths("", taskID, sessionID)
   return validResearchBrief(
     request,
     {
       bundle: {
-        full_markdown_path: `.opencorvus/runtime/tasks/${taskID}/${stage}/s/research-bundle.md`,
-        evidence_json_path: `.opencorvus/runtime/tasks/${taskID}/${stage}/s/evidence.json`,
-        citation_map_path: `.opencorvus/runtime/tasks/${taskID}/${stage}/s/citation-map.json`,
+        full_markdown_path: `${paths.relativeDir}/research-bundle.md`,
+        evidence_json_path: `${paths.relativeDir}/evidence.json`,
+        citation_map_path: `${paths.relativeDir}/citation-map.json`,
       },
       ...overrides,
     },
@@ -328,12 +333,12 @@ describe("research brief persistence and describe projection", () => {
 
   test("task boundary accepts canonical short runtime task path", () => {
     const taskID = "tsk_tradingview_prd_1780373422388"
-    const shortTaskPath = Identifier.shortPath(taskID)
+    const paths = ProjectRuntimePaths.deepResearchPaths("", taskID, "ses_test")
     const brief = validResearchBrief(request, {
       bundle: {
-        full_markdown_path: `.opencorvus/runtime/tasks/${shortTaskPath}/deep-research/ses_test/research-bundle.md`,
-        evidence_json_path: `.opencorvus/runtime/tasks/${shortTaskPath}/deep-research/ses_test/evidence.json`,
-        citation_map_path: `.opencorvus/runtime/tasks/${shortTaskPath}/deep-research/ses_test/citation-map.json`,
+        full_markdown_path: `${paths.relativeDir}/research-bundle.md`,
+        evidence_json_path: `${paths.relativeDir}/evidence.json`,
+        citation_map_path: `${paths.relativeDir}/citation-map.json`,
       },
     })
 

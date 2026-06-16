@@ -17,7 +17,7 @@ import { Worktree } from "./index"
  * orphaned-worktree sweep (§2.1 / §6 of that doc, and the addendum
  * `specs/new-arch/2026-05-15-orphan-worktree-gc.md`).
  *
- * A directory under `<primary>/.opencorvus/runtime/worktrees/` is removed ONLY when
+ * A directory under `<primary>/.opencorvus/r/w/` is removed ONLY when
  * it is genuinely abandoned junk. "Older than N days" is necessary but NOT
  * sufficient: §2.3 of the lifecycle doc forbids deleting failed / aborted /
  * cancelled / restart worktrees because that in-transit state is the input
@@ -109,6 +109,34 @@ export namespace WorktreeGC {
     return new TextDecoder().decode(input)
   }
 
+  function isDirectoryKeyPart(input: string, length: number): boolean {
+    return input.length === length && /^[0-9A-Za-z]+$/.test(input)
+  }
+
+  async function worktreeDirectories(root: string): Promise<string[]> {
+    const entries = await fs.readdir(root, { withFileTypes: true }).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return [] as import("fs").Dirent[]
+      throw err
+    })
+    const directories: string[] = []
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const firstDir = path.join(root, entry.name)
+      const children = await fs.readdir(firstDir, { withFileTypes: true }).catch(() => [] as import("fs").Dirent[])
+      const fanoutChildren = children.filter((child) => child.isDirectory() && isDirectoryKeyPart(child.name, 6))
+      if (isDirectoryKeyPart(entry.name, 2) && fanoutChildren.length > 0) {
+        for (const child of fanoutChildren) {
+          const leaf = path.join(firstDir, child.name, "worktree")
+          const stat = await fs.stat(leaf).catch(() => undefined)
+          if (stat?.isDirectory()) directories.push(leaf)
+        }
+        continue
+      }
+      directories.push(firstDir)
+    }
+    return directories
+  }
+
   async function primaryBranchOf(primaryDir: string): Promise<string | undefined> {
     const head = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], {
       cwd: primaryDir,
@@ -134,12 +162,8 @@ export namespace WorktreeGC {
       const primaryDir = project.worktree
       if (!primaryDir) continue
       const root = Worktree.worktreesRoot(primaryDir)
-
-      const entries = await fs.readdir(root, { withFileTypes: true }).catch((err: NodeJS.ErrnoException) => {
-        if (err.code === "ENOENT") return [] as import("fs").Dirent[]
-        throw err
-      })
-      if (entries.length === 0) continue
+      const directories = await worktreeDirectories(root)
+      if (directories.length === 0) continue
 
       const liveDirs = new Set<string>()
       for (const goalRun of listLiveGoalRunsForProject(project.id)) {
@@ -150,10 +174,7 @@ export namespace WorktreeGC {
       // cannot evaluate the in-transit-commits gate → preserve everything.
       const primaryBranch = await primaryBranchOf(primaryDir)
 
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        const directory = path.join(root, entry.name)
-
+      for (const directory of directories) {
         if (liveDirs.has(await realCanon(directory))) continue
 
         const stat = await fs.stat(directory).catch(() => undefined)

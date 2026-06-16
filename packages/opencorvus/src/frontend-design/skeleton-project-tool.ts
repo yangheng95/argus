@@ -34,12 +34,6 @@ export function createFrontendSkeletonProjectTool(
           .describe(
             "Directory where the skeleton evidence project is written. Omit this when task runtime defaults exist, or pass the frontend-design-skeleton path only. Never pass web-clone-target or any target acceptance app root.",
           ),
-        singleFileHtmlPath: z
-          .string()
-          .optional()
-          .describe(
-            "Deprecated compatibility field. The source skeleton generator consumes web-clone-source/source-skeleton and ignores SingleFile HTML.",
-          ),
         packageName: z.string().optional(),
         overwrite: z.boolean().optional().describe("Replace existing outputDir. Defaults to false."),
       }),
@@ -115,7 +109,7 @@ export function createFrontendSkeletonProjectTool(
             "6. After the visual skeleton baseline exists, render it through one explicit static URL or file path and compare it with `reference.png`. Do not run build/render inside `frontend-design-skeleton` as the final deliverable.",
             "7. Then call `record_frontend_region_selection` for the concrete source region/row you are restoring. Skeleton writes after selection must be owned by that selected region until `record_frontend_replacement_result` is called. Populate the selected HTML/CSS/assets/content slice by replacing the corresponding visual boundary, not by adding unrelated placeholder panels or future-region imports. Data/content snippets are part of the selected region slice; do not put records from unselected footer/economy/news/calendar/FAQ/map/chart/card/list regions into the current region's data/content file.",
             "8. Restore the selected source component/row by transcribing its actual labels, numeric data, source IDs, class responsibilities, SVG paths/assets, and interaction-state visuals into the HTML skeleton. Do not invent simplified SVGs, approximate values, generic styling, fake spacers, or labeled placeholder boxes when the selected evidence has exact values. If the selected skeleton file is already semantic, use it as source evidence first and preserve source IDs, ARIA/data attributes, wrapper nesting, asset resolver usage, viewBox/fill/size values, and helper responsibilities until render/evaluation evidence proves simplification is safe.",
-            "9. After each visual-region restoration, render/evaluate evidence against the visual skeleton: use one explicit static URL or file path, call `webpage_render`, compare against `reference.png` with `webpage_evaluate` using `passThreshold: 96`, call `webpage_vision_judge` for visible theme/layout/density/control mismatches, placeholder UI, or fake spacers, repair the same region from source evidence when the score is below 96/100, then record the replacement result. Do not record completed for charts, maps, tables, calendars, or other complex controls that are only labeled placeholder boxes; restore them from source data/assets and component-kind evidence, or record blocked/deferred visual debt. Do not try multiple dev/preview/Python/Vite servers or use `skill`/shell output as visual evidence.",
+            "9. After each visual-region restoration, render/evaluate evidence against the visual skeleton: use one explicit static URL or file path, call `webpage_render`, compare against `reference.png` with `webpage_evaluate` as diagnostic evidence, call `webpage_vision_judge` for visible theme/layout/density/control mismatches, placeholder UI, or fake spacers, repair the same region from source evidence when screenshot review or the visual judge names mismatches, then record the replacement result. Do not record completed for charts, maps, tables, calendars, or other complex controls that are only labeled placeholder boxes; restore them from source data/assets and component-kind evidence, or record blocked/deferred visual debt. Do not try multiple dev/preview/Python/Vite servers or use `skill`/shell output as visual evidence.",
           ].join("\n"),
           metadata: result,
         }

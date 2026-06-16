@@ -14,17 +14,23 @@ describe("workspace export runtime filtering", () => {
     await $`git commit -m baseline`.cwd(tmp.path).quiet()
     const baseRef = (await $`git rev-parse HEAD`.cwd(tmp.path).quiet().text()).trim()
 
-    await fs.mkdir(path.join(tmp.path, ".opencorvus", "runtime", "tasks", "tsk"), { recursive: true })
-    await fs.writeFile(path.join(tmp.path, ".opencorvus", "runtime", "tasks", "tsk", "trace.jsonl"), "large runtime\n")
+    await fs.mkdir(path.join(tmp.path, ".opencorvus", "r", "t", "ab", "cdef12"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, ".opencorvus", "r", "t", "ab", "cdef12", "trace.jsonl"), "large runtime\n")
+    await fs.mkdir(path.join(tmp.path, ".opencorvus", "runtime", "tasks", "legacy"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, ".opencorvus", "runtime", "tasks", "legacy", "trace.jsonl"), "legacy runtime\n")
     await fs.writeFile(path.join(tmp.path, "src", "app.ts"), "export const value = 2\n")
-    await $`git add -f .opencorvus/runtime/tasks/tsk/trace.jsonl src/app.ts`.cwd(tmp.path).quiet()
+    await $`git add -f .opencorvus/r/t/ab/cdef12/trace.jsonl .opencorvus/runtime/tasks/legacy/trace.jsonl src/app.ts`
+      .cwd(tmp.path)
+      .quiet()
     await $`git commit -m changes`.cwd(tmp.path).quiet()
 
     const diff = await collectMainWorktreeDiff(tmp.path, baseRef)
 
     expect(diff.changedFiles).toEqual(["src/app.ts"])
     expect(diff.patch).toContain("src/app.ts")
+    expect(diff.patch).not.toContain(".opencorvus/r")
     expect(diff.patch).not.toContain(".opencorvus/runtime")
     expect(diff.patch).not.toContain("large runtime")
+    expect(diff.patch).not.toContain("legacy runtime")
   })
 })

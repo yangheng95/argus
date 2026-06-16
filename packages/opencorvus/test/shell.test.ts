@@ -56,6 +56,38 @@ describe("shell process supervisor contract", () => {
     }
   })
 
+  test("run passes process environment, caller environment, and supervisor guard to the child", async () => {
+    const previousProcessEnv = process.env.OPENCORVUS_SHELL_TEST_PROCESS_ENV
+    process.env.OPENCORVUS_SHELL_TEST_PROCESS_ENV = "process"
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    const restore = ProcessSupervisor.setFactoryForTest(async (opts) => {
+      capturedEnv = opts.env
+      return {
+        pid: 128,
+        stdin: null,
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        exited: Promise.resolve(0),
+        terminate: async () => {},
+        dispose: async () => {},
+        unref: () => {},
+      }
+    })
+    try {
+      await Shell.run("env-check", { env: { OPENCORVUS_SHELL_TEST_ENV: "caller" } })
+      expect(capturedEnv?.OPENCORVUS_SHELL_TEST_PROCESS_ENV).toBe("process")
+      expect(capturedEnv?.OPENCORVUS_SHELL_TEST_ENV).toBe("caller")
+      expect(capturedEnv?.OPENCORVUS_PROTECTED_PIDS).toBeTruthy()
+    } finally {
+      if (previousProcessEnv === undefined) {
+        delete process.env.OPENCORVUS_SHELL_TEST_PROCESS_ENV
+      } else {
+        process.env.OPENCORVUS_SHELL_TEST_PROCESS_ENV = previousProcessEnv
+      }
+      restore()
+    }
+  })
+
   test("run timeout terminates and disposes supervisor once", async () => {
     let terminateCalls = 0
     let disposeCalls = 0
@@ -87,6 +119,77 @@ describe("shell process supervisor contract", () => {
       expect(disposeCalls).toBe(1)
     } finally {
       clearInterval(keepAlive)
+      restore()
+    }
+  })
+
+  test("run idle timeout terminates silent processes", async () => {
+    let terminateCalls = 0
+    let resolveExit!: (code: number) => void
+    const exited = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const keepAlive = setInterval(() => {}, 10)
+    const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+      pid: 126,
+      stdin: null,
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exited,
+      terminate: async () => {
+        terminateCalls++
+        clearInterval(keepAlive)
+        resolveExit(1)
+      },
+      dispose: async () => {},
+      unref: () => {},
+    }))
+    try {
+      const result = await Shell.run("silent", { idleTimeoutMs: 1 })
+      expect(result.idleTimedOut).toBe(true)
+      expect(result.timedOut).toBe(false)
+      expect(terminateCalls).toBe(1)
+    } finally {
+      clearInterval(keepAlive)
+      restore()
+    }
+  })
+
+  test("run idle timeout refreshes on stdout activity", async () => {
+    const stdout = new PassThrough()
+    let terminateCalls = 0
+    let resolveExit!: (code: number) => void
+    const exited = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const timers: ReturnType<typeof setTimeout>[] = []
+    const restore = ProcessSupervisor.setFactoryForTest(async () => {
+      timers.push(setTimeout(() => stdout.write("tick1\n"), 5))
+      timers.push(setTimeout(() => stdout.write("tick2\n"), 20))
+      timers.push(setTimeout(() => resolveExit(0), 35))
+      return {
+        pid: 127,
+        stdin: null,
+        stdout,
+        stderr: new PassThrough(),
+        exited,
+        terminate: async () => {
+          terminateCalls++
+          resolveExit(1)
+        },
+        dispose: async () => {},
+        unref: () => {},
+      }
+    })
+    try {
+      const result = await Shell.run("active", { idleTimeoutMs: 25 })
+      expect(result.idleTimedOut).toBe(false)
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain("tick1")
+      expect(result.stdout).toContain("tick2")
+      expect(terminateCalls).toBe(0)
+    } finally {
+      timers.forEach((timer) => clearTimeout(timer))
       restore()
     }
   })

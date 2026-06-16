@@ -18,7 +18,7 @@ import {
 } from "../../../../script/package-linux-binary"
 
 describe("package-linux-binary", () => {
-  test("copies Linux ELF outputs into single-binary bundle directories", () => {
+  test("copies Linux ELF outputs into runtime bundle directories", () => {
     const artifacts = resolveLinuxBinaryArtifacts("/repo")
     expect(artifacts.map((artifact) => artifact.source)).toEqual([
       path.join("/repo", "packages", "opencorvus", "dist", "opencorvus-overlay-server-linux-x64", "opencorvus"),
@@ -84,8 +84,11 @@ describe("package-linux-binary", () => {
       await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "browser-mcp-node", "node_modules", "playwright"), {
         recursive: true,
       })
+      await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "node_modules", "sharp"), { recursive: true })
       await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "ui"), { recursive: true })
       await fs.promises.writeFile(artifact.source, "")
+      await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "package.json"), "{}")
+      await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "node_modules", "sharp", "package.json"), "{}")
       await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "browser-mcp-node", "node"), "")
       await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "browser-mcp-node", "browser.mjs"), "")
       await fs.promises.writeFile(
@@ -97,6 +100,8 @@ describe("package-linux-binary", () => {
       await copyBinaryArtifact(artifact)
 
       expect(fs.existsSync(artifact.output)).toBe(true)
+      expect(fs.existsSync(path.join(artifact.bundleDir, "package.json"))).toBe(true)
+      expect(fs.existsSync(path.join(artifact.bundleDir, "node_modules", "sharp", "package.json"))).toBe(true)
       expect(fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "node"))).toBe(true)
       expect(fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "browser.mjs"))).toBe(true)
       expect(

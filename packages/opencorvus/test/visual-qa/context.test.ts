@@ -23,7 +23,7 @@ describe("visual-qa context rendering", () => {
       },
       {
         key: "reference_artifacts",
-        value: "- .opencorvus/runtime/tasks/tsk/frontend-design/webpage-evidence/reference.png",
+        value: "- .opencorvus/r/t/ab/cdef12/fd/webpage-evidence/reference.png",
         reason: "reference image",
       },
     ])
@@ -163,9 +163,9 @@ function validResearchBrief(): ResearchBrief {
       assumed_non_goals: [],
     },
     bundle: {
-      full_markdown_path: ".opencorvus/runtime/tasks/tsk/frontend-research/ses/research-bundle.md",
-      evidence_json_path: ".opencorvus/runtime/tasks/tsk/frontend-research/ses/evidence.json",
-      citation_map_path: ".opencorvus/runtime/tasks/tsk/frontend-research/ses/citations.json",
+      full_markdown_path: ".opencorvus/r/t/ab/cdef12/fr/gh/ijkl34/research-bundle.md",
+      evidence_json_path: ".opencorvus/r/t/ab/cdef12/fr/gh/ijkl34/evidence.json",
+      citation_map_path: ".opencorvus/r/t/ab/cdef12/fr/gh/ijkl34/citations.json",
     },
     summary: "SHOULD_NOT_APPEAR_RESEARCH_SUMMARY",
     evidence_index: [

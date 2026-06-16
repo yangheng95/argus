@@ -78,7 +78,7 @@ export namespace Shell {
       command,
       shell,
       cwd: opts.cwd,
-      env: { ...opts.env, ...guardEnv },
+      env: { ...process.env, ...opts.env, ...guardEnv },
     })
 
     let stdout = ""

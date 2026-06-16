@@ -29,6 +29,14 @@ afterEach(() => {
   tempDir = ""
 })
 
+test("trace override rejects legacy .opencorvus/runtime layout", async () => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-legacy-"))
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = path.join(tempDir, ".opencorvus", "runtime")
+  const { AgentTrace } = await import("../../src/trace")
+
+  expect(() => AgentTrace.getTraceDir()).toThrow("legacy runtime layout")
+})
+
 test("task trace rollup includes llm_request task and parent metadata", async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-rollup-"))
   process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir

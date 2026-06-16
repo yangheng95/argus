@@ -443,9 +443,8 @@ async function loadTasksOnce(): Promise<void> {
   // UI surfaces the failure explicitly. The previous silent catch left the UI
   // stuck on an empty list with no indication that the backend was unreachable.
   try {
-    const visibleLimit = Math.max(TASK_LIST_PAGE_SIZE, boardStore.tasksLoadedLimit || TASK_LIST_PAGE_SIZE)
-    const data = await apiJson(taskListPagePath({ limit: visibleLimit + 1 }))
-    const page = taskPageFromResponse(data, visibleLimit)
+    const data = await apiJson(taskListPagePath({ limit: TASK_LIST_PAGE_SIZE + 1 }))
+    const page = taskPageFromResponse(data, TASK_LIST_PAGE_SIZE)
     const tasks = sortedTasks({ tasks: page.tasks })
     const seen = new Set(tasks.map((item: any) => item?.task?.requestID).filter(Boolean))
     const nextPending = boardStore.pendingTasks.filter((item: any) => !seen.has(item?.requestID))

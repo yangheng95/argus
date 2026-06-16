@@ -38,7 +38,7 @@ export namespace Truncate {
   export async function cleanup() {
     const cutoff = Identifier.timestamp(Identifier.create("tool", false, Date.now() - RETENTION_MS))
     const root = ProjectRuntimePaths.projectRuntimeRoot(Instance.directory)
-    const entries = await Glob.scan("tasks/*/sessions/*/tool-output/tool_*", { cwd: root, include: "file" }).catch(
+    const entries = await Glob.scan("s/*/*/tool-output/tool_*", { cwd: root, include: "file" }).catch(
       () => [] as string[],
     )
     for (const entry of entries) {

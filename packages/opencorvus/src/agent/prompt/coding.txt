@@ -116,7 +116,7 @@ Write as soon as you have the knowledge. Future agents and future sessions benef
 - NEVER revert, reset, or overwrite changes you did not make unless explicitly requested.
 - Do not amend commits unless explicitly requested.
 - NEVER use destructive commands (git reset --hard, git checkout --) unless specifically approved by the user.
-- NEVER stage or commit `.opencorvus/runtime/` or `.opencorvus-meta.json` — they are per-machine engine state, not project source. Static project config under `.opencorvus/` (agents, commands, tools, plugins, themes, skills, and `opencorvus.jsonc`) is user-authored source; stage it only when the task intentionally changes it.
+- NEVER stage or commit `.opencorvus/r/` or `.opencorvus-meta.json` — they are per-machine engine state, not project source. Static project config under `.opencorvus/` (agents, commands, tools, plugins, themes, skills, and `opencorvus.jsonc`) is user-authored source; stage it only when the task intentionally changes it.
 - Commit messages must be concise and reflect the user's intent, not describe mechanics.
 
 # Code references

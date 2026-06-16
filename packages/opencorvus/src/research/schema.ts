@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { z } from "zod"
-import { Identifier } from "@/id/id"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 export const RESEARCH_VOLATILE_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
 export const RESEARCH_PROMPT_LIMITS = {
@@ -22,7 +22,7 @@ export const RESEARCH_BUNDLE_LIMITS = {
 } as const
 
 const PROJECT_RELATIVE_RUNTIME_RESEARCH_PATH =
-  /^\.opencorvus\/runtime\/tasks\/[^/]+\/(?:deep-research|frontend-research)\/[^/]+\/[^/]+$/
+  /^\.opencorvus\/r\/t\/[0-9A-Za-z]{2}\/[0-9A-Za-z]{6}\/(?:dr|fr)\/[0-9A-Za-z]{2}\/[0-9A-Za-z]{6}\/[^/]+$/
 
 export const ResearchEvidenceRefSchema = z
   .object({
@@ -465,8 +465,8 @@ export function validateResearchBriefIntegrity(brief: ResearchBrief): string | u
 
 export function validateResearchBriefTaskBoundary(brief: ResearchBrief, taskID: string): string | undefined {
   const expectedPrefixes = [
-    `.opencorvus/runtime/tasks/${Identifier.shortPath(taskID)}/deep-research/`,
-    `.opencorvus/runtime/tasks/${Identifier.shortPath(taskID)}/frontend-research/`,
+    `${ProjectRuntimePaths.taskRelative(taskID, "dr")}/`,
+    `${ProjectRuntimePaths.taskRelative(taskID, "fr")}/`,
   ]
   const bundlePaths = [brief.bundle.full_markdown_path, brief.bundle.evidence_json_path, brief.bundle.citation_map_path]
   for (const bundlePath of bundlePaths) {

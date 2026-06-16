@@ -1,3 +1,5 @@
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
+
 export interface BuildPromptOverlayContext {
   frontendResearch?: string
   frontendDesign?: string
@@ -5,6 +7,7 @@ export interface BuildPromptOverlayContext {
   acceptanceFeedback?: string
   designSpecs?: readonly unknown[]
   taskID?: string
+  projectDir?: string
 }
 
 export interface BuildPromptOverlayResult {
@@ -45,18 +48,21 @@ function renderFrontendResearchOverlay(frontendResearch: string): string {
   return sections.join("\n")
 }
 
-function webCloneRuntimeRef(taskID: string | undefined, child: string): string {
-  const root = taskID?.trim()
-    ? `.opencorvus/runtime/tasks/${taskID.trim()}/frontend-design`
-    : ".opencorvus/runtime/tasks/<taskID>/frontend-design"
+function webCloneRuntimeRef(taskID: string | undefined, projectDir: string | undefined, child: string): string {
+  const trimmedTaskID = taskID?.trim()
+  const root = trimmedTaskID
+    ? projectDir?.trim()
+      ? ProjectRuntimePaths.frontendDesignPaths(projectDir.trim(), trimmedTaskID).absoluteDir
+      : ProjectRuntimePaths.frontendDesignPaths("", trimmedTaskID).relativeDir
+    : ".opencorvus/r/t/<task-key>/fd"
   return `${root}/${child}`
 }
 
-function renderWebCloneSourceOverlay(taskID: string | undefined): string {
-  const runtimeDir = webCloneRuntimeRef(taskID, "")
-  const sourcePackage = webCloneRuntimeRef(taskID, "web-clone-source")
-  const sourceReference = webCloneRuntimeRef(taskID, "web-clone-source/reference.png")
-  const skeletonProject = webCloneRuntimeRef(taskID, "frontend-design-skeleton")
+function renderWebCloneSourceOverlay(taskID: string | undefined, projectDir: string | undefined): string {
+  const runtimeDir = webCloneRuntimeRef(taskID, projectDir, "")
+  const sourcePackage = webCloneRuntimeRef(taskID, projectDir, "web-clone-source")
+  const sourceReference = webCloneRuntimeRef(taskID, projectDir, "web-clone-source/reference.png")
+  const skeletonProject = webCloneRuntimeRef(taskID, projectDir, "frontend-design-skeleton")
   return [
     "## Webpage Clone Source-Baseline Overlay",
     "",
@@ -128,7 +134,7 @@ export function renderBuildPromptOverlays(context: BuildPromptOverlayContext | u
 
   if (hasWebCloneSourceHandoff(frontendDesign)) {
     ids.push("webpage-clone-source-baseline")
-    sections.push(renderWebCloneSourceOverlay(context?.taskID))
+    sections.push(renderWebCloneSourceOverlay(context?.taskID, context?.projectDir))
   }
 
   if ((context?.designSpecs?.length ?? 0) > 0 || hasText(frontendDesign)) {

@@ -65,7 +65,7 @@ const PathCommand = cmd({
  * Follows CLAUDE.md rule 13 (reset DB, no migrations) + specs/new-arch/16-unified-teardown.md §7-6
  * (schema-zero rebuild). Wipes:
  *   - Global SQLite db + WAL + SHM (`${Global.Path.data}/opencorvus.db*`)
- *   - Project runtime scratch under <primary>/.opencorvus/runtime/
+ *   - Project runtime scratch under <primary>/.opencorvus/r/
  *   - Legacy runtime directories under <primary>/.opencorvus/
  *
  * Prompts for confirmation (--force to skip). Must dispose all in-memory

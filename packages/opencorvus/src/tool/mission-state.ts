@@ -2,7 +2,9 @@ import z from "zod"
 import path from "node:path"
 import fs from "node:fs/promises"
 import { Tool } from "./tool"
+import { MissionID } from "@/mission/schema"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Session } from "@/session"
 
 /**
@@ -22,7 +24,7 @@ import { Session } from "@/session"
  * dispatched engine_tasks.
  *
  * Directory layout (relative to the project directory at run time):
- *   .opencorvus/runtime/mission/<missionID>/
+ *   .opencorvus/r/m/<mission-key2>/<mission-key6>/
  *     frontier.md   — outstanding work + the mission contract
  *     tasks.md      — engine_task IDs the mission has dispatched + status
  *     handoff.md    — brief for the next wake of this same mission
@@ -38,11 +40,6 @@ import { Session } from "@/session"
 const MISSION_FILES = ["frontier.md", "tasks.md", "handoff.md", "notes.md"] as const
 type MissionFile = (typeof MISSION_FILES)[number]
 
-// Mission identifier: lowercase alphanumerics + hyphens, 1..64 chars.
-// Disallowing dots / slashes / backslashes is what protects the
-// path-traversal boundary together with `path.resolve` checking below.
-const MISSION_ID_RE = /^[a-z0-9-]{1,64}$/
-
 // 256 KB cap on a single file write. Mission state is markdown notes,
 // not artifact storage; anything past this size belongs in a real
 // engine_artifact row.
@@ -54,22 +51,18 @@ function runtimeBase() {
   // resolve relative to it. If a mission ever needs to switch cwd
   // (multi-worktree mission), that decision is explicit at the wake
   // boundary, not silently here.
-  return path.resolve(Instance.directory, ".opencorvus", "runtime", "mission")
+  return path.resolve(ProjectRuntimePaths.projectRuntimeRoot(Instance.directory), "m")
 }
 
 function missionDir(missionID: string) {
-  if (!MISSION_ID_RE.test(missionID)) {
-    throw new Error(
-      `Invalid missionID "${missionID}". Must match /^[a-z0-9-]{1,64}$/ — lowercase letters, digits, and hyphens only.`,
-    )
-  }
+  const parsedMissionID = MissionID.parse(missionID)
   const base = runtimeBase()
-  const resolved = path.resolve(base, missionID)
-  // Defense in depth: even though the regex rejects ../ and slashes,
-  // verify the resolved path actually stays under the base. Catches
-  // future regex regressions and platform path quirks.
-  if (resolved !== path.join(base, missionID) && !resolved.startsWith(base + path.sep)) {
-    throw new Error(`missionID path traversal blocked: ${missionID}`)
+  const resolved = path.resolve(ProjectRuntimePaths.missionRoot(Instance.directory, parsedMissionID))
+  // Defense in depth: even though MissionID rejects ../ and slashes, verify
+  // the resolved path stays under the base. Catches future schema regressions
+  // and platform path quirks.
+  if (!resolved.startsWith(base + path.sep)) {
+    throw new Error(`missionID path traversal blocked: ${parsedMissionID}`)
   }
   return resolved
 }
@@ -158,7 +151,7 @@ export const MissionStateTool = Tool.define("mission_state", {
   description: [
     "Read, write, or list the state files for the CURRENT mission.",
     "The mission is resolved automatically from your session — you do NOT pass a missionID.",
-    "All I/O is confined to `.opencorvus/runtime/mission/<this mission>/` with a fixed",
+    "All I/O is confined to `.opencorvus/r/m/<this-mission-key>/` with a fixed",
     "file-name vocabulary: frontier.md, tasks.md, handoff.md, notes.md.",
     "Use this to carry mission progress across wake cycles — do NOT use read/write/glob.",
     "",

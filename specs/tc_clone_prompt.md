@@ -1,40 +1,10 @@
 我需要复刻网页：<https://www.tradingview.com/markets/world-economy/>
 
-这是一个多阶段任务。目标不是像素级复制 TradingView 的品牌视觉，而是在保留 TradingView 页面信息架构、模块结构、布局密度和交互语义的前提下，严格用 AInvest 设计系统实现生产可合入页面。
-
-你需要基于 OpenCorvus 的 Frontend Design 和 Frontend Research 等 Agent 编排两个 task。frontend_design / frontend_research 是按当前网页作用域一次性产出证据 handoff / brief 的 agent，不用于重复执行、重复修复或重复爬取；后续修复必须消费它们已落盘的证据进入 requirements / architect / build / visual_qa / integrity 链路。
+这是一个多阶段任务。像素级复制 TradingView 的品牌视觉，保留 TradingView 页面信息架构、模块结构、布局密度和交互语义的前提下，严格用 AInvest 设计系统实现生产可合入页面，特别是ainvest-ui-components库中的组件，禁止手写 primitive 或复制截图冒充实现。你需要基于OpenCorvus的Frontend Design 和 Frontend Research等Agent编排两个 task。
 
 阶段 1：目标网页资源抽取 + 设计方案 + 模块实现 (architect > 20 goals，每个页面主要组件至少 1 个 goal)
 
-使用 frontend_design / frontend_research 一次性获取目标网页资源、视觉/功能调查证据和详细 PRD 输入。必须输出可追溯证据，而不是主观描述；不得把这两个 agent 当成后续 region 修复循环。
-
-每个 region 必须至少包含：
-
-- region 名称和页面位置
-- reference screenshot，含 desktop/mobile
-- source-dom 摘要
-- style-profile 摘要，包括尺寸、字体、字重、行高、间距、边框、圆角、颜色语义
-- CSS sidecar 或等价样式证据
-- 交互行为证据
-- 数据来源证据
-- 对应 AInvest 组件复用清单
-- 对应实现文件
-
-实现要求：
-
-- 按网页模块写组件，组件消费对应 region 的 source-dom、style-profile、截图和 CSS sidecar 证据
-- 地图、表格、图表都按可交互功能组件实现
-- 图表优先使用成熟 chart 库或项目已有图表抽象
-- 地图优先使用 GeoJSON / topojson / 成熟地图渲染方案，不得复制截图或手写静态 SVG 冒充
-- 禁止把目标网页截图、iframe、远程 DOM、临时 query/signal 或本地 preview hack 当成实现
-- 右侧预览只能使用 task-scoped backend preview target / evidence 作为单一来源
-- Playwright 必须用 node 启动，Windows 上禁止用 bun 启动
-
-阶段 1 结束前必须落盘：
-
-- 实现方案文档，列出每个 region 的证据、组件、token、数据源、文件路径
-- 接口/数据源设计文档，说明真实接口、已有仓库协议或本地唯一数据源
-- 调用点 grep 结果，尤其是 @ainvest 组件、icons、variables-v1.css、i18n、已有 service/model/hook
+获取目标网页资源和详细 PRD。必须输出可追溯证据，而不是主观描述。根据获取的资源和PRD逐个组件复刻页面细节,采用ainvest-ui-components实现。使用 task-scoped backend browser evidence runner 对每个 region 做 Reference vs Implementation 单独对比。不能只跑 typecheck。实现的组件必须是真正的 AInvest 组件复用，而不是重新造 primitive。每个组件的不可以降级为图片，占位，SVG模拟等非真正实现的形式。
 
 阶段 2：逐模块检查、修复、二次验收  (architect > 20 goals，每个页面主要组件至少 1 个 goal)
 
@@ -54,32 +24,13 @@
 - 使用的 AInvest 组件是否真实复用，而不是重新造 primitive
 - 图标是否来自 @ainvest/icons
 
-发现不一致、丑陋、不合理、不可访问、未复用组件、接口幻觉、双源样式时，必须回到对应 region 的源材料和实现文件继续修复，然后重新截图验证。
-
-最终验收必须包含：
-
-- pnpm exec eslint 通过
-- pnpm exec tsc --noEmit 通过
-- 针对新增/修改行为的单元测试或 e2e 测试通过
-- Playwright desktop/mobile 截图证据
-- 每个 region 的 Reference vs Implementation 对比结论
-- 无 console/page runtime error
-- 无未使用导入、未使用导出、临时代码
-- 无 @ainvest 组件可复用却手写的 primitive
-- 无通用手写 inline SVG 图标
-- 无 hardcoded user-visible colors
-- 无自建 TradingView token 体系
-- handoff 文档完整说明接口设计/复用、数据源、未解决风险和验证命令
-
-如果无法交付，必须明确说明未达成项、影响范围、已验证证据、失败原因，禁止包装成“基本完成”。
+发现不一致、丑陋、不合理、不可访问、未复用组件、接口幻觉、双源样式时，必须回到对应 region 的源材料和实现文件继续修复，然后重新截图验证。如果无法交付，必须明确说明未达成项、影响范围、已验证证据、失败原因，禁止包装成“基本完成”。
 
 硬性约束：
 
-1. 必须先读取并遵守：
+1. 视觉相似为第一目标，不可妥协！必须先读取并遵守下面的视觉要求：
    - AGENTS.md
-   - .agents/skills/ainvest-design-system-lite/SKILL.md
-   - .agents/skills/ainvest-icons/SKILL.md
-   - src/styles/variables-v1.css
+   - ainvest-ui-components skill
    - 项目中已有 @ainvest/* 组件用法
 
 2. 禁止视觉双源：

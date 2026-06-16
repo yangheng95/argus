@@ -9,7 +9,7 @@
  * Lifecycle:
  *   1. AgentSemaphore.withSlot gates parallel agents per task. Orchestrator's
  *      parallel tool_calls fan out with this cap.
- *   2. Worktree.create under `<primary>/.opencorvus/runtime/`. Ownership
+ *   2. Worktree.create under `<primary>/.opencorvus/r/`. Ownership
  *      marker is written via Ownership.Worktree.record so OS-level restart
  *      cleanup can reclaim it.
  *   3. SessionPrompt.prompt runs the build agent in a child session with
@@ -220,6 +220,10 @@ export namespace BuildAgent {
      *  verdict / manifest artifacts. Unlike retryFeedback, this is not an
      *  orchestrator-written summary and also exists for task-scope rework. */
     acceptanceFeedback?: string
+    /** Primary project worktree directory. Build prompts use it to point
+     *  worktree executors at canonical task runtime evidence without copying
+     *  `.opencorvus/r` into the managed worktree. */
+    projectDir?: string
     /** Task-wide fidelity contract derived from architect coverage rows. */
     fidelity?: {
       sourceCoverage?: SourceCoverageEntry[]
@@ -299,7 +303,7 @@ export namespace BuildAgent {
     /** Optional pre-allocated worktree dir. When provided, the build agent
      *  uses it as-is and does NOT manage its lifecycle (caller owns cleanup).
      *  When absent the agent creates a managed worktree under
-     *  `<primary>/.opencorvus/runtime/`. */
+     *  `<primary>/.opencorvus/r/`. */
     workDir?: string
     /** Goal-scoped managed worktree recorded on engine_goal. Unlike workDir,
      *  this still participates in the build agent's merge_back protocol; the
@@ -556,10 +560,13 @@ export namespace BuildAgent {
         }
       }
 
+      const promptContext = input.context
+        ? { ...input.context, projectDir: input.context.projectDir ?? Instance.project.worktree }
+        : undefined
       const buildPromptText = () =>
         input.existingSessionID
-          ? buildRetryFeedbackPrompt(input.target, input.context, input.task.id)
-          : buildUserPrompt(input.target, input.context, input.task.id)
+          ? buildRetryFeedbackPrompt(input.target, promptContext, input.task.id)
+          : buildUserPrompt(input.target, promptContext, input.task.id)
       const requiredIntegrityFingerprints = integrityBlockingFingerprintsFromFeedback(input.context?.integrityFeedback)
       // Forward the same authoritative references named in the
       // frontend-design evidence manifest as multimodal user-message parts so
@@ -2369,7 +2376,7 @@ function renderBuildRequirementsSection(
     "For UI/webpage work, read the PRD/frontend_design material and any frontend_research investigation packets in page chunks before editing: identify the component kind for each chunk, verify the referenced evidence, then implement the matching component and content. All visible content must be componentized and fed by props, data modules, fixtures, or API adapters instead of hardcoded directly into page wrappers, generated SVG, or one-off JSX literals. Charts, maps, heatmaps, geographic visualizations, tables/grids, tabs, menus, modals, forms, and carousels must remain real components with data/state/interaction contracts. Do not replace a chart/map/heatmap with a flat SVG/image/decorative vector unless verified PRD/design evidence says it is static decoration.",
   )
   lines.push(
-    "Respect the source-authority split: PRD/frontend_design contracts define user-facing semantics for global layout intent, component functions, content/data, states, and interactions; skeleton/source-dom/source IR evidence defines implementation facts such as source ids, region geometry, source-ir/style-profile.json, CSS, assets, browser state snapshots, and pixel consistency. Frontend_research packets are coverage and investigation prompts, not a separate fact source. When sources conflict, preserve the PRD/component/design contract and use source evidence to repair measured style/layout/assets.",
+    "Respect the source-authority split: PRD/frontend_design contracts define user-facing semantics for global layout intent, component functions, content/data, states, and interactions; skeleton/source-dom/source IR evidence defines implementation facts such as source ids, region geometry, source-ir/style-profile.json, CSS, assets, browser state snapshots, and pixel consistency. Weight the sources accordingly: PRD/frontend_design drive roughly 70% of implementation decisions, while source evidence supplies roughly 30% style, geometry, CSS, assets, and pixel-consistency support. Frontend_research packets are coverage and investigation prompts, not a separate fact source. When sources conflict, preserve the PRD/component/design contract and use source evidence to repair measured style/layout/assets.",
   )
   if (options.directRequest) {
     lines.push(

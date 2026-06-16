@@ -4,6 +4,7 @@ import type { AgentSideConnection } from "@agentclientprotocol/sdk"
 import type { Event, EventMessagePartUpdated, ToolStatePending, ToolStateRunning } from "@opencorvus-ai/sdk"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { AttachmentStore } from "../../src/storage/attachment-store"
 
 type SessionUpdateParams = Parameters<AgentSideConnection["sessionUpdate"]>[0]
 type RequestPermissionParams = Parameters<AgentSideConnection["requestPermission"]>[0]
@@ -13,6 +14,8 @@ type GlobalEventEnvelope = {
   directory?: string
   payload?: Event
 }
+
+const ACP_TEST_CONFIG = { model: "opencorvus/big-pickle" } as any
 
 type EventController = {
   push: (event: GlobalEventEnvelope) => void
@@ -68,6 +71,47 @@ function toolEvent(
         callID: opts.callID,
         tool: opts.tool,
         state,
+      },
+    },
+  }
+  return { directory: cwd, payload }
+}
+
+function completedToolEvent(
+  sessionId: string,
+  cwd: string,
+  opts: {
+    callID: string
+    tool: string
+    input: Record<string, unknown>
+    output: string
+    attachments?: Array<{ type: "file"; mime: string; filename?: string; url: string }>
+  },
+): GlobalEventEnvelope {
+  const payload: EventMessagePartUpdated = {
+    type: "message.part.updated",
+    properties: {
+      part: {
+        id: `part_${opts.callID}`,
+        sessionID: sessionId,
+        messageID: `msg_${opts.callID}`,
+        type: "tool",
+        callID: opts.callID,
+        tool: opts.tool,
+        state: {
+          status: "completed",
+          input: opts.input,
+          output: opts.output,
+          title: opts.tool,
+          metadata: {},
+          time: { start: Date.now(), end: Date.now() },
+          attachments: opts.attachments?.map((attachment, index) => ({
+            id: `file_${opts.callID}_${index}`,
+            sessionID: sessionId,
+            messageID: `msg_${opts.callID}`,
+            ...attachment,
+          })),
+        },
       },
     },
   }
@@ -260,12 +304,12 @@ function createFakeAgent() {
 
 describe("acp.agent event subscription", () => {
   test("routes message.part.delta by the event sessionID (no cross-session pollution)", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const { agent, controller, updates, stop } = createFakeAgent()
-        const cwd = "/tmp/opencorvus-acp-test"
+        const cwd = tmp.path
 
         const sessionA = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
         const sessionB = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
@@ -295,12 +339,12 @@ describe("acp.agent event subscription", () => {
   })
 
   test("keeps concurrent sessions isolated when message.part.delta events are interleaved", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const { agent, controller, chunks, stop } = createFakeAgent()
-        const cwd = "/tmp/opencorvus-acp-test"
+        const cwd = tmp.path
 
         const sessionA = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
         const sessionB = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
@@ -347,12 +391,12 @@ describe("acp.agent event subscription", () => {
   })
 
   test("does not create additional event subscriptions on repeated loadSession()", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const { agent, calls, stop } = createFakeAgent()
-        const cwd = "/tmp/opencorvus-acp-test"
+        const cwd = tmp.path
 
         const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
 
@@ -369,7 +413,7 @@ describe("acp.agent event subscription", () => {
   })
 
   test("permission.asked events are handled and replied", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -379,7 +423,7 @@ describe("acp.agent event subscription", () => {
           permissionReplies.push(params.requestID)
           return { data: true }
         }
-        const cwd = "/tmp/opencorvus-acp-test"
+        const cwd = tmp.path
 
         const sessionA = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
 
@@ -408,7 +452,7 @@ describe("acp.agent event subscription", () => {
   })
 
   test("permission prompt on session A does not block message updates for session B", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -436,7 +480,7 @@ describe("acp.agent event subscription", () => {
           return { data: true }
         }
 
-        const cwd = "/tmp/opencorvus-acp-test"
+        const cwd = tmp.path
 
         const sessionA = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
         const sessionB = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
@@ -495,12 +539,12 @@ describe("acp.agent event subscription", () => {
   })
 
   test("streams running bash output snapshots and de-dupes identical snapshots", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const { agent, controller, sessionUpdates, stop } = createFakeAgent()
-        const cwd = "/tmp/opencorvus-acp-test"
+        const cwd = tmp.path
         const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
         const input = { command: "echo hello", description: "run command" }
 
@@ -528,13 +572,72 @@ describe("acp.agent event subscription", () => {
     })
   })
 
-  test("emits synthetic pending before first running update for any tool", async () => {
-    await using tmp = await tmpdir()
+  test("emits completed tool image attachments as ACP image content", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const { agent, controller, sessionUpdates, stop } = createFakeAgent()
-        const cwd = "/tmp/opencorvus-acp-test"
+        const cwd = tmp.path
+        const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
+        const image = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from("side-by-side-png"),
+          "image/png",
+          "side-by-side.png",
+        )
+
+        controller.push(
+          completedToolEvent(sessionId, cwd, {
+            callID: "call_compare",
+            tool: "browser_preview_compare_regions",
+            input: { targetID: "art_previewtarget_1" },
+            output: "comparison completed",
+            attachments: [
+              {
+                type: "file",
+                mime: image.mime,
+                filename: image.filename,
+                url: image.url,
+              },
+            ],
+          }),
+        )
+        await new Promise((r) => setTimeout(r, 20))
+
+        const completed = sessionUpdates
+          .filter((u) => u.sessionId === sessionId)
+          .map((u) => u.update)
+          .find(
+            (update) =>
+              update.sessionUpdate === "tool_call_update" &&
+              update.status === "completed" &&
+              update.toolCallId === "call_compare",
+          )
+        expect(completed?.sessionUpdate).toBe("tool_call_update")
+        expect(completed?.status).toBe("completed")
+        const content = completed?.content ?? []
+        expect(
+          content.some(
+            (item: any) =>
+              item.type === "content" &&
+              item.content?.type === "image" &&
+              item.content.mimeType === "image/png" &&
+              item.content.data === Buffer.from("side-by-side-png").toString("base64"),
+          ),
+        ).toBe(true)
+        stop()
+      },
+    })
+  })
+
+  test("emits synthetic pending before first running update for any tool", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, controller, sessionUpdates, stop } = createFakeAgent()
+        const cwd = tmp.path
         const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
 
         controller.push(
@@ -574,12 +677,12 @@ describe("acp.agent event subscription", () => {
   })
 
   test("does not emit duplicate synthetic pending after replayed running tool", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const { agent, controller, sessionUpdates, stop, sdk } = createFakeAgent()
-        const cwd = "/tmp/opencorvus-acp-test"
+        const cwd = tmp.path
         const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
         const input = { command: "echo hi", description: "run command" }
 
@@ -633,12 +736,12 @@ describe("acp.agent event subscription", () => {
   })
 
   test("clears bash snapshot marker on pending state", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const { agent, controller, sessionUpdates, stop } = createFakeAgent()
-        const cwd = "/tmp/opencorvus-acp-test"
+        const cwd = tmp.path
         const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
         const input = { command: "echo hello", description: "run command" }
 

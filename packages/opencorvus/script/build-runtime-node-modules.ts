@@ -13,6 +13,7 @@ function packageDestination(nodeModules: string, packageName: string) {
 
 async function copyPackageDirectory(source: string, destination: string) {
   await fs.promises.rm(destination, { recursive: true, force: true })
+  await fs.promises.mkdir(path.dirname(destination), { recursive: true })
   await fs.promises.cp(source, destination, {
     recursive: true,
     dereference: true,
@@ -55,13 +56,20 @@ async function copyRuntimePackageTree(
   target: ArtifactNodeRuntimeTarget,
   copied: Set<string>,
   rootPackageNames: Set<string>,
+  copiedPackageNames: Map<string, string>,
+  conflictNodeModules: string,
   runtimeDependencies: string[] = [],
 ) {
   const source = resolvePackageSource(packageName, requireFrom, target)
-  const destination = packageDestination(outNodeModules, packageName)
   const copiedKey = fs.realpathSync(source).toLowerCase()
-  if (copied.has(copiedKey)) return
-  copied.add(copiedKey)
+  const existingSource = copiedPackageNames.get(packageName)
+  const hasVersionConflict = existingSource !== undefined && existingSource !== copiedKey
+  const destinationNodeModules = hasVersionConflict ? conflictNodeModules : outNodeModules
+  const destination = packageDestination(destinationNodeModules, packageName)
+  const destinationKey = `${copiedKey}\0${destination.toLowerCase()}`
+  if (copied.has(destinationKey)) return
+  copied.add(destinationKey)
+  if (!hasVersionConflict) copiedPackageNames.set(packageName, copiedKey)
 
   await copyPackageDirectory(source, destination)
 
@@ -73,7 +81,16 @@ async function copyRuntimePackageTree(
 
   const packageRequire = createRequire(path.join(source, "package.json"))
   for (const dependencyName of dependencyNames) {
-    await copyRuntimePackageTree(dependencyName, outNodeModules, packageRequire, target, copied, rootPackageNames)
+    await copyRuntimePackageTree(
+      dependencyName,
+      outNodeModules,
+      packageRequire,
+      target,
+      copied,
+      rootPackageNames,
+      copiedPackageNames,
+      path.join(destination, "node_modules"),
+    )
   }
 }
 
@@ -87,6 +104,7 @@ export async function copyRuntimeNodeModules(
   await fs.promises.mkdir(nodeModules, { recursive: true })
   const requireFromPackage = createRequire(path.join(packageRoot, "package.json"))
   const copied = new Set<string>()
+  const copiedPackageNames = new Map<string, string>()
   const rootPackageNames = new Set(modules.map((item) => item.name))
   for (const item of modules) {
     await copyRuntimePackageTree(
@@ -96,6 +114,8 @@ export async function copyRuntimeNodeModules(
       target,
       copied,
       rootPackageNames,
+      copiedPackageNames,
+      nodeModules,
       item.runtimeDependencies,
     )
   }

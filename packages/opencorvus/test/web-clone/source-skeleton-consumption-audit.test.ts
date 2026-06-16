@@ -91,7 +91,7 @@ describe("web-clone source skeleton consumption audit", () => {
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
     await Bun.write(
-      path.join(projectDir, "frontend-design-skeleton", "src", "generated", "singlefile-head-styles.html"),
+      path.join(projectDir, "frontend-design-skeleton", "src", "generated", "source-head-styles.html"),
       `<style>:root{--sf-img-1:url("data:image/png;base64,${"A".repeat(4000)}")}</style>`,
     )
     await Bun.write(

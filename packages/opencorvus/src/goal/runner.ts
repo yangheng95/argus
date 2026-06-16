@@ -14,16 +14,11 @@ export async function cleanupGoalWorkspace(directory?: string) {
   if (!directory) return
   // Accept both the Global goal-workspace path and the per-project worktree
   // path. Per-goal dispatch creates worktrees under
-  // `<primary>/.opencorvus/runtime/` (via Worktree.create). Without this
+  // `<primary>/.opencorvus/r/` (via Worktree.create). Without this
   // check cleanup is silently skipped, leaking LSP servers + worktree dirs.
-  // The legacy parent-directory layout (`.opencorvus-worktrees/`) is also
-  // still matched so a cleanup straddling the migration still works.
   const goalWorkspaceRoot = path.join(Global.Path.data, "goal-workspace")
   const isGoalWorkspace = Filesystem.contains(goalWorkspaceRoot, directory)
-  const isWorktree =
-    directory.includes(path.join(".opencorvus", "runtime")) ||
-    directory.includes(path.join(".opencorvus", "worktrees")) ||
-    directory.includes(".opencorvus-worktrees")
+  const isWorktree = directory.includes(path.join(".opencorvus", "r"))
   if (!isGoalWorkspace && !isWorktree) {
     throw new Error(`cleanupGoalWorkspace refused path outside goal workspace roots: ${directory}`)
   }

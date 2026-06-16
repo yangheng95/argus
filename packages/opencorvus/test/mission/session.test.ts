@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Session } from "../../src/session"
 import { ensureMissionSession, findExistingMissionSession, listMissionSessions } from "../../src/mission/session"
 import { Log } from "../../src/util/log"
+import { tmpdir } from "../fixture/fixture"
 
 const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -44,6 +47,25 @@ describe("Mission session helpers", () => {
         expect(mission?.channelKey).toBe("mission:m-cwd")
         expect(mission?.cwd).toBe(projectRoot)
         await Session.remove(s.id)
+      },
+    })
+  })
+
+  test("ensureMissionSession creates the short mission runtime directory immediately", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const missionID = "m-runtime"
+        const session = await ensureMissionSession({ missionID, defaultCwd: tmp.path })
+        const missionRoot = ProjectRuntimePaths.missionRoot(tmp.path, missionID)
+        const stat = await fs.stat(missionRoot)
+
+        expect(session.missionID).toBe(missionID)
+        expect(stat.isDirectory()).toBe(true)
+        expect(missionRoot).not.toContain(missionID)
+
+        await Session.remove(session.id)
       },
     })
   })

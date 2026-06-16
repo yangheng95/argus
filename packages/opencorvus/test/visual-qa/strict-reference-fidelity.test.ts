@@ -63,7 +63,7 @@ describe("visual-qa strict reference image fidelity", () => {
     const withReference = renderVisualQaFrontendDesignContext([
       {
         key: "reference_artifacts",
-        value: "- .opencorvus/runtime/tasks/tsk/frontend-design/reference.png",
+        value: "- .opencorvus/r/t/ab/cdef12/fd/reference.png",
         reason: "reference image",
       },
     ])

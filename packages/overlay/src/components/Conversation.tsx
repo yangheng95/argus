@@ -277,7 +277,7 @@ export function Conversation(props: { container: HTMLElement }) {
     if (taskID) {
       return tasks.find((item: any) => item?.task?.id === taskID || item?.id === taskID) || null
     }
-    return tasks[0] || null
+    return null
   }
   const taskContextID = () => {
     const item = taskContextItem()

@@ -140,7 +140,7 @@ describe("browser preview target resolver", () => {
     expect(target.diagnostics.join("\n")).toContain("Saved browser preview target is unreachable")
   })
 
-  test("keeps unreachable saved candidates visible when selecting a reachable target", async () => {
+  test("does not replace the selected preview target with another reachable candidate", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
     const reachable = await persistBrowserPreviewTarget({
@@ -160,13 +160,15 @@ describe("browser preview target resolver", () => {
       isVisible: async (url) => url === reachable.url,
     })
 
-    expect(target.id).toBe(reachable.id)
-    expect(target.status).toBe("ready")
+    expect(target.id).toBe(unreachable.id)
+    expect(target.status).toBe("failed")
+    expect(target.url).toBe(unreachable.url)
     expect(target.candidates.map((candidate) => ({ id: candidate.id, selected: candidate.selected }))).toEqual([
-      { id: unreachable.id, selected: false },
-      { id: reachable.id, selected: true },
+      { id: unreachable.id, selected: true },
+      { id: reachable.id, selected: false },
     ])
     expect(target.diagnostics.join("\n")).toContain(unreachable.url)
+    expect(target.diagnostics.join("\n")).not.toContain(reachable.url)
   })
 
   test("generic tool output does not materialize browser preview candidates", async () => {

@@ -91,6 +91,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Shell } from "../../src/shell/shell"
 import { decodePNG, nonWhiteDensity, uniqueColorBucketCount } from "../../src/util/pixel-stats"
 import { parseSSE } from "../../src/util/sse"
@@ -484,12 +485,12 @@ if (resumeTaskID) {
 // Re-inject local provider configs after scaffoldProject (which overwrites config-override)
 await prepareLocalProviders()
 
-// AgentTrace dir: keep traces under the current runtime root. The old
+// AgentTrace dir: keep traces under the current short runtime root. The old
 // `<project>/.opencorvus/trace` path is a legacy runtime location that
 // Instance rejects before bootstrap, so benchmark-owned trace capture must
-// live inside `.opencorvus/runtime`.
+// live inside `.opencorvus/r`.
 if (!process.env.OPENCORVUS_AGENT_TRACE_DIR) {
-  process.env.OPENCORVUS_AGENT_TRACE_DIR = path.join(temp.dir, ".opencorvus", "runtime", "trace")
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = path.join(ProjectRuntimePaths.projectRuntimeRoot(temp.dir), "trace")
 }
 await fs.mkdir(process.env.OPENCORVUS_AGENT_TRACE_DIR, { recursive: true }).catch(() => undefined)
 process.stderr.write(`[trace] OPENCORVUS_AGENT_TRACE_DIR=${process.env.OPENCORVUS_AGENT_TRACE_DIR}\n`)
@@ -570,13 +571,11 @@ await fs.mkdir(path.dirname(reportFile), { recursive: true })
       path.dirname(reportFile),
       path.basename(reportFile, ".json") + ".html-skeleton-workflow-out",
     )
-    const taskRoot = path.join(temp.dir, ".opencorvus", "runtime", "tasks")
     return refs
       .map((ref, index) => {
         const outDir = refs.length === 1 ? baseOut : path.join(baseOut, `reference-${index + 1}`)
         return [
           `bun run ${safe(htmlSkeletonWorkflowCheckScript)}`,
-          `--task-dir=${safe(taskRoot)}`,
           `--reference=${safe(path.resolve(ref))}`,
           `--out=${safe(outDir)}`,
           `--threshold=${WEB_CLONE_VISUAL_THRESHOLD}`,
@@ -1214,7 +1213,7 @@ try {
   }
   if (!keep && temp.dir) {
     // Rescue the trace dir before wiping the workspace. Default trace dir is
-    // under `<temp.dir>/.opencorvus/runtime/trace`, which would otherwise die
+    // under `<temp.dir>/.opencorvus/r/trace`, which would otherwise die
     // with the workspace and make every benchmark run lose its agent traces.
     const traceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
     if (traceDir && traceDir.startsWith(temp.dir)) {

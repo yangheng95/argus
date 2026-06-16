@@ -3,6 +3,7 @@ import path from "node:path"
 import fs from "node:fs/promises"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Session } from "../../src/session"
 import { ensureMissionSession } from "../../src/mission/session"
 import { MissionStateTool, MISSION_STATE_FILES } from "../../src/tool/mission-state"
@@ -17,7 +18,7 @@ Log.init({ print: false })
  *
  * mission_state is path-confined I/O for the Mission agent. The boundary is
  * the protection — Mission cannot read or write outside
- * `.opencorvus/runtime/mission/<missionID>/<file>` where file is one of the
+ * `.opencorvus/r/m/<mission-key>/<file>` where file is one of the
  * four hard-coded names.
  *
  * The missionID is NOT an agent parameter: it is resolved from the mission
@@ -134,10 +135,9 @@ describe("mission_state read / write / list", () => {
         const body = "## Outstanding\n- /chart\n- /screener\n"
         await tool.execute({ action: "write", file: "frontier.md", content: body } as any, ctx)
         // The file MUST land under the session's missionID, not any id the caller imagined.
-        const onDisk = await fs.readFile(
-          path.join(tmp.path, ".opencorvus", "runtime", "mission", "tv-replay", "frontier.md"),
-          "utf8",
-        )
+        const missionRoot = ProjectRuntimePaths.missionRoot(tmp.path, "tv-replay")
+        expect(missionRoot).not.toContain("tv-replay")
+        const onDisk = await fs.readFile(path.join(missionRoot, "frontier.md"), "utf8")
         expect(onDisk).toBe(body)
         const result = await tool.execute({ action: "read", file: "frontier.md" } as any, ctx)
         expect(result.output).toBe(body)
@@ -155,7 +155,7 @@ describe("mission_state read / write / list", () => {
           { action: "write", file: "tasks.md", content: "task list" } as any,
           await missionCtx("tv-replay"),
         )
-        const dir = path.join(tmp.path, ".opencorvus", "runtime", "mission", "tv-replay")
+        const dir = ProjectRuntimePaths.missionRoot(tmp.path, "tv-replay")
         const entries = await fs.readdir(dir)
         expect(entries.sort()).toEqual(["tasks.md"])
       },

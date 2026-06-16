@@ -1,15 +1,17 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import sharp from "sharp"
 import z from "zod"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { requireRuntimePackage } from "@/runtime/package-require"
 import { BrowserPreviewEvidenceTargetNotFoundError, runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"
 import { BrowserPreviewViewportID } from "./viewport"
 import {
   normalizeRuntimePathRefs,
   persistBrowserPreviewEvidence,
 } from "./persist"
+
+const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
 const SOURCE_REFERENCE_FILES = new Set(["reference.png", "reference-mobile.png"])
 

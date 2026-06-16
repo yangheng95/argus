@@ -601,10 +601,10 @@ function detectFrontendDesignGeneratedBaseline(projectSources: Array<{ relative:
   const byPath = new Map(projectSources.map((source) => [source.relative, source.text]))
   const legacySinglefileBaseline =
     byPath.has("scripts/extract-source-html.mjs") &&
-    byPath.has("src/generated/singlefile-body.html") &&
-    byPath.has("src/generated/singlefile-head-styles.html") &&
-    /singlefile-body\.html\?raw/.test(byPath.get("src/App.jsx") ?? "") &&
-    /singlefile-head-styles\.html\?raw/.test(byPath.get("src/App.jsx") ?? "")
+    byPath.has("src/generated/source-body.html") &&
+    byPath.has("src/generated/source-head-styles.html") &&
+    /source-body\.html\?raw/.test(byPath.get("src/App.jsx") ?? "") &&
+    /source-head-styles\.html\?raw/.test(byPath.get("src/App.jsx") ?? "")
   const sourceDomRegionFileExists = projectSources.some((source) =>
     /^src\/components\/source-dom\/.+\.tsx$/i.test(source.relative),
   )

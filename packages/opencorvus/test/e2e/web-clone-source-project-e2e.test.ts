@@ -329,18 +329,20 @@ describe("web clone source project E2E", () => {
   })
 
   test("frontend_design agent benchmark request points at visual HTML skeleton boundaries", () => {
+    const paths = ProjectRuntimePaths.frontendDesignPaths("", "tsk_test")
+    const visualSkeleton = ProjectRuntimePaths.taskRelative("tsk_test", "fd", "visual-html-skeleton")
     const request = buildFrontendDesignAgentBenchmarkRequest({
-      sourcePackageDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
-      skeletonProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
-      targetProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/visual-html-skeleton",
+      sourcePackageDir: paths.sourcePackageRelative,
+      skeletonProjectDir: paths.skeletonProjectRelative,
+      targetProjectDir: visualSkeleton,
       webpageEvidenceDir: ".tmp/webpage-evidence",
     })
 
     expect(request).toContain("Call `create_frontend_skeleton_project`")
     expect(request).toContain("overwrite=true")
-    expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source")
-    expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton")
-    expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/visual-html-skeleton")
+    expect(request).toContain(paths.sourcePackageRelative)
+    expect(request).toContain(paths.skeletonProjectRelative)
+    expect(request).toContain(visualSkeleton)
     expect(request).toContain("source-editable static HTML/CSS visual skeleton")
     expect(request).toContain("visual-html-skeleton/index.html")
     expect(request).toContain("visual-html-skeleton/styles/tokens.css")
@@ -616,21 +618,21 @@ function buildFrontendDesignAgentBenchmarkRequest(input: {
 }
 
 async function resetFrontendDesignBenchmarkSkeletonDir(projectDir: string): Promise<void> {
-  const runtimeTasksRoot = path.resolve(repoRoot, ".opencorvus", "runtime", "tasks")
+  const runtimeRoot = path.resolve(ProjectRuntimePaths.projectRuntimeRoot(repoRoot))
   const target = path.resolve(projectDir)
-  const relative = path.relative(runtimeTasksRoot, target)
+  const relative = path.relative(runtimeRoot, target)
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`Refusing to reset frontend-design benchmark project outside runtime tasks: ${target}`)
+    throw new Error(`Refusing to reset frontend-design benchmark project outside runtime root: ${target}`)
   }
   await fs.rm(target, { recursive: true, force: true })
 }
 
 async function resetFrontendDesignBenchmarkTargetDir(projectDir: string): Promise<void> {
-  const runtimeTasksRoot = path.resolve(repoRoot, ".opencorvus", "runtime", "tasks")
+  const runtimeRoot = path.resolve(ProjectRuntimePaths.projectRuntimeRoot(repoRoot))
   const target = path.resolve(projectDir)
-  const relative = path.relative(runtimeTasksRoot, target)
+  const relative = path.relative(runtimeRoot, target)
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`Refusing to reset frontend-design benchmark target outside runtime tasks: ${projectDir}`)
+    throw new Error(`Refusing to reset frontend-design benchmark target outside runtime root: ${projectDir}`)
   }
   await fs.rm(target, { recursive: true, force: true })
 }
@@ -830,7 +832,7 @@ async function inspectVisualSkeletonEvidence(
       (await fileExists(path.join(projectDir, "out", "index.html"))),
     rawSourceDomDumpPresent:
       /\bsource-dom-page\b/i.test(indexHtml) ||
-      /\bsinglefile-body\.html\b/i.test(indexHtml) ||
+      /\bsource-body\.html\b/i.test(indexHtml) ||
       /\bsource-skeleton\b/i.test(indexHtml) ||
       (indexHtml.match(/\bdata-source-node-id=/gi) ?? []).length > 500,
     referenceImageExists: await fileExists(path.join(sourcePackageDir, "reference.png")),

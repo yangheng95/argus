@@ -1,7 +1,5 @@
 import path from "node:path"
-import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import type { RuntimeCaptureResult } from "@/runtime/capture-contract"
-import { Identifier } from "@/id/id"
 import z from "zod"
 import type { BrowserEvidenceManifestSummary } from "./evidence-runner"
 import { normalizeRuntimePathRefs, persistBrowserPreviewEvidence, stripRuntimePathRefs } from "./persist"
@@ -53,10 +51,9 @@ export type BrowserPreviewVerificationInput = {
 }
 
 export type BrowserPreviewVerificationCaptureJobInput = {
+  projectRoot: string
   taskID: string
   targetID: string
-  url: string
-  outDir: string
   viewports: BrowserPreviewViewport[]
   viewportIDs: BrowserPreviewViewportID[]
   signal?: AbortSignal
@@ -118,13 +115,10 @@ export async function runBrowserPreviewVerification(
     }
   }
 
-  const captureID = Identifier.ascending("artifact")
-  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, captureID)
   const { captures, manifest } = await captureJob({
+    projectRoot,
     taskID: input.taskID,
     targetID: input.targetID,
-    url: input.target.url,
-    outDir,
     viewports,
     viewportIDs,
     signal: input.signal,

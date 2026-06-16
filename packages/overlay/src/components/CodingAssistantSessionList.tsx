@@ -70,7 +70,7 @@ function CodingAssistantStopButton(props: {
       tone="neutral"
       disabled={props.disabled}
       data-chrome="icon-action"
-      data-ui="coding-assistant-row-stop"
+      data-ui="task-row-cancel"
       data-confirm={confirmStop.armed() ? "true" : undefined}
       title={t("coding_assistant.ledger.stop_title")}
       aria-label={t("coding_assistant.ledger.stop_title")}
@@ -80,10 +80,10 @@ function CodingAssistantStopButton(props: {
       }}
       onBlur={confirmStop.disarm}
     >
-      <span class="coding-assistant-row-stop-icon" data-icon="stop" aria-hidden="true">
+      <span class="task-row-cancel-icon" data-icon="cancel" aria-hidden="true">
         <Icon name="stop" size={11} />
       </span>
-      <span class="coding-assistant-row-stop-icon" data-icon="confirm" aria-hidden="true">
+      <span class="task-row-cancel-icon" data-icon="confirm" aria-hidden="true">
         <Icon name="check" size={11} />
       </span>
     </Button>
@@ -104,7 +104,7 @@ function CodingAssistantDeleteButton(props: {
       tone="danger"
       disabled={props.disabled}
       data-chrome="icon-action"
-      data-ui="coding-assistant-row-delete"
+      data-ui="task-row-delete"
       data-confirm={confirmDelete.armed() ? "true" : undefined}
       title={t("coding_assistant.ledger.delete_title")}
       aria-label={t("coding_assistant.ledger.delete_title")}
@@ -114,10 +114,10 @@ function CodingAssistantDeleteButton(props: {
       }}
       onBlur={confirmDelete.disarm}
     >
-      <span class="coding-assistant-row-delete-icon" data-icon="delete" aria-hidden="true">
+      <span class="task-row-delete-icon" data-icon="delete" aria-hidden="true">
         <Icon name="close" size={11} />
       </span>
-      <span class="coding-assistant-row-delete-icon" data-icon="confirm" aria-hidden="true">
+      <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
         <Icon name="check" size={11} />
       </span>
     </Button>
@@ -133,7 +133,7 @@ function CodingAssistantRenameButton(props: { disabled?: boolean; onClick: () =>
       tone="neutral"
       disabled={props.disabled}
       data-chrome="icon-action"
-      data-ui="coding-assistant-row-rename"
+      data-ui="task-row-rename"
       title={t("coding_assistant.ledger.rename_title")}
       aria-label={t("coding_assistant.ledger.rename_title")}
       onClick={(event) => {
@@ -222,7 +222,7 @@ function CodingAssistantSessionRow(props: {
                   ref={(el) => {
                     inputRef = el
                   }}
-                  class="coding-assistant-row-rename-input"
+                  class="task-row-rename-input"
                   data-ui="coding-assistant-row-rename-input"
                   type="text"
                   maxLength={200}
@@ -276,7 +276,7 @@ function CodingAssistantSessionRow(props: {
         <small class="task-row-stamp coding-assistant-row-stamp" title={updated() ? detailStamp(updated()) : ""}>
           {updated() ? relativeTime(updated()) : t("coding_assistant.ledger.updated_unknown")}
         </small>
-        <div class="task-row-actions coding-assistant-row-actions">
+        <div class="task-row-actions">
           <CodingAssistantStopButton session={props.session} disabled={props.busy} onStop={props.onStopSession} />
           <CodingAssistantRenameButton disabled={props.busy} onClick={beginRename} />
           <CodingAssistantDeleteButton session={props.session} disabled={props.busy} onDelete={props.onDeleteSession} />

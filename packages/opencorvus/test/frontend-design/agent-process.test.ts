@@ -3,6 +3,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Session } from "../../src/session"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
@@ -68,6 +69,8 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
         expect(input.terminalTool?.toolName).toBe("submit_frontend_template")
         expect(input.toolKit.tools.record_frontend_region_selection).toBeDefined()
         expect(input.toolKit.tools.record_frontend_replacement_result).toBeDefined()
+        expect(input.toolKit.tools.create_visual_region_coordinate_atlas).toBeDefined()
+        expect(input.toolKit.tools.create_visual_region_binding_package).toBeDefined()
 
         await input.toolKit.tools.record_frontend_region_selection.execute({
           regionComponentName: "HeroRegion",
@@ -145,8 +148,8 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
           frontend_project: {
             status: "created",
             role: "implementation_target",
-            project_root: ".opencorvus/runtime/tasks/tsk_analyze_process/frontend-design/frontend-design-skeleton",
-            source_package: ".opencorvus/runtime/tasks/tsk_analyze_process/frontend-design/web-clone-source",
+            project_root: ProjectRuntimePaths.frontendDesignPaths("", "tsk_analyze_process").skeletonProjectRelative,
+            source_package: ProjectRuntimePaths.frontendDesignPaths("", "tsk_analyze_process").sourcePackageRelative,
             entrypoints: ["src/main.tsx", "src/App.tsx"],
             generation_tool: "create_frontend_skeleton_project",
             notes: ["HeroRegion replacement completed."],
@@ -240,9 +243,10 @@ test("FrontendDesignAgent.analyze persists process artifacts before failed final
         }),
       ).rejects.toThrow("simulated frontend-design timeout after tools")
 
-      const artifactDir = path.join(tmp.path, ".opencorvus", "runtime", "tasks", taskID, "frontend-design")
-      const processTrace = await readJsonEventually(path.join(artifactDir, "frontend-design-process-trace.json"))
-      const iterationState = await readJsonEventually(path.join(artifactDir, "frontend-design-iteration-state.json"))
+      const artifactDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).templateAbsolute
+      const artifactRoot = path.dirname(artifactDir)
+      const processTrace = await readJsonEventually(path.join(artifactRoot, "frontend-design-process-trace.json"))
+      const iterationState = await readJsonEventually(path.join(artifactRoot, "frontend-design-iteration-state.json"))
       expect(processTrace.events.map((event: any) => event.name)).toContain("frontend_design_replacement_result")
       expect(iterationState.completedReplacements[0].regionComponentName).toBe("FooterRegion")
     },

@@ -2,6 +2,7 @@
 
 import fs from "node:fs/promises"
 import path from "node:path"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { runVisualDiff, summarizeVisualReport, type VisualDiffReport } from "../../src/runtime/visual-page"
 import { serveRenderedDir } from "./static-render-server"
 
@@ -79,7 +80,7 @@ function defaultOutDir(): string {
 
 export function parseHtmlSkeletonWorkflowCheckArgs(): HtmlSkeletonWorkflowCheckInput {
   return {
-    taskID: flag("--task-id"),
+    taskID: flag("--task-id") ?? process.env.OPENCORVUS_TASK_ID,
     taskDir: flag("--task-dir"),
     frontendDesignDir: flag("--frontend-design-dir"),
     frontendResearchDir: flag("--frontend-research-dir"),
@@ -171,22 +172,23 @@ async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<
     browserLaunchTimeoutMs?: number
   }
 > {
+  const taskID = input.taskID ?? process.env.OPENCORVUS_TASK_ID
   const taskDir = input.taskDir
     ? await resolveTaskDir(path.resolve(input.taskDir))
-    : input.taskID
-      ? path.join(repoRoot(), ".opencorvus", "runtime", "tasks", input.taskID)
+    : taskID
+      ? ProjectRuntimePaths.taskRoot(projectRoot(), taskID)
       : undefined
   const frontendDesignDir = input.frontendDesignDir
     ? path.resolve(input.frontendDesignDir)
     : taskDir
-      ? path.basename(taskDir).toLowerCase() === "frontend-design"
+      ? path.basename(taskDir).toLowerCase() === "fd"
         ? taskDir
-        : path.join(taskDir, "frontend-design")
+        : path.join(taskDir, "fd")
       : undefined
   const frontendResearchDir = input.frontendResearchDir
     ? path.resolve(input.frontendResearchDir)
     : taskDir
-      ? path.join(taskDir, "frontend-research")
+      ? await resolveFrontendResearchDir(taskDir)
       : undefined
   const visualRoot = path.resolve(
     input.visualRoot ?? path.join(frontendDesignDir ?? process.cwd(), "visual-html-skeleton"),
@@ -237,27 +239,49 @@ async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<
 }
 
 async function resolveTaskDir(inputDir: string): Promise<string> {
-  const directFrontendDesign = path.join(inputDir, "frontend-design")
-  if ((await dirExists(directFrontendDesign)) || path.basename(inputDir).toLowerCase() === "frontend-design") {
+  const directFrontendDesign = path.join(inputDir, "fd")
+  if ((await dirExists(directFrontendDesign)) || path.basename(inputDir).toLowerCase() === "fd") {
     return inputDir
   }
-  if (path.basename(inputDir).toLowerCase() !== "tasks") return inputDir
+  if (isRuntimeTaskFanoutParent(inputDir)) {
+    throw new Error("Task fanout parent is ambiguous; pass --task-id or OPENCORVUS_TASK_ID instead.")
+  }
+  return inputDir
+}
 
-  const entries = await fs.readdir(inputDir, { withFileTypes: true }).catch(() => [])
+function isRuntimeTaskFanoutParent(inputDir: string): boolean {
+  const normalized = path.normalize(inputDir)
+  return (
+    path.basename(normalized) === "t" &&
+    path.basename(path.dirname(normalized)) === "r" &&
+    path.basename(path.dirname(path.dirname(normalized))) === ".opencorvus"
+  )
+}
+
+async function resolveFrontendResearchDir(taskDir: string): Promise<string | undefined> {
+  const root = path.join(taskDir, "fr")
+  const firstLevel = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
   const candidates = await Promise.all(
-    entries
+    firstLevel
       .filter((entry) => entry.isDirectory())
       .map(async (entry) => {
-        const taskDir = path.join(inputDir, entry.name)
-        const frontendDesignDir = path.join(taskDir, "frontend-design")
-        const stat = await fs.stat(frontendDesignDir).catch(() => undefined)
-        return stat?.isDirectory() ? { taskDir, mtimeMs: stat.mtimeMs } : undefined
+        const firstDir = path.join(root, entry.name)
+        const secondLevel = await fs.readdir(firstDir, { withFileTypes: true }).catch(() => [])
+        return Promise.all(
+          secondLevel
+            .filter((secondEntry) => secondEntry.isDirectory())
+            .map(async (secondEntry) => {
+              const dir = path.join(firstDir, secondEntry.name)
+              const stat = await fs.stat(dir).catch(() => undefined)
+              return stat?.isDirectory() ? { dir, mtimeMs: stat.mtimeMs } : undefined
+            }),
+        )
       }),
   )
-  const sorted = candidates
-    .filter((item): item is { taskDir: string; mtimeMs: number } => Boolean(item))
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)
-  return sorted[0]?.taskDir ?? inputDir
+  return candidates
+    .flat()
+    .filter((item): item is { dir: string; mtimeMs: number } => Boolean(item))
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]?.dir
 }
 
 async function collectArtifactChecks(
@@ -541,6 +565,10 @@ async function collectFrontendResearchChecks(
 
 function repoRoot(): string {
   return path.resolve(import.meta.dir, "../../../..")
+}
+
+function projectRoot(): string {
+  return path.resolve(process.env.OPENCORVUS_PROJECT_DIR ?? repoRoot())
 }
 
 async function fileCheck(

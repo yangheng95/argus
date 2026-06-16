@@ -10,15 +10,15 @@ describe("acceptance runtime path filtering", () => {
   test("package-root discovery ignores runtime-only changed files", async () => {
     await using tmp = await tmpdir()
     await fs.writeFile(path.join(tmp.path, "package.json"), JSON.stringify({ type: "module" }))
-    await fs.mkdir(path.join(tmp.path, ".opencorvus", "runtime", "nested"), { recursive: true })
+    await fs.mkdir(path.join(tmp.path, ".opencorvus", "r", "nested"), { recursive: true })
     await fs.writeFile(
-      path.join(tmp.path, ".opencorvus", "runtime", "nested", "package.json"),
+      path.join(tmp.path, ".opencorvus", "r", "nested", "package.json"),
       JSON.stringify({ type: "module" }),
     )
 
     const root = await Instance.provide({
       directory: tmp.path,
-      fn: () => discoverPackageRoot([".opencorvus/runtime/nested/package.json"]),
+      fn: () => discoverPackageRoot([".opencorvus/r/nested/package.json", ".opencorvus/runtime/nested/package.json"]),
     })
 
     expect(root).toBe(tmp.path)
@@ -32,11 +32,15 @@ describe("acceptance runtime path filtering", () => {
       directory: tmp.path,
       fn: () =>
         detectAcceptanceSurfaces({
-          changedFiles: [".opencorvus/runtime/tasks/tsk/frontend-design/visual-html-skeleton/src/App.tsx"],
+          changedFiles: [
+            ".opencorvus/r/t/ab/cdef12/fd/visual-html-skeleton/src/App.tsx",
+            ".opencorvus/runtime/tasks/tsk/frontend-design/visual-html-skeleton/src/App.tsx",
+          ],
         }),
     })
 
     expect(manifest.surfaces).not.toContain("frontend")
+    expect(JSON.stringify(manifest.evidence)).not.toContain(".opencorvus/r")
     expect(JSON.stringify(manifest.evidence)).not.toContain(".opencorvus/runtime")
   })
 })

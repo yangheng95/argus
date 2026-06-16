@@ -6,6 +6,8 @@ import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { Identifier } from "../../src/id/id"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Worktree } from "../../src/worktree"
 import { WorktreeGC } from "../../src/worktree/gc"
 import { Filesystem } from "../../src/util/filesystem"
@@ -182,6 +184,79 @@ describe("WorktreeGC orphan sweep", () => {
         const plan = await WorktreeGC.inspect({ now })
         expect(plan.candidates.map((c) => c.directory)).not.toContain(wt.directory)
         expect(await Filesystem.exists(wt.directory)).toBe(true)
+      },
+    })
+  }, 30_000)
+
+  test("does not treat short-layout fanout buckets as zombie worktrees", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const projectID = Instance.project.id
+        seedProject(projectID, tmp.path, now)
+        const taskID = Identifier.create("task", false, now)
+        const goalID = Identifier.create("goal", false, now + 1)
+        const runID = Identifier.create("run", false, now + 2)
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              source: "test",
+              title: "gc scoped task",
+              request: "keep scoped worktree",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "scoped goal",
+              slug: "scoped-goal",
+              objective: "still running",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              exports: [],
+              imports: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              status: "running",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        const leaf = ProjectRuntimePaths.worktreeDir(tmp.path, taskID, goalID, runID)
+        const bucket = path.dirname(path.dirname(leaf))
+        await fs.mkdir(leaf, { recursive: true })
+        await Bun.write(path.join(leaf, ".git"), "gitdir: ../../../.git/worktrees/scoped\n")
+        seedGoalRunAttemptWithWorkspace({
+          taskID,
+          goalID,
+          workspaceDir: leaf,
+          workspaceBranch: ProjectRuntimePaths.worktreeBranch({ taskID, goalID, runID }),
+          status: "running",
+          now,
+        })
+        await makeOld(bucket, now)
+        await makeOld(path.dirname(leaf), now)
+        await makeOld(leaf, now)
+
+        const plan = await WorktreeGC.inspect({ now })
+        expect(plan.candidates.map((c) => c.directory)).not.toContain(bucket)
+        expect(plan.candidates.map((c) => c.directory)).not.toContain(leaf)
+        expect(await Filesystem.exists(leaf)).toBe(true)
       },
     })
   }, 30_000)

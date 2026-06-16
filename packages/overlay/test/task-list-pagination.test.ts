@@ -102,3 +102,41 @@ test("loadMoreTasks fetches the next page from the database using the last visib
   ])
   expect(boardStore.tasksHasMore).toBe(false)
 })
+
+test("loadTasks refresh stays first-page sized after older pages were appended", async () => {
+  const requests: TransportRequest[] = []
+  const firstPage = Array.from({ length: TASK_LIST_PAGE_SIZE + 1 }, (_, index) => taskItem(index))
+  const secondPage = [taskItem(11), taskItem(12), taskItem(13)]
+  __setHostTransportForTest({
+    kind: "tauri",
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      requests.push(req)
+      const body = requests.length === 2 ? { tasks: secondPage } : { tasks: firstPage }
+      return { status: 200, ok: true, headers: {}, body: body as T }
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport)
+
+  await loadTasks()
+  await loadMoreTasks()
+  expect(boardStore.tasks).toHaveLength(TASK_LIST_PAGE_SIZE + secondPage.length)
+
+  await loadTasks()
+
+  expect(requests).toHaveLength(3)
+  expect(requests[2].path).toBe("global/tasks")
+  expect(String(requests[2].query?.limit)).toBe(String(TASK_LIST_PAGE_SIZE + 1))
+  expect(requests[2].query?.cursor).toBeUndefined()
+  expect(requests[2].query?.cursorTaskID).toBeUndefined()
+  expect(boardStore.tasks.map((item: any) => item.task.id)).toEqual(
+    firstPage.slice(0, TASK_LIST_PAGE_SIZE).map((item) => item.task.id),
+  )
+})

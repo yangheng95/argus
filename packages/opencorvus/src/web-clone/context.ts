@@ -287,7 +287,6 @@ function renderContract(
       },
       forbidden: [
         "reference screenshot replay",
-        "unverified SingleFile HTML replay outside the frontend-design skeleton baseline",
         "large HTML strings outside generated baseline files",
         "dangerouslySetInnerHTML outside generated baseline files",
         "innerHTML/insertAdjacentHTML/DOMParser page construction outside generated baseline files",
@@ -372,7 +371,6 @@ async function materializeVisibleSourcePackage(input: {
     written,
   )
   for (const diagnostic of [
-    "singlefile.html",
     "page.ir.json",
     "segments.json",
     "codegen-context.json",
@@ -485,9 +483,8 @@ function renderSourcePackageReadme(webpageEvidenceDir: string, stats: PrepareWeb
     "7. `source-ir/style-profile.json` for region-scoped computed style, layout, selector, and asset facts",
     "8. `source-ir/interaction-state-snapshots.json` and `interaction-states/*.png` for scroll/click/runtime state evidence",
     "9. `visual-surface-candidates.json` when present",
-    "10. `singlefile.html` as optional visual DOM/CSS evidence for frontend-design skeleton generation",
-    "11. `source-skeleton/critical.css`",
-    "12. `source-skeleton/index.html` only as raw evidence for ambiguous DOM order or missing text",
+    "10. `source-skeleton/critical.css`",
+    "11. `source-skeleton/index.html` only as raw evidence for ambiguous DOM order or missing text",
     "",
     "Use `assets/manifest.json`, `assets/svg/`, and `assets/images/` as reusable sidecars for dense geometry and extracted resources. Reference those files from normal React/Vue/etc. source instead of pasting the payloads inline.",
     "",

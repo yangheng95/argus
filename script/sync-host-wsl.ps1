@@ -4,6 +4,8 @@ param(
   [string]$WslRoot = "/home/yangheng/myhexin-local/opecorvus",
   [switch]$PreferHostForConflicts,
   [switch]$PreferWslForConflicts,
+  [switch]$PreferHostForWslChanges,
+  [string[]]$OnlyPath = @(),
   [switch]$Apply
 )
 
@@ -11,6 +13,9 @@ $ErrorActionPreference = "Stop"
 
 if ($PreferHostForConflicts -and $PreferWslForConflicts) {
   throw "[sync-host-wsl] choose only one conflict preference"
+}
+if ($PreferHostForWslChanges -and $PreferWslForConflicts) {
+  throw "[sync-host-wsl] PreferHostForWslChanges cannot be combined with PreferWslForConflicts"
 }
 
 function Fail($Message) {
@@ -127,7 +132,29 @@ function Contains-PathItem($Set, $Item) {
   return $Set.Contains(($Item -replace "\\", "/"))
 }
 
+function Filter-Paths([string[]]$Paths, [string[]]$Allowed) {
+  if ($Allowed.Count -eq 0) {
+    return @($Paths)
+  }
+  $allowedSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  foreach ($item in $Allowed) {
+    if (-not [string]::IsNullOrWhiteSpace($item)) {
+      [void]$allowedSet.Add(($item -replace "\\", "/"))
+    }
+  }
+  $filtered = [System.Collections.Generic.List[string]]::new()
+  foreach ($path in $Paths) {
+    if ($allowedSet.Contains(($path -replace "\\", "/"))) {
+      $filtered.Add($path)
+    }
+  }
+  return @($filtered)
+}
+
 function Write-Lines($Path, [string[]]$Lines) {
+  if ($null -eq $Lines) {
+    $Lines = @()
+  }
   [IO.File]::WriteAllLines($Path, $Lines, [Text.UTF8Encoding]::new($false))
 }
 
@@ -152,6 +179,11 @@ $hostChanged = Set-Union (Invoke-HostGitLines -Root $HostRoot -GitArgs @("ls-fil
 $wslChanged = Set-Union (Invoke-WslGitLines -Distro $WslDistro -Root $WslRoot -GitArgs @("ls-files", "-m", "-o", "--exclude-standard")) @()
 $hostTracked = Invoke-HostGitLines -Root $HostRoot -GitArgs @("ls-files")
 $wslTracked = Invoke-WslGitLines -Distro $WslDistro -Root $WslRoot -GitArgs @("ls-files")
+
+$hostChanged = Filter-Paths $hostChanged $OnlyPath
+$wslChanged = Filter-Paths $wslChanged $OnlyPath
+$hostTracked = Filter-Paths $hostTracked $OnlyPath
+$wslTracked = Filter-Paths $wslTracked $OnlyPath
 
 $changedUnion = Set-Union $hostChanged $wslChanged
 $trackedUnion = Set-Union $hostTracked $wslTracked
@@ -240,10 +272,20 @@ foreach ($relative in $changedUnion) {
   }
 
   if ($wslTouched -and -not $hostTouched) {
-    if ($wslHash -eq $null) {
-      $actions.Add("delete-host`t$relative")
+    if ($PreferHostForWslChanges) {
+      if ($hostHash -eq $null) {
+        $actions.Add("delete-wsl`t$relative")
+        $resolutions.Add("prefer-host-delete-wsl`t$relative")
+      } else {
+        $actions.Add("host-to-wsl`t$relative")
+        $resolutions.Add("prefer-host-copy-to-wsl`t$relative")
+      }
     } else {
-      $actions.Add("wsl-to-host`t$relative")
+      if ($wslHash -eq $null) {
+        $actions.Add("delete-host`t$relative")
+      } else {
+        $actions.Add("wsl-to-host`t$relative")
+      }
     }
     continue
   }

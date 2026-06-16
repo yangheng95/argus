@@ -5,6 +5,8 @@ import { join } from "node:path"
 import { stageAccent } from "../src/utils/card-color"
 
 const CARD_CSS = readFileSync(join(import.meta.dir, "..", "src", "styles", "surfaces", "card.css"), "utf8")
+const CARD_COLOR_TS = readFileSync(join(import.meta.dir, "..", "src", "utils", "card-color.ts"), "utf8")
+const LOG_VIEWER_TSX = readFileSync(join(import.meta.dir, "..", "src", "components", "LogViewer.tsx"), "utf8")
 
 const KNOWN_STAGES = [
   "user",
@@ -17,6 +19,7 @@ const KNOWN_STAGES = [
   "requirements",
   "frontend-design",
   "frontend-research",
+  "visual-qa",
   "architect",
   "planner",
   "goal",
@@ -67,5 +70,17 @@ describe("card stage tokens", () => {
       expect(decl).not.toBeNull()
       expect(decl?.[1] ?? "").toMatch(/var\(--(accent|good|warn|bad|text-soft)\)/)
     }
+  })
+
+  test("unknown stages use the CSS fallback instead of a generated raw color", () => {
+    expect(stageAccent("custom-agent")).toBeUndefined()
+    expect(CARD_COLOR_TS).not.toContain("hsl(")
+    expect(CARD_COLOR_TS).not.toMatch(/#[0-9a-fA-F]{3,8}/)
+  })
+
+  test("log viewer does not define a parallel raw-color NDJSON palette", () => {
+    expect(LOG_VIEWER_TSX).not.toContain("NDJSON_STAGE_COLORS")
+    expect(LOG_VIEWER_TSX).not.toContain("NDJSON_TOOL_COLORS")
+    expect(LOG_VIEWER_TSX).not.toMatch(/#[0-9a-fA-F]{3,8}/)
   })
 })

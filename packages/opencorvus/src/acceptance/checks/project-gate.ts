@@ -444,6 +444,7 @@ async function runRequiredCheck(
       command: check.command,
       cwd: workspace,
       timeoutMs: COMMAND_TIMEOUT_MS,
+      taskID,
     })
   })
   const status = result.exitCode === 0 ? "passed" : "failed"
@@ -530,11 +531,17 @@ async function runShellCommand(input: {
   command: string
   cwd: string
   timeoutMs: number
+  taskID?: string
 }): Promise<{ exitCode: number | undefined; stdout: string; stderr: string }> {
   const isWindows = process.platform === "win32"
   const [command, ...args] = isWindows ? ["cmd.exe", "/d", "/s", "/c", input.command] : ["sh", "-lc", input.command]
   const proc = spawn(command, args, {
     cwd: input.cwd,
+    env: {
+      ...process.env,
+      ...(input.taskID ? { OPENCORVUS_TASK_ID: input.taskID } : {}),
+      OPENCORVUS_PROJECT_DIR: Instance.directory,
+    },
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   })

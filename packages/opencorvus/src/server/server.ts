@@ -135,6 +135,12 @@ export namespace Server {
     return spec
   }
 
+  function hasRequiredSchemaFields(schema: unknown): boolean {
+    if (!schema || typeof schema !== "object") return false
+    const required = (schema as { required?: unknown }).required
+    return Array.isArray(required) && required.length > 0
+  }
+
   function markRequiredJsonRequestBodies<T extends OpenAPISpecWithPaths>(spec: T) {
     for (const pathItem of Object.values(spec.paths ?? {})) {
       if (!pathItem || typeof pathItem !== "object") continue
@@ -145,7 +151,7 @@ export namespace Server {
         const operation = rawOperation as OpenAPIOperation
         const requestBody = operation.requestBody
         const jsonSchema = requestBody?.content?.["application/json"]?.schema
-        if (!requestBody || !jsonSchema) continue
+        if (!requestBody || !hasRequiredSchemaFields(jsonSchema)) continue
         requestBody.required = true
       }
     }

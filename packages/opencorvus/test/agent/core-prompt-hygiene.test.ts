@@ -853,7 +853,7 @@ describe("core prompt hygiene", () => {
       "source-ir/style-profile.json",
       "web-clone-source/source-skeleton/source-skeleton-audit.json",
       "source-skeleton/index.html",
-      "96/100 visual gates",
+      "numeric visual acceptance policy",
       "div soup",
     ]
     for (const [name, text] of [

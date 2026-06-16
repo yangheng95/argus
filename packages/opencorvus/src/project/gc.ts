@@ -135,7 +135,9 @@ export namespace ProjectGC {
   }
 
   function cacheRoot(worktree: string, kind: "snapshot" | "session_diff") {
-    return path.join(ProjectRuntimePaths.projectRuntimeRoot(worktree), "cache", kind)
+    return kind === "snapshot"
+      ? path.dirname(ProjectRuntimePaths.snapshotCacheRoot(worktree, "placeholder"))
+      : path.dirname(ProjectRuntimePaths.sessionDiffRoot(worktree, "placeholder"))
   }
 
   async function listOrphansForRows(

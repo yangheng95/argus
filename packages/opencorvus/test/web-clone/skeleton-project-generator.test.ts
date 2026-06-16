@@ -20,8 +20,8 @@ describe("web-clone skeleton project generator", () => {
     expect(await Bun.file(path.join(outputDir, "index.html")).exists()).toBe(true)
     expect(await Bun.file(path.join(outputDir, "public", "source.html")).exists()).toBe(true)
     expect(await Bun.file(path.join(outputDir, "src", "App.jsx")).exists()).toBe(true)
-    expect(await Bun.file(path.join(outputDir, "src", "generated", "singlefile-body.html")).exists()).toBe(true)
-    expect(await Bun.file(path.join(outputDir, "src", "generated", "singlefile-head-styles.html")).exists()).toBe(true)
+    expect(await Bun.file(path.join(outputDir, "src", "generated", "source-body.html")).exists()).toBe(true)
+    expect(await Bun.file(path.join(outputDir, "src", "generated", "source-head-styles.html")).exists()).toBe(true)
     expect(await Bun.file(path.join(outputDir, "src", "skeleton.css")).exists()).toBe(true)
     expect(await Bun.file(path.join(outputDir, "src", "slots.json")).exists()).toBe(true)
     expect(await Bun.file(path.join(outputDir, "reference.png")).exists()).toBe(true)
@@ -34,10 +34,10 @@ describe("web-clone skeleton project generator", () => {
 
     const app = await Bun.file(path.join(outputDir, "src", "App.jsx")).text()
     expect(app).not.toContain("<iframe")
-    expect(app).toContain("singlefile-body.html?raw")
-    expect(app).toContain("singlefile-head-styles.html?raw")
+    expect(app).toContain("source-body.html?raw")
+    expect(app).toContain("source-head-styles.html?raw")
 
-    const body = await Bun.file(path.join(outputDir, "src", "generated", "singlefile-body.html")).text()
+    const body = await Bun.file(path.join(outputDir, "src", "generated", "source-body.html")).text()
     expect(body).toContain("Economy")
     expect(body).toContain('d="M0 0H10V10Z"')
 
@@ -52,11 +52,11 @@ describe("web-clone skeleton project generator", () => {
     expect(packageJson.scripts.preview).toBe("vite preview --host 127.0.0.1 --strictPort")
     expect(JSON.stringify(packageJson.scripts)).not.toContain("bunx")
     expect(result.warnings).toContain(
-      "No SingleFile HTML was available; the baseline uses source-skeleton HTML and may be less visually complete.",
+      "Original CSS evidence appears sparse; source-skeleton CSS may need targeted region repair.",
     )
   })
 
-  test("prefers SingleFile HTML when present", async () => {
+  test("ignores legacy singlefile.html when source-skeleton is present", async () => {
     await using tmp = await tmpdir()
     const sourcePackageDir = await writeFixtureSourcePackage(tmp.path)
     await Bun.write(
@@ -70,41 +70,36 @@ describe("web-clone skeleton project generator", () => {
       outputDir,
     })
 
-    expect(result.stats.sourceHtml).toBe("singlefile")
+    expect(result.stats.sourceHtml).toBe("source-skeleton")
     const sourceHtml = await Bun.file(path.join(outputDir, "public", "source.html")).text()
-    expect(sourceHtml).toContain("SingleFile page")
+    expect(sourceHtml).toContain("Economy")
+    expect(sourceHtml).not.toContain("SingleFile page")
 
-    const body = await Bun.file(path.join(outputDir, "src", "generated", "singlefile-body.html")).text()
-    expect(body).toContain("SingleFile page")
+    const body = await Bun.file(path.join(outputDir, "src", "generated", "source-body.html")).text()
+    expect(body).toContain("Economy")
+    expect(body).not.toContain("SingleFile page")
 
     const app = await Bun.file(path.join(outputDir, "src", "App.jsx")).text()
     expect(app).not.toContain("iframe")
   })
 
-  test("can generate from an explicit SingleFile HTML without source-skeleton", async () => {
+  test("rejects capture HTML without source-skeleton", async () => {
     await using tmp = await tmpdir()
     const sourcePackageDir = path.join(tmp.path, "web-clone-source")
-    const singleFilePath = path.join(tmp.path, "capture.html")
+    const capturePath = path.join(tmp.path, "capture.html")
     await Bun.write(path.join(sourcePackageDir, "reference.png"), minimalPngBytes())
     await Bun.write(
-      singleFilePath,
+      capturePath,
       '<!doctype html><html><head><style>.page{color:red}</style></head><body><main class="page">Captured</main></body></html>',
     )
     const outputDir = path.join(tmp.path, "explicit-singlefile-skeleton")
 
-    const result = await generateWebCloneSkeletonProject({
-      sourcePackageDir,
-      outputDir,
-      singleFileHtmlPath: singleFilePath,
-    })
-
-    expect(result.stats.sourceHtml).toBe("singlefile")
-    expect(await Bun.file(path.join(outputDir, "src", "generated", "singlefile-body.html")).text()).toContain(
-      "Captured",
-    )
-    expect(await Bun.file(path.join(outputDir, "src", "generated", "singlefile-head-styles.html")).text()).toContain(
-      ".page{color:red}",
-    )
+    await expect(
+      generateWebCloneSkeletonProject({
+        sourcePackageDir,
+        outputDir,
+      }),
+    ).rejects.toThrow("web-clone skeleton source is missing")
   })
 })
 

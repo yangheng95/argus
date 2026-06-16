@@ -149,6 +149,43 @@ describe("mission benchmark scenario", () => {
     expect(rejected.verdict).toBe("rejected")
     expect(rejected.failures).toContain("mission state does not reconcile the terminal mission task id and status")
   })
+
+  test("report verdict rejects missing or skipped local verification", () => {
+    const base = {
+      missionID: "m1",
+      sessionID: "ses_1",
+      firstWakeCreated: true,
+      secondWakeCreated: false,
+      missionState: {
+        "frontier.md": "done",
+        "tasks.md": "task_good | completed | benchmark",
+        "handoff.md": "task_good completed; mission complete",
+        "notes.md": "investigation notes",
+      },
+      missionTasks: [
+        {
+          task: {
+            id: "task_good",
+            source: "mission",
+            status: "completed",
+            metadata: { actor: "mission", mission: { id: "m1", session_id: "ses_1" } },
+          },
+          evaluation: { verdict: "accepted" },
+        },
+      ],
+    }
+
+    const missing = evaluateMissionBenchmarkReport(base)
+    const skipped = evaluateMissionBenchmarkReport({
+      ...base,
+      localVerify: { status: "not_run", exitCode: null },
+    })
+
+    expect(missing.verdict).toBe("rejected")
+    expect(missing.failures).toContain("local verification command did not run")
+    expect(skipped.verdict).toBe("rejected")
+    expect(skipped.failures).toContain("local verification command did not complete")
+  })
 })
 
 describe("mission benchmark executable wiring", () => {
@@ -193,5 +230,36 @@ describe("mission benchmark executable wiring", () => {
     expect(src).toContain("let finalExitCode = 1")
     expect(exitIndex).toBeGreaterThan(stopIndex)
     expect(exitIndex).toBeGreaterThan(disposeIndex)
+  })
+
+  test("uses observable inactivity timeout instead of a mechanical total wait deadline", () => {
+    expect(src).toContain("--idle-timeout-ms")
+    expect(src).toContain("const idleTimeoutMs = parsePositiveInt")
+    expect(src).toContain("let idleDeadline = Date.now() + idleTimeoutMs")
+    expect(src).toContain("idleDeadline = Date.now() + idleTimeoutMs")
+    expect(src).toContain("idle timed out waiting for")
+    expect(src).toContain("missionRowsActivityKey(rows)")
+    expect(src).toContain("missionStateActivityKey(state)")
+    expect(src).toContain("SessionStatus.getActivity(sessionID)")
+    expect(src).toContain('`${status.type}:${activity?.last_activity_at ?? "no-stream-activity"}`')
+    expect(src).not.toContain("activityKey: status.type")
+    expect(src).not.toContain("--max-wait-ms")
+    expect(src).not.toContain("maxWaitMs")
+    expect(src).not.toContain("const deadline = Date.now()")
+    expect(src).not.toContain("Date.now() < deadline")
+    expect(src).not.toContain("`timed out waiting for ${label}")
+  })
+
+  test("does not allow bypassing local verification", () => {
+    expect(src).not.toContain("--skip-local-verify")
+    expect(src).not.toContain("skipLocalVerify")
+    expect(src).not.toContain("skippedVerify")
+    expect(src).not.toContain('status: "not_run"')
+    expect(src).toContain("const localVerify = await runLocalVerify")
+    expect(src).toContain('Shell.run(cmd, { cwd, idleTimeoutMs })')
+    expect(src).toContain('status: result.idleTimedOut ? "idle_timeout" : "completed"')
+    expect(src).not.toContain("Bun.spawn")
+    expect(src).not.toContain("proc.exited")
+    expect(src).toContain('throw new Error("acceptance verification command is required")')
   })
 })

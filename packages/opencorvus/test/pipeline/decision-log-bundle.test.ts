@@ -205,7 +205,7 @@ describe("DecisionLogBundle", () => {
 describe("renderFrontendDesignHandoffReference pathMode (systemic absolute-path fix)", () => {
   test("default (no pathMode) keeps the relative path — in-process unchanged", () => {
     const out = renderFrontendDesignHandoffReference("tsk_x", { includeExcerpts: false })
-    expect(out).toContain(".opencorvus/runtime/tasks/tsk_x/frontend-design/frontend-template.md")
+    expect(out).toContain(frontendDesignArtifactPaths("", "tsk_x").templateRelative)
     expect(out).not.toContain("/abs/")
   })
 
@@ -223,17 +223,13 @@ describe("renderFrontendDesignHandoffReference pathMode (systemic absolute-path 
     })
     const expected = frontendDesignArtifactPaths("/abs/proj", "tsk_x").templateAbsolute
     expect(out).toContain(expected)
-    expect(out).toContain(
-      path.join("/abs/proj", ".opencorvus", "runtime", "tasks", "tsk_x", "frontend-design", "frontend-template.md"),
-    )
+    expect(out).toContain(expected)
   })
 
   test("frontendDesignArtifactPaths is single-source: relative consts feed the helper", () => {
     const p = frontendDesignArtifactPaths("/x", "tsk_x")
-    expect(p.templateRelative).toBe(".opencorvus/runtime/tasks/tsk_x/frontend-design/frontend-template.md")
-    expect(p.manifestRelative).toBe(".opencorvus/runtime/tasks/tsk_x/frontend-design/evidence-source-manifest.md")
-    expect(p.templateAbsolute).toBe(
-      path.join("/x", ".opencorvus", "runtime", "tasks", "tsk_x", "frontend-design", "frontend-template.md"),
-    )
+    expect(p.templateRelative).toBe(ProjectRuntimePaths.frontendDesignPaths("/x", "tsk_x").templateRelative)
+    expect(p.manifestRelative).toBe(ProjectRuntimePaths.frontendDesignPaths("/x", "tsk_x").manifestRelative)
+    expect(p.templateAbsolute).toBe(ProjectRuntimePaths.frontendDesignPaths("/x", "tsk_x").templateAbsolute)
   })
 })

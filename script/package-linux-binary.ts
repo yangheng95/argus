@@ -1,15 +1,18 @@
 #!/usr/bin/env bun
 /**
- * Linux x64 single-binary package script.
+ * Linux x64 runtime-bundle package script.
  *
  * This script must run on a Linux x64 host, including WSL. It builds the
  * overlay UI (User Interface), generates a temporary Bun file-embedding
  * module, compiles the native and baseline Linux overlay-server executables,
- * then removes obsolete sidecar UI directories from the output.
+ * then copies the executable and required native runtime node_modules into a
+ * bundle directory. The executable is not a standalone single-file artifact:
+ * native packages such as sharp and Playwright must remain colocated in the
+ * bundle directory.
  *
  * Output:
- *   packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus
- *   packages/opencorvus/dist/binary/opencorvus-linux-x64-baseline/opencorvus
+ *   packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus-bundle.tar.gz
+ *   packages/opencorvus/dist/binary/opencorvus-linux-x64-baseline/opencorvus-bundle.tar.gz
  *
  * The generated executables serve /ui/ from embedded Bun files. They do not
  * require a sibling ui/ directory.
@@ -303,10 +306,10 @@ async function main() {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
   const artifacts = await packageLinuxBinary(repoRoot, parsePackageLinuxBinaryArgs(process.argv.slice(2)))
 
-  console.log("Linux binaries:")
+  console.log("Linux runtime bundles:")
   for (const artifact of artifacts) {
-    const stat = await fs.promises.stat(artifact.output)
-    console.log(`  ${path.relative(repoRoot, artifact.output)} (${Math.round(stat.size / 1024 / 1024)} MiB)`)
+    const stat = await fs.promises.stat(artifact.archive)
+    console.log(`  ${path.relative(repoRoot, artifact.archive)} (${Math.round(stat.size / 1024 / 1024)} MiB)`)
   }
 }
 

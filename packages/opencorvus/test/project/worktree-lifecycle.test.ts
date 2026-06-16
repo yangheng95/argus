@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { SessionTable } from "../../src/session/session.sql"
 import { Database } from "../../src/storage/db"
 import { Worktree } from "../../src/worktree"
 import { Filesystem } from "../../src/util/filesystem"
@@ -18,24 +19,96 @@ async function projectIDFor(directory: string) {
   })
 }
 
-function seedTask(projectID: string, taskID: string) {
+function seedTask(
+  projectID: string,
+  taskID: string,
+  session?: { id: string; directory: string; kind?: "root" | "build"; parentID?: string },
+) {
   const now = Date.now()
   Database.use((db) =>
-    db
-      .insert(EngineTaskTable)
-      .values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "worktree runtime materialization",
-        request: "materialize webpage evidence artifacts",
-        priority: "normal",
-        budget: { max_executor_groups: 1 },
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      })
-      .run(),
+    db.transaction((tx) => {
+      if (session) {
+        tx.insert(SessionTable)
+          .values({
+            id: session.id,
+            project_id: projectID,
+            slug: session.id,
+            directory: session.directory,
+            title: "worktree runtime materialization session",
+            version: "test",
+            kind: session.kind ?? "build",
+            parent_id: session.parentID ?? null,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      }
+      tx.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          session_id: session?.id ?? null,
+          title: "worktree runtime materialization",
+          request: "materialize webpage evidence artifacts",
+          priority: "normal",
+          budget: { max_executor_groups: 1 },
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    }),
+  )
+}
+
+function seedBuildSession(input: { projectID: string; taskID: string; rootSessionID: string; buildSessionID: string; directory: string }) {
+  const now = Date.now()
+  Database.use((db) =>
+    db.transaction((tx) => {
+      tx.insert(SessionTable)
+        .values({
+          id: input.rootSessionID,
+          project_id: input.projectID,
+          slug: input.rootSessionID,
+          directory: input.directory,
+          title: "worktree runtime materialization root",
+          version: "test",
+          kind: "root",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      tx.insert(SessionTable)
+        .values({
+          id: input.buildSessionID,
+          project_id: input.projectID,
+          parent_id: input.rootSessionID,
+          slug: input.buildSessionID,
+          directory: ProjectRuntimePaths.directBuildWorktreeDir(input.directory, input.taskID, input.buildSessionID),
+          title: "worktree runtime materialization build",
+          version: "test",
+          kind: "build",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      tx.insert(EngineTaskTable)
+        .values({
+          id: input.taskID,
+          project_id: input.projectID,
+          source: "test",
+          session_id: input.rootSessionID,
+          title: "worktree runtime materialization",
+          request: "materialize webpage evidence artifacts",
+          priority: "normal",
+          budget: { max_executor_groups: 1 },
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    }),
   )
 }
 
@@ -64,7 +137,7 @@ describe("Worktree lifecycle", () => {
     await using tmp = await tmpdir({ git: true })
     const projectID = await projectIDFor(tmp.path)
     const name = `start-fail-${Date.now().toString(36)}`
-    const directory = path.join(tmp.path, ".opencorvus", "worktrees", name)
+    const directory = path.join(tmp.path, ".opencorvus", "r", "w", name)
     const branch = `opencorvus/${name}`
 
     await Project.update({
@@ -106,7 +179,7 @@ describe("Worktree lifecycle", () => {
     expect(await Filesystem.exists(path.join(info.directory, "node_modules"))).toBe(false)
   }, 30_000)
 
-  test("create materializes task frontend-design artifacts only through scoped runtime path", async () => {
+  test("create keeps task frontend-design artifacts only in canonical runtime", async () => {
     await using tmp = await tmpdir({ git: true })
     const projectID = await projectIDFor(tmp.path)
     const taskID = `tsk_wt_webpage_evidence_${Date.now().toString(36)}`
@@ -133,20 +206,15 @@ describe("Worktree lifecycle", () => {
 
     expect(await Filesystem.exists(path.join(info.directory, "frontend-design-skeleton"))).toBe(false)
     expect(await Filesystem.exists(path.join(info.directory, "web-clone-source"))).toBe(false)
-    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(
-      "source package",
-    )
-    expect(await Filesystem.readText(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
-      "reference",
-    )
-    expect(await Filesystem.readText(path.join(info.directory, paths.skeletonProjectRelative, "README.md"))).toBe(
-      "frontend skeleton",
-    )
+    expect(await Filesystem.exists(path.join(info.directory, ProjectRuntimePaths.relativeRuntimeRoot()))).toBe(false)
+    expect(await Filesystem.readText(path.join(paths.sourcePackageAbsolute, "README.md"))).toBe("source package")
+    expect(await Filesystem.readText(path.join(paths.webpageEvidenceAbsolute, "reference.txt"))).toBe("reference")
+    expect(await Filesystem.readText(path.join(paths.skeletonProjectAbsolute, "README.md"))).toBe("frontend skeleton")
     const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)
 
-  test("task frontend-design worktree view is disposable and cannot delete canonical runtime artifacts", async () => {
+  test("task frontend-design runtime is not copied into reusable worktrees", async () => {
     await using tmp = await tmpdir({ git: true })
     const projectID = await projectIDFor(tmp.path)
     const taskID = `tsk_wt_runtime_copy_${Date.now().toString(36)}`
@@ -169,9 +237,6 @@ describe("Worktree lifecycle", () => {
       fn: () => Worktree.create(createInput),
     })
 
-    await fs.rm(path.join(info.directory, paths.sourcePackageRelative), { recursive: true, force: true })
-    await fs.rm(path.join(info.directory, paths.skeletonProjectRelative), { recursive: true, force: true })
-
     expect(await Filesystem.readText(path.join(paths.sourcePackageAbsolute, "README.md"))).toBe("source package")
     expect(await Filesystem.readText(path.join(paths.skeletonProjectAbsolute, "README.md"))).toBe("frontend skeleton")
     expect(await Filesystem.exists(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(false)
@@ -182,11 +247,9 @@ describe("Worktree lifecycle", () => {
     })
 
     expect(reused.directory).toBe(info.directory)
-    expect(await Filesystem.readText(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe(
-      "source package",
-    )
-    expect(await Filesystem.readText(path.join(reused.directory, paths.skeletonProjectRelative, "README.md"))).toBe(
-      "frontend skeleton",
+    expect(await Filesystem.exists(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe(false)
+    expect(await Filesystem.exists(path.join(reused.directory, paths.skeletonProjectRelative, "README.md"))).toBe(
+      false,
     )
     const status = await $`git status --porcelain=v1`.cwd(reused.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
@@ -218,7 +281,7 @@ describe("Worktree lifecycle", () => {
     expect(await Filesystem.exists(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(false)
   }, 30_000)
 
-  test("reuseIfValid rematerializes missing task webpage evidence view", async () => {
+  test("reuseIfValid does not materialize a task webpage evidence view", async () => {
     await using tmp = await tmpdir({ git: true })
     const projectID = await projectIDFor(tmp.path)
     const taskID = `tsk_wt_webpage_evidence_reuse_${Date.now().toString(36)}`
@@ -242,7 +305,6 @@ describe("Worktree lifecycle", () => {
       fn: () => Worktree.create(createInput),
     })
 
-    await fs.rm(path.join(info.directory, paths.relativeDir), { recursive: true, force: true })
     expect(await Filesystem.exists(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
       false,
     )
@@ -254,22 +316,26 @@ describe("Worktree lifecycle", () => {
 
     expect(reused.directory).toBe(info.directory)
     expect(await Filesystem.exists(path.join(reused.directory, "web-clone-source"))).toBe(false)
-    expect(await Filesystem.readText(path.join(reused.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
-      "reference",
+    expect(await Filesystem.exists(path.join(reused.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
+      false,
     )
-    expect(await Filesystem.readText(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe(
-      "source package",
-    )
+    expect(await Filesystem.exists(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe(false)
     const status = await $`git status --porcelain=v1`.cwd(reused.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)
 
-  test("recoverRecorded rematerializes valid task webpage evidence view", async () => {
+  test("recoverRecorded does not materialize task webpage evidence view", async () => {
     await using tmp = await tmpdir({ git: true })
     const projectID = await projectIDFor(tmp.path)
     const taskID = `tsk_wt_webpage_evidence_recover_${Date.now().toString(36)}`
     const sessionID = `ses_wt_webpage_evidence_recover_${Date.now().toString(36)}`
-    seedTask(projectID, taskID)
+    seedBuildSession({
+      projectID,
+      taskID,
+      rootSessionID: `ses_wt_webpage_evidence_recover_root_${Date.now().toString(36)}`,
+      buildSessionID: sessionID,
+      directory: tmp.path,
+    })
 
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     await fs.mkdir(paths.webpageEvidenceAbsolute, { recursive: true })
@@ -287,8 +353,6 @@ describe("Worktree lifecycle", () => {
         }),
     })
 
-    await fs.rm(path.join(info.directory, paths.relativeDir), { recursive: true, force: true })
-
     const recovered = await Instance.provide({
       directory: tmp.path,
       fn: () => Worktree.recoverRecorded({ directory: info.directory, branch: info.branch }),
@@ -296,21 +360,26 @@ describe("Worktree lifecycle", () => {
 
     expect(recovered).toMatchObject({ status: "recovered", directory: info.directory, branch: info.branch })
     expect(await Filesystem.exists(path.join(info.directory, "web-clone-source"))).toBe(false)
-    expect(await Filesystem.readText(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
-      "reference",
+    expect(await Filesystem.exists(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
+      false,
     )
-    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(
-      "source package",
-    )
+    expect(await Filesystem.exists(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(false)
     const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)
 
-  test("reset rematerializes task webpage evidence view after git clean", async () => {
+  test("reset does not materialize task webpage evidence view after git clean", async () => {
     await using tmp = await tmpdir({ git: true })
     const projectID = await projectIDFor(tmp.path)
     const taskID = `tsk_wt_webpage_evidence_reset_${Date.now().toString(36)}`
-    seedTask(projectID, taskID)
+    const sessionID = `ses_wt_webpage_evidence_reset_${Date.now().toString(36)}`
+    seedBuildSession({
+      projectID,
+      taskID,
+      rootSessionID: `ses_wt_webpage_evidence_reset_root_${Date.now().toString(36)}`,
+      buildSessionID: sessionID,
+      directory: tmp.path,
+    })
 
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     await fs.mkdir(paths.webpageEvidenceAbsolute, { recursive: true })
@@ -324,8 +393,7 @@ describe("Worktree lifecycle", () => {
         Worktree.create({
           name: `webpage-evidence-reset-${Date.now().toString(36)}`,
           taskID,
-          goalID: "gol_webpage_evidence_reset",
-          runID: "run_webpage_evidence_reset",
+          sessionID,
         }),
     })
 
@@ -337,12 +405,10 @@ describe("Worktree lifecycle", () => {
 
     expect(await Filesystem.exists(path.join(info.directory, "scratch.txt"))).toBe(false)
     expect(await Filesystem.exists(path.join(info.directory, "web-clone-source"))).toBe(false)
-    expect(await Filesystem.readText(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
-      "reference",
+    expect(await Filesystem.exists(path.join(info.directory, paths.webpageEvidenceRelative, "reference.txt"))).toBe(
+      false,
     )
-    expect(await Filesystem.readText(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(
-      "source package",
-    )
+    expect(await Filesystem.exists(path.join(info.directory, paths.sourcePackageRelative, "README.md"))).toBe(false)
     const status = await $`git status --porcelain=v1`.cwd(info.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)

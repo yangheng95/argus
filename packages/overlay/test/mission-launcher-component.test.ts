@@ -58,6 +58,7 @@ test("Mission wake result opens the shared center conversation surface", () => {
   expect(MAIN_TSX).toContain("loadConversation(source")
   expect(MAIN_TSX).toContain("startSSE(source")
   expect(MAIN_TSX).toContain("setMissionSharedRefreshToken((value) => value + 1)")
+  expect(MAIN_TSX).toContain("setMissionActivityActivationToken((value) => value + 1)")
   expect(MISSION_TSX).not.toContain("MissionConversation")
   expect(MISSION_TSX).not.toContain('data-ui="mission-conversation"')
   expect(MISSION_TSX).not.toContain('data-ui="mission-agent-rail"')
@@ -76,6 +77,7 @@ test("Mission left activity retires the Channel rail and task bindings surface",
 
 test("Mission left activity loads and paginates Mission records only while active", () => {
   expect(MISSION_TSX).toContain("if (!props.active) return null")
+  expect(MISSION_TSX).toContain("activation: props.activationToken ?? 0")
   expect(MISSION_TSX).toContain("loadMissions({")
   expect(MISSION_TSX).toContain("limit: MISSION_LIST_PAGE_SIZE + 1")
   expect(MISSION_TSX).toContain("cursorUpdated: cursor.updated")
@@ -160,8 +162,9 @@ test("Mission launcher reuses the main ChatComposer with mission-scoped bindings
   expect(MAIN_TSX).toContain('document.getElementById("btnCreateMission")?.addEventListener("click"')
   expect(MAIN_TSX).toContain("openMissionLauncher()")
   expect(MAIN_TSX).toContain("<ChatComposer")
-  expect(MAIN_TSX).toContain('textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}')
-  expect(MAIN_TSX).toContain('sendDataUI={missionLauncherActive() ? "mission-composer-submit" : undefined}')
+  expect(MAIN_TSX).toContain("function missionSubmitActive()")
+  expect(MAIN_TSX).toContain('"mission-composer-input"')
+  expect(MAIN_TSX).toContain('"mission-composer-submit"')
   expect(MAIN_TSX).toContain('composerDraftKey("mission", "new", directory)')
 })
 
@@ -174,9 +177,22 @@ test("Mission activity does not implicitly reopen the newest Mission session whi
   expect(MAIN_TSX).toContain('void selectTask("")')
 })
 
+test("Task source rebinds the left toolbar and center panel to Tasks", () => {
+  expect(MAIN_TSX).toContain('if (activity === "mission" && boardStore.selectedSource?.kind === "task")')
+  expect(MAIN_TSX).toContain('const selectedSource = boardStore.selectedSource')
+  expect(MAIN_TSX).toContain('if (selectedSource?.kind !== "task") return')
+  expect(MAIN_TSX).toContain('setSelectedLeftActivity("tasks")')
+  expect(MAIN_TSX).toContain('setSelectedLeftPanelActivity("tasks")')
+  expect(MAIN_TSX).toContain('resetCenterWorkbenchToFocusedPanel("tasks")')
+})
+
 test("main ChatComposer exposes the standard Mission data-ui hooks for downstream e2e", () => {
-  expect(MAIN_TSX).toContain('textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}')
-  expect(MAIN_TSX).toContain('sendDataUI={missionLauncherActive() ? "mission-composer-submit" : undefined}')
+  expect(MAIN_TSX).toContain("function missionSubmitActive()")
+  expect(MAIN_TSX).toContain('primaryCenterPanel() === "mission" && !isMissionSessionSource()')
+  expect(MAIN_TSX).toContain('missionSubmitActive()')
+  expect(MAIN_TSX).toContain('"mission-composer-input"')
+  expect(MAIN_TSX).toContain('"mission-composer-submit"')
+  expect(MAIN_TSX).toMatch(/if \(missionSubmitActive\(\)\)[\s\S]+?const result = await wakeMission\(\{ text, model \}\)[\s\S]+?return result/)
   expect(MISSION_TSX).not.toContain('data-ui="mission-composer-mission-id"')
   expect(MISSION_TSX).not.toContain("missionID().trim()")
 })

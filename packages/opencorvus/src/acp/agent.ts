@@ -43,11 +43,35 @@ import { LoadAPIKeyError } from "ai"
 import type { AssistantMessage, Event, OpenCorvusClient, SessionMessageResponse, ToolPart } from "@opencorvus-ai/sdk"
 import { applyPatch } from "diff"
 import { renderToolFailureCause } from "@/session/tool-failure-cause"
+import { AttachmentStore } from "@/storage/attachment-store"
 
 type ModeOption = { id: string; name: string; description?: string }
 type ModelOption = { modelId: string; name: string }
 
 const DEFAULT_VARIANT_VALUE = "default"
+
+async function toolImageAttachmentContent(attachments: Message.FilePart[] | undefined): Promise<ToolCallContent[]> {
+  if (!attachments?.length) return []
+  const content: ToolCallContent[] = []
+  for (const attachment of attachments) {
+    if (!attachment.mime.startsWith("image/")) continue
+    const dataUrl =
+      (await AttachmentStore.dataUrlFromReference(attachment.url, attachment.mime).catch(() => undefined)) ??
+      (attachment.url.startsWith("data:") ? attachment.url : undefined)
+    const match = dataUrl?.match(/^data:([^;]+);base64,(.*)$/)
+    if (!match) continue
+    content.push({
+      type: "content",
+      content: {
+        type: "image",
+        mimeType: match[1] || attachment.mime,
+        data: match[2],
+        uri: pathToFileURL(attachment.filename ?? "tool-result-image.png").href,
+      },
+    })
+  }
+  return content
+}
 
 export namespace ACP {
   const log = Log.create({ service: "acp-agent" })
@@ -347,6 +371,7 @@ export namespace ACP {
                     },
                   },
                 ]
+                content.push(...(await toolImageAttachmentContent(part.state.attachments)))
 
                 if (kind === "edit") {
                   // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/
@@ -871,6 +896,7 @@ export namespace ACP {
                   },
                 },
               ]
+              content.push(...(await toolImageAttachmentContent(toolPart.state.attachments)))
 
               if (kind === "edit") {
                 // P0 (commit f4b08c75b) relaxed ToolStatePending/Running/

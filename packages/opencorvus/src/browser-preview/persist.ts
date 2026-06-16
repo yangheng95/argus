@@ -564,6 +564,8 @@ function isPathRefKey(key: string): boolean {
     key === "source_crop" ||
     key === "implementation_crop" ||
     key === "side_by_side" ||
+    key === "source_context" ||
+    key === "binding_puzzle" ||
     key === "diff"
   )
 }
@@ -577,7 +579,6 @@ export function latestBrowserPreviewEvidenceID(input: { taskID: string; targetID
         and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_EVIDENCE_KIND)),
       )
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
-      .limit(20)
       .all(),
   )
   return rows.find((row) => sqlTargetID(row.payload) === input.targetID)?.id

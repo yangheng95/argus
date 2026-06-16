@@ -12,8 +12,7 @@ import {
   findBrowserPreviewTargetByID,
   persistBrowserPreviewTarget,
   promoteBrowserPreviewTarget,
-  PersistedBrowserPreviewEvidence,
-  resolveRuntimeRelativePath,
+  PublicBrowserPreviewEvidence,
   stripRuntimePathRefs,
 } from "../../browser-preview/persist"
 import {
@@ -123,7 +122,7 @@ export const BrowserPreviewRoutes = lazy(() =>
             description: "Persisted browser preview evidence",
             content: {
               "application/json": {
-                schema: resolver(PersistedBrowserPreviewEvidence),
+                schema: resolver(PublicBrowserPreviewEvidence),
               },
             },
           },
@@ -135,7 +134,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         requireTask(taskID)
         const evidence = await findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID })
         if (!evidence) return c.json({ message: `Browser preview evidence not found: ${evidenceID}` }, 404)
-        return c.json(stripRuntimePathRefs(evidence) as PersistedBrowserPreviewEvidence)
+        return c.json(stripRuntimePathRefs(evidence) as PublicBrowserPreviewEvidence)
       },
     )
     .get(
@@ -161,7 +160,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         requireTask(taskID)
         const capturePath = await findReadableBrowserPreviewEvidenceCapturePath({ taskID, evidenceID })
         if (!capturePath) return c.json({ message: `Browser preview evidence capture not found: ${evidenceID}` }, 404)
-        const bytes = await fs.readFile(resolveRuntimeRelativePath(Instance.directory, capturePath))
+        const bytes = await fs.readFile(capturePath)
         return new Response(bytes, {
           headers: {
             "content-type": "image/png",
@@ -201,7 +200,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         const artifactPath = await findReadableBrowserPreviewEvidenceArtifactPath({ taskID, evidenceID, artifactName })
         if (!artifactPath)
           return c.json({ message: `Browser preview evidence artifact not found: ${evidenceID}/${artifactName}` }, 404)
-        const bytes = await fs.readFile(resolveRuntimeRelativePath(Instance.directory, artifactPath))
+        const bytes = await fs.readFile(artifactPath)
         return new Response(bytes, {
           headers: {
             "content-type": "image/png",
