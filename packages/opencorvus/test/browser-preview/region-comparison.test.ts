@@ -6,18 +6,13 @@ import sharp from "sharp"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Instance } from "../../src/project/instance"
-import { SessionTable } from "../../src/session/session.sql"
 import { Database } from "../../src/storage/db"
 import {
   compareBrowserPreviewRegions,
   resolveSourceReferencePath,
   type BrowserPreviewRegionBinding,
 } from "../../src/browser-preview/region-comparison"
-import {
-  findReadableBrowserPreviewEvidenceByID,
-  persistBrowserPreviewTarget,
-  resolveRuntimeRelativePath,
-} from "../../src/browser-preview/persist"
+import { findReadableBrowserPreviewEvidenceByID, resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -26,19 +21,6 @@ const REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS = 60_000
 describe("browser preview region comparison", () => {
   afterEach(async () => {
     await resetDatabase()
-  })
-
-  test("delegates browser runtime capture to the evidence runner", async () => {
-    const source = await fs.readFile(
-      path.resolve(import.meta.dir, "../../src/browser-preview/region-comparison.ts"),
-      "utf8",
-    )
-
-    expect(source).toContain("runBrowserPreviewRegionComparisonCapture")
-    expect(source).not.toContain("runBrowserNodeSidecar")
-    expect(source).not.toContain("BrowserRuntime")
-    expect(source).not.toContain("resolveBrowserNodeSidecarRuntime")
-    expect(source).not.toContain("REGION_COMPARISON_SCRIPT")
   })
 
   test("resolves only canonical source reference screenshots", async () => {
@@ -96,7 +78,6 @@ describe("browser preview region comparison", () => {
         .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
       const server = await startPreviewServer()
       try {
-        const target = await persistBrowserPreviewTarget({ taskID, url: server.url })
         const binding: BrowserPreviewRegionBinding = {
           region_id: "economy",
           viewport_id: "desktop",
@@ -120,7 +101,8 @@ describe("browser preview region comparison", () => {
         const result = await compareBrowserPreviewRegions({
           projectRoot: tmp.path,
           taskID,
-          targetID: target.id,
+          targetID: "art_regioncomparison_target",
+          url: server.url,
           viewportIDs: ["desktop"],
           bindings: [binding],
           includeDiff: true,
@@ -156,21 +138,6 @@ describe("browser preview region comparison", () => {
     },
     { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
   )
-
-  test("requires a persisted browser preview target", async () => {
-    await using tmp = await tmpdir({ git: true })
-    const taskID = await seedTask(tmp.path)
-
-    await expect(
-      compareBrowserPreviewRegions({
-        projectRoot: tmp.path,
-        taskID,
-        targetID: "art_regioncomparison_missing",
-        viewportIDs: ["desktop"],
-        bindings: [],
-      }),
-    ).rejects.toThrow("Browser preview target not found: art_regioncomparison_missing")
-  })
 })
 
 async function seedTask(directory: string) {
@@ -178,36 +145,19 @@ async function seedTask(directory: string) {
   await Instance.provide({
     directory,
     fn: () => {
-      const time = Date.now()
-      const sessionID = `${taskID}_root`
       Database.use((db) =>
-        db.transaction((tx) => {
-          tx.insert(SessionTable)
-            .values({
-              id: sessionID,
-              project_id: Instance.project.id,
-              slug: taskID,
-              directory,
-              title: "Region comparison task",
-              version: "test",
-              kind: "root",
-              time_created: time,
-              time_updated: time,
-            })
-            .run()
-          tx.insert(EngineTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              session_id: sessionID,
-              title: "Region comparison task",
-              request: "Compare economy region",
-              source: "api",
-              time_created: time,
-              time_updated: time,
-            })
-            .run()
-        }),
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "Region comparison task",
+            request: "Compare economy region",
+            source: "api",
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          .run(),
       )
     },
   })

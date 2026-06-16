@@ -5424,20 +5424,18 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<
-      BrowserPreviewCompareTaskTargetRegionsResponses,
-      unknown,
-      ThrowOnError
-    >({
-      url: "/task/{taskID}/browser-preview/compare",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
+    return (options?.client ?? this.client).post<BrowserPreviewCompareTaskTargetRegionsResponses, unknown, ThrowOnError>(
+      {
+        url: "/task/{taskID}/browser-preview/compare",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
       },
-    })
+    )
   }
 
   /**

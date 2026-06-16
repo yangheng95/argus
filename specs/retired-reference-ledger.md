@@ -1,0 +1,28 @@
+# Retired reference ledger
+
+Date: 2026-06-15
+
+This ledger records historical spec paths that are still referenced by source comments, tests, or old implementation notes but no longer exist as standalone files. Do not recreate these paths as empty placeholders. Either move the live reference to an existing current spec, or keep the missing historical path here with a short reason.
+
+| Retired path | Current disposition |
+| --- | --- |
+| `docs/superpowers/plans/2026-05-05-inspector-panel-redesign.md` | External/superpowers planning note; retained only as historical context in follow-up notes. |
+| `docs/superpowers/specs/2026-05-27-task-tree-display.md` | External/superpowers task-tree display note; current behavior is covered by task tree tests and overlay helpers. |
+| `specs/acceptance-attachment-store-single-source-2026-05-11.md` | Historical attachment-store design note; current source is `packages/opencorvus/src/storage/attachment-store.ts` plus attachment/session tests. |
+| `specs/acceptance-fresh-eyes-decoupling-2026-05-18.md` | Historical acceptance-decoupling note; current source is the acceptance arbiter and engine artifact logic. |
+| `specs/card-duration-single-source-2026-05-11.md` | Historical overlay card-duration note; current source is the overlay card-duration tests and rendering code. |
+| `specs/coding-agent-craft-prompt-2026-05-18.md` | Historical engineering-craft prompt note; current source is `packages/opencorvus/src/prompt/core/engineering-craft.txt` and prompt composition tests. |
+| `specs/coding-agent-tui-overlay-plugin-decoupling-2026-06-06.md` | Superseded root TUI ownership draft; current source is `specs/coding-agent-tui-independent-plugin-2026-06-06.md`. |
+| `specs/deliver-accepted-completes-task-2026-05-16.md` | Historical deliver lifecycle note; current architecture summary is in `specs/new-arch/2026-05-12-agent-boundary-refactor-blueprint.md`. |
+| `specs/engine-stream-error-wedge-2026-04-30.md` | Historical engine stream-error note; current coverage is in engine stream-error tests. |
+| `specs/fact-check-agent-2026-05-25.md` | Historical fact-check agent note; current source is `packages/opencorvus/src/fact-check/**` plus fact-check prompt/tool tests. |
+| `specs/gateway-mission-split-2026-05-28.md` | Historical gateway/mission split note; current source is mission session/service code and panel tests. |
+| `specs/git-timeout-systemic-fix-2026-05-06.md` | Historical git timeout note; current source is `packages/opencorvus/src/util/git.ts`. |
+| `specs/new-arch/2026-04-28-structured-output-systemic-fix.md` | Historical structured-output plan; current behavior is covered by session loop/provider/tool-choice tests. |
+| `specs/new-arch/2026-06-04-remove-iwc-aime-provider.md` | Removed private-provider follow-up note; superseded by `specs/new-arch/2026-06-12-remove-private-gateway-builtin.md`. |
+| `specs/notification-reliability-2026-05-18.md` | Historical notification reliability note; current follow-up context is in `specs/new-arch/2026-05-19-overlay-selected-sse-recovery.md`. |
+| `specs/overlay-flat-redesign/plan.md` | Historical overlay flat-redesign plan; current enforcement lives in overlay flat-redesign tests and design tokens. |
+| `specs/overlay-settings-primitives-2026-05-26.md` | Historical settings primitives note; current source is settings primitives code/tests. |
+| `specs/research-bundle-structured-tool-input-2026-06-04.md` | Superseded root research bundle draft; current source is `specs/new-arch/2026-06-04-research-brief-chunked-collector.md`. |
+| `specs/scheduler-collab-audit-2026-04-30.md` | Historical scheduler collaboration audit; current coverage is in engine/session regression tests. |
+| `specs/scheduler-fix-plan-2026-04-30.md` | Historical scheduler fix plan; current coverage is in build-agent/engine/pipeline regression tests. |

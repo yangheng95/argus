@@ -242,4 +242,25 @@ describe("streamText wrapper is the structurally enforced single source (rule 8/
     expect(apiSrc).toMatch(/createToolCallRepair\s*\(/)
     expect(apiSrc).toMatch(/experimental_repairToolCall:\s*repairToolCall/)
   })
+
+  test("production helper streamText calls bind provider models and output schemas", () => {
+    const glob = new Bun.Glob("**/*.ts")
+    const rawLanguageCallers: string[] = []
+    const rawOutputSchemas: string[] = []
+    for (const rel of glob.scanSync({ cwd: srcDir })) {
+      const posix = rel.replaceAll("\\", "/")
+      if (posix.endsWith(".test.ts")) continue
+      if (posix === "provider/llm.ts") continue
+      const text = readFileSync(join(srcDir, rel), "utf8")
+      if (text.includes("streamText({") && /model:\s*language\b/.test(text) && !text.includes("ProviderLLM.wrapModel")) {
+        rawLanguageCallers.push(posix)
+      }
+      const outputMatches = text.matchAll(/Output\.object\(\{\s*schema:\s*([^}\n]+)/g)
+      for (const match of outputMatches) {
+        if (!match[1]?.includes("ProviderSchema.output")) rawOutputSchemas.push(`${posix}: ${match[1]?.trim()}`)
+      }
+    }
+    expect(rawLanguageCallers).toEqual([])
+    expect(rawOutputSchemas).toEqual([])
+  })
 })

@@ -4,6 +4,8 @@ import { resolveAgentModel } from "@/agent/model"
 import { EffectiveConfig } from "@/config/effective"
 import { streamText } from "@/llm/api"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
+import { ProviderSchema } from "@/provider/schema"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { WalkthroughStepSchema, WalkthroughStepsSchema, type WalkthroughStep } from "./dsl"
 
@@ -39,13 +41,14 @@ export async function translateScenarioToStepsWithDependencies(
   dependencies: TranslateScenarioDependencies,
 ): Promise<WalkthroughStep[]> {
   if (!input.spec.scenario) throw new Error(`acceptance spec ${input.spec.id} has no scenario`)
-  const language = await dependencies.getLanguage(await dependencies.resolveModel(input), input)
+  const model = await dependencies.resolveModel(input)
+  const language = ProviderLLM.wrapModel(await dependencies.getLanguage(model, input), model, {})
   const result = dependencies.stream({
     model: language,
     tools: {
       submit_walkthrough_steps: tool({
         description: "Submit executable browser walkthrough steps for the acceptance scenario.",
-        inputSchema: TranslateOutputSchema,
+        inputSchema: ProviderSchema.input(model, TranslateOutputSchema),
       }),
     },
     toolChoice: { type: "tool", toolName: "submit_walkthrough_steps" },
@@ -84,7 +87,7 @@ export async function translateScenarioToStepsWithDependencies(
   for await (const part of result.fullStream) {
     if (isErrorPart(part)) throw new Error(`scenario walkthrough translation failed: ${String(part.error)}`)
     if (isToolCallPart(part) && part.toolName === "submit_walkthrough_steps") {
-      steps = TranslateOutputSchema.parse(part.args).steps
+      steps = TranslateOutputSchema.parse(part.input).steps
     }
   }
   if (!steps) throw new Error(`scenario walkthrough translation did not submit steps for ${input.spec.id}`)
@@ -95,12 +98,13 @@ export async function translateScenarioToStepsWithDependencies(
   return WalkthroughStepsSchema.parse(steps)
 }
 
-function isToolCallPart(part: unknown): part is { type: string; toolName: string; args: unknown } {
+function isToolCallPart(part: unknown): part is { type: string; toolName: string; input: unknown } {
   return (
     typeof part === "object" &&
     part !== null &&
     (part as { type?: unknown }).type === "tool-call" &&
-    typeof (part as { toolName?: unknown }).toolName === "string"
+    typeof (part as { toolName?: unknown }).toolName === "string" &&
+    "input" in part
   )
 }
 

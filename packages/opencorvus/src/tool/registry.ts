@@ -1,7 +1,6 @@
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
 import { BrowserPreviewCompareRegionsTool } from "./browser-preview-compare-regions"
-import { BrowserPreviewBindLocalModuleTool } from "./browser-preview-bind-local-module"
 import { BrowserPreviewTool } from "./browser-preview"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
@@ -132,7 +131,6 @@ export namespace ToolRegistry {
       ...(question ? [QuestionTool] : []),
       BashTool,
       BrowserPreviewTool,
-      BrowserPreviewBindLocalModuleTool,
       BrowserPreviewCompareRegionsTool,
       ReadTool,
       GlobTool,

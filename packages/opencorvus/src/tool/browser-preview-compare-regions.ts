@@ -1,6 +1,6 @@
 import path from "node:path"
 import z from "zod"
-import { findReadableBrowserPreviewEvidenceArtifactPath } from "@/browser-preview/persist"
+import { findBrowserPreviewTargetByID, resolveRuntimeRelativePath } from "@/browser-preview/persist"
 import {
   BrowserPreviewRegionBinding,
   BrowserPreviewRegionComparisonResult,
@@ -19,7 +19,7 @@ export const BrowserPreviewCompareRegionsToolParameters = z.object({
     .describe("Task-scoped source/local region bindings produced from source visual evidence and local components."),
   includeDiff: z.boolean().default(false).describe("Whether to also generate per-region difference PNGs."),
   includeFullpageOverview: z.boolean().default(false).describe("Whether to retain full-page overview capture metadata."),
-}).strict()
+})
 export type BrowserPreviewCompareRegionsToolParameters = z.infer<typeof BrowserPreviewCompareRegionsToolParameters>
 
 export const BrowserPreviewCompareRegionsTool = Tool.define("browser_preview_compare_regions", {
@@ -31,40 +31,29 @@ export const BrowserPreviewCompareRegionsTool = Tool.define("browser_preview_com
     if (!taskID) {
       throw new Error("browser_preview_compare_regions requires a task context.")
     }
+    const target = findBrowserPreviewTargetByID({ taskID, targetID: params.targetID })
+    if (!target) {
+      throw new Error(`Browser preview target not found: ${params.targetID}`)
+    }
     const result = await compareBrowserPreviewRegions({
       projectRoot: Instance.directory,
       taskID,
       targetID: params.targetID,
+      url: target.url,
       viewportIDs: params.viewportIDs,
       bindings: params.inlineBindings,
       includeDiff: params.includeDiff,
       includeFullpageOverview: params.includeFullpageOverview,
       signal: ctx.abort,
     })
-    const visibleImages = await Promise.all(
-      result.regions
-        .filter((region) => region.status === "completed" && region.artifacts?.side_by_side)
-        .slice(0, 6)
-        .map(async (region) => {
-          const evidenceID = result.evidenceIDs[`${region.viewport_id}:${region.region_id}`]
-          if (!evidenceID) {
-            throw new Error(`Region comparison evidence not found: ${region.viewport_id}:${region.region_id}`)
-          }
-          const artifactPath = await findReadableBrowserPreviewEvidenceArtifactPath({
-            taskID,
-            evidenceID,
-            artifactName: "side-by-side",
-          })
-          if (!artifactPath) {
-            throw new Error(`Region comparison side-by-side artifact not readable: ${evidenceID}`)
-          }
-          return {
-            path: artifactPath,
-            mime: "image/png",
-            filename: `${region.viewport_id}-${path.basename(region.artifacts!.side_by_side)}`,
-          }
-        }),
-    )
+    const visibleImages = result.regions
+      .filter((region) => region.status === "completed" && region.artifacts?.side_by_side)
+      .slice(0, 6)
+      .map((region) => ({
+        path: resolveRuntimeRelativePath(Instance.directory, region.artifacts!.side_by_side),
+        mime: "image/png",
+        filename: `${region.viewport_id}-${path.basename(region.artifacts!.side_by_side)}`,
+      }))
     const multimodal = await buildMultimodalToolResult({
       projectID: Instance.project.id,
       text: JSON.stringify(result, null, 2),

@@ -1,9 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import {
+  clampConfigSidebarWidth,
+  configSidebarResizeBounds,
+  nextConfigSidebarKeyboardWidth,
+} from "../src/components/settings/config-resizer"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "settings.css"), "utf8")
+const CONFIG_DIALOG_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "ConfigDialogHost.tsx"), "utf8")
 const HEADER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "header.css"), "utf8")
 const PROVIDERS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ProvidersPanel.tsx"), "utf8")
 const PROMPT_CATALOG_TSX = readFileSync(
@@ -30,6 +36,32 @@ describe("config panel sizing", () => {
     expect(bodyOf("#configDialog .dialog-form")).toMatch(/min-height\s*:/)
     expect(bodyOf(".config-dialog-layout")).toMatch(/flex\s*:\s*1 1 auto/)
     expect(bodyOf(".config-content")).toMatch(/min-height\s*:\s*0/)
+  })
+
+  test("config sidebar resizer exposes keyboard separator semantics", () => {
+    expect(CONFIG_DIALOG_TSX).toContain('role="separator"')
+    expect(CONFIG_DIALOG_TSX).toContain('aria-orientation="vertical"')
+    expect(CONFIG_DIALOG_TSX).toContain('aria-controls="configSidebar"')
+    expect(CONFIG_DIALOG_TSX).toContain("aria-valuemin")
+    expect(CONFIG_DIALOG_TSX).toContain("aria-valuemax")
+    expect(CONFIG_DIALOG_TSX).toContain("aria-valuenow")
+    expect(CONFIG_DIALOG_TSX).toContain("tabIndex={0}")
+    expect(CONFIG_DIALOG_TSX).toContain("onKeyDown={handleResizeKeyDown}")
+    expect(bodyOf(".config-resizer:hover::before,\n.config-resizer:focus-visible::before,\n.config-resizer[data-active=\"true\"]::before")).toMatch(
+      /background:\s*var\(--accent\)/,
+    )
+  })
+
+  test("config sidebar keyboard resize clamps to the same bounds", () => {
+    const bounds = configSidebarResizeBounds(2)
+    expect(bounds).toEqual({ min: 280, max: 640, step: 32 })
+    expect(clampConfigSidebarWidth(100, bounds)).toBe(280)
+    expect(clampConfigSidebarWidth(700, bounds)).toBe(640)
+    expect(nextConfigSidebarKeyboardWidth(400, "ArrowLeft", bounds)).toBe(368)
+    expect(nextConfigSidebarKeyboardWidth(400, "ArrowRight", bounds)).toBe(432)
+    expect(nextConfigSidebarKeyboardWidth(400, "Home", bounds)).toBe(280)
+    expect(nextConfigSidebarKeyboardWidth(400, "End", bounds)).toBe(640)
+    expect(nextConfigSidebarKeyboardWidth(400, "Enter", bounds)).toBeUndefined()
   })
 
   test("settings panels keep a flat borderless owner surface", () => {

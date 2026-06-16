@@ -220,8 +220,8 @@ const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
 ]
 
 const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
-  { id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission" },
   { id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks" },
+  { id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission" },
   { id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant" },
   { id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory" },
   { id: "skill", icon: "config-skill", labelKey: "skill.title", tooltipKey: "activity.tooltip.skill" },
@@ -229,17 +229,14 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
 ]
 
 const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
-const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)
+const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>("workflow")
 const activeRightActivity = () => selectedRightActivity()
-const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")
-const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("mission")
-const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")
-const [missionActivityActivationToken, setMissionActivityActivationToken] = createSignal(0)
+const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("tasks")
+const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("tasks")
+const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("task")
 const [missionSharedRefreshToken, setMissionSharedRefreshToken] = createSignal(0)
 const [missionLauncherActive, setMissionLauncherActive] = createSignal(false)
 const [missionLauncherSubmitting, setMissionLauncherSubmitting] = createSignal(false)
-const [assistantLauncherActive, setAssistantLauncherActive] = createSignal(false)
-const [assistantLauncherSubmitting, setAssistantLauncherSubmitting] = createSignal(false)
 const activeLeftActivity = () => selectedLeftActivity()
 let codingAssistantActivationController: AbortController | null = null
 
@@ -257,7 +254,7 @@ function isAbortError(error: unknown): boolean {
 function activateCodingAssistantSessionList(): void {
   abortCodingAssistantActivation()
   setMissionLauncherActive(false)
-  if (!isCodingAssistantSource()) void selectTask("")
+  if (isMissionSessionSource()) void selectTask("")
   const controller = new AbortController()
   codingAssistantActivationController = controller
   bumpWorkspaceEpoch()
@@ -273,10 +270,9 @@ function activateCodingAssistantSessionList(): void {
         ? selectedID
         : (codingAssistantStore.sessions[0]?.id ?? "")
     if (sessionID) {
-      setAssistantLauncherActive(false)
       await selectCodingAssistantSession({ sessionID, signal: controller.signal })
     } else {
-      setAssistantLauncherActive(true)
+      await createCodingAssistantSession({ signal: controller.signal })
     }
   })()
     .catch((error) => {
@@ -396,11 +392,7 @@ function selectLeftActivity(activity: LeftActivity): void {
     return
   }
   abortCodingAssistantActivation()
-  setAssistantLauncherActive(false)
   if (activity !== "mission") setMissionLauncherActive(false)
-  if (activity === "mission" && boardStore.selectedSource?.kind === "task") {
-    void selectTask("")
-  }
   if (boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())) {
     void selectTask("")
   }
@@ -412,7 +404,6 @@ function selectLeftActivity(activity: LeftActivity): void {
   }
   setSelectedLeftActivity(activity)
   setSelectedLeftPanelActivity(activity)
-  if (activity === "mission") setMissionActivityActivationToken((value) => value + 1)
 }
 
 function isMissionSessionSource(): boolean {
@@ -421,52 +412,19 @@ function isMissionSessionSource(): boolean {
 
 function selectMissionTask(taskID: string): void {
   setMissionLauncherActive(false)
-  setAssistantLauncherActive(false)
   resetCenterWorkbenchToFocusedPanel("tasks")
   setSelectedLeftActivity("tasks")
   setSelectedLeftPanelActivity("tasks")
   void selectTask(taskID)
 }
 
-function openTaskLauncher(): void {
-  abortCodingAssistantActivation()
-  setMissionLauncherActive(false)
-  setAssistantLauncherActive(false)
-  resetCenterWorkbenchToFocusedPanel("tasks")
-  setSelectedLeftActivity("tasks")
-  setSelectedLeftPanelActivity("tasks")
-  void selectTask("")
-  queueMicrotask(() => {
-    document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
-  })
-}
-
 function openMissionLauncher(): void {
   abortCodingAssistantActivation()
-  setAssistantLauncherActive(false)
   resetCenterWorkbenchToFocusedPanel("mission")
   setSelectedLeftActivity("mission")
   setSelectedLeftPanelActivity("mission")
-  setMissionActivityActivationToken((value) => value + 1)
   setMissionLauncherActive(true)
   void selectTask("")
-  queueMicrotask(() => {
-    document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
-  })
-}
-
-function openCodingAssistantLauncher(): void {
-  abortCodingAssistantActivation()
-  setMissionLauncherActive(false)
-  setAssistantLauncherActive(true)
-  bumpWorkspaceEpoch()
-  resetCenterWorkbenchToFocusedPanel("assistant")
-  setSelectedLeftActivity("assistant")
-  setSelectedLeftPanelActivity("assistant")
-  void selectTask("")
-  void loadCodingAssistantSessions().catch((error) => {
-    reportOverlayRuntimeError("coding-assistant.sessions", error)
-  })
   queueMicrotask(() => {
     document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
   })
@@ -935,25 +893,6 @@ disposers.push(
   }),
 )
 
-disposers.push(
-  createRoot((dispose) => {
-    createEffect(() => {
-      const selectedSource = boardStore.selectedSource
-      if (selectedSource?.kind !== "task") return
-      if (!focusedLeftActivityOwnsPrimaryPanel(selectedLeftActivity())) return
-      if (selectedLeftActivity() === "tasks" && selectedLeftPanelActivity() === "tasks" && primaryCenterPanel() === "task") {
-        return
-      }
-      setMissionLauncherActive(false)
-      setAssistantLauncherActive(false)
-      resetCenterWorkbenchToFocusedPanel("tasks")
-      setSelectedLeftActivity("tasks")
-      setSelectedLeftPanelActivity("tasks")
-    })
-    return dispose
-  }),
-)
-
 const taskListEl = document.getElementById("taskListPanel")
 if (taskListEl) {
   taskListEl.innerHTML = ""
@@ -991,7 +930,6 @@ if (codingAssistantListEl) {
           })
         }}
         onSelectSession={(session) => {
-          setAssistantLauncherActive(false)
           resetCenterWorkbenchToFocusedPanel("assistant")
           void selectCodingAssistantSession({ sessionID: session.id }).catch((error) => {
             reportOverlayRuntimeError("coding-assistant.select", error)
@@ -1047,7 +985,6 @@ if (missionListEl) {
     () => (
       <Mission
         active={selectedLeftPanelActivity() === "mission"}
-        activationToken={missionActivityActivationToken()}
         refreshToken={missionSharedRefreshToken()}
         onSelectTask={selectMissionTask}
       />
@@ -1102,13 +1039,9 @@ let lastTaskBusy = false
 let lastSuggestionTaskID: string | null = null
 
 const panelComposerDraftKey = () => {
-  if (missionSubmitActive()) {
+  if (missionLauncherActive()) {
     const directory = activeDirectory()
     return directory ? composerDraftKey("mission", "new", directory) : composerDraftKey("mission", "new")
-  }
-  if (assistantSubmitActive()) {
-    const directory = activeDirectory()
-    return directory ? composerDraftKey("assistant", "new", directory) : composerDraftKey("assistant", "new")
   }
   const taskID = activeTaskID()
   if (taskID) return composerDraftKey("task", taskID)
@@ -1118,20 +1051,12 @@ const panelComposerDraftKey = () => {
   return directory ? composerDraftKey("task", "new", directory) : composerDraftKey("task", "new")
 }
 
-function missionSubmitActive(): boolean {
-  return missionLauncherActive() || (primaryCenterPanel() === "mission" && !isMissionSessionSource())
-}
-
-function assistantSubmitActive(): boolean {
-  return assistantLauncherActive() || (primaryCenterPanel() === "chat" && !activeSessionID())
-}
-
 const composerEl = document.getElementById("solidChatComposer")
 if (composerEl) {
   render(
     () => (
       <ChatComposer
-        enabled={canComposeChat() && !missionLauncherSubmitting() && !assistantLauncherSubmitting()}
+        enabled={canComposeChat() && !missionLauncherSubmitting()}
         // Composer busy ≡ a send request is in flight (SSE stream open).
         // A running task no longer disables the composer: the user can queue
         // additional messages; `panelMessage` routes them as operator notes /
@@ -1140,31 +1065,13 @@ if (composerEl) {
         busy={!!messageStore.chatRequest}
         stopping={!!(messageStore.chatRequest as any)?.stopping}
         draftKey={panelComposerDraftKey()}
-        placeholder={
-          missionSubmitActive()
-            ? t("mission.launcher.placeholder")
-            : assistantSubmitActive()
-              ? t("coding_assistant.launcher.placeholder")
-              : undefined
-        }
-        textareaDataUI={
-          missionSubmitActive()
-            ? "mission-composer-input"
-            : assistantSubmitActive()
-              ? "coding-assistant-composer-input"
-              : undefined
-        }
-        sendDataUI={
-          missionSubmitActive()
-            ? "mission-composer-submit"
-            : assistantSubmitActive()
-              ? "coding-assistant-composer-submit"
-              : undefined
-        }
+        placeholder={missionLauncherActive() ? t("mission.launcher.placeholder") : undefined}
+        textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}
+        sendDataUI={missionLauncherActive() ? "mission-composer-submit" : undefined}
         pendingSuggestion={pendingSuggestion()}
         onSuggestionConsumed={() => setPendingSuggestion("")}
         onSubmit={async (text, attachments, webSearch) => {
-          if (missionSubmitActive()) {
+          if (missionLauncherActive()) {
             if (attachments.length > 0) {
               throw new Error(t("mission.launcher.attachments_unsupported"))
             }
@@ -1177,16 +1084,6 @@ if (composerEl) {
               return result
             } finally {
               setMissionLauncherSubmitting(false)
-            }
-          }
-          if (assistantSubmitActive()) {
-            setAssistantLauncherSubmitting(true)
-            try {
-              await createCodingAssistantSession()
-              setAssistantLauncherActive(false)
-              return await panelMessage(text, attachments, webSearch ? { web_search: true } : {})
-            } finally {
-              setAssistantLauncherSubmitting(false)
             }
           }
           const refreshMissionLedger = isMissionSessionSource()
@@ -1370,13 +1267,22 @@ function onDocumentReady(callback: () => void): void {
 function bindSidebarStaticControls(): void {
   // ── Sidebar buttons ──
   document.getElementById("btnCreateTask")?.addEventListener("click", () => {
-    openTaskLauncher()
+    // Deselect current task and focus the composer — the user types their
+    // request directly in the ChatComposer, no modal dialog needed.
+    setMissionLauncherActive(false)
+    resetCenterWorkbenchToFocusedPanel("tasks")
+    void selectTask("")
+    const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
+    textarea?.focus()
   })
   document.getElementById("btnCreateMission")?.addEventListener("click", () => {
     openMissionLauncher()
   })
   document.getElementById("btnCreateCodingAssistantSession")?.addEventListener("click", () => {
-    openCodingAssistantLauncher()
+    resetCenterWorkbenchToFocusedPanel("assistant")
+    void createCodingAssistantSession().catch((error) => {
+      reportOverlayRuntimeError("coding-assistant.create", error)
+    })
   })
 
   // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer
@@ -1486,19 +1392,16 @@ disposers.push(
       settingsStore.locale
       boardStore.selectedSource
       missionLauncherActive()
-      assistantLauncherActive()
       primaryCenterPanel()
       const title = document.querySelector("#chatViewTitle") as HTMLElement | null
       if (title) {
-        title.textContent = missionSubmitActive()
+        title.textContent = missionLauncherActive()
           ? t("mission.launcher.title")
-          : assistantSubmitActive()
-            ? t("coding_assistant.launcher.title")
-            : primaryCenterPanel() === "mission"
-              ? t("mission.title")
-              : primaryCenterPanel() === "chat" || isCodingAssistantSource()
-                ? t("chat.panel_title")
-                : t("task.panel_title")
+          : primaryCenterPanel() === "mission"
+            ? t("mission.title")
+            : primaryCenterPanel() === "chat" || isCodingAssistantSource()
+              ? t("chat.panel_title")
+              : t("task.panel_title")
       }
     })
 
