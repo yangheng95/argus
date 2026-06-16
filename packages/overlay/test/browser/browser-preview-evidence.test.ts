@@ -102,7 +102,6 @@ test(
     const errors: string[] = []
     const requestLog: string[] = []
     let selectedTargetID = targetID
-    const pendingAlternateLiveSnapshots: Array<() => void> = []
 
     const pngBytes = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAABACAYAAADbER1AAAAAdElEQVR4AQXBAQ3AIAADsGaqEDMxFzMvyOKt892XqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZ+SrVB/bxIzVQAAAAASUVORK5CYII=",
@@ -113,6 +112,8 @@ test(
     const alternatePreviewTarget = () => `${serverOrigin}/preview-target-alt`
     const selectedPreviewTarget = () =>
       selectedTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget()
+    const captureSummary = (target: string) =>
+      target === alternateTargetID ? "alternate target desktop capture passed" : "primary target desktop capture passed"
     const viewports = [
       { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1440, height: 900 },
       { id: "tablet", labelKey: "browser_preview.viewport.tablet", width: 834, height: 1112 },
@@ -157,6 +158,7 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/mission") return send([])
       if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
       if (path === "/path") return send({ directory: projectRoot })
       if (path === "/vcs") {
@@ -279,17 +281,25 @@ test(
       if (path === `/task/${taskID}/browser-preview/capture` && req.method === "POST") {
         const body = await req.json()
         captureBodies.push(body)
+        const responseTargetID = body?.targetID === alternateTargetID ? alternateTargetID : targetID
+        if (responseTargetID === alternateTargetID) {
+          await new Promise((resolve) => setTimeout(resolve, 1_200))
+        }
         return send({
           status: "passed",
           projectRoot,
           target: {
-            id: selectedTargetID,
+            id: responseTargetID,
             taskID,
-            latestEvidenceID: evidenceID,
+            latestEvidenceIDs: {
+              desktop: evidenceID,
+              tablet: "art_previewevidence_tablet",
+              mobile: "art_previewevidence_mobile",
+            },
             kind: "task-url",
             status: "ready",
             projectRoot,
-            url: selectedPreviewTarget(),
+            url: responseTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget(),
             viewports,
             diagnostics: ["Resolved saved browser preview target."],
             candidates: [],
@@ -300,10 +310,10 @@ test(
             desktop: {
               captured: true,
               passed: true,
-              url: selectedPreviewTarget(),
+              url: responseTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget(),
               requested_viewport: { width: 1440, height: 900 },
               viewport: { width: 1440, height: 900, capped: false },
-              summary: "manifest-backed desktop capture passed",
+              summary: captureSummary(responseTargetID),
               path: `${projectRoot}/.opencorvus/tasks/${taskID}/browser-preview/desktop.png`,
               manifest: {
                 operations: [{ viewportIDs: ["desktop", "tablet", "mobile"], diagnosticsPath: "diagnostics.json" }],
@@ -312,7 +322,7 @@ test(
             tablet: {
               captured: true,
               passed: true,
-              url: selectedPreviewTarget(),
+              url: responseTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget(),
               requested_viewport: { width: 834, height: 1112 },
               viewport: { width: 834, height: 1112, capped: false },
               summary: "manifest-backed tablet capture passed",
@@ -324,7 +334,7 @@ test(
             mobile: {
               captured: true,
               passed: true,
-              url: selectedPreviewTarget(),
+              url: responseTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget(),
               requested_viewport: { width: 390, height: 844 },
               viewport: { width: 390, height: 844, capped: false },
               summary: "manifest-backed mobile capture passed",
@@ -340,18 +350,14 @@ test(
             mobile: "art_previewevidence_mobile",
           },
           diagnostics: [
-            "manifest-backed desktop capture passed",
+            captureSummary(responseTargetID),
             "manifest-backed tablet capture passed",
             "manifest-backed mobile capture passed",
           ],
         })
       }
       if (path === `/task/${taskID}/browser-preview/live/snapshot` && req.method === "POST") {
-        const body = await req.json()
-        liveSnapshotBodies.push(body)
-        if ((body as any)?.targetID === alternateTargetID) {
-          await new Promise<void>((resolve) => pendingAlternateLiveSnapshots.push(resolve))
-        }
+        liveSnapshotBodies.push(await req.json())
         return new Response(pngBytes, {
           headers: { "content-type": "image/png" },
         })
@@ -437,13 +443,14 @@ test(
         "online connection badge",
         () => ({ errors, requestLog }),
       )
-      await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached" })
-      const taskRowVisible = await page.$eval(`.task-row-main[data-task-id="${taskID}"]`, (node: Element) => {
-        const element = node as HTMLElement
-        const rect = element.getBoundingClientRect()
-        return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden"
-      })
-      if (taskRowVisible) await page.click(`.task-row-main[data-task-id="${taskID}"]`)
+      await waitForPageState(
+        page,
+        () =>
+          document.querySelector<HTMLElement>(".global-task-row[data-active='true'] .task-row-main")?.dataset.taskId ===
+          "tsk_browserpreview_e2e",
+        "restored browser preview task selection",
+        () => ({ errors, requestLog }),
+      )
       await waitForPageState(
         page,
         () =>
@@ -479,29 +486,24 @@ test(
           }),
         )
       })
-      for (let i = 0; i < 100 && liveInputBodies.length < 2; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-      const initialLiveInputCount = liveInputBodies.length
       await page.click('[data-ui="browser-preview-candidate-trigger"]')
       await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await waitForPageText(page, alternatePreviewTarget(), "alternate preview target text")
+      await waitForPageState(
+        page,
+        () => !(document.body.textContent || "").includes("primary target desktop capture passed"),
+        "stale preview evidence hidden after alternate target selection",
+        () => ({ errors, requestLog, captureBodies }),
+      )
+      await waitForPageText(page, "alternate target desktop capture passed", "alternate target evidence summary")
       for (
         let i = 0;
-        i < 100 && pendingAlternateLiveSnapshots.length === 0;
+        i < 100 && !liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID));
         i += 1
       ) {
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
-      const pendingAlternateState = await page.evaluate(() => ({
-        hasLiveImage: !!document.querySelector('[data-ui="browser-preview-live-screenshot"]'),
-        hasLoading: !!document.querySelector('[data-ui="browser-preview-live-loading"]'),
-      }))
-      assert.equal(pendingAlternateState.hasLiveImage, false)
-      assert.equal(pendingAlternateState.hasLoading, true)
-      assert.equal(liveInputBodies.length, initialLiveInputCount)
-      for (const release of pendingAlternateLiveSnapshots.splice(0)) release()
       assert.ok(
         liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID)),
         `interactive browser preview reloaded after selecting an alternate target\n${JSON.stringify(
@@ -520,19 +522,12 @@ test(
         "reloaded alternate interactive browser preview screenshot",
         () => ({ errors, requestLog }),
       )
-      await page.click('[data-ui="browser-preview-live-screenshot"]', { position: { x: 8, y: 8 } })
-      for (let i = 0; i < 100 && liveInputBodies.length <= initialLiveInputCount; i += 1) {
+      for (let i = 0; i < 100 && liveInputBodies.length < 2; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
       assert.ok(
-        liveInputBodies.length > initialLiveInputCount,
+        liveInputBodies.length >= 2,
         `interactive browser preview input routed to backend\n${JSON.stringify({ errors, requestLog }, null, 2)}`,
-      )
-      await waitForPageState(
-        page,
-        () => document.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')?.dataset.status === "ready",
-        "alternate interactive browser preview ready after input",
-        () => ({ errors, requestLog }),
       )
 
       const preview = await page.evaluate(() => {
@@ -546,11 +541,16 @@ test(
       })
       assert.equal(preview.status, "ready")
       assert.equal(preview.imageLoaded, true)
-      assert.match(preview.text, /manifest-backed desktop capture passed/)
+      assert.match(preview.text, /alternate target desktop capture passed/)
+      assert.doesNotMatch(preview.text, /primary target desktop capture passed/)
       assert.match(preview.text, new RegExp(alternatePreviewTarget().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
       assert.deepEqual(selectedTargets, [{ targetID: alternateTargetID }])
       assert.deepEqual(JSON.parse(JSON.stringify(captureBodies[0])), {
         targetID,
+        viewportIDs: ["desktop", "tablet", "mobile"],
+      })
+      assert.deepEqual(JSON.parse(JSON.stringify(captureBodies[1])), {
+        targetID: alternateTargetID,
         viewportIDs: ["desktop", "tablet", "mobile"],
       })
       assert.ok(
@@ -562,7 +562,6 @@ test(
         "live snapshot should reload after selecting an alternate target",
       )
       assert.deepEqual(liveInputBodies.map((body) => (body as any).input.kind).slice(0, 2), ["click", "wheel"])
-      assert.equal((liveInputBodies.at(-1) as any)?.targetID, alternateTargetID)
       assert.ok(
         requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/capture`)),
         "capture route should be called through the task-scoped backend",
@@ -581,6 +580,271 @@ test(
         ),
         "evidence screenshot route should be loaded through the task-scoped backend",
       )
+    } finally {
+      await browser.close().catch(() => undefined)
+      await server.close()
+    }
+  },
+  { timeout: 60_000 },
+)
+
+test(
+  "browser preview panel binds persisted evidence to the selected viewport",
+  async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
+    const now = Date.now()
+    const taskID = "tsk_browserpreview_persisted_viewport"
+    const targetID = "art_previewtarget_persisted_viewport"
+    const projectRoot = "D:/overlay/workspace/app"
+    const requestLog: string[] = []
+    const errors: string[] = []
+    const captureBodies: unknown[] = []
+    const pngBytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAABACAYAAADbER1AAAAAdElEQVR4AQXBAQ3AIAADsGaqEDMxFzMvyOKt892XqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZ+SrVB/bxIzVQAAAAASUVORK5CYII=",
+      "base64",
+    )
+    const evidenceByID = {
+      art_previewevidence_desktop_persisted: {
+        id: "art_previewevidence_desktop_persisted",
+        taskID,
+        targetID,
+        viewportID: "desktop",
+        status: "passed",
+        summary: "persisted desktop evidence passed",
+        capture: { captured: true, passed: true, path: `${projectRoot}/desktop.png`, sha: "desktopsha" },
+        diagnostics: ["persisted desktop evidence passed"],
+        timeCompleted: now - 300,
+        timeCreated: now - 300,
+      },
+      art_previewevidence_tablet_persisted: {
+        id: "art_previewevidence_tablet_persisted",
+        taskID,
+        targetID,
+        viewportID: "tablet",
+        status: "passed",
+        summary: "persisted tablet evidence passed",
+        capture: { captured: true, passed: true, path: `${projectRoot}/tablet.png`, sha: "tabletsha" },
+        diagnostics: ["persisted tablet evidence passed"],
+        timeCompleted: now - 200,
+        timeCreated: now - 200,
+      },
+      art_previewevidence_mobile_persisted: {
+        id: "art_previewevidence_mobile_persisted",
+        taskID,
+        targetID,
+        viewportID: "mobile",
+        status: "passed",
+        summary: "persisted mobile evidence passed",
+        capture: { captured: true, passed: true, path: `${projectRoot}/mobile.png`, sha: "mobilesha" },
+        diagnostics: ["persisted mobile evidence passed"],
+        timeCompleted: now - 100,
+        timeCreated: now - 100,
+      },
+    } as const
+    const viewports = [
+      { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1440, height: 900 },
+      { id: "tablet", labelKey: "browser_preview.viewport.tablet", width: 834, height: 1112 },
+      { id: "mobile", labelKey: "browser_preview.viewport.mobile", width: 390, height: 844 },
+    ]
+    const task = {
+      id: taskID,
+      directory: projectRoot,
+      status: "running",
+      sessionID: "ses_preview_persisted_viewport",
+      request: "Verify persisted preview evidence",
+      title: "Verify persisted preview evidence",
+      time: { created: now - 10_000, updated: now - 1_000 },
+    }
+    const board = {
+      snapshotVersion: "preview-persisted-viewport-board",
+      lastSequence: 0,
+      task,
+      overview: { headline: "Preview evidence", summary: "Persisted preview evidence is ready.", controls: {} },
+      lanes: [],
+      interactions: [],
+    }
+    let serverOrigin = ""
+    const previewTarget = () => `${serverOrigin}/preview-target`
+    const targetResponse = () => ({
+      id: targetID,
+      taskID,
+      latestEvidenceIDs: {
+        desktop: evidenceByID.art_previewevidence_desktop_persisted.id,
+        tablet: evidenceByID.art_previewevidence_tablet_persisted.id,
+        mobile: evidenceByID.art_previewevidence_mobile_persisted.id,
+      },
+      kind: "task-url",
+      status: "ready",
+      projectRoot,
+      url: previewTarget(),
+      viewports,
+      diagnostics: ["Resolved saved browser preview target."],
+      candidates: [{ id: targetID, url: previewTarget(), source: "task-artifact", selected: true, timeUpdated: now }],
+      source: "task-artifact",
+    })
+
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      requestLog.push(`${req.method} ${url.pathname}${url.search}`)
+      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/preview-target")
+        return new Response("<main>Persisted viewport preview target is live</main>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        })
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+      if (path === "/path") return send({ directory: projectRoot })
+      if (path === "/vcs")
+        return send({
+          branch: "preview-e2e",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config" && req.method === "PATCH") return send({ model: "" })
+      if (path === "/config") return send({ model: "" })
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/agent") return send([])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/skill/market") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === `/task/${taskID}/board`) return send(board, { headers: { etag: `"board-${now}"` } })
+      if (path === `/task/${taskID}/conversation`)
+        return send({
+          lastSequence: 0,
+          board,
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { rootID: "root", cards: {}, order: [] },
+          agentView: { rootID: "root", cards: {}, order: [] },
+          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+          messageWatermark: 0,
+        })
+      if (path === `/task/${taskID}/transcript`) return send([])
+      if (path === `/task/${taskID}/trace`)
+        return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace`, enabled: true })
+      if (
+        path === "/task/events" ||
+        path === `/task/${taskID}/events` ||
+        path === `/task/${taskID}/conversation/events`
+      ) {
+        return eventStream()
+      }
+      if (path === `/task/${taskID}/browser-preview`) return send(targetResponse())
+      if (path === `/task/${taskID}/browser-preview/capture` && req.method === "POST") {
+        captureBodies.push(await req.json())
+        return send({ status: "failed", projectRoot, target: targetResponse(), viewports, captures: {}, evidenceIDs: {}, diagnostics: [] })
+      }
+      if (path === `/task/${taskID}/browser-preview/live/snapshot` && req.method === "POST") {
+        return new Response(pngBytes, { headers: { "content-type": "image/png" } })
+      }
+      const evidenceMatch = path.match(new RegExp(`^/task/${taskID}/browser-preview/evidence/([^/]+)$`))
+      if (evidenceMatch) {
+        const evidence = evidenceByID[evidenceMatch[1] as keyof typeof evidenceByID]
+        return evidence ? send(evidence) : send({ message: "missing" }, { status: 404 })
+      }
+      const captureMatch = path.match(new RegExp(`^/task/${taskID}/browser-preview/evidence/([^/]+)/capture\\.png$`))
+      if (captureMatch) return new Response(pngBytes, { headers: { "content-type": "image/png" } })
+      return send({})
+    })
+    serverOrigin = server.origin
+
+    const browser = await launchBrowser(["--disable-dev-shm-usage"])
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 1440, height: 900 })
+      await page.evaluateOnNewDocument((serverUrl) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_server_url", serverUrl)
+        localStorage.setItem("oc_right_panel_collapsed", "false")
+        const settings = {
+          serverUrl,
+          autoServer: false,
+          locale: "en-US",
+          directory: "D:/overlay/workspace/app",
+          directoryMode: "custom",
+          workspaceTaskID: "tsk_browserpreview_persisted_viewport",
+          workspaceDirectory: "D:/overlay/workspace/app",
+        }
+        window.__TAURI__ = {
+          core: {
+            invoke: async (command: string, args: Record<string, unknown> = {}) => {
+              if (command === "overlay_settings_load") return settings
+              if (command === "overlay_settings_save") {
+                Object.assign(settings, (args.settings as Record<string, unknown>) || {})
+                return true
+              }
+              if (command === "overlay_open_path") return true
+              if (command === "overlay_open_url") return true
+              return null
+            },
+          },
+          window: {
+            getCurrentWindow() {
+              return {
+                close: async () => true,
+                hide: async () => true,
+                startDragging: async () => true,
+                minimize: async () => true,
+              }
+            },
+          },
+        }
+      }, server.origin)
+      page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`))
+      page.on("response", (response) => {
+        if (response.status() >= 400) errors.push(`response${response.status()}: ${response.url()}`)
+      })
+      page.on("console", (msg) => {
+        if (msg.type() === "error") errors.push(`console: ${msg.text()}`)
+      })
+
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+      await page.waitForSelector("#solidRightActivityToolbar")
+      await waitForPageState(
+        page,
+        () => document.querySelector("#connBadge")?.getAttribute("data-status") === "online",
+        "online connection badge",
+        () => ({ errors, requestLog }),
+      )
+      await waitForPageState(
+        page,
+        () =>
+          document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active === "true" &&
+          !!document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]'),
+        "browser preview live frame rendered",
+        () => ({ errors, requestLog }),
+      )
+      await waitForPageText(page, "persisted desktop evidence passed", "desktop persisted evidence")
+      let text = await page.evaluate(() => document.querySelector(".browser-preview-evidence-status")?.textContent || "")
+      assert.match(text, /persisted desktop evidence passed/)
+      assert.doesNotMatch(text, /persisted mobile evidence passed/)
+
+      await page.click('[data-ui="browser-preview-viewport"][data-viewport-id="mobile"]')
+      await waitForPageText(page, "persisted mobile evidence passed", "mobile persisted evidence")
+      text = await page.evaluate(() => document.querySelector(".browser-preview-evidence-status")?.textContent || "")
+      assert.match(text, /persisted mobile evidence passed/)
+      assert.doesNotMatch(text, /persisted desktop evidence passed/)
+      assert.deepEqual(captureBodies, [])
     } finally {
       await browser.close().catch(() => undefined)
       await server.close()

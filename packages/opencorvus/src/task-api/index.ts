@@ -14,6 +14,8 @@ import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
 import { PermissionNext } from "@/permission/next"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
+import { ProviderSchema } from "@/provider/schema"
 import { ProtocolStore } from "@/protocol/store"
 import { EngineProtocol } from "@/engine/protocol"
 import { ensureGitignore } from "@/engine/git"
@@ -2009,9 +2011,8 @@ export namespace EngineService {
     const task = requireTask(taskID)
     const sessionID = task.session_id ?? undefined
     const model = await resolveAgentModel("summary", { sessionID })
-    const language = await Provider.getLanguage(model, {
-      config: await EffectiveConfig.effective(sessionID ? { sessionID } : undefined),
-    })
+    const config = await EffectiveConfig.effective(sessionID ? { sessionID } : undefined)
+    const language = ProviderLLM.wrapModel(await Provider.getLanguage(model, { config }), model, {})
 
     const messages = sessionID ? await Session.messages({ sessionID, limit: 6 }) : []
     const transcript = messages
@@ -2049,7 +2050,7 @@ export namespace EngineService {
       model: language,
       temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
       messages: followupMessages,
-      output: Output.object({ schema: z.object({ suggestion: z.string() }) }),
+      output: Output.object({ schema: ProviderSchema.output(model, z.object({ suggestion: z.string() })) }),
     })
 
     try {

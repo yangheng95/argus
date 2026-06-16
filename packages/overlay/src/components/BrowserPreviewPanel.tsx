@@ -1,5 +1,5 @@
 import * as Select from "@kobalte/core/select"
-import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch, untrack } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import type { JSX } from "solid-js"
 import { ApiError } from "../services/api"
 import {
@@ -20,6 +20,7 @@ import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
 import { Tab, Tabs } from "./ui/Tabs"
+import { browserPreviewLivePoint } from "./browser-preview-live-point"
 
 type BrowserPreviewCandidate = BrowserPreviewTarget["candidates"][number]
 
@@ -37,7 +38,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [refreshToken, setRefreshToken] = createSignal(0)
   const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
   const [lastAutoCapturedPreviewKey, setLastAutoCapturedPreviewKey] = createSignal("")
-  const [liveImage, setLiveImage] = createSignal<{ scopeKey: string; url: string }>()
+  const [liveImageUrl, setLiveImageUrl] = createSignal("")
   const [liveError, setLiveError] = createSignal("")
   const [liveLoading, setLiveLoading] = createSignal(false)
   const [verificationRequest, setVerificationRequest] = createSignal<{
@@ -73,9 +74,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [latestEvidence] = createResource(
     () => {
       const taskID = props.taskID()
-      const evidenceID = currentTarget()?.latestEvidenceID
-      if (!taskID || !evidenceID) return undefined
-      return { taskID, evidenceID }
+      const targetID = currentTarget()?.id
+      const evidenceID = currentTarget()?.latestEvidenceIDs?.[viewportID()]
+      if (!taskID || !targetID || !evidenceID) return undefined
+      return { taskID, evidenceID, targetID, viewportID: viewportID() }
     },
     (scope) => loadTaskBrowserPreviewEvidence(scope),
   )
@@ -90,6 +92,17 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
   const selectedViewport = createMemo(() => viewports().find((viewport) => viewport.id === viewportID()))
   const targetUrl = createMemo(() => currentTarget()?.url)
+  const currentVerificationRequest = createMemo(() => {
+    const request = verificationRequest()
+    const taskID = props.taskID()
+    const resolved = currentTarget()
+    if (!request || !taskID || !resolved?.id) return undefined
+    if (request.taskID !== taskID || request.targetID !== resolved.id) return undefined
+    return request
+  })
+  const currentVerification = createMemo(() => (currentVerificationRequest() ? verification() : undefined))
+  const currentVerificationError = createMemo(() => (currentVerificationRequest() ? verification.error : undefined))
+  const currentVerificationLoading = createMemo(() => Boolean(currentVerificationRequest() && verification.loading))
   const liveScope = createMemo(() => {
     const taskID = props.taskID()
     const resolved = currentTarget()
@@ -97,26 +110,23 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.id || !viewport) return undefined
     return { taskID, targetID: resolved.id, viewportID: viewport.id, viewport }
   })
-  const liveScopeKey = (scope: NonNullable<ReturnType<typeof liveScope>>) =>
-    `${scope.taskID}:${scope.targetID}:${scope.viewportID}`
-  const liveImageUrl = createMemo(() => {
-    const scope = liveScope()
-    const image = liveImage()
-    if (!scope || !image || image.scopeKey !== liveScopeKey(scope)) return ""
-    return image.url
-  })
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
-    const verified = verification()
-    const request = verificationRequest()
-    const taskID = props.taskID()
-    const targetID = currentTarget()?.id
-    if (verified && request && request.taskID === taskID && request.targetID === targetID) {
+    const verified = currentVerification()
+    const request = currentVerificationRequest()
+    if (verified && request) {
       return evidenceFromVerification(verified, viewportID(), {
         taskID: request.taskID,
         targetID: request.targetID,
       })
     }
-    return latestEvidence()
+    const evidence = latestEvidence()
+    const taskID = props.taskID()
+    const targetID = currentTarget()?.id
+    if (!evidence || !taskID || !targetID) return undefined
+    if (evidence.taskID !== taskID || evidence.targetID !== targetID || evidence.viewportID !== viewportID()) {
+      return undefined
+    }
+    return evidence
   })
   const [captureImageUrl] = createResource(
     () => {
@@ -133,30 +143,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     return current
   })
 
-  createEffect(() => {
-    const request = verificationRequest()
-    if (!request) return
-    const taskID = props.taskID()
-    const targetID = currentTarget()?.id
-    if (request.taskID !== taskID || request.targetID !== targetID) setVerificationRequest(undefined)
-  })
-
-  createEffect(() => {
-    const error = verification.error
-    if (!(error instanceof ApiError) || error.status !== 404) return
-    const request = verificationRequest()
-    const taskID = props.taskID()
-    const targetID = currentTarget()?.id
-    if (!request || request.taskID !== taskID || request.targetID !== targetID) return
-    setVerificationRequest(undefined)
-    void refetchTarget()
-  })
-
   onCleanup(() => {
     const current = captureImageUrl()
     if (current) URL.revokeObjectURL(current)
-    const live = liveImage()
-    if (live) URL.revokeObjectURL(live.url)
+    const live = liveImageUrl()
+    if (live) URL.revokeObjectURL(live)
   })
 
   createEffect(() => {
@@ -185,7 +176,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const resolved = currentTarget()
     const viewportIDs = viewports().map((viewport) => viewport.id)
     if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.url || !resolved.id) return
-    if (viewportIDs.length === 0 || resolved.latestEvidenceID || verification.loading) return
+    const latestEvidenceIDs = resolved.latestEvidenceIDs ?? {}
+    if (viewportIDs.length === 0 || viewportIDs.every((id) => latestEvidenceIDs[id]) || currentVerificationLoading()) {
+      return
+    }
     const key = `${taskID}:${resolved.id}:${viewportIDs.join(",")}`
     if (lastAutoCapturedPreviewKey() === key) return
     setLastAutoCapturedPreviewKey(key)
@@ -211,24 +205,21 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   let liveFrameRequestSequence = 0
 
-  const replaceLiveImageUrl = (scopeKey: string, next: string) => {
-    const previous = untrack(liveImage)
-    setLiveImage({ scopeKey, url: next })
-    if (previous && previous.url !== next) URL.revokeObjectURL(previous.url)
+  const replaceLiveImageUrl = (next: string) => {
+    const previous = liveImageUrl()
+    setLiveImageUrl(next)
+    if (previous && previous !== next) URL.revokeObjectURL(previous)
   }
 
   const clearLiveImageUrl = () => {
-    const previous = untrack(liveImage)
+    const previous = liveImageUrl()
     if (!previous) return
-    setLiveImage(undefined)
-    URL.revokeObjectURL(previous.url)
+    setLiveImageUrl("")
+    URL.revokeObjectURL(previous)
   }
 
   const loadLiveFrame = async (scope: NonNullable<ReturnType<typeof liveScope>>, input?: BrowserPreviewLiveInput) => {
     const sequence = ++liveFrameRequestSequence
-    const scopeKey = liveScopeKey(scope)
-    const previous = untrack(liveImage)
-    if (previous && previous.scopeKey !== scopeKey) clearLiveImageUrl()
     setLiveLoading(true)
     setLiveError("")
     try {
@@ -239,7 +230,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         URL.revokeObjectURL(next)
         return
       }
-      replaceLiveImageUrl(scopeKey, next)
+      replaceLiveImageUrl(next)
     } catch (error) {
       if (sequence === liveFrameRequestSequence) {
         setLiveError(String(error))
@@ -258,18 +249,12 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const image = element.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
     if (!viewport || !image) return undefined
     const rect = image.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0) return undefined
-    return {
-      x: Math.max(0, Math.min(viewport.width, ((event.clientX - rect.left) / rect.width) * viewport.width)),
-      y: Math.max(0, Math.min(viewport.height, ((event.clientY - rect.top) / rect.height) * viewport.height)),
-    }
+    return browserPreviewLivePoint(event, rect, viewport)
   }
 
   const sendLiveInput = (input: BrowserPreviewLiveInput) => {
     const scope = liveScope()
     if (!scope) return
-    const image = untrack(liveImage)
-    if (!image || image.scopeKey !== liveScopeKey(scope)) return
     void loadLiveFrame(scope, input)
   }
 
@@ -420,6 +405,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                       size="sm"
                       tone="neutral"
                       data-ui="browser-preview-viewport"
+                      data-viewport-id={item.id}
                     >
                       {viewportLabel(item.id)}
                     </Tab>
@@ -436,7 +422,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             tone="neutral"
             title={t("browser_preview.capture_title")}
             aria-label={t("browser_preview.capture_title")}
-            disabled={!props.taskID() || !targetUrl() || !currentTarget()?.id || verification.loading}
+            disabled={!props.taskID() || !targetUrl() || !currentTarget()?.id || currentVerificationLoading()}
             onClick={captureEvidence}
           >
             <Icon name="inspect" size={13} />
@@ -446,11 +432,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
           <div
             class="browser-preview-evidence-status"
             data-status={
-              verification.error ? "failed" : (verification()?.status ?? (verification.loading ? "loading" : "idle"))
+              currentVerificationError()
+                ? "failed"
+                : (currentVerification()?.status ?? renderedEvidence()?.status ?? (currentVerificationLoading() ? "loading" : "idle"))
             }
           >
             <Switch>
-              <Match when={verification.error}>
+              <Match when={currentVerificationError()}>
                 {(error) => (
                   <>
                     <Icon name="status-failed" size={14} />
@@ -458,15 +446,23 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                   </>
                 )}
               </Match>
-              <Match when={verification.loading}>
+              <Match when={currentVerificationLoading()}>
                 <span class="card__spinner" />
                 <span>{t("browser_preview.capture_loading")}</span>
               </Match>
-              <Match when={verification()}>
+              <Match when={currentVerification()}>
                 {(resolved) => (
                   <>
                     <Icon name={resolved().status === "passed" ? "status-completed" : "status-failed"} size={14} />
                     <span>{resolved().captures[viewportID()]?.summary ?? resolved().diagnostics.join(" ")}</span>
+                  </>
+                )}
+              </Match>
+              <Match when={renderedEvidence()}>
+                {(evidence) => (
+                  <>
+                    <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={14} />
+                    <span>{evidence().summary}</span>
                   </>
                 )}
               </Match>

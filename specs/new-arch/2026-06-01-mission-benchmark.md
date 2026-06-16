@@ -35,7 +35,7 @@ Add a benchmark focused on OpenCorvus Mission mode. The benchmark must exercise 
 | `packages/opencorvus/test/benchmark/mission-benchmark.test.ts`                             | Static/contract tests for the benchmark scenario and route wiring.                                                                                                                   |
 | `packages/opencorvus/src/orchestrator/agent.ts`                                            | Regression fix from live benchmark: record orchestrator trace reports inside the orchestrator session context.                                                                       |
 | `packages/opencorvus/test/session/trace-task-rollup.test.ts`                               | Regression test proving a report can be written for a child session while an unrelated parent session context is ambient.                                                            |
-| `docs/product/zh-CN/operations/benchmark.md` and `docs/product/en/operations/benchmark.md` | Document the new mission benchmark entry point and its pass criteria.                                                                                                                |
+| `packages/web/src/content/docs/zh-cn/operations/benchmark.mdx` and `packages/web/src/content/docs/operations/benchmark.mdx` | Document the new mission benchmark entry point and its pass criteria.                                                                                                                |
 
 ## Acceptance
 

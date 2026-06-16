@@ -1,5 +1,7 @@
 import path from "node:path"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import type { RuntimeCaptureResult } from "@/runtime/capture-contract"
+import { Identifier } from "@/id/id"
 import z from "zod"
 import type { BrowserEvidenceManifestSummary } from "./evidence-runner"
 import { normalizeRuntimePathRefs, persistBrowserPreviewEvidence, stripRuntimePathRefs } from "./persist"
@@ -51,9 +53,10 @@ export type BrowserPreviewVerificationInput = {
 }
 
 export type BrowserPreviewVerificationCaptureJobInput = {
-  projectRoot: string
   taskID: string
   targetID: string
+  url: string
+  outDir: string
   viewports: BrowserPreviewViewport[]
   viewportIDs: BrowserPreviewViewportID[]
   signal?: AbortSignal
@@ -115,10 +118,13 @@ export async function runBrowserPreviewVerification(
     }
   }
 
+  const captureID = Identifier.ascending("artifact")
+  const outDir = ProjectRuntimePaths.taskAbsolute(projectRoot, input.taskID, "browser-preview", captureID)
   const { captures, manifest } = await captureJob({
-    projectRoot,
     taskID: input.taskID,
     targetID: input.targetID,
+    url: input.target.url,
+    outDir,
     viewports,
     viewportIDs,
     signal: input.signal,
@@ -137,6 +143,7 @@ export async function runBrowserPreviewVerification(
     }) as BrowserPreviewCaptureSummary
     const status = result.captured && result.passed ? "passed" : "failed"
     evidenceIDs[viewport.id] = persistBrowserPreviewEvidence({
+      projectRoot,
       taskID: input.taskID,
       targetID: input.targetID,
       viewportID: viewport.id,
@@ -156,7 +163,7 @@ export async function runBrowserPreviewVerification(
   return {
     status,
     projectRoot,
-    target: { ...input.target, latestEvidenceID: evidenceIDs[viewports[0]?.id ?? ""] },
+    target: { ...input.target, latestEvidenceIDs: evidenceIDs },
     viewports,
     captures: stripRuntimePathRefs(responseCaptures) as Record<string, BrowserPreviewCaptureSummary>,
     evidenceIDs,

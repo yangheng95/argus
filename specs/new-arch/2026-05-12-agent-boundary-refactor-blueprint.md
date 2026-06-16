@@ -6,7 +6,7 @@ Status: Draft for implementation, revised after sub-agent review
 2026-05-16 lifecycle update: `deliver` accepted is now the task completion
 authority. `publish_acceptance` is explicit post-acceptance artifact export only,
 and `prosecute` is post-acceptance hardening evidence rather than a pre-publish
-review window. See `specs/deliver-accepted-completes-task-2026-05-16.md`.
+review window. See retired external note specs/deliver-accepted-completes-task-2026-05-16.md.
 
 ## 0. Problem Statement
 

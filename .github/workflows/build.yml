@@ -184,26 +184,31 @@ jobs:
         working-directory: packages/opencorvus/dist
         run: |
           set -euo pipefail
-          name="opencorvus-${{ matrix.platform }}"
-          if [[ ! -d "$name" ]]; then
-            echo "missing $name directory under packages/opencorvus/dist" >&2
+          shopt -s nullglob
+          dirs=(opencorvus-${{ matrix.platform }}*)
+          if [[ ${#dirs[@]} -eq 0 ]]; then
+            echo "missing opencorvus-${{ matrix.platform }}* directories under packages/opencorvus/dist" >&2
             exit 1
           fi
-          case "${{ matrix.platform }}" in
-            linux-*)
-              tar -czf "${name}.tar.gz" "${name}"
-              ;;
-            darwin-*)
-              zip -rq "${name}.zip" "${name}"
-              ;;
-            windows-*)
-              7z a -tzip "${name}.zip" "${name}" > /dev/null
-              ;;
-            *)
-              echo "Unknown matrix.platform: ${{ matrix.platform }}" >&2
-              exit 1
-              ;;
-          esac
+          for dir in "${dirs[@]}"; do
+            [[ -d "$dir" ]] || continue
+            name="$(basename "$dir")"
+            case "$name" in
+              opencorvus-linux-*)
+                tar -czf "${name}.tar.gz" -C "$dir" .
+                ;;
+              opencorvus-darwin-*)
+                (cd "$dir" && zip -rq "../${name}.zip" .)
+                ;;
+              opencorvus-windows-*)
+                (cd "$dir" && 7z a -tzip "../${name}.zip" . > /dev/null)
+                ;;
+              *)
+                echo "Unknown CLI dist directory: $dir" >&2
+                exit 1
+                ;;
+            esac
+          done
 
       - name: Validate CLI assets
         run: |
@@ -211,9 +216,19 @@ jobs:
           if [[ "${{ needs.prepare.outputs.release }}" == "1" ]]; then
             EXTRA="--require-archives"
           fi
+          platforms=()
+          for dir in packages/opencorvus/dist/opencorvus-${{ matrix.platform }}*; do
+            [[ -d "$dir" ]] || continue
+            platforms+=("${dir##*/opencorvus-}")
+          done
+          if [[ ${#platforms[@]} -eq 0 ]]; then
+            echo "No CLI dist directories found for ${{ matrix.platform }}" >&2
+            exit 1
+          fi
+          platforms_csv="$(IFS=,; echo "${platforms[*]}")"
           bun ./script/check-release-assets.ts cli \
             --dir packages/opencorvus/dist \
-            --platforms "${{ matrix.platform }}" \
+            --platforms "$platforms_csv" \
             --version "${{ needs.prepare.outputs.version }}" \
             $EXTRA
 
@@ -349,12 +364,18 @@ jobs:
       run:
         shell: bash
     steps:
+      - name: Download CLI dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: opencorvus-dist-*
+          path: /tmp/release-assets
+
       - uses: actions/download-artifact@v4
         with:
           pattern: overlay-*
           path: /tmp/release-assets
 
-      - name: Upload overlay assets to GitHub Release
+      - name: Upload release assets to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

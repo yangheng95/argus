@@ -7,6 +7,8 @@ import { SystemPrompt } from "../session/system"
 import { Instance, lazyInstanceState } from "../project/instance"
 import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
+import { ProviderLLM } from "../provider/llm"
+import { ProviderSchema } from "../provider/schema"
 
 import PROMPT_GENERATE from "./generate.txt"
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
@@ -867,7 +869,7 @@ export namespace Agent {
     const { resolveAgentModelRef } = await import("./model")
     const defaultModel = await resolveAgentModelRef("agent-generate", { explicitModel: input.model ?? null })
     const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
-    const language = await Provider.getLanguage(model)
+    const language = ProviderLLM.wrapModel(await Provider.getLanguage(model), model, {})
 
     const system = [cfg.prompt?.["agent_generate"] ?? PROMPT_GENERATE]
     const { Plugin } = await import("@/plugin")
@@ -905,7 +907,7 @@ export namespace Agent {
       temperature: 0.3,
       messages: helperMessages,
       model: language,
-      output: Output.object({ schema: helperSchema }),
+      output: Output.object({ schema: ProviderSchema.output(model, helperSchema) }),
       ...(isOpenAIOAuth
         ? {
             providerOptions: ProviderTransform.providerOptions(model, { store: false }),
