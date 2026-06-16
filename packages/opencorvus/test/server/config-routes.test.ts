@@ -136,13 +136,36 @@ describe("config prompt routes", () => {
     expect(JSON.stringify(nameParsed.error.issues)).toContain("config.agent.build.name cannot rename")
   })
 
-  test("GET /config/prompt-profile returns active profile catalog", async () => {
+  test("GET /config/prompt-profile returns full active profile catalog", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        const patchResponse = await app.request("/config", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            prompt_profile: {
+              active: "custom-squad",
+              profiles: {
+                "custom-squad": {
+                  label: "Custom Squad",
+                  description: "Project profile",
+                  agents: {
+                    build: "Custom build guidance.",
+                  },
+                },
+              },
+            },
+          }),
+        })
+        expect(patchResponse.status).toBe(200)
+
         const response = await app.request("/config/prompt-profile", {
           headers: {
             "x-opencorvus-directory": tmp.path,
@@ -153,11 +176,40 @@ describe("config prompt routes", () => {
         const body = (await response.json()) as {
           active: string
           default: string
-          profiles: Array<{ id: string; label: string }>
+          targets: Array<{ id: string; editable: boolean; built_in_only: boolean }>
+          profiles: Array<{ id: string; label: string; built_in: boolean; editable: boolean; agents: Record<string, string> }>
         }
-        expect(body.active).toBe("frontend")
+        expect(body.active).toBe("custom-squad")
         expect(body.default).toBe("frontend")
-        expect(body.profiles.map((profile) => profile.id)).toEqual(["general", "frontend", "backend", "algorithm"])
+        expect(body.targets.find((target) => target.id === "build")).toMatchObject({
+          id: "build",
+          editable: true,
+          built_in_only: false,
+        })
+        expect(body.targets.find((target) => target.id === "orchestrator")).toMatchObject({
+          id: "orchestrator",
+          editable: false,
+          built_in_only: true,
+        })
+        expect(body.profiles.map((profile) => profile.id)).toEqual([
+          "general",
+          "frontend",
+          "backend",
+          "algorithm",
+          "custom-squad",
+        ])
+        expect(body.profiles.find((profile) => profile.id === "frontend")).toMatchObject({
+          built_in: true,
+          editable: false,
+        })
+        expect(body.profiles.find((profile) => profile.id === "custom-squad")).toMatchObject({
+          label: "Custom Squad",
+          built_in: false,
+          editable: true,
+          agents: {
+            build: "Custom build guidance.",
+          },
+        })
       },
     })
   })

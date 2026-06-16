@@ -50,4 +50,12 @@ describe("prompt catalog save values", () => {
     expect(source).toContain("entry.editable_prompt ?? entry.prompt ??")
     expect(source).toContain("entry.effective_prompt ?? currentDraft()")
   })
+
+  test("PromptCatalog exposes visible prompt-profile management separate from per-agent prompt saves", () => {
+    const source = readFileSync(join(import.meta.dir, "../src/components/settings/PromptCatalog.tsx"), "utf8")
+    expect(source).toContain('data-ui="prompt-profile-panel"')
+    expect(source).toContain("savePromptProfile(")
+    expect(source).toContain("setProjectPromptProfileActive(")
+    expect(source).toContain("serviceSave(entry, value)")
+  })
 })

@@ -7,7 +7,7 @@ import { EngineConfig } from "../../engine/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
-import { PromptProfile } from "@/agent/prompt-profile"
+import { PromptProfile, PromptProfileCatalogSchema } from "@/agent/prompt-profile"
 import { PromptCatalog } from "../../config/prompt-catalog"
 import { mapValues } from "remeda"
 import { errors } from "../error"
@@ -148,18 +148,7 @@ export const ConfigRoutes = lazy(() =>
             content: {
               "application/json": {
                 schema: resolver(
-                  z.object({
-                    active: z.string(),
-                    default: z.string(),
-                    profiles: z.array(
-                      z.object({
-                        id: z.string(),
-                        label: z.string(),
-                        description: z.string().optional(),
-                        built_in: z.boolean(),
-                      }),
-                    ),
-                  }),
+                  PromptProfileCatalogSchema,
                 ),
               },
             },

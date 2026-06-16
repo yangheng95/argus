@@ -843,6 +843,36 @@
                     "default": {
                       "type": "string"
                     },
+                    "targets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "editable": {
+                            "type": "boolean"
+                          },
+                          "built_in_only": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "editable",
+                          "built_in_only"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
                     "profiles": {
                       "type": "array",
                       "items": {
@@ -859,21 +889,38 @@
                           },
                           "built_in": {
                             "type": "boolean"
+                          },
+                          "editable": {
+                            "type": "boolean"
+                          },
+                          "agents": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           }
                         },
                         "required": [
                           "id",
                           "label",
-                          "built_in"
-                        ]
+                          "built_in",
+                          "editable",
+                          "agents"
+                        ],
+                        "additionalProperties": false
                       }
                     }
                   },
                   "required": [
                     "active",
                     "default",
+                    "targets",
                     "profiles"
-                  ]
+                  ],
+                  "additionalProperties": false
                 }
               }
             }

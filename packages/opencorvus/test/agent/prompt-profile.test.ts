@@ -51,6 +51,47 @@ describe("prompt profiles", () => {
     expect(PromptProfile.overlayFor("mission", config)).toContain("frontend_design")
   })
 
+  test("profile catalog exposes target metadata and editable custom profile definitions", () => {
+    const config = Config.Info.parse({
+      prompt_profile: {
+        active: "custom-squad",
+        profiles: {
+          "custom-squad": {
+            label: "Custom Squad",
+            description: "Project-defined prompt profile.",
+            agents: {
+              build: "Custom build guidance.",
+            },
+          },
+        },
+      },
+    })
+    const catalog = PromptProfile.list(config)
+    expect(catalog.targets.find((target) => target.id === "build")).toMatchObject({
+      id: "build",
+      editable: true,
+      built_in_only: false,
+    })
+    expect(catalog.targets.find((target) => target.id === "orchestrator")).toMatchObject({
+      id: "orchestrator",
+      editable: false,
+      built_in_only: true,
+    })
+    expect(catalog.profiles.find((profile) => profile.id === "frontend")).toMatchObject({
+      id: "frontend",
+      built_in: true,
+      editable: false,
+    })
+    expect(catalog.profiles.find((profile) => profile.id === "custom-squad")).toMatchObject({
+      id: "custom-squad",
+      built_in: false,
+      editable: true,
+      agents: {
+        build: "Custom build guidance.",
+      },
+    })
+  })
+
   test("rejects unknown active profiles and built-in-only user targets", () => {
     const unknown = Config.Info.safeParse({ prompt_profile: { active: "missing" } })
     expect(unknown.success).toBe(false)
@@ -81,5 +122,22 @@ describe("prompt profiles", () => {
     })
     expect(parsed.success).toBe(false)
     if (!parsed.success) expect(JSON.stringify(parsed.error.issues)).toContain("not editable")
+  })
+
+  test("session overlay rejects inline prompt profile definitions", () => {
+    const parsed = Config.Overlay.safeParse({
+      prompt_profile: {
+        active: "frontend",
+        profiles: {
+          custom: {
+            label: "Nope",
+            agents: {
+              build: "not allowed",
+            },
+          },
+        },
+      },
+    })
+    expect(parsed.success).toBe(false)
   })
 })

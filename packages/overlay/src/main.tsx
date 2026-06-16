@@ -1119,7 +1119,9 @@ async function refreshPromptProfiles(): Promise<void> {
 createEffect(() => {
   const connected = appStore.connected
   const directoryEpoch = settingsStore.directoryEpoch
+  const promptProfileConfigVersion = JSON.stringify(appStore.config?.prompt_profile ?? null)
   const configuredActive = appStore.config?.prompt_profile?.active
+  void promptProfileConfigVersion
   if (typeof configuredActive === "string" && configuredActive.trim()) {
     setActivePromptProfile(configuredActive)
   }

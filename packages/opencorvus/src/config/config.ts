@@ -1697,7 +1697,7 @@ export namespace Config {
   async function loadFile(filepath: string): Promise<Info> {
     log.info("loading", { path: filepath })
     const text = await readFile(filepath)
-    if (!text) return Info.parse({})
+    if (!text || text.trim().length === 0) return {} as Info
     return load(text, { path: filepath })
   }
 
