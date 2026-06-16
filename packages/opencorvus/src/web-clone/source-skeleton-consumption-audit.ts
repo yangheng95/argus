@@ -11,7 +11,7 @@ export interface WebCloneSourceSkeletonConsumptionAuditInput {
   projectDir: string
   sourcePackageDir: string
   outputPath?: string
-  finalAcceptanceMode?: WebCloneFinalAcceptanceMode
+  finalAcceptanceMode: WebCloneFinalAcceptanceMode
 }
 
 export type WebCloneFinalAcceptanceMode = "visual_baseline_allowed" | "maintainable_replacement_required"
@@ -137,7 +137,10 @@ export async function auditWebCloneSourceSkeletonConsumption(
 ): Promise<WebCloneSourceSkeletonConsumptionAudit> {
   const projectDir = path.resolve(input.projectDir)
   const sourcePackageDir = path.resolve(input.sourcePackageDir)
-  const finalAcceptanceMode = input.finalAcceptanceMode ?? "visual_baseline_allowed"
+  const finalAcceptanceMode = input.finalAcceptanceMode
+  if (!finalAcceptanceMode) {
+    throw new Error("web-clone source audit requires explicit finalAcceptanceMode")
+  }
   const sourceLabel = normalizePath(path.basename(sourcePackageDir) || "web-clone-source")
   const referenceImagePath = path.join(sourcePackageDir, "reference.png")
   const sourceSkeletonPath = path.join(sourcePackageDir, "source-skeleton", "index.html")
@@ -472,13 +475,13 @@ export async function inspectWebCloneSourceSkeletonConsumptionEvidence(input: {
       ],
     }
   }
-  if ((parsed.finalAcceptanceMode ?? "visual_baseline_allowed") !== finalAcceptanceMode) {
+  if (parsed.finalAcceptanceMode !== finalAcceptanceMode) {
     return {
       referenced: true,
       ok: false,
       auditPath: canonicalAuditPath,
       findings: [
-        `${canonicalAuditPath}: audit finalAcceptanceMode must be ${finalAcceptanceMode}, got ${parsed.finalAcceptanceMode ?? "visual_baseline_allowed"}`,
+        `${canonicalAuditPath}: audit finalAcceptanceMode must be ${finalAcceptanceMode}, got ${parsed.finalAcceptanceMode ?? "missing"}`,
       ],
     }
   }

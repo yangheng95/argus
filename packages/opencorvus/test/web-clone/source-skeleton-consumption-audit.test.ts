@@ -39,7 +39,11 @@ describe("web-clone source skeleton consumption audit", () => {
     )
     await Bun.write(path.join(projectDir, "src", "App.css"), ".logo { height: 6em; }")
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(false)
     expect(audit.risk.defaultScaffoldDetected).toBe(true)
@@ -70,7 +74,11 @@ describe("web-clone source skeleton consumption audit", () => {
       ),
     )
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(false)
     expect(audit.projectStats.sourceFileCount).toBe(0)
@@ -91,7 +99,11 @@ describe("web-clone source skeleton consumption audit", () => {
       "document.createElement('template').innerHTML = '<main>raw baseline</main>'",
     )
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(true)
     expect(audit.projectStats.base64DataUriCount).toBe(0)
@@ -138,7 +150,11 @@ describe("web-clone source skeleton consumption audit", () => {
     `,
     )
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.projectStats.dataArrayCount).toBeGreaterThan(0)
     expect(audit.sourceCoverage.matchedTextCount).toBeGreaterThanOrEqual(6)
@@ -213,6 +229,7 @@ describe("web-clone source skeleton consumption audit", () => {
     const { audit, auditPath } = await writeWebCloneSourceSkeletonConsumptionAudit({
       projectDir,
       sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
     })
 
     expect(auditPath).toEndWith("web-clone-source-skeleton-consumption-audit.json")
@@ -241,7 +258,11 @@ describe("web-clone source skeleton consumption audit", () => {
       ).join("\n"),
     )
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(true)
     expect(audit.risk.htmlReplayDetected).toBe(false)
@@ -321,7 +342,11 @@ describe("web-clone source skeleton consumption audit", () => {
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(true)
     expect(audit.findings.join("\n")).not.toContain("Manifest source evidence file is missing")
@@ -366,7 +391,11 @@ describe("web-clone source skeleton consumption audit", () => {
     `,
     )
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(false)
     expect(audit.risk.referenceImageReplayDetected).toBe(true)
@@ -415,7 +444,11 @@ describe("web-clone source skeleton consumption audit", () => {
     `,
     )
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(false)
     expect(audit.risk.hiddenSemanticContentDetected).toBe(true)
@@ -451,7 +484,11 @@ describe("web-clone source skeleton consumption audit", () => {
     `,
     )
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(false)
     expect(audit.risk.denseInlineAssetDetected).toBe(true)
@@ -500,7 +537,11 @@ describe("web-clone source skeleton consumption audit", () => {
     `,
     )
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(true)
     expect(audit.risk.denseInlineAssetDetected).toBe(false)
@@ -513,7 +554,11 @@ describe("web-clone source skeleton consumption audit", () => {
     await writePassingProject(projectDir)
     await Bun.write(path.join(webpageEvidenceDir, "actual-app.png"), minimalPngBytes())
 
-    const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir: webpageEvidenceDir })
+    const audit = await auditWebCloneSourceSkeletonConsumption({
+      projectDir,
+      sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
+    })
 
     expect(audit.passed).toBe(false)
     expect(audit.risk.sourcePackageContaminated).toBe(true)
@@ -524,6 +569,20 @@ describe("web-clone source skeleton consumption audit", () => {
     expect(inferWebCloneFinalAcceptanceMode("需要一个可维护的真实实现，尽量复用现有组件或者成熟组件")).toBe(
       "maintainable_replacement_required",
     )
+  })
+
+  test("requires explicit final acceptance mode for direct audits", async () => {
+    await using tmp = await tmpdir()
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
+    const projectDir = path.join(tmp.path, "app")
+    await writePassingProject(projectDir)
+
+    await expect(
+      auditWebCloneSourceSkeletonConsumption({
+        projectDir,
+        sourcePackageDir: webpageEvidenceDir,
+      } as Parameters<typeof auditWebCloneSourceSkeletonConsumption>[0]),
+    ).rejects.toThrow("requires explicit finalAcceptanceMode")
   })
 
   test("consumption evidence reports a missing or stale audit when source-skeleton is cited", async () => {
@@ -541,6 +600,7 @@ describe("web-clone source skeleton consumption audit", () => {
     const { auditPath } = await writeWebCloneSourceSkeletonConsumptionAudit({
       projectDir,
       sourcePackageDir: webpageEvidenceDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
     })
     const passing = await inspectWebCloneSourceSkeletonConsumptionEvidence({ projectDir: tmp.path, citedText })
     expect(passing.ok).toBe(true)
@@ -555,6 +615,13 @@ describe("web-clone source skeleton consumption audit", () => {
     expect(wrongMode.findings.join("\n")).toContain("finalAcceptanceMode must be maintainable_replacement_required")
 
     const staleAudit = JSON.parse(await Bun.file(auditPath).text())
+    delete staleAudit.finalAcceptanceMode
+    await Bun.write(auditPath, JSON.stringify(staleAudit, null, 2))
+    const missingMode = await inspectWebCloneSourceSkeletonConsumptionEvidence({ projectDir: tmp.path, citedText })
+    expect(missingMode.ok).toBe(false)
+    expect(missingMode.findings.join("\n")).toContain("got missing")
+
+    staleAudit.finalAcceptanceMode = "visual_baseline_allowed"
     staleAudit.projectStats.sourceFileCount = 999
     await Bun.write(auditPath, JSON.stringify(staleAudit, null, 2))
     const stale = await inspectWebCloneSourceSkeletonConsumptionEvidence({ projectDir: tmp.path, citedText })
@@ -587,6 +654,7 @@ describe("web-clone source skeleton consumption audit", () => {
     await writeWebCloneSourceSkeletonConsumptionAudit({
       projectDir: path.join(tmp.path, "toy-app"),
       sourcePackageDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
     })
 
     const result = await inspectWebCloneSourceSkeletonConsumptionEvidence({
@@ -607,6 +675,7 @@ describe("web-clone source skeleton consumption audit", () => {
     const { audit } = await writeWebCloneSourceSkeletonConsumptionAudit({
       projectDir: toyProjectDir,
       sourcePackageDir,
+      finalAcceptanceMode: "visual_baseline_allowed",
       outputPath: path.join(tmp.path, "web-clone-source-skeleton-consumption-audit.json"),
     })
     expect(audit.passed).toBe(true)

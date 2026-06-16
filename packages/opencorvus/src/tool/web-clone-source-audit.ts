@@ -7,7 +7,7 @@ import { writeWebCloneSourceSkeletonConsumptionAudit } from "../web-clone/source
 export const WebCloneSourceAuditTool = Tool.define("web_clone_source_audit", {
   description: `Audit a downstream webpage clone implementation against the task-runtime or explicitly supplied web-clone-source source package.
 
-Use this after a Build agent has written React/Vue/etc. source from web-clone-source/source-skeleton and web-clone-source/source-ir. Pass sourcePackageDir from the frontend_design public report when the source package lives under task runtime. The tool reads project-owned source files plus that source package, writes web-clone-source-skeleton-consumption-audit.json, and fails the audit when the project ignored the skeleton/IR, kept default framework scaffold text/assets, missed repeated data arrays/loops, or used HTML/base64/manual-DOM replay shortcuts. Use finalAcceptanceMode=maintainable_replacement_required when the original request asks for maintainability, real implementation, component reuse, or replacement of generated/mechanical output; in that mode the frontend-design generated DOM/CSS baseline cannot be the final deliverable. It does not re-extract webpages.`,
+Use this after a Build agent has written React/Vue/etc. source from web-clone-source/source-skeleton and web-clone-source/source-ir. Pass sourcePackageDir from the frontend_design public report when the source package lives under task runtime. The tool reads project-owned source files plus that source package, writes web-clone-source-skeleton-consumption-audit.json, and fails the audit when the project ignored the skeleton/IR, kept default framework scaffold text/assets, missed repeated data arrays/loops, or used HTML/base64/manual-DOM replay shortcuts. finalAcceptanceMode is required: use maintainable_replacement_required when the original request asks for maintainability, real implementation, component reuse, or replacement of generated/mechanical output; in that mode the frontend-design generated DOM/CSS baseline cannot be the final deliverable. It does not re-extract webpages.`,
   parameters: z.object({
     projectDir: z
       .string()
@@ -27,9 +27,8 @@ Use this after a Build agent has written React/Vue/etc. source from web-clone-so
       .optional(),
     finalAcceptanceMode: z
       .enum(["visual_baseline_allowed", "maintainable_replacement_required"])
-      .default("visual_baseline_allowed")
       .describe(
-        "Use maintainable_replacement_required for final deliveries where the user asked for maintainable/real/component-reuse replacement instead of a generated baseline.",
+        "Required explicit audit mode. Use maintainable_replacement_required for final deliveries where the user asked for maintainable/real/component-reuse replacement instead of a generated baseline.",
       ),
   }),
   async execute(params) {
