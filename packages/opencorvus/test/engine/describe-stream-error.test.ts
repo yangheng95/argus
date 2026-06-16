@@ -6,6 +6,9 @@ import { describeTask, renderTaskDescription } from "../../src/engine/describe"
 import { recordToolExecuteError } from "../../src/engine/persist"
 import { createDecisionLog } from "../../src/decision-log"
 import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { Message } from "../../src/session/message"
+import { SessionStatus } from "../../src/session/status"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -27,7 +30,7 @@ let projectID = ""
 let taskID = ""
 let stamp = ""
 
-function seedTask(taskStartedMs: number) {
+function seedTask(taskStartedMs: number, sessionID?: string) {
   Database.transaction((db) => {
     db.insert(ProjectTable)
       .values({
@@ -38,11 +41,13 @@ function seedTask(taskStartedMs: number) {
         time_created: taskStartedMs,
         time_updated: taskStartedMs,
       })
+      .onConflictDoNothing()
       .run()
     db.insert(EngineTaskTable)
       .values({
         id: taskID,
         project_id: projectID,
+        session_id: sessionID,
         source: "test",
         title: "stream-error describe",
         request: "test",
@@ -53,6 +58,55 @@ function seedTask(taskStartedMs: number) {
         time_started: taskStartedMs,
       })
       .run()
+  })
+}
+
+async function appendOpenToolPart(input: {
+  sessionID: string
+  messageID: string
+  partID: string
+  directory: string
+  status?: "pending" | "running"
+}) {
+  const now = Date.now()
+  await Session.updateMessage({
+    id: input.messageID,
+    sessionID: input.sessionID,
+    role: "assistant",
+    time: { created: now },
+    parentID: `${input.messageID}_parent`,
+    agent: "orchestrator",
+    providerID: "hexin",
+    modelID: "kimi-k2.6",
+    path: { cwd: input.directory, root: input.directory },
+    cost: 0,
+    tokens: {
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      total: 0,
+      cache: { read: 0, write: 0 },
+    },
+  })
+  await Session.updatePart({
+    id: input.partID,
+    messageID: input.messageID,
+    sessionID: input.sessionID,
+    type: "tool",
+    callID: `${input.partID}:call`,
+    tool: "frontend_research",
+    state:
+      input.status === "running"
+        ? {
+            status: "running",
+            input: { source_url: "https://example.com" },
+            time: { start: now },
+          }
+        : {
+            status: "pending",
+            input: { source_url: "https://example.com" },
+            raw: "",
+          },
   })
 }
 
@@ -320,6 +374,76 @@ describe("describeTask.recent_tool_execute_failures", () => {
         expect(md).toContain("Recent tool execution failures")
         expect(md).toContain("register_goal")
         expect(md).toContain("Expected object, received array")
+      },
+    })
+  })
+})
+
+describe("describeTask.open_tool_calls_without_current_owner", () => {
+  test("projects task-owned open tool calls that lost their current-process owner", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        projectID = Instance.project.id
+        const root = await Session.create({ kind: "root", title: "open tool root" })
+        const orchestrator = await Session.create({
+          kind: "orchestrator",
+          parentID: root.id,
+          title: "open tool orchestrator",
+        })
+        seedTask(Date.now(), root.id)
+        await appendOpenToolPart({
+          sessionID: orchestrator.id,
+          messageID: `msg_open_tool_${stamp}`,
+          partID: `prt_open_tool_${stamp}`,
+          directory: tmp.path,
+          status: "running",
+        })
+
+        const desc = await describeTask(taskID)
+        expect(desc.open_tool_calls_without_current_owner).toHaveLength(1)
+        expect(desc.open_tool_calls_without_current_owner![0]).toMatchObject({
+          session_id: orchestrator.id,
+          session_kind: "orchestrator",
+          tool_name: "frontend_research",
+          status: "running",
+        })
+
+        const md = renderTaskDescription(desc)
+        expect(md).toContain("Open tool calls without current process owner")
+        expect(md).toContain("frontend_research")
+        expect(md).toContain("retry_task")
+        expect(md).toContain("re-dispatch")
+      },
+    })
+  })
+
+  test("does not project current-process open tool calls as stale", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        projectID = Instance.project.id
+        const root = await Session.create({ kind: "root", title: "owned open tool root" })
+        const orchestrator = await Session.create({
+          kind: "orchestrator",
+          parentID: root.id,
+          title: "owned open tool orchestrator",
+        })
+        seedTask(Date.now(), root.id)
+        await appendOpenToolPart({
+          sessionID: orchestrator.id,
+          messageID: `msg_owned_tool_${stamp}`,
+          partID: `prt_owned_tool_${stamp}`,
+          directory: tmp.path,
+          status: "running",
+        })
+        SessionStatus.set(orchestrator.id, { type: "streaming" })
+
+        const desc = await describeTask(taskID)
+        expect(desc.open_tool_calls_without_current_owner).toBeUndefined()
+        expect(renderTaskDescription(desc)).not.toContain("Open tool calls without current process owner")
       },
     })
   })

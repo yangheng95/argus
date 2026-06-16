@@ -28,6 +28,8 @@ import { deriveGoalStatus } from "./goal-status"
 import { isGoalRunOrphaned, isRunOrphan } from "./orphan"
 import { deriveTaskStatus } from "./task-status"
 import { ToolFailureCause, renderToolFailureCause } from "@/session/tool-failure-cause"
+import { SessionStatus } from "@/session/status"
+import { Database, sql } from "@/storage/db"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
  *  The column it used to shadow (engine_goal.status) is gone; this is
@@ -61,6 +63,7 @@ import { researchBriefIsStale, researchRequestHashInput } from "@/research/stale
 const STREAM_FAILURE_PROMPT_CAP = 5
 const AGENT_FAILURE_PROMPT_CAP = 5
 const TOOL_EXECUTE_FAILURE_PROMPT_CAP = 5
+const OPEN_TOOL_CALL_PROMPT_CAP = 5
 
 const LIVE_STATES = new Set(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
 const TERMINAL_OK_STATES = new Set(["completed"])
@@ -159,6 +162,17 @@ export interface AgentFailureDesc {
   goal_id?: string
 }
 
+export interface OpenToolCallDesc {
+  time_created: number
+  session_id: string
+  session_kind: string
+  message_id: string
+  part_id: string
+  tool_name: string
+  call_id: string
+  status: string
+}
+
 export interface AcceptanceVerdictDesc {
   iteration: number
   verdict: string
@@ -223,6 +237,10 @@ export interface TaskDesc {
    *  since `task.time_started`. */
   recent_stream_failures?: StreamFailureDesc[]
   recent_tool_execute_failures?: ToolExecuteFailureDesc[]
+  /** Persisted tool calls in the task session tree whose state is still
+   *  pending/running while no current process owns the tool session. This is
+   *  execution evidence for the orchestrator LLM, not a lifecycle transition. */
+  open_tool_calls_without_current_owner?: OpenToolCallDesc[]
   /** Recent sub-agent session failures recorded in decision_log phase
    *  "agent_error". These are the model-visible counterpart to overlay red
    *  session cards: provider quota, network, schema, and terminal session
@@ -282,6 +300,66 @@ function describeResearchBriefArtifact(input: {
     ],
     summary: artifact.payload.summary,
   }
+}
+
+function listOpenToolCallsWithoutCurrentOwner(task: TaskRow): OpenToolCallDesc[] {
+  if (!task.session_id) return []
+  const rows = Database.use((db) =>
+    db.all<{
+      time_created: number
+      session_id: string
+      session_kind: string
+      message_id: string
+      part_id: string
+      tool_name: string | null
+      call_id: string | null
+      status: string | null
+    }>(sql`
+      WITH RECURSIVE session_tree(id, kind) AS (
+        SELECT id, kind
+        FROM session
+        WHERE id = ${task.session_id}
+          AND project_id = ${task.project_id}
+        UNION ALL
+        SELECT s.id, s.kind
+        FROM session s
+        JOIN session_tree st ON s.parent_id = st.id
+      )
+      SELECT
+        p.time_created AS time_created,
+        p.session_id AS session_id,
+        st.kind AS session_kind,
+        p.message_id AS message_id,
+        p.id AS part_id,
+        json_extract(p.data, '$.tool') AS tool_name,
+        json_extract(p.data, '$.callID') AS call_id,
+        json_extract(p.data, '$.state.status') AS status
+      FROM part p
+      JOIN session_tree st ON st.id = p.session_id
+      WHERE json_extract(p.data, '$.type') = 'tool'
+        AND json_extract(p.data, '$.state.status') NOT IN ('completed', 'error')
+      ORDER BY p.time_created DESC, p.id DESC
+      LIMIT ${OPEN_TOOL_CALL_PROMPT_CAP}
+    `),
+  )
+
+  return rows.flatMap((row) => {
+    const currentStatus = SessionStatus.get(row.session_id)
+    if (currentStatus.type === "streaming" || currentStatus.type === "retry") return []
+    if (!row.tool_name || !row.call_id || !row.status) return []
+    return [
+      {
+        time_created: row.time_created,
+        session_id: row.session_id,
+        session_kind: row.session_kind,
+        message_id: row.message_id,
+        part_id: row.part_id,
+        tool_name: row.tool_name,
+        call_id: row.call_id,
+        status: row.status,
+      },
+    ]
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -567,6 +645,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       reason: entry.value,
       goal_id: entry.goalID ?? undefined,
     }))
+  const openToolCallsWithoutCurrentOwner = listOpenToolCallsWithoutCurrentOwner(task)
 
   // Bootstrap-first signal. Single source — derived from goal status and
   // surfaced as collaboration context. This is not a dispatch gate.
@@ -602,6 +681,8 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     recent_verdict: verdict,
     recent_stream_failures: recentStreamFailures.length > 0 ? recentStreamFailures : undefined,
     recent_tool_execute_failures: recentToolExecuteFailures.length > 0 ? recentToolExecuteFailures : undefined,
+    open_tool_calls_without_current_owner:
+      openToolCallsWithoutCurrentOwner.length > 0 ? openToolCallsWithoutCurrentOwner : undefined,
     recent_agent_failures: recentAgentFailures.length > 0 ? recentAgentFailures : undefined,
     iterations_count: history.length,
   }
@@ -822,6 +903,25 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
         `decision was made. Use this history to decide: \`retry_task\` (transient ` +
         `network/idle blip), \`restart_from_stage\` (config-level — wrong provider/key), ` +
         `or \`fail_task\` (permanent — quota exhausted, key revoked, model gone).`,
+    )
+  }
+
+  if (desc.open_tool_calls_without_current_owner && desc.open_tool_calls_without_current_owner.length > 0) {
+    lines.push("")
+    lines.push(
+      `## Open tool calls without current process owner (${desc.open_tool_calls_without_current_owner.length})`,
+    )
+    for (const f of desc.open_tool_calls_without_current_owner) {
+      const ts = new Date(f.time_created).toISOString()
+      lines.push(
+        `- ${ts} ${f.tool_name} status=${f.status} call=${f.call_id} session=${f.session_id} kind=${f.session_kind} message=${f.message_id} part=${f.part_id}`,
+      )
+    }
+    lines.push(
+      `Each entry is a persisted assistant tool call in this task's session tree with no terminal tool result ` +
+        `and no current-process session owner. Treat it as execution evidence from a previous interrupted wake; ` +
+        `decide whether to retry_task, re-dispatch the relevant tool/work, restart_from_stage, fail_task, or ask ` +
+        `the operator from the full task context.`,
     )
   }
 
