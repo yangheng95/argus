@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import {
+  assessCaptureManifest,
   assessCaptureDiagnostics,
+  CaptureReferenceError,
   captureReferenceManifest,
   type CaptureManifestType,
 } from "../../src/frontend-design/capture-gate"
@@ -42,8 +44,8 @@ describe("capture reference diagnostics", () => {
     expect(warnings.some((v) => v.field === "non_white_pixel_ratio")).toBe(false)
   })
 
-  test("reports blank sparse captures as diagnostics without rejecting", () => {
-    const warnings = assessCaptureDiagnostics(
+  test("rejects blank sparse captures as unusable references", () => {
+    const assessment = assessCaptureManifest(
       manifest({
         non_white_pixel_ratio: 0.031948,
         text_length: 0,
@@ -52,7 +54,9 @@ describe("capture reference diagnostics", () => {
       }),
     )
 
-    expect(warnings.some((v) => v.field === "non_white_pixel_ratio")).toBe(true)
+    expect(assessment.ok).toBe(false)
+    expect(assessment.diagnostics.some((v) => v.field === "non_white_pixel_ratio")).toBe(true)
+    expect(assessment.ok ? "" : assessment.reason).toContain("no usable visual reference evidence")
   })
 
   test("does not keep an in-process browser capture override", () => {
@@ -77,6 +81,13 @@ describe("capture reference diagnostics", () => {
 
     expect(source).toContain('waitUntil: "domcontentloaded"')
     expect(source).not.toContain('page.goto(input.url, { waitUntil: "networkidle"')
+  })
+
+  test("url screenshot tool does not downgrade unusable captures into attachments", () => {
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/url-screenshot-tool.ts"), "utf8")
+
+    expect(source).toContain("Rejects blank or no-signal captures before returning a PNG attachment")
+    expect(source).not.toContain("without rejecting the image")
   })
 
   test("captures a local HTTP visual reference through the browser runtime", async () => {
@@ -108,6 +119,35 @@ describe("capture reference diagnostics", () => {
       expect(result.manifest.reference_strings).toContain("Runtime capture fixture")
       expect(statSync(result.artifactPaths.screenshotPng).size).toBeGreaterThan(0)
       expect(statSync(result.artifactPaths.domHtml).size).toBeGreaterThan(0)
+    } finally {
+      server.stop(true)
+      rmSync(outDir, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  test("rejects a real blank local HTTP capture before materializing reference artifacts", async () => {
+    const outDir = path.join(os.tmpdir(), `capture-gate-blank-${process.pid}-${Date.now()}`)
+    mkdirSync(outDir, { recursive: true })
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(`<!doctype html><html><body style="margin:0;background:#fff"></body></html>`, {
+          headers: { "content-type": "text/html" },
+        })
+      },
+    })
+
+    try {
+      await expect(
+        captureReferenceManifest({
+          url: `http://127.0.0.1:${server.port}/`,
+          outDir,
+          viewport: { width: 640, height: 360 },
+          timeoutMs: 20_000,
+        }),
+      ).rejects.toBeInstanceOf(CaptureReferenceError)
+      expect(existsSync(path.join(outDir, "manifest.json"))).toBe(false)
+      expect(existsSync(path.join(outDir, "screenshot.png"))).toBe(false)
     } finally {
       server.stop(true)
       rmSync(outDir, { recursive: true, force: true })

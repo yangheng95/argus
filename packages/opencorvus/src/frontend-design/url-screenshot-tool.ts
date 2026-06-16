@@ -20,7 +20,7 @@ export function createUrlScreenshotTool() {
     url_screenshot: tool({
       description:
         "Capture a live http(s) webpage as a PNG visual reference. " +
-        "Records capture diagnostics such as byte size, non-white density, and color count without rejecting the image. " +
+        "Rejects blank or no-signal captures before returning a PNG attachment. " +
         "This is the only live-URL capture tool available to frontend-design; do NOT use webfetch for visual work.",
       inputSchema: z.object({
         url: z.string().describe("Live webpage URL to capture. Must start with http:// or https://."),

@@ -2669,9 +2669,8 @@ export function createOrchestratorTools(input: {
         // share links (Sketch Cloud, Adobe XD, Framer, InVision, Zeplin, …)
         // and plain live pages contribute pixel references, not just markup.
         //
-        // URL captures are evidence materialization, not acceptance gates.
-        // Browser/navigation/screenshot failures are recorded; pixel-density
-        // heuristics are diagnostics attached to the materialized reference.
+        // URL captures are evidence materialization. Browser/navigation,
+        // screenshot, and unusable no-signal reference failures are recorded.
         for (const liveUrl of liveUrls) {
           try {
             await trackStepProgress(
