@@ -236,6 +236,7 @@ describe("project-scope middleware: directory required", () => {
 
   test("cross-project GET /global/tasks works without ?directory=", async () => {
     const now = Date.now()
+    const query = `directory-required-global-tasks-${now}`
     Database.use((db) => {
       db.insert(ProjectTable)
         .values([
@@ -262,16 +263,16 @@ describe("project-scope middleware: directory required", () => {
           {
             id: "task-alpha",
             project_id: "project-alpha",
-            title: "Alpha task",
-            request: "alpha",
+            title: `${query} Alpha task`,
+            request: `${query} alpha`,
             time_created: now - 2,
             time_updated: now - 2,
           },
           {
             id: "task-beta",
             project_id: "project-beta",
-            title: "Beta task",
-            request: "beta",
+            title: `${query} Beta task`,
+            request: `${query} beta`,
             time_created: now - 1,
             time_updated: now - 1,
           },
@@ -280,7 +281,7 @@ describe("project-scope middleware: directory required", () => {
     })
 
     const app = Server.App()
-    const response = await app.request("/global/tasks", { method: "GET" })
+    const response = await app.request(`/global/tasks?q=${encodeURIComponent(query)}`, { method: "GET" })
     expect(response.status).toBe(200)
     const body = (await response.json()) as { tasks: Array<{ task: { directory?: string } }> }
     expect(Array.isArray(body.tasks)).toBe(true)
