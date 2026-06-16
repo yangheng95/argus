@@ -164,6 +164,76 @@ function seedGoalRun(
   )
 }
 
+function appendRunStatus(taskID: string, runID: string, status: "failed" | "aborted", reason: string, now: number) {
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: `${runID}_${status}_${now}`,
+        task_id: taskID,
+        run_id: runID,
+        kind: "run",
+        label: `run-${status}`,
+        payload: {
+          plan_version_id: null,
+          session_id: null,
+          executor: "opencorvus",
+          status,
+          phase: "dispatch",
+          blocking_reason: null,
+          error: reason,
+          retry_count: 0,
+          executor_ref: null,
+          metadata: null,
+          time_started: now - 10,
+          time_completed: now,
+        },
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run(),
+  )
+}
+
+function appendGoalRunStatus(
+  taskID: string,
+  runID: string,
+  goalRunID: string,
+  goalID: string,
+  status: "aborted",
+  reason: string,
+  owner: string,
+  now: number,
+) {
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: `${goalRunID}_${status}_${now}`,
+        task_id: taskID,
+        run_id: runID,
+        goal_run_id: goalRunID,
+        kind: "goal_run_attempt",
+        label: `goal-run-${status}`,
+        payload: {
+          goal_id: goalID,
+          session_id: "ses_build",
+          status,
+          retry_count: 0,
+          blocking_reason: null,
+          error: reason,
+          workspace_dir: null,
+          owner,
+          time_started: now - 10,
+          time_completed: now,
+        },
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run(),
+  )
+}
+
 function fakeGoal(goalID: string) {
   return {
     id: goalID,
@@ -299,6 +369,39 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
         expect(deriveTaskStatus(task!)).toBe("failed")
         expect(task?.error).toBe(reason)
         expect(observeOrphanRuns(Instance.project.id).map((r) => r.id)).not.toContain(runID)
+      },
+    })
+  })
+
+  test.serial("startup convergence terminalizes task after prior owner-death run abort already removed live orphan tips", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = `tsk_converge_half_${now}`
+        const runID = `run_converge_half_${now}`
+        const goalRunID = "grun_converge_half"
+        const goalID = "gol_converge_half"
+        const reason = "Server startup: previous owner process died before terminalization"
+        seedTaskRun(taskID, runID, now)
+        seedGoalRun(taskID, runID, goalRunID, goalID, DEAD_OWNER, now + 1)
+        appendGoalRunStatus(taskID, runID, goalRunID, goalID, "aborted", reason, DEAD_OWNER, now + 2)
+        appendRunStatus(taskID, runID, "aborted", reason, now + 3)
+
+        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
+        expect(findRun(runID)?.status).toBe("aborted")
+        expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
+
+        const result = await convergeDeadOwnerLiveExecution({ reason })
+
+        expect(result.tasks).toBeGreaterThanOrEqual(1)
+        expect(result.goalRuns).toBe(0)
+        expect(result.runs).toBe(0)
+        const task = findTask(taskID)
+        expect(task).toBeDefined()
+        expect(deriveTaskStatus(task!)).toBe("failed")
+        expect(task?.error).toBe(reason)
       },
     })
   })
