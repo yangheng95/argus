@@ -65,10 +65,10 @@ function renderedTargetForSession(
       renderedCardID,
     }
   }
-  if (stage === "integrity") return { renderedCardID: `${stage}:session:${session.sessionID}` }
   const messageID = targetMessageID(session)
+  if (stage === "integrity" && messageID) return { renderedCardID: `${stage}:session:${session.sessionID}` }
   if (messageID) return { renderedCardID: `${stage}:session:${session.sessionID}:message:${messageID}` }
-  return { renderedCardID: `${stage}:session:${session.sessionID}` }
+  return null
 }
 
 function agentRecordFromSession(session: ConversationAgentSessionView): AgentWorkflowRecord | null {
