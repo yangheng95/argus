@@ -8,3 +8,19 @@ export function prepareCompiledBinaryRuntime() {
   process.env.OPENCORVUS_ORIGINAL_CWD = originalCwd
   process.chdir(binDir)
 }
+
+export async function runCompiledBinaryEntrypoint(loadEntrypoint: () => Promise<unknown>) {
+  prepareCompiledBinaryRuntime()
+  try {
+    await loadEntrypoint()
+  } catch (error) {
+    process.exitCode = 1
+    process.stderr.write(formatEntrypointError(error))
+    process.exit(1)
+  }
+}
+
+function formatEntrypointError(error: unknown): string {
+  const message = error instanceof Error ? error.stack || error.message : String(error)
+  return message.endsWith("\n") ? message : `${message}\n`
+}

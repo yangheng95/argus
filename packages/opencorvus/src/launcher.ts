@@ -1,4 +1,3 @@
-import { prepareCompiledBinaryRuntime } from "./runtime/binary-launcher"
+import { runCompiledBinaryEntrypoint } from "./runtime/binary-launcher"
 
-prepareCompiledBinaryRuntime()
-await import("./index.ts")
+await runCompiledBinaryEntrypoint(() => import("./index.ts"))

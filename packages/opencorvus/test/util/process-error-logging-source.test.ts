@@ -14,6 +14,14 @@ describe("process error logging", () => {
     expect(source).not.toContain("e instanceof Error ? e.message")
   })
 
+  test("process-level failures rethrow after logging so the runtime owns fatal exit semantics", () => {
+    expect(source).toContain('process.removeAllListeners(event)')
+    expect(source).toContain("throw reason")
+    expect(source).toContain('rethrowAfterProcessError("unhandledRejection", reason)')
+    expect(source).toContain('rethrowAfterProcessError("uncaughtException", error)')
+    expect(source).not.toContain("setTimeout(() => process.exit")
+  })
+
   test("CLI entrypoints use the shared process error logger", () => {
     expect(cliSource).toContain("installProcessErrorLogging()")
     expect(overlayServerSource).toContain("installProcessErrorLogging()")
