@@ -77,6 +77,8 @@ export const PromptProfileCatalogProfileSchema = z
 export const PromptProfileCatalogSchema = z
   .object({
     active: z.string(),
+    project_active: z.string(),
+    session_active: z.string().nullable(),
     default: z.string(),
     targets: z.array(PromptProfileTargetCatalogEntrySchema),
     profiles: z.array(PromptProfileCatalogProfileSchema),
@@ -91,55 +93,12 @@ type ConfigLike = {
   prompt_profile?: PromptProfileConfig
 }
 
-export interface PromptProfileAgentBlueprint {
-  focus: string
-  agents?: readonly string[]
-  tools?: readonly string[]
-  guardrails?: readonly string[]
-}
-
-export interface PromptProfileBlueprint {
-  label: string
-  description?: string
-  agents: Partial<Record<PromptProfileTargetID, PromptProfileAgentBlueprint>>
-}
-
 const userTargetSet = new Set<string>(USER_PROFILE_TARGETS)
 const builtInOnlyTargetSet = new Set<string>(BUILT_IN_ONLY_PROFILE_TARGETS)
 const allTargetSet = new Set<string>([...USER_PROFILE_TARGETS, ...BUILT_IN_ONLY_PROFILE_TARGETS])
 
-function renderAgentOverlay(
-  profileID: string,
-  blueprint: PromptProfileAgentBlueprint,
-): string {
-  const sections = [`Active prompt profile: ${profileID} expert squad.`, blueprint.focus.trim()]
-  if (blueprint.agents?.length) {
-    sections.push(`Keep these agent handoffs front-of-mind: ${blueprint.agents.map((name) => `\`${name}\``).join(", ")}.`)
-  }
-  if (blueprint.tools?.length) {
-    sections.push(`Prioritize these tools when available: ${blueprint.tools.map((name) => `\`${name}\``).join(", ")}.`)
-  }
-  if (blueprint.guardrails?.length) {
-    sections.push(blueprint.guardrails.map((item) => item.trim()).join(" "))
-  }
-  return sections.filter((part) => part.trim().length > 0).join(" ")
-}
-
-function materializeProfile(
-  profileID: string,
-  blueprint: PromptProfileBlueprint,
-): PromptProfileDefinition {
-  return {
-    label: blueprint.label,
-    description: blueprint.description,
-    agents: Object.fromEntries(
-      Object.entries(blueprint.agents).map(([agentID, policy]) => [agentID, renderAgentOverlay(profileID, policy!)]),
-    ),
-  }
-}
-
 export namespace PromptProfile {
-  export const builtInBlueprints: Record<string, PromptProfileBlueprint> = {
+  export const builtIns: Record<string, PromptProfileDefinition> = {
     general: {
       label: "General",
       description: "No domain-specific expert overlay.",
@@ -149,252 +108,103 @@ export namespace PromptProfile {
       label: "Frontend",
       description: "UI, interaction, visual verification, and design-system focused expert squad.",
       agents: {
-        coding: {
-          focus:
-            "Treat visual references, responsive layout, interaction truth, and accessibility regressions as first-class requirements while keeping implementation rooted in the existing codebase.",
-          tools: ["read", "glob", "search_code", "edit", "write", "bash", "webfetch", "memory"],
-        },
-        "coding-assistant": {
-          focus:
-            "In direct assistant sessions, bias toward UI structure, styling, interaction states, and evidence-backed frontend fixes rather than abstract discussion.",
-          tools: ["read", "glob", "search_code", "edit", "write", "bash", "webfetch", "panel", "memory"],
-        },
-        general: {
-          focus:
-            "For multi-step frontend work, keep the task grounded in concrete screens, component behavior, responsive states, and runtime-visible evidence.",
-          tools: ["read", "glob", "search_code", "edit", "write", "bash", "websearch", "webfetch", "memory"],
-          guardrails: ["If the request becomes visual cloning or webpage evidence work, route that need to `frontend_design` instead of improvising."],
-        },
-        explore: {
-          focus:
-            "When exploring for a frontend task, extract component structure, styling systems, state transitions, and any prior visual evidence without mutating the workspace.",
-          tools: ["read", "glob", "search_code", "external_code_search", "lsp", "websearch", "webfetch", "panel", "memory"],
-        },
-        mission: {
-          focus:
-            "Coordinate long-running frontend work around screen fidelity, task-scoped preview targets, interaction semantics, and explicit visual acceptance evidence.",
-          agents: ["requirements", "frontend_research", "frontend_design", "build", "visual_qa", "integrity"],
-          tools: ["read", "glob", "search_code", "webfetch", "websearch", "mission_state", "panel", "memory", "wait", "question"],
-        },
-        "intent-analysis": {
-          focus:
-            "Disambiguate frontend requests into visual requirements, reference assets, breakpoints, interaction flows, accessibility expectations, and missing preview evidence.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "skill", "todoread", "todowrite"],
-        },
-        requirements: {
-          focus:
-            "Extract source-backed UI requirements: information architecture, component states, responsive rules, accessibility, visual acceptance, and missing design evidence.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "websearch", "skill", "todoread", "todowrite"],
-        },
-        architect: {
-          focus:
-            "Turn frontend requirements into component boundaries, route/data contracts, preview-target ownership, and explicit visual acceptance handoffs.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "websearch", "skill", "todoread", "todowrite"],
-        },
-        "frontend-design": {
-          focus:
-            "Own visual evidence extraction, source audit, component/material inventory, skeleton generation, and the frontend handoff package for implementation.",
-          tools: [
-            "url_screenshot",
-            "webpage_extract",
-            "webpage_compile",
-            "webpage_analyze",
-            "webpage_runtime_state",
-            "create_frontend_skeleton_project",
-            "create_visual_region_coordinate_atlas",
-            "create_visual_region_binding_package",
-            "web_clone_source_audit",
-            "webpage_render",
-            "webpage_evaluate",
-            "webpage_text_diff",
-            "webpage_vision_judge",
-          ],
-        },
-        "frontend-research": {
-          focus:
-            "Publish the one-shot source-backed webpage investigation brief that downstream frontend-design and build work must follow.",
-          tools: ["skill"],
-          guardrails: ["Do not implement UI or call build from this stage; stay in investigation and handoff mode."],
-        },
-        build: {
-          focus:
-            "When implementing frontend work, preserve structure and behavior, verify real runtime states, and fix the underlying UI defect instead of approximating the intended appearance.",
-          tools: ["read", "glob", "search_code", "edit", "write", "apply_patch", "bash", "browser_preview", "memory"],
-        },
-        "visual-qa": {
-          focus:
-            "Audit rendered UI and interactions with real evidence, capture the mismatch precisely, and repair in-scope frontend defects before final sign-off.",
-          tools: ["browser_preview", "webpage_render", "webpage_evaluate", "webpage_text_diff", "webpage_vision_judge", "bash", "edit", "write", "apply_patch"],
-        },
-        integrity: {
-          focus:
-            "Reject frontend delivery unless task-scoped preview evidence, interaction truth, and visual acceptance all match the requested surface.",
-          tools: ["browser_preview"],
-        },
-        orchestrator: {
-          focus:
-            "Keep the same workflow, but bias planning and retries toward UI evidence, preview-target truth, and final visual acceptance rather than abstract implementation completion.",
-          agents: ["requirements", "frontend_research", "frontend_design", "build", "visual_qa", "integrity"],
-          tools: ["requirements", "frontend_research", "frontend_design", "build", "visual_qa", "integrity", "browser_preview", "read_context", "question"],
-        },
+        coding:
+          "Treat layout structure, responsive behavior, interaction state, and visible regressions as first-class requirements. Prefer fixes that stay rooted in the existing component system and can be verified in the rendered UI.",
+        "coding-assistant":
+          "Keep direct assistant help concrete and UI-facing: component structure, styling deltas, interaction semantics, and visible regressions matter more than abstract discussion.",
+        general:
+          "For multi-step frontend work, keep the task anchored to real screens, state transitions, accessibility, and what the user can actually see and do.",
+        explore:
+          "When exploring a frontend task, extract component boundaries, styling conventions, state transitions, and prior visual evidence without mutating the workspace.",
+        mission:
+          "Coordinate frontend work around visible outcomes: the target surface, the interaction states that matter, and the evidence needed to prove the UI now behaves correctly.",
+        "intent-analysis":
+          "Disambiguate frontend requests into concrete screen changes, interaction flows, breakpoints, accessibility expectations, and any missing reference evidence.",
+        requirements:
+          "Extract source-backed frontend requirements: information architecture, component states, responsive rules, accessibility, and explicit visual acceptance conditions.",
+        architect:
+          "Turn frontend requirements into component boundaries, data-flow expectations, ownership lines, and a verification plan that maps back to the rendered surface.",
+        "frontend-design":
+          "Focus on visual structure, reference evidence, layout hierarchy, spacing rhythm, and the concrete UI deltas implementation must preserve.",
+        "frontend-research":
+          "Produce a source-backed frontend brief that clarifies the target surface, important interaction behavior, and the evidence downstream implementation must honor.",
+        build:
+          "Implement frontend changes by preserving real structure and behavior, then verify the result in the running UI instead of approximating the intended appearance.",
+        "visual-qa":
+          "Audit the rendered UI for layout, interaction, and state mismatches. Call out the concrete defect and keep review tied to visible evidence.",
+        integrity:
+          "Reject frontend delivery unless the requested surface, interaction behavior, and visual acceptance conditions are explicitly demonstrated.",
+        orchestrator:
+          "For frontend work, bias planning and retries toward visible UI outcomes, trustworthy reference evidence, and final visual acceptance rather than abstract completion.",
       },
     },
     backend: {
       label: "Backend",
       description: "API, state, data, integration, and operational correctness focused expert squad.",
       agents: {
-        coding: {
-          focus:
-            "Bias direct coding work toward API contracts, state ownership, persistence boundaries, observability, and deterministic failure handling.",
-          tools: ["read", "glob", "search_code", "edit", "write", "bash", "webfetch", "memory"],
-        },
-        "coding-assistant": {
-          focus:
-            "In direct assistant sessions, keep backend changes contract-driven and integration-aware, with explicit handling of data flow and error surfaces.",
-          tools: ["read", "glob", "search_code", "edit", "write", "bash", "webfetch", "panel", "memory"],
-        },
-        general: {
-          focus:
-            "For backend tasks, reason from contracts, data flow, concurrency, persistence, and operational evidence instead of UI polish or loose brainstorming.",
-          tools: ["read", "glob", "search_code", "edit", "write", "bash", "websearch", "webfetch", "memory"],
-        },
-        explore: {
-          focus:
-            "When exploring for backend work, map routes, schemas, data ownership, error paths, and shared runtime invariants with source citations.",
-          tools: ["read", "glob", "search_code", "external_code_search", "lsp", "websearch", "webfetch", "panel", "memory"],
-        },
-        mission: {
-          focus:
-            "Coordinate long-running backend work around contract boundaries, storage/state transitions, integration evidence, and operational failure modes.",
-          agents: ["requirements", "architect", "deep_research", "build", "fact_check", "integrity"],
-          tools: ["read", "glob", "search_code", "webfetch", "websearch", "mission_state", "panel", "memory", "wait", "question"],
-        },
-        "intent-analysis": {
-          focus:
-            "Disambiguate backend requests into APIs, state transitions, persistence, concurrency concerns, migration policy, integration points, and observability gaps.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "skill", "todoread", "todowrite"],
-        },
-        requirements: {
-          focus:
-            "Extract source-backed backend requirements around request/response contracts, storage semantics, lifecycle events, concurrency, and failure handling.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "websearch", "skill", "todoread", "todowrite"],
-        },
-        architect: {
-          focus:
-            "Turn backend requirements into route, schema, storage, ownership, and integration contracts with explicit verification ownership.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "websearch", "skill", "todoread", "todowrite"],
-        },
-        build: {
-          focus:
-            "Implement backend work with explicit contracts, deterministic state transitions, integration-safe edits, and command-backed verification of the real runtime path.",
-          tools: ["read", "glob", "search_code", "edit", "write", "apply_patch", "bash", "webfetch", "memory"],
-        },
-        "deep-research": {
-          focus:
-            "Gather durable backend evidence for APIs, library behavior, external protocols, migration constraints, and operational assumptions before implementation commits to them.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "webfetch", "external_code_search", "todoread", "todowrite"],
-        },
-        "fact-check": {
-          focus:
-            "Verify backend factual claims such as API behavior, version details, schema assumptions, and operational numbers against source evidence.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "websearch", "webfetch", "external_code_search", "memory_search", "memory_get", "todoread", "todowrite"],
-        },
-        integrity: {
-          focus:
-            "Reject backend delivery unless the claimed contracts, state transitions, and integration evidence are actually demonstrated by the changed code and tests.",
-          tools: ["browser_preview"],
-        },
-        orchestrator: {
-          focus:
-            "Keep the same workflow, but route planning and retries toward contract boundaries, storage changes, integration evidence, and operational failure modes.",
-          agents: ["requirements", "architect", "deep_research", "build", "fact_check", "integrity"],
-          tools: ["requirements", "architect", "deep_research", "build", "fact_check", "integrity", "read_context", "analytics", "question"],
-        },
+        coding:
+          "Bias direct coding work toward request and data contracts, ownership of state, persistence boundaries, observability, and deterministic failure handling.",
+        "coding-assistant":
+          "Keep backend help contract-driven and integration-aware. Make data flow, persistence effects, and error surfaces explicit.",
+        general:
+          "For backend tasks, reason from contracts, state transitions, persistence, concurrency, and runtime evidence instead of UI polish or loose brainstorming.",
+        explore:
+          "When exploring backend work, map routes, schemas, ownership boundaries, shared invariants, and failure paths with source citations.",
+        mission:
+          "Coordinate backend work around contract boundaries, storage changes, integration evidence, and operational failure modes.",
+        "intent-analysis":
+          "Disambiguate backend requests into APIs, state transitions, storage effects, concurrency concerns, migration policy, and observability gaps.",
+        requirements:
+          "Extract source-backed backend requirements around request and response contracts, storage semantics, lifecycle events, concurrency, and failure handling.",
+        architect:
+          "Turn backend requirements into route, schema, storage, ownership, and verification contracts that make integration boundaries explicit.",
+        build:
+          "Implement backend changes with deterministic state transitions, explicit contracts, and verification that exercises the real runtime path.",
+        "deep-research":
+          "Gather durable evidence for API behavior, library semantics, protocol constraints, migration limitations, and operational assumptions before implementation depends on them.",
+        "fact-check":
+          "Verify backend claims such as API behavior, version details, schema assumptions, and operational numbers against source evidence.",
+        integrity:
+          "Reject backend delivery unless contracts, state transitions, and integration behavior are demonstrated by the changed code and verification evidence.",
+        orchestrator:
+          "For backend work, bias planning and retries toward contract edges, storage effects, integration evidence, and operational failure modes.",
       },
     },
     algorithm: {
       label: "Algorithm",
       description: "Correctness, complexity, benchmark, and adversarial-case focused expert squad.",
       agents: {
-        coding: {
-          focus:
-            "Bias direct coding work toward precise problem formulation, invariants, complexity, numerical behavior, and benchmarkable correctness.",
-          tools: ["read", "glob", "search_code", "edit", "write", "bash", "webfetch", "memory"],
-        },
-        "coding-assistant": {
-          focus:
-            "In direct assistant sessions, prefer reasoning that exposes invariants, edge cases, complexity tradeoffs, and reproducible verification steps.",
-          tools: ["read", "glob", "search_code", "edit", "write", "bash", "webfetch", "panel", "memory"],
-        },
-        general: {
-          focus:
-            "For algorithm-heavy work, reason explicitly about invariants, asymptotic cost, pathological cases, reproducibility, and proof obligations.",
-          tools: ["read", "glob", "search_code", "edit", "write", "bash", "websearch", "webfetch", "memory"],
-        },
-        explore: {
-          focus:
-            "When exploring for algorithm work, extract the exact current behavior, data shapes, hot paths, and benchmark hooks from source evidence.",
-          tools: ["read", "glob", "search_code", "external_code_search", "lsp", "websearch", "webfetch", "panel", "memory"],
-        },
-        mission: {
-          focus:
-            "Coordinate long-running algorithm work around proof obligations, benchmark evidence, adversarial cases, and explicit correctness review.",
-          agents: ["requirements", "architect", "goal_workload_analyst", "deep_research", "build", "fact_check", "integrity"],
-          tools: ["read", "glob", "search_code", "webfetch", "websearch", "mission_state", "panel", "memory", "wait", "question"],
-        },
-        "intent-analysis": {
-          focus:
-            "Disambiguate algorithm requests into formal objectives, constraints, success metrics, input bounds, precision requirements, and missing benchmark expectations.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "skill", "todoread", "todowrite"],
-        },
-        requirements: {
-          focus:
-            "Extract algorithm requirements as explicit invariants, constraints, input ranges, correctness expectations, edge cases, and measurable performance targets.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "websearch", "skill", "todoread", "todowrite"],
-        },
-        architect: {
-          focus:
-            "Turn algorithm requirements into data, execution, and verification contracts that make complexity and correctness review explicit.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "websearch", "skill", "todoread", "todowrite"],
-        },
-        build: {
-          focus:
-            "Implement algorithm work with invariant-preserving edits, benchmarkable test scaffolds, and concrete evidence for complexity and correctness claims.",
-          tools: ["read", "glob", "search_code", "edit", "write", "apply_patch", "bash", "webfetch", "memory"],
-        },
-        "deep-research": {
-          focus:
-            "Gather durable evidence for algorithm references, external formulas, protocol constraints, numeric pitfalls, and benchmark methodology before implementation commits to them.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "webfetch", "external_code_search", "todoread", "todowrite"],
-        },
-        "fact-check": {
-          focus:
-            "Verify algorithm factual claims such as formulas, complexity statements, benchmark assumptions, and numeric limits against source evidence.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "websearch", "webfetch", "external_code_search", "memory_search", "memory_get", "todoread", "todowrite"],
-        },
-        "goal-workload-analyst": {
-          focus:
-            "Stress-test the goal graph for hidden algorithmic complexity, missing benchmark scope, and under-specified correctness obligations before execution begins.",
-          tools: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"],
-        },
-        integrity: {
-          focus:
-            "Reject algorithm delivery unless correctness, edge cases, and benchmark evidence are explicitly demonstrated rather than implied.",
-          tools: ["browser_preview"],
-        },
-        orchestrator: {
-          focus:
-            "Keep the same workflow, but route planning and retries toward formal constraints, benchmark evidence, adversarial coverage, and explicit correctness review.",
-          agents: ["requirements", "architect", "workload_analysis", "deep_research", "build", "fact_check", "integrity"],
-          tools: ["requirements", "architect", "workload_analysis", "deep_research", "build", "fact_check", "integrity", "read_context", "analytics", "question"],
-        },
+        coding:
+          "Bias direct coding work toward precise problem formulation, invariants, complexity, numerical behavior, and correctness that can be demonstrated.",
+        "coding-assistant":
+          "Prefer reasoning that makes invariants, edge cases, complexity tradeoffs, and reproducible verification steps explicit.",
+        general:
+          "For algorithm-heavy work, reason explicitly about invariants, asymptotic cost, adversarial cases, reproducibility, and proof obligations.",
+        explore:
+          "When exploring algorithm work, extract the exact current behavior, data shapes, hot paths, and benchmark hooks from source evidence.",
+        mission:
+          "Coordinate algorithm work around proof obligations, benchmark evidence, adversarial cases, and explicit correctness review.",
+        "intent-analysis":
+          "Disambiguate algorithm requests into formal objectives, constraints, success metrics, input bounds, precision requirements, and missing benchmark expectations.",
+        requirements:
+          "Extract algorithm requirements as explicit invariants, constraints, input ranges, correctness expectations, edge cases, and measurable performance targets.",
+        architect:
+          "Turn algorithm requirements into execution and verification contracts that make correctness review and complexity review explicit.",
+        build:
+          "Implement algorithm changes with invariant-preserving edits, benchmarkable tests, and concrete evidence for correctness and complexity claims.",
+        "deep-research":
+          "Gather durable evidence for formulas, external references, protocol constraints, numeric pitfalls, and benchmark methodology before implementation depends on them.",
+        "fact-check":
+          "Verify algorithm claims such as formulas, complexity statements, benchmark assumptions, and numeric limits against source evidence.",
+        "goal-workload-analyst":
+          "Stress-test the goal against hidden complexity, missing benchmark scope, and under-specified correctness obligations before execution begins.",
+        integrity:
+          "Reject algorithm delivery unless correctness, edge cases, and benchmark evidence are explicitly demonstrated rather than implied.",
+        orchestrator:
+          "For algorithm work, bias planning and retries toward formal constraints, adversarial coverage, benchmark evidence, and explicit correctness review.",
       },
     },
   }
-
-  export const builtIns: Record<string, PromptProfileDefinition> = Object.fromEntries(
-    Object.entries(builtInBlueprints).map(([profileID, blueprint]) => [profileID, materializeProfile(profileID, blueprint)]),
-  )
 
   export const targets: PromptProfileTargetCatalogEntry[] = [...USER_PROFILE_TARGETS, ...BUILT_IN_ONLY_PROFILE_TARGETS].map(
     (targetID) => ({
@@ -447,7 +257,13 @@ export namespace PromptProfile {
       .join("\n\n")
   }
 
-  export function list(config: ConfigLike) {
+  export function list(
+    config: ConfigLike,
+    opts: {
+      projectActive?: string
+      sessionActive?: string | null
+    } = {},
+  ) {
     const active = activeID(config)
     const profiles = Object.entries(catalog(config)).map(([id, profile]) => ({
       id,
@@ -459,6 +275,8 @@ export namespace PromptProfile {
     }))
     return PromptProfileCatalogSchema.parse({
       active,
+      project_active: opts.projectActive ?? active,
+      session_active: opts.sessionActive ?? null,
       default: DEFAULT_PROMPT_PROFILE_ID,
       targets,
       profiles,

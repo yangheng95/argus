@@ -50,6 +50,8 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
 
   const promptProfiles = {
     active: "frontend",
+    project_active: "frontend",
+    session_active: null,
     default: "general",
     targets: [
       {
@@ -117,7 +119,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       mode: "append",
       scope: "agent",
       description: "Editable user append after the active squad overlay.",
-      prompt: "Core build prompt.",
+      prompt: "Existing user append for build.",
       editable_prompt: "Existing user append for build.",
       effective_prompt:
         "Core build prompt.\n\n[Frontend profile]\nVerify with a real browser and screenshot review before closing the task.\n\n[User append]\nExisting user append for build.",

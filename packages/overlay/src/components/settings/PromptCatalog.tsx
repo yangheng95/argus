@@ -13,6 +13,7 @@ import { createStore, reconcile } from "solid-js/store"
 import { t } from "../../utils/i18n"
 import { renderMarkdown } from "../../utils/markdown"
 import { appStore } from "../../store/app"
+import { activeSessionID, rootTaskSessionID } from "../../store/board"
 import { settingsStore } from "../../store/settings"
 import {
   createPromptProfileID,
@@ -23,6 +24,7 @@ import {
   resetPromptEntry as serviceReset,
   savePromptProfile,
   setProjectPromptProfileActive,
+  setSessionPromptProfileActive,
   type PromptProfileCatalog as PromptProfileCatalogResponse,
   type PromptProfileDraft,
   type PromptProfileOption,
@@ -111,6 +113,18 @@ function editablePrompt(entry: PromptEntry): string {
   return entry.editable_prompt ?? entry.prompt ?? ""
 }
 
+function effectivePreviewPrompt(entry: PromptEntry, draft: string): string {
+  if (entry.scope === "system") return draft
+  if (entry.prompt_mode === "append") {
+    return [entry.default_prompt ?? "", entry.profile_prompt ?? "", draft]
+      .filter((part) => typeof part === "string" && part.trim().length > 0)
+      .join("\n\n")
+  }
+  return [draft, entry.profile_prompt ?? ""]
+    .filter((part) => typeof part === "string" && part.trim().length > 0)
+    .join("\n\n")
+}
+
 function compactProfileAgents(agents: Record<string, string> | undefined): Record<string, string> {
   if (!agents || typeof agents !== "object") return {}
   return Object.fromEntries(
@@ -175,7 +189,10 @@ export default function PromptCatalog() {
   })
 
   const profileConfigVersion = createMemo(() => JSON.stringify(appStore.config?.prompt_profile ?? null))
+  const currentScopeSessionID = createMemo(() => rootTaskSessionID() || activeSessionID() || "")
   const profiles = createMemo(() => profileCatalog()?.profiles ?? [])
+  const projectActiveProfileID = createMemo(() => profileCatalog()?.project_active ?? "")
+  const sessionActiveProfileID = createMemo(() => profileCatalog()?.session_active ?? "")
   const currentProfile = createMemo(() => {
     const list = profiles()
     return list.find((profile) => profile.id === selectedProfileID()) ?? list[0]
@@ -200,7 +217,8 @@ export default function PromptCatalog() {
     setProfileLoading(true)
     const sequence = ++promptProfileLoadSequence
     try {
-      const catalog = await loadPromptProfileCatalog()
+      const sessionID = currentScopeSessionID() || undefined
+      const catalog = await loadPromptProfileCatalog(sessionID)
       if (sequence !== promptProfileLoadSequence) return
       setProfileCatalog(catalog)
       setSelectedProfileID((current) =>
@@ -215,7 +233,9 @@ export default function PromptCatalog() {
     const connected = appStore.connected
     const directory = settingsStore.directory.trim()
     const version = profileConfigVersion()
+    const sessionID = currentScopeSessionID()
     void version
+    void sessionID
     if (!connected || !directory) {
       setProfileCatalog(null)
       return
@@ -343,7 +363,11 @@ export default function PromptCatalog() {
           id: nextID,
           label: `${profile.label} ${t("prompt_profile.copy_suffix")}`.trim(),
           description: profile.description ?? "",
-          agents: { ...(profile.agents ?? {}) },
+          agents: Object.fromEntries(
+            Object.entries(profile.agents ?? {}).filter(([targetID]) =>
+              catalog.targets.some((target) => target.id === targetID && target.editable),
+            ),
+          ),
         },
         catalog.default,
       )
@@ -399,12 +423,28 @@ export default function PromptCatalog() {
 
   async function handleActivateProfile() {
     const profile = currentProfile()
-    if (!profile || profileCatalog()?.active === profile.id) return
+    if (!profile || projectActiveProfileID() === profile.id) return
     setSaving(true)
     try {
       await setProjectPromptProfileActive(profile.id)
       await reloadPromptSurfaces(profile.id)
       showNotice(t("prompt_profile.activated"), "active")
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : String(error), "error")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleActivateProfileForSession() {
+    const profile = currentProfile()
+    const sessionID = currentScopeSessionID()
+    if (!profile || !sessionID || sessionActiveProfileID() === profile.id) return
+    setSaving(true)
+    try {
+      await setSessionPromptProfileActive(sessionID, profile.id)
+      await reloadPromptSurfaces(profile.id)
+      showNotice(t("prompt_profile.activated_session"), "active")
     } catch (error) {
       showNotice(error instanceof Error ? error.message : String(error), "error")
     } finally {
@@ -453,6 +493,9 @@ export default function PromptCatalog() {
             }
           />
           <p class="agent-models-info">{t("prompt_profile.settings_intro")}</p>
+          <Show when={currentScopeSessionID()}>
+            <p class="agent-models-info">{t("prompt_profile.session_scope_hint")}</p>
+          </Show>
 
           <Show when={!profileLoading()} fallback={<div class="loading-hint">{t("prompt_profile.loading")}</div>}>
             <Show when={profiles().length > 0} fallback={<div class="empty-hint">{t("prompt_profile.none")}</div>}>
@@ -474,9 +517,14 @@ export default function PromptCatalog() {
                           </Show>
                         </div>
                         <div class="prompt-profile-list-meta">
-                          <Show when={profileCatalog()?.active === profile.id}>
+                          <Show when={projectActiveProfileID() === profile.id}>
                             <span class="s-pill" data-tone="accent">
                               {t("prompt_profile.project_active")}
+                            </span>
+                          </Show>
+                          <Show when={!!currentScopeSessionID() && sessionActiveProfileID() === profile.id}>
+                            <span class="s-pill" data-tone="ok">
+                              {t("prompt_profile.session_active")}
                             </span>
                           </Show>
                           <span class="s-pill" data-tone={profile.built_in ? "muted" : "ok"}>
@@ -502,11 +550,23 @@ export default function PromptCatalog() {
                             variant="solid"
                             size="sm"
                             tone="accent"
-                            disabled={saving() || profileCatalog()?.active === profile.id}
+                            disabled={saving() || projectActiveProfileID() === profile.id}
                             onClick={handleActivateProfile}
                           >
                             {t("prompt_profile.activate")}
                           </Button>
+                          <Show when={currentScopeSessionID()}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              tone="neutral"
+                              disabled={saving() || sessionActiveProfileID() === profile.id}
+                              onClick={handleActivateProfileForSession}
+                            >
+                              {t("prompt_profile.activate_session")}
+                            </Button>
+                          </Show>
                           <Show when={profile.editable}>
                             <Button
                               type="button"
@@ -625,7 +685,7 @@ export default function PromptCatalog() {
                   const dirty = createMemo(() => isDirty(entry))
                   const currentDraft = createMemo(() => draftValue(entry))
                   const previewPrompt = createMemo(() =>
-                    dirty() ? currentDraft() : (entry.effective_prompt ?? currentDraft()),
+                    dirty() ? effectivePreviewPrompt(entry, currentDraft()) : (entry.effective_prompt ?? currentDraft()),
                   )
                   const canShowDefault = () => !!entry.default_prompt
 

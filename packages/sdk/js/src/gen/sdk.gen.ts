@@ -759,10 +759,21 @@ export class Config extends HeyApiClient {
   public promptProfile<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "sessionID" },
+          ],
+        },
+      ],
+    )
     return (options?.client ?? this.client).get<ConfigPromptProfileResponses, unknown, ThrowOnError>({
       url: "/config/prompt-profile",
       ...options,

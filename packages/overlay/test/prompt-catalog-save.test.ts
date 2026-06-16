@@ -15,20 +15,16 @@ describe("prompt catalog save values", () => {
     default_prompt: "Default architect prompt.",
   }
 
-  test("append-mode unchanged default clears prompt_append", () => {
-    expect(promptConfigValueForSave(appendEntry, "Default architect prompt.")).toBe("")
+  test("append-mode preserves the editable append text exactly", () => {
+    expect(promptConfigValueForSave(appendEntry, "Default architect prompt.")).toBe("Default architect prompt.")
   })
 
-  test("append-mode saves only text appended after the default prompt", () => {
-    expect(promptConfigValueForSave(appendEntry, "Default architect prompt.\n\nExtra instruction.")).toBe(
-      "Extra instruction.",
-    )
+  test("append-mode saves the editable append text exactly", () => {
+    expect(promptConfigValueForSave(appendEntry, "Extra instruction.")).toBe("Extra instruction.")
   })
 
-  test("append-mode rejects replacing the code-owned default prompt", () => {
-    expect(() => promptConfigValueForSave(appendEntry, "Replaced architect prompt.")).toThrow(
-      "Only add custom text after the default prompt.",
-    )
+  test("append-mode no longer strips a built-in prompt prefix on save", () => {
+    expect(promptConfigValueForSave(appendEntry, "Replaced architect prompt.")).toBe("Replaced architect prompt.")
   })
 
   test("override-mode saves the editor text exactly", () => {
@@ -56,6 +52,8 @@ describe("prompt catalog save values", () => {
     expect(source).toContain('data-ui="prompt-profile-panel"')
     expect(source).toContain("savePromptProfile(")
     expect(source).toContain("setProjectPromptProfileActive(")
+    expect(source).toContain("setSessionPromptProfileActive(")
+    expect(source).toContain("target.editable")
     expect(source).toContain("serviceSave(entry, value)")
   })
 })

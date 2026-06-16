@@ -146,7 +146,7 @@ export namespace PromptCatalog {
       const userAppend = promptMode === "append" ? configuredPrompt : null
       const editablePrompt =
         promptMode === "append"
-          ? [defaultPrompt, userAppend].filter((item) => item && item.trim().length > 0).join("\n\n")
+          ? (userAppend ?? "")
           : basePrompt
       const profilePrompt = PromptProfile.overlayFor(agent.name, cfg) ?? null
       const effectivePrompt = PromptProfile.composeAgentPrompt({

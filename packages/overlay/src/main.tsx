@@ -23,7 +23,7 @@ import { MemoryPanel } from "./components/MemoryPanel"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
-import { loadTasks, boardStore, loadBoard, activeTaskID, activeSessionID, setBoardStore } from "./store/board"
+import { loadTasks, boardStore, loadBoard, activeTaskID, activeSessionID, rootTaskSessionID, setBoardStore } from "./store/board"
 import { clearMessages, messageStore, setChatAttachments } from "./store/messages"
 import { appStore } from "./store/app"
 import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, renameTask } from "./services/task"
@@ -1108,7 +1108,8 @@ let promptProfileLoadSequence = 0
 async function refreshPromptProfiles(): Promise<void> {
   if (!appStore.connected || !settingsStore.directory) return
   const sequence = ++promptProfileLoadSequence
-  const catalog = await loadPromptProfileCatalog()
+  const sessionID = rootTaskSessionID() || activeSessionID() || undefined
+  const catalog = await loadPromptProfileCatalog(sessionID)
   if (sequence !== promptProfileLoadSequence) return
   setPromptProfiles(catalog.profiles)
   setActivePromptProfile((current) =>
@@ -1119,14 +1120,18 @@ async function refreshPromptProfiles(): Promise<void> {
 createEffect(() => {
   const connected = appStore.connected
   const directoryEpoch = settingsStore.directoryEpoch
+  const selectedTaskSessionID = rootTaskSessionID()
+  const selectedSessionID = activeSessionID()
   const promptProfileConfigVersion = JSON.stringify(appStore.config?.prompt_profile ?? null)
   const configuredActive = appStore.config?.prompt_profile?.active
   void promptProfileConfigVersion
-  if (typeof configuredActive === "string" && configuredActive.trim()) {
+  if (!selectedTaskSessionID && !selectedSessionID && typeof configuredActive === "string" && configuredActive.trim()) {
     setActivePromptProfile(configuredActive)
   }
   if (!connected) return
   void directoryEpoch
+  void selectedTaskSessionID
+  void selectedSessionID
   void refreshPromptProfiles().catch((error) => reportOverlayRuntimeError("prompt-profile", error))
 })
 

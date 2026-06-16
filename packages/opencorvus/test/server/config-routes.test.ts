@@ -4,6 +4,7 @@ import path from "path"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -95,6 +96,7 @@ describe("config prompt routes", () => {
         expect(intent?.default_prompt && intent.default_prompt.length > 0).toBe(true)
         expect(intent?.effective_prompt).toContain(intent!.default_prompt!)
         expect(intent?.effective_prompt).toContain("Custom intent append")
+        expect(intent?.editable_prompt).toBe("Custom intent append")
         // Previously-masked native agents (architect / requirements / frontend-design)
         // now each have a distinct default prompt — none collapse to empty.
         const architect = body.find((item) => item.key === "architect" && item.scope === "agent")
@@ -106,9 +108,9 @@ describe("config prompt routes", () => {
         expect(architect?.prompt).toBe(architect?.editable_prompt)
         expect(requirements?.prompt).toBe(requirements?.editable_prompt)
         expect(frontendDesign?.prompt).toBe(frontendDesign?.editable_prompt)
-        expect(architect?.effective_prompt).toContain("Active prompt profile: frontend expert squad.")
-        expect(requirements?.effective_prompt).toContain("Active prompt profile: frontend expert squad.")
-        expect(frontendDesign?.effective_prompt).toContain("Active prompt profile: frontend expert squad.")
+        expect(architect?.effective_prompt).toContain("verification plan")
+        expect(requirements?.effective_prompt).toContain("visual acceptance conditions")
+        expect(frontendDesign?.effective_prompt).toContain("visual structure")
         // Distinct defaults — the pre-fix bug made several agents collapse to
         // the same empty/inherits_core placeholder.
         expect(architect!.default_prompt).not.toBe(requirements!.default_prompt)
@@ -175,11 +177,15 @@ describe("config prompt routes", () => {
         expect(response.status).toBe(200)
         const body = (await response.json()) as {
           active: string
+          project_active: string
+          session_active: string | null
           default: string
           targets: Array<{ id: string; editable: boolean; built_in_only: boolean }>
           profiles: Array<{ id: string; label: string; built_in: boolean; editable: boolean; agents: Record<string, string> }>
         }
         expect(body.active).toBe("custom-squad")
+        expect(body.project_active).toBe("custom-squad")
+        expect(body.session_active).toBe(null)
         expect(body.default).toBe("frontend")
         expect(body.targets.find((target) => target.id === "build")).toMatchObject({
           id: "build",
@@ -210,6 +216,47 @@ describe("config prompt routes", () => {
             build: "Custom build guidance.",
           },
         })
+      },
+    })
+  })
+
+  test("GET /config/prompt-profile returns session-effective active profile when sessionID is supplied", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.update({
+          prompt_profile: {
+            active: "backend",
+          },
+        })
+        const root = await Session.create({ kind: "root", title: "profile scope root" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: {
+            prompt_profile: {
+              active: "algorithm",
+            },
+          },
+        })
+
+        const app = Server.App()
+        const response = await app.request(`/config/prompt-profile?sessionID=${encodeURIComponent(root.id)}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          active: string
+          project_active: string
+          session_active: string | null
+        }
+        expect(body.active).toBe("algorithm")
+        expect(body.project_active).toBe("backend")
+        expect(body.session_active).toBe("algorithm")
       },
     })
   })

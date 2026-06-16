@@ -840,6 +840,19 @@
                     "active": {
                       "type": "string"
                     },
+                    "project_active": {
+                      "type": "string"
+                    },
+                    "session_active": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "default": {
                       "type": "string"
                     },
@@ -916,6 +929,8 @@
                   },
                   "required": [
                     "active",
+                    "project_active",
+                    "session_active",
                     "default",
                     "targets",
                     "profiles"
@@ -935,6 +950,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional root or child session id for session-effective prompt profile view"
           }
         ],
         "x-codeSamples": [

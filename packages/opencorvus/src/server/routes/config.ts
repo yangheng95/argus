@@ -3,6 +3,7 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Config } from "../../config/config"
 import { validateConfigModelReferences } from "@/config/model-reference-validation"
+import { EffectiveConfig } from "@/config/effective"
 import { EngineConfig } from "../../engine/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
@@ -155,8 +156,28 @@ export const ConfigRoutes = lazy(() =>
           },
         },
       }),
+      validator(
+        "query",
+        z.object({
+          sessionID: z.string().optional().meta({ description: "Optional root or child session id for session-effective prompt profile view" }),
+        }),
+      ),
       async (c) => {
-        return c.json(PromptProfile.list(await Config.get()))
+        const query = c.req.valid("query")
+        if (!query.sessionID) {
+          const config = await Config.get()
+          return c.json(PromptProfile.list(config, { projectActive: PromptProfile.activeID(config), sessionActive: null }))
+        }
+        const [projectConfig, effectiveConfig] = await Promise.all([
+          EffectiveConfig.base({ sessionID: query.sessionID }),
+          EffectiveConfig.effective({ sessionID: query.sessionID }),
+        ])
+        return c.json(
+          PromptProfile.list(effectiveConfig, {
+            projectActive: PromptProfile.activeID(projectConfig),
+            sessionActive: PromptProfile.activeID(effectiveConfig),
+          }),
+        )
       },
     )
     .get(
