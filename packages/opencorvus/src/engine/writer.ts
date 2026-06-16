@@ -308,29 +308,6 @@ async function abortOpenToolParts(sessionID: string, reason: string): Promise<nu
   return updated
 }
 
-async function hasOpenToolParts(sessionID: string): Promise<boolean> {
-  const messages = await Session.messages({ sessionID })
-  for (const message of messages) {
-    const parts = await Message.parts(message.info.id)
-    for (const part of parts) {
-      if (part.type !== "tool") continue
-      if (part.state.status === "completed" || part.state.status === "error") continue
-      return true
-    }
-  }
-  return false
-}
-
-async function taskHasOrphanedOpenToolParts(task: TaskRow): Promise<boolean> {
-  if (!task.session_id) return false
-  if (currentProcessSessionTaskIDs().has(task.id)) return false
-  const sessionIDs = await Session.treeInProject({ sessionID: task.session_id, projectID: task.project_id })
-  for (const sessionID of sessionIDs) {
-    if (await hasOpenToolParts(sessionID)) return true
-  }
-  return false
-}
-
 async function abortOwnedToolPart(input: {
   ownership: OrchestratorToolOwnershipPayload
   reason: string
@@ -651,14 +628,7 @@ export async function convergeDeadOwnerLiveExecution(input: {
       const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
         (row) => row.status !== "queued" && isGoalRunOrphaned(row),
       )
-      const hasOwnerlessToolPart = await taskHasOrphanedOpenToolParts(task)
-      if (
-        orphanGoalRuns.length === 0 &&
-        !latestRunWasTerminalizedByReason(task.id, input.reason) &&
-        !hasOwnerlessToolPart
-      ) {
-        return
-      }
+      if (orphanGoalRuns.length === 0 && !latestRunWasTerminalizedByReason(task.id, input.reason)) return
       if (task.project_id === "global") {
         corruptTasks += 1
         log.error("convergeDeadOwnerLiveExecution: corrupt global task terminalized", { taskID: task.id })
