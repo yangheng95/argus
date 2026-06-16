@@ -11,9 +11,9 @@
  *  4. unique_color_ratio     — 唯一色桶数 ≥ reference × 0.5，卡单色页
  *  5. text_hit_ratio         — reference OCR 文本在 rendered 的命中率 ≥ 0.7
  *
- * 第 5 条的 OCR/anchor 来自 P1-B (Stream F) 的 CaptureManifest.reference_strings。
- * 在 F 未 merge 前，caller 不提供 referenceStrings，此条硬门 skip（passed=true,
- * value=NaN），并从复合 score 权重中按比例摊到前三条上——保持 score 单调有意义。
+ * 第 5 条的 OCR/anchor 来自 CaptureManifest.reference_strings。缺少 reference
+ * strings 或 rendered text 表示硬门证据缺失，必须失败，不能把占位文案风险
+ * 伪装成通过。
  *
  * 消费者：P0-B（verdict 硬门）、P0-C.4（LKG 回滚比较 score）、P2（replay 曲线）。
  */
@@ -146,7 +146,7 @@ function hammingDistance(a: bigint, b: bigint): number {
 /**
  * reference OCR 文本在 rendered 的命中率。Stream C 不内嵌 OCR；调用方通过
  * renderedText 传入：Stream A (P0-0) 附带 rendered 页的 innerText 即可；
- * P1-B 合入后 referenceStrings 由 CaptureManifest 权威产出。两者任一缺失该门 skip。
+ * referenceStrings 由 CaptureManifest 权威产出。两者任一缺失该硬门失败。
  */
 function textHitRatio(
   referenceStrings: readonly string[] | undefined,
@@ -245,10 +245,10 @@ export async function computeVisualMetric(input: {
     textValue === null
       ? {
           name: "text_hit_ratio",
-          passed: true,
+          passed: false,
           threshold: t.text_hit_ratio_min,
           value: Number.NaN,
-          note: "skipped: referenceStrings/renderedText 未提供（等待 P1-B capture-fingerprint 落地）",
+          note: "missing required referenceStrings/renderedText evidence for text_hit_ratio hard gate",
         }
       : {
           name: "text_hit_ratio",
@@ -268,21 +268,10 @@ export async function computeVisualMetric(input: {
   const phashNorm = Math.max(0, 1 - hamming / 32) // 32 位差异 = 0 分
   const ssimNorm = Math.max(0, Math.min(1, mssim))
   const densityNorm = Math.max(0, Math.min(1, densityRatio))
-  let wP = t.score_weights.phash
-  let wS = t.score_weights.ssim
-  let wD = t.score_weights.density
-  let textComponent = 0
-  if (textValue === null) {
-    // 权重再分配：缺 anchor 时把 text_hit 的权重按比例摊给前三项，保持 score 可比。
-    const rem = wP + wS + wD
-    if (rem > 0) {
-      wP /= rem
-      wS /= rem
-      wD /= rem
-    }
-  } else {
-    textComponent = t.score_weights.text_hit * Math.max(0, Math.min(1, textValue))
-  }
+  const wP = t.score_weights.phash
+  const wS = t.score_weights.ssim
+  const wD = t.score_weights.density
+  const textComponent = t.score_weights.text_hit * Math.max(0, Math.min(1, textValue ?? 0))
   const score = wP * phashNorm + wS * ssimNorm + wD * densityNorm + textComponent
 
   return {
