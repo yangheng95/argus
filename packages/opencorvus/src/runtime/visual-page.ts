@@ -26,7 +26,11 @@ import ssim from "ssim.js"
 import { BrowserNodeSidecarError, runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
 import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
 import { BrowserRuntime } from "@/browser/runtime"
-import type { RuntimeCaptureLayers, RuntimeInteractionProbe } from "@/runtime/capture-contract"
+import {
+  runtimeCaptureFailedLayers,
+  type RuntimeCaptureLayers,
+  type RuntimeInteractionProbe,
+} from "@/runtime/capture-contract"
 import { pngLuminanceVariance } from "@/runtime/png-metrics"
 
 export interface VisualDiffOptions {
@@ -53,13 +57,14 @@ export interface VisualDiffOptions {
 
 export interface VisualDiffReport {
   passed: boolean
-  /** "ok" if both gates passed, otherwise a categorical reason. */
-  reason: "ok" | "size_mismatch" | "below_mean" | "below_worst" | "below_both"
+  /** "ok" if SSIM and runtime capture gates passed, otherwise a categorical reason. */
+  reason: "ok" | "size_mismatch" | "below_mean" | "below_worst" | "below_both" | "runtime_layers"
   mssim: number
   threshold: number
   worstThreshold: number
   distribution: { min: number; p1: number; p5: number; p25: number; mean: number }
-  gate: { meanPassed: boolean; worstPassed: boolean }
+  gate: { meanPassed: boolean; worstPassed: boolean; runtimePassed: boolean }
+  runtime: { passed: boolean; failedLayers: string[]; layers: RuntimeCaptureLayers }
   viewport: { width: number; height: number }
   rendered: { path: string; width: number; height: number }
   reference: { path: string; width: number; height: number }
@@ -533,7 +538,7 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
   })
 
   const refImgProbe = await decodePNG(opts.reference)
-  const { renderedPath, viewport } = await renderPage({
+  const rendered = await renderPage({
     rendered: opts.rendered,
     outDir: opts.outDir,
     viewport: opts.viewport ?? { width: refImgProbe.width, height: refImgProbe.height },
@@ -541,6 +546,14 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
     browserLaunchTimeoutMs: opts.browserLaunchTimeoutMs,
     headless: opts.headless,
   })
+  const { renderedPath, viewport } = rendered
+  const runtimeFailedLayers = runtimeCaptureFailedLayers(rendered.capture.layers)
+  const runtimePassed = runtimeFailedLayers.length === 0
+  const runtimeReport = {
+    passed: runtimePassed,
+    failedLayers: runtimeFailedLayers,
+    layers: rendered.capture.layers,
+  }
 
   const rendImg = await decodePNG(renderedPath)
   const refImg = refImgProbe
@@ -552,7 +565,8 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
       threshold,
       worstThreshold,
       distribution: { min: Number.NaN, p1: Number.NaN, p5: Number.NaN, p25: Number.NaN, mean: Number.NaN },
-      gate: { meanPassed: false, worstPassed: false },
+      gate: { meanPassed: false, worstPassed: false, runtimePassed },
+      runtime: runtimeReport,
       viewport,
       rendered: { path: renderedPath, width: rendImg.width, height: rendImg.height },
       reference: { path: path.resolve(opts.reference), width: refImg.width, height: refImg.height },
@@ -579,14 +593,16 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
 
   const meanPassed = mssim >= threshold
   const worstPassed = Number.isFinite(p5) ? p5 >= worstThreshold : false
-  const passed = meanPassed && worstPassed
+  const passed = runtimePassed && meanPassed && worstPassed
   const reason: VisualDiffReport["reason"] = passed
     ? "ok"
     : !meanPassed && !worstPassed
       ? "below_both"
       : !meanPassed
         ? "below_mean"
-        : "below_worst"
+        : !worstPassed
+          ? "below_worst"
+          : "runtime_layers"
 
   const report: VisualDiffReport = {
     passed,
@@ -595,7 +611,8 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
     threshold,
     worstThreshold,
     distribution: { min: minSSIM, p1, p5, p25, mean: mssim },
-    gate: { meanPassed, worstPassed },
+    gate: { meanPassed, worstPassed, runtimePassed },
+    runtime: runtimeReport,
     viewport,
     rendered: { path: renderedPath, width: rendImg.width, height: rendImg.height },
     reference: { path: path.resolve(opts.reference), width: refImg.width, height: refImg.height },
@@ -610,7 +627,9 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
 export function summarizeVisualReport(report: VisualDiffReport): string {
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(4) : "n/a")
   if (report.reason === "size_mismatch") {
-    return `size mismatch — rendered=${report.rendered.width}x${report.rendered.height} reference=${report.reference.width}x${report.reference.height}`
+    const runtimeSuffix = report.runtime.passed ? "" : ` runtime_failed=${report.runtime.failedLayers.join(",")}`
+    return `size mismatch — rendered=${report.rendered.width}x${report.rendered.height} reference=${report.reference.width}x${report.reference.height}${runtimeSuffix}`
   }
-  return `mean=${fmt(report.mssim)} (≥${report.threshold}) p5=${fmt(report.distribution.p5)} (≥${report.worstThreshold}) min=${fmt(report.distribution.min)}`
+  const runtimeSuffix = report.runtime.passed ? "" : ` runtime_failed=${report.runtime.failedLayers.join(",")}`
+  return `mean=${fmt(report.mssim)} (≥${report.threshold}) p5=${fmt(report.distribution.p5)} (≥${report.worstThreshold}) min=${fmt(report.distribution.min)}${runtimeSuffix}`
 }
