@@ -34,6 +34,9 @@ composer can drift apart:
 
 - New Task, New Mission, and New Coding Assistant all select the matching left
   toolbar icon and center primary panel.
+- Task-source rebind only applies to primary conversation activities
+  (Tasks/Mission/Coding Assistant). Memory, Skill, and MCP remain left tool
+  activities over the selected task and must not be forced back to Tasks.
 - Clicking New Coding Assistant without submitting does not call
   `createCodingAssistantSession()` and does not add a ledger row.
 - Submitting the Assistant launcher first creates a Coding Assistant session,
