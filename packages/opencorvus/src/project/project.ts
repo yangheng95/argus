@@ -201,10 +201,13 @@ export namespace Project {
       const local = await Filesystem.exists(dotgit)
 
       if (!gitBinary) {
-        const id =
-          (await Filesystem.readText(marker(dotgit))
-            .then((x) => x.trim())
-            .catch(() => undefined)) || generated(dotgit)
+        const localID = generated(dotgit)
+        const markerPath = marker(dotgit)
+        const cached = await Filesystem.readText(markerPath)
+          .then((x) => x.trim())
+          .catch(() => undefined)
+        const id = cached && cached !== "global" ? cached : localID
+        if (local && id === localID) await Filesystem.write(markerPath, localID).catch(() => undefined)
 
         return {
           id,

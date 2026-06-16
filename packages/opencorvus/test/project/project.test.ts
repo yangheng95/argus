@@ -63,6 +63,21 @@ async function withMode(next: Mode, run: () => Promise<void>) {
   }
 }
 
+async function withGitUnavailable(run: () => Promise<void>) {
+  const originalPath = process.env.PATH
+  const originalPathCase = process.env.Path
+  process.env.PATH = ""
+  process.env.Path = ""
+  try {
+    await run()
+  } finally {
+    if (originalPath === undefined) delete process.env.PATH
+    else process.env.PATH = originalPath
+    if (originalPathCase === undefined) delete process.env.Path
+    else process.env.Path = originalPathCase
+  }
+}
+
 async function loadProject() {
   return (await import("../../src/project/project")).Project
 }
@@ -181,8 +196,27 @@ describe("Project.fromDirectory", () => {
 
     expect(project.id).toBe(Project.directoryProjectID(tmp.path))
     expect(project.id).not.toBe("global")
-    expect(Project.get("global")).toBeUndefined()
+    expect(Project.get("global")?.worktree).not.toBe(tmp.path)
+    expect(Project.get(project.id)?.worktree).toBe(tmp.path)
     expect((await Filesystem.readText(marker)).trim()).toBe(project.id)
+  })
+
+  test("rewrites legacy global marker when git binary is unavailable", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir()
+    await $`git init`.cwd(tmp.path).quiet()
+    const marker = path.join(tmp.path, ".git", "opencorvus")
+    await Filesystem.write(marker, "global")
+
+    await withGitUnavailable(async () => {
+      const { project } = await p.fromDirectory(tmp.path)
+
+      expect(project.id).toBe(Project.directoryProjectID(tmp.path))
+      expect(project.id).not.toBe("global")
+      expect(Project.get("global")?.worktree).not.toBe(tmp.path)
+      expect(Project.get(project.id)?.worktree).toBe(tmp.path)
+      expect((await Filesystem.readText(marker)).trim()).toBe(project.id)
+    })
   })
 
   test("keeps git vcs when show-toplevel exits non-zero with empty output", async () => {

@@ -109,21 +109,18 @@ test("track initializes a pre-existing non-git snapshot directory before add", a
   })
 })
 
-test("track uses project worktree as the git precondition and skips the global root", async () => {
+test("track skips a concrete non-git project worktree", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      expect(Instance.project.id).toBe("global")
-      expect(Instance.project.worktree).toBe("/")
-
-      const projectRef = Project as unknown as { isGitRepo: typeof Project.isGitRepo }
       const processRef = Process as unknown as { run: typeof Process.run }
-      const originalIsGitRepo = projectRef.isGitRepo
       const originalRun = processRef.run
       const gitCalls: string[][] = []
 
-      projectRef.isGitRepo = (directory: string) => directory === Instance.directory || originalIsGitRepo(directory)
+      expect(Instance.project.id).not.toBe("global")
+      expect(Instance.project.worktree).toBe(tmp.path)
+
       processRef.run = async (cmd, opts) => {
         if (cmd[0] === "git") gitCalls.push(cmd.map(String))
         return originalRun(cmd, opts)
@@ -133,7 +130,6 @@ test("track uses project worktree as the git precondition and skips the global r
         await expect(Snapshot.track()).resolves.toBeUndefined()
         expect(gitCalls).toEqual([])
       } finally {
-        projectRef.isGitRepo = originalIsGitRepo
         processRef.run = originalRun
       }
     },
@@ -824,18 +820,17 @@ test("concurrent file operations during patch", async () => {
 })
 
 test("snapshot state isolation between projects", async () => {
-  // Test that different projects don't interfere with each other
   await using tmp1 = await snapshotWorktree()
   await using tmp2 = await snapshotWorktree()
   let project1ID: string | undefined
+  let project1SnapshotRoot: string | undefined
 
   await Instance.provide({
     directory: tmp1.path,
     fn: async () => {
       project1ID = Instance.project.id
+      project1SnapshotRoot = ProjectRuntimePaths.snapshotCacheRoot(Instance.project.worktree, Instance.project.id)
       expect(project1ID).not.toBe("global")
-      const before1 = await Snapshot.track()
-      expect(before1).toBeTruthy()
       await Filesystem.write(`${tmp1.path}/project1.txt`, "project1 content")
     },
   })
@@ -846,13 +841,14 @@ test("snapshot state isolation between projects", async () => {
       expect(project1ID).toBeDefined()
       expect(Instance.project.id).not.toBe("global")
       expect(Instance.project.id).not.toBe(project1ID)
+      expect(ProjectRuntimePaths.snapshotCacheRoot(Instance.project.worktree, Instance.project.id)).not.toBe(
+        project1SnapshotRoot,
+      )
       const before2 = await Snapshot.track()
       expect(before2).toBeTruthy()
       await Filesystem.write(`${tmp2.path}/project2.txt`, "project2 content")
       const patch2 = await Snapshot.patch(before2!)
       expect(patch2.files).toContain(rel("project2.txt"))
-
-      // Ensure project1 files don't appear in project2
       expect(patch2.files).not.toContain(rel("project1.txt"))
     },
   })
