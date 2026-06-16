@@ -219,7 +219,6 @@ export async function compareBrowserPreviewRegions(
   const evidenceIDs: Record<string, string> = {}
   for (const region of regions) {
     const evidenceID = persistBrowserPreviewEvidence({
-      projectRoot: input.projectRoot,
       taskID: input.taskID,
       targetID: input.targetID,
       viewportID: region.viewport_id,

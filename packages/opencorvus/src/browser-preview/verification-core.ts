@@ -143,7 +143,6 @@ export async function runBrowserPreviewVerification(
     }) as BrowserPreviewCaptureSummary
     const status = result.captured && result.passed ? "passed" : "failed"
     evidenceIDs[viewport.id] = persistBrowserPreviewEvidence({
-      projectRoot,
       taskID: input.taskID,
       targetID: input.targetID,
       viewportID: viewport.id,
