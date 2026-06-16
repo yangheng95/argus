@@ -16,6 +16,7 @@ import { resetWriter } from "../services/tree-writer"
 import { ApiError } from "../services/api"
 import { t } from "../utils/i18n"
 import { humanizeApiError } from "../utils/mission-helpers"
+import { isAbortError } from "../utils/string"
 import { Icon } from "./Icon"
 import { MissionList } from "./MissionList"
 
@@ -117,9 +118,13 @@ function MissionContent(props: MissionProps) {
   }
 
   async function handleMissionSelect(mission: MissionRecord): Promise<void> {
-    await withBusy(`mission:${mission.sessionID}`, async () => {
+    setActionError(null)
+    try {
       await openMissionSession(mission.sessionID, mission.directory)
-    })
+    } catch (err) {
+      if (isAbortError(err)) return
+      reportActionError(`mission:${mission.sessionID}`, err)
+    }
   }
 
   function handleTaskSelect(taskID: string): void {

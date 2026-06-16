@@ -12,6 +12,10 @@ import {
   MAX_TOTAL_ATTACHMENT_SIZE,
   wouldExceedAggregateLimit,
 } from "../services/chat-attach-limits"
+import {
+  canAcceptComposerAttachment,
+  setComposerAttachmentInputEnabled,
+} from "../services/composer-attachment-acceptance"
 import { fileToDataUrl } from "../services/file-to-data-url"
 import { Icon } from "./Icon"
 import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
@@ -169,6 +173,11 @@ export function ChatComposer(props: ChatComposerProps) {
   const showLargeRequestWarning = createMemo(() => utf8ByteLength(text()) > REQUEST_PERFORMANCE_WARNING_BYTES)
   const stopping = () => props.stopping === true
 
+  createEffect(() => {
+    setComposerAttachmentInputEnabled(props.enabled)
+  })
+  onCleanup(() => setComposerAttachmentInputEnabled(false))
+
   function writeText(next: string): void {
     setText(next)
     if (textareaRef && textareaRef.value !== next) textareaRef.value = next
@@ -301,6 +310,7 @@ export function ChatComposer(props: ChatComposerProps) {
   // ── Attachment handling ──
 
   async function addAttachment(file: File) {
+    if (!canAcceptComposerAttachment()) return
     if (!file) return
     if (file.size > MAX_ATTACHMENT_SIZE) {
       console.warn("[ChatComposer] file too large:", file.name, file.size)
@@ -418,6 +428,10 @@ export function ChatComposer(props: ChatComposerProps) {
 
   function handleDragOver(e: DragEvent) {
     e.preventDefault()
+    if (!canAcceptComposerAttachment()) {
+      setDragover(false)
+      return
+    }
     setDragover(true)
   }
 
@@ -430,6 +444,7 @@ export function ChatComposer(props: ChatComposerProps) {
   async function handleDrop(e: DragEvent) {
     e.preventDefault()
     setDragover(false)
+    if (!canAcceptComposerAttachment()) return
     const files = e.dataTransfer?.files
     if (!files) return
     for (const file of files) await addAttachment(file)
@@ -441,6 +456,7 @@ export function ChatComposer(props: ChatComposerProps) {
     const files = e.clipboardData?.files
     if (!files || !files.length) return
     e.preventDefault()
+    if (!canAcceptComposerAttachment()) return
     for (const file of files) await addAttachment(file)
   }
 
@@ -525,7 +541,7 @@ export function ChatComposer(props: ChatComposerProps) {
       onDrop={handleDrop}
     >
       {/* Attachments strip */}
-      <Show when={attachments().length > 0}>
+      <Show when={canAcceptComposerAttachment() && attachments().length > 0}>
         <div class="chat-attachments" id="chatAttachments">
           <For each={attachments()}>
             {(att, index) => (

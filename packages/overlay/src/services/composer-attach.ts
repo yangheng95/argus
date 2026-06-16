@@ -9,6 +9,7 @@
 // must press send for it to leave the client.
 
 import { messageStore, setChatAttachments } from "../store/messages"
+import { canAcceptComposerAttachment } from "./composer-attachment-acceptance"
 import { getHostTransport } from "./host-transport"
 import { isComposerAttachPayload } from "./composer-attach-validate"
 
@@ -22,6 +23,7 @@ export function installComposerAttachSubscription(): void {
       console.warn("[composer.attach] invalid payload, ignoring", raw)
       return
     }
+    if (!canAcceptComposerAttachment()) return
     // Reuse the existing attachment shape used by services/chat.ts —
     // adding sourcePath / selection as optional metadata so the host
     // origin is traceable in the message stream once submitted.

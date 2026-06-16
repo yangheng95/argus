@@ -13,7 +13,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { autoGrowHeight, DEFAULT_MAX_VISIBLE_LINES } from "../src/components/primitives/AutoGrowTextarea"
+import { autoGrowHeight, DEFAULT_MAX_VISIBLE_LINES } from "../src/components/primitives/AutoGrowTextareaMetrics"
 
 const SRC = path.resolve(import.meta.dir, "..", "src")
 const read = (rel: string) => readFileSync(path.join(SRC, rel), "utf8")
@@ -47,7 +47,9 @@ describe("goal / mission / chat reuse the AutoGrowTextarea primitive", () => {
     const main = read("main.tsx")
     expect(mission).not.toContain("<ChatComposer")
     expect(main).toContain("<ChatComposer")
-    expect(main).toContain('textareaDataUI={missionLauncherActive() ? "mission-composer-input" : undefined}')
+    expect(main).toContain("missionSubmitActive()")
+    expect(main).toContain('"mission-composer-input"')
+    expect(main).toContain("function missionLedgerActive()")
     expect(main).toContain("draftKey={panelComposerDraftKey()}")
     expect(mission).not.toMatch(/<textarea\b/)
   })

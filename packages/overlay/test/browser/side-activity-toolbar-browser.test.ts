@@ -148,6 +148,23 @@ test(
 
     const requestLog: Array<{ method: string; path: string }> = []
     let missionInterruptible = true
+    const promptProfileCatalog = {
+      active: "general",
+      project_active: "general",
+      session_active: null,
+      default: "general",
+      targets: [],
+      profiles: [
+        {
+          id: "general",
+          label: "General",
+          description: "Baseline prompt set.",
+          built_in: true,
+          editable: false,
+          agents: {},
+        },
+      ],
+    }
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
@@ -327,7 +344,8 @@ test(
       if (path === "/provider") return send({ all: [], connected: [], default: {} })
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [] })
-      if (path === "/config") return send({ model: "" })
+      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+      if (path === "/config") return send({ model: "", prompt_profile: { active: "general" } })
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
@@ -485,6 +503,7 @@ test(
             missionAbortButtons: document.querySelectorAll('.mission-ledger [data-ui="task-row-cancel"]').length,
             missionTaskProjectionButtons: document.querySelectorAll('[data-ui="mission-task-projection-select"]')
               .length,
+            chatAttachmentItems: document.querySelectorAll("#chatAttachments .chat-attachment-item").length,
             renderedCardCount: Array.isArray((window as any).renderConversation?.())
               ? (window as any).renderConversation().length
               : -1,
@@ -520,7 +539,6 @@ test(
         }
         throw new Error(`${label}: ${JSON.stringify(state)} requests=${JSON.stringify(requestLog.slice(-20))}`)
       }
-
       assertMatchObject(await activeState(), {
         leftTasks: "false",
         leftMission: "true",
@@ -620,6 +638,24 @@ test(
         missionTaskProjectionButtons: 1,
       })
       assert.deepEqual((await activeState()).openPanels, ["mission"])
+      const missionLedgerComposer = await page.$eval("#chatTextarea", (node) => {
+        const textarea = node as HTMLTextAreaElement
+        return {
+          disabled: textarea.disabled,
+          dataUI: textarea.getAttribute("data-ui"),
+        }
+      })
+      assert.deepEqual(missionLedgerComposer, { disabled: true, dataUI: null })
+      await page.evaluate(() => {
+        const form = document.querySelector<HTMLFormElement>("#solidChatComposer form")
+        if (!form) throw new Error("missing chat composer form")
+        const data = new DataTransfer()
+        data.items.add(new File(["disabled mission ledger"], "mission-ledger.txt", { type: "text/plain" }))
+        form.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: data }))
+        form.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data }))
+      })
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      assert.equal((await activeState()).chatAttachmentItems, 0)
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
       assertMatchObject(await activeState(), {
         leftMission: "true",
@@ -662,10 +698,12 @@ test(
         selectedSourceKind: "session",
         selectedSourceID: "ses_mission_side_activity",
       })
-      assert.ok(
-        requestLog.some(
-          (entry) => entry.method === "GET" && entry.path === "/session/ses_mission_side_activity/conversation",
-        ),
+      await waitForState(
+        "mission row should request its session conversation",
+        () =>
+          requestLog.some(
+            (entry) => entry.method === "GET" && entry.path === "/session/ses_mission_side_activity/conversation",
+          ),
       )
 
       await page.$eval("#chatTextarea", (node) => {
@@ -755,6 +793,7 @@ test(
         leftMissionButton: "false",
         selectedSourceKind: "task",
         selectedSourceID: "tsk_side_activity",
+        chatAttachmentItems: 0,
       })
 
       const missionRequestsBeforeReturn = requestLog.filter(

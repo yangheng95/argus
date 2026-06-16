@@ -94,6 +94,23 @@ test("Mission abort immediately removes the interruptible row action before list
   )
 })
 
+test("Mission row selection is not blocked by unrelated row action busy state", () => {
+  const start = MISSION_TSX.indexOf("async function handleMissionSelect")
+  const end = MISSION_TSX.indexOf("function handleTaskSelect", start)
+  const block = MISSION_TSX.slice(start, end)
+  expect(block).toContain("await openMissionSession(mission.sessionID, mission.directory)")
+  expect(block).not.toContain("withBusy")
+})
+
+test("Mission row selection ignores superseded conversation aborts without surfacing action errors", () => {
+  const start = MISSION_TSX.indexOf("async function handleMissionSelect")
+  const end = MISSION_TSX.indexOf("function handleTaskSelect", start)
+  const block = MISSION_TSX.slice(start, end)
+  expect(MISSION_TSX).toContain('import { isAbortError } from "../utils/string"')
+  expect(block).toContain("if (isAbortError(err)) return")
+  expect(block.indexOf("if (isAbortError(err)) return")).toBeLessThan(block.indexOf("reportActionError"))
+})
+
 test("services/mission.ts exports wakeMission pointed at /mission/wake", () => {
   expect(SERVICES_MISSION).toContain("export async function wakeMission")
   expect(SERVICES_MISSION).toContain("`mission/wake`")
@@ -172,34 +189,39 @@ test("Mission activity does not implicitly reopen the newest Mission session whi
   expect(MISSION_TSX).not.toContain("const mission = missionRecords()?.records[0]")
   expect(MISSION_TSX).not.toContain("rows.some((mission) => mission.sessionID === selected)")
   expect(MISSION_TSX).toContain('onSelectMission={(mission) => void handleMissionSelect(mission)}')
+  expect(MAIN_TSX).toContain("function selectLeftActivity(activity: LeftActivity)")
+  expect(MAIN_TSX).toContain("setMissionLauncherActive(false)")
   expect(MAIN_TSX).toContain("function openMissionLauncher()")
   expect(MAIN_TSX).toContain("setMissionLauncherActive(true)")
   expect(MAIN_TSX).toContain('void selectTask("")')
 })
 
-test("Task source rebinds the left toolbar and center panel to Tasks", () => {
-  expect(MAIN_TSX).toContain('if (activity === "mission" && boardStore.selectedSource?.kind === "task")')
-  expect(MAIN_TSX).toContain('const selectedSource = boardStore.selectedSource')
-  expect(MAIN_TSX).toContain('if (selectedSource?.kind !== "task") return')
-  expect(MAIN_TSX).toContain("if (!focusedLeftActivityOwnsPrimaryPanel(selectedLeftActivity())) return")
-  expect(MAIN_TSX).toContain('setSelectedLeftActivity("tasks")')
-  expect(MAIN_TSX).toContain('setSelectedLeftPanelActivity("tasks")')
-  expect(MAIN_TSX).toContain('resetCenterWorkbenchToFocusedPanel("tasks")')
+test("Mission task projection selection explicitly rebinds the left toolbar and center panel to Tasks", () => {
+  const start = MAIN_TSX.indexOf("function selectMissionTask")
+  const end = MAIN_TSX.indexOf("function openMissionLauncher", start)
+  const block = MAIN_TSX.slice(start, end)
+  expect(block).toContain('resetCenterWorkbenchToFocusedPanel("tasks")')
+  expect(block).toContain('setSelectedLeftActivity("tasks")')
+  expect(block).toContain('setSelectedLeftPanelActivity("tasks")')
+  expect(block).toContain("void selectTask(taskID)")
 })
 
-test("Task source rebind does not steal Memory Skill or MCP tool activities", () => {
-  const rebindStart = MAIN_TSX.indexOf('const selectedSource = boardStore.selectedSource')
-  const rebindEnd = MAIN_TSX.indexOf("const taskListEl = document.getElementById", rebindStart)
-  const rebindBlock = MAIN_TSX.slice(rebindStart, rebindEnd)
-  expect(rebindBlock).toContain("focusedLeftActivityOwnsPrimaryPanel(selectedLeftActivity())")
-  expect(rebindBlock).not.toContain('selectedLeftActivity() === "memory"')
-  expect(rebindBlock).not.toContain('selectedLeftActivity() === "skill"')
-  expect(rebindBlock).not.toContain('selectedLeftActivity() === "mcp"')
+test("selected task source does not globally steal Mission or Assistant activity focus", () => {
+  const taskListMount = MAIN_TSX.indexOf('const taskListEl = document.getElementById("taskListPanel")')
+  const beforeTaskListMount = MAIN_TSX.slice(0, taskListMount)
+  expect(beforeTaskListMount).not.toContain('const selectedSource = boardStore.selectedSource')
+  expect(beforeTaskListMount).not.toContain('selectedSource?.kind !== "task"')
+  expect(beforeTaskListMount).not.toContain('boardStore.selectedSource?.kind === "task"')
 })
 
 test("main ChatComposer exposes the standard Mission data-ui hooks for downstream e2e", () => {
   expect(MAIN_TSX).toContain("function missionSubmitActive()")
-  expect(MAIN_TSX).toContain('primaryCenterPanel() === "mission" && !isMissionSessionSource()')
+  expect(MAIN_TSX).toContain("return missionLauncherActive()")
+  expect(MAIN_TSX).not.toContain('missionLauncherActive() || (primaryCenterPanel() === "mission"')
+  expect(MAIN_TSX).toContain("function missionLedgerActive()")
+  expect(MAIN_TSX).toContain('primaryCenterPanel() === "mission" && !missionSubmitActive() && !isMissionSessionSource()')
+  expect(MAIN_TSX).toContain("canComposeChat() && !missionLedgerActive()")
+  expect(MAIN_TSX).toContain('composerDraftKey("mission", "ledger", directory)')
   expect(MAIN_TSX).toContain('missionSubmitActive()')
   expect(MAIN_TSX).toContain('"mission-composer-input"')
   expect(MAIN_TSX).toContain('"mission-composer-submit"')
