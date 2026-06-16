@@ -152,6 +152,22 @@ test("benchmark requires a visible overlay browser path", () => {
   expect(src).toContain("const currentOverlay = await withTimeout(overlaySnapshot(page)")
 })
 
+test("benchmark screenshot evidence is required and decoded", () => {
+  const screenshotFn = src.slice(
+    src.indexOf("async function takeBenchmarkScreenshot"),
+    src.indexOf("function elapsedOrNull"),
+  )
+  expect(src).toContain("decodePNG")
+  expect(src).toContain("nonWhiteDensity")
+  expect(src).toContain("uniqueColorBucketCount")
+  expect(screenshotFn).toContain('await page.screenshot({ path: screenshot, fullPage: true, type: "png" })')
+  expect(screenshotFn).toContain("benchmark screenshot has invalid dimensions")
+  expect(screenshotFn).toContain("benchmark screenshot lacks visible UI pixels")
+  expect(screenshotFn).not.toContain("catch")
+  expect(screenshotFn).not.toContain("return null")
+  expect(src).not.toContain("screenshot: null")
+})
+
 test("benchmark auto verification uses task-scoped HTML skeleton workflow thresholds", () => {
   expect(src).toContain("WEB_CLONE_VISUAL_THRESHOLD")
   expect(src).toContain("WEB_CLONE_VISUAL_WORST_THRESHOLD")

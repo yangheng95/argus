@@ -92,6 +92,7 @@ import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
 import { Shell } from "../../src/shell/shell"
+import { decodePNG, nonWhiteDensity, uniqueColorBucketCount } from "../../src/util/pixel-stats"
 import { parseSSE } from "../../src/util/sse"
 import { ensureStandaloneGitRepo } from "./git"
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
@@ -1734,12 +1735,19 @@ function applyBenchmarkErrorVerdict(base: ReturnType<typeof evaluateQualityGates
 
 async function takeBenchmarkScreenshot(page: Page) {
   const screenshot = path.join(process.cwd(), `overlay-web-benchmark-${Date.now()}.png`)
-  try {
-    await page.screenshot({ path: screenshot, fullPage: true })
-    return screenshot
-  } catch {
-    return null
+  await page.screenshot({ path: screenshot, fullPage: true, type: "png" })
+  const image = await decodePNG(screenshot)
+  if (image.width <= 0 || image.height <= 0) {
+    throw new Error(`benchmark screenshot has invalid dimensions: ${screenshot}`)
   }
+  const density = nonWhiteDensity(image)
+  const colorBuckets = uniqueColorBucketCount(image)
+  if (density <= 0 || colorBuckets <= 1) {
+    throw new Error(
+      `benchmark screenshot lacks visible UI pixels: ${screenshot} density=${density.toFixed(4)} colorBuckets=${colorBuckets}`,
+    )
+  }
+  return screenshot
 }
 
 function elapsedOrNull(at: number) {
