@@ -23,7 +23,7 @@
  *     - `Ownership.Process.record(...)` / `.clear(...)` / `.orphans()` —
  *       same shape for OS-level executor child processes.
  *
- *   Both sub-registries write to `<primary-worktree>/.opencorvus/runtime/ownership/`
+ *   Both sub-registries write to `<primary-worktree>/.opencorvus/r/o/`
  *   so recovery on next process start can find them. Marker writes and
  *   deletions are best-effort: failure to write does not abort the
  *   create path; the fallback is just "the marker is missing next time",

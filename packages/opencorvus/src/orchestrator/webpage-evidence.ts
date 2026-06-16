@@ -10,6 +10,15 @@ import { prepareWebCloneContext } from "@/web-clone/context"
 import { readPngEvidence } from "@/web-clone/evidence-integrity"
 
 export type LiveWebpageEvidenceStatus = "skipped" | "reused" | "generated"
+export type LiveWebpageEvidenceFailurePhase =
+  | "extract"
+  | "compile"
+  | "analyze"
+  | "captureRuntimeState"
+  | "completePrimaryEvidence"
+  | "sourcePackage"
+
+export const LIVE_WEBPAGE_EVIDENCE_FAILURE_FILE = "webpage-evidence-failure.json"
 
 export interface LiveWebpageEvidenceResult {
   status: LiveWebpageEvidenceStatus
@@ -131,16 +140,53 @@ export async function ensureLiveWebpageEvidence(input: {
   }
 
   const pipeline = input.pipeline ?? defaultLiveWebpageEvidencePipeline()
-  await pipeline.extract({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
-  await pipeline.compile({ outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
-  await pipeline.analyze({ outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
-  await pipeline.captureRuntimeState({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
+  await runLiveWebpageEvidenceStage({
+    phase: "extract",
+    taskID: input.taskID,
+    url,
+    evidenceDir,
+    fn: () => pipeline.extract({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
+  })
+  await runLiveWebpageEvidenceStage({
+    phase: "compile",
+    taskID: input.taskID,
+    url,
+    evidenceDir,
+    fn: () => pipeline.compile({ outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
+  })
+  await runLiveWebpageEvidenceStage({
+    phase: "analyze",
+    taskID: input.taskID,
+    url,
+    evidenceDir,
+    fn: () => pipeline.analyze({ outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
+  })
+  await runLiveWebpageEvidenceStage({
+    phase: "captureRuntimeState",
+    taskID: input.taskID,
+    url,
+    evidenceDir,
+    fn: () =>
+      pipeline.captureRuntimeState({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
+  })
   if (!(await hasCompletePrimaryEvidence(evidenceDir, url))) {
-    throw new Error(
-      `Live webpage evidence pipeline finished but did not produce the complete primary webpage evidence artifact set in ${evidenceDir}`,
-    )
+    await failLiveWebpageEvidence({
+      phase: "completePrimaryEvidence",
+      taskID: input.taskID,
+      url,
+      evidenceDir,
+      error: new Error(
+        `Live webpage evidence pipeline finished but did not produce the complete primary webpage evidence artifact set in ${evidenceDir}`,
+      ),
+    })
   }
-  await ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID)
+  await runLiveWebpageEvidenceStage({
+    phase: "sourcePackage",
+    taskID: input.taskID,
+    url,
+    evidenceDir,
+    fn: () => ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID),
+  })
 
   return {
     status: "generated",
@@ -151,6 +197,77 @@ export async function ensureLiveWebpageEvidence(input: {
       ...primaryWebpageSourcePackageArtifacts(input.taskID),
     ],
   }
+}
+
+async function runLiveWebpageEvidenceStage(input: {
+  phase: LiveWebpageEvidenceFailurePhase
+  taskID: string
+  url: string
+  evidenceDir: string
+  fn: () => Promise<void>
+}): Promise<void> {
+  try {
+    await input.fn()
+  } catch (error) {
+    await failLiveWebpageEvidence({
+      phase: input.phase,
+      taskID: input.taskID,
+      url: input.url,
+      evidenceDir: input.evidenceDir,
+      error,
+    })
+  }
+}
+
+async function failLiveWebpageEvidence(input: {
+  phase: LiveWebpageEvidenceFailurePhase
+  taskID: string
+  url: string
+  evidenceDir: string
+  error: unknown
+}): Promise<never> {
+  const diagnosticPath = path.join(input.evidenceDir, LIVE_WEBPAGE_EVIDENCE_FAILURE_FILE)
+  await writeLiveWebpageEvidenceFailureDiagnostic({ ...input, diagnosticPath })
+  const message = errorMessage(input.error)
+  throw new Error(
+    `Live webpage evidence ${input.phase} failed for ${input.url}. Diagnostic: ${diagnosticPath}. ${message}`,
+    {
+      cause: input.error,
+    },
+  )
+}
+
+async function writeLiveWebpageEvidenceFailureDiagnostic(input: {
+  phase: LiveWebpageEvidenceFailurePhase
+  taskID: string
+  url: string
+  evidenceDir: string
+  diagnosticPath: string
+  error: unknown
+}): Promise<void> {
+  await fs.mkdir(input.evidenceDir, { recursive: true })
+  const error = input.error instanceof Error ? input.error : new Error(String(input.error))
+  await fs.writeFile(
+    input.diagnosticPath,
+    `${JSON.stringify(
+      {
+        version: 1,
+        purpose: "live-webpage-evidence-failure",
+        taskID: input.taskID,
+        url: input.url,
+        phase: input.phase,
+        evidenceDir: input.evidenceDir,
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  )
 }
 
 async function ensureVisibleSourcePackage(projectDir: string, worktreeDir: string, taskID: string): Promise<void> {
@@ -280,4 +397,8 @@ function normalizeUrlForEvidence(input: string | undefined): string {
   } catch {
     return input.trim().replace(/\/$/, "")
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

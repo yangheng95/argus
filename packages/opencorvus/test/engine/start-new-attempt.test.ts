@@ -478,7 +478,7 @@ describe("Goal.startNewAttempt — options", () => {
       summary: "Build changed one source file and one runtime scratch file.",
       diffs: [
         {
-          file: ".opencorvus/runtime/tasks/tsk/sessions/ses/worktree/package.json",
+          file: ".opencorvus/r/s/ab/cdef12/worktree/package.json",
           before: "{}",
           after: '{"private":true}',
           additions: 1,

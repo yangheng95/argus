@@ -12,6 +12,7 @@
  */
 import { Database as RawSqlite } from "bun:sqlite"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { ensureMissionSession } from "@/mission/session"
 import { Session } from "@/session"
 import { SessionContext } from "@/session/context"
@@ -118,7 +119,7 @@ await Instance.provide({
     })
 
     // ---- Mission state files ----
-    const stateDir = path.join(Instance.directory, ".opencorvus", "runtime", "mission", MISSION_ID)
+    const stateDir = ProjectRuntimePaths.missionRoot(Instance.directory, MISSION_ID)
     console.log("\n===== MISSION STATE FILES (" + stateDir + ") =====")
     for (const f of ["frontier.md", "tasks.md", "handoff.md", "notes.md"]) {
       const body = await fs.readFile(path.join(stateDir, f), "utf8").catch((e: any) => `<MISSING: ${e.code}>`)

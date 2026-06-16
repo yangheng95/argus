@@ -9,9 +9,9 @@ import path from "node:path"
  *   ensureGitignore: stage .gitignore failed: The following paths are
  *   ignored by one of your .gitignore files: .opencorvus
  *
- * Root cause: goal worktrees live under `<project>/.opencorvus/runtime/.../
+ * Root cause: goal worktrees live under `<project>/.opencorvus/r/.../
  * goal-<id>/`, and the project-root `.gitignore` (which goal worktrees
- * share via the parent repo) lists `.opencorvus/runtime/`. Running
+ * share via the parent repo) lists `.opencorvus/r/`. Running
  * `git add -- .gitignore` from inside that worktree triggers git's
  * "ignored path" guard. the goal workspace terminal
  * cleanup then aborts and orchestrator loops trying to redeliver,

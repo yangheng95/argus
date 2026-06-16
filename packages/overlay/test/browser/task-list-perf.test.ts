@@ -121,6 +121,9 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "perf-test" })
+    if (path === "/global/projects/discover") {
+      return send({ root: "D:/perf", defaultDirectory: "D:/perf/workspace", projects: [] })
+    }
     if (path === "/log") return send({})
     if (path === "/log/tail") return send({ lines: [] })
     if (path === "/global/tasks" || path === "/tasks") {

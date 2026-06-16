@@ -1,6 +1,6 @@
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
-export const USER_REQUEST_BUNDLE_PATH_TEMPLATE = ".opencorvus/runtime/tasks/<taskID>/intent/request.md"
+export const USER_REQUEST_BUNDLE_PATH_TEMPLATE = ".opencorvus/r/t/<task-key>/intent/request.md"
 export const USER_REQUEST_BUNDLE_PATH = USER_REQUEST_BUNDLE_PATH_TEMPLATE
 
 export function renderUserRequestSection(input: {

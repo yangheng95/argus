@@ -138,7 +138,6 @@ import {
   viewRun,
   viewSnapshot,
   viewTask,
-  viewTaskListTask,
   type GoalRow,
   type TaskListRow,
   type TaskRow,
@@ -801,13 +800,20 @@ function taskItems(rows: TaskListRow[]) {
 
   return rows.map((item) => {
     const task = item.task
+    const plan = findActivePlanForTask(task.id)
+    const run = findActiveRunForTask(task.id)
+    const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const pendingInteractions = listInteractions(task.id).filter((entry) => entry.status === "pending")
+    const taskView = viewTask(task, { directory: item.directory })
+    if (taskView.queue && item.directory && isTaskQueued(task)) {
+      taskView.queue.revision = queueRevisions.get(item.directory)
+    }
     return {
-      task: viewTaskListTask(task, {
-        directory: item.directory,
-        queueRevision: item.directory && isTaskQueued(task) ? queueRevisions.get(item.directory) : undefined,
-      }),
+      task: taskView,
       project: item.project,
+      plan: plan ? viewPlan(plan) : undefined,
+      run: run ? viewRun(run) : undefined,
+      evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
       active_sessions: listActiveSessionsForTask(task.id),
       pending_interactions: pendingInteractions.length,
       pending_interaction_items: pendingInteractions.map(viewInteraction),
@@ -988,9 +994,9 @@ export namespace EngineService {
     }
     // Materialize the intent bundle on disk BEFORE the queue picks the task
     // up, so when the orchestrator / planner / architect wake their stage
-    // prompts (which reference `.opencorvus/intent/request.md`) resolve to
+    // prompts (which reference the task-scoped intent bundle path) resolve to
     // a real file. Without this, architect-generated goal objectives like
-    // "see .opencorvus/intent/request.md §3" point at nothing — the
+    // "see the intent bundle §3" point at nothing — the
     // executor either misses the reference or hallucinates a body. See
     // `src/intent/bundle.ts` header for the full rationale.
     const { IntentBundle } = await import("@/intent/bundle")

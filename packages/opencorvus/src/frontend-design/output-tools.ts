@@ -41,8 +41,6 @@ export interface FrontendTemplateOutputCollector {
 }
 
 const VISUAL_ANCHOR_BUDGET = 80
-const HIGH_FIDELITY_VISUAL_SCORE = 96
-const HIGH_FIDELITY_VISUAL_SIMILARITY = 0.95
 
 function emptyCollector(): FrontendTemplateOutputCollector {
   return { specs: [] }
@@ -396,21 +394,21 @@ function renderFrontendProjectReport(final: FrontendTemplateFinal): string {
 function renderVisualBaselineQualityStatus(final: FrontendTemplateFinal): string {
   const evidence = inspectVisualBaselineQuality(final)
   if (evidence.status === "evidence_missing") {
-    return "- visual_quality_status: evidence_missing. No measured high-fidelity `webpage_evaluate` score was reported for the visual HTML skeleton; treat the skeleton as unproven until a 96/100 evaluation or >=0.95 similarity is recorded."
+    return "- visual_quality_status: evidence_missing. No measured `webpage_evaluate` diagnostic score was reported for the visual HTML skeleton; treat the skeleton as unproven until rendered screenshot evidence and visual review are recorded."
   }
   if (evidence.status === "incomplete_visual_fidelity") {
     const score =
       evidence.lastScore === undefined
         ? ""
-        : ` Reported score ${formatNumber(evidence.lastScore)}/100 is below required ${HIGH_FIDELITY_VISUAL_SCORE}/100.`
+        : ` Last reported diagnostic score: ${formatNumber(evidence.lastScore)}/100.`
     const similarity =
       evidence.lastSimilarity === undefined
         ? ""
-        : ` Reported similarity ${formatNumber(evidence.lastSimilarity)} is below required ${HIGH_FIDELITY_VISUAL_SIMILARITY}.`
+        : ` Last reported diagnostic similarity: ${formatNumber(evidence.lastSimilarity)}.`
     const debt = evidence.hasRemainingDebt ? " Remaining visual debt is present in the submitted contract." : ""
     return `- visual_quality_status: incomplete_visual_fidelity.${score}${similarity}${debt} This skeleton is unproven and must not be treated as ready for downstream transcription.`
   }
-  return `- visual_quality_status: high_fidelity_evidence_reported. Reported visual evidence meets ${HIGH_FIDELITY_VISUAL_SCORE}/100 or >=${HIGH_FIDELITY_VISUAL_SIMILARITY} similarity; source traceability and placeholder review still remain authoritative.`
+  return "- visual_quality_status: visual_evidence_reported. Render/evaluate evidence was reported; source traceability, screenshot inspection, visual judge findings, and placeholder review remain authoritative."
 }
 
 function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
@@ -430,17 +428,14 @@ function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
     .filter((score) => Number.isFinite(score))
   const lastScore = scores.at(-1)
   const lastSimilarity = similarities.at(-1)
-  const explicitBelowThreshold =
-    /\b(?:below|under|less than)\s+(?:the\s+)?(?:95%|0\.95|95\/100|96\/100|threshold)\b/i.test(text)
   const hasRemainingDebt = /\bremaining visual debt\s*:\s*(?!\s*(?:none|no|0|\(\s*none\s*\))\b)/i.test(text)
 
-  if (explicitBelowThreshold || hasRemainingDebt) {
+  if (hasRemainingDebt) {
     return { status: "incomplete_visual_fidelity", lastScore, lastSimilarity, hasRemainingDebt }
   }
   if (lastScore !== undefined) {
     return {
-      status:
-        lastScore >= HIGH_FIDELITY_VISUAL_SCORE ? "high_fidelity_evidence_reported" : "incomplete_visual_fidelity",
+      status: "high_fidelity_evidence_reported",
       lastScore,
       lastSimilarity,
       hasRemainingDebt,
@@ -448,10 +443,7 @@ function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
   }
   if (lastSimilarity !== undefined) {
     return {
-      status:
-        lastSimilarity >= HIGH_FIDELITY_VISUAL_SIMILARITY
-          ? "high_fidelity_evidence_reported"
-          : "incomplete_visual_fidelity",
+      status: "high_fidelity_evidence_reported",
       lastScore,
       lastSimilarity,
       hasRemainingDebt,

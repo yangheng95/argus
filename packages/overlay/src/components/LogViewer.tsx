@@ -22,34 +22,7 @@ import { fmtElapsed, logDetailFields, parseServerLogLine, stringifyLogValue } fr
 // ── Re-export types so callers can use them without importing store/app ──
 export type { LogEntry, LogLevel, LogSource }
 
-// ── Constants ──
-
-const NDJSON_STAGE_COLORS: Record<string, string> = {
-  spec: "#3A86FF",
-  planner: "#7B54C9",
-  goal: "#2ECC71",
-  judge: "#F39C12",
-  acceptance: "#28B4A0",
-}
-
-const NDJSON_TOOL_COLORS: Record<string, string> = {
-  read_file: "#3498DB",
-  list_directory: "#5DADE2",
-  find_files: "#76D7EA",
-  search_code: "#F39C12",
-  memory_search: "#9B59B6",
-  web_search: "#E67E22",
-  write_file: "#27AE60",
-  edit_file: "#2ECC71",
-  run_command: "#E8644A",
-  bash: "#E74C3C",
-}
-
 const LOG_LEVEL_OPTIONS: LogLevel[] = ["debug", "info", "warn", "error"]
-
-function ndjsonToolColor(name: string): string {
-  return NDJSON_TOOL_COLORS[name] ?? "#95A5A6"
-}
 
 // ── Internal server-log state ──
 // Stored as module-level variables (same pattern as ) so they survive

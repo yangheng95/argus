@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { EnginePlanVersionTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Server } from "../../src/server/server"
@@ -330,94 +330,6 @@ describe("project-scope middleware: directory required", () => {
     expect(next.status).toBe(200)
     const nextBody = (await next.json()) as { tasks: Array<{ task: { id: string } }> }
     expect(nextBody.tasks.map((item) => item.task.id)).toEqual(["page-a"])
-  })
-
-  test("cross-project GET /global/tasks returns lean task rows without prompt-scale fields", async () => {
-    const now = Date.now()
-    const taskID = Identifier.ascending("task")
-    const planID = Identifier.ascending("plan")
-    const largeText = "large task-list payload ".repeat(500)
-    Database.use((db) => {
-      db.insert(ProjectTable)
-        .values({
-          id: "project-lean-task-list",
-          name: "Lean task list",
-          worktree: "C:/work/lean-task-list",
-          sandboxes: [],
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      db.insert(EngineTaskTable)
-        .values({
-          id: taskID,
-          project_id: "project-lean-task-list",
-          source: "mission",
-          title: "Lean projection task",
-          request: largeText,
-          priority: "normal",
-          metadata: {
-            checks: { build: ["pnpm", "build"] },
-            large: largeText,
-          },
-          budget: { max_executor_groups: 2 },
-          attachments: [
-            {
-              sha: "sha-lean-list",
-              url: "/attachment/project/sha-lean-list.txt",
-              mime: "text/plain",
-              size: largeText.length,
-              filename: "large.txt",
-            },
-          ],
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      db.insert(EnginePlanVersionTable)
-        .values({
-          id: planID,
-          task_id: taskID,
-          version: 1,
-          status: "active",
-          summary: "active plan",
-          prompt: largeText,
-          metadata: { large: largeText },
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    })
-
-    const app = Server.App()
-    const response = await app.request("/global/tasks?limit=5&q=Lean%20projection", { method: "GET" })
-    expect(response.status).toBe(200)
-    const body = (await response.json()) as { tasks: Array<Record<string, any>> }
-    expect(body.tasks).toHaveLength(1)
-    const item = body.tasks[0]!
-    expect(item.plan).toBeUndefined()
-    expect(item.run).toBeUndefined()
-    expect(item.evaluation).toBeUndefined()
-    expect(item.task).toMatchObject({
-      id: taskID,
-      title: "Lean projection task",
-      status: "queued",
-      directory: "C:/work/lean-task-list",
-      priority: "normal",
-    })
-    expect(item.task.request).toBeUndefined()
-    expect(item.task.metadata).toBeUndefined()
-    expect(item.task.attachments).toBeUndefined()
-    expect(item.task.budget).toBeUndefined()
-
-    const full = await app.request(`/task/${taskID}?directory=${encodeURIComponent("C:/work/lean-task-list")}`, {
-      method: "GET",
-    })
-    expect(full.status).toBe(200)
-    const fullBody = (await full.json()) as { request?: string; metadata?: unknown; attachments?: unknown[] }
-    expect(fullBody.request).toBe(largeText)
-    expect(fullBody.metadata).toBeDefined()
-    expect(fullBody.attachments).toHaveLength(1)
   })
 
   test("cross-project GET /global/tasks rejects incomplete compound cursor query", async () => {

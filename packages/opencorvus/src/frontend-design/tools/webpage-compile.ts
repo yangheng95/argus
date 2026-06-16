@@ -13,7 +13,7 @@ export const WebpageCompileTool = Tool.define("webpage_compile", {
 
 The canonical outputs are \`page.ir.json\` and \`assets/manifest.json\`. Dense CSS, SVG path data, data URIs, scripts, and long attribute/text values are preserved as content-addressed sidecar assets instead of being inlined into prompt context.
 
-Reads \`<outputDir>/singlefile.html\` when present, otherwise \`<outputDir>/capture.html\`, plus \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes \`<outputDir>/page.ir.json\`, \`<outputDir>/assets/manifest.json\`, and sidecar assets. Returns compact artifact stats.
+Reads \`<outputDir>/capture.html\` plus \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes \`<outputDir>/page.ir.json\`, \`<outputDir>/assets/manifest.json\`, and sidecar assets. Returns compact artifact stats.
 
 This tool is artifact-dependent: do NOT call it until \`extracted-page.json\` exists in the output directory. Never batch it with the URL extraction call that creates that file.
 
@@ -22,7 +22,7 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
     outputDir: z
       .string()
       .describe(
-        `Directory containing singlefile.html or capture.html plus extracted-page.json. Writes page.ir.json, assets/manifest.json, and sidecar assets here. Defaults to task-scoped \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`.`,
+        `Directory containing capture.html plus extracted-page.json. Writes page.ir.json, assets/manifest.json, and sidecar assets here. Defaults to task-scoped \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\` (matching webpage_extract's default). Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`.`,
       )
       .optional(),
   }),
@@ -30,7 +30,6 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
     const outputDir = await resolveWebpageEvidenceOutputDir({ override: params.outputDir, sessionID: ctx.sessionID })
     const extractedPath = path.join(outputDir, "extracted-page.json")
     const captureHtmlPath = path.join(outputDir, "capture.html")
-    const singleFileHtmlPath = path.join(outputDir, "singlefile.html")
 
     let extractedText: string
     try {
@@ -45,14 +44,13 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
       throw error
     }
 
-    const archiveHtmlPath = await existingArchiveHtmlPath(singleFileHtmlPath, captureHtmlPath)
-    if (!archiveHtmlPath) {
+    if (!(await exists(captureHtmlPath))) {
       throw new Error(
-        `Missing ${singleFileHtmlPath} and ${captureHtmlPath}. \`webpage_compile\` compiles canonical webpage evidence IR from ` +
+        `Missing ${captureHtmlPath}. \`webpage_compile\` compiles canonical webpage evidence IR from ` +
           `the HTML archive produced by \`webpage_extract\`. Re-run extraction for this evidence package first.`,
       )
     }
-    const archiveHtml = await fs.readFile(archiveHtmlPath, "utf8")
+    const archiveHtml = await fs.readFile(captureHtmlPath, "utf8")
 
     const raw = JSON.parse(extractedText)
     const page = materializeInlineExtractedPageAssets(ExtractedPageSchema.parse(raw), outputDir)
@@ -72,7 +70,7 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
         `# Compiled Web Clone Source IR`,
         "",
         `- Source: ${extractedPath}`,
-        `- HTML archive: ${archiveHtmlPath}`,
+        `- HTML archive: ${captureHtmlPath}`,
         `- Canonical structure IR: ${path.join(outputDir, "page.ir.json")}`,
         `- Browser layout/style merge: ${structure.pageIr.stats.layoutMatchedElements ?? 0}/${structure.pageIr.stats.layoutElements ?? 0} elements`,
         `- Asset graph: ${path.join(outputDir, "assets", "manifest.json")}`,
@@ -89,15 +87,6 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
     }
   },
 })
-
-async function existingArchiveHtmlPath(
-  singleFileHtmlPath: string,
-  captureHtmlPath: string,
-): Promise<string | undefined> {
-  if (await exists(singleFileHtmlPath)) return singleFileHtmlPath
-  if (await exists(captureHtmlPath)) return captureHtmlPath
-  return undefined
-}
 
 async function exists(filePath: string): Promise<boolean> {
   try {

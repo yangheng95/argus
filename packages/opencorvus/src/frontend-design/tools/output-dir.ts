@@ -6,7 +6,7 @@
  * rendered.png, diff.png, source-skeleton/, and source-ir/.
  *
  * The default lives in the task runtime:
- *   `<project>/.opencorvus/runtime/tasks/<task>/frontend-design/webpage-evidence/`
+ *   `<project>/.opencorvus/r/t/<task-key>/fd/webpage-evidence/`
  * Callers that want a different location, such as benchmark drivers and tests,
  * still override via the tool's outputDir parameter.
  */

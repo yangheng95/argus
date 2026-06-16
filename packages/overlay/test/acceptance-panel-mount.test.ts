@@ -208,7 +208,7 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
     'const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])',
   )
   expect(main).toContain(
-    'const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)',
+    "const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)",
   )
   expect(main).toContain("const activeRightActivity = () => selectedRightActivity()")
   expect(main).toContain('setSelectedRightActivity(panel === "task" ? "workflow" : null)')

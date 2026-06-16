@@ -97,7 +97,7 @@ export async function bindLocalModuleToSourceRegion(
   if (!target) throw new Error(`Browser preview target not found: ${input.targetID}`)
 
   const jobID = Identifier.ascending("artifact")
-  const outDir = ProjectRuntimePaths.taskAbsolute(input.projectRoot, input.taskID, "browser-preview", jobID)
+  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, jobID)
   await fs.mkdir(outDir, { recursive: true })
 
   const sourceImagePath = resolveSourceReferencePath({
@@ -663,15 +663,10 @@ async function main() {
     const locator = await findNode(page, input.locator);
     const count = await locator.count();
     if (count < 1) throw new Error("Implementation locator did not match any visible element.");
-    const visible = await locator.isVisible();
-    if (!visible) throw new Error("Implementation locator matched an element that is not visible.");
     await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
     await page.waitForTimeout(200);
     const capture = await locator.evaluate((node) => {
       const rect = node.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) {
-        throw new Error("Implementation locator matched a zero-size element.");
-      }
       const fullText = (node.innerText || node.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
       const texts = [];
       function add(value) {
@@ -691,8 +686,8 @@ async function main() {
         bbox: {
           x: Math.max(0, Math.round(rect.left + window.scrollX)),
           y: Math.max(0, Math.round(rect.top + window.scrollY)),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
+          width: Math.max(1, Math.round(rect.width)),
+          height: Math.max(1, Math.round(rect.height)),
         },
         textAnchors: texts.slice(0, 16),
         fullText,

@@ -20,6 +20,9 @@ import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import { isLiveGoalRunStatus } from "@/engine/catalog"
 import { InternalGitCommitSubject } from "@/engine/internal-git-commit-subject"
 import { listGoalWorkspacesForProject } from "@/engine/store"
+import { EngineTaskTable } from "@/engine/engine.sql"
+import { SessionTable } from "@/session/session.sql"
+import { taskIDForSession } from "@/orchestrator/task-event"
 
 export namespace Worktree {
   const log = Log.create({ service: "worktree" })
@@ -128,7 +131,7 @@ export namespace Worktree {
 
   /**
    * Single source for the per-project worktree root. Goal worktrees live
-   * UNDER `<primary>/.opencorvus/runtime/worktrees/` (co-located with other
+   * UNDER `<primary>/.opencorvus/r/w/` (co-located with other
    * runtime scratch, covered by the `/.opencorvus/` .gitignore entry). `create()`
    * and `WorktreeGC` MUST both derive the root from here — two inline
    * `path.join(...,".opencorvus","worktrees")` would be a double source
@@ -138,16 +141,51 @@ export namespace Worktree {
     return ProjectRuntimePaths.worktreesRoot(primaryDir)
   }
 
-  function taskIDFromRuntimeWorktree(primaryDir: string, worktreeDir: string): string | undefined {
-    const tasksRoot = path.join(ProjectRuntimePaths.projectRuntimeRoot(primaryDir), "tasks")
-    const relative = path.relative(tasksRoot, worktreeDir)
-    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return undefined
-    const parts = relative.split(path.sep).filter(Boolean)
-    if (parts.length === 6 && parts[1] === "goals" && parts[3] === "runs" && parts[5] === "worktree") {
-      return parts[0]
+  async function projectIDFromPrimaryDir(primaryDir: string): Promise<string | undefined> {
+    const rows = Database.use((db) => db.select().from(ProjectTable).all())
+    const primaryKey = await canonical(primaryDir)
+    for (const row of rows) {
+      if ((await canonical(row.worktree)) === primaryKey) return row.id
     }
-    if (parts.length === 4 && parts[1] === "sessions" && parts[3] === "worktree") {
-      return parts[0]
+    return undefined
+  }
+
+  async function taskIDFromRecordedWorkspace(primaryDir: string, worktreeDir: string): Promise<string | undefined> {
+    const projectID = await projectIDFromPrimaryDir(primaryDir)
+    if (!projectID) return undefined
+    const target = await canonical(worktreeDir)
+    for (const entry of listGoalWorkspacesForProject(projectID)) {
+      if ((await canonical(entry.workspaceDir)) === target) return entry.goal.task_id
+    }
+    const tasks = Database.use((db) =>
+      db
+        .select({
+          id: EngineTaskTable.id,
+          sessionID: EngineTaskTable.session_id,
+        })
+        .from(EngineTaskTable)
+        .where(eq(EngineTaskTable.project_id, projectID))
+        .all(),
+    )
+    for (const task of tasks) {
+      if (!task.sessionID) continue
+      const expected = ProjectRuntimePaths.directBuildWorktreeDir(primaryDir, task.id, task.sessionID)
+      if ((await canonical(expected)) === target) return task.id
+    }
+    const sessions = Database.use((db) =>
+      db
+        .select({
+          id: SessionTable.id,
+          directory: SessionTable.directory,
+        })
+        .from(SessionTable)
+        .where(eq(SessionTable.project_id, projectID))
+        .all(),
+    )
+    for (const session of sessions) {
+      if ((await canonical(session.directory)) !== target) continue
+      const taskID = taskIDForSession(session.id)
+      if (taskID) return taskID
     }
     return undefined
   }
@@ -1407,10 +1445,10 @@ export namespace Worktree {
 
     // Resolve the PRIMARY worktree (main repo root) first so a dispatched
     // goal session (whose Instance.directory IS itself a child worktree)
-    // doesn't cause nested `.opencorvus/runtime/.opencorvus/runtime/...`
+    // doesn't cause nested `.opencorvus/r/.opencorvus/r/...`
     // recursion. `primaryWorktreeInfo()` always returns the primary repo root.
     //
-    // Worktrees live UNDER `<primary>/.opencorvus/runtime/` — co-located
+    // Worktrees live UNDER `<primary>/.opencorvus/r/` — co-located
     // with other runtime scratch (attachments, visual-diff output). Previous
     // design placed them in the PARENT of the project root, which leaked
     // scratch dirs into the user's workspace for real projects and piled
@@ -1680,7 +1718,7 @@ export namespace Worktree {
       return error instanceof Error ? error.message : String(error)
     }
 
-    const taskID = taskIDFromRuntimeWorktree(primary.directory, directory)
+    const taskID = await taskIDFromRecordedWorkspace(primary.directory, directory)
     if (!taskID) return undefined
 
     try {
@@ -1951,7 +1989,7 @@ export namespace Worktree {
         throw new ResetFailedError({ message: error instanceof Error ? error.message : String(error) })
       })
 
-      const taskID = taskIDFromRuntimeWorktree(primaryInfo.directory, worktreePath)
+      const taskID = await taskIDFromRecordedWorkspace(primaryInfo.directory, worktreePath)
       if (taskID) {
         await TaskRuntimeMaterializer.materializeFrontendDesign({
           projectDir: primaryInfo.directory,

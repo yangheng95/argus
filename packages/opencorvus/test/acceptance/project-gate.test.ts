@@ -316,9 +316,9 @@ describe("acceptance project evidence gate", () => {
     const dir = await packageFixture({
       lint: "node scripts/check-lint-scope.mjs",
     })
-    await fs.mkdir(path.join(dir, ".opencorvus", "runtime", "worktrees", "goal-demo", ".next"), { recursive: true })
+    await fs.mkdir(path.join(dir, ".opencorvus", "r", "w", "goal-demo", ".next"), { recursive: true })
     await fs.writeFile(
-      path.join(dir, ".opencorvus", "runtime", "worktrees", "goal-demo", ".next", "generated-bad.js"),
+      path.join(dir, ".opencorvus", "r", "w", "goal-demo", ".next", "generated-bad.js"),
       "throw new Error('generated worktree output must not be linted')\n",
     )
     await fs.mkdir(path.join(dir, "scripts"), { recursive: true })
@@ -328,7 +328,7 @@ describe("acceptance project evidence gate", () => {
 import { existsSync } from "node:fs"
 import { cwd } from "node:process"
 
-if (existsSync(".opencorvus/runtime/worktrees/goal-demo/.next/generated-bad.js")) {
+if (existsSync(".opencorvus/r/w/goal-demo/.next/generated-bad.js")) {
   console.error("lint saw opencorvus internal worktree output")
   process.exit(1)
 }

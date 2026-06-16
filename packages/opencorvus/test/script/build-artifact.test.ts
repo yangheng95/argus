@@ -25,6 +25,11 @@ function currentRuntimeTarget(): ArtifactNodeRuntimeTarget {
   return target
 }
 
+function currentBunCompileTarget(): string {
+  const target = currentRuntimeTarget()
+  return ["bun", target.os === "win32" ? "windows" : target.os, target.arch, target.abi].filter(Boolean).join("-")
+}
+
 describe("build-artifact", () => {
   test("default flavor stays on the full cli artifact name", () => {
     expect(parseBuildFlavor(["bun", "run", "build"])).toBe("cli")
@@ -122,6 +127,11 @@ describe("build-artifact", () => {
     const screenshotSource = readFileSync(resolve(import.meta.dir, "../../src/gui/screenshot.ts"), "utf8")
     const capabilitySource = readFileSync(resolve(import.meta.dir, "../../src/platform/capability.ts"), "utf8")
     const ptyHostSource = readFileSync(resolve(import.meta.dir, "../../src/pty/host.ts"), "utf8")
+    const regionComparisonSource = readFileSync(resolve(import.meta.dir, "../../src/browser-preview/region-comparison.ts"), "utf8")
+    const visualRegionBindingToolSource = readFileSync(
+      resolve(import.meta.dir, "../../src/frontend-design/visual-region-binding-tool.ts"),
+      "utf8",
+    )
 
     expect(watcherSource).not.toContain('from "@parcel/watcher/wrapper"')
     expect(watcherSource).not.toContain("@parcel/watcher-${process.platform}")
@@ -132,6 +142,10 @@ describe("build-artifact", () => {
     expect(capabilitySource).toContain('requireRuntimePackage("@parcel/watcher")')
     expect(ptyHostSource).not.toContain('from "@lydell/node-pty"')
     expect(ptyHostSource).toContain('requireRuntimePackage<typeof import("@lydell/node-pty")>')
+    expect(regionComparisonSource).not.toContain('from "sharp"')
+    expect(regionComparisonSource).toContain('requireRuntimePackage<typeof import("sharp")>("sharp")')
+    expect(visualRegionBindingToolSource).not.toContain('from "sharp"')
+    expect(visualRegionBindingToolSource).toContain('requireRuntimePackage<typeof import("sharp")>("sharp")')
   })
 
   test("runtime node module set includes win32 x64 native packages only for win32 x64", () => {
@@ -175,20 +189,25 @@ describe("build-artifact", () => {
     expect(packages).not.toContain("node-screenshots-linux-arm64-musl")
   })
 
-  test("runtime node module copy keeps package dependencies in the runtime node_modules root", async () => {
+  test("runtime node module copy keeps current-target package dependencies in the runtime node_modules root", async () => {
     const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-runtime-node-modules-"))
     try {
-      const target = { os: "win32", arch: "x64" } as const
+      const target = currentRuntimeTarget()
       const nativeRuntimeModules = artifactRuntimeNodeModules(target).filter((item) =>
         ["sharp", "@parcel/watcher", "node-screenshots"].includes(item.name),
       )
+      const currentTargetNativePackages = nativeRuntimeModules.flatMap((item) => item.runtimeDependencies ?? [])
       await copyRuntimeNodeModules(target, outdir, resolve(import.meta.dir, "../../"), nativeRuntimeModules)
       expect(existsSync(resolve(outdir, "node_modules/@img/colour/package.json"))).toBe(true)
-      expect(existsSync(resolve(outdir, "node_modules/@img/sharp-win32-x64/package.json"))).toBe(true)
+      for (const packageName of currentTargetNativePackages) {
+        expect(existsSync(resolve(outdir, "node_modules", ...packageName.split("/"), "package.json"))).toBe(true)
+      }
       expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher/wrapper.js"))).toBe(true)
-      expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher-win32-x64/package.json"))).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules/detect-libc/package.json"))).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher/node_modules/detect-libc/package.json"))).toBe(
+        true,
+      )
       expect(existsSync(resolve(outdir, "node_modules/micromatch/package.json"))).toBe(true)
-      expect(existsSync(resolve(outdir, "node_modules/node-screenshots-win32-x64-msvc/package.json"))).toBe(true)
     } finally {
       await rm(outdir, { recursive: true, force: true })
     }
@@ -245,6 +264,83 @@ describe("build-artifact", () => {
     }
   })
 
+  test("runtime node module copy lets sharp load through its package entrypoint", async () => {
+    const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-sharp-runtime-"))
+    try {
+      const target = currentRuntimeTarget()
+      const sharpRuntimeModule = artifactRuntimeNodeModules(target).find((item) => item.name === "sharp")
+      expect(sharpRuntimeModule).toBeDefined()
+      await writeFile(resolve(outdir, "package.json"), JSON.stringify({ type: "commonjs" }))
+      await copyRuntimeNodeModules(target, outdir, resolve(import.meta.dir, "../../"), [sharpRuntimeModule!])
+
+      const packageJson = resolve(outdir, "package.json")
+      const script = [
+        'const { createRequire } = require("node:module")',
+        `const runtimeRequire = createRequire(${JSON.stringify(packageJson)})`,
+        'const sharp = runtimeRequire("sharp")',
+        'if (typeof sharp !== "function") throw new Error("missing sharp callable export")',
+      ].join(";")
+      const proc = Bun.spawn([process.execPath, "-e", script], {
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ])
+
+      expect(`${stdout}\n${stderr}`).not.toContain("Cannot find module")
+      expect(`${stdout}\n${stderr}`).not.toContain("Cannot find package")
+      expect(exitCode).toBe(0)
+    } finally {
+      await rm(outdir, { recursive: true, force: true })
+    }
+  })
+
+  test("runtime node module copy preserves conflicting detect-libc versions for sharp and parcel watcher", async () => {
+    const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-native-conflict-runtime-"))
+    try {
+      const target = currentRuntimeTarget()
+      const modules = artifactRuntimeNodeModules(target).filter((item) =>
+        ["sharp", "@parcel/watcher"].includes(item.name),
+      )
+      await writeFile(resolve(outdir, "package.json"), JSON.stringify({ type: "commonjs" }))
+      await copyRuntimeNodeModules(target, outdir, resolve(import.meta.dir, "../../"), modules)
+
+      const packageJson = resolve(outdir, "package.json")
+      const watcherPackageJson = resolve(outdir, "node_modules", "@parcel", "watcher", "package.json")
+      const script = [
+        'const { createRequire } = require("node:module")',
+        `const runtimeRequire = createRequire(${JSON.stringify(packageJson)})`,
+        `const watcherRequire = createRequire(${JSON.stringify(watcherPackageJson)})`,
+        'const sharpDetectLibc = runtimeRequire("detect-libc/package.json")',
+        'const watcherDetectLibc = watcherRequire("detect-libc/package.json")',
+        'if (sharpDetectLibc.version !== "2.1.2") throw new Error(`sharp detect-libc ${sharpDetectLibc.version}`)',
+        'if (watcherDetectLibc.version !== "1.0.3") throw new Error(`watcher detect-libc ${watcherDetectLibc.version}`)',
+        'const sharp = runtimeRequire("sharp")',
+        'const watcher = runtimeRequire("@parcel/watcher")',
+        'if (typeof sharp !== "function") throw new Error("missing sharp callable export")',
+        'if (typeof watcher.subscribe !== "function") throw new Error("missing watcher subscribe")',
+      ].join(";")
+      const proc = Bun.spawn([process.execPath, "-e", script], {
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ])
+
+      expect(`${stdout}\n${stderr}`).not.toContain("Cannot find module")
+      expect(`${stdout}\n${stderr}`).not.toContain("Cannot find package")
+      expect(exitCode).toBe(0)
+    } finally {
+      await rm(outdir, { recursive: true, force: true })
+    }
+  }, 60000)
+
   test("runtime node module copy resolves packaged Playwright modules from opencorvus", async () => {
     const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-playwright-runtime-node-modules-"))
     try {
@@ -279,21 +375,36 @@ describe("build-artifact", () => {
     }
   })
 
-  test("overlay-server bundle does not include browser driver internals", async () => {
+  test("overlay-server compiled binary does not include browser driver internals", async () => {
     const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-overlay-bundle-"))
+    const packageRoot = resolve(import.meta.dir, "../../")
+    const previousCwd = process.cwd()
+    const outfile = resolve(outdir, process.platform === "win32" ? "overlay-probe.exe" : "overlay-probe")
     try {
+      process.chdir(packageRoot)
       const result = await Bun.build({
-        entrypoints: [resolve(import.meta.dir, "../../src/overlay-server.ts")],
+        conditions: ["browser"],
+        entrypoints: artifactEntrypoints("overlay-server"),
         outdir,
         target: "bun",
+        tsconfig: resolve(packageRoot, "tsconfig.json"),
         external: artifactExternalModules(),
+        compile: {
+          autoloadBunfig: false,
+          autoloadDotenv: false,
+          autoloadTsconfig: true,
+          autoloadPackageJson: true,
+          target: currentBunCompileTarget(),
+          outfile,
+        },
       })
       expect(result.success).toBe(true)
-      const source = readFileSync(resolve(outdir, "overlay-server.js"), "utf8")
-      expect(source).not.toContain("chromium-bidi/lib/cjs/bidiMapper/BidiMapper")
-      expect(source).not.toContain("BidiOverCdp")
-      expect(source).not.toContain("playwright-core/lib/server")
+      const source = readFileSync(outfile)
+      expect(source.includes(Buffer.from("chromium-bidi/lib/cjs/bidiMapper/BidiMapper"))).toBe(false)
+      expect(source.includes(Buffer.from("BidiOverCdp"))).toBe(false)
+      expect(source.includes(Buffer.from("playwright-core/lib/server"))).toBe(false)
     } finally {
+      process.chdir(previousCwd)
       await rm(outdir, { recursive: true, force: true })
     }
   }, 60000)

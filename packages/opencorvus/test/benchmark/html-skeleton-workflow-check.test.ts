@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "node:path"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import {
   parseHtmlSkeletonWorkflowCheckArgs,
   runHtmlSkeletonWorkflowCheck,
@@ -104,9 +105,11 @@ describe("html skeleton workflow check", () => {
 
   test("recognizes frontend-research JSON evidence in session-scoped output", async () => {
     await using tmp = await tmpdir()
-    const taskDir = path.join(tmp.path, "tasks", "tsk_full_workflow")
-    const frontendDesignDir = path.join(taskDir, "frontend-design")
-    const frontendResearchDir = path.join(taskDir, "frontend-research", "ses_research")
+    const taskID = "tsk_full_workflow"
+    const sessionID = "ses_research"
+    const taskDir = ProjectRuntimePaths.taskRoot(tmp.path, taskID)
+    const frontendDesignDir = path.join(taskDir, "fd")
+    const frontendResearchDir = ProjectRuntimePaths.frontendResearchPaths(tmp.path, taskID, sessionID).absoluteDir
     const visualRoot = path.join(frontendDesignDir, "visual-html-skeleton")
     const sourcePackageDir = path.join(frontendDesignDir, "web-clone-source")
     await writeSourceEvidence(sourcePackageDir)
@@ -248,10 +251,12 @@ describe("html skeleton workflow check", () => {
     expect(report.checks.find((check) => check.id === "visual-token-css")?.passed).toBe(false)
   })
 
-  test("resolves a runtime tasks parent to the task-scoped frontend-design skeleton", async () => {
+  test("rejects an ambiguous runtime task fanout parent instead of guessing by mtime", async () => {
     await using tmp = await tmpdir()
-    const tasksDir = path.join(tmp.path, ".opencorvus", "runtime", "tasks")
-    const frontendDesignDir = path.join(tasksDir, "tsk_full_workflow", "frontend-design")
+    const taskID = "tsk_full_workflow"
+    const tasksDir = path.join(ProjectRuntimePaths.projectRuntimeRoot(tmp.path), "t")
+    const taskDir = ProjectRuntimePaths.taskRoot(tmp.path, taskID)
+    const frontendDesignDir = path.join(taskDir, "fd")
     const visualRoot = path.join(frontendDesignDir, "visual-html-skeleton")
     const sourcePackageDir = path.join(frontendDesignDir, "web-clone-source")
     await writeSourceEvidence(sourcePackageDir)
@@ -308,26 +313,78 @@ describe("html skeleton workflow check", () => {
       "create_frontend_skeleton_project\nsubmit_frontend_template\n",
     )
 
-    const report = await runHtmlSkeletonWorkflowCheck({
-      taskDir: tasksDir,
-      reference: path.join(tmp.path, "missing-reference.png"),
-      outDir: path.join(tmp.path, "out"),
-      threshold: 0.95,
-      worstThreshold: 0.8,
-      headless: true,
-    })
+    await expect(
+      runHtmlSkeletonWorkflowCheck({
+        taskDir: tasksDir,
+        outDir: path.join(tmp.path, "out"),
+        threshold: 0.95,
+        worstThreshold: 0.8,
+        headless: true,
+      }),
+    ).rejects.toThrow("Task fanout parent is ambiguous")
+  })
 
-    expect(report.passed).toBe(false)
-    expect(report.visualDiff).toBeUndefined()
-    expect(report.frontendDesignDir).toBe(frontendDesignDir)
-    expect(report.visualRoot).toBe(visualRoot)
-    expect(report.checks.find((check) => check.id === "reference-png")?.passed).toBe(false)
+  test("uses OPENCORVUS_TASK_ID instead of guessing the newest task fanout directory", async () => {
+    await using tmp = await tmpdir()
+    const targetTaskID = "tsk_target_workflow"
+    const passingTaskID = "tsk_other_workflow"
+    const targetTaskDir = ProjectRuntimePaths.taskRoot(tmp.path, targetTaskID)
+    const targetFrontendDesignDir = path.join(targetTaskDir, "fd")
+    const passingTaskDir = ProjectRuntimePaths.taskRoot(tmp.path, passingTaskID)
+    const passingFrontendDesignDir = path.join(passingTaskDir, "fd")
+    const passingVisualRoot = path.join(passingFrontendDesignDir, "visual-html-skeleton")
+    const passingSourcePackageDir = path.join(passingFrontendDesignDir, "web-clone-source")
+
+    await writeSourceEvidence(path.join(targetFrontendDesignDir, "web-clone-source"))
+    await Bun.write(
+      path.join(targetFrontendDesignDir, "frontend-template.md"),
+      "- role: visual_baseline_input\nvisual-html-skeleton/index.html\nvisual-diff\n",
+    )
+
+    await writeSourceEvidence(passingSourcePackageDir)
+    await Bun.write(path.join(passingVisualRoot, "index.html"), "<!doctype html><main>Passing task</main>")
+    await Bun.write(path.join(passingVisualRoot, "styles", "tokens.css"), ":root{--color-canvas:#fff}")
+    await Bun.write(
+      path.join(passingFrontendDesignDir, "frontend-template.md"),
+      "- role: visual_baseline_input\nvisual-html-skeleton/index.html\nvisual-diff\nsubmit_frontend_template\n",
+    )
+    await Bun.write(path.join(passingFrontendDesignDir, "evidence-source-manifest.md"), "web-clone-source/reference.png")
+    await Bun.write(path.join(passingFrontendDesignDir, "frontend-design-process-trace.json"), "{}")
+    await Bun.write(path.join(passingFrontendDesignDir, "frontend-design-iteration-state.json"), "{}")
+
+    const previousTaskID = process.env.OPENCORVUS_TASK_ID
+    const previousProjectDir = process.env.OPENCORVUS_PROJECT_DIR
+    process.env.OPENCORVUS_TASK_ID = targetTaskID
+    process.env.OPENCORVUS_PROJECT_DIR = tmp.path
+    try {
+      const report = await runHtmlSkeletonWorkflowCheck({
+        outDir: path.join(tmp.path, "out"),
+        threshold: 0.95,
+        worstThreshold: 0.8,
+        headless: true,
+      })
+
+      expect(report.frontendDesignDir).toBe(targetFrontendDesignDir)
+      expect(report.passed).toBe(false)
+      expect(report.checks.find((check) => check.id === "visual-root-index")?.passed).toBe(false)
+    } finally {
+      if (previousTaskID === undefined) {
+        delete process.env.OPENCORVUS_TASK_ID
+      } else {
+        process.env.OPENCORVUS_TASK_ID = previousTaskID
+      }
+      if (previousProjectDir === undefined) {
+        delete process.env.OPENCORVUS_PROJECT_DIR
+      } else {
+        process.env.OPENCORVUS_PROJECT_DIR = previousProjectDir
+      }
+    }
   })
 
   test("rejects old task-scoped source baseline handoffs that never restored visual-html-skeleton", async () => {
     await using tmp = await tmpdir()
     const taskDir = path.join(tmp.path, "tasks", "tsk_old")
-    const frontendDesignDir = path.join(taskDir, "frontend-design")
+    const frontendDesignDir = path.join(taskDir, "fd")
     const sourcePackageDir = path.join(frontendDesignDir, "web-clone-source")
     await writeSourceEvidence(sourcePackageDir)
     await Bun.write(
@@ -361,7 +418,7 @@ describe("html skeleton workflow check", () => {
   test("writes a failed report instead of starting visual render when skeleton artifacts are missing", async () => {
     await using tmp = await tmpdir()
     const taskDir = path.join(tmp.path, "tasks", "tsk_missing_visual")
-    const frontendDesignDir = path.join(taskDir, "frontend-design")
+    const frontendDesignDir = path.join(taskDir, "fd")
     const sourcePackageDir = path.join(frontendDesignDir, "web-clone-source")
     await writeSourceEvidence(sourcePackageDir)
     await Bun.write(

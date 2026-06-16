@@ -1,9 +1,11 @@
 import { researchRequestHash, researchSourceDigest, type ResearchBrief } from "../../src/research/schema"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 export function validResearchBrief(
   request = "research request",
   overrides: Partial<ResearchBrief> = {},
 ): ResearchBrief {
+  const bundleRoot = ProjectRuntimePaths.deepResearchPaths("", "tsk_research_fixture", "ses_research_fixture").relativeDir
   const evidence = [
     {
       id: "ev_1",
@@ -33,9 +35,9 @@ export function validResearchBrief(
       assumed_non_goals: [],
     },
     bundle: {
-      full_markdown_path: ".opencorvus/runtime/tasks/t/deep-research/s/research-bundle.md",
-      evidence_json_path: ".opencorvus/runtime/tasks/t/deep-research/s/evidence.json",
-      citation_map_path: ".opencorvus/runtime/tasks/t/deep-research/s/citation-map.json",
+      full_markdown_path: `${bundleRoot}/research-bundle.md`,
+      evidence_json_path: `${bundleRoot}/evidence.json`,
+      citation_map_path: `${bundleRoot}/citation-map.json`,
     },
     summary: "Evidence-backed summary.",
     evidence_index: evidence,

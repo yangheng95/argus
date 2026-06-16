@@ -13584,18 +13584,6 @@
                     "regionID": {
                       "type": "string"
                     },
-                    "manifestPath": {
-                      "type": "string"
-                    },
-                    "artifactPaths": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -14805,7 +14793,8 @@
                   "targetID",
                   "viewportIDs",
                   "inlineBindings"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -14879,7 +14868,8 @@
                 "required": [
                   "targetID",
                   "viewportID"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -15036,7 +15026,8 @@
                   "targetID",
                   "viewportID",
                   "input"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },

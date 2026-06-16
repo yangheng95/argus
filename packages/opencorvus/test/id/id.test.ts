@@ -214,8 +214,15 @@ describe("Identifier.shortPath", () => {
     expect(new Set(ids.map(Identifier.shortPath)).size).toBe(ids.length)
   })
 
-  test("retains the legacy 8-body form for runtime readers only", () => {
+  test("directoryKey returns a stable non-readable 8-character key", () => {
     const id = "tsk_e54c2d091001t145QP2P6xwoqi"
-    expect(Identifier.legacyShortPath(id)).toBe("tsk_e54c2d09")
+    expect(Identifier.directoryKey(id)).toMatch(/^[0-9A-Za-z]{8}$/)
+    expect(Identifier.directoryKey(id)).toBe(Identifier.directoryKey(id))
+  })
+
+  test("directoryKey distinguishes IDs created in the same millisecond", () => {
+    const timestamp = 1779604252000
+    const ids = Array.from({ length: 512 }, () => Identifier.create("goal", false, timestamp))
+    expect(new Set(ids.map(Identifier.directoryKey)).size).toBe(ids.length)
   })
 })

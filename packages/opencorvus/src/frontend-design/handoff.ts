@@ -5,7 +5,7 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 // The `frontend_design` decision-log phase is the canonical source; these
 // files are a regenerated, read-only PROJECTION of it (rule 8 — one source;
 // previously `orchestrator/tools.ts` recomputed these strings independently).
-export const FRONTEND_DESIGN_RELATIVE_DIR_TEMPLATE = ".opencorvus/runtime/tasks/<taskID>/frontend-design"
+export const FRONTEND_DESIGN_RELATIVE_DIR_TEMPLATE = ".opencorvus/r/t/<task-key>/fd"
 export const FRONTEND_DESIGN_TEMPLATE_PATH_TEMPLATE = `${FRONTEND_DESIGN_RELATIVE_DIR_TEMPLATE}/frontend-template.md`
 export const FRONTEND_DESIGN_SOURCE_MANIFEST_PATH_TEMPLATE = `${FRONTEND_DESIGN_RELATIVE_DIR_TEMPLATE}/evidence-source-manifest.md`
 

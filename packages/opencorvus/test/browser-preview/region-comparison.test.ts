@@ -6,6 +6,7 @@ import sharp from "sharp"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Instance } from "../../src/project/instance"
+import { SessionTable } from "../../src/session/session.sql"
 import { Database } from "../../src/storage/db"
 import {
   compareBrowserPreviewRegions,
@@ -177,19 +178,36 @@ async function seedTask(directory: string) {
   await Instance.provide({
     directory,
     fn: () => {
+      const time = Date.now()
+      const sessionID = `${taskID}_root`
       Database.use((db) =>
-        db
-          .insert(EngineTaskTable)
-          .values({
-            id: taskID,
-            project_id: Instance.project.id,
-            title: "Region comparison task",
-            request: "Compare economy region",
-            source: "api",
-            time_created: Date.now(),
-            time_updated: Date.now(),
-          })
-          .run(),
+        db.transaction((tx) => {
+          tx.insert(SessionTable)
+            .values({
+              id: sessionID,
+              project_id: Instance.project.id,
+              slug: taskID,
+              directory,
+              title: "Region comparison task",
+              version: "test",
+              kind: "root",
+              time_created: time,
+              time_updated: time,
+            })
+            .run()
+          tx.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: sessionID,
+              title: "Region comparison task",
+              request: "Compare economy region",
+              source: "api",
+              time_created: time,
+              time_updated: time,
+            })
+            .run()
+        }),
       )
     },
   })

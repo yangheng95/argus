@@ -757,6 +757,24 @@ test(
         selectedSourceID: "tsk_side_activity",
       })
 
+      const missionRequestsBeforeReturn = requestLog.filter(
+        (entry) => entry.method === "GET" && entry.path === "/mission",
+      ).length
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      await waitForState(
+        "mission activity should reload rows after switching away and back",
+        (state) =>
+          state.leftMission === "true" &&
+          state.leftTasks === "false" &&
+          state.missionRows === 1 &&
+          state.missionTaskProjectionButtons === 1,
+      )
+      assert.equal(
+        requestLog.filter((entry) => entry.method === "GET" && entry.path === "/mission").length >
+          missionRequestsBeforeReturn,
+        true,
+      )
+
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
       await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-row")
       const skillPanelState = await page.evaluate(() => {

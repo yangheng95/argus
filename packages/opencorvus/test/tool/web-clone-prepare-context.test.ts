@@ -50,7 +50,7 @@ describe("tool.web_clone_prepare_context", () => {
         expect(result.metadata.sourceReadmePath).toBe(path.join(sourcePackageDir, "README.md"))
         expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "implementation-blueprint.md"))
         expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "reference-mobile.png"))
-        expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "singlefile.html"))
+        expect(result.metadata.materializedFiles).not.toContain(path.join(sourcePackageDir, "singlefile.html"))
         expect(result.metadata.contextPath).toBe(path.join(sourcePackageDir, "web-clone-context.md"))
         expect(result.metadata.contractPath).toBe(path.join(sourcePackageDir, "web-clone-implementation-contract.json"))
         expect(result.metadata.materializedFiles).toContain(
@@ -109,7 +109,6 @@ describe("tool.web_clone_prepare_context", () => {
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     for (const file of [
       "capture.html",
-      "singlefile.html",
       "extracted-page.json",
       "segments.json",
       "codegen-context.json",
@@ -190,10 +189,6 @@ async function writeFixtureEvidence(root: string): Promise<string> {
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "capture.html"), "<!doctype html><main>Economic calendar</main>")
-  await Bun.write(
-    path.join(webpageEvidenceDir, "singlefile.html"),
-    "<!doctype html><main>Economic calendar SingleFile</main>",
-  )
   await Bun.write(
     path.join(webpageEvidenceDir, "extracted-page.json"),
     JSON.stringify(

@@ -2,11 +2,10 @@
  * `webpage_extract` tool — wraps the webpage extraction runtime.
  *
  * Launches a headless browser, pulls the DOM tree + computed styles + full-
- * page screenshot, and writes five primary artifacts to the worktree:
+ * page screenshot, and writes primary artifacts to the worktree:
  *   - `<outputDir>/reference.png`          reference screenshot (binary)
  *   - `<outputDir>/reference-mobile.png`   mobile viewport reference screenshot (binary)
  *   - `<outputDir>/capture.html`           post-load archive HTML snapshot
- *   - `<outputDir>/singlefile.html`        archived HTML/CSS visual baseline
  *   - `<outputDir>/extracted-page.json`    full ExtractedPage (tree + tokens + assets)
  *   - `<outputDir>/images/*`               downloaded image assets (when keep_images=true)
  *
@@ -24,7 +23,6 @@ import { Tool } from "../../tool/tool"
 import { Log } from "../../util/log"
 import { extractPage } from "@/browser/webpage/extract"
 import { resolveWebpageEvidenceOutputDir, DEFAULT_WEBPAGE_EVIDENCE_SUBDIR } from "./output-dir"
-import { captureSingleFileHtml } from "@/web-clone/singlefile-capture"
 
 const log = Log.create({ service: "webpage-evidence.tool.webpage_extract" })
 
@@ -137,34 +135,6 @@ Use this only when URL evidence is missing for the requested output directory. D
     const jsonPath = path.join(outputDir, "extracted-page.json")
     await fs.writeFile(jsonPath, JSON.stringify(page, null, 2), "utf8")
 
-    const singleFilePath = path.join(outputDir, "singlefile.html")
-    let singleFile:
-      | {
-          outputPath: string
-          bytes: number
-        }
-      | undefined
-    let singleFileError: string | undefined
-    try {
-      singleFile = await captureSingleFileHtml({
-        url: params.url,
-        outputPath: singleFilePath,
-        viewport,
-        waitDelayMs: 10_000,
-        signal: ctx.abort,
-      })
-    } catch (error) {
-      singleFileError = error instanceof Error ? error.message : String(error)
-      log.warn("SingleFile capture failed; continuing with browser HTML capture", {
-        url: params.url,
-        outputDir,
-        error: singleFileError,
-      })
-      await fs
-        .writeFile(path.join(outputDir, "singlefile-failure.txt"), `${singleFileError}\n`, "utf8")
-        .catch(() => undefined)
-    }
-
     const summary = {
       url: params.url,
       title: page.title,
@@ -174,8 +144,6 @@ Use this only when URL evidence is missing for the requested output directory. D
       mobileReferencePath,
       captureHtmlPath,
       extractedPagePath: jsonPath,
-      singleFilePath: singleFile?.outputPath,
-      singleFileError,
       stats: page.stats,
       tokens: {
         colors: Object.keys(page.tokens.colors).length,
@@ -205,9 +173,6 @@ Use this only when URL evidence is missing for the requested output directory. D
         `**Mobile reference screenshot:** \`${mobileReferencePath}\``,
         `**HTML capture:** \`${captureHtmlPath}\``,
         `**Full extracted page JSON:** \`${jsonPath}\``,
-        singleFile
-          ? `**SingleFile HTML:** \`${singleFile.outputPath}\` (${Math.round(singleFile.bytes / 1024)}KB)`
-          : `**SingleFile HTML:** unavailable; using browser HTML capture. See \`${path.join(outputDir, "singlefile-failure.txt")}\`.`,
         "",
         "Evidence acquired. Do not rerun extraction for this URL/outputDir unless the source changed. Use compact webpage evidence artifacts for frontend template synthesis; do not read `extracted-page.json` wholesale.",
       ].join("\n"),

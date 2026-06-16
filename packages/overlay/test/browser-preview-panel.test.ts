@@ -76,6 +76,8 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain('event.key === "Tab" || event.key === "Escape"')
   expect(component).toContain('data-ui="browser-preview-screenshot"')
   expect(component).toContain("verificationRequest()")
+  expect(component).toContain("request.taskID === taskID && request.targetID === targetID")
+  expect(component).toContain("if (request.taskID !== taskID || request.targetID !== targetID) setVerificationRequest(undefined)")
   expect(component).toContain("const error = verification.error")
   expect(component).toContain("if (!(error instanceof ApiError) || error.status !== 404) return")
   expect(component).toContain("setVerificationRequest(undefined)")

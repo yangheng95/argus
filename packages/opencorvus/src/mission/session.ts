@@ -1,5 +1,7 @@
 import { Database, NotFoundError, and, desc, eq, isNull, like, or, sql } from "../storage/db"
+import fs from "node:fs/promises"
 import { Instance } from "@/project/instance"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Session } from "@/session"
 import { SessionTable } from "@/session/session.sql"
 import { MissionID } from "./schema"
@@ -22,6 +24,10 @@ function missionIDFromInfo(session: Session.Info): string | undefined {
   const missionID = (session.metadata as { mission?: { id?: unknown } } | undefined)?.mission?.id
   const parsed = MissionID.safeParse(missionID)
   return parsed.success ? parsed.data : undefined
+}
+
+async function ensureMissionRuntimeDirectory(input: { directory: string; missionID: string }) {
+  await fs.mkdir(ProjectRuntimePaths.missionRoot(input.directory, input.missionID), { recursive: true })
 }
 
 function findMissionSessionID(missionID: string) {
@@ -193,8 +199,13 @@ export async function* listGlobalMissionSessions(input?: {
 }
 
 async function ensureMissionSessionInner(input: { missionID: string; defaultCwd: string }) {
-  const existingID = findMissionSessionID(input.missionID)
-  if (existingID) return withMissionID(await Session.get(existingID), input.missionID)
+  const missionID = MissionID.parse(input.missionID)
+  const existingID = findMissionSessionID(missionID)
+  if (existingID) {
+    const existing = await Session.get(existingID)
+    await ensureMissionRuntimeDirectory({ directory: existing.directory, missionID })
+    return withMissionID(existing, missionID)
+  }
 
   const created = await Session.createNext({
     kind: "mission",
@@ -205,13 +216,14 @@ async function ensureMissionSessionInner(input: { missionID: string; defaultCwd:
     sessionID: created.id,
     patch: {
       mission: {
-        id: input.missionID,
-        channelKey: channelKeyForMission(input.missionID),
+        id: missionID,
+        channelKey: channelKeyForMission(missionID),
         cwd: input.defaultCwd,
       },
     },
   })
-  return withMissionID(updated, input.missionID)
+  await ensureMissionRuntimeDirectory({ directory: updated.directory, missionID })
+  return withMissionID(updated, missionID)
 }
 
 export async function ensureMissionSession(input: { missionID: string; defaultCwd: string }) {

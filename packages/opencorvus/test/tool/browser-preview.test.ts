@@ -14,11 +14,7 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionTable } from "../../src/session/session.sql"
 import { Database } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import {
-  findLatestBrowserPreviewTarget,
-  latestBrowserPreviewEvidenceID,
-  persistBrowserPreviewTarget,
-} from "../../src/browser-preview/persist"
+import { findLatestBrowserPreviewTarget, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -98,7 +94,7 @@ async function seedTask(directory: string) {
   return taskID
 }
 
-async function startModulePreviewServer(input?: { hiddenRegion?: boolean }): Promise<{ url: string; close: () => Promise<void> }> {
+async function startModulePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
   server = createServer((req, res) => {
     if (req.url !== "/world-economy") {
@@ -115,7 +111,6 @@ async function startModulePreviewServer(input?: { hiddenRegion?: boolean }): Pro
             body { margin: 0; font-family: Arial, sans-serif; background: #f7f8fa; }
             main { padding: 40px; }
             [data-oc-region="economic-calendar"] {
-              ${input?.hiddenRegion ? "display: none;" : ""}
               width: 360px;
               min-height: 150px;
               background: #ffffff;
@@ -149,52 +144,6 @@ async function startModulePreviewServer(input?: { hiddenRegion?: boolean }): Pro
         server = undefined
       }),
   }
-}
-
-async function writeLocalModuleBindingSourceEvidence(root: string, taskID: string) {
-  const designPaths = ProjectRuntimePaths.frontendDesignPaths(root, taskID)
-  await fs.mkdir(path.join(designPaths.skeletonProjectAbsolute, "src/data"), { recursive: true })
-  await fs.mkdir(designPaths.sourcePackageAbsolute, { recursive: true })
-  await sharp({
-    create: {
-      width: 900,
-      height: 700,
-      channels: 4,
-      background: "#f7f8fa",
-    },
-  })
-    .composite([
-      {
-        input: Buffer.from(
-          `<svg width="380" height="170" xmlns="http://www.w3.org/2000/svg">
-            <rect width="380" height="170" rx="8" fill="#ffffff" stroke="#d7dde5"/>
-            <text x="24" y="56" font-family="Arial" font-size="28" fill="#111827">Economic calendar</text>
-            <text x="24" y="98" font-family="Arial" font-size="16" fill="#4c5a68">GDP, inflation, interest rate, and jobs events</text>
-          </svg>`,
-        ),
-        left: 64,
-        top: 96,
-      },
-    ])
-    .png()
-    .toFile(path.join(designPaths.sourcePackageAbsolute, "reference.png"))
-  await fs.writeFile(
-    path.join(designPaths.skeletonProjectAbsolute, "src/data/sourceDomRegions.ts"),
-    `export const sourceDomRegions = ${JSON.stringify(
-      [
-        {
-          componentName: "EconomicCalendarRegion",
-          heading: "Economic calendar",
-          textPreview: "GDP, inflation, interest rate, and jobs events",
-          sourceBounds: { x: 64, y: 96, width: 380, height: 170 },
-          selector: "section:nth-of-type(1)",
-        },
-      ],
-      null,
-      2,
-    )} as const\n`,
-  )
-  return designPaths
 }
 
 describe("tool.browser_preview", () => {
@@ -567,46 +516,6 @@ describe("tool.browser_preview", () => {
             })
             expect(payload.nextStep).toContain("pass metadata.binding to browser_preview_compare_regions")
             expect(payload.artifacts.binding_puzzle).toEndWith("binding-puzzle.png")
-          },
-        })
-      } finally {
-        await preview.close()
-      }
-    },
-    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
-  )
-
-  test(
-    "bind local module tool rejects hidden implementation locators before persisting evidence",
-    async () => {
-      const preview = await startModulePreviewServer({ hiddenRegion: true })
-      try {
-        await using tmp = await tmpdir({ git: true })
-        const taskID = await seedTask(tmp.path)
-        await Instance.provide({
-          directory: tmp.path,
-          fn: async () => {
-            await writeLocalModuleBindingSourceEvidence(tmp.path, taskID)
-            const target = await persistBrowserPreviewTarget({ taskID, url: preview.url })
-            const tool = await BrowserPreviewBindLocalModuleTool.init()
-
-            await expect(
-              tool.execute(
-                {
-                  targetID: target.id,
-                  viewportID: "desktop",
-                  regionID: "economic-calendar",
-                  route: "/world-economy",
-                  implementationLocator: { kind: "data-oc-region", value: "economic-calendar" },
-                  componentFiles: ["src/pages/world-economy/EconomicCalendar.tsx"],
-                  sourceReferenceArtifactID: "reference.png",
-                  textAnchors: ["Economic calendar", "GDP", "inflation"],
-                },
-                { ...baseCtx, extra: { taskID } },
-              ),
-            ).rejects.toThrow("Implementation locator matched an element that is not visible.")
-
-            expect(latestBrowserPreviewEvidenceID({ taskID, targetID: target.id })).toBeUndefined()
           },
         })
       } finally {

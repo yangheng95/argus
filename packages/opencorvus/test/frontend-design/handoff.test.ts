@@ -3,6 +3,7 @@ import { createDecisionLog } from "../../src/decision-log"
 import { renderFrontendDesignHandoffReference } from "../../src/frontend-design/handoff"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
@@ -104,8 +105,9 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
 
       expect(handoff).toContain("Frontend Design Public Report")
       expect(handoff).toContain("frontend_design public report")
-      expect(handoff).toContain(`.opencorvus/runtime/tasks/${taskID}/frontend-design/frontend-template.md`)
-      expect(handoff).toContain(`.opencorvus/runtime/tasks/${taskID}/frontend-design/evidence-source-manifest.md`)
+      const paths = ProjectRuntimePaths.frontendDesignPaths("", taskID)
+      expect(handoff).toContain(paths.templateRelative)
+      expect(handoff).toContain(paths.manifestRelative)
       expect(handoff).toContain("do not run webpage evidence tools outside frontend_design")
       expect(handoff).toContain("public_report")
       expect(handoff).toContain("visual_consistency_contract")

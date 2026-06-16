@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { buildRetryFeedbackPrompt, buildUserPrompt } from "../../src/build/agent"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 describe("build agent prompt context", () => {
   test("request-path build receives canonical acceptance feedback", () => {
@@ -591,7 +592,7 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("web-clone-source/source-ir/component-tree.json")
     expect(prompt).toContain("web-clone-source/source-skeleton/critical.css")
     expect(prompt).toContain("web-clone-source-skeleton-consumption-audit.json passed")
-    expect(prompt).toContain("Treat `.opencorvus/runtime/tasks/<taskID>/frontend-design/` as read-only input")
+    expect(prompt).toContain("Treat `.opencorvus/r/t/<task-key>/fd/` as read-only input")
     expect(prompt).toContain(
       "Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `webpage-evidence/`, `references/`, or top-level `reference.png`",
     )
@@ -616,14 +617,11 @@ describe("build agent prompt context", () => {
       "tsk_reference_path_contract",
     )
 
+    const paths = ProjectRuntimePaths.frontendDesignPaths("", "tsk_reference_path_contract")
+    expect(prompt).toContain(`web-clone-source/reference.png\` means \`${paths.sourcePackageRelative}/reference.png\``)
+    expect(prompt).toContain(`Resolve \`web-clone-source/...\` refs under \`${paths.sourcePackageRelative}/...\``)
     expect(prompt).toContain(
-      "web-clone-source/reference.png` means `.opencorvus/runtime/tasks/tsk_reference_path_contract/frontend-design/web-clone-source/reference.png`",
-    )
-    expect(prompt).toContain(
-      "Resolve `web-clone-source/...` refs under `.opencorvus/runtime/tasks/tsk_reference_path_contract/frontend-design/web-clone-source/...`",
-    )
-    expect(prompt).toContain(
-      "`frontend-design-skeleton/...` refs under `.opencorvus/runtime/tasks/tsk_reference_path_contract/frontend-design/frontend-design-skeleton/...`",
+      `\`frontend-design-skeleton/...\` refs under \`${paths.skeletonProjectRelative}/...\``,
     )
     expect(prompt).toContain("not `./web-clone-source/reference.png` in the acceptance root")
   })

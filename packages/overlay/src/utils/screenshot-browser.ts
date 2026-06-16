@@ -1,5 +1,4 @@
 import { normalizeAgentRole, type AgentRole } from "./message"
-import type { CardNode } from "../store/card-tree"
 
 export const SCREENSHOT_BROWSER_ITEM_LIMIT = 120
 
@@ -21,13 +20,6 @@ export interface ScreenshotBrowserGroup {
   items: ScreenshotBrowserItem[]
 }
 
-interface ScreenshotPartInput {
-  owner: { id: string; messageID?: string; time: number }
-  part: Record<string, any>
-  role: AgentRole
-  index: number
-}
-
 function isRecord(value: unknown): value is Record<string, any> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
@@ -39,9 +31,21 @@ function firstString(...values: unknown[]): string {
   return ""
 }
 
-function cardRole(card: CardNode): AgentRole | undefined {
-  const role = firstString(card.stage, card.role)
-  return role ? normalizeAgentRole(role) : undefined
+function messageTime(message: any): number {
+  const time = message?.info?.time
+  const completed = Number(time?.completed)
+  if (Number.isFinite(completed) && completed > 0) return completed
+  const updated = Number(time?.updated)
+  if (Number.isFinite(updated) && updated > 0) return updated
+  const created = Number(time?.created)
+  if (Number.isFinite(created) && created > 0) return created
+  return 0
+}
+
+function messageRole(message: any): AgentRole {
+  return normalizeAgentRole(
+    firstString(message?.info?.resolvedRole, message?.info?.channel, message?.info?.agent, message?.info?.role),
+  )
 }
 
 export function isStoredAttachmentUrl(url: string): boolean {
@@ -68,14 +72,20 @@ function pushUnique(items: ScreenshotBrowserItem[], seen: Set<string>, item: Scr
   items.push(item)
 }
 
-function browserEvidenceItem(input: ScreenshotPartInput): ScreenshotBrowserItem | undefined {
+function browserEvidenceItem(input: {
+  message: any
+  part: any
+  role: AgentRole
+  time: number
+  index: number
+}): ScreenshotBrowserItem | undefined {
   const metadata = isRecord(input.part?.state?.metadata) ? input.part.state.metadata : {}
   const browser = isRecord(metadata.browser) ? metadata.browser : undefined
   const screenshot = isRecord(browser?.screenshot) ? browser.screenshot : undefined
   const src = firstString(screenshot?.attachmentUrl)
   if (!isStoredAttachmentUrl(src)) return undefined
   const title = firstString(browser?.title, browser?.url, input.part?.tool, "Browser screenshot")
-  const messageID = firstString(input.owner.messageID, input.owner.id)
+  const messageID = firstString(input.message.info?.id)
   const partID = firstString(input.part?.id) || String(input.index)
   const viewport = isRecord(browser?.viewport) ? browser.viewport : {}
   const viewportText =
@@ -89,19 +99,25 @@ function browserEvidenceItem(input: ScreenshotPartInput): ScreenshotBrowserItem 
     alt: title,
     title,
     detail: [firstString(browser?.url), viewportText].filter(Boolean).join(" · "),
-    time: input.owner.time,
+    time: input.time,
     messageID,
     partID,
     source: "tool-browser-evidence",
   }
 }
 
-function fileItem(input: ScreenshotPartInput): ScreenshotBrowserItem | undefined {
+function fileItem(input: {
+  message: any
+  part: any
+  role: AgentRole
+  time: number
+  index: number
+}): ScreenshotBrowserItem | undefined {
   if (!isStoredImageReference(input.part)) return undefined
   const src = firstString(input.part?.url)
   if (!src) return undefined
   const title = firstString(input.part?.filename, input.part?.name, src)
-  const messageID = firstString(input.owner.messageID, input.owner.id)
+  const messageID = firstString(input.message.info?.id)
   const partID = firstString(input.part?.id) || String(input.index)
   return {
     id: `file:${messageID}:${partID}`,
@@ -110,20 +126,26 @@ function fileItem(input: ScreenshotPartInput): ScreenshotBrowserItem | undefined
     alt: title,
     title,
     detail: firstString(input.part?.mime, input.part?.mediaType),
-    time: input.owner.time,
+    time: input.time,
     messageID,
     partID,
     source: "file",
   }
 }
 
-function toolAttachmentItems(input: ScreenshotPartInput): ScreenshotBrowserItem[] {
+function toolAttachmentItems(input: {
+  message: any
+  part: any
+  role: AgentRole
+  time: number
+  index: number
+}): ScreenshotBrowserItem[] {
   const attachments = Array.isArray(input.part?.state?.attachments)
     ? input.part.state.attachments
     : Array.isArray(input.part?.attachments)
       ? input.part.attachments
       : []
-  const messageID = firstString(input.owner.messageID, input.owner.id)
+  const messageID = firstString(input.message.info?.id)
   const partID = firstString(input.part?.id) || String(input.index)
   return attachments
     .filter((attachment: any) => isStoredImageReference(attachment))
@@ -137,7 +159,7 @@ function toolAttachmentItems(input: ScreenshotPartInput): ScreenshotBrowserItem[
         alt: title,
         title,
         detail: firstString(attachment?.mime, attachment?.mediaType, input.part?.tool),
-        time: input.owner.time,
+        time: input.time,
         messageID,
         partID,
         source: "tool-attachment" as const,
@@ -146,66 +168,30 @@ function toolAttachmentItems(input: ScreenshotPartInput): ScreenshotBrowserItem[
     .filter((item) => !!item.src)
 }
 
-function collectPartItems(input: {
-  items: ScreenshotBrowserItem[]
-  seen: Set<string>
-  owner: { id: string; messageID?: string; time: number }
-  role: AgentRole
-  part: unknown
-  index: number
-}): void {
-  if (!isRecord(input.part)) return
-  const partInput: ScreenshotPartInput = {
-    owner: input.owner,
-    role: input.role,
-    part: input.part,
-    index: input.index,
-  }
-  if (input.part.type === "file") {
-    const item = fileItem(partInput)
-    if (item) pushUnique(input.items, input.seen, item)
-    return
-  }
-  if (input.part.type === "tool") {
-    const browser = browserEvidenceItem(partInput)
-    if (browser) pushUnique(input.items, input.seen, browser)
-    for (const attachment of toolAttachmentItems(partInput)) {
-      pushUnique(input.items, input.seen, attachment)
-    }
-  }
-}
-
-export function collectScreenshotBrowserItemsFromCards(
-  order: readonly string[],
-  cards: Readonly<Record<string, CardNode | undefined>>,
-): ScreenshotBrowserItem[] {
+export function collectScreenshotBrowserItems(messages: readonly any[]): ScreenshotBrowserItem[] {
   const seen = new Set<string>()
-  const visitedCards = new Set<string>()
   const items: ScreenshotBrowserItem[] = []
-
-  function visit(cardID: string): void {
-    if (!cardID || visitedCards.has(cardID)) return
-    visitedCards.add(cardID)
-    const card = cards[cardID]
-    if (!card) return
-    const role = cardRole(card)
-    if (role) {
-      const owner = { id: card.id, messageID: card.messageID, time: Number(card.time) || 0 }
-      const parts = Array.isArray(card.parts) ? card.parts : []
-      for (let index = 0; index < parts.length; index += 1) {
-        collectPartItems({ items, seen, owner, role, part: parts[index], index })
+  for (const message of messages) {
+    const role = messageRole(message)
+    const time = messageTime(message)
+    const parts = Array.isArray(message?.parts) ? message.parts : []
+    for (let index = 0; index < parts.length; index += 1) {
+      const part = parts[index]
+      if (!isRecord(part)) continue
+      if (part.type === "file") {
+        const item = fileItem({ message, part, role, time, index })
+        if (item) pushUnique(items, seen, item)
+        continue
       }
-      if (card.toolPart) {
-        collectPartItems({ items, seen, owner, role, part: card.toolPart, index: parts.length })
+      if (part.type === "tool") {
+        const browser = browserEvidenceItem({ message, part, role, time, index })
+        if (browser) pushUnique(items, seen, browser)
+        for (const attachment of toolAttachmentItems({ message, part, role, time, index })) {
+          pushUnique(items, seen, attachment)
+        }
       }
-    }
-    for (const childID of Array.isArray(card.childIDs) ? card.childIDs : []) {
-      visit(childID)
     }
   }
-
-  for (const cardID of order) visit(cardID)
-
   return items.sort((a, b) => b.time - a.time).slice(0, SCREENSHOT_BROWSER_ITEM_LIMIT)
 }
 

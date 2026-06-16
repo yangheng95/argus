@@ -4,8 +4,8 @@
  * Compares a reference screenshot to a rendered screenshot and emits a numeric
  * score (SSIM × 50 + pixel-similarity × 50). No diff heatmap — that proxy
  * channeled the agent into pixel-mask whack-a-mole instead of looking at the
- * reference and rendered PNGs directly. The numeric visual threshold is owned
- * by `evaluate.ts`; `webpage_vision_judge` remains the qualitative diff review.
+ * reference and rendered PNGs directly. Numeric thresholds are diagnostics;
+ * `webpage_vision_judge` remains the qualitative diff review.
  */
 
 import fs from "node:fs/promises"
@@ -15,7 +15,6 @@ import z from "zod"
 import { Tool } from "../../tool/tool"
 import {
   WEBPAGE_EVALUATE_PASS_SCORE,
-  WEBPAGE_HIGH_FIDELITY_PASS_SCORE,
   evaluateVisual,
   isEvaluationReportPassing,
 } from "@/verification/visual/evaluate"
@@ -30,7 +29,7 @@ Formula: \`round(ssim * 50 + (100 - pixelDiff%) * 0.5)\`.
   - pixelmatch: pixel-level diff at threshold 0.1 (captures colour precision)
   - dimension-mismatch penalty proportional to area ratio when the two images differ in size
 
-Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed. The default threshold is 85/100 for iterative repair. For high-fidelity webpage clone acceptance, pass \`passThreshold: 96\` so the integer score proves similarity >95%. Use \`webpage_vision_judge\` for qualitative differences because the score alone cannot tell you whether structural elements are correct.`,
+Returns score, SSIM, pixelDiff%, and whether the optional numeric diagnostic threshold passed. The default threshold is ${WEBPAGE_EVALUATE_PASS_SCORE}/100 for local diagnostics. Do not use the numeric result as the completion condition for frontend-design handoff; use \`webpage_vision_judge\` and direct screenshot inspection for qualitative differences because the score alone cannot tell you whether structural elements are correct.`,
   parameters: z.object({
     reference: z
       .string()
@@ -50,7 +49,7 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
       .min(0)
       .max(100)
       .describe(
-        `Numeric pass threshold. Default ${WEBPAGE_EVALUATE_PASS_SCORE}; use ${WEBPAGE_HIGH_FIDELITY_PASS_SCORE} for similarity >95% acceptance.`,
+        `Optional numeric diagnostic threshold. Default ${WEBPAGE_EVALUATE_PASS_SCORE}; this is not the frontend-design completion condition.`,
       )
       .optional(),
   }),
@@ -110,7 +109,7 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
         `- Pixel diff: ${report.pixelDiffPercent.toFixed(2)}% (${report.mismatchedPixels} / ${report.totalPixels} px)`,
         `- Dimensions match: ${report.dimensionsMatch} (compared at ${report.comparisonDimensions.width}×${report.comparisonDimensions.height})`,
         "",
-        `For high-fidelity webpage clone acceptance, use ${WEBPAGE_HIGH_FIDELITY_PASS_SCORE}/100 (strictly greater than 95) plus qualitative review evidence. For qualitative differences, call \`webpage_vision_judge\` — it reads the two PNGs and returns a structured diff list.`,
+        `For frontend-design handoff, treat this score as diagnostic evidence only. For qualitative differences, call \`webpage_vision_judge\` — it reads the two PNGs and returns a structured diff list.`,
       ].join("\n"),
       metadata: {
         overallScore: report.overallScore,

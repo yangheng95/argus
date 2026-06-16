@@ -42,7 +42,7 @@ Four independent agents were assigned:
 | Right toolbar registry | `packages/overlay/src/main.tsx` `CenterWorkbenchPanel`, `CENTER_WORKBENCH_PANEL_ORDER`, `RIGHT_ACTIVITIES` | Add `screenshots` as a first-class right activity. |
 | Workbench DOM | `packages/overlay/src/index.html` `centerWorkbench*` views | Add `centerWorkbenchScreenshots` and `solidScreenshotBrowserMount`. |
 | Workbench view map | `packages/overlay/src/main.tsx` `getCenterWorkbenchViews()` | Add `screenshots` entry so open/close, resizing, and active state stay on the existing workbench path. |
-| Screenshot identity | `packages/overlay/src/store/card-tree.ts` `cardTreeStore` | Derive the panel from the current visible conversation card tree, not a new overlay store or legacy message mirror. |
+| Screenshot identity | `packages/overlay/src/store/messages.ts` `messageStore.messages` | Derive the panel from current task transcript/timeline messages, not a new overlay store. |
 | Agent grouping | `packages/overlay/src/utils/message.ts` `normalizeAgentRole`, `roleLabel` | Use the canonical role classifier and labels; no ad hoc agent-name rules. |
 | Tool screenshots | `packages/overlay/src/components/InlineToolPart.tsx` metadata path `metadata.browser.screenshot.attachmentUrl` | Extract the same URL shape for the browser, keeping tool output rendering unchanged. |
 | File images | `packages/overlay/src/components/FilePart.tsx` image parts | Extract image file parts only when they reference `/attachment/...`, which is backed by `.opencorvus`. |
@@ -53,7 +53,7 @@ Four independent agents were assigned:
 
 ## Design
 
-Add `ScreenshotBrowserPanel` as a right workbench panel. It reads reachable `cardTreeStore` nodes, scans image-bearing parts, groups them by canonical agent role, and renders bounded thumbnail rows with shared preview behavior.
+Add `ScreenshotBrowserPanel` as a right workbench panel. It reads `messageStore.messages`, scans image-bearing parts, groups them by canonical agent role, and renders bounded thumbnail rows with shared preview behavior.
 
 Included sources:
 
@@ -102,35 +102,6 @@ Four read-only reviewers rechecked the implementation after the initial pass.
 | Existing browser preview UI synthesized evidence IDs and timestamps when backend evidence was missing. | P1 | Removed the synthetic evidence ID and timestamp path; missing persisted evidence ID now surfaces as an error. |
 | Existing browser preview candidate selection used first candidate as local fallback. | P2 | Removed first-candidate selection; backend-selected/current target candidates remain the only selected value. |
 | Right activity active state had a stale `selectedRightActivity` signal beside `centerWorkbenchPanels`. | P1 | Removed the stale right-activity signal; right toolbar active state is now derived from `isRightActivityOpen`. |
-
-## 2026-06-15 Repair: Card Tree Source Binding
-
-User report: the agent-grouped screenshot toolbar did not work after the
-2026-06-14 integration.
-
-Root cause: the overlay conversation renderer now reads `cardTreeStore` as the
-single visible conversation source, while the screenshot browser component was
-wired to legacy `messageStore.messages`. New task/session messages are projected
-into reachable card nodes by `services/tree-writer.ts`; a panel that scans
-`messageStore.messages` can be empty even when screenshots are visible in the
-conversation.
-
-Repair plan:
-
-- Keep the existing right toolbar registration, workbench view, attachment URL
-  validation, and shared image preview/resource-cache rules.
-- Replace the screenshot browser data input with reachable
-  `cardTreeStore.order` / `cardTreeStore.cards[*].childIDs` traversal.
-- Group screenshots by the owning card's canonical `stage` / `role` instead of
-  message `info` fields, because card stage is the UI's current agent identity
-  source.
-- Include both normal card `parts` and promoted tool-card `toolPart` content.
-- Do not read orphan `cardTreeStore.cards` entries outside the reachable tree.
-- Update tests so the panel is locked to `cardTreeStore` and still collects
-  screenshots when no `messageStore` entry exists.
-- Add a Node-driven browser fixture that opens the real overlay page, clicks
-  the right toolbar screenshots activity, verifies the grouped thumbnail panel,
-  and writes a screenshot artifact for visual review.
 
 ## Non-Goals
 

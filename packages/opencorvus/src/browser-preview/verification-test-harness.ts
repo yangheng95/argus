@@ -1,6 +1,8 @@
+import { Identifier } from "@/id/id"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import type { RuntimeCaptureInput, RuntimeCaptureResult } from "@/runtime/capture-contract"
 import { findBrowserPreviewTargetByID } from "./persist"
-import { createBrowserPreviewEvidenceJobContext, writeBrowserEvidenceManifest } from "./evidence-runner"
+import { writeBrowserEvidenceManifest } from "./evidence-runner"
 import {
   runBrowserPreviewVerification,
   type BrowserPreviewVerification,
@@ -30,18 +32,15 @@ async function captureWithTestHarness(
   if (!target) {
     throw new Error(`Browser preview target not found: ${input.targetID}`)
   }
-  const context = createBrowserPreviewEvidenceJobContext({
-    projectRoot: input.projectRoot,
-    taskID: input.taskID,
-    targetID: input.targetID,
-  })
+  const jobID = Identifier.ascending("artifact")
+  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, jobID)
   const captures: Record<string, RuntimeCaptureResult> = {}
   const artifactPaths: string[] = []
   const diagnostics: string[] = []
   for (const viewport of input.viewports) {
     const result = await input.captureForTest({
       url: target.url,
-      outDir: context.outDir,
+      outDir,
       viewport_width: viewport.width,
       viewport_height: viewport.height,
       fileLabel: viewport.id,
@@ -52,7 +51,11 @@ async function captureWithTestHarness(
     diagnostics.push(result.summary)
   }
   const manifest = await writeBrowserEvidenceManifest({
-    context,
+    outDir,
+    jobID,
+    taskID: input.taskID,
+    targetID: input.targetID,
+    url: target.url,
     viewportIDs: input.viewportIDs,
     artifactPaths,
     captures,

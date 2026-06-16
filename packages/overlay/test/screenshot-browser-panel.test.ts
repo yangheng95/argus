@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import type { CardNode } from "../src/store/card-tree"
 import {
-  collectScreenshotBrowserItemsFromCards,
+  collectScreenshotBrowserItems,
   groupScreenshotBrowserItems,
   isStoredAttachmentUrl,
   SCREENSHOT_BROWSER_ITEM_LIMIT,
@@ -16,15 +15,14 @@ function read(rel: string): string {
 }
 
 describe("screenshot browser panel", () => {
-  test("collects appeared screenshots from reachable card tree nodes by canonical agent", () => {
-    const cards: Record<string, CardNode> = {
-      root: {
-        id: "root",
-        kind: "agent",
-        stage: "build",
-        title: "Build",
-        time: 100,
-        messageID: "m1",
+  test("collects appeared screenshots from message file parts and tool metadata by canonical agent", () => {
+    const messages = [
+      {
+        info: {
+          id: "m1",
+          agent: "coding",
+          time: { created: 100 },
+        },
         parts: [
           { id: "p1", type: "file", url: "/attachment/project/a.png", mime: "image/png", filename: "a.png" },
           { id: "p2", type: "file", url: "/attachment/project/doc.pdf", mime: "application/pdf", filename: "doc.pdf" },
@@ -46,15 +44,13 @@ describe("screenshot browser panel", () => {
             filename: "bad.png",
           },
         ],
-        childIDs: ["visual"],
       },
-      visual: {
-        id: "visual",
-        kind: "agent",
-        stage: "visual-qa",
-        title: "Visual QA",
-        time: 200,
-        messageID: "m2",
+      {
+        info: {
+          id: "m2",
+          resolvedRole: "visual-qa",
+          time: { created: 200 },
+        },
         parts: [
           {
             id: "p3",
@@ -75,19 +71,37 @@ describe("screenshot browser panel", () => {
             id: "p3b",
             type: "tool",
             tool: "browser_observe",
-            state: { metadata: { browser: { screenshot: { attachmentUrl: "data:image/png;base64,BBBB" } } } },
+            state: {
+              metadata: {
+                browser: {
+                  screenshot: { attachmentUrl: "data:image/png;base64,BBBB" },
+                },
+              },
+            },
           },
           {
             id: "p3c",
             type: "tool",
             tool: "browser_observe",
-            state: { metadata: { browser: { screenshot: { attachmentUrl: "https://example.test/browser.png" } } } },
+            state: {
+              metadata: {
+                browser: {
+                  screenshot: { attachmentUrl: "https://example.test/browser.png" },
+                },
+              },
+            },
           },
           {
             id: "p3d",
             type: "tool",
             tool: "browser_observe",
-            state: { metadata: { browser: { screenshot: { attachmentUrl: "/api/browser.png" } } } },
+            state: {
+              metadata: {
+                browser: {
+                  screenshot: { attachmentUrl: "/api/browser.png" },
+                },
+              },
+            },
           },
           {
             id: "p4",
@@ -104,54 +118,21 @@ describe("screenshot browser panel", () => {
             },
           },
         ],
-        childIDs: ["promoted"],
       },
-      promoted: {
-        id: "promoted",
-        kind: "tool",
-        stage: "visual-qa",
-        title: "Promoted tool",
-        time: 300,
-        parts: [],
-        childIDs: [],
-        toolPart: {
-          id: "p5",
-          type: "tool",
-          tool: "url_screenshot",
-          state: {
-            attachments: [{ url: "/attachment/project/promoted.png", mime: "image/png", filename: "promoted.png" }],
-          },
-        },
-      },
-      orphan: {
-        id: "orphan",
-        kind: "agent",
-        stage: "build",
-        title: "Orphan",
-        time: 400,
-        parts: [{ id: "orphan-file", type: "file", url: "/attachment/project/orphan.png", mime: "image/png" }],
-        childIDs: [],
-      },
-    }
+    ]
 
-    const items = collectScreenshotBrowserItemsFromCards(["root"], cards)
+    const items = collectScreenshotBrowserItems(messages)
     const groups = groupScreenshotBrowserItems(items)
 
     expect(items.map((item) => item.src)).toEqual([
-      "/attachment/project/promoted.png",
       "/attachment/project/browser.png",
       "/attachment/project/tool.webp",
       "/attachment/project/a.png",
     ])
     expect(groups.map((group) => group.role)).toEqual(["visual-qa", "build"])
-    expect(groups[0].items.map((item) => item.source)).toEqual([
-      "tool-attachment",
-      "tool-browser-evidence",
-      "tool-attachment",
-    ])
+    expect(groups[0].items.map((item) => item.source)).toEqual(["tool-browser-evidence", "tool-attachment"])
     expect(groups[1].items.map((item) => item.source)).toEqual(["file"])
     expect(items.every((item) => item.src.startsWith("/attachment/"))).toBe(true)
-    expect(items.some((item) => item.src.includes("orphan"))).toBe(false)
   })
 
   test("accepts only canonical stored attachment urls", () => {
@@ -167,61 +148,28 @@ describe("screenshot browser panel", () => {
   })
 
   test("bounds derived history before rendering", () => {
-    const cards = Object.fromEntries(
-      Array.from({ length: SCREENSHOT_BROWSER_ITEM_LIMIT + 10 }, (_item, index) => [
-        `card-${index}`,
+    const messages = Array.from({ length: SCREENSHOT_BROWSER_ITEM_LIMIT + 10 }, (_item, index) => ({
+      info: {
+        id: `m${index}`,
+        agent: "executor",
+        time: { created: index + 1 },
+      },
+      parts: [
         {
-          id: `card-${index}`,
-          kind: "agent",
-          stage: "executor",
-          title: "Executor",
-          time: index + 1,
-          messageID: `m${index}`,
-          childIDs: index < SCREENSHOT_BROWSER_ITEM_LIMIT + 9 ? [`card-${index + 1}`] : [],
-          parts: [
-            {
-              id: `p${index}`,
-              type: "file",
-              url: `/attachment/project/${index}.png`,
-              mime: "image/png",
-              filename: `${index}.png`,
-            },
-          ],
-        } satisfies CardNode,
-      ]),
-    ) as Record<string, CardNode>
+          id: `p${index}`,
+          type: "file",
+          url: `/attachment/project/${index}.png`,
+          mime: "image/png",
+          filename: `${index}.png`,
+        },
+      ],
+    }))
 
-    const items = collectScreenshotBrowserItemsFromCards(["card-0"], cards)
+    const items = collectScreenshotBrowserItems(messages)
 
     expect(items).toHaveLength(SCREENSHOT_BROWSER_ITEM_LIMIT)
     expect(items[0].src).toBe(`/attachment/project/${SCREENSHOT_BROWSER_ITEM_LIMIT + 9}.png`)
     expect(items.at(-1)?.src).toBe("/attachment/project/10.png")
-  })
-
-  test("skips cards without explicit agent identity instead of normalizing them to assistant", () => {
-    const cards: Record<string, CardNode> = {
-      root: {
-        id: "root",
-        kind: "message",
-        title: "No stage",
-        time: 100,
-        parts: [{ id: "p1", type: "file", url: "/attachment/project/no-stage.png", mime: "image/png" }],
-        childIDs: ["child"],
-      },
-      child: {
-        id: "child",
-        kind: "agent",
-        stage: "build",
-        title: "Build",
-        time: 200,
-        parts: [{ id: "p2", type: "file", url: "/attachment/project/build.png", mime: "image/png" }],
-        childIDs: [],
-      },
-    }
-
-    const items = collectScreenshotBrowserItemsFromCards(["root"], cards)
-
-    expect(items.map((item) => item.src)).toEqual(["/attachment/project/build.png"])
   })
 
   test("component reuses shared image resource and preview paths without local screenshot storage", () => {
@@ -240,10 +188,9 @@ describe("screenshot browser panel", () => {
     expect(main).toContain('id: "screenshots"')
     expect(main).toContain('icon: "screenshots"')
     expect(icon).toContain("Images")
-    expect(component).toContain("cardTreeStore.order")
-    expect(component).toContain("cardTreeStore.cards")
-    expect(component).not.toContain("messageStore")
-    expect(component).toContain("collectScreenshotBrowserItemsFromCards")
+    expect(component).toContain("messageStore.messages")
+    expect(component).toContain("active() ? collectScreenshotBrowserItems(messageStore.messages) : []")
+    expect(component).toContain("collectScreenshotBrowserItems")
     expect(component).toContain("groupScreenshotBrowserItems")
     expect(component).toContain("fetchResourceAsObjectUrl")
     expect(component).toContain("peekResourceObjectUrl")
@@ -258,9 +205,6 @@ describe("screenshot browser panel", () => {
     expect(css).toContain(".screenshot-browser-panel")
     expect(css).toContain(".screenshot-browser-grid")
     expect(css).toContain("grid-template-rows: calc(86px * var(--ui-scale))")
-    expect(css).toContain(".screenshot-browser__thumb-trigger .screenshot-browser__thumb-image")
-    expect(css).toContain("max-width: none")
-    expect(css).toContain("max-height: none")
     for (const key of [
       "screenshots.title",
       "screenshots.empty",

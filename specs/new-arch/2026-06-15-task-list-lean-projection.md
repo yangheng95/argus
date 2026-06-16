@@ -21,6 +21,13 @@ selected task board, not to the list.
 Task-list SSE then debounces to `loadTasks()`, so every lifecycle burst refreshes
 the inflated list payload. This is a contract bug, not a rendering-only issue.
 
+The overlay also grew the refresh payload after a user clicked "load more":
+`loadTasks()` used `tasksLoadedLimit + 1`, so every SSE refresh and 30-second
+poll refetched all previously loaded rows. With many task cards this turns a
+background refresh into an ever-growing list reload. The list has one source of
+truth for pagination: `loadTasks()` owns the first page refresh, and
+`loadMoreTasks()` owns cursor-based append.
+
 ## Call Point Sweep
 
 | Surface | Current use | Decision |
@@ -42,6 +49,10 @@ Create a dedicated task-list projection in the backend:
 - `ProjectTaskSummary.task` / `GlobalTaskBoard.tasks[].task` use a lean schema
   instead of the full `Task` schema.
 - Full task and board routes keep the existing `viewTask()` contract.
+- Overlay `loadTasks()` always fetches the first page plus one sentinel row;
+  it does not scale with previously loaded rows.
+- Overlay `loadMoreTasks()` remains the only path that appends older pages by
+  cursor.
 
 No fallback contract is added. If a UI surface needs full task detail, it must
 use the selected task detail/board route.
@@ -54,5 +65,8 @@ use the selected task detail/board route.
   directory, and timestamps remain available to the sidebar.
 - Full `/task/:taskID` still returns full task detail.
 - Overlay pagination tests still pass.
+- After loading older pages, the next `loadTasks()` request still uses
+  `limit=TASK_LIST_PAGE_SIZE+1` and resets to the first page instead of
+  refetching every loaded row.
 - A real local `/global/tasks?limit=11` response is materially smaller after
   restarting the service with the patch.

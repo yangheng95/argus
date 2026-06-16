@@ -53,9 +53,11 @@ describe("task project archive route", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await fs.mkdir(path.join(tmp.path, ".opencorvus", "r", "t", "ab", "cdef12"), { recursive: true })
         await fs.mkdir(path.join(tmp.path, ".opencorvus", "runtime"), { recursive: true })
         await fs.mkdir(path.join(tmp.path, ".opencorvus", "worktrees"), { recursive: true })
         await fs.mkdir(path.join(tmp.path, ".opencorvus-worktrees"), { recursive: true })
+        await fs.writeFile(path.join(tmp.path, ".opencorvus", "r", "t", "ab", "cdef12", "forced.txt"), "short runtime must not archive\n")
         await fs.writeFile(path.join(tmp.path, ".opencorvus", "runtime", "forced.txt"), "runtime must not archive\n")
         await fs.writeFile(path.join(tmp.path, ".opencorvus", "worktrees", "forced.txt"), "worktree must not archive\n")
         await fs.writeFile(
@@ -63,7 +65,7 @@ describe("task project archive route", () => {
           "legacy worktree must not archive\n",
         )
         await fs.writeFile(path.join(tmp.path, ".opencorvus-meta.json"), "{}\n")
-        await $`git add -f .opencorvus/runtime/forced.txt .opencorvus/worktrees/forced.txt .opencorvus-worktrees/forced.txt .opencorvus-meta.json`
+        await $`git add -f .opencorvus/r/t/ab/cdef12/forced.txt .opencorvus/runtime/forced.txt .opencorvus/worktrees/forced.txt .opencorvus-worktrees/forced.txt .opencorvus-meta.json`
           .cwd(tmp.path)
           .quiet()
 
@@ -178,6 +180,7 @@ describe("task project archive route", () => {
         expect(entries.has("project/spaced name .txt")).toBe(false)
         expect(entries.get("project/src/untracked.txt")).toBe("untracked file\n")
         expect(entries.has("project/dist/ignored.txt")).toBe(false)
+        expect(entries.has("project/.opencorvus/r/t/ab/cdef12/forced.txt")).toBe(false)
         expect(entries.has("project/.opencorvus/runtime/forced.txt")).toBe(false)
         expect(entries.has("project/.opencorvus/worktrees/forced.txt")).toBe(false)
         expect(entries.has("project/.opencorvus-worktrees/forced.txt")).toBe(false)

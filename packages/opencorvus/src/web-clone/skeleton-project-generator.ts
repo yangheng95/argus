@@ -8,7 +8,6 @@ export interface GenerateWebCloneSkeletonProjectInput {
   outputDir: string
   packageName?: string
   overwrite?: boolean
-  singleFileHtmlPath?: string
 }
 
 export interface GenerateWebCloneSkeletonProjectOutput {
@@ -21,7 +20,7 @@ export interface GenerateWebCloneSkeletonProjectOutput {
     hydratedSvgPaths: number
     copiedAssets: number
     slotCount: number
-    sourceHtml: "singlefile" | "source-skeleton"
+    sourceHtml: "source-skeleton"
   }
   warnings: string[]
 }
@@ -41,24 +40,16 @@ interface SourceDocument {
   bodyHtml: string
 }
 
-const SINGLEFILE_CANDIDATES = [
-  "singlefile.html",
-  "single-file.html",
-  "source-singlefile.html",
-  path.join("singlefile", "index.html"),
-]
-
 export async function generateWebCloneSkeletonProject(
   input: GenerateWebCloneSkeletonProjectInput,
 ): Promise<GenerateWebCloneSkeletonProjectOutput> {
   const sourcePackageDir = path.resolve(input.sourcePackageDir)
   const outputDir = path.resolve(input.outputDir)
-  const singleFilePath = await resolveSingleFileHtml(sourcePackageDir, input.singleFileHtmlPath)
-  await assertSourcePackage(sourcePackageDir, singleFilePath)
+  await assertSourcePackage(sourcePackageDir)
   await prepareOutputDir(outputDir, input.overwrite === true)
 
-  const sourceHtmlKind = singleFilePath ? "singlefile" : "source-skeleton"
-  const sourceHtmlPath = singleFilePath ?? path.join(sourcePackageDir, "source-skeleton", "index.html")
+  const sourceHtmlKind = "source-skeleton" as const
+  const sourceHtmlPath = path.join(sourcePackageDir, "source-skeleton", "index.html")
   const rawHtml = await fs.readFile(sourceHtmlPath, "utf8")
   const { html, hydratedSvgPaths, copiedAssets } = await hydrateHtmlAssets({
     html: rawHtml,
@@ -69,7 +60,7 @@ export async function generateWebCloneSkeletonProject(
   const criticalCss = await readOptionalText(path.join(sourcePackageDir, "source-skeleton", "critical.css"))
   const fullSourceCss = await readOptionalText(path.join(sourcePackageDir, "source-skeleton", "full-source.css"))
   const css = renderSkeletonCss({ criticalCss, fullSourceCss, sourceHtmlKind })
-  const sourceHtml = sourceHtmlKind === "singlefile" ? html : renderSourceHtmlDocument({ html, css })
+  const sourceHtml = renderSourceHtmlDocument({ html, css })
   const sourceDocument = extractSourceDocument(sourceHtml)
   const slots = await extractSlots(sourcePackageDir)
   const packageJson = renderPackageJson(input.packageName ?? `web-clone-skeleton-${path.basename(outputDir)}`)
@@ -86,10 +77,10 @@ export async function generateWebCloneSkeletonProject(
     ["src/main.jsx", renderMainJsx()],
     ["src/skeleton.css", css],
     ["src/slots.json", JSON.stringify({ version: 1, purpose: "web-clone-skeleton-slots", slots }, null, 2) + "\n"],
-    ["src/generated/singlefile-head-styles.html", sourceDocument.headStylesHtml],
-    ["src/generated/singlefile-body.html", sourceDocument.bodyHtml],
+    ["src/generated/source-head-styles.html", sourceDocument.headStylesHtml],
+    ["src/generated/source-body.html", sourceDocument.bodyHtml],
     [
-      "src/generated/singlefile-document.json",
+      "src/generated/source-document.json",
       JSON.stringify(
         {
           title: sourceDocument.title,
@@ -125,8 +116,7 @@ export async function generateWebCloneSkeletonProject(
   }
 }
 
-async function assertSourcePackage(sourcePackageDir: string, singleFilePath: string | undefined): Promise<void> {
-  if (singleFilePath) return
+async function assertSourcePackage(sourcePackageDir: string): Promise<void> {
   const skeleton = path.join(sourcePackageDir, "source-skeleton", "index.html")
   try {
     const stat = await fs.stat(skeleton)
@@ -147,21 +137,6 @@ async function prepareOutputDir(outputDir: string, overwrite: boolean): Promise<
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err
   }
   await fs.mkdir(outputDir, { recursive: true })
-}
-
-async function resolveSingleFileHtml(sourcePackageDir: string, explicit?: string): Promise<string | undefined> {
-  const candidates = explicit
-    ? [path.isAbsolute(explicit) ? explicit : path.join(sourcePackageDir, explicit)]
-    : SINGLEFILE_CANDIDATES.map((candidate) => path.join(sourcePackageDir, candidate))
-  for (const candidate of candidates) {
-    try {
-      const stat = await fs.stat(candidate)
-      if (stat.isFile() && stat.size > 0) return candidate
-    } catch {
-      // keep looking
-    }
-  }
-  return undefined
 }
 
 async function hydrateHtmlAssets(input: {
@@ -225,7 +200,7 @@ function readTextSyncBestEffort(filePath: string): string {
 function renderSkeletonCss(input: {
   criticalCss: string
   fullSourceCss: string
-  sourceHtmlKind: "singlefile" | "source-skeleton"
+  sourceHtmlKind: "source-skeleton"
 }): string {
   return [
     "/* Web clone skeleton CSS.",
@@ -349,9 +324,9 @@ function renderMainJsx(): string {
 function renderAppJsx(): string {
   return [
     "import { useLayoutEffect } from 'react'",
-    "import bodyHtml from './generated/singlefile-body.html?raw'",
-    "import headStylesHtml from './generated/singlefile-head-styles.html?raw'",
-    "import documentMeta from './generated/singlefile-document.json'",
+    "import bodyHtml from './generated/source-body.html?raw'",
+    "import headStylesHtml from './generated/source-head-styles.html?raw'",
+    "import documentMeta from './generated/source-document.json'",
     "",
     "function applyAttributes(element, nextAttributes) {",
     "  for (const name of element.getAttributeNames()) {",
@@ -461,9 +436,9 @@ function renderExtractSourceHtmlScript(): string {
     "}",
     "",
     "fs.mkdirSync(outputDir, { recursive: true })",
-    "fs.writeFileSync(new URL('./singlefile-head-styles.html', outputDir), extractStyleAndStylesheetTags(headHtml).trim())",
-    "fs.writeFileSync(new URL('./singlefile-body.html', outputDir), stripScriptTags(bodyHtml).trim())",
-    "fs.writeFileSync(new URL('./singlefile-document.json', outputDir), `${JSON.stringify(meta, null, 2)}\\n`)",
+    "fs.writeFileSync(new URL('./source-head-styles.html', outputDir), extractStyleAndStylesheetTags(headHtml).trim())",
+    "fs.writeFileSync(new URL('./source-body.html', outputDir), stripScriptTags(bodyHtml).trim())",
+    "fs.writeFileSync(new URL('./source-document.json', outputDir), `${JSON.stringify(meta, null, 2)}\\n`)",
     "",
   ].join("\n")
 }
@@ -546,7 +521,7 @@ function renderPackageJson(packageName: string): string {
 
 function renderReadme(input: {
   sourcePackageDir: string
-  sourceHtmlKind: "singlefile" | "source-skeleton"
+  sourceHtmlKind: "source-skeleton"
   slots: SlotRecord[]
   warnings: string[]
 }): string {
@@ -559,8 +534,8 @@ function renderReadme(input: {
     `- HTML source: ${input.sourceHtmlKind}`,
     "- Source HTML: `public/source.html`",
     "- React entry: `src/App.jsx`",
-    "- Extracted DOM: `src/generated/singlefile-body.html`",
-    "- Extracted styles: `src/generated/singlefile-head-styles.html`",
+    "- Extracted DOM: `src/generated/source-body.html`",
+    "- Extracted styles: `src/generated/source-head-styles.html`",
     "- Fillable slots: `src/slots.json`",
     "- Visual truth: `reference.png`",
     "- Mobile visual truth: `reference-mobile.png`",
@@ -585,19 +560,14 @@ function renderReadme(input: {
 }
 
 function buildWarnings(
-  sourceHtmlKind: "singlefile" | "source-skeleton",
+  sourceHtmlKind: "source-skeleton",
   criticalCss: string,
   fullSourceCss: string,
 ): string[] {
   const warnings: string[] = []
-  if (sourceHtmlKind !== "singlefile") {
-    warnings.push(
-      "No SingleFile HTML was available; the baseline uses source-skeleton HTML and may be less visually complete.",
-    )
-  }
   const reachableRuleCount = (criticalCss.match(/\/\* Reachable original CSS rules\. \*\//g) ?? []).length
-  if (sourceHtmlKind !== "singlefile" && reachableRuleCount === 0 && fullSourceCss.length < 20000) {
-    warnings.push("Original CSS evidence appears sparse; run SingleFile capture when visual fidelity is low.")
+  if (reachableRuleCount === 0 && fullSourceCss.length < 20000) {
+    warnings.push("Original CSS evidence appears sparse; source-skeleton CSS may need targeted region repair.")
   }
   return warnings
 }

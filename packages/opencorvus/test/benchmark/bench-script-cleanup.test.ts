@@ -99,8 +99,10 @@ test("benchmark local verification uses shared inactivity timeout", () => {
   expect(src).not.toContain("Date.now() - lastActivityLogAt")
 })
 
-test("benchmark trace override uses current runtime root instead of legacy trace path", () => {
-  expect(src).toContain(`".opencorvus", "runtime", "trace"`)
+test("benchmark trace override uses short runtime root instead of legacy trace path", () => {
+  expect(src).toContain("ProjectRuntimePaths.projectRuntimeRoot(temp.dir)")
+  expect(src).toContain(`"trace"`)
+  expect(src).not.toContain(`".opencorvus", "runtime", "trace"`)
   expect(src).not.toContain(`".opencorvus", "trace"`)
 })
 
@@ -227,8 +229,9 @@ test("benchmark auto verification uses task-scoped HTML skeleton workflow thresh
   expect(src).toContain("WEB_CLONE_VISUAL_THRESHOLD")
   expect(src).toContain("WEB_CLONE_VISUAL_WORST_THRESHOLD")
   expect(src).toContain("html-skeleton-workflow-check.ts")
-  expect(src).toContain(`".opencorvus", "runtime", "tasks"`)
-  expect(src).toContain("--task-dir=${safe(taskRoot)}")
+  expect(src).not.toContain(`".opencorvus", "runtime", "tasks"`)
+  expect(src).not.toContain("--task-dir=${safe(taskFanoutRoot)}")
+  expect(src).toContain("OPENCORVUS_TASK_ID")
   expect(src).toContain(".html-skeleton-workflow-out")
   expect(src).toContain("--threshold=${WEB_CLONE_VISUAL_THRESHOLD}")
   expect(src).toContain("--worst-threshold=${WEB_CLONE_VISUAL_WORST_THRESHOLD}")

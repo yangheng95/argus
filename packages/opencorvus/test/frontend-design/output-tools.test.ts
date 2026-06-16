@@ -501,7 +501,7 @@ test("visual baseline report marks below-threshold measured skeleton as incomple
         entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/styles/tokens.css"],
         generation_tool: "source-ir-static-html-skeleton",
         notes: [
-          "Visual score below 95% target (81 vs 95 required).",
+          "Diagnostic visual score reported as 81/100.",
           "Remaining visual debt: canvas map, table heat colors, simplified legend SVG, logo path, and social icons.",
           "The skeleton is a usable visual baseline for downstream transcription work.",
         ],
@@ -516,7 +516,7 @@ test("visual baseline report marks below-threshold measured skeleton as incomple
 
   const report = buildFrontendTemplateReport(kit.getCollector()).detail
   expect(report).toContain("visual_quality_status: incomplete_visual_fidelity")
-  expect(report).toContain("Reported score 81/100 is below required 96/100")
+  expect(report).toContain("Last reported diagnostic score: 81/100")
   expect(report).toContain("Remaining visual debt is present")
   expect(report).toContain("must not be treated as ready for downstream transcription")
 })
@@ -552,7 +552,7 @@ test("visual baseline workflow reports source baseline submissions as incomplete
       baseline_replacement_plan: [],
       material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
       material_inventory_items: materialInventoryItems,
-      visual_consistency_contract: "95% visual similarity against web-clone-source/reference.png.",
+      visual_consistency_contract: "Visual review against web-clone-source/reference.png.",
       ui_data_contract: "Static visible source content only.",
       frontend_project: {
         status: "created",

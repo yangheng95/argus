@@ -1,7 +1,8 @@
 import z from "zod"
 
-// Mission identifier shape. It matches mission_state's path guard so
-// `.opencorvus/runtime/mission/<missionID>/` remains a single valid namespace.
+// Mission identifier shape. It matches mission_state's path guard before the
+// ID is converted to the `.opencorvus/r/m/<mission-key2>/<mission-key6>/`
+// runtime namespace.
 export const MissionID = z
   .string()
   .min(1)

@@ -108,7 +108,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
     const verified = verification()
     const request = verificationRequest()
-    if (verified && request) {
+    const taskID = props.taskID()
+    const targetID = currentTarget()?.id
+    if (verified && request && request.taskID === taskID && request.targetID === targetID) {
       return evidenceFromVerification(verified, viewportID(), {
         taskID: request.taskID,
         targetID: request.targetID,
@@ -129,6 +131,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const current = captureImageUrl()
     if (previous && previous !== current) URL.revokeObjectURL(previous)
     return current
+  })
+
+  createEffect(() => {
+    const request = verificationRequest()
+    if (!request) return
+    const taskID = props.taskID()
+    const targetID = currentTarget()?.id
+    if (request.taskID !== taskID || request.targetID !== targetID) setVerificationRequest(undefined)
   })
 
   createEffect(() => {

@@ -149,7 +149,11 @@ export function evaluateMissionBenchmarkReport(input: MissionBenchmarkReportInpu
     failures.push("mission state does not reconcile the terminal mission task id and status")
   }
 
-  if (input.localVerify?.status === "completed" && input.localVerify.exitCode !== 0) {
+  if (!input.localVerify) {
+    failures.push("local verification command did not run")
+  } else if (input.localVerify.status !== "completed") {
+    failures.push("local verification command did not complete")
+  } else if (input.localVerify.exitCode !== 0) {
     failures.push("local verification command failed")
   }
 

@@ -945,9 +945,6 @@ describe("orchestrator tools", () => {
 
         expect(result).toContain("Build agent finished")
         expect(result).toContain("Direct workflow build completed")
-        expect(result).toContain("run `visual_qa` once for the terminal goal batch")
-        expect(result).toContain("peer post-build review evidence")
-        expect(result).toContain("visual_qa and integrity are peer review agents")
         expect(workflowState.workflowID).toBe("pipeline")
         const run = findActiveRunForTask(taskID)
         expect(run).toBeDefined()
@@ -3310,136 +3307,139 @@ describe("orchestrator tools", () => {
         .run()
     })
 
-    designAnalyzeImpl = async () => ({
-      specs: [],
-      designSystem: "Reference design system",
-      techStack: ["React", "Bun"],
-      frontendTemplate: "Frontend replica scope body",
-      finalAcceptanceMode: "maintainable_replacement_required",
-      fillableModules:
-        "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-ir/style-profile.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw webpage evidence only as diagnostics for named gaps.",
-      componentInventory: "Component inventory body.",
-      qualityProjectContract:
-        "High-quality target project body. Build semantic React source from the source skeleton, component modules, data modules, style modules, CSS sidecars, and verification commands.",
-      componentReusePlan: [
-        {
-          family_id: "comp-page-shell",
-          name: "Page shell",
-          observed_surface: "Reference page shell",
-          source_refs: ["web-clone-source/reference.png"],
-          implementation_strategy: "extracted_baseline_defer",
-          reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
-          mature_library_candidates: [],
-          props_states: "static extracted baseline until parity-safe replacement",
-          replacement_boundary: "page root subtree",
-          parity_guard: "measured visual comparison against reference.png",
-        },
-      ],
-      materialInventory: "Material inventory body.",
-      frontendProject: {
-        status: "created",
-        role: "source_baseline_input",
-        project_root: "C:\\tmp\\frontend-design-skeleton",
-        source_package: "web-clone-source",
-        entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
-        generation_tool: "test",
-        notes: [],
-      },
-      visualConsistencyContract:
-        "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with measured visual comparison plus source-quality review.",
-      uiDataContract:
-        "UI data contract derived from source-skeleton table/list/control structure; unknown backend details remain unknown.",
-      templateIterationNotes: ["First pass covered layout.", "Second pass covered visual consistency."],
-      completenessReview: "Complete enough for downstream implementation.",
-      referenceArtifacts: [
-        "web-clone-source/README.md",
-        "web-clone-source/implementation-blueprint.md",
-        "web-clone-source/web-clone-context.md",
-        "web-clone-source/web-clone-implementation-contract.json",
-        "web-clone-source/source-ir/component-tree.json",
-        "web-clone-source/source-ir/content-model.json",
-        "web-clone-source/source-ir/layout-map.json",
-        "web-clone-source/source-ir/style-profile.json",
-        "web-clone-source/source-ir/style-tokens.json",
-        "web-clone-source/source-ir/interaction-hints.json",
-        "web-clone-source/source-skeleton/critical.css",
-        "web-clone-source/visual-surface-candidates.json",
-        "web-clone-source/reference.png",
-        "webpage-evidence/reference.png",
-        "webpage-evidence/page.ir.json",
-        "webpage-evidence/assets/manifest.json",
-        "webpage-evidence/segments.json",
-        "webpage-evidence/codegen-context.json",
-        "webpage-evidence/source-skeleton/",
-        "webpage-evidence/source-skeleton/README.md",
-        "webpage-evidence/source-skeleton/index.html",
-        "webpage-evidence/source-skeleton/critical.css",
-        "webpage-evidence/source-skeleton/full-source.css",
-        "webpage-evidence/source-skeleton/used-selectors.json",
-        "webpage-evidence/source-skeleton/skeleton-manifest.json",
-        "webpage-evidence/source-skeleton/source-skeleton-audit.json",
-        "webpage-evidence/source-ir/component-tree.json",
-        "webpage-evidence/source-ir/content-model.json",
-        "webpage-evidence/source-ir/layout-map.json",
-        "webpage-evidence/source-ir/style-profile.json",
-        "webpage-evidence/source-ir/style-tokens.json",
-        "webpage-evidence/source-ir/interaction-hints.json",
-        "webpage-evidence/source-ir/source-quality-audit.json",
-      ],
-      openQuestions: ["Live feed authentication is unknown."],
-      report: {
-        summary: "Frontend replica scope body",
-        detail: [
-          "## Frontend Template",
-          "Frontend replica scope body",
-          "",
-          "## Final Acceptance Mode",
-          "maintainable_replacement_required",
-          "",
-          "## Fillable Modules",
+    designAnalyzeImpl = async (input) => {
+      await input.onSessionCreated?.("ses_frontend_design_mock")
+      return {
+        specs: [],
+        designSystem: "Reference design system",
+        techStack: ["React", "Bun"],
+        frontendTemplate: "Frontend replica scope body",
+        finalAcceptanceMode: "maintainable_replacement_required",
+        fillableModules:
           "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-ir/style-profile.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw webpage evidence only as diagnostics for named gaps.",
-          "",
-          "## Implementation Problems And Agent Handoff",
-          "Complete enough for downstream implementation.",
-          "",
-          "## Reuse Constraints",
-          "- comp-page-shell - Page shell",
-          "  - strategy: extracted_baseline_defer",
-          "  - parity_guard: measured visual comparison against reference.png",
-          "",
-          "## Source Region Evolution Plan",
-          "- no source-region evolution plan submitted",
-          "",
-          "## Quality Project Contract",
+        componentInventory: "Component inventory body.",
+        qualityProjectContract:
           "High-quality target project body. Build semantic React source from the source skeleton, component modules, data modules, style modules, CSS sidecars, and verification commands.",
-          "",
-          "## Material Inventory",
-          "Material inventory body.",
-          "",
-          "## Frontend Project",
-          "- status: created",
-          "- role: source_baseline_input",
-          "- project_root: C:\\tmp\\frontend-design-skeleton",
-          "- acceptance_root: .",
-          "- source_package: web-clone-source",
-          "- generation_tool: test",
-          "- adoption_rule: frontend-design-skeleton is a source baseline excluded from final acceptance",
-          "",
-          "## Visual Consistency Contract",
+        componentReusePlan: [
+          {
+            family_id: "comp-page-shell",
+            name: "Page shell",
+            observed_surface: "Reference page shell",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
+            mature_library_candidates: [],
+            props_states: "static extracted baseline until parity-safe replacement",
+            replacement_boundary: "page root subtree",
+            parity_guard: "measured visual comparison against reference.png",
+          },
+        ],
+        materialInventory: "Material inventory body.",
+        frontendProject: {
+          status: "created",
+          role: "source_baseline_input",
+          project_root: "C:\\tmp\\frontend-design-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+          generation_tool: "test",
+          notes: [],
+        },
+        visualConsistencyContract:
           "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with measured visual comparison plus source-quality review.",
-          "",
-          "## UI Data Contract",
+        uiDataContract:
           "UI data contract derived from source-skeleton table/list/control structure; unknown backend details remain unknown.",
-          "",
-          "## Reference Artifacts",
-          "- web-clone-source/implementation-blueprint.md",
-          "- web-clone-source/source-skeleton/critical.css",
-          "- web-clone-source/source-ir/component-tree.json",
-          "- web-clone-source/source-ir/style-profile.json",
-        ].join("\n"),
-      },
-      sessionID: "ses_frontend_design_mock",
-    })
+        templateIterationNotes: ["First pass covered layout.", "Second pass covered visual consistency."],
+        completenessReview: "Complete enough for downstream implementation.",
+        referenceArtifacts: [
+          "web-clone-source/README.md",
+          "web-clone-source/implementation-blueprint.md",
+          "web-clone-source/web-clone-context.md",
+          "web-clone-source/web-clone-implementation-contract.json",
+          "web-clone-source/source-ir/component-tree.json",
+          "web-clone-source/source-ir/content-model.json",
+          "web-clone-source/source-ir/layout-map.json",
+          "web-clone-source/source-ir/style-profile.json",
+          "web-clone-source/source-ir/style-tokens.json",
+          "web-clone-source/source-ir/interaction-hints.json",
+          "web-clone-source/source-skeleton/critical.css",
+          "web-clone-source/visual-surface-candidates.json",
+          "web-clone-source/reference.png",
+          "webpage-evidence/reference.png",
+          "webpage-evidence/page.ir.json",
+          "webpage-evidence/assets/manifest.json",
+          "webpage-evidence/segments.json",
+          "webpage-evidence/codegen-context.json",
+          "webpage-evidence/source-skeleton/",
+          "webpage-evidence/source-skeleton/README.md",
+          "webpage-evidence/source-skeleton/index.html",
+          "webpage-evidence/source-skeleton/critical.css",
+          "webpage-evidence/source-skeleton/full-source.css",
+          "webpage-evidence/source-skeleton/used-selectors.json",
+          "webpage-evidence/source-skeleton/skeleton-manifest.json",
+          "webpage-evidence/source-skeleton/source-skeleton-audit.json",
+          "webpage-evidence/source-ir/component-tree.json",
+          "webpage-evidence/source-ir/content-model.json",
+          "webpage-evidence/source-ir/layout-map.json",
+          "webpage-evidence/source-ir/style-profile.json",
+          "webpage-evidence/source-ir/style-tokens.json",
+          "webpage-evidence/source-ir/interaction-hints.json",
+          "webpage-evidence/source-ir/source-quality-audit.json",
+        ],
+        openQuestions: ["Live feed authentication is unknown."],
+        report: {
+          summary: "Frontend replica scope body",
+          detail: [
+            "## Frontend Template",
+            "Frontend replica scope body",
+            "",
+            "## Final Acceptance Mode",
+            "maintainable_replacement_required",
+            "",
+            "## Fillable Modules",
+            "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-ir/style-profile.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw webpage evidence only as diagnostics for named gaps.",
+            "",
+            "## Implementation Problems And Agent Handoff",
+            "Complete enough for downstream implementation.",
+            "",
+            "## Reuse Constraints",
+            "- comp-page-shell - Page shell",
+            "  - strategy: extracted_baseline_defer",
+            "  - parity_guard: measured visual comparison against reference.png",
+            "",
+            "## Source Region Evolution Plan",
+            "- no source-region evolution plan submitted",
+            "",
+            "## Quality Project Contract",
+            "High-quality target project body. Build semantic React source from the source skeleton, component modules, data modules, style modules, CSS sidecars, and verification commands.",
+            "",
+            "## Material Inventory",
+            "Material inventory body.",
+            "",
+            "## Frontend Project",
+            "- status: created",
+            "- role: source_baseline_input",
+            "- project_root: C:\\tmp\\frontend-design-skeleton",
+            "- acceptance_root: .",
+            "- source_package: web-clone-source",
+            "- generation_tool: test",
+            "- adoption_rule: frontend-design-skeleton is a source baseline excluded from final acceptance",
+            "",
+            "## Visual Consistency Contract",
+            "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with measured visual comparison plus source-quality review.",
+            "",
+            "## UI Data Contract",
+            "UI data contract derived from source-skeleton table/list/control structure; unknown backend details remain unknown.",
+            "",
+            "## Reference Artifacts",
+            "- web-clone-source/implementation-blueprint.md",
+            "- web-clone-source/source-skeleton/critical.css",
+            "- web-clone-source/source-ir/component-tree.json",
+            "- web-clone-source/source-ir/style-profile.json",
+          ].join("\n"),
+        },
+        sessionID: "ses_frontend_design_mock",
+      }
+    }
 
     await Instance.provide({
       directory: tmp.path,
@@ -3495,6 +3495,20 @@ describe("orchestrator tools", () => {
         expect(manifest).toContain("web-clone-source/source-ir/content-model.json")
         expect(manifest).toContain("web-clone-source/source-ir/style-profile.json")
         expect(manifest).toContain("web-clone-source/reference.png")
+
+        const stepSummaries = Database.use((db) =>
+          db
+            .select({ payload: ProtocolEventTable.payload })
+            .from(ProtocolEventTable)
+            .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
+            .all()
+            .map((event) => String(event.payload?.summary ?? "")),
+        )
+        expect(stepSummaries).toContain("frontend_design dispatch: input accepted")
+        expect(stepSummaries).toContain("frontend_design dispatch: loading agent module")
+        expect(stepSummaries).toContain("frontend_design dispatch: visual input ready; calling agent analyze")
+        expect(stepSummaries).toContain("frontend_design dispatch: agent session created ses_frontend_design_mock")
+        expect(stepSummaries).toContain("frontend_design dispatch: agent analyze returned")
       },
     })
   }, 60_000)

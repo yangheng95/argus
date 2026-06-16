@@ -7,6 +7,7 @@ import {
   researchBundleFromDraft,
 } from "../../src/research/output-tools"
 import { researchRequestHash, validateResearchBriefIntegrity } from "../../src/research/schema"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 function callTool(tools: Record<string, any>, name: string, input: unknown): Promise<string> {
   return tools[name].execute!(input as any, {} as any)
@@ -254,6 +255,7 @@ describe("research output tools", () => {
     const draft = kit.getCollector().draft
     if (!draft) throw new Error("draft missing")
 
+    const bundleRoot = ProjectRuntimePaths.deepResearchPaths("", "tsk_research_digest", "ses_research_digest").relativeDir
     const brief = buildResearchBriefFromDraft({
       draft,
       metadata: {
@@ -263,9 +265,9 @@ describe("research output tools", () => {
         created_at: "2026-05-31T00:00:00.000Z",
       },
       bundlePaths: {
-        full_markdown_path: ".opencorvus/runtime/tasks/t/deep-research/s/research-bundle.md",
-        evidence_json_path: ".opencorvus/runtime/tasks/t/deep-research/s/evidence.json",
-        citation_map_path: ".opencorvus/runtime/tasks/t/deep-research/s/citation-map.json",
+        full_markdown_path: `${bundleRoot}/research-bundle.md`,
+        evidence_json_path: `${bundleRoot}/evidence.json`,
+        citation_map_path: `${bundleRoot}/citation-map.json`,
       },
     })
 

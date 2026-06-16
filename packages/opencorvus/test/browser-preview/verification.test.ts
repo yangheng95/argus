@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
-import { SessionTable } from "../../src/session/session.sql"
 import { findReadableBrowserPreviewEvidenceByID, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { verifyBrowserPreview } from "../../src/browser-preview/verification"
@@ -27,36 +26,19 @@ describe("browser preview verification", () => {
     await Instance.provide({
       directory,
       fn: () => {
-        const time = Date.now()
-        const sessionID = `${taskID}_root`
         Database.use((db) =>
-          db.transaction((tx) => {
-            tx.insert(SessionTable)
-              .values({
-                id: sessionID,
-                project_id: Instance.project.id,
-                slug: taskID,
-                directory,
-                title: "Preview task",
-                version: "test",
-                kind: "root",
-                time_created: time,
-                time_updated: time,
-              })
-              .run()
-            tx.insert(EngineTaskTable)
-              .values({
-                id: taskID,
-                project_id: Instance.project.id,
-                session_id: sessionID,
-                title: "Preview task",
-                request: "Preview task",
-                source: "api",
-                time_created: time,
-                time_updated: time,
-              })
-              .run()
-          }),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Preview task",
+              request: "Preview task",
+              source: "api",
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .run(),
         )
       },
     })

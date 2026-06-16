@@ -3,6 +3,8 @@
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { Shell } from "../../src/shell/shell"
 import { ensureStandaloneGitRepo } from "./git"
 import {
   DEFAULT_MISSION_BENCHMARK_REQUEST,
@@ -20,13 +22,12 @@ type Executor = "opencorvus" | "codex" | "claude-code"
 const KNOWN_FLAGS = new Set([
   "--acceptance-verify-cmd",
   "--executor",
-  "--max-wait-ms",
+  "--idle-timeout-ms",
   "--mission-id",
   "--poll-ms",
   "--project-dir",
   "--report",
   "--request-file",
-  "--skip-local-verify",
   "--title",
   "--no-keep",
 ])
@@ -89,9 +90,8 @@ const reportFlag = stripWrappingQuotes(flag("--report"))
 const projectDirFlag = stripWrappingQuotes(flag("--project-dir"))
 const title = stripWrappingQuotes(flag("--title")) ?? MISSION_BENCHMARK_TITLE
 const missionID = stripWrappingQuotes(flag("--mission-id")) ?? `mission-bench-${Date.now().toString(36)}`
-const maxWaitMs = parsePositiveInt("--max-wait-ms", 45 * 60 * 1000)
+const idleTimeoutMs = parsePositiveInt("--idle-timeout-ms", 45 * 60 * 1000)
 const pollMs = parsePositiveInt("--poll-ms", 2_000)
-const skipLocalVerify = process.argv.includes("--skip-local-verify")
 const keep = !process.argv.includes("--no-keep")
 const acceptanceVerifyCmd = stripWrappingQuotes(flag("--acceptance-verify-cmd")) ?? DEFAULT_MISSION_VERIFY_CMD
 
@@ -219,9 +219,7 @@ try {
   await waitForSessionSettled(secondWake.sessionID)
   const latestBoard = await apiJson("/tasks?limit=50")
   const missionTasks = missionTaskRows(latestBoard, missionID)
-  const localVerify = skipLocalVerify
-    ? skippedVerify(acceptanceVerifyCmd)
-    : await runLocalVerify(temp.dir, acceptanceVerifyCmd)
+  const localVerify = await runLocalVerify(temp.dir, acceptanceVerifyCmd)
 
   const verdict = evaluateMissionBenchmarkReport({
     missionID,
@@ -302,7 +300,12 @@ async function waitForMissionDispatch(id: string): Promise<MissionBenchmarkTask[
   return waitFor(`mission ${id} to dispatch a task`, async () => {
     const board = await apiJson("/tasks?limit=50")
     const rows = missionTaskRows(board, id)
-    return rows.length > 0 ? rows : undefined
+    const activityKey = missionRowsActivityKey(rows)
+    return {
+      result: rows.length > 0 ? rows : undefined,
+      activityKey,
+      activity: `mission task rows: ${activityKey}`,
+    }
   })
 }
 
@@ -310,9 +313,13 @@ async function waitForMissionTerminalTasks(id: string): Promise<MissionBenchmark
   return waitFor(`mission ${id} dispatched task to reach terminal state`, async () => {
     const board = await apiJson("/tasks?limit=50")
     const rows = missionTaskRows(board, id)
-    if (rows.length === 0) return undefined
     const terminal = terminalMissionTasks(rows)
-    return terminal.length === rows.length ? terminal : undefined
+    const activityKey = missionRowsActivityKey(rows)
+    return {
+      result: rows.length > 0 && terminal.length === rows.length ? terminal : undefined,
+      activityKey,
+      activity: `mission task rows: ${activityKey}`,
+    }
   })
 }
 
@@ -322,7 +329,12 @@ async function waitForMissionReconciliation(
 ): Promise<Record<string, string>> {
   return waitFor(`mission ${id} reconciliation state`, async () => {
     const state = await readMissionState(id)
-    return missionStateMentionsTerminalTasks(state, terminalTasks) ? state : undefined
+    const activityKey = missionStateActivityKey(state)
+    return {
+      result: missionStateMentionsTerminalTasks(state, terminalTasks) ? state : undefined,
+      activityKey,
+      activity: `mission state sha=${activityKey}`,
+    }
   })
 }
 
@@ -330,7 +342,13 @@ async function waitForSessionSettled(sessionID: string): Promise<void> {
   const { SessionStatus } = await import("../../src/session")
   await waitFor(`mission session ${sessionID} to settle`, async () => {
     const status = SessionStatus.get(sessionID)
-    return status.type === "streaming" || status.type === "retry" ? undefined : true
+    const activity = SessionStatus.getActivity(sessionID)
+    const activityKey = `${status.type}:${activity?.last_activity_at ?? "no-stream-activity"}`
+    return {
+      result: status.type === "streaming" || status.type === "retry" ? undefined : true,
+      activityKey,
+      activity: `session status: ${status.type}; last_activity_at=${activity?.last_activity_at ?? "none"}`,
+    }
   })
 }
 
@@ -339,25 +357,63 @@ async function readMissionState(id: string): Promise<Record<string, string>> {
   return Object.fromEntries(await Promise.all(files.map(async (file) => [file, await readMissionFile(id, file)])))
 }
 
-async function waitFor<T>(label: string, fn: () => Promise<T | undefined>): Promise<T> {
-  const deadline = Date.now() + maxWaitMs
+type WaitObservation<T> = {
+  result: T | undefined
+  activityKey: string
+  activity: string
+}
+
+async function waitFor<T>(label: string, fn: () => Promise<WaitObservation<T>>): Promise<T> {
+  let idleDeadline = Date.now() + idleTimeoutMs
   let lastError: unknown
-  while (Date.now() < deadline) {
+  let lastActivityKey = ""
+  while (Date.now() < idleDeadline) {
     try {
-      const result = await fn()
+      const observation = await fn()
+      if (observation.activityKey && observation.activityKey !== lastActivityKey) {
+        lastActivityKey = observation.activityKey
+        idleDeadline = Date.now() + idleTimeoutMs
+        log(`${label} activity: ${observation.activity}`)
+      }
+      const result = observation.result
       if (result !== undefined) return result
     } catch (error) {
       lastError = error
+      const errorKey = error instanceof Error ? error.message : String(error)
+      if (errorKey !== lastActivityKey) {
+        lastActivityKey = errorKey
+        idleDeadline = Date.now() + idleTimeoutMs
+        log(`${label} error activity: ${errorKey}`)
+      }
     }
     await Bun.sleep(pollMs)
   }
   throw new Error(
-    `timed out waiting for ${label}${lastError ? `: ${lastError instanceof Error ? lastError.message : String(lastError)}` : ""}`,
+    `idle timed out waiting for ${label} after ${idleTimeoutMs}ms without activity${
+      lastError ? `: ${lastError instanceof Error ? lastError.message : String(lastError)}` : ""
+    }`,
   )
 }
 
+function missionRowsActivityKey(rows: MissionBenchmarkTask[]): string {
+  if (rows.length === 0) return "rows=0"
+  return rows
+    .map((item) => {
+      const task = item.task
+      return `${task?.id ?? "(missing)"}:${task?.status ?? "(missing)"}:${item.evaluation?.verdict ?? "(no-eval)"}`
+    })
+    .join("|")
+}
+
+function missionStateActivityKey(state: Record<string, string>): string {
+  const payload = ["frontier.md", "tasks.md", "handoff.md", "notes.md"]
+    .map((file) => `${file}\n${state[file] ?? ""}`)
+    .join("\n---\n")
+  return String(Bun.hash.xxHash64(payload))
+}
+
 async function readMissionFile(id: string, file: string): Promise<string> {
-  return fs.readFile(path.join(temp.dir, ".opencorvus", "runtime", "mission", id, file), "utf8").catch(() => "")
+  return fs.readFile(path.join(ProjectRuntimePaths.missionRoot(temp.dir, id), file), "utf8").catch(() => "")
 }
 
 async function api(pathname: string, init: RequestInit = {}) {
@@ -385,7 +441,7 @@ async function scaffoldMissionProject(dir: string, configDir: string, model: str
   await gitInit(dir)
   await writeIfMissing(
     path.join(dir, ".gitignore"),
-    ["node_modules/", "dist/", ".opencorvus/runtime/", "*.log", ""].join("\n"),
+    ["node_modules/", "dist/", ".opencorvus/r/", ".opencorvus/runtime/", "*.log", ""].join("\n"),
   )
   await fs.writeFile(
     path.join(dir, "package.json"),
@@ -458,32 +514,15 @@ async function copyAuthIntoTempHome(home: string): Promise<void> {
 }
 
 async function runLocalVerify(cwd: string, cmd: string) {
-  if (!cmd) return skippedVerify(cmd)
-  const shell = process.platform === "win32" ? ["cmd", "/c", cmd] : ["bash", "-lc", cmd]
-  const proc = Bun.spawn(shell, { cwd, stdout: "pipe", stderr: "pipe" })
-  const [exitCode, stdout, stderr] = await Promise.all([
-    proc.exited,
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ])
+  if (!cmd.trim()) throw new Error("acceptance verification command is required")
+  const result = await Shell.run(cmd, { cwd, idleTimeoutMs })
   return {
     mode: "command",
     command: cmd,
-    exitCode,
-    stdout: stdout.trim(),
-    stderr: stderr.trim(),
-    status: "completed",
-  }
-}
-
-function skippedVerify(command: string) {
-  return {
-    mode: "skipped",
-    command: command || null,
-    exitCode: null,
-    stdout: "",
-    stderr: "",
-    status: "not_run",
+    exitCode: result.exitCode,
+    stdout: result.stdout.trim(),
+    stderr: result.stderr.trim(),
+    status: result.idleTimedOut ? "idle_timeout" : "completed",
   }
 }
 

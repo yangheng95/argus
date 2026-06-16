@@ -9,7 +9,7 @@ import { EngineTaskTable } from "@/engine/engine.sql"
 import { Log } from "@/util/log"
 
 // Map MIME types to the canonical file extension used when we lay attachments
-// down inside a project's .opencorvus/runtime attachment blob store. The list only
+// down inside a project's .opencorvus/r attachment blob store. The list only
 // covers MIME types that a provider might send back as multimodal content.
 // Anything not in this table falls back to the filename's own extension, and
 // only if that is also missing do we store a raw ".bin" (explicit enough that
@@ -92,7 +92,7 @@ export namespace AttachmentStore {
   }
 
   /**
-   * Persist an attachment under `<project.worktree>/.opencorvus/runtime/blobs/attachments/<sha>.<ext>`.
+   * Persist an attachment under `<project.worktree>/.opencorvus/r/b/a/<sha>.<ext>`.
    * Content-addressed: identical payloads deduplicate to the same file. Returns
    * a reference carrying the HTTP URL that AttachmentRoutes serves.
    *
@@ -575,7 +575,7 @@ export namespace AttachmentStore {
 
   /**
    * Enumerate every `<sha>.<ext>` currently on disk under the project's
-   * `.opencorvus/runtime/blobs/attachments/` directory. Returns `[]` when the directory
+   * `.opencorvus/r/b/a/` directory. Returns `[]` when the directory
    * does not exist (no attachments have ever been written for this project).
    */
   export async function listOnDisk(projectID: string): Promise<

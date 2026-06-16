@@ -11,9 +11,9 @@
  * per rule 25, the output directory is derived from `Instance.directory`
  * rather than hardcoded.
  *
- * Output layout under `<project>/.opencorvus/runtime/tasks/<taskID>/`:
- *   - `<sessionID>.jsonl` — per-session detail (every event for that session)
- *   - `_task-<taskID>.jsonl` — per-task chronological rollup. Each event that
+ * Output layout under `<project>/.opencorvus/r/`:
+ *   - `s/<task-session-key>/trace.jsonl` — per-session detail
+ *   - `t/<task-key>/trace.jsonl` — per-task chronological rollup. Each event that
  *     carries taskID is appended to BOTH its session file AND the task file,
  *     so a single task's orchestrator wake + every sub-agent dispatch sit in
  *     one file in time order. Underscore prefix sorts task files to the top
@@ -57,7 +57,6 @@ import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { SessionObservability } from "@/util/session-observability"
-import { Identifier } from "@/id/id"
 import type { AgentReport } from "@/agent/report"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 
@@ -103,10 +102,16 @@ export namespace AgentTrace {
     // Override path: benchmark runs / CI pipelines that wipe Instance.directory
     // at the end of the run (overlay-web-benchmark deletes the entire
     // temp.dir on exit) set this env to a stable location so traces survive.
-    // Default — Instance.directory/.opencorvus/runtime — is the right answer
+    // Default — Instance.directory/.opencorvus/r — is the right answer
     // for normal interactive sessions where the project dir is permanent.
     const override = process.env.OPENCORVUS_AGENT_TRACE_DIR
-    if (override && override.length > 0) return override
+    if (override && override.length > 0) {
+      const normalized = override.replaceAll("\\", "/")
+      if (normalized.includes("/.opencorvus/runtime") || normalized.endsWith("/.opencorvus/runtime")) {
+        throw new Error(`OPENCORVUS_AGENT_TRACE_DIR must not point at legacy runtime layout: ${override}`)
+      }
+      return override
+    }
     return ProjectRuntimePaths.projectRuntimeRoot(Instance.directory)
   }
 
@@ -310,7 +315,7 @@ export namespace AgentTrace {
       tracePayloadRef: {
         sha256,
         bytes,
-        path: path.posix.join(".opencorvus", "runtime", "tasks", Identifier.shortPath(taskID), "trace", "blobs", filename),
+        path: ProjectRuntimePaths.taskRelative(taskID, "trace", "blobs", filename),
       },
       summary: summarizePayload(event.payload),
     }
@@ -369,6 +374,7 @@ export namespace AgentTrace {
         const file = sessionFile(bucket.sessionID, event.taskID)
         fs.mkdirSync(path.dirname(file), { recursive: true })
         fs.appendFileSync(file, line, { encoding: "utf-8" })
+        writeSessionTraceIndex(bucket.sessionID, event.taskID)
       } else {
         const file = domainFile(event.taskID, bucket.domain)
         fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -398,17 +404,26 @@ export namespace AgentTrace {
   }
 
   function findSessionTraceFile(sessionID: string): string | undefined {
-    const taskRoot = path.join(traceDir(), "tasks")
+    const indexPath = ProjectRuntimePaths.sessionTraceIndexPathFromRuntimeRoot(traceDir(), sessionID)
+    let raw: string
     try {
-      for (const taskSegment of fs.readdirSync(taskRoot)) {
-        const sessionSegments = [Identifier.shortPath(sessionID), sessionID]
-        for (const sessionSegment of [...new Set(sessionSegments)]) {
-          const candidate = path.join(taskRoot, taskSegment, "sessions", sessionSegment, "trace.jsonl")
-          if (fs.existsSync(candidate)) return candidate
-        }
-      }
-    } catch {}
-    return undefined
+      raw = fs.readFileSync(indexPath, "utf8")
+    } catch {
+      return undefined
+    }
+    try {
+      const parsed = JSON.parse(raw) as { sessionID?: unknown; taskID?: unknown }
+      if (parsed.sessionID !== sessionID || typeof parsed.taskID !== "string") return undefined
+      return sessionFile(sessionID, parsed.taskID)
+    } catch {
+      return undefined
+    }
+  }
+
+  function writeSessionTraceIndex(sessionID: string, taskID: string) {
+    const indexPath = ProjectRuntimePaths.sessionTraceIndexPathFromRuntimeRoot(traceDir(), sessionID)
+    fs.mkdirSync(path.dirname(indexPath), { recursive: true })
+    fs.writeFileSync(indexPath, JSON.stringify({ sessionID, taskID }) + "\n", "utf8")
   }
 
   function firstExisting(candidates: string[]): string | undefined {

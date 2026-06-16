@@ -6,6 +6,7 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import {
   ensureLiveWebpageEvidence,
   hasCompletePrimaryEvidence,
+  LIVE_WEBPAGE_EVIDENCE_FAILURE_FILE,
   primaryWebpageEvidenceArtifacts,
   type LiveWebpageEvidencePipeline,
 } from "../../src/orchestrator/webpage-evidence"
@@ -150,7 +151,7 @@ describe("live webpage evidence pipeline", () => {
     expect(await fileExists(path.join(secondPaths.sourcePackageAbsolute, "singlefile.html"))).toBe(false)
   })
 
-  test("treats SingleFile archive as optional when capture and source evidence are complete", async () => {
+  test("uses capture and source evidence as the complete webpage evidence contract", async () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_webpage_evidence_capture_only"
     const evidenceDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).webpageEvidenceAbsolute
@@ -181,6 +182,53 @@ describe("live webpage evidence pipeline", () => {
         },
       }),
     ).rejects.toThrow("did not produce the complete primary webpage evidence artifact set")
+  })
+
+  test("writes a stage diagnostic when live webpage extraction fails before frontend_design starts", async () => {
+    await using tmp = await tmpdir()
+    const taskID = "tsk_webpage_evidence_extract_timeout"
+    const calls: string[] = []
+    const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+
+    await expect(
+      ensureLiveWebpageEvidence({
+        projectDir: tmp.path,
+        worktreeDir: tmp.path,
+        taskID,
+        urls: ["https://example.com/slow"],
+        pipeline: {
+          extract: async () => {
+            calls.push("extract")
+            throw new Error("page.goto: Timeout 60000ms exceeded")
+          },
+          compile: async () => {
+            calls.push("compile")
+          },
+          analyze: async () => {
+            calls.push("analyze")
+          },
+          captureRuntimeState: async () => {
+            calls.push("captureRuntimeState")
+          },
+        },
+      }),
+    ).rejects.toThrow("Live webpage evidence extract failed")
+
+    expect(calls).toEqual(["extract"])
+    const diagnostic = JSON.parse(
+      await fs.readFile(path.join(paths.webpageEvidenceAbsolute, LIVE_WEBPAGE_EVIDENCE_FAILURE_FILE), "utf8"),
+    )
+    expect(diagnostic).toMatchObject({
+      version: 1,
+      purpose: "live-webpage-evidence-failure",
+      taskID,
+      url: "https://example.com/slow",
+      phase: "extract",
+      evidenceDir: paths.webpageEvidenceAbsolute,
+      error: {
+        message: "page.goto: Timeout 60000ms exceeded",
+      },
+    })
   })
 })
 

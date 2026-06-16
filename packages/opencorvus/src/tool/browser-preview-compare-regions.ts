@@ -1,6 +1,6 @@
 import path from "node:path"
 import z from "zod"
-import { resolveRuntimeRelativePath } from "@/browser-preview/persist"
+import { findReadableBrowserPreviewEvidenceArtifactPath } from "@/browser-preview/persist"
 import {
   BrowserPreviewRegionBinding,
   BrowserPreviewRegionComparisonResult,
@@ -41,14 +41,30 @@ export const BrowserPreviewCompareRegionsTool = Tool.define("browser_preview_com
       includeFullpageOverview: params.includeFullpageOverview,
       signal: ctx.abort,
     })
-    const visibleImages = result.regions
-      .filter((region) => region.status === "completed" && region.artifacts?.side_by_side)
-      .slice(0, 6)
-      .map((region) => ({
-        path: resolveRuntimeRelativePath(Instance.directory, region.artifacts!.side_by_side),
-        mime: "image/png",
-        filename: `${region.viewport_id}-${path.basename(region.artifacts!.side_by_side)}`,
-      }))
+    const visibleImages = await Promise.all(
+      result.regions
+        .filter((region) => region.status === "completed" && region.artifacts?.side_by_side)
+        .slice(0, 6)
+        .map(async (region) => {
+          const evidenceID = result.evidenceIDs[`${region.viewport_id}:${region.region_id}`]
+          if (!evidenceID) {
+            throw new Error(`Region comparison evidence not found: ${region.viewport_id}:${region.region_id}`)
+          }
+          const artifactPath = await findReadableBrowserPreviewEvidenceArtifactPath({
+            taskID,
+            evidenceID,
+            artifactName: "side-by-side",
+          })
+          if (!artifactPath) {
+            throw new Error(`Region comparison side-by-side artifact not readable: ${evidenceID}`)
+          }
+          return {
+            path: artifactPath,
+            mime: "image/png",
+            filename: `${region.viewport_id}-${path.basename(region.artifacts!.side_by_side)}`,
+          }
+        }),
+    )
     const multimodal = await buildMultimodalToolResult({
       projectID: Instance.project.id,
       text: JSON.stringify(result, null, 2),

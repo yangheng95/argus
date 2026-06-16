@@ -8683,12 +8683,8 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
     taskID: string
     targetID: string
     viewportID: string
-    operationKind: "preview-capture" | "reference-comparison"
+    operationKind?: "preview-capture" | "reference-comparison"
     regionID?: string
-    manifestPath?: string
-    artifactPaths?: {
-      [key: string]: string
-    }
     status: "passed" | "failed"
     summary: string
     capture?: unknown

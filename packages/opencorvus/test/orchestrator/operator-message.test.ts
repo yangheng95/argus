@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { OrchestratorEventNote, orchestratorUserText } from "../../src/orchestrator/agent"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 test("operator message wake note preserves authored text without synthetic framing", () => {
   const text = "继续，任务卡死了"
@@ -15,7 +16,7 @@ test("orchestrator wake without caller note reuses the original task request", (
   const text = orchestratorUserText({ id: "tsk_operator_msg", request: "build the requested feature" })
 
   expect(text).toContain("build the requested feature")
-  expect(text).toContain(".opencorvus/runtime/tasks/tsk_operator_msg/intent/request.md")
+  expect(text).toContain(ProjectRuntimePaths.intentPaths("", "tsk_operator_msg").relative)
   expect(text).toContain("Full user request:")
   expect(text).toContain("Audit copy:")
   expect(text).not.toContain("Task state has advanced")

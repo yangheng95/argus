@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { renderUserRequestSection, USER_REQUEST_BUNDLE_PATH } from "../../src/intent/request-prompt"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 describe("user request prompt injection", () => {
   test("injects the full user request and points at request.md audit copy", () => {
@@ -21,7 +22,7 @@ describe("user request prompt injection", () => {
       taskID: "tsk_prompt_path",
     })
 
-    expect(section).toContain(".opencorvus/runtime/tasks/tsk_prompt_path/intent/request.md")
+    expect(section).toContain(ProjectRuntimePaths.intentPaths("", "tsk_prompt_path").relative)
     expect(section).not.toContain("<taskID>")
   })
 

@@ -5,6 +5,7 @@ import path from "path"
 import { Instance } from "../../src/project/instance"
 import { ensureGitignore } from "../../src/engine/git"
 import { InternalGitCommitSubject } from "../../src/engine/internal-git-commit-subject"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { tmpdir } from "../fixture/fixture"
 
 async function gitTracked(dir: string, target: string) {
@@ -49,6 +50,7 @@ describe("ensureGitignore", () => {
       fn: async () => {
         await ensureGitignore()
         const body = await fs.readFile(path.join(tmp.path, ".gitignore"), "utf8")
+        expect(body).toContain(".opencorvus/r/")
         expect(body).toContain(".opencorvus/runtime/")
         expect(body).not.toMatch(/(^|\n)\.opencorvus\/(\r?\n|$)/)
         expect(body).toContain(".opencorvus-meta.json")
@@ -67,6 +69,7 @@ describe("ensureGitignore", () => {
         await ensureGitignore()
         const body = await fs.readFile(path.join(tmp.path, ".gitignore"), "utf8")
         expect(body).toContain("node_modules/")
+        expect(body).toContain(".opencorvus/r/")
         expect(body).toContain(".opencorvus/runtime/")
         expect(body).not.toMatch(/(^|\n)\.opencorvus\/(\r?\n|$)/)
         expect(body).toContain(".opencorvus-meta.json")
@@ -112,7 +115,7 @@ describe("ensureGitignore", () => {
   test("untracks opencorvus runtime paths and root artifacts committed before the ignore existed", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(path.join(tmp.path, ".opencorvus-meta.json"), `{"goalID":"stale"}`)
-    const runtimeIntent = ".opencorvus/runtime/tasks/tsk_git_ignore/intent/request.md"
+    const runtimeIntent = ProjectRuntimePaths.intentPaths("", "tsk_git_ignore").relative
     const staticConfig = ".opencorvus/agents/demo.md"
     const visualArtifact = "artifacts/reference.png"
     await fs.mkdir(path.dirname(path.join(tmp.path, runtimeIntent)), { recursive: true })

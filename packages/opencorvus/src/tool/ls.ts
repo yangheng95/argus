@@ -11,7 +11,7 @@ export const IGNORE_PATTERNS = [
   "__pycache__/",
   ".git/",
   // `.opencorvus/` covers all our scratch, including goal worktrees which
-  // now live under `.opencorvus/runtime/`. The legacy sibling pattern is
+  // now live under `.opencorvus/r/`. The legacy sibling pattern is
   // retained for projects that still have leftover dirs from the prior
   // parent-directory layout.
   ".opencorvus/",

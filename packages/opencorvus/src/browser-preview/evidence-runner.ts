@@ -47,18 +47,6 @@ type BrowserPreviewEvidenceRunnerInput = {
   signal?: AbortSignal
 }
 
-const BrowserPreviewEvidenceJobContextBrand: unique symbol = Symbol("BrowserPreviewEvidenceJobContext")
-
-type BrowserPreviewEvidenceJobContext = {
-  projectRoot: string
-  jobID: string
-  taskID: string
-  targetID: string
-  url: string
-  outDir: string
-  [BrowserPreviewEvidenceJobContextBrand]: true
-}
-
 type BrowserPreviewRegionComparisonRunnerInput = {
   projectRoot: string
   taskID: string
@@ -136,13 +124,20 @@ export class BrowserPreviewEvidenceTargetNotFoundError extends Error {
 export async function runBrowserPreviewEvidenceJob(
   input: BrowserPreviewEvidenceRunnerInput,
 ): Promise<BrowserPreviewEvidenceRunnerResult> {
-  const context = createBrowserPreviewEvidenceJobContext(input)
+  requireBrowserEvidenceIdentity(input)
+  const target = findBrowserPreviewTargetByID({ taskID: input.taskID, targetID: input.targetID })
+  if (!target) {
+    throw new BrowserPreviewEvidenceTargetNotFoundError(input.targetID)
+  }
+  const jobID = Identifier.ascending("artifact")
+  const projectRoot = path.resolve(input.projectRoot)
+  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID)
   const executablePath = await BrowserRuntime.findBrowserExecutable()
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(undefined)
   const navigationTimeoutMs = RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms
   const settleMs = RUNTIME_CAPTURE_DEFAULTS.settle_ms
   const runtime = await resolveBrowserNodeSidecarRuntime()
-  await fs.mkdir(context.outDir, { recursive: true })
+  await fs.mkdir(outDir, { recursive: true })
 
   const viewports: SidecarViewportInput[] = input.viewportIDs.map((id) => {
     const preset = browserPreviewViewportByID(id)
@@ -151,7 +146,7 @@ export async function runBrowserPreviewEvidenceJob(
       id,
       width: viewport.width,
       height: viewport.height,
-      screenshotPath: path.join(context.outDir, `${id}.png`),
+      screenshotPath: path.join(outDir, `${id}.png`),
     }
   })
 
@@ -161,7 +156,7 @@ export async function runBrowserPreviewEvidenceJob(
     runtime,
     script: BROWSER_PREVIEW_BATCH_SCRIPT,
     payload: {
-      url: context.url,
+      url: target.url,
       executablePath,
       launchArgs: BrowserRuntime.defaultLaunchArgs(),
       launchTimeoutMs,
@@ -194,14 +189,18 @@ export async function runBrowserPreviewEvidenceJob(
   const artifactPaths: string[] = []
   const diagnostics: string[] = []
   for (const capture of sidecar.result.captures) {
-    const finalized = await finalizeBrowserPreviewSidecarCapture({ capture, context })
+    const finalized = await finalizeBrowserPreviewSidecarCapture({ capture, url: target.url, outDir })
     captures[capture.id] = finalized.capture
     if (finalized.artifactPath) artifactPaths.push(finalized.artifactPath)
     diagnostics.push(finalized.diagnostic)
   }
 
   const manifest = await writeBrowserEvidenceManifest({
-    context,
+    outDir,
+    jobID,
+    taskID: input.taskID,
+    targetID: input.targetID,
+    url: target.url,
     viewportIDs: input.viewportIDs,
     artifactPaths,
     captures,
@@ -213,10 +212,17 @@ export async function runBrowserPreviewEvidenceJob(
 export async function runBrowserPreviewRegionComparisonCapture(
   input: BrowserPreviewRegionComparisonRunnerInput,
 ): Promise<BrowserPreviewRegionComparisonCaptureResult> {
-  const context = createBrowserPreviewEvidenceJobContext(input)
-  await fs.mkdir(context.outDir, { recursive: true })
+  requireBrowserEvidenceIdentity(input)
+  const target = findBrowserPreviewTargetByID({ taskID: input.taskID, targetID: input.targetID })
+  if (!target) {
+    throw new BrowserPreviewEvidenceTargetNotFoundError(input.targetID)
+  }
+  const jobID = Identifier.ascending("artifact")
+  const projectRoot = path.resolve(input.projectRoot)
+  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID)
+  await fs.mkdir(outDir, { recursive: true })
   if (input.bindings.length === 0) {
-    return { jobID: context.jobID, outDir: context.outDir, regions: [] }
+    return { jobID, outDir, regions: [] }
   }
 
   const executablePath = await BrowserRuntime.findBrowserExecutable()
@@ -232,8 +238,8 @@ export async function runBrowserPreviewRegionComparisonCapture(
     runtime,
     script: BROWSER_PREVIEW_REGION_COMPARISON_SCRIPT,
     payload: {
-      url: context.url,
-      outDir: context.outDir,
+      url: target.url,
+      outDir,
       executablePath,
       launchArgs: BrowserRuntime.defaultLaunchArgs(),
       launchTimeoutMs,
@@ -265,48 +271,28 @@ export async function runBrowserPreviewRegionComparisonCapture(
       `Browser preview region comparison runner exited with ${sidecar.signal ?? sidecar.exitCode}. ${sidecar.stderr.trim()}`,
     )
   }
-  return { jobID: context.jobID, outDir: context.outDir, fullpagePath: sidecar.result.fullpagePath, regions: sidecar.result.regions }
-}
-
-export function createBrowserPreviewEvidenceJobContext(input: {
-  projectRoot: string
-  taskID: string
-  targetID: string
-}): BrowserPreviewEvidenceJobContext {
-  requireBrowserEvidenceIdentity(input)
-  const target = findBrowserPreviewTargetByID({ taskID: input.taskID, targetID: input.targetID })
-  if (!target) {
-    throw new BrowserPreviewEvidenceTargetNotFoundError(input.targetID)
-  }
-  const jobID = Identifier.ascending("artifact")
-  const projectRoot = path.resolve(input.projectRoot)
-  return {
-    projectRoot,
-    jobID,
-    taskID: input.taskID,
-    targetID: input.targetID,
-    url: target.url,
-    outDir: ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID),
-    [BrowserPreviewEvidenceJobContextBrand]: true,
-  }
+  return { jobID, outDir, fullpagePath: sidecar.result.fullpagePath, regions: sidecar.result.regions }
 }
 
 export async function writeBrowserEvidenceManifest(input: {
-  context: BrowserPreviewEvidenceJobContext
+  outDir: string
+  jobID: string
+  taskID: string
+  targetID: string
+  url: string
   viewportIDs: BrowserPreviewViewportID[]
   artifactPaths: string[]
   captures: Record<string, RuntimeCaptureResult>
   diagnostics: string[]
 }): Promise<BrowserEvidenceManifestSummary> {
-  const { context } = input
-  requireBrowserEvidenceIdentity(context)
-  await fs.mkdir(context.outDir, { recursive: true })
-  const diagnosticsPath = path.join(context.outDir, "diagnostics.json")
+  requireBrowserEvidenceIdentity(input)
+  await fs.mkdir(input.outDir, { recursive: true })
+  const diagnosticsPath = path.join(input.outDir, "diagnostics.json")
   const manifest: BrowserEvidenceManifestSummary = {
-    manifestPath: path.join(context.outDir, "manifest.json"),
-    jobID: context.jobID,
-    taskID: context.taskID,
-    targetID: context.targetID,
+    manifestPath: path.join(input.outDir, "manifest.json"),
+    jobID: input.jobID,
+    taskID: input.taskID,
+    targetID: input.targetID,
     operations: [
       {
         kind: "preview-capture",
@@ -323,10 +309,10 @@ export async function writeBrowserEvidenceManifest(input: {
     diagnosticsPath,
     JSON.stringify(
       {
-        jobID: context.jobID,
-        taskID: context.taskID,
-        targetID: context.targetID,
-        url: context.url,
+        jobID: input.jobID,
+        taskID: input.taskID,
+        targetID: input.targetID,
+        url: input.url,
         viewportIDs: input.viewportIDs,
         diagnostics: input.diagnostics,
       },
@@ -339,7 +325,7 @@ export async function writeBrowserEvidenceManifest(input: {
     JSON.stringify(
       {
         ...manifest,
-        url: context.url,
+        url: input.url,
         captures: input.captures,
         diagnostics: input.diagnostics,
       },
@@ -364,16 +350,16 @@ function requireBrowserEvidenceIdentity(input: { projectRoot?: string; jobID?: s
 
 export async function finalizeBrowserPreviewSidecarCapture(input: {
   capture: SidecarCaptureResult
-  context: BrowserPreviewEvidenceJobContext
+  url: string
+  outDir: string
 }): Promise<BrowserPreviewFinalizedSidecarCapture> {
   const { capture } = input
-  const { context } = input
   if (!capture.captured || !capture.path) {
     return {
       capture: {
         captured: false,
         passed: false,
-        url: context.url,
+        url: input.url,
         requested_viewport: capture.requested_viewport,
         viewport: capture.viewport,
         capture_error: capture.capture_error ?? { kind: "capture_failed", message: capture.summary },
@@ -391,7 +377,7 @@ export async function finalizeBrowserPreviewSidecarCapture(input: {
       capture: {
         captured: false,
         passed: false,
-        url: context.url,
+        url: input.url,
         requested_viewport: capture.requested_viewport,
         viewport: capture.viewport,
         capture_error: { kind: "capture_failed", message: summary },
@@ -402,7 +388,7 @@ export async function finalizeBrowserPreviewSidecarCapture(input: {
   }
   const bytes = await fs.readFile(capture.path)
   const sha = crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 16)
-  const finalPath = path.join(context.outDir, `${capture.id}-${sha}.png`)
+  const finalPath = path.join(input.outDir, `${capture.id}-${sha}.png`)
   if (finalPath !== capture.path) {
     await fs.rename(capture.path, finalPath).catch(async () => {
       await fs.copyFile(capture.path!, finalPath)
@@ -419,14 +405,14 @@ export async function finalizeBrowserPreviewSidecarCapture(input: {
   const failedLayers = runtimeCaptureFailedLayers(capture.layers)
   const passed = failedLayers.length === 0
   const summary = passed
-    ? `all runtime capture layers passed on ${context.url}`
+    ? `all runtime capture layers passed on ${input.url}`
     : `failed layers: ${failedLayers.join(", ")}`
   return {
     capture: {
       captured: true,
       passed,
-      url: context.url,
-      target_url: capture.target_url ?? context.url,
+      url: input.url,
+      target_url: capture.target_url ?? input.url,
       path: finalPath,
       sha,
       bytes: bytes.length,
