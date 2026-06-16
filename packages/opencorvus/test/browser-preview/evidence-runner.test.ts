@@ -1,17 +1,27 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { PNG } from "pngjs"
 import {
+  createBrowserPreviewEvidenceJobContext,
   finalizeBrowserPreviewSidecarCapture,
   runBrowserPreviewEvidenceJob,
   writeBrowserEvidenceManifest,
 } from "../../src/browser-preview/evidence-runner"
+import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import type { RuntimeCaptureSuccess } from "../../src/runtime/capture-contract"
+import { Database } from "../../src/storage/db"
+import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 describe("browser preview evidence runner contract", () => {
+  afterEach(async () => {
+    await resetDatabase()
+  })
+
   test("sidecar captures full-page screenshots instead of viewport clips", async () => {
     const source = await fs.readFile(
       path.resolve(import.meta.dir, "../../src/browser-preview/evidence-runner.ts"),
@@ -37,6 +47,23 @@ describe("browser preview evidence runner contract", () => {
     expect(inputType).not.toContain("outDir:")
     expect(source).toContain("findBrowserPreviewTargetByID")
     expect(source).toContain("ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID)")
+  })
+
+  test("manifest and finalizer helpers require a runner-created job context", async () => {
+    const source = await fs.readFile(
+      path.resolve(import.meta.dir, "../../src/browser-preview/evidence-runner.ts"),
+      "utf8",
+    )
+    const manifestInput = source.match(/export async function writeBrowserEvidenceManifest\(input: \{[\s\S]*?\n\}\):/)?.[0] ?? ""
+    const finalizerInput = source.match(/export async function finalizeBrowserPreviewSidecarCapture\(input: \{[\s\S]*?\n\}\):/)?.[0] ?? ""
+
+    expect(source).toContain("createBrowserPreviewEvidenceJobContext")
+    expect(manifestInput).toContain("context: BrowserPreviewEvidenceJobContext")
+    expect(manifestInput).not.toContain("url:")
+    expect(manifestInput).not.toContain("outDir:")
+    expect(finalizerInput).toContain("context: BrowserPreviewEvidenceJobContext")
+    expect(finalizerInput).not.toContain("url:")
+    expect(finalizerInput).not.toContain("outDir:")
   })
 
   test("owns browser runtime launch for preview and region comparison evidence", async () => {
@@ -69,19 +96,16 @@ describe("browser preview evidence runner contract", () => {
 
   test("manifest records viewport IDs and diagnostics path as runner evidence metadata", async () => {
     await using tmp = await tmpdir()
-    const desktopPath = path.join(tmp.path, "desktop.png")
-    const mobilePath = path.join(tmp.path, "mobile.png")
+    const context = await createEvidenceContext(tmp.path, "tsk_preview_manifest", "http://127.0.0.1:5173/")
+    const desktopPath = path.join(context.outDir, "desktop.png")
+    const mobilePath = path.join(context.outDir, "mobile.png")
     const captures = {
       desktop: passedCapture("desktop", desktopPath),
       mobile: failedCapture("mobile"),
     }
 
     const manifest = await writeBrowserEvidenceManifest({
-      outDir: tmp.path,
-      jobID: "art_preview_job",
-      taskID: "tsk_preview",
-      targetID: "art_preview_target",
-      url: "http://127.0.0.1:5173/",
+      context,
       viewportIDs: ["desktop", "mobile"],
       artifactPaths: [desktopPath, mobilePath],
       captures,
@@ -94,18 +118,18 @@ describe("browser preview evidence runner contract", () => {
         status: "failed",
         viewportIDs: ["desktop", "mobile"],
         artifactPaths: [desktopPath, mobilePath],
-        diagnosticsPath: path.join(tmp.path, "diagnostics.json"),
+        diagnosticsPath: path.join(context.outDir, "diagnostics.json"),
       },
     ])
     const manifestJSON = JSON.parse(await fs.readFile(manifest.manifestPath, "utf8"))
     expect(manifestJSON.operations[0].viewportIDs).toEqual(["desktop", "mobile"])
-    expect(manifestJSON.operations[0].diagnosticsPath).toBe(path.join(tmp.path, "diagnostics.json"))
+    expect(manifestJSON.operations[0].diagnosticsPath).toBe(path.join(context.outDir, "diagnostics.json"))
     expect(manifestJSON.captures.desktop.summary).toBe("desktop passed")
-    const diagnosticsJSON = JSON.parse(await fs.readFile(path.join(tmp.path, "diagnostics.json"), "utf8"))
+    const diagnosticsJSON = JSON.parse(await fs.readFile(path.join(context.outDir, "diagnostics.json"), "utf8"))
     expect(diagnosticsJSON).toMatchObject({
-      jobID: "art_preview_job",
-      taskID: "tsk_preview",
-      targetID: "art_preview_target",
+      jobID: context.jobID,
+      taskID: "tsk_preview_manifest",
+      targetID: context.targetID,
       url: "http://127.0.0.1:5173/",
       viewportIDs: ["desktop", "mobile"],
       diagnostics: ["desktop passed", "mobile failed"],
@@ -114,27 +138,26 @@ describe("browser preview evidence runner contract", () => {
 
   test("manifest writing rejects missing target identity before evidence files are created", async () => {
     await using tmp = await tmpdir()
+    const context = await createEvidenceContext(tmp.path, "tsk_preview_missing_identity", "http://127.0.0.1:5173/")
 
     await expect(
       writeBrowserEvidenceManifest({
-        outDir: tmp.path,
-        jobID: "art_preview_job",
-        taskID: "tsk_preview",
-        targetID: "",
-        url: "http://127.0.0.1:5173/",
+        context: { ...context, targetID: "" },
         viewportIDs: ["desktop"],
         artifactPaths: [],
         captures: {},
         diagnostics: [],
       }),
     ).rejects.toThrow(/targetID/)
-    await expect(fs.stat(path.join(tmp.path, "manifest.json"))).rejects.toThrow()
-    await expect(fs.stat(path.join(tmp.path, "diagnostics.json"))).rejects.toThrow()
+    await expect(fs.stat(path.join(context.outDir, "manifest.json"))).rejects.toThrow()
+    await expect(fs.stat(path.join(context.outDir, "diagnostics.json"))).rejects.toThrow()
   })
 
   test("does not synthesize passed layers when the sidecar omits structured evidence", async () => {
     await using tmp = await tmpdir()
-    const screenshotPath = path.join(tmp.path, "desktop.png")
+    const context = await createEvidenceContext(tmp.path, "tsk_preview_structured", "http://127.0.0.1:5173/")
+    await fs.mkdir(context.outDir, { recursive: true })
+    const screenshotPath = path.join(context.outDir, "desktop.png")
     await writePng(screenshotPath, "noise")
 
     const result = await finalizeBrowserPreviewSidecarCapture({
@@ -143,8 +166,7 @@ describe("browser preview evidence runner contract", () => {
         layers: undefined,
         dom: undefined,
       }),
-      url: "http://127.0.0.1:5173/",
-      outDir: tmp.path,
+      context,
     })
 
     expect(result.artifactPath).toBeUndefined()
@@ -155,7 +177,9 @@ describe("browser preview evidence runner contract", () => {
 
   test("derives pixel pass from screenshot variance instead of the sidecar passed flag", async () => {
     await using tmp = await tmpdir()
-    const screenshotPath = path.join(tmp.path, "desktop.png")
+    const context = await createEvidenceContext(tmp.path, "tsk_preview_pixel", "http://127.0.0.1:5173/")
+    await fs.mkdir(context.outDir, { recursive: true })
+    const screenshotPath = path.join(context.outDir, "desktop.png")
     await writePng(screenshotPath, "solid")
 
     const result = await finalizeBrowserPreviewSidecarCapture({
@@ -164,8 +188,7 @@ describe("browser preview evidence runner contract", () => {
         layers: passedLayers(screenshotPath),
         dom: populatedDom(),
       }),
-      url: "http://127.0.0.1:5173/",
-      outDir: tmp.path,
+      context,
     })
 
     const { capture } = result
@@ -179,7 +202,9 @@ describe("browser preview evidence runner contract", () => {
 
   test("uses decoded PNG dimensions for scrollable full-page evidence size", async () => {
     await using tmp = await tmpdir()
-    const screenshotPath = path.join(tmp.path, "desktop.png")
+    const context = await createEvidenceContext(tmp.path, "tsk_preview_dimensions", "http://127.0.0.1:5173/")
+    await fs.mkdir(context.outDir, { recursive: true })
+    const screenshotPath = path.join(context.outDir, "desktop.png")
     await writePng(screenshotPath, "noise", { width: 12, height: 96 })
 
     const result = await finalizeBrowserPreviewSidecarCapture({
@@ -188,8 +213,7 @@ describe("browser preview evidence runner contract", () => {
         layers: passedLayers(screenshotPath),
         dom: populatedDom(),
       }),
-      url: "http://127.0.0.1:5173/",
-      outDir: tmp.path,
+      context,
     })
 
     expect(result.capture.captured).toBe(true)
@@ -198,6 +222,39 @@ describe("browser preview evidence runner contract", () => {
     expect(result.capture.viewport).toEqual({ width: 1440, height: 1080, capped: false })
   })
 })
+
+async function createEvidenceContext(projectRoot: string, taskID: string, url: string) {
+  await seedTask(projectRoot, taskID)
+  const target = await persistBrowserPreviewTarget({ taskID, url })
+  return createBrowserPreviewEvidenceJobContext({
+    projectRoot,
+    taskID,
+    targetID: target.id,
+  })
+}
+
+async function seedTask(directory: string, taskID: string) {
+  await Instance.provide({
+    directory,
+    fn: () => {
+      const time = Date.now()
+      Database.use((db) =>
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "Preview task",
+            request: "Preview task",
+            source: "api",
+            time_created: time,
+            time_updated: time,
+          })
+          .run(),
+      )
+    },
+  })
+}
 
 function sidecarCapture(input: {
   path: string
