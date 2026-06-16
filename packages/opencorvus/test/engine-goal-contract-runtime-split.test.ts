@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { SCHEMA_DDL } from "../src/storage/ddl"
 
 // Phase B (2026-05-05) — verify the schema split between contract data
 // (engine_goal) and runtime worktree state (engine_artifact[goal_run_attempt]
@@ -34,11 +35,10 @@ describe("engine_goal schema — runtime workspace columns retired", () => {
   })
 
   test("DDL has no workspace_* column declarations on engine_goal", () => {
-    const source = readFileSync(resolve(import.meta.dir, "../src/storage/ddl.ts"), "utf8")
-    const goalTableStart = source.indexOf("CREATE TABLE IF NOT EXISTS engine_goal")
+    const goalTableStart = SCHEMA_DDL.indexOf('CREATE TABLE IF NOT EXISTS "engine_goal"')
     expect(goalTableStart).toBeGreaterThan(0)
-    const goalTableEnd = source.indexOf(");", goalTableStart)
-    const ddl = source.slice(goalTableStart, goalTableEnd)
+    const goalTableEnd = SCHEMA_DDL.indexOf(");", goalTableStart)
+    const ddl = SCHEMA_DDL.slice(goalTableStart, goalTableEnd)
     // Strip SQL comments so retirement notes don't trip the assertion.
     const ddlCode = ddl.replace(/--[^\n]*\n/g, "\n")
     expect(ddlCode).not.toMatch(/^\s*workspace_dir\s+text/m)

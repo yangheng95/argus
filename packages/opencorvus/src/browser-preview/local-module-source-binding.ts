@@ -174,6 +174,7 @@ export async function bindLocalModuleToSourceRegion(
   })
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8")
   const evidenceID = persistBrowserPreviewEvidence({
+    projectRoot: input.projectRoot,
     taskID: input.taskID,
     targetID: input.targetID,
     viewportID: input.viewportID,

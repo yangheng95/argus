@@ -109,25 +109,32 @@ export namespace ProviderTransform {
       },
     }
 
-    const systemSet: Set<ModelMessage> = new Set(systemEdges)
-
+    const systemSet = new Set<ModelMessage>(systemEdges)
+    const optionsByMessage = new Map<ModelMessage, Record<string, any>>()
     for (const msg of unique([...systemEdges, ...final])) {
-      const opts = systemSet.has(msg) ? systemOptions : tailOptions
+      optionsByMessage.set(msg, systemSet.has(msg) ? systemOptions : tailOptions)
+    }
+
+    return msgs.map((msg) => {
+      const opts = optionsByMessage.get(msg)
+      if (!opts) return msg
       const useMessageLevelOptions = model.providerID === "anthropic" || model.providerID.includes("bedrock")
       const shouldUseContentOptions = !useMessageLevelOptions && Array.isArray(msg.content) && msg.content.length > 0
 
       if (shouldUseContentOptions) {
         const lastContent = msg.content[msg.content.length - 1]
         if (lastContent && typeof lastContent === "object" && "providerOptions" in lastContent) {
-          lastContent.providerOptions = mergeDeep(lastContent.providerOptions ?? {}, opts)
-          continue
+          const nextContent = [...msg.content]
+          nextContent[nextContent.length - 1] = {
+            ...lastContent,
+            providerOptions: mergeDeep(lastContent.providerOptions ?? {}, opts),
+          }
+          return { ...msg, content: nextContent } as ModelMessage
         }
       }
 
-      msg.providerOptions = mergeDeep(msg.providerOptions ?? {}, opts)
-    }
-
-    return msgs
+      return { ...msg, providerOptions: mergeDeep(msg.providerOptions ?? {}, opts) } as ModelMessage
+    })
   }
 
   function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {

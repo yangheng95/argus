@@ -59,20 +59,123 @@ const anthropicFilterEmpty: NormalizeMessages = (msgs) => {
 
 const claudeSanitizeToolCallIds: NormalizeMessages = (msgs) => {
   // Claude tool IDs must be [a-zA-Z0-9_-]; replace everything else with `_`.
+  const toolCallIDs = uniqueToolCallIDs(msgs)
+  const normalizedIDs = normalizeUniqueToolCallIDs(toolCallIDs, claudeToolCallIDCandidate)
   return msgs.map((msg) => {
     if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-      msg.content = msg.content.map((part) => {
-        if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-          return {
-            ...part,
-            toolCallId: part.toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_"),
+      return {
+        ...msg,
+        content: msg.content.map((part) => {
+          const toolCallId = toolPartCallID(part)
+          if (toolCallId) {
+            return { ...part, toolCallId: normalizedIDs.get(toolCallId) ?? claudeToolCallIDCandidate(toolCallId) }
           }
-        }
-        return part
-      })
+          return part
+        }),
+      }
     }
     return msg
   })
+}
+
+function claudeToolCallIDCandidate(toolCallID: string): string {
+  return toolCallID.replace(/[^a-zA-Z0-9_-]/g, "_") || "call"
+}
+
+function isTextOnlyAssistant(msg: ModelMessage) {
+  if (msg.role !== "assistant") return false
+  if (typeof msg.content === "string") return msg.content.length > 0
+  if (!Array.isArray(msg.content) || msg.content.length === 0) return false
+  return msg.content.every((part) => part.type === "text" && part.text.length > 0)
+}
+
+const mistralToolCallIdPadAndSeq: NormalizeMessages = (msgs) => {
+  // Mistral tool IDs must be exactly 9 alphanumeric characters; pad/truncate.
+  const toolCallIDs = uniqueToolCallIDs(msgs)
+  const normalizedIDs = normalizeUniqueToolCallIDs(toolCallIDs, mistralToolCallIDCandidate, mistralCollisionToolCallID)
+  return msgs.map((msg) => {
+    if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
+      return {
+        ...msg,
+        content: msg.content.map((part) => {
+          const toolCallId = toolPartCallID(part)
+          if (toolCallId) {
+            return { ...part, toolCallId: normalizedIDs.get(toolCallId) ?? mistralToolCallIDCandidate(toolCallId) }
+          }
+          return part
+        }),
+      }
+    }
+    return msg
+  })
+}
+
+function uniqueToolCallIDs(msgs: ModelMessage[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const msg of msgs) {
+    if ((msg.role !== "assistant" && msg.role !== "tool") || !Array.isArray(msg.content)) continue
+    for (const part of msg.content) {
+      const toolCallId = toolPartCallID(part)
+      if (!toolCallId || seen.has(toolCallId)) continue
+      seen.add(toolCallId)
+      result.push(toolCallId)
+    }
+  }
+  return result
+}
+
+function toolPartCallID(part: unknown): string | undefined {
+  if (!part || typeof part !== "object" || Array.isArray(part)) return undefined
+  const record = part as Record<string, unknown>
+  if (record.type !== "tool-call" && record.type !== "tool-result") return undefined
+  return typeof record.toolCallId === "string" && record.toolCallId.length > 0 ? record.toolCallId : undefined
+}
+
+function normalizeUniqueToolCallIDs(
+  originals: string[],
+  candidateFor: (toolCallID: string) => string,
+  collisionCandidateFor: (toolCallID: string, salt: number) => string = defaultCollisionToolCallID,
+): Map<string, string> {
+  const normalized = new Map<string, string>()
+  const ownerByNormalized = new Map<string, string>()
+
+  for (const original of originals) {
+    let candidate = candidateFor(original)
+    if (ownerByNormalized.has(candidate) && ownerByNormalized.get(candidate) !== original) {
+      for (let salt = 0; ; salt += 1) {
+        candidate = collisionCandidateFor(original, salt)
+        const owner = ownerByNormalized.get(candidate)
+        if (!owner || owner === original) break
+      }
+    }
+    normalized.set(original, candidate)
+    ownerByNormalized.set(candidate, original)
+  }
+
+  return normalized
+}
+
+function defaultCollisionToolCallID(toolCallID: string, salt: number): string {
+  return `${claudeToolCallIDCandidate(toolCallID)}_${stableBase36(`${toolCallID}:${salt}`).slice(0, 6)}`
+}
+
+function mistralToolCallIDCandidate(toolCallID: string): string {
+  return toolCallID.replace(/[^a-zA-Z0-9]/g, "").substring(0, 9).padEnd(9, "0")
+}
+
+function mistralCollisionToolCallID(toolCallID: string, salt: number): string {
+  const prefix = toolCallID.replace(/[^a-zA-Z0-9]/g, "").substring(0, 4).padEnd(4, "0")
+  return `${prefix}${stableBase36(`${toolCallID}:${salt}`).slice(0, 5).padStart(5, "0")}`.substring(0, 9)
+}
+
+function stableBase36(value: string): string {
+  let hash = 2_166_136_261
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i)
+    hash = Math.imul(hash, 16_777_619) >>> 0
+  }
+  return hash.toString(36)
 }
 
 const claudeDropToolResultAssistantTail: NormalizeMessages = (msgs) => {
@@ -86,47 +189,6 @@ const claudeDropToolResultAssistantTail: NormalizeMessages = (msgs) => {
 
 const claudeNormalize: NormalizeMessages = (msgs, model) => {
   return claudeDropToolResultAssistantTail(claudeSanitizeToolCallIds(msgs, model), model)
-}
-
-function isTextOnlyAssistant(msg: ModelMessage) {
-  if (msg.role !== "assistant") return false
-  if (typeof msg.content === "string") return msg.content.length > 0
-  if (!Array.isArray(msg.content) || msg.content.length === 0) return false
-  return msg.content.every((part) => part.type === "text" && part.text.length > 0)
-}
-
-const mistralToolCallIdPadAndSeq: NormalizeMessages = (msgs) => {
-  // Mistral tool IDs must be exactly 9 alphanumeric characters; pad/truncate.
-  // Also: a `tool` message cannot be followed directly by `user`; insert an
-  // `assistant` bridge.
-  const result: ModelMessage[] = []
-  for (let i = 0; i < msgs.length; i++) {
-    const msg = msgs[i]
-    const nextMsg = msgs[i + 1]
-
-    if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-      msg.content = msg.content.map((part) => {
-        if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-          const normalizedId = part.toolCallId
-            .replace(/[^a-zA-Z0-9]/g, "")
-            .substring(0, 9)
-            .padEnd(9, "0")
-          return { ...part, toolCallId: normalizedId }
-        }
-        return part
-      })
-    }
-
-    result.push(msg)
-
-    if (msg.role === "tool" && nextMsg?.role === "user") {
-      result.push({
-        role: "assistant",
-        content: [{ type: "text", text: "Done." }],
-      })
-    }
-  }
-  return result
 }
 
 function extractInlineThink(text: string) {

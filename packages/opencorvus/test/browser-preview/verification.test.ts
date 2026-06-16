@@ -231,13 +231,13 @@ describe("browser preview verification", () => {
     })
 
     expect(result.status).toBe("failed")
-    expect(result.target.latestEvidenceID).toBeTruthy()
-    expect(result.evidenceIDs.desktop).toBe(result.target.latestEvidenceID)
+    expect(result.target.latestEvidenceIDs?.desktop).toBeTruthy()
+    expect(result.evidenceIDs.desktop).toBe(result.target.latestEvidenceIDs?.desktop)
     const artifact = Database.use((db) =>
       db
         .select()
         .from(EngineArtifactTable)
-        .where(eq(EngineArtifactTable.id, result.target.latestEvidenceID!))
+        .where(eq(EngineArtifactTable.id, result.target.latestEvidenceIDs!.desktop!))
         .limit(1)
         .get(),
     )
@@ -246,7 +246,7 @@ describe("browser preview verification", () => {
     expect(artifact?.payload?.status).toBe("failed")
     const evidence = await findReadableBrowserPreviewEvidenceByID({
       taskID,
-      evidenceID: result.target.latestEvidenceID!,
+      evidenceID: result.target.latestEvidenceIDs!.desktop!,
     })
     expect(evidence?.taskID).toBe(taskID)
     expect(evidence?.targetID).toBe(persisted.id)

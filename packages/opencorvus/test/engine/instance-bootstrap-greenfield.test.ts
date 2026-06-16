@@ -19,8 +19,8 @@ import { ensureGitignore } from "../../src/engine/git"
  * The new contract:
  *   - `Instance.provide` succeeds on greenfield directories without
  *     creating any disk artifact under `.git/`.
- *   - The bootstrap returns `Project.fromDirectory` results unchanged
- *     (non-git → `id: "global"`, worktree: "/", sandbox: "/").
+ *   - The bootstrap returns a directory-scoped project identity
+ *     (non-git → deterministic id, worktree: directory, sandbox: directory).
  *   - Routes that *require* a working tree must explicitly check
  *     `Project.isGitRepo` and throw `WorktreeNotGitError` (412) so the
  *     overlay can prompt the user for an explicit init.
@@ -36,10 +36,14 @@ describe("Instance.provide bootstrap (greenfield)", () => {
     expect(Project.isGitRepo(dir)).toBe(false)
 
     let inside = false
+    let projectID = ""
+    let worktree = ""
     await Instance.provide({
       directory: dir,
       fn: async () => {
         inside = true
+        projectID = Instance.project.id
+        worktree = Instance.worktree
         // The body runs inside Instance context; calling ensureGitignore
         // is allowed but writes only `.gitignore` (no `.git/`).
         await ensureGitignore()
@@ -57,5 +61,8 @@ describe("Instance.provide bootstrap (greenfield)", () => {
     // ensureGitignore should still be writable — it writes a plain
     // file regardless of git-ness.
     expect(existsSync(path.join(dir, ".gitignore"))).toBe(true)
+    expect(projectID).toBe(Project.directoryProjectID(dir))
+    expect(projectID).not.toBe("global")
+    expect(worktree).toBe(dir)
   })
 })

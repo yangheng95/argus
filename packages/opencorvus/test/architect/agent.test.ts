@@ -5,8 +5,11 @@ import { tmpdir } from "../fixture/fixture"
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
 mock.module("@/agent/runner", () => ({
+  AgentRunError: class AgentRunError extends Error {},
+  buildHardErrorFromFinalMessage: () => null,
   extractInformationMissingBlock: () => undefined,
   messageHasInformationMissing: () => false,
+  toolErrorPartsFromFinalMessage: () => [],
   runAgentSession: (input: any) => {
     if (!runnerImpl) throw new Error("runAgentSession mock not configured")
     return runnerImpl(input)
@@ -103,6 +106,7 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           consumer_goal_ids: ["goal_tests"],
           summary: "Main implementation surface consumed by the integration tests.",
           artifact_paths: ["src/index.ts"],
+          evidence_refs: [],
         })
         collector.contract_graph.dependency_contracts.push({
           from_goal_id: "goal_main",

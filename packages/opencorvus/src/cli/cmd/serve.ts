@@ -96,7 +96,6 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
     process.env.OPENCORVUS_PROJECT_DIR = resolved
     console.log(`Project directory (sandbox): ${resolved}`)
   }
-  const shutdownDirectory = require("path").resolve(projectDir || process.cwd())
 
   // Kill old process if port is occupied, then wait for release with retries
   if (opts.port > 0 && (await isPortInUse(opts.port, opts.hostname))) {
@@ -106,33 +105,6 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
       await new Promise((r) => setTimeout(r, 500))
       if (!(await isPortInUse(opts.port, opts.hostname))) break
     }
-  }
-
-  async function abortLiveExecutionOnShutdown(directory: string, reason: string) {
-    const { InstanceBootstrap } = await import("../../project/bootstrap")
-    const { Instance } = await import("../../project/instance")
-    const { listLiveRunsForProject } = await import("../../engine/store")
-    const { abortActiveTasksForProject, abortLiveExecutionForProject, abortRuns } = await import("../../engine/writer")
-
-    return Instance.provide({
-      directory,
-      init: InstanceBootstrap,
-      async fn() {
-        const projectID = Instance.project.id
-        const liveRuns = listLiveRunsForProject(projectID)
-        const execution = await abortLiveExecutionForProject({
-          projectID,
-          reason,
-          cleanupGoalWorkspaces: false,
-        })
-        const abortedRuns = await abortRuns(liveRuns, reason)
-        const abortedTasks = await abortActiveTasksForProject({
-          projectID,
-          reason,
-        })
-        return { projectID, abortedRuns, abortedTasks, ...execution }
-      },
-    })
   }
 
   process.on("uncaughtException", (err) => {
@@ -148,6 +120,26 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
   process.env.OPENCORVUS_SERVER_URL = serverUrl
   console.log(`opencorvus server listening on ${serverUrl}`)
   console.log(`overlay UI available at ${serverUrl}/ui/`)
+  try {
+    const { convergeDeadOwnerLiveExecution } = await import("../../engine/writer")
+    const converged = await convergeDeadOwnerLiveExecution({
+      reason: "Server startup: previous owner process died before terminalization",
+    })
+    if (
+      converged.tasks > 0 ||
+      converged.goalRuns > 0 ||
+      converged.runs > 0 ||
+      converged.sessions > 0 ||
+      converged.toolParts > 0 ||
+      converged.corruptTasks > 0
+    ) {
+      console.log(
+        `[serve] converged dead-owner execution tasks=${converged.tasks} runs=${converged.runs} goalRuns=${converged.goalRuns} sessions=${converged.sessions} toolParts=${converged.toolParts} corruptTasks=${converged.corruptTasks}`,
+      )
+    }
+  } catch (error) {
+    console.error("[serve] startup owner-death convergence failed:", error)
+  }
 
   let shutdownPromise: Promise<void> | null = null
   const requestShutdown = (trigger: string) => {
@@ -156,9 +148,10 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
       const reason = `Server shutdown: ${trigger}`
       console.log(`[serve] shutdown requested via ${trigger}`)
       try {
-        const aborted = await abortLiveExecutionOnShutdown(shutdownDirectory, reason)
+        const { abortCurrentProcessLiveExecution } = await import("../../engine/writer")
+        const aborted = await abortCurrentProcessLiveExecution({ reason })
         console.log(
-          `[serve] aborted live execution project=${aborted.projectID} runs=${aborted.abortedRuns} goalRuns=${aborted.goalRuns} tasks=${aborted.abortedTasks.tasks} sessions=${aborted.abortedTasks.sessions} toolParts=${aborted.abortedTasks.toolParts}`,
+          `[serve] aborted live execution tasks=${aborted.tasks} runs=${aborted.runs} goalRuns=${aborted.goalRuns} ownerships=${aborted.ownerships} sessions=${aborted.sessions} toolParts=${aborted.toolParts} corruptTasks=${aborted.corruptTasks}`,
         )
       } catch (error) {
         console.error("[serve] graceful shutdown abort failed:", error)

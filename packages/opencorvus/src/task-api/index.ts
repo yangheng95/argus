@@ -15,6 +15,8 @@ import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
 import { PermissionNext } from "@/permission/next"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
+import { ProviderSchema } from "@/provider/schema"
 import { ProtocolStore } from "@/protocol/store"
 import { EngineProtocol } from "@/engine/protocol"
 import { ensureGitignore } from "@/engine/git"
@@ -82,7 +84,7 @@ import {
   isTaskTerminal,
 } from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
-import { TaskGlobalProjectBindingError } from "@/engine/task-project-error"
+import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
 import { discardQueuedTaskEvent } from "@/engine/queue"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
@@ -752,12 +754,6 @@ async function prepareProject(project?: string) {
       message: `Cannot create a task in ${Instance.directory}: the directory is not a git repository. Initialize it via POST /project/current/init-git or pick a different working directory.`,
     })
   }
-  if (Instance.project.id === "global") {
-    throw new TaskGlobalProjectBindingError({
-      message: `Cannot create a task in ${Instance.directory}: task creation requires a concrete Git project, but the active project resolved to global.`,
-      projectID: Instance.project.id,
-    })
-  }
   // Create .gitignore before executor starts so the agent's own commits never include node_modules/dist etc.
   await ensureGitignore()
   if (!project) return
@@ -934,6 +930,8 @@ export namespace EngineService {
 
   async function createTaskInner(input: z.infer<typeof CreateTaskInput>) {
     await prepareProject(input.project)
+    const existingBindingTask = existingTaskByChannelBinding(input.channelBinding)
+    if (existingBindingTask) return existingBindingTask
     const requestID = input.requestID?.trim() || undefined
     if (requestID) {
       const existing = findTaskByRequest(Instance.project.id, requestID)
@@ -1069,8 +1067,6 @@ export namespace EngineService {
     } catch (error) {
       const existing = requestID ? recoverTaskByRequest(requestID, error) : undefined
       if (existing) return existing
-      const bound = recoverTaskByChannelBinding(input.channelBinding, error)
-      if (bound) return bound
       throw error
     }
     recordNote({
@@ -1156,6 +1152,7 @@ export namespace EngineService {
     merge: (prev: FileRef[]) => { next: FileRef[]; reason: string } | null,
   ): Promise<FileRef[]> {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     const located = AttachmentStore.nameFromUrl(file.url)
     if (!located) {
       throw new Error(`${column}: file.url is not a valid /attachment/<projectID>/<name> reference: ${file.url}`)
@@ -1545,6 +1542,7 @@ export namespace EngineService {
 
   export async function deleteTask(taskID: string) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     discardQueuedTaskEvent(taskID)
     // Cancel if still active
     if (!isTaskTerminal(task)) {
@@ -1571,6 +1569,7 @@ export namespace EngineService {
 
   export async function updateTaskBudget(taskID: string, budget: z.input<typeof Budget> | null) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     const parsed = budget ? budgetRow(budget) : null
     Database.use((db) => db.update(EngineTaskTable).set({ budget: parsed }).where(eq(EngineTaskTable.id, taskID)).run())
     await Bus.publish(Event.TaskUpdated, {
@@ -1583,6 +1582,7 @@ export namespace EngineService {
 
   export async function updateTaskTitle(taskID: string, title: string) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     Database.use((db) => db.update(EngineTaskTable).set({ title }).where(eq(EngineTaskTable.id, taskID)).run())
     await Bus.publish(Event.TaskUpdated, {
       taskID,
@@ -1600,7 +1600,7 @@ function recoverTaskByRequest(requestID: string, error: unknown) {
   return findTaskByRequest(Instance.project.id, requestID)?.id
 }
 
-function recoverTaskByChannelBinding(
+function existingTaskByChannelBinding(
   binding:
     | {
         platform: string
@@ -1608,17 +1608,14 @@ function recoverTaskByChannelBinding(
         thread: string
       }
     | undefined,
-  error: unknown,
 ) {
   if (!binding) return
-  const message = error instanceof Error ? error.message : String(error)
-  if (!message.includes("UNIQUE constraint failed")) return
-  if (!message.includes("engine_channel_binding")) return
-  return Database.use(
+  const row = Database.use(
     (db) =>
       db
-        .select({ task_id: EngineChannelBindingTable.task_id })
+        .select({ task_id: EngineChannelBindingTable.task_id, project_id: EngineTaskTable.project_id })
         .from(EngineChannelBindingTable)
+        .innerJoin(EngineTaskTable, eq(EngineTaskTable.id, EngineChannelBindingTable.task_id))
         .where(
           and(
             eq(EngineChannelBindingTable.platform, binding.platform),
@@ -1626,8 +1623,28 @@ function recoverTaskByChannelBinding(
             eq(EngineChannelBindingTable.thread, binding.thread),
           ),
         )
-        .get()?.task_id,
+        .get(),
   )
+  if (!row) return
+  if (row.project_id === "global") {
+    throw new TaskGlobalProjectBindingError({
+      message: `Channel binding ${binding.platform}/${binding.channel}/${binding.thread} points to task ${row.task_id} bound to project global. Task workflow state requires a concrete Git project.`,
+      taskID: row.task_id,
+      projectID: row.project_id,
+    })
+  }
+  if (row.project_id !== Instance.project.id) {
+    throw new TaskChannelBindingProjectConflictError({
+      message: `Channel binding ${binding.platform}/${binding.channel}/${binding.thread} points to task ${row.task_id} in project ${row.project_id}, but the active project is ${Instance.project.id}.`,
+      platform: binding.platform,
+      channel: binding.channel,
+      thread: binding.thread,
+      taskID: row.task_id,
+      projectID: row.project_id,
+      activeProjectID: Instance.project.id,
+    })
+  }
+  return row.task_id
 }
 
 export namespace EngineService {
@@ -1700,6 +1717,7 @@ export namespace EngineService {
 
   export async function cancelTask(taskID: string, options?: CancelTaskOptions) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     discardQueuedTaskEvent(taskID)
     const taskDirectory = taskCwd(taskID)
     const decisions = createDecisionLog(taskID)
@@ -1849,6 +1867,7 @@ export namespace EngineService {
 
   export async function retryTask(taskID: string) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     const metadata =
       task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
         ? { ...(task.metadata as Record<string, unknown>) }
@@ -1866,6 +1885,7 @@ export namespace EngineService {
 
   export async function recordOperatorNote(taskID: string, note: string) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     const run = findActiveRunForTask(task.id)
     const now = Date.now()
     Database.use((db) =>
@@ -2009,9 +2029,8 @@ export namespace EngineService {
     const task = requireTask(taskID)
     const sessionID = task.session_id ?? undefined
     const model = await resolveAgentModel("summary", { sessionID })
-    const language = await Provider.getLanguage(model, {
-      config: await EffectiveConfig.effective(sessionID ? { sessionID } : undefined),
-    })
+    const config = await EffectiveConfig.effective(sessionID ? { sessionID } : undefined)
+    const language = ProviderLLM.wrapModel(await Provider.getLanguage(model, { config }), model, {})
 
     const messages = sessionID ? await Session.messages({ sessionID, limit: 6 }) : []
     const transcript = messages
@@ -2049,7 +2068,7 @@ export namespace EngineService {
       model: language,
       temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
       messages: followupMessages,
-      output: Output.object({ schema: z.object({ suggestion: z.string() }) }),
+      output: Output.object({ schema: ProviderSchema.output(model, z.object({ suggestion: z.string() })) }),
     })
 
     try {

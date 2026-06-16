@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { SCHEMA_DDL } from "../src/storage/ddl"
 
 // Phase E (2026-05-05) — engine_goal.retry_count is gone. The per-goal
 // implementation version counter (V label) was a denormalised cache of
@@ -21,11 +22,10 @@ describe("engine_goal.retry_count column retired", () => {
   })
 
   test("DDL has no retry_count column declaration on engine_goal", () => {
-    const source = readFileSync(resolve(import.meta.dir, "../src/storage/ddl.ts"), "utf8")
-    const goalTableStart = source.indexOf("CREATE TABLE IF NOT EXISTS engine_goal")
+    const goalTableStart = SCHEMA_DDL.indexOf('CREATE TABLE IF NOT EXISTS "engine_goal"')
     expect(goalTableStart).toBeGreaterThan(0)
-    const goalTableEnd = source.indexOf(");", goalTableStart)
-    const ddl = source.slice(goalTableStart, goalTableEnd).replace(/--[^\n]*\n/g, "\n")
+    const goalTableEnd = SCHEMA_DDL.indexOf(");", goalTableStart)
+    const ddl = SCHEMA_DDL.slice(goalTableStart, goalTableEnd).replace(/--[^\n]*\n/g, "\n")
     expect(ddl).not.toMatch(/^\s*retry_count\s+integer/m)
   })
 

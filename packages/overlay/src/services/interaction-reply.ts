@@ -17,6 +17,7 @@
 // conflict ourselves.
 
 import { apiJson } from "./api"
+import { projectScopedPath } from "./project-directory"
 
 const REPLY_TIMEOUT_MS = 30_000
 
@@ -45,7 +46,7 @@ export async function replyInteraction(
     if (endpoint === "question") {
       if (action !== "answer") throw new Error(`question reply endpoint does not support ${action}`)
       const answers = Array.isArray(input.answers) ? input.answers : []
-      await apiJson(`question/${id}/reply`, {
+      await apiJson(projectScopedPath(`question/${id}/reply`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers }),
@@ -55,7 +56,7 @@ export async function replyInteraction(
     }
 
     if (action === "once" || action === "always") {
-      await apiJson(`interaction/${id}/reply`, {
+      await apiJson(projectScopedPath(`interaction/${id}/reply`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reply: action, autoReply }),
@@ -67,7 +68,7 @@ export async function replyInteraction(
     const answers = Array.isArray(input.answers) ? input.answers : undefined
     const message = typeof input.message === "string" && input.message.trim() ? input.message.trim() : undefined
 
-    await apiJson(`interaction/${id}/reply`, {
+    await apiJson(projectScopedPath(`interaction/${id}/reply`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -87,14 +88,14 @@ export async function rejectInteraction(
 ): Promise<void> {
   return lockedRequest(id, async () => {
     if (endpoint === "question") {
-      await apiJson(`question/${id}/reject`, {
+      await apiJson(projectScopedPath(`question/${id}/reject`), {
         method: "POST",
         signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
       })
       return
     }
 
-    await apiJson(`interaction/${id}/reject`, {
+    await apiJson(projectScopedPath(`interaction/${id}/reject`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ autoReply }),

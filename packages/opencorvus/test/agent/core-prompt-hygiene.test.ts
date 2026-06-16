@@ -405,6 +405,8 @@ describe("core prompt hygiene", () => {
     expect(text).toContain(
       "contract_audit.contract_ids must be copied from already-registered contract ids returned by register_contract; unknown ids are rejected.",
     )
+    expect(text).toContain("`contract_audit` is a scorer `type`, not a `script_ref` path")
+    expect(text).toContain("Never write `.opencorvus/scripts/contract-audit`")
   })
 
   test("architect prompt pins acceptance scorer discriminator values", async () => {
