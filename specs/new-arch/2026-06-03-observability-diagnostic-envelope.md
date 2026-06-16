@@ -410,8 +410,8 @@ Files:
 - `packages/overlay/src-tauri/src/main.rs`
 - `packages/vscode-extension/src/sidecar/manager.ts`
 - `packages/vscode-extension/src/extension.ts`
-- `docs/product/en/operations/troubleshooting.md`
-- `docs/product/zh-CN/operations/troubleshooting.md`
+- `packages/web/src/content/docs/troubleshooting.mdx`
+- `packages/web/src/content/docs/zh-cn/troubleshooting.mdx`
 
 Tests:
 

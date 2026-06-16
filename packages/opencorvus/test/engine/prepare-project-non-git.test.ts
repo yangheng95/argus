@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { existsSync } from "fs"
 import path from "path"
-import { Database } from "../../src/storage/db"
-import { ProjectTable } from "../../src/project/project.sql"
 import { Instance } from "../../src/project/instance"
+import { Project } from "../../src/project/project"
+import {
+  EngineChannelBindingTable,
+  EngineProgressSnapshotTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
 import { EngineService } from "@/task-api"
 import { Worktree } from "../../src/worktree"
+import { MessageTable, SessionTable } from "../../src/session/session.sql"
+import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -40,28 +46,15 @@ describe("EngineService.createTask in a non-git directory (W2-V32)", () => {
   test("throws WorktreeNotGitError without auto-creating .git", async () => {
     await using tmp = await tmpdir() // NB: no `git: true` — directory has no .git
     expect(existsSync(path.join(tmp.path, ".git"))).toBe(false)
-
-    // Seed a project row so Instance.provide doesn't bail on missing project state.
-    Database.use((db) =>
-      db
-        .insert(ProjectTable)
-        .values({
-          id: "global",
-          worktree: "/",
-          name: "non-git scope",
-          sandboxes: [],
-          time_created: Date.now(),
-          time_updated: Date.now(),
-        })
-        .onConflictDoNothing()
-        .run(),
-    )
+    const before = workflowCounts()
 
     let thrown: unknown
     try {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
+          expect(Instance.project.id).toBe(Project.directoryProjectID(tmp.path))
+          expect(Instance.project.id).not.toBe("global")
           await EngineService.createTask({
             executor: "claude-code",
             title: "should never get here",
@@ -79,5 +72,16 @@ describe("EngineService.createTask in a non-git directory (W2-V32)", () => {
     // Critical: the directory must NOT have been turned into a git
     // repo as a side effect.
     expect(existsSync(path.join(tmp.path, ".git"))).toBe(false)
+    expect(workflowCounts()).toEqual(before)
   })
 })
+
+function workflowCounts() {
+  return Database.use((db) => ({
+    tasks: db.select().from(EngineTaskTable).all().length,
+    channels: db.select().from(EngineChannelBindingTable).all().length,
+    progress: db.select().from(EngineProgressSnapshotTable).all().length,
+    sessions: db.select().from(SessionTable).all().length,
+    messages: db.select().from(MessageTable).all().length,
+  }))
+}

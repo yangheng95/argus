@@ -24,6 +24,11 @@ const investigationPlan = {
 }
 
 mock.module("@/agent/runner", () => ({
+  AgentRunError: class AgentRunError extends Error {},
+  buildHardErrorFromFinalMessage: () => null,
+  extractInformationMissingBlock: () => undefined,
+  messageHasInformationMissing: () => false,
+  toolErrorPartsFromFinalMessage: () => [],
   runAgentSession: async (input: any) => {
     runnerCalls.push(input)
     userPrompts.push(input.buildUserPrompt())

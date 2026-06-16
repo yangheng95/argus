@@ -37,18 +37,16 @@ export namespace Project {
     return createHash("sha1").update(Filesystem.windowsPath(seed)).digest("hex")
   }
 
+  export function directoryProjectID(directory: string) {
+    return generated(path.join(directory, ".git"))
+  }
+
   async function text(args: string[], cwd: string) {
     const result = await git(args, { cwd }).catch(() => undefined)
     if (!result || result.exitCode !== 0) return
     const value = result.text().trim()
     if (!value) return
     return value
-  }
-
-  async function initRepo(directory: string) {
-    const result = await git(["init"], { cwd: directory }).catch(() => undefined)
-    if (!result || result.exitCode !== 0) return false
-    return Filesystem.exists(path.join(directory, ".git"))
   }
 
   function comparePath(value: string) {
@@ -70,7 +68,7 @@ export namespace Project {
     const cached = await Filesystem.readText(marker(common))
       .then((x) => x.trim())
       .catch(() => undefined)
-    if (!cached) {
+    if (!cached || cached === "global") {
       await Filesystem.write(markerPath, localID).catch(() => undefined)
       return localID
     }
@@ -203,18 +201,13 @@ export namespace Project {
       const local = await Filesystem.exists(dotgit)
 
       if (!gitBinary) {
-        if (!local) {
-          return {
-            id: "global",
-            worktree: "/",
-            sandbox: "/",
-          }
-        }
-
-        const id =
-          (await Filesystem.readText(marker(dotgit))
-            .then((x) => x.trim())
-            .catch(() => undefined)) || generated(dotgit)
+        const localID = generated(dotgit)
+        const markerPath = marker(dotgit)
+        const cached = await Filesystem.readText(markerPath)
+          .then((x) => x.trim())
+          .catch(() => undefined)
+        const id = cached && cached !== "global" ? cached : localID
+        if (local && id === localID) await Filesystem.write(markerPath, localID).catch(() => undefined)
 
         return {
           id,
@@ -255,9 +248,9 @@ export namespace Project {
       }
 
       return {
-        id: "global",
-        worktree: "/",
-        sandbox: "/",
+        id: directoryProjectID(directory),
+        worktree: directory,
+        sandbox: directory,
       }
     })
 

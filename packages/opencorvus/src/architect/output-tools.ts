@@ -641,7 +641,8 @@ function isExistingFile(resolvedPath: string): boolean {
 function scriptRefError(goalID: string, missing: readonly string[]): string {
   return (
     `Error: goal "${goalID}" references missing script_ref acceptance scorer path(s): ${missing.join(", ")}. ` +
-    `Use spec.kind="shell" with cmd for inline checks, or reference an existing repo script; collector unchanged.`
+    "script_ref is only for existing repo scripts. contract_audit is a scorer type, not a script_ref path; never use .opencorvus/scripts/contract-audit. " +
+    `Use spec.kind="shell" with cmd for inline page checks, or type="contract_audit" with registered contract_ids for graph-contract checks; collector unchanged.`
   )
 }
 
@@ -873,11 +874,7 @@ export function createArchitectOutputTools(input: {
           return scriptRefError(id, missingScriptRefs)
         }
         const changedFields = Object.keys(normalizedUpdates).filter(
-          (key) =>
-            !isDeepStrictEqual(
-              (prior as unknown as Record<string, unknown>)[key],
-              (next as unknown as Record<string, unknown>)[key],
-            ),
+          (key) => !isDeepStrictEqual(prior[key as keyof RegisteredGoal], next[key as keyof RegisteredGoal]),
         )
         if (changedFields.length === 0 && normalized.changes.length === 0) {
           return `No changes: goal "${id}" already matches the submitted updates.\nCurrent: ${formatGoalSnapshot(prior)}`

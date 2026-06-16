@@ -250,7 +250,7 @@ TaskRewound: {
 | 9   | Web timeline + rewind UI                                           | `packages/web/src/...`                           | 6h    | 5, 6 |
 | 10  | Overlay timeline + rewind UI                                       | `packages/opencorvus/overlay/...`                | 7h    | 5, 6 |
 | 11  | TUI `/rewind` 命令                                                 | TUI 入口                                         | 1h    | 5    |
-| 12  | 文档：zh-CN + en                                                   | `docs/product/{en,zh-CN}/concepts/agent-loop.md` | 1h    | —    |
+| 12  | 文档：zh-CN + en                                                   | `packages/web/src/content/docs/{concepts/agent-loop,zh-cn/concepts/agent-loop}.mdx` | 1h    | —    |
 | 13  | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE 改写为 IN-SCOPE） | `engine/rewind.ts`                               | —     | 4    |
 
 **总工时**：~36h ≈ **5 工作日**（单人，含调试）。
@@ -378,7 +378,7 @@ rewind 后，下一次用户消息进来时，orchestrator 会重读 task → de
 | 9     | Web timeline + rewind UI                                      | `packages/web/src/...`                           | 6h       | 5, 6    |
 | 10    | Overlay timeline + rewind UI                                  | `packages/opencorvus/overlay/...`                | 7h       | 5, 6    |
 | 11    | TUI `/rewind` 命令                                            | TUI 入口                                         | 1h       | 5       |
-| 12    | 文档：zh-CN + en                                              | `docs/product/{en,zh-CN}/concepts/agent-loop.md` | 1h       | —       |
+| 12    | 文档：zh-CN + en                                              | `packages/web/src/content/docs/{concepts/agent-loop,zh-cn/concepts/agent-loop}.mdx` | 1h       | —       |
 | 13    | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE → IN-SCOPE） | `engine/rewind.ts`                               | —        | 4       |
 
 **总工时**：~37h ≈ **5 工作日**（单人）。

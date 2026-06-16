@@ -4,11 +4,10 @@
  * translated to executable checks + rubric evaluations by
  * `src/spec/translator.ts`, and executed by the per-goal evaluator.
  *
- * Shape follows the cross-framework convergence documented in
- * `docs/spec-acceptance-eval-protocol.md` (Inspect AI, Braintrust autoevals,
- * MLflow make_judge, Ragas rubric metrics, DeepEval G-Eval, AutoUAT). Three
- * scorer families — heuristic / llm_judge / prebuilt — cover every case
- * without inventing a new DSL.
+ * Shape follows cross-framework convergence from Inspect AI, Braintrust
+ * autoevals, MLflow make_judge, Ragas rubric metrics, DeepEval G-Eval, and
+ * AutoUAT. Three scorer families — heuristic / llm_judge / prebuilt — cover
+ * every case without inventing a new DSL.
  */
 import z from "zod"
 
@@ -43,8 +42,15 @@ const HeuristicScorerSchema = z.object({
       cwd: z.string().optional(),
     }),
     z.object({
-      kind: z.literal("script_ref").describe("script_ref — run a repo script. Requires: path; optional args."),
-      path: z.string().min(1).describe("Repo-relative script path."),
+      kind: z
+        .literal("script_ref")
+        .describe(
+          "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
+        ),
+      path: z
+        .string()
+        .min(1)
+        .describe("Repo-relative script path that already exists at registration time."),
       args: z.array(z.string()).optional(),
     }),
   ]),
@@ -110,7 +116,7 @@ const ContractAuditScorerSchema = z.object({
   type: z
     .literal("contract_audit")
     .describe(
-      "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
+      "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
     ),
   name: z.string().min(1),
   spec: z.object({

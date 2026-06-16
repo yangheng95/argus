@@ -38,8 +38,7 @@ host-side routing mechanism.
   - `packages/opencorvus/test/agent/runner-tool-scope.test.ts`
   - Agent tests that assert `skill` is visible to planning stages.
 - Docs:
-  - `docs/product/*/opencorvus/skills.md`
-  - `packages/web/src/content/docs/*/skills.mdx`
+  - `packages/web/src/content/docs/{skills,zh-cn/skills}.mdx`
 
 ## Decision
 

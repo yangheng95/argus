@@ -94,7 +94,7 @@ jobs:
         uses: ./.github/actions/setup-bun
 
       - name: Run GUI coordinate smoke
-        run: bun run ./packages/opencorvus/script/gui-coordinate-smoke.ts
+        run: bun test --cwd packages/overlay test/browser-preview-live-point.test.ts
 
   channel-runtime-unit:
     name: channel-runtime-unit

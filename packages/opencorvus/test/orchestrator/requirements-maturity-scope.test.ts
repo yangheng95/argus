@@ -5,6 +5,7 @@ import { findActiveSpecForTask } from "../../src/engine/store"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Instance } from "../../src/project/instance"
 import { Question } from "../../src/question"
+import { Session } from "../../src/session"
 import { Database } from "../../src/storage/db"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { resetDatabase } from "../fixture/db"
@@ -13,6 +14,11 @@ import { tmpdir } from "../fixture/fixture"
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
 mock.module("@/agent/runner", () => ({
+  AgentRunError: class AgentRunError extends Error {},
+  buildHardErrorFromFinalMessage: () => null,
+  extractInformationMissingBlock: () => undefined,
+  messageHasInformationMissing: () => false,
+  toolErrorPartsFromFinalMessage: () => [],
   runAgentSession: (input: any) => {
     if (!runnerImpl) throw new Error("runAgentSession mock not configured")
     return runnerImpl(input)
@@ -58,36 +64,7 @@ describe("requirements maturity scope clarification", () => {
     const now = Date.now()
     const projectID = `project_maturity_scope_${now}`
     const taskID = `tsk_maturity_scope_${now}`
-    const sessionID = `ses_maturity_scope_${now}`
     let runnerCalls = 0
-
-    Database.use((db) => {
-      db.insert(ProjectTable)
-        .values({
-          id: projectID,
-          worktree: tmp.path,
-          name: "Maturity scope project",
-          sandboxes: "[]",
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      db.insert(EngineTaskTable)
-        .values({
-          id: taskID,
-          project_id: projectID,
-          session_id: null,
-          source: "test",
-          title: "Mature DeepSeek chat",
-          request: "写一个成熟的输入 deepseek key 即可聊天的 ai chat 页面",
-          kind: "workflow",
-          priority: "normal",
-          time_created: now,
-          time_updated: now,
-          time_started: now,
-        })
-        .run()
-    })
 
     runnerImpl = async (input: any) => {
       runnerCalls += 1
@@ -113,9 +90,43 @@ describe("requirements maturity scope clarification", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const rootSession = await Session.create({ kind: "root", title: "Maturity scope root" })
+        const agentSession = await Session.create({
+          kind: "orchestrator",
+          parentID: rootSession.id,
+          title: "Maturity scope orchestrator",
+        })
+        Database.use((db) => {
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Maturity scope project",
+              sandboxes: "[]",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: rootSession.id,
+              source: "test",
+              title: "Mature DeepSeek chat",
+              request: "写一个成熟的输入 deepseek key 即可聊天的 ai chat 页面",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
         const { tools } = createOrchestratorTools({
           taskID,
-          agentSessionID: sessionID,
+          agentSessionID: agentSession.id,
           signal: new AbortController().signal,
         })
 

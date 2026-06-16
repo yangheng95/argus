@@ -1,20 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { createServer, type Server } from "node:http"
-import fs from "node:fs/promises"
 import path from "node:path"
 import { PassThrough } from "node:stream"
-import sharp from "sharp"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
-import { BrowserPreviewBindLocalModuleTool } from "../../src/tool/browser-preview-bind-local-module"
 import { BrowserPreviewCompareRegionsTool } from "../../src/tool/browser-preview-compare-regions"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Instance } from "../../src/project/instance"
-import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
-import { SessionTable } from "../../src/session/session.sql"
 import { Database } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { findLatestBrowserPreviewTarget, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import { findLatestBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -58,92 +53,23 @@ async function seedTask(directory: string) {
   await Instance.provide({
     directory,
     fn: () => {
-      const time = Date.now()
-      const sessionID = `${taskID}_root`
       Database.use((db) =>
-        db.transaction((tx) => {
-          tx.insert(SessionTable)
-            .values({
-              id: sessionID,
-              project_id: Instance.project.id,
-              slug: taskID,
-              directory,
-              title: "Preview task",
-              version: "test",
-              kind: "root",
-              time_created: time,
-              time_updated: time,
-            })
-            .run()
-          tx.insert(EngineTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              session_id: sessionID,
-              title: "Preview task",
-              request: "Preview task",
-              source: "api",
-              time_created: time,
-              time_updated: time,
-            })
-            .run()
-        }),
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "Preview task",
+            request: "Preview task",
+            source: "api",
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          .run(),
       )
     },
   })
   return taskID
-}
-
-async function startModulePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
-  let server: Server | undefined
-  server = createServer((req, res) => {
-    if (req.url !== "/world-economy") {
-      res.writeHead(404, { "content-type": "text/plain" })
-      res.end("not found")
-      return
-    }
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
-    res.end(`<!doctype html>
-      <html>
-        <head>
-          <title>World economy preview</title>
-          <style>
-            body { margin: 0; font-family: Arial, sans-serif; background: #f7f8fa; }
-            main { padding: 40px; }
-            [data-oc-region="economic-calendar"] {
-              width: 360px;
-              min-height: 150px;
-              background: #ffffff;
-              border: 1px solid #d7dde5;
-              border-radius: 8px;
-              padding: 20px;
-              box-sizing: border-box;
-            }
-            h2 { margin: 0 0 16px; font-size: 26px; line-height: 1.1; }
-            p { margin: 0; font-size: 16px; color: #4c5a68; }
-          </style>
-        </head>
-        <body>
-          <main>
-            <section data-oc-region="economic-calendar">
-              <h2>Economic calendar</h2>
-              <p>GDP, inflation, interest rate, and jobs events</p>
-            </section>
-          </main>
-        </body>
-      </html>`)
-  })
-  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
-  const address = server.address()
-  if (!address || typeof address === "string") throw new Error("module preview test server did not bind a TCP address")
-  return {
-    url: `http://127.0.0.1:${address.port}`,
-    close: () =>
-      new Promise<void>((resolve) => {
-        server?.close(() => resolve())
-        server = undefined
-      }),
-  }
 }
 
 describe("tool.browser_preview", () => {
@@ -154,7 +80,6 @@ describe("tool.browser_preview", () => {
         directory: path.join(__dirname, "../.."),
         fn: async () => {
           await expect(ToolRegistry.ids()).resolves.toContain("browser_preview")
-          await expect(ToolRegistry.ids()).resolves.toContain("browser_preview_bind_local_module")
           await expect(ToolRegistry.ids()).resolves.toContain("browser_preview_compare_regions")
         },
       })
@@ -407,125 +332,6 @@ describe("tool.browser_preview", () => {
   )
 
   test(
-    "bind local module tool requires a persisted target ID",
-    async () => {
-      await using tmp = await tmpdir({ git: true })
-      const taskID = await seedTask(tmp.path)
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const tool = await BrowserPreviewBindLocalModuleTool.init()
-          await expect(
-            tool.execute(
-              {
-                targetID: "art_previewtarget_missing",
-                viewportID: "desktop",
-                regionID: "economy",
-                route: "/",
-                implementationLocator: { kind: "data-oc-region", value: "economy" },
-                componentFiles: ["src/Economy.tsx"],
-                textAnchors: ["Economy"],
-              },
-              { ...baseCtx, extra: { taskID } },
-            ),
-          ).rejects.toThrow("Browser preview target not found: art_previewtarget_missing")
-        },
-      })
-    },
-    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
-  )
-
-  test(
-    "bind local module tool returns a source-local puzzle image attachment and compare-ready binding",
-    async () => {
-      const preview = await startModulePreviewServer()
-      try {
-        await using tmp = await tmpdir({ git: true })
-        const taskID = await seedTask(tmp.path)
-        await Instance.provide({
-          directory: tmp.path,
-          fn: async () => {
-            const designPaths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
-            await fs.mkdir(path.join(designPaths.skeletonProjectAbsolute, "src/data"), { recursive: true })
-            await fs.mkdir(designPaths.sourcePackageAbsolute, { recursive: true })
-            await sharp({
-              create: {
-                width: 900,
-                height: 700,
-                channels: 4,
-                background: "#f7f8fa",
-              },
-            })
-              .composite([
-                {
-                  input: Buffer.from(
-                    `<svg width="380" height="170" xmlns="http://www.w3.org/2000/svg">
-                      <rect width="380" height="170" rx="8" fill="#ffffff" stroke="#d7dde5"/>
-                      <text x="24" y="56" font-family="Arial" font-size="28" fill="#111827">Economic calendar</text>
-                      <text x="24" y="98" font-family="Arial" font-size="16" fill="#4c5a68">GDP, inflation, interest rate, and jobs events</text>
-                    </svg>`,
-                  ),
-                  left: 64,
-                  top: 96,
-                },
-              ])
-              .png()
-              .toFile(path.join(designPaths.sourcePackageAbsolute, "reference.png"))
-            await fs.writeFile(
-              path.join(designPaths.skeletonProjectAbsolute, "src/data/sourceDomRegions.ts"),
-              `export const sourceDomRegions = ${JSON.stringify(
-                [
-                  {
-                    componentName: "EconomicCalendarRegion",
-                    heading: "Economic calendar",
-                    textPreview: "GDP, inflation, interest rate, and jobs events",
-                    sourceBounds: { x: 64, y: 96, width: 380, height: 170 },
-                    selector: "section:nth-of-type(1)",
-                  },
-                ],
-                null,
-                2,
-              )} as const\n`,
-            )
-            const target = await persistBrowserPreviewTarget({ taskID, url: preview.url })
-            const tool = await BrowserPreviewBindLocalModuleTool.init()
-            const result = await tool.execute(
-              {
-                targetID: target.id,
-                viewportID: "desktop",
-                regionID: "economic-calendar",
-                route: "/world-economy",
-                implementationLocator: { kind: "data-oc-region", value: "economic-calendar" },
-                componentFiles: ["src/pages/world-economy/EconomicCalendar.tsx"],
-                sourceReferenceArtifactID: "reference.png",
-                textAnchors: ["Economic calendar", "GDP", "inflation"],
-              },
-              { ...baseCtx, extra: { taskID } },
-            )
-            const payload = JSON.parse(result.output)
-
-            expect(result.attachments).toHaveLength(1)
-            expect(result.attachments?.[0]?.mime).toBe("image/png")
-            expect(result.attachments?.[0]?.filename).toBe("desktop-economic-calendar-binding-puzzle.png")
-            expect(result.metadata.attachmentCount).toBe(1)
-            expect(result.metadata.binding.region_id).toBe("economic-calendar")
-            expect(result.metadata.binding.source.bbox.width).toBeGreaterThanOrEqual(380)
-            expect(result.metadata.binding.implementation.locator).toEqual({
-              kind: "data-oc-region",
-              value: "economic-calendar",
-            })
-            expect(payload.nextStep).toContain("pass metadata.binding to browser_preview_compare_regions")
-            expect(payload.artifacts.binding_puzzle).toEndWith("binding-puzzle.png")
-          },
-        })
-      } finally {
-        await preview.close()
-      }
-    },
-    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
-  )
-
-  test(
     "compare regions tool requires a persisted target ID",
     async () => {
       await using tmp = await tmpdir({ git: true })
@@ -559,48 +365,6 @@ describe("tool.browser_preview", () => {
               { ...baseCtx, extra: { taskID } },
             ),
           ).rejects.toThrow("Browser preview target not found: art_previewtarget_missing")
-        },
-      })
-    },
-    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
-  )
-
-  test(
-    "compare regions tool rejects raw URL and output directory parameters",
-    async () => {
-      await using tmp = await tmpdir({ git: true })
-      const taskID = await seedTask(tmp.path)
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const tool = await BrowserPreviewCompareRegionsTool.init()
-          await expect(
-            tool.execute(
-              {
-                targetID: "art_previewtarget_missing",
-                url: "http://127.0.0.1:5174/other",
-                outDir: ".opencorvus/r/tsk/browser-preview/job",
-                viewportIDs: ["desktop"],
-                inlineBindings: [
-                  {
-                    region_id: "economy",
-                    viewport_id: "desktop",
-                    region_scope: "page-section",
-                    source: {
-                      reference_artifact_id: "reference.png",
-                      bbox: { x: 0, y: 0, width: 100, height: 80 },
-                      semantic_role: "economy section",
-                    },
-                    implementation: {
-                      route: "/",
-                      locator: { kind: "data-oc-region", value: "economy" },
-                    },
-                  },
-                ],
-              } as any,
-              { ...baseCtx, extra: { taskID } },
-            ),
-          ).rejects.toThrow("invalid arguments")
         },
       })
     },

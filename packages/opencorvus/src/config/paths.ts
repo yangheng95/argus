@@ -9,7 +9,7 @@ import { Global } from "@/global"
 
 export namespace ConfigPaths {
   function boundary(directory: string, worktree: string) {
-    return worktree === "/" ? directory : worktree
+    return worktree
   }
 
   export async function projectFiles(name: string, directory: string, worktree: string) {

@@ -13573,8 +13573,19 @@
                     "taskID": {
                       "type": "string"
                     },
-                    "latestEvidenceID": {
-                      "type": "string"
+                    "latestEvidenceIDs": {
+                      "type": "object",
+                      "properties": {
+                        "desktop": {
+                          "type": "string"
+                        },
+                        "tablet": {
+                          "type": "string"
+                        },
+                        "mobile": {
+                          "type": "string"
+                        }
+                      }
                     },
                     "kind": {
                       "type": "string",
@@ -13755,6 +13766,18 @@
                     },
                     "regionID": {
                       "type": "string"
+                    },
+                    "manifestPath": {
+                      "type": "string"
+                    },
+                    "artifactPaths": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
                     },
                     "status": {
                       "type": "string",
@@ -13976,8 +13999,19 @@
                     "taskID": {
                       "type": "string"
                     },
-                    "latestEvidenceID": {
-                      "type": "string"
+                    "latestEvidenceIDs": {
+                      "type": "object",
+                      "properties": {
+                        "desktop": {
+                          "type": "string"
+                        },
+                        "tablet": {
+                          "type": "string"
+                        },
+                        "mobile": {
+                          "type": "string"
+                        }
+                      }
                     },
                     "kind": {
                       "type": "string",
@@ -14175,8 +14209,19 @@
                         "taskID": {
                           "type": "string"
                         },
-                        "latestEvidenceID": {
-                          "type": "string"
+                        "latestEvidenceIDs": {
+                          "type": "object",
+                          "properties": {
+                            "desktop": {
+                              "type": "string"
+                            },
+                            "tablet": {
+                              "type": "string"
+                            },
+                            "mobile": {
+                              "type": "string"
+                            }
+                          }
                         },
                         "kind": {
                           "type": "string",
@@ -14966,8 +15011,7 @@
                   "targetID",
                   "viewportIDs",
                   "inlineBindings"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           },
@@ -15041,8 +15085,7 @@
                 "required": [
                   "targetID",
                   "viewportID"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           },
@@ -15199,8 +15242,7 @@
                   "targetID",
                   "viewportID",
                   "input"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           },
@@ -16035,12 +16077,12 @@
                                               "type": "object",
                                               "properties": {
                                                 "kind": {
-                                                  "description": "script_ref — run a repo script. Requires: path; optional args.",
+                                                  "description": "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
                                                   "type": "string",
                                                   "const": "script_ref"
                                                 },
                                                 "path": {
-                                                  "description": "Repo-relative script path.",
+                                                  "description": "Repo-relative script path that already exists at registration time.",
                                                   "type": "string",
                                                   "minLength": 1
                                                 },
@@ -16217,7 +16259,7 @@
                                       "type": "object",
                                       "properties": {
                                         "type": {
-                                          "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                          "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                           "type": "string",
                                           "const": "contract_audit"
                                         },
@@ -16488,12 +16530,12 @@
                                                     "type": "object",
                                                     "properties": {
                                                       "kind": {
-                                                        "description": "script_ref — run a repo script. Requires: path; optional args.",
+                                                        "description": "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
                                                         "type": "string",
                                                         "const": "script_ref"
                                                       },
                                                       "path": {
-                                                        "description": "Repo-relative script path.",
+                                                        "description": "Repo-relative script path that already exists at registration time.",
                                                         "type": "string",
                                                         "minLength": 1
                                                       },
@@ -16670,7 +16712,7 @@
                                             "type": "object",
                                             "properties": {
                                               "type": {
-                                                "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                                "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                                 "type": "string",
                                                 "const": "contract_audit"
                                               },
@@ -29476,12 +29518,12 @@
                                         "type": "object",
                                         "properties": {
                                           "kind": {
-                                            "description": "script_ref — run a repo script. Requires: path; optional args.",
+                                            "description": "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
                                             "type": "string",
                                             "const": "script_ref"
                                           },
                                           "path": {
-                                            "description": "Repo-relative script path.",
+                                            "description": "Repo-relative script path that already exists at registration time.",
                                             "type": "string",
                                             "minLength": 1
                                           },
@@ -29658,7 +29700,7 @@
                                 "type": "object",
                                 "properties": {
                                   "type": {
-                                    "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                    "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                     "type": "string",
                                     "const": "contract_audit"
                                   },

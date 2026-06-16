@@ -205,7 +205,7 @@ export async function buildTaskProjectArchive(input: {
   const task = requireTask(input.taskID)
   const project = Project.get(task.project_id)
   if (!project) throw new Error(`Project not found for task ${input.taskID}: ${task.project_id}`)
-  if (project.worktree === "/" || !Project.isGitRepo(project.worktree)) {
+  if (!Project.isGitRepo(project.worktree)) {
     throw new TaskProjectArchiveUnsupportedProjectError(
       `Task ${input.taskID} project is not a Git worktree and cannot be archived with gitignore semantics`,
     )

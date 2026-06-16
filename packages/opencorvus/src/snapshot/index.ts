@@ -70,7 +70,7 @@ export namespace Snapshot {
 
   export async function track() {
     const project = Instance.project
-    if (project.worktree === "/" || !Project.isGitRepo(project.worktree) || Flag.OPENCORVUS_CLIENT === "acp") return
+    if (!Project.isGitRepo(project.worktree) || Flag.OPENCORVUS_CLIENT === "acp") return
     const cfg = await Config.get()
     if (cfg.snapshot === false) return
     const git = gitdir()

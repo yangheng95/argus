@@ -20,6 +20,11 @@ import { t } from "../utils/i18n"
 import { OVERLAY_VERSION } from "../utils/version"
 import { currentUIScale } from "../services/pane"
 import { Icon, type IconName } from "./Icon"
+import {
+  clampConfigSidebarWidth,
+  configSidebarResizeBounds,
+  nextConfigSidebarKeyboardWidth,
+} from "./settings/config-resizer"
 
 interface ConfigTabDef {
   id: ConfigDialogTab
@@ -147,6 +152,18 @@ export function ConfigDialogHost() {
       "min-width": `${width}px`,
     }
   })
+  const resizeBounds = createMemo(() => configSidebarResizeBounds(currentUIScale()))
+  const currentSidebarWidth = () => {
+    const width = dialogStore.config.sidebarWidth
+    if (typeof width === "number" && Number.isFinite(width) && width > 0) {
+      return clampConfigSidebarWidth(width, resizeBounds())
+    }
+    const rendered = document.getElementById("configSidebar")?.getBoundingClientRect().width
+    if (typeof rendered === "number" && Number.isFinite(rendered) && rendered > 0) {
+      return clampConfigSidebarWidth(rendered, resizeBounds())
+    }
+    return clampConfigSidebarWidth(220 * currentUIScale(), resizeBounds())
+  }
 
   const aboutRows = createMemo(() => {
     const config = appStore.config
@@ -276,14 +293,14 @@ export function ConfigDialogHost() {
       resizeHandle.dataset.active = "true"
       document.body.dataset.resizing = "true"
       event.preventDefault()
-      const scale = currentUIScale()
+      const bounds = resizeBounds()
       resizeStartWidth = sidebar.getBoundingClientRect().width
-      resizeMin = 140 * scale
-      resizeMax = 320 * scale
+      resizeMin = bounds.min
+      resizeMax = bounds.max
       return true
     },
     onMove: (dx) => {
-      const next = Math.round(Math.min(resizeMax, Math.max(resizeMin, resizeStartWidth + dx)))
+      const next = clampConfigSidebarWidth(resizeStartWidth + dx, { min: resizeMin, max: resizeMax, step: 1 })
       setConfigSidebarWidth(next)
     },
     onEnd: () => {
@@ -292,6 +309,12 @@ export function ConfigDialogHost() {
       delete document.body.dataset.resizing
     },
   })
+  const handleResizeKeyDown: JSX.EventHandlerUnion<HTMLDivElement, KeyboardEvent> = (event) => {
+    const next = nextConfigSidebarKeyboardWidth(currentSidebarWidth(), event.key, resizeBounds())
+    if (next === undefined) return
+    event.preventDefault()
+    setConfigSidebarWidth(next)
+  }
 
   return (
     <Dialog
@@ -348,7 +371,21 @@ export function ConfigDialogHost() {
               <span>{t(ABOUT_CONFIG_TAB.labelKey)}</span>
             </button>
           </nav>
-          <div class="config-resizer" id="configResizer" onPointerDown={startResize} />
+          <div
+            class="config-resizer"
+            id="configResizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-controls="configSidebar"
+            aria-label={t("config.title")}
+            aria-valuemin={Math.round(resizeBounds().min)}
+            aria-valuemax={Math.round(resizeBounds().max)}
+            aria-valuenow={currentSidebarWidth()}
+            tabIndex={0}
+            title={t("config.title")}
+            onPointerDown={startResize}
+            onKeyDown={handleResizeKeyDown}
+          />
           <div class="config-content" id="configContent">
             <div
               class="config-tab-panel active"

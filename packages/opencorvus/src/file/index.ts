@@ -350,7 +350,6 @@ export namespace File {
   async function isPathAllowed(input: string) {
     const [target, directory] = await Promise.all([canonicalPath(input), canonicalPath(Instance.directory)])
     if (isWithin(directory, target)) return true
-    if (Instance.worktree === "/") return false
     const worktree = await canonicalPath(Instance.worktree)
     return isWithin(worktree, target)
   }
@@ -369,14 +368,14 @@ export namespace File {
     let cache: Entry = { files: [], dirs: [] }
     let fetching = false
 
-    const isGlobalHome = Instance.directory === Global.Path.home && Instance.project.id === "global"
+    const isHomeDirectory = Filesystem.resolve(Instance.directory) === Filesystem.resolve(Global.Path.home)
 
     const fn = async (result: Entry) => {
       // Disable scanning if in root of file system
       if (Instance.directory === path.parse(Instance.directory).root) return
       fetching = true
 
-      if (isGlobalHome) {
+      if (isHomeDirectory) {
         const dirs = new Set<string>()
         const ignore = new Set<string>()
 

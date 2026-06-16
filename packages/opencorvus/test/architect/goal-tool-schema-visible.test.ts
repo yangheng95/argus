@@ -35,6 +35,10 @@ function assertAcceptanceSpecSchemaVisible(node: JsonObject) {
   const scorerVariants = scorerItems.oneOf ?? scorerItems.anyOf
   expect(Array.isArray(scorerVariants)).toBe(true)
   expect(scorerVariants.length).toBeGreaterThanOrEqual(4)
+
+  const rendered = JSON.stringify(node)
+  expect(rendered).toContain("Not for contract_audit; contract_audit is its own scorer type")
+  expect(rendered).toContain("This is a scorer type, not a script_ref path")
 }
 
 test("goal tool schemas expose acceptance_specs shape to the model", () => {

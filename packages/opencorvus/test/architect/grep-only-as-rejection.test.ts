@@ -44,4 +44,12 @@ describe("architect grep-only acceptance spec discipline", () => {
     expect(prompt).toContain('For one-off checks, use `spec.kind:"shell"` with `cmd`')
     expect(prompt).toContain("do not register helper-script goals or temporary test goals to probe the schema")
   })
+
+  test("core prompt distinguishes contract_audit from script_ref paths", async () => {
+    const prompt = await readArchitectPrompt()
+
+    expect(prompt).toContain("`contract_audit` is a scorer `type`, not a `script_ref` path")
+    expect(prompt).toContain("Never write `.opencorvus/scripts/contract-audit`")
+    expect(prompt).toContain('for graph-contract checks use `type:"contract_audit"` with registered contract ids')
+  })
 })

@@ -5,6 +5,7 @@ import { EngineInteractionRequestTable, EngineTaskTable } from "../../src/engine
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
 import { createRequirementsOutputTools, RequirementsSubmitSchema } from "../../src/requirements/output-tools"
 import { createDecisionLog } from "../../src/decision-log"
 
@@ -15,6 +16,7 @@ mock.module("@/agent/runner", () => ({
   buildHardErrorFromFinalMessage: () => null,
   messageHasInformationMissing: () => false,
   extractInformationMissingBlock: () => null,
+  toolErrorPartsFromFinalMessage: () => [],
   runAgentSession: (input: any) => {
     if (!runnerImpl) throw new Error("runAgentSession mock not configured")
     return runnerImpl(input)
@@ -48,6 +50,7 @@ describe("RequirementsAgent prompt precedence", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const rootSession = await Session.create({ kind: "root", title: "Requirements prompt test root" })
         Database.use((db) => {
           db.insert(ProjectTable)
             .values({
@@ -65,6 +68,7 @@ describe("RequirementsAgent prompt precedence", () => {
               id: taskID,
               project_id: projectID,
               source: "test",
+              session_id: rootSession.id,
               title: "复刻百度主页",
               request: "复刻百度主页",
               priority: "normal",
@@ -235,6 +239,7 @@ describe("RequirementsAgent prompt precedence", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const rootSession = await Session.create({ kind: "root", title: "Maturity pending root" })
         Database.use((db) => {
           db.insert(ProjectTable)
             .values({
@@ -252,6 +257,7 @@ describe("RequirementsAgent prompt precedence", () => {
               id: taskID,
               project_id: projectID,
               source: "test",
+              session_id: rootSession.id,
               title: "Mature DeepSeek chat",
               request: "写一个成熟的输入 deepseek key 即可聊天的 ai chat 页面",
               priority: "normal",

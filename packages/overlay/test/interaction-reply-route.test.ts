@@ -8,6 +8,9 @@ import type {
 } from "../src/services/host-transport"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import { rejectInteraction, replyInteraction } from "../src/services/interaction-reply"
+import { configure } from "../src/services/api"
+
+const PROJECT_DIRECTORY = "D:/overlay/question-project"
 
 function recordingTransport(requests: TransportRequest[]): HostTransport {
   return {
@@ -30,11 +33,13 @@ function recordingTransport(requests: TransportRequest[]): HostTransport {
 
 afterEach(() => {
   __setHostTransportForTest(undefined)
+  configure({ directory: "" })
 })
 
 test("raw question replies use the question route", async () => {
   const requests: TransportRequest[] = []
   __setHostTransportForTest(recordingTransport(requests))
+  configure({ directory: PROJECT_DIRECTORY })
 
   await replyInteraction(
     "que_route_answer",
@@ -51,6 +56,7 @@ test("raw question replies use the question route", async () => {
     ["POST", "question/que_route_answer/reply"],
     ["POST", "question/que_route_reject/reject"],
   ])
+  expect(requests.map((req) => req.query?.directory)).toEqual([PROJECT_DIRECTORY, PROJECT_DIRECTORY])
   expect(requests[0]?.body).toEqual({
     kind: "json",
     value: { answers: [["Vite + React"]] },
@@ -61,6 +67,7 @@ test("raw question replies use the question route", async () => {
 test("engine interactions keep using the interaction route", async () => {
   const requests: TransportRequest[] = []
   __setHostTransportForTest(recordingTransport(requests))
+  configure({ directory: PROJECT_DIRECTORY })
 
   await replyInteraction("interaction_route_answer", "answer", false, {
     answers: [["Mock data"]],
@@ -69,4 +76,5 @@ test("engine interactions keep using the interaction route", async () => {
   expect(requests.map((req) => [req.method, req.path])).toEqual([
     ["POST", "interaction/interaction_route_answer/reply"],
   ])
+  expect(requests[0]?.query?.directory).toBe(PROJECT_DIRECTORY)
 })

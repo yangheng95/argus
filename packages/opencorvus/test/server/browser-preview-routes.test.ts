@@ -7,10 +7,9 @@ import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sq
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Server } from "../../src/server/server"
-import { SessionTable } from "../../src/session/session.sql"
 import { closeBrowserPreviewLiveSessions } from "../../src/browser-preview/live"
 import {
-  latestBrowserPreviewEvidenceID,
+  latestBrowserPreviewEvidenceIDs,
   persistBrowserPreviewEvidence,
   persistBrowserPreviewTarget,
 } from "../../src/browser-preview/persist"
@@ -34,36 +33,19 @@ describe("browser preview routes", () => {
     await Instance.provide({
       directory,
       fn: () => {
-        const time = Date.now()
-        const sessionID = `${taskID}_root`
         Database.use((db) =>
-          db.transaction((tx) => {
-            tx.insert(SessionTable)
-              .values({
-                id: sessionID,
-                project_id: Instance.project.id,
-                slug: taskID,
-                directory,
-                title: "Preview task",
-                version: "test",
-                kind: "root",
-                time_created: time,
-                time_updated: time,
-              })
-              .run()
-            tx.insert(EngineTaskTable)
-              .values({
-                id: taskID,
-                project_id: Instance.project.id,
-                session_id: sessionID,
-                title: "Preview task",
-                request: "Preview task",
-                source: "api",
-                time_created: time,
-                time_updated: time,
-              })
-              .run()
-          }),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Preview task",
+              request: "Preview task",
+              source: "api",
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .run(),
         )
       },
     })
@@ -86,7 +68,7 @@ describe("browser preview routes", () => {
   }
 
   async function browserPreviewArtifactPath(directory: string, taskID: string, name: string): Promise<string> {
-    const dir = ProjectRuntimePaths.browserPreviewJobRoot(directory, taskID, "art_route_test_job")
+    const dir = ProjectRuntimePaths.taskAbsolute(directory, taskID, "browser-preview", "art-route-test-job")
     await fs.mkdir(dir, { recursive: true })
     return path.join(dir, name)
   }
@@ -133,7 +115,7 @@ describe("browser preview routes", () => {
           { url: liveUrl, selected: true },
           { url: "http://127.0.0.1:9/dead", selected: false },
         ])
-        expect(JSON.stringify(body)).not.toContain("Saved browser preview target is unreachable")
+        expect(JSON.stringify(body)).toContain("Saved browser preview target is unreachable")
 
         const artifact = Database.use((db) =>
           db
@@ -217,6 +199,63 @@ describe("browser preview routes", () => {
   )
 
   test(
+    "GET /task/:taskID/browser-preview returns latest evidence IDs per viewport",
+    async () => {
+      await using tmp = await tmpdir()
+      const preview = servePreview()
+      const taskID = await seedTask(tmp.path)
+      try {
+        const target = await persistBrowserPreviewTarget({ taskID, url: preview.url.href })
+        const desktopPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop.png")
+        const mobilePath = await browserPreviewArtifactPath(tmp.path, taskID, "mobile.png")
+        await fs.writeFile(desktopPath, "desktop-evidence")
+        await fs.writeFile(mobilePath, "mobile-evidence")
+        const desktopEvidenceID = persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportID: "desktop",
+          status: "passed",
+          summary: "desktop persisted evidence",
+          capture: { captured: true, passed: true, path: desktopPath, sha: sha16("desktop-evidence") },
+          diagnostics: ["desktop persisted evidence"],
+          now: 1000,
+        })
+        const mobileEvidenceID = persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportID: "mobile",
+          status: "passed",
+          summary: "mobile persisted evidence",
+          capture: { captured: true, passed: true, path: mobilePath, sha: sha16("mobile-evidence") },
+          diagnostics: ["mobile persisted evidence"],
+          now: 2000,
+        })
+        const app = Server.App()
+
+        const response = await app.request(`/task/${taskID}/browser-preview`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          latestEvidenceID?: string
+          latestEvidenceIDs?: { desktop?: string; mobile?: string }
+        }
+        expect(body.latestEvidenceID).toBeUndefined()
+        expect(body.latestEvidenceIDs?.desktop).toBe(desktopEvidenceID)
+        expect(body.latestEvidenceIDs?.mobile).toBe(mobileEvidenceID)
+      } finally {
+        preview.stop(true)
+      }
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "PUT /task/:taskID/browser-preview/target selects an existing saved target",
     async () => {
       await using tmp = await tmpdir()
@@ -283,6 +322,7 @@ describe("browser preview routes", () => {
       await fs.writeFile(screenshotPath, "browser-preview-screenshot")
       const sha = sha16("browser-preview-screenshot")
       const evidenceID = persistBrowserPreviewEvidence({
+        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -307,7 +347,6 @@ describe("browser preview routes", () => {
         targetID: string
         viewportID: string
         status: string
-        projectRoot?: string
         capture?: { path?: string; sha?: string }
         diagnostics?: string[]
       }
@@ -316,7 +355,6 @@ describe("browser preview routes", () => {
       expect(body.targetID).toBe(target.id)
       expect(body.viewportID).toBe("desktop")
       expect(body.status).toBe("passed")
-      expect(body.projectRoot).toBeUndefined()
       expect(body.capture?.path).toBeUndefined()
       expect(body.capture?.sha).toBe(sha)
       expect(body.diagnostics).toEqual(["all runtime capture layers passed"])
@@ -341,6 +379,7 @@ describe("browser preview routes", () => {
       const bytes = Buffer.from("browser-preview-png-bytes")
       await fs.writeFile(screenshotPath, bytes)
       const evidenceID = persistBrowserPreviewEvidence({
+        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -382,6 +421,7 @@ describe("browser preview routes", () => {
       const bytes = Buffer.from("region-comparison-png-bytes")
       await fs.writeFile(artifactPath, bytes)
       const evidenceID = persistBrowserPreviewEvidence({
+        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -419,104 +459,19 @@ describe("browser preview routes", () => {
   )
 
   test(
-    "browser preview evidence artifact routes read from the evidence task project",
-    async () => {
-      await using evidenceProject = await tmpdir()
-      await using selectedProject = await tmpdir()
-      const evidenceTaskID = await seedTask(evidenceProject.path, "tsk_browserpreviewroute_evidence_project")
-      await seedTask(selectedProject.path, "tsk_browserpreviewroute_selected_project")
-      const target = await persistBrowserPreviewTarget({
-        taskID: evidenceTaskID,
-        url: "http://127.0.0.1:5174/task",
-      })
-      const screenshotPath = await browserPreviewArtifactPath(evidenceProject.path, evidenceTaskID, "desktop.png")
-      const sideBySidePath = await browserPreviewArtifactPath(
-        evidenceProject.path,
-        evidenceTaskID,
-        "side-by-side.png",
-      )
-      await fs.writeFile(screenshotPath, "evidence-project-capture")
-      await fs.writeFile(sideBySidePath, "evidence-project-side-by-side")
-      const screenshotRelativePath = path.relative(evidenceProject.path, screenshotPath).replaceAll(path.sep, "/")
-      const sideBySideRelativePath = path.relative(evidenceProject.path, sideBySidePath).replaceAll(path.sep, "/")
-      const selectedCapturePath = path.join(selectedProject.path, ...screenshotRelativePath.split("/"))
-      const selectedSideBySidePath = path.join(selectedProject.path, ...sideBySideRelativePath.split("/"))
-      await fs.mkdir(path.dirname(selectedCapturePath), { recursive: true })
-      await fs.mkdir(path.dirname(selectedSideBySidePath), { recursive: true })
-      await fs.writeFile(selectedCapturePath, "selected-project-capture")
-      await fs.writeFile(selectedSideBySidePath, "selected-project-side-by-side")
-      const captureEvidenceID = persistBrowserPreviewEvidence({
-        taskID: evidenceTaskID,
-        targetID: target.id,
-        viewportID: "desktop",
-        status: "passed",
-        summary: "capture passed",
-        capture: { path: screenshotPath, sha: sha16("evidence-project-capture") },
-        diagnostics: ["capture passed"],
-        now: 1000,
-      })
-      const artifactEvidenceID = persistBrowserPreviewEvidence({
-        taskID: evidenceTaskID,
-        targetID: target.id,
-        viewportID: "desktop",
-        operationKind: "reference-comparison",
-        regionID: "economy",
-        status: "passed",
-        summary: "comparison passed",
-        artifactPaths: { side_by_side: sideBySidePath },
-        diagnostics: ["comparison passed"],
-        now: 2000,
-      })
-      Database.use((db) => {
-        for (const evidenceID of [captureEvidenceID, artifactEvidenceID]) {
-          const row = db
-            .select()
-            .from(EngineArtifactTable)
-            .where(eq(EngineArtifactTable.id, evidenceID))
-            .limit(1)
-            .get()
-          if (!row) throw new Error(`Browser preview evidence row missing: ${evidenceID}`)
-          db.update(EngineArtifactTable)
-            .set({ payload: { ...(row.payload as Record<string, unknown>), project_root: selectedProject.path } })
-            .where(eq(EngineArtifactTable.id, evidenceID))
-            .run()
-        }
-      })
-      const app = Server.App()
-
-      const capture = await app.request(
-        `/task/${evidenceTaskID}/browser-preview/evidence/${captureEvidenceID}/capture.png`,
-        {
-          headers: {
-            "x-opencorvus-directory": selectedProject.path,
-          },
-        },
-      )
-      const artifact = await app.request(
-        `/task/${evidenceTaskID}/browser-preview/evidence/${artifactEvidenceID}/artifact/side-by-side`,
-        {
-          headers: {
-            "x-opencorvus-directory": selectedProject.path,
-          },
-        },
-      )
-
-      expect(capture.status).toBe(200)
-      expect(Buffer.from(await capture.arrayBuffer()).toString("utf8")).toBe("evidence-project-capture")
-      expect(artifact.status).toBe(200)
-      expect(Buffer.from(await artifact.arrayBuffer()).toString("utf8")).toBe("evidence-project-side-by-side")
-    },
-    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
-  )
-
-  test(
     "GET /task/:taskID/browser-preview/evidence/:evidenceID rejects missing or mismatched screenshot artifacts",
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
       const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
-      const missingPath = ProjectRuntimePaths.browserPreviewJobRelative(taskID, "art_route_test_job", "missing.png")
+      const missingPath = ProjectRuntimePaths.taskRelative(
+        taskID,
+        "browser-preview",
+        "art-route-test-job",
+        "missing.png",
+      )
       const missingEvidenceID = persistBrowserPreviewEvidence({
+        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -528,6 +483,7 @@ describe("browser preview routes", () => {
       const screenshotPath = await browserPreviewArtifactPath(tmp.path, taskID, "mismatch.png")
       await fs.writeFile(screenshotPath, "actual-screenshot")
       const mismatchEvidenceID = persistBrowserPreviewEvidence({
+        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -564,6 +520,7 @@ describe("browser preview routes", () => {
 
       expect(() =>
         persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
           taskID,
           targetID: target.id,
           viewportID: "desktop",
@@ -628,34 +585,6 @@ describe("browser preview routes", () => {
   )
 
   test(
-    "POST /task/:taskID/browser-preview/capture rejects direct URL-shaped input",
-    async () => {
-      await using tmp = await tmpdir()
-      const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
-      const app = Server.App()
-
-      const response = await app.request(`/task/${taskID}/browser-preview/capture`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": tmp.path,
-        },
-        body: JSON.stringify({
-          targetID: target.id,
-          url: "http://127.0.0.1:5174/other",
-          outDir: ".opencorvus/r/tsk/browser-preview/job",
-          viewportIDs: ["desktop"],
-        }),
-      })
-
-      expect(response.status).toBe(400)
-      expect(JSON.stringify(await response.json())).toContain("Unrecognized")
-    },
-    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
-  )
-
-  test(
     "POST /task/:taskID/browser-preview/compare requires a persisted targetID before launching comparison",
     async () => {
       await using tmp = await tmpdir()
@@ -702,39 +631,6 @@ describe("browser preview routes", () => {
       })
       expect(unknownTarget.status).toBe(404)
       expect(JSON.stringify(await unknownTarget.json())).toContain("art_previewtarget_missing")
-
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
-      const rawUrl = await app.request(`/task/${taskID}/browser-preview/compare`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": tmp.path,
-        },
-        body: JSON.stringify({
-          targetID: target.id,
-          url: "http://127.0.0.1:5174/other",
-          outDir: ".opencorvus/r/tsk/browser-preview/job",
-          viewportIDs: ["desktop"],
-          inlineBindings: [
-            {
-              region_id: "economy",
-              viewport_id: "desktop",
-              region_scope: "page-section",
-              source: {
-                reference_artifact_id: "reference.png",
-                bbox: { x: 0, y: 0, width: 100, height: 80 },
-                semantic_role: "economy section",
-              },
-              implementation: {
-                route: "/",
-                locator: { kind: "data-oc-region", value: "economy" },
-              },
-            },
-          ],
-        }),
-      })
-      expect(rawUrl.status).toBe(400)
-      expect(JSON.stringify(await rawUrl.json())).toContain("Unrecognized")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
@@ -750,6 +646,7 @@ describe("browser preview routes", () => {
       await fs.writeFile(screenshotPath, "preview-capture")
       await fs.writeFile(sideBySidePath, "side-by-side")
       const captureID = persistBrowserPreviewEvidence({
+        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -760,6 +657,7 @@ describe("browser preview routes", () => {
         now: 1000,
       })
       persistBrowserPreviewEvidence({
+        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -772,56 +670,10 @@ describe("browser preview routes", () => {
         now: 2000,
       })
 
-      expect(latestBrowserPreviewEvidenceID({ taskID, targetID: target.id })).toBe(captureID)
+      expect(latestBrowserPreviewEvidenceIDs({ taskID, targetID: target.id }).desktop).toBe(captureID)
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
-
-  test(
-    "latest browser preview evidence is filtered by target before recency ordering can hide older captures",
-    async () => {
-      await using tmp = await tmpdir()
-      const taskID = await seedTask(tmp.path)
-      const firstTarget = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/first" })
-      const secondTarget = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/second" })
-      const firstCaptureID = persistBrowserPreviewEvidence({
-        taskID,
-        targetID: firstTarget.id,
-        viewportID: "desktop",
-        status: "failed",
-        summary: "first target capture",
-        diagnostics: ["first target capture"],
-        now: 1000,
-      })
-      for (let index = 0; index < 21; index++) {
-        persistBrowserPreviewEvidence({
-          taskID,
-          targetID: secondTarget.id,
-          viewportID: "desktop",
-          status: "failed",
-          summary: `second target capture ${index}`,
-          diagnostics: [`second target capture ${index}`],
-          now: 2000 + index,
-        })
-      }
-
-      expect(latestBrowserPreviewEvidenceID({ taskID, targetID: firstTarget.id })).toBe(firstCaptureID)
-    },
-    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
-  )
-
-  test("live preview routes delegate target lookup to the live display module", async () => {
-    const routeSource = await fs.readFile(
-      path.resolve(import.meta.dir, "../../src/server/routes/browser-preview.ts"),
-      "utf8",
-    )
-    const liveRoutes = routeSource.slice(routeSource.indexOf('"/task/:taskID/browser-preview/live/snapshot"'))
-
-    expect(liveRoutes).toContain("captureBrowserPreviewLiveSnapshot({")
-    expect(liveRoutes).toContain("interactBrowserPreviewLive({")
-    expect(liveRoutes).not.toContain("url: target.url")
-    expect(liveRoutes).not.toContain("findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })")
-  })
 
   test(
     "POST /task/:taskID/browser-preview/live/snapshot returns a PNG from the persisted target",
@@ -846,20 +698,6 @@ describe("browser preview routes", () => {
       expect(response.headers.get("content-type")).toBe("image/png")
       const bytes = Buffer.from(await response.arrayBuffer())
       expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
-      const evidenceRows = Database.use((db) =>
-        db
-          .select()
-          .from(EngineArtifactTable)
-          .where(
-            and(
-              eq(EngineArtifactTable.task_id, taskID),
-              eq(EngineArtifactTable.kind, "browser_preview_evidence"),
-            ),
-          )
-          .all(),
-      )
-      expect(evidenceRows).toHaveLength(0)
-      expect(latestBrowserPreviewEvidenceID({ taskID, targetID: target.id })).toBeUndefined()
     },
     { timeout: 60_000 },
   )
@@ -899,30 +737,12 @@ describe("browser preview routes", () => {
         }),
       })
       expect(unknownTarget.status).toBe(404)
-
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
-      const rawUrl = await app.request(`/task/${taskID}/browser-preview/live/input`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": tmp.path,
-        },
-        body: JSON.stringify({
-          targetID: target.id,
-          url: "http://127.0.0.1:5174/other",
-          outDir: ".opencorvus/r/tsk/browser-preview/job",
-          viewportID: "desktop",
-          input: { kind: "click", x: 1, y: 1 },
-        }),
-      })
-      expect(rawUrl.status).toBe(400)
-      expect(JSON.stringify(await rawUrl.json())).toContain("Unrecognized")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
 
   test(
-    "POST /task/:taskID/browser-preview/capture rejects an unknown targetID before verification",
+    "POST /task/:taskID/browser-preview/capture does not replace an unknown targetID with the latest target",
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
@@ -938,8 +758,23 @@ describe("browser preview routes", () => {
         body: JSON.stringify({ targetID: "art_previewtarget_missing", viewportIDs: ["desktop"] }),
       })
 
-      expect(response.status).toBe(404)
-      expect(JSON.stringify(await response.json())).toContain("Browser preview target not found: art_previewtarget_missing")
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as {
+        status: string
+        captures?: Record<string, unknown>
+        evidenceIDs?: Record<string, string>
+        target?: { status: string; url?: string; diagnostics?: string[] }
+        diagnostics?: string[]
+      }
+      expect(body.status).toBe("failed")
+      expect(body.captures).toEqual({})
+      expect(body.evidenceIDs).toEqual({})
+      expect(body.target?.status).toBe("failed")
+      expect(body.target?.url).toBeUndefined()
+      expect(body.target?.diagnostics?.join("\n")).toContain(
+        "Browser preview target not found: art_previewtarget_missing",
+      )
+      expect(body.diagnostics?.join("\n")).toContain("requires a resolved http(s) URL")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )

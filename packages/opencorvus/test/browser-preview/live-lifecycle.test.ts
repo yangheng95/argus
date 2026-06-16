@@ -46,8 +46,9 @@ test("server dispose and shutdown paths close interactive browser preview sessio
   const globalRoutes = source("src/server/routes/global.ts")
 
   expect(serve).toContain("closeBrowserPreviewLiveSessions")
+  expect(serve).toContain("abortCurrentProcessLiveExecution")
   expect(serve.indexOf("await closeBrowserPreviewLiveSessions()")).toBeGreaterThan(
-    serve.indexOf("abortLiveExecutionOnShutdown"),
+    serve.indexOf("abortCurrentProcessLiveExecution"),
   )
   expect(appRoutes).toContain("await closeBrowserPreviewLiveSessions()")
   expect(appRoutes.indexOf("await closeBrowserPreviewLiveSessions()")).toBeLessThan(
