@@ -520,6 +520,11 @@ function affectedRunsForGoalRuns(taskID: string, goalRuns: GoalRunRow[]): RunRow
   })
 }
 
+function latestRunWasTerminalizedByReason(taskID: string, reason: string): boolean {
+  const run = findRuns(taskID)[0]
+  return !!run && (run.status === "failed" || run.status === "aborted") && run.error === reason
+}
+
 async function abortRunsForRows(rows: RunRow[], reason: string): Promise<number> {
   const unique = new Map(rows.map((row) => [row.id, row]))
   return abortRuns([...unique.values()], reason)
@@ -622,15 +627,17 @@ export async function convergeDeadOwnerLiveExecution(input: {
     const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
       (row) => row.status !== "queued" && isGoalRunOrphaned(row),
     )
-    if (orphanGoalRuns.length === 0) continue
+    if (orphanGoalRuns.length === 0 && !latestRunWasTerminalizedByReason(task.id, input.reason)) continue
     if (task.project_id === "global") {
       corruptTasks += 1
       log.error("convergeDeadOwnerLiveExecution: corrupt global task terminalized", { taskID: task.id })
     }
 
-    goalRuns += await abortGoalRunsForRows(orphanGoalRuns, input.reason)
-    const affectedRuns = affectedRunsForGoalRuns(task.id, orphanGoalRuns)
-    runs += await abortRunsForRows(affectedRuns, input.reason)
+    if (orphanGoalRuns.length > 0) {
+      goalRuns += await abortGoalRunsForRows(orphanGoalRuns, input.reason)
+      const affectedRuns = affectedRunsForGoalRuns(task.id, orphanGoalRuns)
+      runs += await abortRunsForRows(affectedRuns, input.reason)
+    }
     const taskResult = await terminateTaskOwnedSessionsAndFail({ task: findTask(task.id) ?? task, reason: input.reason })
     tasks += taskResult.tasks
     sessions += taskResult.sessions
