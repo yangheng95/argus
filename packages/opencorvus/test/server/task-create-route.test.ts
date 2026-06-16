@@ -3,6 +3,7 @@ import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Server } from "../../src/server/server"
+import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -16,7 +17,7 @@ describe("task creation route", () => {
   })
 
   test("POST /task accepts omitted queue and starts immediately", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
 
     const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
     const app = Server.App()
@@ -45,5 +46,35 @@ describe("task creation route", () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
     expect(runTaskLoop).toHaveBeenCalledTimes(1)
+  }, 15_000)
+
+  test("POST /task writes selected prompt profile to the root session overlay", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+
+    spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+    const app = Server.App()
+    const response = await app.request("/task", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({
+        request: "create with backend profile",
+        executor: "opencorvus",
+        requestID: "route-create-profile",
+        source: "panel",
+        promptProfile: "backend",
+      }),
+    })
+
+    expect(response.status).toBe(202)
+    const body = (await response.json()) as { task_id: string }
+    const task = findTask(body.task_id)
+    expect(task?.session_id).toBeTruthy()
+    const session = await Session.get(task!.session_id!)
+    expect(session.metadata?.configOverlay).toMatchObject({
+      prompt_profile: { active: "backend" },
+    })
   }, 15_000)
 })

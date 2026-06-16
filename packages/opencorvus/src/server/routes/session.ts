@@ -9,6 +9,7 @@ import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
 import { validateConfigModelReferences } from "@/config/model-reference-validation"
 import { Agent } from "@/agent/agent"
+import { PromptProfile } from "@/agent/prompt-profile"
 import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "../../session/prompt"
 import { SessionContext } from "@/session/context"
@@ -300,6 +301,13 @@ export const SessionRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const patch = c.req.valid("json")
         await validateConfigModelReferences(patch, "configOverlay")
+        if (typeof patch.prompt_profile?.active === "string") {
+          try {
+            PromptProfile.assertKnownProfileID(patch.prompt_profile.active, await EffectiveConfig.base({ sessionID }))
+          } catch (error) {
+            return c.json({ error: error instanceof Error ? error.message : String(error) }, 400)
+          }
+        }
         await Session.mergeConfigOverlay({ sessionID, patch })
         Provider.reset()
         Agent.reset()

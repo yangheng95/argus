@@ -38,6 +38,7 @@ import { Filesystem } from "@/util/filesystem"
 import { buildChannelSchema } from "@/channel/catalog"
 import { withKeyedLock } from "@/util/lock"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
+import { PromptProfile, PromptProfileConfigSchema, PromptProfileOverlaySchema } from "@/agent/prompt-profile"
 import { isModelReference } from "@/provider/model-ref"
 import { BrowserMCPBuiltin } from "@/mcp/browser/builtin"
 
@@ -108,7 +109,7 @@ export namespace Config {
     // 5) local config directories (.opencorvus/*)
     // 6) Inline config (OPENCORVUS_CONFIG_CONTENT)
     // Managed config directory is enterprise-only and always overrides everything above.
-    let result: Info = {}
+    let result: Info = Info.parse({})
     for (const [key, value] of Object.entries(auth)) {
       if (value.type === "wellknown") {
         process.env[value.key] = value.token
@@ -826,9 +827,33 @@ export namespace Config {
     .object({
       model: ModelId.nullable().optional(),
       prompt: z.record(z.string(), z.string().nullable()).nullable().optional(),
+      prompt_profile: PromptProfileOverlaySchema.nullable().optional(),
       agent: z.record(z.string(), OverlayAgent.nullable()).nullable().optional(),
     })
     .strict()
+    .superRefine((overlay, ctx) => {
+      for (const [agentID, agentConfig] of Object.entries(overlay.agent ?? {})) {
+        if (!agentConfig) continue
+        const role = AgentRoleContract.all[agentID as AgentRoleID]
+        if (role?.promptConfigMode === "append" && agentConfig.prompt !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["agent", agentID, "prompt"],
+            message: `configOverlay.agent.${agentID}.prompt is invalid for append-mode agents; use prompt_append.`,
+          })
+        }
+        if (
+          role?.promptConfigMode === "none" &&
+          (agentConfig.prompt !== undefined || agentConfig.prompt_append !== undefined)
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["agent", agentID],
+            message: `configOverlay.agent.${agentID} prompt configuration is not editable.`,
+          })
+        }
+      }
+    })
   export type Overlay = z.output<typeof Overlay>
 
   export const Keybinds = z
@@ -1342,6 +1367,9 @@ export namespace Config {
         .record(z.string(), z.string())
         .optional()
         .describe("System-scope prompt overrides keyed by prompt identifier (e.g. core_header)"),
+      prompt_profile: PromptProfileConfigSchema.describe(
+        "Active prompt profile and optional project-defined profile overlays.",
+      ),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       permission: Permission.optional(),
       tool_permissions: z
@@ -1645,6 +1673,7 @@ export namespace Config {
           })
         }
       }
+      PromptProfile.validateConfig(config, ctx)
     })
     .meta({
       ref: "Config",
@@ -1668,7 +1697,7 @@ export namespace Config {
   async function loadFile(filepath: string): Promise<Info> {
     log.info("loading", { path: filepath })
     const text = await readFile(filepath)
-    if (!text) return {}
+    if (!text) return Info.parse({})
     return load(text, { path: filepath })
   }
 

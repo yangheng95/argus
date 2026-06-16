@@ -30,6 +30,12 @@ export interface ChatAttachment {
   filename: string
 }
 
+export interface PromptProfileOption {
+  id: string
+  label: string
+  description?: string
+}
+
 export interface ChatComposerProps {
   /**
    * Whether the composer should be interactive.
@@ -45,7 +51,12 @@ export interface ChatComposerProps {
    */
   stopping?: boolean
   /** Called when the user submits a message. */
-  onSubmit: (text: string, attachments: ChatAttachment[], webSearch: boolean) => void | Promise<void>
+  onSubmit: (
+    text: string,
+    attachments: ChatAttachment[],
+    webSearch: boolean,
+    promptProfile: string,
+  ) => void | Promise<void>
   /** Called when the user clicks the stop button while busy. */
   onStop?: () => void
   /**
@@ -69,6 +80,9 @@ export interface ChatComposerProps {
   draftKey?: string
   /** Optional single prompt hint for scoped composers such as Mission launch. */
   placeholder?: string
+  promptProfiles: PromptProfileOption[]
+  promptProfileID: string
+  onPromptProfileChange: (profileID: string) => void
 }
 
 // ── Constants ──
@@ -125,6 +139,7 @@ function utf8ByteLength(value: string): number {
 export function ChatComposer(props: ChatComposerProps) {
   let textareaRef!: HTMLTextAreaElement
   let formRef!: HTMLFormElement
+  let promptProfileSelectRef!: HTMLSelectElement
 
   const [text, setText] = createSignal("")
   let loadedDraftKey: string | null = null
@@ -364,7 +379,7 @@ export function ChatComposer(props: ChatComposerProps) {
     const submittedDraftKey = props.draftKey
     setSubmitting(true)
     try {
-      await props.onSubmit(trimmed, sentAttachments, false)
+      await props.onSubmit(trimmed, sentAttachments, false, props.promptProfileID)
       setText("")
       clearComposerDraft(submittedDraftKey)
       setAttachments([])
@@ -486,6 +501,17 @@ export function ChatComposer(props: ChatComposerProps) {
   }
   const sendAriaLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"))
   const sendLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"))
+  const promptProfileLabel = createMemo(() => {
+    return props.promptProfiles.find((profile) => profile.id === props.promptProfileID)?.label ?? props.promptProfileID
+  })
+  const promptProfileDisabled = createMemo(() => props.promptProfiles.length === 0 || !props.enabled || props.busy)
+
+  createEffect(() => {
+    props.promptProfiles.length
+    if (promptProfileSelectRef && promptProfileSelectRef.value !== props.promptProfileID) {
+      promptProfileSelectRef.value = props.promptProfileID
+    }
+  })
 
   return (
     <form
@@ -610,6 +636,39 @@ export function ChatComposer(props: ChatComposerProps) {
        * stays clean. */}
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
+          <label class="prompt-profile-select-wrap" title={t("prompt_profile.selector_title")}>
+            <span class="prompt-profile-select-chrome" aria-hidden="true">
+              <span class="prompt-profile-select-copy">
+                <span class="prompt-profile-select-label">{t("prompt_profile.selector_label")}</span>
+                <span class="prompt-profile-select-value">{promptProfileLabel()}</span>
+              </span>
+              <span class="prompt-profile-select-caret">
+                <Icon name="caret-down" size={9} />
+              </span>
+            </span>
+            <select
+              ref={promptProfileSelectRef}
+              class="prompt-profile-select"
+              data-ui="prompt-profile-selector"
+              aria-label={t("prompt_profile.selector_title")}
+              disabled={promptProfileDisabled()}
+              value={props.promptProfileID}
+              onChange={(event) => props.onPromptProfileChange(event.currentTarget.value)}
+            >
+              <Show
+                when={props.promptProfiles.length > 0}
+                fallback={<option value={props.promptProfileID}>{promptProfileLabel()}</option>}
+              >
+                <For each={props.promptProfiles}>
+                  {(profile) => (
+                    <option value={profile.id} title={profile.description ?? profile.label}>
+                      {profile.label}
+                    </option>
+                  )}
+                </For>
+              </Show>
+            </select>
+          </label>
           <ExecutorSelector />
         </div>
       </div>

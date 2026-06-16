@@ -4,6 +4,7 @@ import { Output } from "ai"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { streamText } from "@/llm/api"
 import { Agent } from "@/agent/agent"
+import { PromptProfile } from "@/agent/prompt-profile"
 import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
 import { Bus } from "@/bus"
 import { Config } from "@/config/config"
@@ -964,6 +965,13 @@ export namespace EngineService {
         patch: { model: input.model },
       })
     }
+    if (input.promptProfile) {
+      PromptProfile.assertKnownProfileID(input.promptProfile, taskConfigSnapshot)
+      await Session.mergeConfigOverlay({
+        sessionID: session.id,
+        patch: { prompt_profile: { active: input.promptProfile } },
+      })
+    }
     const resolvedChecks = await taskChecks(input.checks)
     const now = Date.now()
     const taskID = Identifier.ascending("task")
@@ -1902,6 +1910,16 @@ export namespace EngineService {
     const task = requireTask(taskID)
     assertTaskProjectIsConcrete(task)
     assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
+    if (input.promptProfile) {
+      if (!task.session_id) {
+        throw new Error(`Task ${task.id} has no root session; cannot apply prompt profile ${input.promptProfile}.`)
+      }
+      PromptProfile.assertKnownProfileID(input.promptProfile, await EffectiveConfig.base({ sessionID: task.session_id }))
+      await Session.mergeConfigOverlay({
+        sessionID: task.session_id,
+        patch: { prompt_profile: { active: input.promptProfile } },
+      })
+    }
 
     // Decode base64 attachments once, write bytes to AttachmentStore, and carry
     // references downstream. Mirrors createTask so that follow-up messages and

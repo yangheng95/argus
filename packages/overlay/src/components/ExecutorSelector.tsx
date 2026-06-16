@@ -18,7 +18,7 @@
 //     otherwise appStore.config.model via patchConfig
 
 import * as Popover from "@kobalte/core/popover"
-import { createMemo, createResource, createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js"
 import { appStore } from "../store/app"
 import { activeTaskID, hasSelectedTask } from "../store/board"
 import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings"
@@ -160,12 +160,16 @@ function ChevronCaret(props: { open: boolean }) {
 
 function ChipModel(props: { model: string; placeholder: string }) {
   const parts = createMemo(() => splitModelID(props.model))
+  const displayText = createMemo(() => {
+    if (!props.model) return props.placeholder
+    const provider = parts().provider
+    const name = parts().name
+    if (provider && name) return `${provider}/${name}`
+    return name || provider || props.model
+  })
   return (
-    <span class="executor-chip-model" data-empty={props.model ? "false" : "true"}>
-      <Show when={props.model} fallback={<span class="executor-chip-name">{props.placeholder}</span>}>
-        <span class="executor-chip-provider">{parts().provider}</span>
-        <span class="executor-chip-name">{parts().name || parts().provider}</span>
-      </Show>
+    <span class="executor-chip-value" data-empty={props.model ? "false" : "true"} title={displayText()}>
+      {displayText()}
     </span>
   )
 }
@@ -222,6 +226,12 @@ export function ExecutorSelector() {
     const id = externalActiveID()
     return id ? executorCurrentModel(id) : ""
   })
+  const externalChipLabel = createMemo(() =>
+    isExternalActive() ? executorLabel(activeID()) : t("executor.external_popover_title"),
+  )
+  const externalModelPlaceholder = createMemo(() =>
+    isExternalActive() ? t("agent_models.option_not_set") : t("executor.external_disabled"),
+  )
 
   const mirrorGroups = createMemo(mirrorProviderGroups)
   // External popover always renders a tab strip across the available external
@@ -240,11 +250,16 @@ export function ExecutorSelector() {
   // always has something to show. Tracked separately from settingsStore so
   // peeking at another executor's model list doesn't auto-switch the active
   // executor.
-  const focusedExternalID = createMemo(() => {
+  const defaultFocusedExternalID = createMemo(() => {
     const id = externalActiveID()
     if (id) return id
     const firstSelectable = externalTabs().find((tab) => tab.selectable)
     return firstSelectable?.id ?? EXTERNAL_EXECUTOR_IDS[0]
+  })
+  const [focusedExternalID, setFocusedExternalID] = createSignal(defaultFocusedExternalID())
+  createEffect(() => {
+    const next = defaultFocusedExternalID()
+    if (!external.open()) setFocusedExternalID(next)
   })
   const focusedGroups = createMemo(() => externalProviderGroups(focusedExternalID()))
   const focusedCurrentModel = createMemo(() => executorCurrentModel(focusedExternalID()))
@@ -257,6 +272,7 @@ export function ExecutorSelector() {
   function openExternal() {
     mirror.close()
     void ensureProviderInfoLoaded()
+    setFocusedExternalID(defaultFocusedExternalID())
     external.openIt()
   }
 
@@ -326,6 +342,7 @@ export function ExecutorSelector() {
       setSettingsStore("executor", sanitizeExecutor(executorID))
       saveSettings()
     }
+    setFocusedExternalID(executorID)
     await setExecutorModel(executorID, model)
     external.close()
   }
@@ -338,25 +355,16 @@ export function ExecutorSelector() {
     external.close()
   }
 
-  function focusExternal(executorID: string) {
-    // Switching the popover tab makes that executor active so subsequent
-    // model picks land on the right executor descriptor.
-    if (executorID !== activeID()) {
-      setSettingsStore("executor", sanitizeExecutor(executorID))
-      saveSettings()
-    }
-  }
-
   function changeExternalTab(value: string) {
     if (value === EXTERNAL_DISABLED_TAB_ID) {
       disableExternal()
       return
     }
-    focusExternal(value)
+    setFocusedExternalID(value)
   }
 
   return (
-    <div class="executor-dualbar" data-ui="executor-dualbar">
+    <div class="executor-dualbar" data-ui="executor-dualbar" data-ui-group="executor-selector">
       <ExecutorChip
         side="mirror"
         disclosure={mirror}
@@ -427,9 +435,9 @@ export function ExecutorSelector() {
         side="external"
         disclosure={external}
         onActivate={openExternal}
-        label={isExternalActive() ? executorLabel(activeID()) : t("executor.external_disabled")}
+        label={externalChipLabel()}
         model={externalModel()}
-        modelPlaceholder={isExternalActive() ? t("agent_models.option_not_set") : ""}
+        modelPlaceholder={externalModelPlaceholder()}
         title={
           isExternalActive()
             ? t("executor.external_chip_title", {
@@ -563,10 +571,10 @@ function ExecutorChip(props: ExecutorChipProps) {
           aria-label={props.ariaLabel}
           disabled={props.disabled}
         >
-          <span class="executor-chip-identity">
+          <span class="executor-chip-copy">
             <span class="executor-chip-label">{props.label}</span>
+            <ChipModel model={props.model} placeholder={props.modelPlaceholder} />
           </span>
-          <ChipModel model={props.model} placeholder={props.modelPlaceholder} />
           <ChevronCaret open={props.disclosure.open()} />
         </Popover.Trigger>
         <Popover.Content class="executor-popover" data-section={props.side}>

@@ -674,6 +674,8 @@
   "prompt.none": "No configurable prompts available",
   "prompt.preview": "Markdown Preview",
   "prompt.preview_empty": "This prompt is empty.",
+  "prompt_profile.selector_label": "Expert Squad",
+  "prompt_profile.selector_title": "Prompt expert squad",
   "prompt.reset": "Reset",
   "prompt.reset_done": "Reset",
   "prompt.append_core_edit_error": "This agent uses a code-owned default prompt. Only add custom text after the default prompt.",

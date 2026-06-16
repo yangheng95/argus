@@ -203,7 +203,9 @@ test("main ChatComposer exposes the standard Mission data-ui hooks for downstrea
   expect(MAIN_TSX).toContain('missionSubmitActive()')
   expect(MAIN_TSX).toContain('"mission-composer-input"')
   expect(MAIN_TSX).toContain('"mission-composer-submit"')
-  expect(MAIN_TSX).toMatch(/if \(missionSubmitActive\(\)\)[\s\S]+?const result = await wakeMission\(\{ text, model \}\)[\s\S]+?return result/)
+  expect(MAIN_TSX).toMatch(
+    /if \(missionSubmitActive\(\)\)[\s\S]+?const result = await wakeMission\(\{ text, model, promptProfile \}\)[\s\S]+?return result/,
+  )
   expect(MISSION_TSX).not.toContain('data-ui="mission-composer-mission-id"')
   expect(MISSION_TSX).not.toContain("missionID().trim()")
 })

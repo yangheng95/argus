@@ -47,6 +47,8 @@
  */
 import ORCHESTRATOR_CORE from "@/prompt/core/orchestrator-core.txt"
 import { Provider } from "@/provider/provider"
+import { EffectiveConfig } from "@/config/effective"
+import { PromptProfile } from "@/agent/prompt-profile"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig } from "@/engine"
 import { INFORMATION_MISSING_FALLBACK_TEXT } from "@/prompt/information-missing"
@@ -937,6 +939,14 @@ async function buildSystemParts(
   workflow?: MiniWorkflow,
   workflowState?: WorkflowState,
 ): Promise<string[]> {
+  const config = task.session_id
+    ? await EffectiveConfig.effective({ sessionID: task.session_id })
+    : await EffectiveConfig.effective({ taskID: task.id })
+  const instructions = PromptProfile.composeAgentPrompt({
+    agentID: "orchestrator",
+    base: ORCHESTRATOR_INSTRUCTIONS,
+    config,
+  })
   const ctx: string[] = []
   const autoIteration = (await EngineConfig.get()).auto_iteration === true
 
@@ -1106,5 +1116,5 @@ async function buildSystemParts(
     }
   }
 
-  return [ORCHESTRATOR_INSTRUCTIONS, ctx.join("\n")]
+  return [instructions, ctx.join("\n")]
 }

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { promptConfigValueForSave } from "../src/services/config"
 
 describe("prompt catalog save values", () => {
@@ -35,5 +37,12 @@ describe("prompt catalog save values", () => {
         "Custom coding prompt.",
       ),
     ).toBe("Custom coding prompt.")
+  })
+
+  test("PromptCatalog editor uses editable_prompt instead of profile-applied effective_prompt", () => {
+    const source = readFileSync(join(import.meta.dir, "../src/components/settings/PromptCatalog.tsx"), "utf8")
+    expect(source).toContain("function editablePrompt")
+    expect(source).toContain("entry.editable_prompt ?? entry.prompt ??")
+    expect(source).toContain("entry.effective_prompt ?? currentDraft()")
   })
 })

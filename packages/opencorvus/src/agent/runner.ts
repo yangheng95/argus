@@ -67,6 +67,7 @@ import type { LanguageModel } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { resolveAgentModel, resolveSessionOverlay } from "@/agent/model"
 import { Agent } from "@/agent/agent"
+import { PromptProfile } from "@/agent/prompt-profile"
 import { Provider } from "@/provider/provider"
 import { EffectiveConfig } from "@/config/effective"
 import { EngineConfig } from "@/engine"
@@ -1380,7 +1381,8 @@ export async function runAgentSessionWithRetry<C>(
 //
 // Order:
 //   1. core prompt (from `prompt/core/<kind>-core.txt`)
-//   2. user-config append: `config.agent.<kind>.prompt_append`, when present
+//   2. active prompt profile overlay
+//   3. user-config append: `config.agent.<kind>.prompt_append`, when present
 //
 // Per rule 22 / rule 25 this is the only path. Agents do not roll their
 // own composition.
@@ -1397,7 +1399,7 @@ async function composeSystemPrompt(
   const effectiveAgent = baseAgent ? Agent.resolveSessionAgent(baseAgent, overlay) : undefined
   const userAppend =
     effectiveAgent?.promptAppend ?? (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
-  const prompt = typeof userAppend === "string" && userAppend.trim().length > 0 ? `${core}\n\n${userAppend}` : core
+  const prompt = PromptProfile.composeAgentPrompt({ agentID: agentName, base: core, userAppend, config })
   return { prompt }
 }
 

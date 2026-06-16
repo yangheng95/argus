@@ -873,7 +873,11 @@ export function createArchitectOutputTools(input: {
           return scriptRefError(id, missingScriptRefs)
         }
         const changedFields = Object.keys(normalizedUpdates).filter(
-          (key) => !isDeepStrictEqual((prior as Record<string, unknown>)[key], (next as Record<string, unknown>)[key]),
+          (key) =>
+            !isDeepStrictEqual(
+              (prior as unknown as Record<string, unknown>)[key],
+              (next as unknown as Record<string, unknown>)[key],
+            ),
         )
         if (changedFields.length === 0 && normalized.changes.length === 0) {
           return `No changes: goal "${id}" already matches the submitted updates.\nCurrent: ${formatGoalSnapshot(prior)}`

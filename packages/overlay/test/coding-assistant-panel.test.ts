@@ -97,6 +97,7 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(main).toMatch(/if \(assistantSubmitActive\(\)\)[\s\S]+?await createCodingAssistantSession\(\)[\s\S]+?return await panelMessage/)
   expect(main).toContain('composerDraftKey("session", sessionID)')
   expect(chat).toContain("session/${encodeURIComponent(sessionID)}/prompt_async")
+  expect(chat).toContain("await patchSessionConfig(sessionID, { prompt_profile: { active: promptProfile } })")
   expect(chat).toContain("activeSessionID()")
   expect(main).not.toContain("overlayRightActivityPlugins")
   expect(main).not.toContain("PluginPanel")

@@ -60,6 +60,8 @@ export interface MissionWakeInput {
   title?: string
   /** Explicit OpenCorvus model reference for this wake. */
   model?: string
+  /** Prompt profile selected in the shared composer. */
+  promptProfile?: string
   signal?: AbortSignal
 }
 
@@ -278,6 +280,7 @@ export async function wakeMission(input: MissionWakeInput): Promise<MissionWakeR
     ...(input.missionID ? { missionID: input.missionID } : {}),
     ...(input.title ? { title: input.title } : {}),
     ...(input.model ? { model: input.model } : {}),
+    ...(input.promptProfile ? { promptProfile: input.promptProfile } : {}),
   })
   return (await apiJson(`mission/wake`, {
     method: "POST",

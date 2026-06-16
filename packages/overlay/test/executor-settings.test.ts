@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import type {
   HostKind,
   HostTransport,
@@ -9,6 +11,7 @@ import type {
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 const { __setHostTransportForTest } = await import("../src/services/host-transport")
+const { configure } = await import("../src/services/api")
 const { createTauriTransport } = await import("../src/services/tauri-transport")
 const { createTask, panelRequestBody } = await import("../src/services/task")
 const {
@@ -21,6 +24,10 @@ const {
   setSettingsStore,
   settingsStore,
 } = await import("../src/store/settings")
+
+const CHAT_COMPOSER_SOURCE = readFileSync(join(import.meta.dir, "../src/components/ChatComposer.tsx"), "utf8")
+const EXECUTOR_SELECTOR_SOURCE = readFileSync(join(import.meta.dir, "../src/components/ExecutorSelector.tsx"), "utf8")
+const COMPOSER_CSS_SOURCE = readFileSync(join(import.meta.dir, "../src/styles/surfaces/composer.css"), "utf8")
 
 class MemoryStorage {
   private values = new Map<string, string>()
@@ -69,6 +76,7 @@ beforeEach(() => {
 
 afterEach(() => {
   __setHostTransportForTest(undefined)
+  configure({ directory: "" })
   applySettings({ ...DEFAULT_SETTINGS })
   ;(globalThis as any).localStorage = originalLocalStorage
 })
@@ -193,6 +201,7 @@ describe("executor settings", () => {
         }
       }),
     )
+    configure({ directory: "C:/overlay/workspace/app" })
     setSettingsStore("executor", "opencode" as any)
 
     await createTask({ text: "hello", queue: false, kind: "workflow" })
@@ -215,11 +224,58 @@ describe("executor settings", () => {
         }
       }),
     )
+    configure({ directory: "C:/overlay/workspace/app" })
 
     await createTask({ text: "hello", queue: false, kind: "workflow", model: "openai/gpt-5.5" })
 
     expect(captured?.body?.kind).toBe("json")
     expect((captured?.body as any).value.model).toBe("openai/gpt-5.5")
+  })
+
+  test("task creation forwards the selected prompt profile as a task overlay field", async () => {
+    let captured: TransportRequest | undefined
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        captured = req
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: { task_id: "task_profile" },
+        }
+      }),
+    )
+    configure({ directory: "C:/overlay/workspace/app" })
+
+    await createTask({ text: "hello", queue: false, kind: "workflow", promptProfile: "backend" })
+
+    expect(captured?.body?.kind).toBe("json")
+    const body = (captured?.body as any).value
+    expect(body.promptProfile).toBe("backend")
+    expect(body.metadata?.promptProfile).toBeUndefined()
+  })
+
+  test("prompt profile selector preserves the active value when catalog options load", () => {
+    expect(CHAT_COMPOSER_SOURCE).toContain('data-ui="prompt-profile-selector"')
+    expect(CHAT_COMPOSER_SOURCE).toContain("let promptProfileSelectRef!: HTMLSelectElement")
+    expect(CHAT_COMPOSER_SOURCE).toContain("promptProfileSelectRef.value = props.promptProfileID")
+  })
+
+  test("external executor tab browsing only changes local popover focus until a model is picked", () => {
+    const changeExternalTabBlock =
+      EXECUTOR_SELECTOR_SOURCE.match(/function changeExternalTab\(value: string\) \{[\s\S]*?\n  \}/)?.[0] ?? ""
+    expect(EXECUTOR_SELECTOR_SOURCE).toContain("const [focusedExternalID, setFocusedExternalID] = createSignal")
+    expect(changeExternalTabBlock).toContain("setFocusedExternalID(value)")
+    expect(changeExternalTabBlock).not.toContain('setSettingsStore("executor"')
+    expect(changeExternalTabBlock).not.toContain("saveSettings()")
+    expect(EXECUTOR_SELECTOR_SOURCE).toContain("label={externalChipLabel()}")
+    expect(EXECUTOR_SELECTOR_SOURCE).toContain("model={externalModel()}")
+  })
+
+  test("narrow composer layout stacks the executor chips instead of squeezing them into two columns", () => {
+    expect(COMPOSER_CSS_SOURCE).toContain("@container (max-width: 520px)")
+    expect(COMPOSER_CSS_SOURCE).toContain(".executor-dualbar {")
+    expect(COMPOSER_CSS_SOURCE).toContain("grid-template-columns: minmax(0, 1fr);")
   })
 
   test("panel request body sanitizes explicit executor input", () => {

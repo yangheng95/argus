@@ -20,6 +20,7 @@ import { homedir } from "node:os"
 import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { findExistingMissionSession } from "../../src/mission/session"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { SessionWake } from "../../src/session/wake"
@@ -169,6 +170,48 @@ describe("POST /mission/wake — happy path", () => {
           providerID: "opencorvus",
           modelID: "gpt-5-nano",
         })
+      },
+    })
+  })
+
+  test("applies selected prompt profile to the Mission session before wake", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+        const res = await post("/mission/wake", tmp.path, {
+          missionID: "profiled-mission",
+          text: "go",
+          promptProfile: "backend",
+        })
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as { sessionID: string }
+        const session = await Session.get(body.sessionID)
+        const overlay = (session.metadata as { configOverlay?: { prompt_profile?: { active?: string } } } | undefined)
+          ?.configOverlay
+        expect(overlay?.prompt_profile?.active).toBe("backend")
+        expect(wakeSpy).toHaveBeenCalledTimes(1)
+        expect(wakeSpy.mock.calls[0]?.[0]?.sessionID).toBe(body.sessionID)
+      },
+    })
+  })
+
+  test("rejects unknown prompt profile without waking or creating a Mission session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+        const res = await post("/mission/wake", tmp.path, {
+          missionID: "unknown-profile",
+          text: "go",
+          promptProfile: "does-not-exist",
+        })
+        expect(res.status).toBe(400)
+        expect(await res.json()).toEqual({ error: 'Unknown prompt profile "does-not-exist"' })
+        expect(wakeSpy).not.toHaveBeenCalled()
+        expect(findExistingMissionSession("unknown-profile")).toBeUndefined()
       },
     })
   })

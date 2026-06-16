@@ -268,6 +268,7 @@ export const CreateTaskInput = z.object({
   /** Defaults to "workflow" (full pipeline). Pass "build" to bypass the pipeline
    *  and run the build agent directly — used for one-shot edits. */
   kind: z.enum(["workflow", "build"]).optional(),
+  promptProfile: z.string().min(1).optional(),
   budget: Budget.optional(),
   checks: CheckConfig.optional(),
   routing: StageRouting.optional(),
@@ -562,6 +563,7 @@ export const TaskMessageInput = z.object({
   source: z.string().min(1),
   target: TaskMessageTarget.optional(),
   user_id: z.string().optional(),
+  promptProfile: z.string().min(1).optional(),
   attachments: TaskAttachmentInput.array().optional(),
   /** Overlay bridge envelope fields. They identify how a rendered message was
    *  displayed, not what the operator asked. The task service accepts them so
