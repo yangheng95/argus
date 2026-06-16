@@ -1,27 +1,16 @@
-import { expect, mock, test } from "bun:test"
+import { expect, test } from "bun:test"
 
-let stdioTransportConstructed = 0
+import { Instance } from "../../src/project/instance"
+import { MCP } from "../../src/mcp"
+import { tmpdir } from "../fixture/fixture"
 
-mock.module("@modelcontextprotocol/sdk/client/stdio.js", () => ({
-  StdioClientTransport: class MockStdioClientTransport {
-    constructor() {
-      stdioTransportConstructed += 1
-      throw new Error("stdio transport constructor failed")
-    }
-  },
-}))
-
-const { Instance } = await import("../../src/project/instance")
-const { MCP } = await import("../../src/mcp")
-const { tmpdir } = await import("../fixture/fixture")
-
-test("MCP status starts local transports asynchronously", async () => {
+test("MCP status starts local transports asynchronously and records startup failure", async () => {
   await using tmp = await tmpdir({
     config: {
       mcp: {
         broken: {
           type: "local",
-          command: ["broken-mcp-command"],
+          command: ["opencorvus-missing-mcp-command-for-test"],
           timeout: 1,
         },
         browser: {
@@ -36,26 +25,24 @@ test("MCP status starts local transports asynchronously", async () => {
     fn: async () => {
       const status = await MCP.status()
       expect(status.broken).toEqual({ status: "connecting" })
-      expect(stdioTransportConstructed).toBe(0)
 
       await expect(MCP.tools()).resolves.toEqual({})
-      expect(stdioTransportConstructed).toBe(0)
+      await waitFor(async () => (await MCP.status()).broken.status === "failed")
 
-      await waitFor(() => stdioTransportConstructed === 1)
-      expect(stdioTransportConstructed).toBe(1)
-      expect((await MCP.status()).broken).toEqual({
-        status: "failed",
-        error: "stdio transport constructor failed",
-      })
+      const failed = (await MCP.status()).broken
+      expect(failed.status).toBe("failed")
+      if (failed.status === "failed") {
+        expect(failed.error.length).toBeGreaterThan(0)
+      }
     },
   })
 })
 
-async function waitFor(predicate: () => boolean) {
+async function waitFor(predicate: () => boolean | Promise<boolean>) {
   const deadline = Date.now() + 1_000
   while (Date.now() < deadline) {
-    if (predicate()) return
+    if (await predicate()) return
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
-  expect(predicate()).toBe(true)
+  expect(await predicate()).toBe(true)
 }

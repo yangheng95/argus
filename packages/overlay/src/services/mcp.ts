@@ -81,9 +81,7 @@ export async function addMcpServer(input: AddMcpInput): Promise<void> {
       [request.name]: request.config,
     }
   })
-  await apiJson(`mcp/${encodeURIComponent(request.name)}/connect`, {
-    method: "POST",
-  })
+  await connectMcp(request.name)
 }
 
 /** Connects a configured MCP server by name. */
