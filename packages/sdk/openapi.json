@@ -14524,8 +14524,7 @@
                 "required": [
                   "targetID",
                   "viewportIDs"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           },
