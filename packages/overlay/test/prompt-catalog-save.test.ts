@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { promptConfigValueForSave } from "../src/services/config"
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+
+const { promptConfigValueForSave } = await import("../src/services/config")
+const { installRealOverlayI18n } = await import("./fixtures/i18n")
+
+installRealOverlayI18n()
 
 describe("prompt catalog save values", () => {
   const appendEntry = {
@@ -22,7 +27,7 @@ describe("prompt catalog save values", () => {
 
   test("append-mode rejects replacing the code-owned default prompt", () => {
     expect(() => promptConfigValueForSave(appendEntry, "Replaced architect prompt.")).toThrow(
-      "prompt.append_core_edit_error",
+      "Only add custom text after the default prompt.",
     )
   })
 

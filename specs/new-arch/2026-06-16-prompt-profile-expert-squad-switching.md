@@ -70,9 +70,11 @@ single prompt compiler. Invalid profile ids are hard errors. There is no
 fallback profile selection and no keyword classifier.
 
 When `prompt_profile` is absent, config materialization should set
-`prompt_profile.active = "general"` as the explicit default value. Runtime code
-must then read the materialized active id; it must not contain a separate
-"if missing, use general" fallback branch.
+`prompt_profile.active = "frontend"` as the explicit default value because the
+overlay input-box selector is a first-run operator control and the current
+product emphasis is frontend implementation/verification. Runtime code must
+then read the materialized active id; it must not contain a separate
+"if missing, use frontend" fallback branch.
 
 ## Prompt Profile Shape
 
@@ -110,12 +112,42 @@ Rules:
   tests, route handlers, and agent modules.
 - The initial built-in ids should be:
   - `general`: empty overlays that preserve current behavior exactly.
-  - `frontend`: requirements/architect/frontend-design/frontend-research/build/visual-qa/integrity/orchestrator overlays emphasizing GUI, source evidence, layout parity, interaction truth, and visual verification.
-  - `backend`: requirements/architect/build/integrity/deep-research/fact-check overlays emphasizing API contracts, data flow, persistence, concurrency, observability, migrations policy, and integration tests.
-  - `algorithm`: requirements/architect/build/integrity/deep-research/fact-check overlays emphasizing problem formulation, correctness proof, complexity, numerical precision, benchmark design, adversarial cases, and reproducibility.
+  - `frontend`: direct coding surfaces (`coding`, `coding-assistant`, `mission`)
+    plus workflow specialists (`intent-analysis`, `requirements`,
+    `architect`, `frontend-design`, `frontend-research`, `build`,
+    `visual-qa`, `integrity`, `orchestrator`) with explicit UI/visual
+    evidence emphasis.
+  - `backend`: direct coding surfaces (`coding`, `coding-assistant`,
+    `mission`) plus workflow specialists (`intent-analysis`, `requirements`,
+    `architect`, `build`, `deep-research`, `fact-check`, `integrity`,
+    `orchestrator`) with explicit contract/data/operations emphasis.
+  - `algorithm`: direct coding surfaces (`coding`, `coding-assistant`,
+    `mission`) plus workflow specialists (`intent-analysis`, `requirements`,
+    `architect`, `build`, `deep-research`, `fact-check`,
+    `goal-workload-analyst`, `integrity`, `orchestrator`) with explicit
+    correctness/benchmark emphasis.
 
 Research-only profiles can be added later by adding registry entries and tests;
 the schema and compiler do not need a new workflow branch.
+
+## Scene Agent/Tool Matrix
+
+Built-in profiles must not stop at a label like "frontend" or "backend". Each
+scene definition has to encode which agents and tools are supposed to be
+foregrounded so the squad switch changes the whole team's reasoning emphasis
+without changing runtime wiring.
+
+Minimum matrix for the initial built-ins:
+
+| Scene | Agents that must receive explicit overlay guidance | Tool emphasis that must be named in the overlay registry |
+| --- | --- | --- |
+| `frontend` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `frontend-design`, `frontend-research`, `build`, `visual-qa`, `integrity`, `orchestrator` | `read`/`search_code`/`edit`/`write`/`bash` for implementation, `webpage_extract`/`webpage_render`/`webpage_evaluate`/`webpage_text_diff`/`webpage_vision_judge`/`browser_preview` for evidence and acceptance, and orchestrator dispatch tools such as `frontend_design`, `visual_qa`, `integrity` |
+| `backend` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `build`, `deep-research`, `fact-check`, `integrity`, `orchestrator` | `read`/`search_code`/`edit`/`write`/`bash` for implementation, `webfetch`/`external_code_search`/`websearch` for evidence, and orchestrator dispatch tools such as `deep_research`, `fact_check`, `integrity` |
+| `algorithm` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `build`, `deep-research`, `fact-check`, `goal-workload-analyst`, `integrity`, `orchestrator` | `read`/`search_code`/`edit`/`write`/`bash` for implementation, `webfetch`/`external_code_search` for reference evidence, `workload_analysis` for anti-underestimation review, and orchestrator dispatch tools such as `fact_check`, `integrity` |
+
+The matrix belongs in the backend registry (`src/agent/prompt-profile.ts`) as a
+single source. UI labels, tests, and route handlers may read it, but they must
+not fork their own scene/agent/tool lists.
 
 ## Composition Order
 
