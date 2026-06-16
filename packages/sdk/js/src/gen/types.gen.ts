@@ -2355,6 +2355,32 @@ export type FormatterStatus = {
   enabled: boolean
 }
 
+export type EventInstallationUpdated = {
+  type: "installation.updated"
+  properties: {
+    version: string
+  }
+}
+
+export type EventInstallationUpdateAvailable = {
+  type: "installation.update-available"
+  properties: {
+    version: string
+  }
+}
+
+export type EventProjectUpdated = {
+  type: "project.updated"
+  properties: Project
+}
+
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
+  }
+}
+
 export type EventServerConnected = {
   type: "server.connected"
   properties: {
@@ -2366,6 +2392,170 @@ export type EventGlobalDisposed = {
   type: "global.disposed"
   properties: {
     [key: string]: unknown
+  }
+}
+
+export type EventLspClientDiagnostics = {
+  type: "lsp.client.diagnostics"
+  properties: {
+    serverID: string
+    path: string
+  }
+}
+
+export type EventLspUpdated = {
+  type: "lsp.updated"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventTodoUpdated = {
+  type: "todo.updated"
+  properties: {
+    sessionID: string
+    todos: Array<Todo>
+  }
+}
+
+export type EventMessageUpdated = {
+  type: "message.updated"
+  properties: {
+    info: Message
+  }
+}
+
+export type EventMessageRemoved = {
+  type: "message.removed"
+  properties: {
+    sessionID: string
+    messageID: string
+  }
+}
+
+export type EventMessagePartUpdated = {
+  type: "message.part.updated"
+  properties: {
+    part: Part
+  }
+}
+
+export type EventMessagePartDelta = {
+  type: "message.part.delta"
+  properties: {
+    sessionID: string
+    messageID: string
+    partID: string
+    field: string
+    delta: string
+  }
+}
+
+export type EventMessagePartRemoved = {
+  type: "message.part.removed"
+  properties: {
+    sessionID: string
+    messageID: string
+    partID: string
+  }
+}
+
+export type EventSessionError = {
+  type: "session.error"
+  properties: {
+    sessionID?: string
+    error?:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | StructuredOutputPayloadError
+      | TerminalToolMissingError
+      | SnapshotIntegrityError
+      | SnapshotEmptyTreeError
+      | ContextOverflowError
+      | PromptBudgetOverflowError
+      | ToolSchemaBudgetError
+      | ApiError
+  }
+}
+
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
+  properties: {
+    mcpName: string
+    url: string
+  }
+}
+
+export type EventMcpAuthRequired = {
+  type: "mcp.auth.required"
+  properties: {
+    name: string
+    message: string
+    reason: "needs_auth" | "needs_client_registration"
+  }
+}
+
+export type EventMcpPromptsChanged = {
+  type: "mcp.prompts.changed"
+  properties: {
+    server?: string
+  }
+}
+
+export type EventMcpResourcesChanged = {
+  type: "mcp.resources.changed"
+  properties: {
+    server?: string
+  }
+}
+
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+  }
+}
+
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
+}
+
+export type EventPermissionReplied = {
+  type: "permission.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+    autoReply: boolean
+  }
+}
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
   }
 }
 
@@ -2922,196 +3112,6 @@ export type EventIntegrityReviewCompleted = {
   }
 }
 
-export type EventInstallationUpdated = {
-  type: "installation.updated"
-  properties: {
-    version: string
-  }
-}
-
-export type EventInstallationUpdateAvailable = {
-  type: "installation.update-available"
-  properties: {
-    version: string
-  }
-}
-
-export type EventProjectUpdated = {
-  type: "project.updated"
-  properties: Project
-}
-
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
-export type EventLspClientDiagnostics = {
-  type: "lsp.client.diagnostics"
-  properties: {
-    serverID: string
-    path: string
-  }
-}
-
-export type EventLspUpdated = {
-  type: "lsp.updated"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventTodoUpdated = {
-  type: "todo.updated"
-  properties: {
-    sessionID: string
-    todos: Array<Todo>
-  }
-}
-
-export type EventMessageUpdated = {
-  type: "message.updated"
-  properties: {
-    info: Message
-  }
-}
-
-export type EventMessageRemoved = {
-  type: "message.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-  }
-}
-
-export type EventMessagePartUpdated = {
-  type: "message.part.updated"
-  properties: {
-    part: Part
-  }
-}
-
-export type EventMessagePartDelta = {
-  type: "message.part.delta"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-    field: string
-    delta: string
-  }
-}
-
-export type EventMessagePartRemoved = {
-  type: "message.part.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-  }
-}
-
-export type EventSessionError = {
-  type: "session.error"
-  properties: {
-    sessionID?: string
-    error?:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputError
-      | StructuredOutputPayloadError
-      | TerminalToolMissingError
-      | SnapshotIntegrityError
-      | SnapshotEmptyTreeError
-      | ContextOverflowError
-      | PromptBudgetOverflowError
-      | ToolSchemaBudgetError
-      | ApiError
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
-  }
-}
-
-export type EventMcpAuthRequired = {
-  type: "mcp.auth.required"
-  properties: {
-    name: string
-    message: string
-    reason: "needs_auth" | "needs_client_registration"
-  }
-}
-
-export type EventMcpPromptsChanged = {
-  type: "mcp.prompts.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventMcpResourcesChanged = {
-  type: "mcp.resources.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-    autoReply: boolean
-  }
-}
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
 export type EventTaskQueueCompleted = {
   type: "task-queue.completed"
   properties: {
@@ -3351,8 +3351,31 @@ export type EventPtyDeleted = {
 }
 
 export type Event =
+  | EventInstallationUpdated
+  | EventInstallationUpdateAvailable
+  | EventProjectUpdated
+  | EventServerInstanceDisposed
   | EventServerConnected
   | EventGlobalDisposed
+  | EventLspClientDiagnostics
+  | EventLspUpdated
+  | EventTodoUpdated
+  | EventMessageUpdated
+  | EventMessageRemoved
+  | EventMessagePartUpdated
+  | EventMessagePartDelta
+  | EventMessagePartRemoved
+  | EventSessionError
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
+  | EventMcpAuthRequired
+  | EventMcpPromptsChanged
+  | EventMcpResourcesChanged
+  | EventCommandExecuted
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventSessionStatus
+  | EventSessionIdle
   | EventTaskCreated
   | EventTaskUpdated
   | EventTaskCompleted
@@ -3389,29 +3412,6 @@ export type Event =
   | EventReviewStreamChunk
   | EventAcceptanceEvidenceUpdated
   | EventIntegrityReviewCompleted
-  | EventInstallationUpdated
-  | EventInstallationUpdateAvailable
-  | EventProjectUpdated
-  | EventServerInstanceDisposed
-  | EventLspClientDiagnostics
-  | EventLspUpdated
-  | EventTodoUpdated
-  | EventMessageUpdated
-  | EventMessageRemoved
-  | EventMessagePartUpdated
-  | EventMessagePartDelta
-  | EventMessagePartRemoved
-  | EventSessionError
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
-  | EventMcpAuthRequired
-  | EventMcpPromptsChanged
-  | EventMcpResourcesChanged
-  | EventCommandExecuted
-  | EventPermissionAsked
-  | EventPermissionReplied
-  | EventSessionStatus
-  | EventSessionIdle
   | EventTaskQueueCompleted
   | EventQuestionAsked
   | EventQuestionReplied
@@ -8341,6 +8341,7 @@ export type MissionListResponses = {
     created: number
     updated: number
     archived?: number
+    interruptible: boolean
     tasks: Array<{
       id: string
       title: string
@@ -8508,6 +8509,7 @@ export type MissionRenameResponses = {
     created: number
     updated: number
     archived?: number
+    interruptible: boolean
     tasks: Array<{
       id: string
       title: string
@@ -8685,7 +8687,7 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
     taskID: string
     targetID: string
     viewportID: string
-    operationKind: "preview-capture" | "reference-comparison"
+    operationKind?: "preview-capture" | "reference-comparison"
     regionID?: string
     manifestPath?: string
     artifactPaths?: {
@@ -9295,11 +9297,11 @@ export type TaskCreateData = {
                   }
                 | {
                     /**
-                     * script_ref — run a repo script. Requires: path; optional args.
+                     * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
                      */
                     kind: "script_ref"
                     /**
-                     * Repo-relative script path.
+                     * Repo-relative script path that already exists at registration time.
                      */
                     path: string
                     args?: Array<string>
@@ -9376,7 +9378,7 @@ export type TaskCreateData = {
             }
           | {
               /**
-               * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.
+               * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                */
               type: "contract_audit"
               name: string
@@ -9460,11 +9462,11 @@ export type TaskCreateData = {
                     }
                   | {
                       /**
-                       * script_ref — run a repo script. Requires: path; optional args.
+                       * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
                        */
                       kind: "script_ref"
                       /**
-                       * Repo-relative script path.
+                       * Repo-relative script path that already exists at registration time.
                        */
                       path: string
                       args?: Array<string>
@@ -9541,7 +9543,7 @@ export type TaskCreateData = {
               }
             | {
                 /**
-                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.
+                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                  */
                 type: "contract_audit"
                 name: string
@@ -13169,11 +13171,11 @@ export type GoalUpdateData = {
                 }
               | {
                   /**
-                   * script_ref — run a repo script. Requires: path; optional args.
+                   * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
                    */
                   kind: "script_ref"
                   /**
-                   * Repo-relative script path.
+                   * Repo-relative script path that already exists at registration time.
                    */
                   path: string
                   args?: Array<string>
@@ -13250,7 +13252,7 @@ export type GoalUpdateData = {
           }
         | {
             /**
-             * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.
+             * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
              */
             type: "contract_audit"
             name: string

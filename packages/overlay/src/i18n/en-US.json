@@ -366,8 +366,6 @@
   "coding_assistant.title": "Coding Assistant",
   "coding_assistant.chat.new": "New Chat",
   "coding_assistant.chat.new_title": "New assistant chat",
-  "coding_assistant.launcher.title": "New Assistant Chat",
-  "coding_assistant.launcher.placeholder": "Ask the coding assistant...",
   "coding_assistant.ledger.search_placeholder": "Search assistant chats...",
   "coding_assistant.ledger.search_clear": "Clear search",
   "coding_assistant.ledger.empty": "No assistant chats yet.",
