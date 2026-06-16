@@ -112,8 +112,8 @@ Rules:
   tests, route handlers, and agent modules.
 - The initial built-in ids should be:
   - `general`: empty overlays that preserve current behavior exactly.
-  - `frontend`: direct coding surfaces (`coding`, `coding-assistant`, `mission`)
-    plus workflow specialists (`intent-analysis`, `requirements`,
+  - `frontend`: direct coding surfaces (`coding`, `coding-assistant`,
+    `mission`) plus workflow specialists (`intent-analysis`, `requirements`,
     `architect`, `frontend-design`, `frontend-research`, `build`,
     `visual-qa`, `integrity`, `orchestrator`) with explicit UI/visual
     evidence emphasis.
@@ -126,28 +126,43 @@ Rules:
     `architect`, `build`, `deep-research`, `fact-check`,
     `goal-workload-analyst`, `integrity`, `orchestrator`) with explicit
     correctness/benchmark emphasis.
+- Built-in profile content must be stored as the final overlay strings the
+  runtime appends. The registry may keep authoring metadata such as `label` and
+  `description`, but it must not carry secondary workflow control structures
+  such as tool inventories, dispatch rosters, or handoff graphs and then render
+  them into prompt prose.
 
 Research-only profiles can be added later by adding registry entries and tests;
 the schema and compiler do not need a new workflow branch.
 
-## Scene Agent/Tool Matrix
+## Scene Target Matrix
 
-Built-in profiles must not stop at a label like "frontend" or "backend". Each
-scene definition has to encode which agents and tools are supposed to be
-foregrounded so the squad switch changes the whole team's reasoning emphasis
-without changing runtime wiring.
+Built-in profiles must not stop at a label like `frontend` or `backend`. Each
+scene definition has to encode which agent targets receive explicit overlay
+text so the squad switch changes the whole team's reasoning emphasis without
+changing runtime wiring.
 
-Minimum matrix for the initial built-ins:
+Minimum target matrix for the initial built-ins:
 
-| Scene | Agents that must receive explicit overlay guidance | Tool emphasis that must be named in the overlay registry |
-| --- | --- | --- |
-| `frontend` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `frontend-design`, `frontend-research`, `build`, `visual-qa`, `integrity`, `orchestrator` | `read`/`search_code`/`edit`/`write`/`bash` for implementation, `webpage_extract`/`webpage_render`/`webpage_evaluate`/`webpage_text_diff`/`webpage_vision_judge`/`browser_preview` for evidence and acceptance, and orchestrator dispatch tools such as `frontend_design`, `visual_qa`, `integrity` |
-| `backend` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `build`, `deep-research`, `fact-check`, `integrity`, `orchestrator` | `read`/`search_code`/`edit`/`write`/`bash` for implementation, `webfetch`/`external_code_search`/`websearch` for evidence, and orchestrator dispatch tools such as `deep_research`, `fact_check`, `integrity` |
-| `algorithm` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `build`, `deep-research`, `fact-check`, `goal-workload-analyst`, `integrity`, `orchestrator` | `read`/`search_code`/`edit`/`write`/`bash` for implementation, `webfetch`/`external_code_search` for reference evidence, `workload_analysis` for anti-underestimation review, and orchestrator dispatch tools such as `fact_check`, `integrity` |
+| Scene | Targets that must receive explicit overlay guidance |
+| --- | --- |
+| `frontend` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `frontend-design`, `frontend-research`, `build`, `visual-qa`, `integrity`, `orchestrator` |
+| `backend` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `build`, `deep-research`, `fact-check`, `integrity`, `orchestrator` |
+| `algorithm` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `build`, `deep-research`, `fact-check`, `goal-workload-analyst`, `integrity`, `orchestrator` |
 
 The matrix belongs in the backend registry (`src/agent/prompt-profile.ts`) as a
 single source. UI labels, tests, and route handlers may read it, but they must
-not fork their own scene/agent/tool lists.
+not fork their own target lists.
+
+Prompt-content rules for those built-ins:
+
+- Overlay strings must be direct instructions, not templated wrappers.
+- Do not serialize tool inventories, workflow graphs, or handoff rosters into
+  the overlay text.
+- Do not emit non-canonical agent identifiers or dispatch ids in user-visible
+  prompt prose.
+- If an overlay needs to mention evidence or validation, it must say what the
+  model should verify or produce, not just name a tool family.
 
 ## Composition Order
 
@@ -220,14 +235,14 @@ visible, single setting.
      or `config.agent.<id>.prompt`.
 
 4. Add profile API.
-   - `GET /config/prompt-profile`: list built-in and configured profiles,
-     active project profile, and active session profile when a session id is supplied.
+  - `GET /config/prompt-profile`: list built-in and configured profiles,
+    active project profile, and active session profile when a session id is supplied.
    - The response must expose the full visible prompt-profile catalog, not only
      labels:
      - `targets[]`: target id, label, description, and whether the target is
        editable by user-defined profiles or built-in-only.
-     - `profiles[]`: id, label, description, built-in/editable flags, and the
-       exact rendered per-target prompt overlay strings that the runtime uses.
+    - `profiles[]`: id, label, description, built-in/editable flags, and the
+      exact per-target prompt overlay strings that the runtime uses.
    - Built-in profiles are read-only in the API contract; user-defined
      profiles are editable project config records.
    - Project-level change uses existing `PATCH /config`.
@@ -240,18 +255,25 @@ visible, single setting.
      new tab is needed.
    - Use mature primitives already present in the UI, e.g. the same select/list
      pattern used by agent model settings.
-   - The UI must let the user inspect every built-in expert-squad prompt
-     overlay per target without leaving the app.
-   - The UI must let the user create, duplicate, edit, and delete custom
-     prompt profiles stored under `config.prompt_profile.profiles`, while
-     keeping built-ins read-only.
-   - Creating or deleting a custom profile must refresh the chat-composer
-     selector catalog so the newly available profiles are immediately
-     selectable for task/session-scoped switching.
-   - Provide two explicit scopes:
-     - Project active profile: writes `PATCH /config`.
-     - Selected task/session active profile: writes `PATCH /session/{rootSessionID}/config`.
-   - Do not have the UI loop over all agents and write prompt_append fields.
+  - The UI must let the user inspect every built-in expert-squad prompt
+    overlay per target without leaving the app.
+  - The UI must let the user create, duplicate, edit, and delete custom
+    prompt profiles stored under `config.prompt_profile.profiles`, while
+    keeping built-ins read-only.
+  - When duplicating a built-in profile, the UI must copy only user-editable
+    targets. Built-in-only targets such as `orchestrator` and `integrity`
+    remain visible in the built-in inspector but must not be copied into the
+    editable project profile payload.
+  - Creating or deleting a custom profile must refresh the chat-composer
+    selector catalog so the newly available profiles are immediately
+    selectable for task/session-scoped switching.
+  - Provide two explicit scopes:
+    - Project active profile: writes `PATCH /config`.
+    - Selected task/session active profile: writes `PATCH /session/{rootSessionID}/config`.
+  - The UI must show which scope is currently being inspected. When a selected
+    task/session root exists, the visible active badge and selector state for
+    that scope must come from session-effective config, not only project config.
+  - Do not have the UI loop over all agents and write prompt_append fields.
 
 6. Add tests.
    - Config schema:
@@ -350,3 +372,11 @@ The following prompts remain outside prompt profiles in this design:
   none agents cannot become user-editable through profiles; preserve
   `systemMode="complete"` semantics by compiling profile overlays before
   complete-system calls and never inside `LLM.composeSystem()` complete mode.
+- Independent audit feedback on 2026-06-16 after the first implementation
+  required a second correction pass:
+  - remove templated wrapper prose from built-in overlays;
+  - remove tool/dispatch/handoff metadata from the prompt-profile registry;
+  - align user-visible settings with session-effective profile scope;
+  - prevent built-in duplication from emitting built-in-only targets;
+  - keep visible editable prompt surfaces aligned with what runtime save paths
+    actually allow.

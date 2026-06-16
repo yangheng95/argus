@@ -3904,6 +3904,10 @@ export type ConfigPromptProfileData = {
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
+    /**
+     * Optional root or child session id for session-effective prompt profile view
+     */
+    sessionID?: string
   }
   url: "/config/prompt-profile"
 }
@@ -3914,6 +3918,8 @@ export type ConfigPromptProfileResponses = {
    */
   200: {
     active: string
+    project_active: string
+    session_active: string | null
     default: string
     targets: Array<{
       id: string

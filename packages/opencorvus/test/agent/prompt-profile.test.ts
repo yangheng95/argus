@@ -17,7 +17,7 @@ describe("prompt profiles", () => {
       userAppend: "USER_APPEND",
       config,
     })
-    expect(prompt.startsWith("BASE\n\nActive prompt profile: backend expert squad.")).toBe(true)
+    expect(prompt.startsWith("BASE\n\nImplement backend changes with deterministic state transitions")).toBe(true)
     expect(prompt.endsWith("\n\nUSER_APPEND")).toBe(true)
   })
 
@@ -26,29 +26,20 @@ describe("prompt profiles", () => {
     expect(PromptProfile.composeAgentPrompt({ agentID: "build", base: "BASE", config })).toBe("BASE")
   })
 
-  test("built-in profiles expose an explicit scenario agent/tool matrix", () => {
-    expect(PromptProfile.builtInBlueprints.frontend.agents["frontend-design"]?.tools).toEqual(
-      expect.arrayContaining(["webpage_extract", "webpage_render", "webpage_vision_judge"]),
-    )
-    expect(PromptProfile.builtInBlueprints.frontend.agents["visual-qa"]?.tools).toEqual(
-      expect.arrayContaining(["browser_preview", "webpage_text_diff"]),
-    )
-    expect(PromptProfile.builtInBlueprints.backend.agents["deep-research"]?.tools).toEqual(
-      expect.arrayContaining(["webfetch", "external_code_search"]),
-    )
-    expect(PromptProfile.builtInBlueprints.algorithm.agents["goal-workload-analyst"]?.tools).toEqual(
-      expect.arrayContaining(["read_file", "search_code"]),
-    )
-    expect(PromptProfile.builtInBlueprints.algorithm.agents.orchestrator?.agents).toEqual(
-      expect.arrayContaining(["workload_analysis", "fact_check", "integrity"]),
-    )
+  test("built-in profiles expose direct target overlays without wrapper boilerplate", () => {
+    expect(PromptProfile.builtIns.frontend.agents["frontend-design"]).toContain("visual structure")
+    expect(PromptProfile.builtIns.frontend.agents["orchestrator"]).toContain("visible UI outcomes")
+    expect(PromptProfile.builtIns.backend.agents["deep-research"]).toContain("API behavior")
+    expect(PromptProfile.builtIns.algorithm.agents["goal-workload-analyst"]).toContain("hidden complexity")
+    expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
+    expect(PromptProfile.builtIns.frontend.agents.build).not.toContain("Active prompt profile:")
   })
 
   test("direct session agents also receive scene-specific overlays", () => {
     const config = Config.Info.parse({ prompt_profile: { active: "frontend" } })
-    expect(PromptProfile.overlayFor("coding", config)).toContain("Active prompt profile: frontend expert squad.")
-    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("Prioritize these tools")
-    expect(PromptProfile.overlayFor("mission", config)).toContain("frontend_design")
+    expect(PromptProfile.overlayFor("coding", config)).toContain("responsive behavior")
+    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("UI-facing")
+    expect(PromptProfile.overlayFor("mission", config)).toContain("visible outcomes")
   })
 
   test("profile catalog exposes target metadata and editable custom profile definitions", () => {
@@ -67,6 +58,8 @@ describe("prompt profiles", () => {
       },
     })
     const catalog = PromptProfile.list(config)
+    expect(catalog.project_active).toBe("custom-squad")
+    expect(catalog.session_active).toBe(null)
     expect(catalog.targets.find((target) => target.id === "build")).toMatchObject({
       id: "build",
       editable: true,

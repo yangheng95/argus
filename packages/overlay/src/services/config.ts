@@ -161,6 +161,8 @@ export interface PromptProfileTarget {
 
 export interface PromptProfileCatalog {
   active: string
+  project_active: string
+  session_active: string | null
   default: string
   targets: PromptProfileTarget[]
   profiles: PromptProfileOption[]
@@ -216,11 +218,12 @@ export async function getTaskOperatorModelContext(taskID: string): Promise<TaskO
   return await apiJson(`task/${encodeURIComponent(taskID)}/operator-model-context`)
 }
 
-export async function loadPromptProfileCatalog(): Promise<PromptProfileCatalog> {
+export async function loadPromptProfileCatalog(sessionID?: string): Promise<PromptProfileCatalog> {
   if (!appStore.connected) {
     throw new Error("Cannot load prompt profiles while disconnected")
   }
-  return await apiJson("config/prompt-profile")
+  const suffix = sessionID ? `?sessionID=${encodeURIComponent(sessionID)}` : ""
+  return await apiJson(`config/prompt-profile${suffix}`)
 }
 
 function promptProfileConfigShape(
@@ -329,6 +332,10 @@ export async function setProjectPromptProfileActive(profileID: string): Promise<
       active: profileID,
     }
   })
+}
+
+export async function setSessionPromptProfileActive(sessionID: string, profileID: string): Promise<SessionConfigResponse> {
+  return await patchSessionConfig(sessionID, { prompt_profile: { active: profileID } })
 }
 
 export async function syncAgentPromptLocale(locale: string): Promise<void> {
@@ -535,14 +542,7 @@ export async function savePromptEntry(entry: any, value: string): Promise<void> 
 }
 
 export function promptConfigValueForSave(entry: any, value: string): string {
-  if (entry?.prompt_mode !== "append") return value
-  const defaultPrompt = typeof entry.default_prompt === "string" ? entry.default_prompt : ""
-  if (!defaultPrompt) return value
-  if (value === defaultPrompt) return ""
-  if (value.startsWith(`${defaultPrompt}\n\n`)) return value.slice(defaultPrompt.length + 2)
-  if (value.startsWith(`${defaultPrompt}\n`)) return value.slice(defaultPrompt.length + 1)
-  if (value.startsWith(defaultPrompt)) return value.slice(defaultPrompt.length)
-  throw new Error(t("prompt.append_core_edit_error"))
+  return value
 }
 
 /**
