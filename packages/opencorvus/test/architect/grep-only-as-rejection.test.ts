@@ -26,4 +26,14 @@ describe("architect grep-only acceptance spec discipline", () => {
     expect(prompt).toContain("`scorers[*].name` or `title` references that acceptance phrase")
     expect(prompt).toContain("surface that as a decomposition concern instead of filling the gap with a grep")
   })
+
+  test("core prompt forbids toolchain-only specs as acceptance", async () => {
+    const prompt = await readArchitectPrompt()
+
+    expect(prompt).toContain("meaningful feature acceptance")
+    expect(prompt).toContain("Syntax checks, typecheck, lint, build success, dev-server startup")
+    expect(prompt).toContain("must never be the title, sole scorer, or whole success criterion")
+    expect(prompt).toContain("A shell scorer that only runs `tsc`, `typecheck`, `lint`, `build`, `npm start`, `bun dev`")
+    expect(prompt).toContain("surface that as an under-specified requirement in decomposition_analysis")
+  })
 })
