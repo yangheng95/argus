@@ -131,6 +131,17 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     return current
   })
 
+  createEffect(() => {
+    const error = verification.error
+    if (!(error instanceof ApiError) || error.status !== 404) return
+    const request = verificationRequest()
+    const taskID = props.taskID()
+    const targetID = currentTarget()?.id
+    if (!request || request.taskID !== taskID || request.targetID !== targetID) return
+    setVerificationRequest(undefined)
+    void refetchTarget()
+  })
+
   onCleanup(() => {
     const current = captureImageUrl()
     if (current) URL.revokeObjectURL(current)
