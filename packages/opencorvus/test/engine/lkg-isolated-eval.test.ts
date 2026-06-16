@@ -52,6 +52,11 @@ describe("isolated acceptance LKG evaluation", () => {
           expect(result.outcome.kind).toBe("regressed")
           expect("rolledBackTo" in result.outcome ? result.outcome.rolledBackTo : "").toBe(previousSha)
           expect(result.evaluatedSha).toBe(roundSha)
+          expect(result.metric.passed).toBe(false)
+          expect(result.metric.gates.find((gate) => gate.name === "text_hit_ratio")?.passed).toBe(false)
+          expect(result.metric.gates.find((gate) => gate.name === "text_hit_ratio")?.note).toContain(
+            "missing required",
+          )
           expect(await head(dir)).toBe(primaryBefore)
           await expect(fs.stat(evalDir(dir, task.id, 2, roundSha))).rejects.toThrow()
         },
