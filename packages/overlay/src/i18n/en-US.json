@@ -376,6 +376,8 @@
   "coding_assistant.ledger.delete_title": "Delete this assistant chat and its full history (click twice to confirm).",
   "coding_assistant.ledger.rename_title": "Rename this assistant chat (or double-click the title).",
   "coding_assistant.ledger.rename_placeholder": "Assistant chat title",
+  "coding_assistant.launcher.title": "New Coding Assistant Chat",
+  "coding_assistant.launcher.placeholder": "Describe what you want this independent Coding Assistant chat to handle...",
   "checks.pending": "Pending",
   "common.active": "Active",
   "common.cancel": "Cancel",
