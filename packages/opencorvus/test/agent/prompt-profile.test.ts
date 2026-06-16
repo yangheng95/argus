@@ -26,6 +26,31 @@ describe("prompt profiles", () => {
     expect(PromptProfile.composeAgentPrompt({ agentID: "build", base: "BASE", config })).toBe("BASE")
   })
 
+  test("built-in profiles expose an explicit scenario agent/tool matrix", () => {
+    expect(PromptProfile.builtInBlueprints.frontend.agents["frontend-design"]?.tools).toEqual(
+      expect.arrayContaining(["webpage_extract", "webpage_render", "webpage_vision_judge"]),
+    )
+    expect(PromptProfile.builtInBlueprints.frontend.agents["visual-qa"]?.tools).toEqual(
+      expect.arrayContaining(["browser_preview", "webpage_text_diff"]),
+    )
+    expect(PromptProfile.builtInBlueprints.backend.agents["deep-research"]?.tools).toEqual(
+      expect.arrayContaining(["webfetch", "external_code_search"]),
+    )
+    expect(PromptProfile.builtInBlueprints.algorithm.agents["goal-workload-analyst"]?.tools).toEqual(
+      expect.arrayContaining(["read_file", "search_code"]),
+    )
+    expect(PromptProfile.builtInBlueprints.algorithm.agents.orchestrator?.agents).toEqual(
+      expect.arrayContaining(["workload_analysis", "fact_check", "integrity"]),
+    )
+  })
+
+  test("direct session agents also receive scene-specific overlays", () => {
+    const config = Config.Info.parse({ prompt_profile: { active: "frontend" } })
+    expect(PromptProfile.overlayFor("coding", config)).toContain("Active prompt profile: frontend expert squad.")
+    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("Prioritize these tools")
+    expect(PromptProfile.overlayFor("mission", config)).toContain("frontend_design")
+  })
+
   test("rejects unknown active profiles and built-in-only user targets", () => {
     const unknown = Config.Info.safeParse({ prompt_profile: { active: "missing" } })
     expect(unknown.success).toBe(false)
