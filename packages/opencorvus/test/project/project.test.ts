@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { Project } from "../../src/project/project"
 import { Log } from "../../src/util/log"
 import { $ } from "bun"
@@ -7,6 +7,7 @@ import fs from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Filesystem } from "../../src/util/filesystem"
 import { GlobalBus } from "../../src/bus/global"
+import { resetDatabase } from "../fixture/db"
 
 Log.init({ print: false })
 
@@ -67,6 +68,14 @@ async function loadProject() {
 }
 
 describe("Project.fromDirectory", () => {
+  beforeEach(() => {
+    resetDatabase()
+  })
+
+  afterEach(() => {
+    resetDatabase()
+  })
+
   test("should handle git repository with no commits", async () => {
     const p = await loadProject()
     await using tmp = await tmpdir()
@@ -124,8 +133,11 @@ describe("Project.fromDirectory", () => {
 
     expect(await Filesystem.exists(path.join(child, ".git"))).toBe(false)
     expect(Project.isGitRepo(nested.project.worktree)).toBe(false)
-    expect(nested.project.id).toBe("global")
+    expect(nested.project.id).toBe(Project.directoryProjectID(child))
+    expect(nested.project.id).not.toBe("global")
     expect(nested.project.id).not.toBe(parent.project.id)
+    expect(nested.project.worktree).toBe(child)
+    expect(nested.sandbox).toBe(child)
   })
 
   test("keeps standalone non-git directories outside git mode", async () => {
@@ -134,11 +146,43 @@ describe("Project.fromDirectory", () => {
 
     const { project, sandbox } = await p.fromDirectory(tmp.path)
 
-    expect(project.id).toBe("global")
+    expect(project.id).toBe(Project.directoryProjectID(tmp.path))
+    expect(project.id).not.toBe("global")
     expect(Project.isGitRepo(project.worktree)).toBe(false)
-    expect(project.worktree).toBe("/")
-    expect(sandbox).toBe("/")
+    expect(project.worktree).toBe(tmp.path)
+    expect(sandbox).toBe(tmp.path)
     expect(await Filesystem.exists(path.join(tmp.path, ".git"))).toBe(false)
+  })
+
+  test("keeps non-git project identity stable after git init", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir()
+
+    const before = await p.fromDirectory(tmp.path)
+    expect(before.project.id).toBe(Project.directoryProjectID(tmp.path))
+    expect(before.project.worktree).toBe(tmp.path)
+
+    await $`git init`.cwd(tmp.path).quiet()
+    const after = await p.fromDirectory(tmp.path)
+
+    expect(after.project.id).toBe(before.project.id)
+    expect(after.project.worktree).toBe(tmp.path)
+    expect(Project.get(before.project.id)?.worktree).toBe(tmp.path)
+  })
+
+  test("rewrites legacy global marker before inserting project row", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir()
+    await $`git init`.cwd(tmp.path).quiet()
+    const marker = path.join(tmp.path, ".git", "opencorvus")
+    await Filesystem.write(marker, "global")
+
+    const { project } = await p.fromDirectory(tmp.path)
+
+    expect(project.id).toBe(Project.directoryProjectID(tmp.path))
+    expect(project.id).not.toBe("global")
+    expect(Project.get("global")).toBeUndefined()
+    expect((await Filesystem.readText(marker)).trim()).toBe(project.id)
   })
 
   test("keeps git vcs when show-toplevel exits non-zero with empty output", async () => {

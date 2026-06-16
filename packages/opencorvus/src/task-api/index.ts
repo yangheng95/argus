@@ -81,7 +81,7 @@ import {
   isTaskTerminal,
 } from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
-import { TaskGlobalProjectBindingError } from "@/engine/task-project-error"
+import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
 import { discardQueuedTaskEvent } from "@/engine/queue"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
@@ -751,12 +751,6 @@ async function prepareProject(project?: string) {
       message: `Cannot create a task in ${Instance.directory}: the directory is not a git repository. Initialize it via POST /project/current/init-git or pick a different working directory.`,
     })
   }
-  if (Instance.project.id === "global") {
-    throw new TaskGlobalProjectBindingError({
-      message: `Cannot create a task in ${Instance.directory}: task creation requires a concrete Git project, but the active project resolved to global.`,
-      projectID: Instance.project.id,
-    })
-  }
   // Create .gitignore before executor starts so the agent's own commits never include node_modules/dist etc.
   await ensureGitignore()
   if (!project) return
@@ -933,6 +927,8 @@ export namespace EngineService {
 
   async function createTaskInner(input: z.infer<typeof CreateTaskInput>) {
     await prepareProject(input.project)
+    const existingBindingTask = existingTaskByChannelBinding(input.channelBinding)
+    if (existingBindingTask) return existingBindingTask
     const requestID = input.requestID?.trim() || undefined
     if (requestID) {
       const existing = findTaskByRequest(Instance.project.id, requestID)
@@ -1061,8 +1057,6 @@ export namespace EngineService {
     } catch (error) {
       const existing = requestID ? recoverTaskByRequest(requestID, error) : undefined
       if (existing) return existing
-      const bound = recoverTaskByChannelBinding(input.channelBinding, error)
-      if (bound) return bound
       throw error
     }
     recordNote({
@@ -1538,6 +1532,7 @@ export namespace EngineService {
 
   export async function deleteTask(taskID: string) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     discardQueuedTaskEvent(taskID)
     // Cancel if still active
     if (!isTaskTerminal(task)) {
@@ -1564,6 +1559,7 @@ export namespace EngineService {
 
   export async function updateTaskBudget(taskID: string, budget: z.input<typeof Budget> | null) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     const parsed = budget ? budgetRow(budget) : null
     Database.use((db) => db.update(EngineTaskTable).set({ budget: parsed }).where(eq(EngineTaskTable.id, taskID)).run())
     await Bus.publish(Event.TaskUpdated, {
@@ -1576,6 +1572,7 @@ export namespace EngineService {
 
   export async function updateTaskTitle(taskID: string, title: string) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     Database.use((db) => db.update(EngineTaskTable).set({ title }).where(eq(EngineTaskTable.id, taskID)).run())
     await Bus.publish(Event.TaskUpdated, {
       taskID,
@@ -1593,7 +1590,7 @@ function recoverTaskByRequest(requestID: string, error: unknown) {
   return findTaskByRequest(Instance.project.id, requestID)?.id
 }
 
-function recoverTaskByChannelBinding(
+function existingTaskByChannelBinding(
   binding:
     | {
         platform: string
@@ -1601,12 +1598,8 @@ function recoverTaskByChannelBinding(
         thread: string
       }
     | undefined,
-  error: unknown,
 ) {
   if (!binding) return
-  const message = error instanceof Error ? error.message : String(error)
-  if (!message.includes("UNIQUE constraint failed")) return
-  if (!message.includes("engine_channel_binding")) return
   const row = Database.use(
     (db) =>
       db
@@ -1631,7 +1624,15 @@ function recoverTaskByChannelBinding(
     })
   }
   if (row.project_id !== Instance.project.id) {
-    return undefined
+    throw new TaskChannelBindingProjectConflictError({
+      message: `Channel binding ${binding.platform}/${binding.channel}/${binding.thread} points to task ${row.task_id} in project ${row.project_id}, but the active project is ${Instance.project.id}.`,
+      platform: binding.platform,
+      channel: binding.channel,
+      thread: binding.thread,
+      taskID: row.task_id,
+      projectID: row.project_id,
+      activeProjectID: Instance.project.id,
+    })
   }
   return row.task_id
 }
@@ -1706,6 +1707,7 @@ export namespace EngineService {
 
   export async function cancelTask(taskID: string, options?: CancelTaskOptions) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     discardQueuedTaskEvent(taskID)
     const taskDirectory = taskCwd(taskID)
     const decisions = createDecisionLog(taskID)

@@ -400,14 +400,26 @@ async function terminateTaskOwnedSessionsAndFail(input: {
   let sessions = 0
   let toolParts = 0
   const task = input.task
-  const project = Project.get(task.project_id)
-  if (!project) throw new Error(`Cannot terminate task ${task.id}: project ${task.project_id} not found`)
+  const project = task.project_id === "global" ? undefined : Project.get(task.project_id)
+  if (!project && task.project_id !== "global") {
+    throw new Error(`Cannot terminate task ${task.id}: project ${task.project_id} not found`)
+  }
   if (task.session_id) {
     const ids = await Session.treeInProject({ sessionID: task.session_id, projectID: task.project_id })
     for (const sessionID of ids.slice().reverse()) {
       toolParts += await abortOpenToolParts(sessionID, input.reason)
-      await publishSessionAbortInProject(sessionID, project.worktree, input.reason)
-      SessionPrompt.cancel(sessionID, project.worktree)
+      if (project) {
+        await publishSessionAbortInProject(sessionID, project.worktree, input.reason)
+        SessionPrompt.cancel(sessionID, project.worktree)
+      } else {
+        SessionStatus.abortActivityGate(sessionID, new DOMException(input.reason, "AbortError"))
+        SessionStatus.set(sessionID, {
+          type: "terminal",
+          reason: "aborted",
+          error: input.reason,
+        })
+        SessionPrompt.cancel(sessionID)
+      }
       sessions += 1
     }
   }
@@ -418,9 +430,18 @@ async function terminateTaskOwnedSessionsAndFail(input: {
       error: input.reason,
     },
     input.reason,
-    { projectDir: project.worktree },
+    project ? { projectDir: project.worktree } : undefined,
   )
   return { tasks: 1, sessions, toolParts }
+}
+
+async function provideTaskRootSessionDirectory<T>(task: TaskRow, fn: () => Promise<T>): Promise<T> {
+  if (Instance.current() || !task.session_id) return fn()
+  const session = await Session.get(task.session_id)
+  return Instance.provide({
+    directory: session.directory,
+    fn,
+  })
 }
 
 async function publishSessionAbortInProject(sessionID: string, directory: string, reason: string) {
@@ -538,37 +559,44 @@ export async function abortCurrentProcessLiveExecution(input: {
   for (const taskID of taskIDs) {
     const task = findTask(taskID)
     if (!task) continue
-    if (task.project_id === "global") {
-      corruptTasks += 1
-      log.error("abortCurrentProcessLiveExecution: corrupt global task skipped", { taskID })
-      continue
-    }
-    const project = Project.get(task.project_id)
-    if (!project) throw new Error(`Cannot abort task ${task.id}: project ${task.project_id} not found`)
+    await provideTaskRootSessionDirectory(task, async () => {
+      const isCorruptGlobalTask = task.project_id === "global"
+      if (isCorruptGlobalTask) corruptTasks += 1
+      const project = isCorruptGlobalTask ? undefined : Project.get(task.project_id)
+      if (!project && !isCorruptGlobalTask) {
+        throw new Error(`Cannot abort task ${task.id}: project ${task.project_id} not found`)
+      }
+      if (isCorruptGlobalTask) {
+        log.error("abortCurrentProcessLiveExecution: corrupt global task terminalized", { taskID })
+      }
 
-    const ownedToolRuns = currentProcessOwnedToolOwnership(task)
-    const ownedGoalRunsBefore = currentProcessOwnedGoalRuns(task)
-    const ownershipResult = await abortLiveOrchestratorToolOwnership({
-      taskID: task.id,
-      reason: input.reason,
-      ownerships: ownedToolRuns,
-      originSite: "engine.writer.abort-current-process-live-execution",
-      promptDirectory: project.worktree,
+      const ownedToolRuns = currentProcessOwnedToolOwnership(task)
+      const ownedGoalRunsBefore = currentProcessOwnedGoalRuns(task)
+      const ownershipResult = await abortLiveOrchestratorToolOwnership({
+        taskID: task.id,
+        reason: input.reason,
+        ownerships: ownedToolRuns,
+        originSite: "engine.writer.abort-current-process-live-execution",
+        promptDirectory: project?.worktree,
+      })
+      ownerships += ownershipResult.ownerships
+      goalRuns += ownershipResult.goalRuns
+      sessions += ownershipResult.sessions
+      toolParts += ownershipResult.toolParts
+
+      const ownedGoalRunsAfter = currentProcessOwnedGoalRuns(task)
+      goalRuns += await abortGoalRunsForRows(ownedGoalRunsAfter, input.reason)
+      const affectedRuns = affectedRunsForGoalRuns(task.id, [...ownedGoalRunsBefore, ...ownedGoalRunsAfter])
+      runs += await abortRunsForRows(affectedRuns, input.reason)
+
+      const taskResult = await terminateTaskOwnedSessionsAndFail({
+        task: findTask(task.id) ?? task,
+        reason: input.reason,
+      })
+      tasks += taskResult.tasks
+      sessions += taskResult.sessions
+      toolParts += taskResult.toolParts
     })
-    ownerships += ownershipResult.ownerships
-    goalRuns += ownershipResult.goalRuns
-    sessions += ownershipResult.sessions
-    toolParts += ownershipResult.toolParts
-
-    const ownedGoalRunsAfter = currentProcessOwnedGoalRuns(task)
-    goalRuns += await abortGoalRunsForRows(ownedGoalRunsAfter, input.reason)
-    const affectedRuns = affectedRunsForGoalRuns(task.id, [...ownedGoalRunsBefore, ...ownedGoalRunsAfter])
-    runs += await abortRunsForRows(affectedRuns, input.reason)
-
-    const taskResult = await terminateTaskOwnedSessionsAndFail({ task: findTask(task.id) ?? task, reason: input.reason })
-    tasks += taskResult.tasks
-    sessions += taskResult.sessions
-    toolParts += taskResult.toolParts
   }
 
   return { tasks, sessions, toolParts, goalRuns, runs, ownerships, corruptTasks }
@@ -597,8 +625,7 @@ export async function convergeDeadOwnerLiveExecution(input: {
     if (orphanGoalRuns.length === 0) continue
     if (task.project_id === "global") {
       corruptTasks += 1
-      log.error("convergeDeadOwnerLiveExecution: corrupt global task skipped", { taskID: task.id })
-      continue
+      log.error("convergeDeadOwnerLiveExecution: corrupt global task terminalized", { taskID: task.id })
     }
 
     goalRuns += await abortGoalRunsForRows(orphanGoalRuns, input.reason)

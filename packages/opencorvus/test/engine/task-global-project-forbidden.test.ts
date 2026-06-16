@@ -2,11 +2,15 @@ import { $ } from "bun"
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EngineChannelBindingTable, EngineProgressSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { persistQueuedTask } from "../../src/engine/pipeline"
-import { TaskGlobalProjectBindingError } from "../../src/engine/task-project-error"
+import {
+  TaskChannelBindingProjectConflictError,
+  TaskGlobalProjectBindingError,
+} from "../../src/engine/task-project-error"
 import { Identifier } from "../../src/id/id"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
+import { ProjectTable } from "../../src/project/project.sql"
 import { Session } from "../../src/session"
 import { MessageTable, SessionTable } from "../../src/session/session.sql"
 import { Database, eq } from "../../src/storage/db"
@@ -21,6 +25,7 @@ describe("task global project binding is forbidden", () => {
 
   afterEach(async () => {
     mock.restore()
+    await Instance.disposeAll()
     await resetDatabase()
   })
 
@@ -45,21 +50,21 @@ describe("task global project binding is forbidden", () => {
     expect(row).toBeUndefined()
   })
 
-  test("createTask refuses a stale global active project before root session creation", async () => {
+  test("non-git Instance.provide no longer creates a global active project", async () => {
     await using tmp = await tmpdir()
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        expect(Instance.project.id).toBe("global")
-        spyOn(Project, "isGitRepo").mockReturnValue(true)
+        expect(Instance.project.id).toBe(Project.directoryProjectID(tmp.path))
+        expect(Instance.project.id).not.toBe("global")
 
         await expect(
           EngineService.createTask({
             request: "must not create root session",
             source: "test",
           }),
-        ).rejects.toThrow(TaskGlobalProjectBindingError)
+        ).rejects.toThrow("not a git repository")
 
         const sessions = Database.use((db) =>
           db.select().from(SessionTable).where(eq(SessionTable.title, "must not create root session")).all(),
@@ -147,6 +152,27 @@ describe("task global project binding is forbidden", () => {
     expect(runTaskLoop).not.toHaveBeenCalled()
   })
 
+  test("public task mutations refuse a legacy global task", async () => {
+    const legacy = await seedLegacyGlobalTask()
+
+    await Instance.provide({
+      directory: legacy.directory,
+      fn: async () => {
+        await expect(EngineService.updateTaskTitle(legacy.taskID, "renamed")).rejects.toThrow(
+          TaskGlobalProjectBindingError,
+        )
+        await expect(EngineService.updateTaskBudget(legacy.taskID, null)).rejects.toThrow(TaskGlobalProjectBindingError)
+        await expect(EngineService.cancelTask(legacy.taskID)).rejects.toThrow(TaskGlobalProjectBindingError)
+        await expect(EngineService.deleteTask(legacy.taskID)).rejects.toThrow(TaskGlobalProjectBindingError)
+      },
+    })
+
+    const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, legacy.taskID)).get())
+    expect(task?.title).toBe("legacy global task")
+    expect(task?.time_completed).toBeNull()
+    expect(progressCount(legacy.taskID)).toBe(0)
+  })
+
   test("direct task file registration refuses a legacy global task before URL fallback", async () => {
     const legacy = await seedLegacyGlobalTask()
 
@@ -173,7 +199,7 @@ describe("task global project binding is forbidden", () => {
     })
   })
 
-  test("channel binding recovery refuses a binding that points to a legacy global task", async () => {
+  test("channel binding preflight refuses a binding that points to a legacy global task", async () => {
     const binding = {
       platform: "slack",
       channel: "C_global",
@@ -197,6 +223,85 @@ describe("task global project binding is forbidden", () => {
     })
 
     expect(runTaskLoop).not.toHaveBeenCalled()
+    const sessions = Database.use((db) =>
+      db.select().from(SessionTable).where(eq(SessionTable.title, "must not recover global binding")).all(),
+    )
+    expect(sessions).toHaveLength(0)
+  })
+
+  test("channel binding preflight refuses another concrete project before creating a root session", async () => {
+    const binding = {
+      platform: "slack",
+      channel: "C_cross_project",
+      thread: "T_cross_project",
+    }
+    await using first = await tmpdir({ git: true, config: { model: "project/default" } })
+    await using second = await tmpdir({ git: true, config: { model: "project/default" } })
+    const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+    await Instance.provide({
+      directory: first.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "first binding owner" })
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              source: "test",
+              title: "first binding owner",
+              request: "first project owns binding",
+              executor: "opencorvus",
+              priority: "normal",
+              kind: "workflow",
+              queue_order: 0,
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineChannelBindingTable)
+            .values({
+              id: Identifier.ascending("binding"),
+              task_id: taskID,
+              platform: binding.platform,
+              channel: binding.channel,
+              thread: binding.thread,
+              payload: {},
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+      },
+    })
+
+    await Instance.provide({
+      directory: second.path,
+      fn: async () => {
+        await expect(
+          EngineService.createTask({
+            request: "second project must not create session",
+            title: "must not create cross project binding session",
+            source: "test",
+            channelBinding: binding,
+          }),
+        ).rejects.toThrow(TaskChannelBindingProjectConflictError)
+      },
+    })
+
+    expect(runTaskLoop).not.toHaveBeenCalled()
+    const sessions = Database.use((db) =>
+      db
+        .select()
+        .from(SessionTable)
+        .where(eq(SessionTable.title, "must not create cross project binding session"))
+        .all(),
+    )
+    expect(sessions).toHaveLength(0)
   })
 })
 
@@ -210,11 +315,24 @@ async function seedLegacyGlobalTask(input?: {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      expect(Instance.project.id).toBe("global")
+      expect(Instance.project.id).not.toBe("global")
       const session = await Session.create({ kind: "root", title: "legacy global task" })
       taskID = Identifier.ascending("task")
       sessionID = session.id
       const now = Date.now()
+      Database.use((db) =>
+        db
+          .insert(ProjectTable)
+          .values({
+            id: "global",
+            worktree: "/legacy-global-project",
+            sandboxes: [],
+            time_created: now,
+            time_updated: now,
+          })
+          .onConflictDoNothing()
+          .run(),
+      )
       Database.use((db) =>
         db
           .insert(EngineTaskTable)
