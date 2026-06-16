@@ -18,7 +18,7 @@
 import { Log } from "@/util/log"
 import { Database, and, eq, inArray, isNotNull, isNull } from "@/storage/db"
 import { Identifier } from "@/id/id"
-import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
+import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES, isLiveGoalRunStatus, isLiveRunStatus } from "./catalog"
 import { EngineArtifactTable, EngineTaskTable, type EngineRunStatus } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
@@ -33,6 +33,7 @@ import {
   findGoal,
   findRun,
   findRuns,
+  findTask,
   goalRunQueueTaskID,
   listGoals,
   listGoalWorkspacesForProject,
@@ -52,6 +53,11 @@ import {
 } from "./tool-ownership"
 import { abortGoalRunExecution } from "./execution-abort"
 import { updateGoalWorkspace } from "./persist"
+import { processOwner } from "./lease"
+import { isGoalRunOrphaned } from "./orphan"
+import { taskIDForSession } from "@/orchestrator/task-event"
+import { Project } from "@/project/project"
+import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "engine-writer" })
 
@@ -259,6 +265,11 @@ export interface AbortLiveOwnershipResult {
   toolParts: number
 }
 
+export interface AbortProcessLiveExecutionResult extends AbortActiveTasksResult, AbortLiveResult {
+  ownerships: number
+  corruptTasks: number
+}
+
 async function abortOpenToolParts(sessionID: string, reason: string): Promise<number> {
   const messages = await Session.messages({ sessionID })
   let updated = 0
@@ -372,6 +383,60 @@ function listActiveTasksForProject(projectID: string): TaskRow[] {
   )
 }
 
+function listActiveTasks(): TaskRow[] {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineTaskTable)
+      .where(and(isNotNull(EngineTaskTable.time_started), isNull(EngineTaskTable.time_completed)))
+      .all(),
+  )
+}
+
+async function terminateTaskOwnedSessionsAndFail(input: {
+  task: TaskRow
+  reason: string
+}): Promise<AbortActiveTasksResult> {
+  let sessions = 0
+  let toolParts = 0
+  const task = input.task
+  const project = Project.get(task.project_id)
+  if (!project) throw new Error(`Cannot terminate task ${task.id}: project ${task.project_id} not found`)
+  if (task.session_id) {
+    const ids = await Session.treeInProject({ sessionID: task.session_id, projectID: task.project_id })
+    for (const sessionID of ids.slice().reverse()) {
+      toolParts += await abortOpenToolParts(sessionID, input.reason)
+      await publishSessionAbortInProject(sessionID, project.worktree, input.reason)
+      SessionPrompt.cancel(sessionID, project.worktree)
+      sessions += 1
+    }
+  }
+  await updateTask(
+    task,
+    {
+      status: "failed",
+      error: input.reason,
+    },
+    input.reason,
+    { projectDir: project.worktree },
+  )
+  return { tasks: 1, sessions, toolParts }
+}
+
+async function publishSessionAbortInProject(sessionID: string, directory: string, reason: string) {
+  await Instance.provide({
+    directory,
+    async fn() {
+      SessionStatus.abortActivityGate(sessionID, new DOMException(reason, "AbortError"))
+      SessionStatus.set(sessionID, {
+        type: "terminal",
+        reason: "aborted",
+        error: reason,
+      })
+    },
+  })
+}
+
 /**
  * Terminate task-owned session trees for every active task in a project.
  * Run / goal_run rows are aborted by the existing writers;
@@ -388,25 +453,164 @@ export async function abortActiveTasksForProject(input: {
   let toolParts = 0
   const activeTasks = listActiveTasksForProject(input.projectID)
   for (const task of activeTasks) {
-    if (task.session_id) {
-      const ids = await Session.tree(task.session_id)
-      for (const sessionID of ids.slice().reverse()) {
-        toolParts += await abortOpenToolParts(sessionID, input.reason)
-        SessionPrompt.cancel(sessionID)
-        sessions += 1
-      }
-    }
-    await updateTask(
-      task,
-      {
-        status: "failed",
-        error: input.reason,
-      },
-      input.reason,
-    )
-    tasks += 1
+    const result = await terminateTaskOwnedSessionsAndFail({ task, reason: input.reason })
+    tasks += result.tasks
+    sessions += result.sessions
+    toolParts += result.toolParts
   }
   return { tasks, sessions, toolParts }
+}
+
+function currentProcessSessionTaskIDs(): Set<string> {
+  const taskIDs = new Set<string>()
+  for (const [sessionID, status] of Object.entries(SessionStatus.list())) {
+    if (status.type !== "streaming" && status.type !== "retry") continue
+    const taskID = taskIDForSession(sessionID)
+    if (taskID) taskIDs.add(taskID)
+  }
+  return taskIDs
+}
+
+function currentProcessOwnedGoalRuns(task: TaskRow): GoalRunRow[] {
+  const owner = processOwner()
+  return listGoalRunsForTask(task.id).filter(
+    (row) => isLiveGoalRunStatus(row.status) && row.status !== "queued" && row.owner === owner,
+  )
+}
+
+function currentProcessOwnedToolOwnership(task: TaskRow): OrchestratorToolOwnershipRow[] {
+  const owner = processOwner()
+  return listLiveOrchestratorToolOwnership(task.id).filter((row) => row.payload.owner === owner)
+}
+
+function affectedRunsForGoalRuns(taskID: string, goalRuns: GoalRunRow[]): RunRow[] {
+  const runIDs = [...new Set(goalRuns.map((row) => row.coordinator_run_id).filter((item): item is string => !!item))]
+  return runIDs.flatMap((runID) => {
+    const run = findRun(runID)
+    if (!run || !isLiveRunStatus(run.status)) return []
+    const hasLiveExecutor = listGoalRunsForTask(taskID).some(
+      (row) =>
+        row.coordinator_run_id === runID &&
+        isLiveGoalRunStatus(row.status) &&
+        row.status !== "queued" &&
+        !isGoalRunOrphaned(row),
+    )
+    return hasLiveExecutor ? [] : [run]
+  })
+}
+
+async function abortRunsForRows(rows: RunRow[], reason: string): Promise<number> {
+  const unique = new Map(rows.map((row) => [row.id, row]))
+  return abortRuns([...unique.values()], reason)
+}
+
+async function abortGoalRunsForRows(rows: GoalRunRow[], reason: string): Promise<number> {
+  const unique = new Map(rows.map((row) => [row.id, row]))
+  return abortGoalRuns([...unique.values()], { reason })
+}
+
+/**
+ * Process-shutdown convergence.
+ *
+ * This discovers live work from process-owned facts, not from the sidecar
+ * launch directory. A Tauri sidecar can start in an app-data cwd that resolves
+ * to the historical `global` pseudo-project; shutdown must still close the
+ * concrete tasks this process owns.
+ */
+export async function abortCurrentProcessLiveExecution(input: {
+  reason: string
+}): Promise<AbortProcessLiveExecutionResult> {
+  const activeTasks = listActiveTasks()
+  const taskIDs = currentProcessSessionTaskIDs()
+  for (const task of activeTasks) {
+    if (currentProcessOwnedToolOwnership(task).length > 0) taskIDs.add(task.id)
+    if (currentProcessOwnedGoalRuns(task).length > 0) taskIDs.add(task.id)
+  }
+
+  let tasks = 0
+  let sessions = 0
+  let toolParts = 0
+  let goalRuns = 0
+  let runs = 0
+  let ownerships = 0
+  let corruptTasks = 0
+
+  for (const taskID of taskIDs) {
+    const task = findTask(taskID)
+    if (!task) continue
+    if (task.project_id === "global") {
+      corruptTasks += 1
+      log.error("abortCurrentProcessLiveExecution: corrupt global task skipped", { taskID })
+      continue
+    }
+    const project = Project.get(task.project_id)
+    if (!project) throw new Error(`Cannot abort task ${task.id}: project ${task.project_id} not found`)
+
+    const ownedToolRuns = currentProcessOwnedToolOwnership(task)
+    const ownedGoalRunsBefore = currentProcessOwnedGoalRuns(task)
+    const ownershipResult = await abortLiveOrchestratorToolOwnership({
+      taskID: task.id,
+      reason: input.reason,
+      ownerships: ownedToolRuns,
+      originSite: "engine.writer.abort-current-process-live-execution",
+      promptDirectory: project.worktree,
+    })
+    ownerships += ownershipResult.ownerships
+    goalRuns += ownershipResult.goalRuns
+    sessions += ownershipResult.sessions
+    toolParts += ownershipResult.toolParts
+
+    const ownedGoalRunsAfter = currentProcessOwnedGoalRuns(task)
+    goalRuns += await abortGoalRunsForRows(ownedGoalRunsAfter, input.reason)
+    const affectedRuns = affectedRunsForGoalRuns(task.id, [...ownedGoalRunsBefore, ...ownedGoalRunsAfter])
+    runs += await abortRunsForRows(affectedRuns, input.reason)
+
+    const taskResult = await terminateTaskOwnedSessionsAndFail({ task: findTask(task.id) ?? task, reason: input.reason })
+    tasks += taskResult.tasks
+    sessions += taskResult.sessions
+    toolParts += taskResult.toolParts
+  }
+
+  return { tasks, sessions, toolParts, goalRuns, runs, ownerships, corruptTasks }
+}
+
+/**
+ * Startup convergence for live goal attempts whose owning process is gone.
+ *
+ * This records physical death as terminal facts. It does not dispatch, wake,
+ * retry, or synthesize operator messages.
+ */
+export async function convergeDeadOwnerLiveExecution(input: {
+  reason: string
+}): Promise<AbortProcessLiveExecutionResult> {
+  let tasks = 0
+  let sessions = 0
+  let toolParts = 0
+  let goalRuns = 0
+  let runs = 0
+  let corruptTasks = 0
+
+  for (const task of listActiveTasks()) {
+    const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
+      (row) => row.status !== "queued" && isGoalRunOrphaned(row),
+    )
+    if (orphanGoalRuns.length === 0) continue
+    if (task.project_id === "global") {
+      corruptTasks += 1
+      log.error("convergeDeadOwnerLiveExecution: corrupt global task skipped", { taskID: task.id })
+      continue
+    }
+
+    goalRuns += await abortGoalRunsForRows(orphanGoalRuns, input.reason)
+    const affectedRuns = affectedRunsForGoalRuns(task.id, orphanGoalRuns)
+    runs += await abortRunsForRows(affectedRuns, input.reason)
+    const taskResult = await terminateTaskOwnedSessionsAndFail({ task: findTask(task.id) ?? task, reason: input.reason })
+    tasks += taskResult.tasks
+    sessions += taskResult.sessions
+    toolParts += taskResult.toolParts
+  }
+
+  return { tasks, sessions, toolParts, goalRuns, runs, ownerships: 0, corruptTasks }
 }
 
 /**
@@ -423,6 +627,7 @@ export async function abortLiveOrchestratorToolOwnership(input: {
   ownerships?: OrchestratorToolOwnershipRow[]
   originSite?: string
   metadata?: Record<string, unknown>
+  promptDirectory?: string
 }): Promise<AbortLiveOwnershipResult> {
   const ownerships = input.ownerships ?? listLiveOrchestratorToolOwnership(input.taskID)
   const originSite = input.originSite ?? "engine.writer.abort-live-orchestrator-tool-ownership"
@@ -434,13 +639,17 @@ export async function abortLiveOrchestratorToolOwnership(input: {
 
   for (const ownership of ownerships) {
     const childSessionID = ownership.payload.child_session_id
-    SessionPrompt.cancel(childSessionID)
-    SessionStatus.abortActivityGate(childSessionID, new DOMException(input.reason, "AbortError"))
-    SessionStatus.set(childSessionID, {
-      type: "terminal",
-      reason: "aborted",
-      error: input.reason,
-    })
+    if (input.promptDirectory) {
+      await publishSessionAbortInProject(childSessionID, input.promptDirectory, input.reason)
+    } else {
+      SessionStatus.abortActivityGate(childSessionID, new DOMException(input.reason, "AbortError"))
+      SessionStatus.set(childSessionID, {
+        type: "terminal",
+        reason: "aborted",
+        error: input.reason,
+      })
+    }
+    SessionPrompt.cancel(childSessionID, input.promptDirectory)
     sessions += 1
 
     if (ownership.payload.goal_run_id) {

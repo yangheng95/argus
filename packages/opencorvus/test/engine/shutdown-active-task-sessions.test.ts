@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { abortActiveTasksForProject } from "../../src/engine/writer"
+import { abortActiveTasksForProject, abortCurrentProcessLiveExecution } from "../../src/engine/writer"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import { ensureTaskMessageProtocolBridge } from "../../src/orchestrator/protocol/message-bridge"
@@ -60,6 +60,7 @@ describe("shutdown aborts active task-owned sessions", () => {
             input: 0,
             output: 0,
             reasoning: 0,
+            total: 0,
             cache: { read: 0, write: 0 },
           },
         })
@@ -106,9 +107,9 @@ describe("shutdown aborts active task-owned sessions", () => {
         })
 
         expect(result).toEqual({ tasks: 1, sessions: 3, toolParts: 1 })
-        expect(SessionStatus.get(root.id)).toEqual({ type: "terminal", reason: "aborted" })
-        expect(SessionStatus.get(orchestrator.id)).toEqual({ type: "terminal", reason: "aborted" })
-        expect(SessionStatus.get(build.id)).toEqual({ type: "terminal", reason: "aborted" })
+        expect(SessionStatus.get(root.id)).toEqual({ type: "terminal", reason: "aborted", error: reason })
+        expect(SessionStatus.get(orchestrator.id)).toEqual({ type: "terminal", reason: "aborted", error: reason })
+        expect(SessionStatus.get(build.id)).toEqual({ type: "terminal", reason: "aborted", error: reason })
 
         const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(task).toBeDefined()
@@ -122,5 +123,57 @@ describe("shutdown aborts active task-owned sessions", () => {
         expect(part.state.failure.message).toBe(reason)
       },
     })
+  })
+
+  test("process shutdown terminates current-process task ownership without ambient project scope", async () => {
+    await using tmp = await tmpdir({ git: true })
+    let taskID = ""
+    let rootID = ""
+    let buildID = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ensureTaskMessageProtocolBridge()
+        const now = Date.now()
+        taskID = `tsk_shutdown_owned_${now}`
+        const root = await Session.create({ kind: "root", title: "owned root" })
+        const build = await Session.create({ kind: "build", parentID: root.id, title: "owned build" })
+        rootID = root.id
+        buildID = build.id
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "owned shutdown",
+              request: "owned shutdown",
+              kind: "workflow",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        SessionStatus.set(build.id, { type: "streaming" })
+      },
+    })
+
+    await Instance.disposeAll()
+    const reason = "Server shutdown: http.shutdown"
+    const result = await abortCurrentProcessLiveExecution({ reason })
+
+    expect(result.tasks).toBeGreaterThanOrEqual(1)
+    expect(result.corruptTasks).toBe(0)
+    expect(SessionStatus.get(rootID)).toEqual({ type: "terminal", reason: "aborted", error: reason })
+    expect(SessionStatus.get(buildID)).toEqual({ type: "terminal", reason: "aborted", error: reason })
+    const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+    expect(task).toBeDefined()
+    expect(deriveTaskStatus(task!)).toBe("failed")
+    expect(task?.error).toBe(reason)
   })
 })

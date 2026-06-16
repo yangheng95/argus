@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { isGoalRunOrphaned, isRunOrphan, observeOrphanRuns } from "../../src/engine/orphan"
 import { describeGoal, goalStatusByID, renderTaskDescription } from "../../src/engine/describe"
 import { processOwner } from "../../src/engine/lease"
-import type { GoalRunRow } from "../../src/engine/store"
+import { findGoalRun, findRun, findTask, type GoalRunRow } from "../../src/engine/store"
+import { deriveTaskStatus } from "../../src/engine/task-status"
+import { convergeDeadOwnerLiveExecution } from "../../src/engine/writer"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
@@ -176,11 +178,15 @@ function fakeGoal(goalID: string) {
 }
 
 describe("owner-orphan derivation across describe / orphan (restart scenario)", () => {
+  beforeEach(async () => {
+    await resetDatabase()
+  })
+
   afterEach(async () => {
     await resetDatabase()
   })
 
-  test("a live goal_run stamped by a FOREIGN (restarted) process is derived dead", async () => {
+  test.serial("a live goal_run stamped by a FOREIGN (restarted) process is derived dead", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -221,7 +227,7 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
     })
   })
 
-  test("a live goal_run stamped by THIS process is still alive (no false positive)", async () => {
+  test.serial("a live goal_run stamped by THIS process is still alive (no false positive)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -243,7 +249,7 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
     })
   })
 
-  test("a live goal_run stamped by another live owner remains running", async () => {
+  test.serial("a live goal_run stamped by another live owner remains running", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -260,6 +266,37 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
         expect(goalStatusByID("gol_live_foreign")).toBe("running")
 
         expect(isRunOrphan(Instance.project.id, runID)).toBe(false)
+        expect(observeOrphanRuns(Instance.project.id).map((r) => r.id)).not.toContain(runID)
+      },
+    })
+  })
+
+  test.serial("startup convergence terminalizes dead-owner live goal_run, run, and task", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = `tsk_converge_${now}`
+        const runID = `run_converge_${now}`
+        const goalRunID = "grun_converge"
+        seedTaskRun(taskID, runID, now)
+        seedGoalRun(taskID, runID, goalRunID, "gol_converge", DEAD_OWNER, now + 1)
+
+        const reason = "Server startup: previous owner process died before terminalization"
+        const result = await convergeDeadOwnerLiveExecution({ reason })
+
+        expect(result.tasks).toBeGreaterThanOrEqual(1)
+        expect(result.goalRuns).toBeGreaterThanOrEqual(1)
+        expect(result.runs).toBeGreaterThanOrEqual(1)
+        expect(result.corruptTasks).toBe(0)
+        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
+        expect(findGoalRun(goalRunID)?.error).toBe(reason)
+        expect(findRun(runID)?.status).toBe("aborted")
+        const task = findTask(taskID)
+        expect(task).toBeDefined()
+        expect(deriveTaskStatus(task!)).toBe("failed")
+        expect(task?.error).toBe(reason)
         expect(observeOrphanRuns(Instance.project.id).map((r) => r.id)).not.toContain(runID)
       },
     })

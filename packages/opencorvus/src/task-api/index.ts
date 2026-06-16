@@ -1148,6 +1148,7 @@ export namespace EngineService {
     merge: (prev: FileRef[]) => { next: FileRef[]; reason: string } | null,
   ): Promise<FileRef[]> {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     const located = AttachmentStore.nameFromUrl(file.url)
     if (!located) {
       throw new Error(`${column}: file.url is not a valid /attachment/<projectID>/<name> reference: ${file.url}`)
@@ -1606,11 +1607,12 @@ function recoverTaskByChannelBinding(
   const message = error instanceof Error ? error.message : String(error)
   if (!message.includes("UNIQUE constraint failed")) return
   if (!message.includes("engine_channel_binding")) return
-  return Database.use(
+  const row = Database.use(
     (db) =>
       db
-        .select({ task_id: EngineChannelBindingTable.task_id })
+        .select({ task_id: EngineChannelBindingTable.task_id, project_id: EngineTaskTable.project_id })
         .from(EngineChannelBindingTable)
+        .innerJoin(EngineTaskTable, eq(EngineTaskTable.id, EngineChannelBindingTable.task_id))
         .where(
           and(
             eq(EngineChannelBindingTable.platform, binding.platform),
@@ -1618,8 +1620,20 @@ function recoverTaskByChannelBinding(
             eq(EngineChannelBindingTable.thread, binding.thread),
           ),
         )
-        .get()?.task_id,
+        .get(),
   )
+  if (!row) return
+  if (row.project_id === "global") {
+    throw new TaskGlobalProjectBindingError({
+      message: `Channel binding ${binding.platform}/${binding.channel}/${binding.thread} points to task ${row.task_id} bound to project global. Task workflow state requires a concrete Git project.`,
+      taskID: row.task_id,
+      projectID: row.project_id,
+    })
+  }
+  if (row.project_id !== Instance.project.id) {
+    return undefined
+  }
+  return row.task_id
 }
 
 export namespace EngineService {
@@ -1841,6 +1855,7 @@ export namespace EngineService {
 
   export async function retryTask(taskID: string) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     const metadata =
       task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
         ? { ...(task.metadata as Record<string, unknown>) }
@@ -1858,6 +1873,7 @@ export namespace EngineService {
 
   export async function recordOperatorNote(taskID: string, note: string) {
     const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     const run = findActiveRunForTask(task.id)
     const now = Date.now()
     Database.use((db) =>
