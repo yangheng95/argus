@@ -1,5 +1,5 @@
 import z from "zod"
-import type { AgentRoleID } from "@/agent/role-contract"
+import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 
 export const DEFAULT_PROMPT_PROFILE_ID = "frontend"
 
@@ -52,6 +52,40 @@ export const PromptProfileOverlaySchema = z
 export type PromptProfileDefinition = z.output<typeof PromptProfileDefinitionSchema>
 export type PromptProfileConfig = z.output<typeof PromptProfileConfigSchema>
 export type PromptProfileOverlay = z.output<typeof PromptProfileOverlaySchema>
+
+export const PromptProfileTargetCatalogEntrySchema = z
+  .object({
+    id: z.string(),
+    label: z.string(),
+    description: z.string().optional(),
+    editable: z.boolean(),
+    built_in_only: z.boolean(),
+  })
+  .strict()
+
+export const PromptProfileCatalogProfileSchema = z
+  .object({
+    id: z.string(),
+    label: z.string(),
+    description: z.string().optional(),
+    built_in: z.boolean(),
+    editable: z.boolean(),
+    agents: z.record(z.string(), z.string()),
+  })
+  .strict()
+
+export const PromptProfileCatalogSchema = z
+  .object({
+    active: z.string(),
+    default: z.string(),
+    targets: z.array(PromptProfileTargetCatalogEntrySchema),
+    profiles: z.array(PromptProfileCatalogProfileSchema),
+  })
+  .strict()
+
+export type PromptProfileTargetCatalogEntry = z.output<typeof PromptProfileTargetCatalogEntrySchema>
+export type PromptProfileCatalogProfile = z.output<typeof PromptProfileCatalogProfileSchema>
+export type PromptProfileCatalog = z.output<typeof PromptProfileCatalogSchema>
 
 type ConfigLike = {
   prompt_profile?: PromptProfileConfig
@@ -362,6 +396,20 @@ export namespace PromptProfile {
     Object.entries(builtInBlueprints).map(([profileID, blueprint]) => [profileID, materializeProfile(profileID, blueprint)]),
   )
 
+  export const targets: PromptProfileTargetCatalogEntry[] = [...USER_PROFILE_TARGETS, ...BUILT_IN_ONLY_PROFILE_TARGETS].map(
+    (targetID) => ({
+      id: targetID,
+      label: targetID,
+      description:
+        AgentRoleContract.all[targetID as AgentRoleID]?.description ??
+        (builtInOnlyTargetSet.has(targetID)
+          ? `Built-in runtime prompt target ${targetID}.`
+          : `Prompt profile target ${targetID}.`),
+      editable: userTargetSet.has(targetID) && !builtInOnlyTargetSet.has(targetID),
+      built_in_only: builtInOnlyTargetSet.has(targetID),
+    }),
+  )
+
   export function catalog(config: ConfigLike): Record<string, PromptProfileDefinition> {
     return {
       ...builtIns,
@@ -406,8 +454,15 @@ export namespace PromptProfile {
       label: profile.label,
       description: profile.description,
       built_in: Object.hasOwn(builtIns, id),
+      editable: !Object.hasOwn(builtIns, id),
+      agents: { ...(profile.agents ?? {}) },
     }))
-    return { active, default: DEFAULT_PROMPT_PROFILE_ID, profiles }
+    return PromptProfileCatalogSchema.parse({
+      active,
+      default: DEFAULT_PROMPT_PROFILE_ID,
+      targets,
+      profiles,
+    })
   }
 
   export function assertKnownProfileID(profileID: string, config: ConfigLike): void {

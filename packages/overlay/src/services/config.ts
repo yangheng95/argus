@@ -147,12 +147,30 @@ export interface PromptProfileOption {
   label: string
   description?: string
   built_in?: boolean
+  editable?: boolean
+  agents?: Record<string, string>
+}
+
+export interface PromptProfileTarget {
+  id: string
+  label: string
+  description?: string
+  editable: boolean
+  built_in_only: boolean
 }
 
 export interface PromptProfileCatalog {
   active: string
   default: string
+  targets: PromptProfileTarget[]
   profiles: PromptProfileOption[]
+}
+
+export interface PromptProfileDraft {
+  id: string
+  label: string
+  description?: string
+  agents: Record<string, string>
 }
 
 export function modelContextID(context: TaskOperatorModelContext | null | undefined): string {
@@ -203,6 +221,114 @@ export async function loadPromptProfileCatalog(): Promise<PromptProfileCatalog> 
     throw new Error("Cannot load prompt profiles while disconnected")
   }
   return await apiJson("config/prompt-profile")
+}
+
+function promptProfileConfigShape(
+  config: Record<string, any>,
+  defaultActive: string,
+): { active: string; profiles: Record<string, any> } {
+  const promptProfile =
+    config.prompt_profile && typeof config.prompt_profile === "object" && !Array.isArray(config.prompt_profile)
+      ? config.prompt_profile
+      : {}
+  const profiles =
+    promptProfile.profiles && typeof promptProfile.profiles === "object" && !Array.isArray(promptProfile.profiles)
+      ? { ...promptProfile.profiles }
+      : {}
+  const active =
+    typeof promptProfile.active === "string" && promptProfile.active.trim().length > 0 ? promptProfile.active : defaultActive
+  return { active, profiles }
+}
+
+function compactPromptProfileAgents(agents: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(agents).flatMap(([agentID, prompt]) => {
+      if (typeof prompt !== "string" || prompt.trim().length === 0) return []
+      return [[agentID, prompt]]
+    }),
+  )
+}
+
+export function createPromptProfileID(existingIDs: Iterable<string>, baseLabel: string): string {
+  const taken = new Set(Array.from(existingIDs, (value) => String(value)))
+  const seed =
+    baseLabel
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "custom-squad"
+  let nextID = seed
+  let suffix = 2
+  while (taken.has(nextID)) {
+    nextID = `${seed}-${suffix}`
+    suffix += 1
+  }
+  return nextID
+}
+
+export function upsertPromptProfileConfig(
+  config: Record<string, any>,
+  profile: PromptProfileDraft,
+  defaultActive: string,
+): void {
+  const nextLabel = profile.label.trim()
+  if (!nextLabel) {
+    throw new Error("Prompt profile label cannot be empty.")
+  }
+  const nextDescription = typeof profile.description === "string" ? profile.description.trim() : ""
+  const { active, profiles } = promptProfileConfigShape(config, defaultActive)
+  profiles[profile.id] = {
+    label: nextLabel,
+    ...(nextDescription ? { description: nextDescription } : {}),
+    agents: compactPromptProfileAgents(profile.agents ?? {}),
+  }
+  config.prompt_profile = {
+    active,
+    profiles,
+  }
+}
+
+export function deletePromptProfileConfig(
+  config: Record<string, any>,
+  profileID: string,
+  nextActive: string,
+  defaultActive: string,
+): void {
+  const { active, profiles } = promptProfileConfigShape(config, defaultActive)
+  delete profiles[profileID]
+  config.prompt_profile = {
+    active: active === profileID ? nextActive : active,
+    ...(Object.keys(profiles).length > 0 ? { profiles } : {}),
+  }
+}
+
+export async function savePromptProfile(profile: PromptProfileDraft, defaultActive: string): Promise<any> {
+  return await updateConfig((current) => {
+    upsertPromptProfileConfig(current, profile, defaultActive)
+  })
+}
+
+export async function deletePromptProfile(
+  profileID: string,
+  nextActive: string,
+  defaultActive: string,
+): Promise<any> {
+  return await updateConfig((current) => {
+    deletePromptProfileConfig(current, profileID, nextActive, defaultActive)
+  })
+}
+
+export async function setProjectPromptProfileActive(profileID: string): Promise<any> {
+  return await updateConfig((current) => {
+    const promptProfile =
+      current.prompt_profile && typeof current.prompt_profile === "object" && !Array.isArray(current.prompt_profile)
+        ? { ...current.prompt_profile }
+        : {}
+    current.prompt_profile = {
+      ...promptProfile,
+      active: profileID,
+    }
+  })
 }
 
 export async function syncAgentPromptLocale(locale: string): Promise<void> {

@@ -222,6 +222,14 @@ visible, single setting.
 4. Add profile API.
    - `GET /config/prompt-profile`: list built-in and configured profiles,
      active project profile, and active session profile when a session id is supplied.
+   - The response must expose the full visible prompt-profile catalog, not only
+     labels:
+     - `targets[]`: target id, label, description, and whether the target is
+       editable by user-defined profiles or built-in-only.
+     - `profiles[]`: id, label, description, built-in/editable flags, and the
+       exact rendered per-target prompt overlay strings that the runtime uses.
+   - Built-in profiles are read-only in the API contract; user-defined
+     profiles are editable project config records.
    - Project-level change uses existing `PATCH /config`.
    - Current-task/session change uses existing `PATCH /session/{sessionID}/config`.
    - OpenAPI and SDK generated files must be updated after route/schema changes.
@@ -232,6 +240,14 @@ visible, single setting.
      new tab is needed.
    - Use mature primitives already present in the UI, e.g. the same select/list
      pattern used by agent model settings.
+   - The UI must let the user inspect every built-in expert-squad prompt
+     overlay per target without leaving the app.
+   - The UI must let the user create, duplicate, edit, and delete custom
+     prompt profiles stored under `config.prompt_profile.profiles`, while
+     keeping built-ins read-only.
+   - Creating or deleting a custom profile must refresh the chat-composer
+     selector catalog so the newly available profiles are immediately
+     selectable for task/session-scoped switching.
    - Provide two explicit scopes:
      - Project active profile: writes `PATCH /config`.
      - Selected task/session active profile: writes `PATCH /session/{rootSessionID}/config`.

@@ -3915,11 +3915,22 @@ export type ConfigPromptProfileResponses = {
   200: {
     active: string
     default: string
+    targets: Array<{
+      id: string
+      label: string
+      description?: string
+      editable: boolean
+      built_in_only: boolean
+    }>
     profiles: Array<{
       id: string
       label: string
       description?: string
       built_in: boolean
+      editable: boolean
+      agents: {
+        [key: string]: string
+      }
     }>
   }
 }
