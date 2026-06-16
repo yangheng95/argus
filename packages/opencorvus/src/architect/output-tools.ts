@@ -15,6 +15,7 @@ import { tool } from "ai"
 import z from "zod"
 import path from "path"
 import fs from "fs"
+import { isDeepStrictEqual } from "node:util"
 import { Instance } from "@/project/instance"
 import { limitSummary, markdownList, requireReportString } from "@/agent/report"
 import {
@@ -596,8 +597,52 @@ function formatGoalSnapshot(goal: RegisteredGoal): string {
 }
 
 function formatAcceptanceSpecSnapshot(spec: AcceptanceSpec): string {
-  const scorerTypes = spec.scorers.map((scorer) => scorer.type).join("+")
+  const scorerTypes = spec.scorers.map(formatScorerSnapshot).join("+")
   return `${spec.id}:${spec.severity}:${spec.trigger ?? "default"}:${scorerTypes}`
+}
+
+function formatScorerSnapshot(scorer: AcceptanceSpec["scorers"][number]): string {
+  if (scorer.type === "heuristic") {
+    if (scorer.spec.kind === "shell") return `heuristic:shell:${limitInline(scorer.spec.cmd, 48)}`
+    return `heuristic:script_ref:${scorer.spec.path}`
+  }
+  if (scorer.type === "prebuilt") return `prebuilt:${scorer.name}`
+  if (scorer.type === "contract_audit") return `contract_audit:${scorer.spec.contract_ids.join(",")}`
+  return `llm_judge:${scorer.inputs?.join(",") ?? "acceptance_summary"}`
+}
+
+function limitInline(value: string, max: number): string {
+  const compact = value.replace(/\s+/g, " ").trim()
+  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact
+}
+
+function missingScriptRefPaths(goal: RegisteredGoal, workDir: string): string[] {
+  const missing: string[] = []
+  for (const spec of goal.acceptance_specs) {
+    for (const scorer of spec.scorers) {
+      if (scorer.type !== "heuristic" || scorer.spec.kind !== "script_ref") continue
+      const resolved = path.resolve(workDir, scorer.spec.path)
+      if (!isExistingFile(resolved)) {
+        missing.push(`${spec.id}/${scorer.name}: ${scorer.spec.path}`)
+      }
+    }
+  }
+  return missing
+}
+
+function isExistingFile(resolvedPath: string): boolean {
+  try {
+    return fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isFile()
+  } catch {
+    return false
+  }
+}
+
+function scriptRefError(goalID: string, missing: readonly string[]): string {
+  return (
+    `Error: goal "${goalID}" references missing script_ref acceptance scorer path(s): ${missing.join(", ")}. ` +
+    `Use spec.kind="shell" with cmd for inline checks, or reference an existing repo script; collector unchanged.`
+  )
 }
 
 function isEssentialVisualEvidenceAcceptanceSpec(spec: AcceptanceSpec): boolean {
@@ -752,6 +797,10 @@ export function createArchitectOutputTools(input: {
         if (unknownContractIDs.length > 0) {
           return `Error: goal "${parsedGoal.id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
         }
+        const missingScriptRefs = missingScriptRefPaths(parsedGoal, dir)
+        if (missingScriptRefs.length > 0) {
+          return scriptRefError(parsedGoal.id, missingScriptRefs)
+        }
         const warnings: string[] = []
         for (const p of parsedGoal.owned_paths) {
           try {
@@ -819,8 +868,18 @@ export function createArchitectOutputTools(input: {
             return `Error: goal "${id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
           }
         }
+        const missingScriptRefs = missingScriptRefPaths(next, dir)
+        if (missingScriptRefs.length > 0) {
+          return scriptRefError(id, missingScriptRefs)
+        }
+        const changedFields = Object.keys(normalizedUpdates).filter(
+          (key) => !isDeepStrictEqual((prior as Record<string, unknown>)[key], (next as Record<string, unknown>)[key]),
+        )
+        if (changedFields.length === 0 && normalized.changes.length === 0) {
+          return `No changes: goal "${id}" already matches the submitted updates.\nCurrent: ${formatGoalSnapshot(prior)}`
+        }
         collector.goals[idx] = next
-        return `OK: goal "${id}" fields updated (${Object.keys(normalizedUpdates).length} change(s))${formatOwnedPathNormalizationNotice(normalized.changes)}\nCurrent: ${formatGoalSnapshot(next)}`
+        return `OK: goal "${id}" fields updated (${changedFields.join(", ")})${formatOwnedPathNormalizationNotice(normalized.changes)}\nCurrent: ${formatGoalSnapshot(next)}`
       },
     }),
 

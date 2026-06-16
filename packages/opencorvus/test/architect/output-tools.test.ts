@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { validateArchitectContractGraph, type ArchitectContractGraph } from "@/architect/contract-graph"
 import { createArchitectOutputTools, architectValidationFindings } from "@/architect/output-tools"
 import { GoalContractFieldsSchema } from "@/pipeline/goal-contract.schema"
@@ -42,6 +45,24 @@ function contractAuditSpec(contractIDs: string[], severity: "essential" | "impor
       },
     ],
     severity,
+  }
+}
+
+function scriptRefAcceptance(goalID: string, scriptPath: string) {
+  return {
+    id: `acc-${goalID}`,
+    source_requirement_id: "REQ-1",
+    goal_id: goalID,
+    title: `${goalID} scripted acceptance`,
+    severity: "essential" as const,
+    scorers: [
+      {
+        type: "heuristic" as const,
+        name: "scripted-check",
+        spec: { kind: "script_ref" as const, path: scriptPath, args: [] },
+        expect: { exit_code: 0 },
+      },
+    ],
   }
 }
 
@@ -666,13 +687,112 @@ test("register_goal and modify_goal accept contract_audit ids after contract reg
     {} as any,
   )
 
-  expect(modifyGoalOut).toContain('OK: goal "goal_ui" fields updated')
+  expect(modifyGoalOut).toContain('No changes: goal "goal_ui" already matches the submitted updates')
   expect(kit.getCollector().goals.find((goal) => goal.id === "goal_ui")?.acceptance_specs[0]?.scorers[0]).toMatchObject(
     {
       type: "contract_audit",
       spec: { contract_ids: ["contract_order"] },
     },
   )
+})
+
+test("register_goal rejects script_ref acceptance specs whose scripts do not exist", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-script-ref-"))
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+
+  const out = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_missing_script",
+      title: "Missing script",
+      objective: "Define a goal whose scripted acceptance must reference a real repository script.",
+      acceptance_specs: [scriptRefAcceptance("goal_missing_script", "scripts/missing-check.sh")],
+      owned_paths: ["src/missing.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("references missing script_ref acceptance scorer path(s)")
+  expect(out).toContain('Use spec.kind="shell" with cmd for inline checks')
+  expect(kit.getCollector().goals).toEqual([])
+})
+
+test("register_goal accepts existing script_ref and exposes scorer kind in goal snapshot", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-script-ref-"))
+  fs.mkdirSync(path.join(tmp, "scripts"))
+  fs.writeFileSync(path.join(tmp, "scripts", "check.sh"), "echo ok\n")
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+
+  const out = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_existing_script",
+      title: "Existing script",
+      objective: "Define a goal whose scripted acceptance references a real repository script.",
+      acceptance_specs: [scriptRefAcceptance("goal_existing_script", "scripts/check.sh")],
+      owned_paths: ["src/existing.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain('OK: goal "goal_existing_script" registered')
+  expect(out).toContain("heuristic:script_ref:scripts/check.sh")
+})
+
+test("register_goal exposes shell scorer kind and command preview in goal snapshot", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+
+  const out = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_shell_snapshot",
+      title: "Shell snapshot",
+      objective: "Define a goal whose shell acceptance is visible in architect feedback.",
+      acceptance_specs: [acceptance("goal_shell_snapshot")],
+      owned_paths: ["src/shell.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("heuristic:shell:bun test")
+})
+
+test("modify_goal reports no-op instead of fake changed count for identical updates", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+  const goal = {
+    id: "goal_noop",
+    title: "Noop",
+    objective: "Define a stable goal whose repeated updates should be reported as unchanged.",
+    acceptance_specs: [acceptance("goal_noop")],
+    owned_paths: ["src/noop.ts"],
+    depends_on: [],
+    priority: "blocking" as const,
+    kind: "feature" as const,
+    requirement_ids: ["REQ-1"],
+  }
+  await kit.tools.register_goal.execute!(goal as any, {} as any)
+
+  const out = await kit.tools.modify_goal.execute!(
+    {
+      id: "goal_noop",
+      updates: {
+        acceptance_specs: goal.acceptance_specs,
+      },
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain('No changes: goal "goal_noop" already matches the submitted updates')
+  expect(out).not.toContain("fields updated")
 })
 
 test("register_goal schema rejects malformed scorer type before execute", () => {

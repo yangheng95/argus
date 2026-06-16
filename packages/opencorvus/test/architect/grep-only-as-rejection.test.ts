@@ -36,4 +36,12 @@ describe("architect grep-only acceptance spec discipline", () => {
     expect(prompt).toContain("A shell scorer that only runs `tsc`, `typecheck`, `lint`, `build`, `npm start`, `bun dev`")
     expect(prompt).toContain("surface that as an under-specified requirement in decomposition_analysis")
   })
+
+  test("core prompt requires script_ref scorers to reference existing scripts", async () => {
+    const prompt = await readArchitectPrompt()
+
+    expect(prompt).toContain('Use `spec.kind:"script_ref"` only for repo scripts that already exist at registration time')
+    expect(prompt).toContain('For one-off checks, use `spec.kind:"shell"` with `cmd`')
+    expect(prompt).toContain("do not register helper-script goals or temporary test goals to probe the schema")
+  })
 })
