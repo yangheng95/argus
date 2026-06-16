@@ -139,3 +139,6 @@ packages/sdk/js/openapi-ts-error-*.log
 
 # Auto-added by OpenCorvus
 # the whole baseline / acceptance commit aborts. Same trap for the other
+
+# Auto-added by OpenCorvus
+.opencorvus/r/
