@@ -27,7 +27,7 @@ import {
   importSkillPackage,
   type SkillImportPackageFile,
 } from "../../services/extensions"
-import { addMcpServer } from "../../services/mcp"
+import { addMcpServer, connectMcp, disconnectMcp } from "../../services/mcp"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
 import { Icon, type IconName } from "../Icon"
@@ -113,11 +113,23 @@ function skillDuplicateTitle(item: SkillItem): string {
 function mcpStatusLabel(status: string): string {
   const map: Record<string, string> = {
     connected: t("mcp.status.connected"),
+    disconnected: t("mcp.status.disconnected"),
     disabled: t("mcp.status.disabled"),
+    failed: t("mcp.status.failed"),
     error: t("mcp.status.error"),
     connecting: t("mcp.status.connecting"),
+    needs_auth: t("mcp.status.needs_auth"),
+    needs_client_registration: t("mcp.status.needs_client_registration"),
   }
   return map[status] || status
+}
+
+function mcpCanConnect(status: string): boolean {
+  return status === "disconnected" || status === "disabled" || status === "failed"
+}
+
+function mcpCanDisconnect(status: string): boolean {
+  return status === "connected" || status === "connecting"
 }
 
 function dataTransferEntries(dataTransfer: DataTransfer | null): WebkitFileSystemEntry[] {
@@ -716,6 +728,28 @@ function ExtensionSettingsPanel(props: {
     }
   }
 
+  async function handleConnectMcp(name: string) {
+    if (!requireActiveDirectory()) return
+    setPanelNotice("")
+    try {
+      await connectMcp(name)
+      await refreshMcpStatus()
+    } catch (e) {
+      setPanelNotice(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function handleDisconnectMcp(name: string) {
+    if (!requireActiveDirectory()) return
+    setPanelNotice("")
+    try {
+      await disconnectMcp(name)
+      await refreshMcpStatus()
+    } catch (e) {
+      setPanelNotice(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   return (
     <>
       <Show when={loading()}>
@@ -1078,9 +1112,37 @@ function ExtensionSettingsPanel(props: {
                           <strong>{name}</strong>
                           <span>{detail ? detail : mcpStatusLabel(status)}</span>
                         </div>
-                        <span class="extension-status" data-state={status}>
-                          {mcpStatusLabel(status)}
-                        </span>
+                        <div class="extension-row-actions">
+                          <Show when={mcpCanConnect(status)}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              tone="accent"
+                              title={t("mcp.connect_action")}
+                              aria-label={t("mcp.connect_action")}
+                              onClick={() => handleConnectMcp(name)}
+                            >
+                              {t("mcp.connect_action")}
+                            </Button>
+                          </Show>
+                          <Show when={mcpCanDisconnect(status)}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              tone="neutral"
+                              title={t("mcp.disconnect_action")}
+                              aria-label={t("mcp.disconnect_action")}
+                              onClick={() => handleDisconnectMcp(name)}
+                            >
+                              {t("mcp.disconnect_action")}
+                            </Button>
+                          </Show>
+                          <span class="extension-status" data-state={status}>
+                            {mcpStatusLabel(status)}
+                          </span>
+                        </div>
                       </div>
                     )
                   }}

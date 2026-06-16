@@ -940,6 +940,7 @@ disposers.push(
     createEffect(() => {
       const selectedSource = boardStore.selectedSource
       if (selectedSource?.kind !== "task") return
+      if (!focusedLeftActivityOwnsPrimaryPanel(selectedLeftActivity())) return
       if (selectedLeftActivity() === "tasks" && selectedLeftPanelActivity() === "tasks" && primaryCenterPanel() === "task") {
         return
       }

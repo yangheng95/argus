@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
-import { addMcpServer, buildMcpAddRequest, parseMcpArguments } from "../src/services/mcp"
+import { addMcpServer, buildMcpAddRequest, connectMcp, disconnectMcp, parseMcpArguments } from "../src/services/mcp"
 
 function fakeTransport(capture: (req: TransportRequest) => void): HostTransport {
   return {
@@ -88,6 +88,32 @@ describe("MCP overlay service", () => {
         command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "C:\\repo with spaces"],
       },
     })
+  })
+
+  test("connects and disconnects configured MCP servers through project-scoped routes", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(fakeTransport((req) => requests.push(req)))
+    configure({ directory: "C:/Users/chuan/myhexin-local/vibecodingclient" })
+
+    await connectMcp("browser")
+    await disconnectMcp("browser")
+
+    expect(requests.map((req) => [req.method, req.path, req.query])).toEqual([
+      [
+        "POST",
+        "mcp/browser/connect",
+        {
+          directory: "C:/Users/chuan/myhexin-local/vibecodingclient",
+        },
+      ],
+      [
+        "POST",
+        "mcp/browser/disconnect",
+        {
+          directory: "C:/Users/chuan/myhexin-local/vibecodingclient",
+        },
+      ],
+    ])
   })
 
   test("rejects malformed local MCP arguments instead of changing their meaning", () => {

@@ -1,5 +1,5 @@
 // ── MCP Service ──
-// disconnectMcp, removeMcpAuth, deleteAllMcp.
+// connectMcp, disconnectMcp, removeMcpAuth, deleteAllMcp.
 // DOM-rendering is handled by declarative Solid.js components.
 
 import { appStore } from "../store/app"
@@ -82,6 +82,13 @@ export async function addMcpServer(input: AddMcpInput): Promise<void> {
     }
   })
   await apiJson(`mcp/${encodeURIComponent(request.name)}/connect`, {
+    method: "POST",
+  })
+}
+
+/** Connects a configured MCP server by name. */
+export async function connectMcp(name: string): Promise<void> {
+  await apiJson(`mcp/${encodeURIComponent(name)}/connect`, {
     method: "POST",
   })
 }

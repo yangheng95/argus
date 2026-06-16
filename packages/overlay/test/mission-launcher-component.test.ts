@@ -181,9 +181,20 @@ test("Task source rebinds the left toolbar and center panel to Tasks", () => {
   expect(MAIN_TSX).toContain('if (activity === "mission" && boardStore.selectedSource?.kind === "task")')
   expect(MAIN_TSX).toContain('const selectedSource = boardStore.selectedSource')
   expect(MAIN_TSX).toContain('if (selectedSource?.kind !== "task") return')
+  expect(MAIN_TSX).toContain("if (!focusedLeftActivityOwnsPrimaryPanel(selectedLeftActivity())) return")
   expect(MAIN_TSX).toContain('setSelectedLeftActivity("tasks")')
   expect(MAIN_TSX).toContain('setSelectedLeftPanelActivity("tasks")')
   expect(MAIN_TSX).toContain('resetCenterWorkbenchToFocusedPanel("tasks")')
+})
+
+test("Task source rebind does not steal Memory Skill or MCP tool activities", () => {
+  const rebindStart = MAIN_TSX.indexOf('const selectedSource = boardStore.selectedSource')
+  const rebindEnd = MAIN_TSX.indexOf("const taskListEl = document.getElementById", rebindStart)
+  const rebindBlock = MAIN_TSX.slice(rebindStart, rebindEnd)
+  expect(rebindBlock).toContain("focusedLeftActivityOwnsPrimaryPanel(selectedLeftActivity())")
+  expect(rebindBlock).not.toContain('selectedLeftActivity() === "memory"')
+  expect(rebindBlock).not.toContain('selectedLeftActivity() === "skill"')
+  expect(rebindBlock).not.toContain('selectedLeftActivity() === "mcp"')
 })
 
 test("main ChatComposer exposes the standard Mission data-ui hooks for downstream e2e", () => {
