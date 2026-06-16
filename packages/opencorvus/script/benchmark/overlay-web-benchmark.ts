@@ -168,7 +168,6 @@ const KNOWN_FLAGS = new Set<string>([
   "--figma-url",
   // boolean (no value) switches
   "--no-keep",
-  "--no-browser",
   "--stop-after-architect",
 ])
 
@@ -241,12 +240,6 @@ if (requestFile && requestAttachment) {
 }
 const figmaUrl = flag("--figma-url")?.trim() || undefined
 const acceptanceVerifyCmd = flag("--acceptance-verify-cmd")
-// `--no-browser` bypasses the puppeteer-driven overlay UI and drives the
-// benchmark entirely through HTTP API polling. The downstream code already
-// guards every puppeteer call with `if (page)` — this flag activates those
-// branches. Useful when the overlay UI is under refactor (07-panel-reactivity.md)
-// and we only want to exercise the opencorvus server pipeline end-to-end.
-const noBrowser = process.argv.includes("--no-browser")
 const stopAfterArchitect = process.argv.includes("--stop-after-architect")
 // Only set task-level budget when explicitly provided via CLI flag.
 // Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
@@ -507,26 +500,24 @@ await Instance.provide({
     await ExecutorBootstrap.autoRegister(true)
   },
 })
-const browser = noBrowser ? null : await launchBrowser()
-let page = browser ? await browser.newPage() : null
-if (page) await page.setViewport({ width: 1600, height: 1200 })
+const browser = await launchBrowser()
+let page = await browser.newPage()
+await page.setViewport({ width: 1600, height: 1200 })
 // Forward overlay browser console + pageerror events to benchmark stdout.
 // Without this the overlay's own `console.error(...)` (including the
 // `[sse] dispatch error for event X` introduced to surface tree-writer
 // throws that were previously silently swallowed) is invisible to the
 // benchmark driver, making UI-side regressions appear as generic overlay
 // rendering failures.
-if (page) {
-  page.on("console", (msg) => {
-    const type = msg.type()
-    // Only forward warning+ to avoid log noise from info/debug.
-    if (type === "log" || type === "info" || type === "debug") return
-    process.stderr.write(`[overlay-console:${type}] ${msg.text()}\n`)
-  })
-  page.on("pageerror", (err) => {
-    process.stderr.write(`[overlay-pageerror] ${err.message}\n${err.stack ?? ""}\n`)
-  })
-}
+page.on("console", (msg) => {
+  const type = msg.type()
+  // Only forward warning+ to avoid log noise from info/debug.
+  if (type === "log" || type === "info" || type === "debug") return
+  process.stderr.write(`[overlay-console:${type}] ${msg.text()}\n`)
+})
+page.on("pageerror", (err) => {
+  process.stderr.write(`[overlay-pageerror] ${err.message}\n${err.stack ?? ""}\n`)
+})
 
 const marks = {
   startedAt: Date.now(),
@@ -920,45 +911,26 @@ let eventStream = {
 try {
   await Bun.write(eventLogFile, "")
 
-  if (page) {
-    await page.evaluateOnNewDocument(
-      (serverUrl, directory) => {
-        localStorage.setItem("oc_server_url", serverUrl)
-        localStorage.setItem("oc_auto_server", "false")
-        localStorage.setItem("oc_directory", directory)
-        localStorage.setItem("oc_directory_mode", "custom")
-        localStorage.setItem("oc_workspace_directory", directory)
-        localStorage.setItem("oc_auto_question", "true")
-      },
-      server.url.origin,
-      temp.dir,
-    )
+  await page.evaluateOnNewDocument(
+    (serverUrl, directory) => {
+      localStorage.setItem("oc_server_url", serverUrl)
+      localStorage.setItem("oc_auto_server", "false")
+      localStorage.setItem("oc_directory", directory)
+      localStorage.setItem("oc_directory_mode", "custom")
+      localStorage.setItem("oc_workspace_directory", directory)
+      localStorage.setItem("oc_auto_question", "true")
+    },
+    server.url.origin,
+    temp.dir,
+  )
 
-    await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })
-    const overlayReady = await page
-      .waitForFunction(() => typeof (window as OverlayBenchmarkWindow).applyDirectory === "function", { timeout: 0 })
-      .then(() => true)
-      .catch((error) => {
-        errorLine(
-          `[overlay-benchmark] overlay readiness wait failed; continuing API-only for primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-        )
-        return false
-      })
-    if (overlayReady) {
-      const overlay = await syncDirectory(page, temp.dir).catch((error) => {
-        errorLine(
-          `[overlay-benchmark] overlay directory sync failed; continuing API-only for primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-        )
-        return null
-      })
-      if (overlay) logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
-    }
-    await api("/global/health").catch((error) => {
-      errorLine(
-        `[overlay-benchmark] health check failed; continuing primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-      )
-    })
-  }
+  await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })
+  await page.waitForFunction(() => typeof (window as OverlayBenchmarkWindow).applyDirectory === "function", {
+    timeout: 0,
+  })
+  const overlay = await syncDirectory(page, temp.dir)
+  logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
+  await api("/global/health")
   marks.onlineAt = Date.now()
   marks.submittedAt = Date.now()
 
@@ -968,21 +940,19 @@ try {
     taskID = resumeTaskID
     eventStream = subscribeTaskEvents(taskID)
 
-    // Navigate browser to the overlay and select the existing task
-    if (page) {
-      await page.evaluate(async (id) => {
-        const overlay = window as OverlayBenchmarkWindow
-        await overlay.loadTasks()
-        await overlay.selectTask(id)
-      }, taskID)
-      await page.waitForFunction(
-        (id) => {
-          return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
-        },
-        { timeout: 0 },
-        taskID,
-      )
-    }
+    // Navigate browser to the overlay and select the existing task.
+    await page.evaluate(async (id) => {
+      const overlay = window as OverlayBenchmarkWindow
+      await overlay.loadTasks()
+      await overlay.selectTask(id)
+    }, taskID)
+    await page.waitForFunction(
+      (id) => {
+        return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
+      },
+      { timeout: 0 },
+      taskID,
+    )
 
     // Synthesize planning/streaming snapshots from current board state
     const currentProg = await api(`/task/${taskID}/progress`)
@@ -1000,14 +970,12 @@ try {
     marks.createdAt = Date.now()
     marks.selectedAt = Date.now()
 
-    if (page) {
-      await page.waitForFunction(
-        () => {
-          return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
-        },
-        { timeout: 0 },
-      )
-    }
+    await page.waitForFunction(
+      () => {
+        return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
+      },
+      { timeout: 0 },
+    )
     marks.boardAt = Date.now()
 
     if (resumeMessage !== undefined) {
@@ -1022,16 +990,7 @@ try {
       logLine(`[overlay-benchmark] resume taskID=${taskID} attached without message injection`)
     }
 
-    if (page) {
-      streaming = await waitForStreamingVisible(page).catch(() => ({
-        reasoning: "",
-        assistantText: "",
-        liveRole: "",
-        liveText: "",
-      }))
-    } else {
-      streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
-    }
+    streaming = await waitForStreamingVisible(page)
     marks.streamingAt = Date.now()
     // ─────────────────────────────────────────────────────────────────────────
   } else {
@@ -1076,61 +1035,10 @@ try {
         `--resume-task-id=${taskID} --resume-home-dir="${temp.home}" --project-dir="${temp.dir}" --executor=${executor}`,
     )
 
-    if (page) {
-      planning = await waitForPlanningVisible(page, api).catch((error) => {
-        errorLine(
-          `[overlay-benchmark] overlay planning visibility check failed; falling back to API polling: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-        )
-        return null
-      })
-      if (!planning) {
-        while (true) {
-          const prog = await api(`/task/${taskID}/progress`)
-            .then((r) => r.json())
-            .catch(() => null)
-          if (prog?.task?.status && prog.task.status !== "queued") {
-            planning = {
-              pendingCount: 0,
-              taskList: [],
-              reasoning: "",
-              assistantText: "",
-              taskIDs: [taskID],
-              selectedTaskID: taskID,
-            }
-            break
-          }
-          await Bun.sleep(1000)
-        }
-      }
-    } else {
-      while (true) {
-        const prog = await api(`/task/${taskID}/progress`)
-          .then((r) => r.json())
-          .catch(() => null)
-        if (prog?.task?.status && prog.task.status !== "queued") {
-          planning = {
-            pendingCount: 0,
-            taskList: [],
-            reasoning: "",
-            assistantText: "",
-            taskIDs: [taskID],
-            selectedTaskID: taskID,
-          }
-          break
-        }
-        await Bun.sleep(1000)
-      }
-    }
+    planning = await waitForPlanningVisible(page, api)
     marks.planningAt = Date.now()
 
-    if (page) {
-      taskID = await waitForTaskCreated(page, api).catch((error) => {
-        errorLine(
-          `[overlay-benchmark] overlay task-created visibility check failed; keeping API taskID=${taskID}: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-        )
-        return taskID
-      })
-    }
+    taskID = await waitForTaskCreated(page, api)
     marks.createdAt = Date.now()
     await api(`/task/${taskID}/budget`, {
       method: "PATCH",
@@ -1144,71 +1052,33 @@ try {
       }),
     }).catch(() => undefined)
 
-    if (page) {
-      await page
-        .evaluate(async (id) => {
-          const overlay = window as OverlayBenchmarkWindow
-          if (overlay.boardStore.selectedTaskID === id) return
-          await overlay.loadTasks()
-          await overlay.selectTask(id)
-        }, taskID)
-        .catch((error) => {
-          errorLine(
-            `[overlay-benchmark] overlay selectTask failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-          )
-        })
-      await page
-        .waitForFunction(
-          (id) => {
-            return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
-          },
-          { timeout: 0 },
-          taskID,
-        )
-        .catch((error) => {
-          errorLine(
-            `[overlay-benchmark] overlay selected-task wait failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-          )
-        })
-    }
+    await page.evaluate(async (id) => {
+      const overlay = window as OverlayBenchmarkWindow
+      if (overlay.boardStore.selectedTaskID === id) return
+      await overlay.loadTasks()
+      await overlay.selectTask(id)
+    }, taskID)
+    await page.waitForFunction(
+      (id) => {
+        return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
+      },
+      { timeout: 0 },
+      taskID,
+    )
     marks.selectedAt = Date.now()
 
-    if (page) {
-      await page
-        .waitForFunction(
-          () => {
-            return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
-          },
-          { timeout: 0 },
-        )
-        .catch((error) => {
-          errorLine(
-            `[overlay-benchmark] overlay board wait failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-          )
-        })
-    }
+    await page.waitForFunction(
+      () => {
+        return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
+      },
+      { timeout: 0 },
+    )
     marks.boardAt = Date.now()
-    if (page) {
-      streaming = await waitForStreamingVisible(page).catch((error) => {
-        errorLine(
-          `[overlay-benchmark] overlay streaming visibility check failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-        )
-        return { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
-      })
-    } else {
-      streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
-    }
+    streaming = await waitForStreamingVisible(page)
     marks.streamingAt = Date.now()
     // ─────────────────────────────────────────────────────────────────────────
   }
-  if (page && browser) {
-    page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api).catch((error) => {
-      errorLine(
-        `[overlay-benchmark] resume overlay verification failed; continuing primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`,
-      )
-      return page
-    })
-  }
+  page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
   board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
   if (stopAfterArchitect) {
@@ -1333,13 +1203,12 @@ try {
       }).catch(() => undefined),
     )
   }
-  if (page) await cleanup("page.close", () => page!.close().catch(() => undefined))
-  if (browser)
-    await cleanup(
-      "browser.close",
-      () => browser!.close().catch(() => undefined),
-      () => browser!.process()?.kill("SIGKILL"),
-    )
+  await cleanup("page.close", () => page.close().catch(() => undefined))
+  await cleanup(
+    "browser.close",
+    () => browser.close().catch(() => undefined),
+    () => browser.process()?.kill("SIGKILL"),
+  )
   await cleanup("server.stop", () => server.stop(true))
   await cleanup("instance.disposeAll", () => Instance.disposeAll().catch(() => undefined))
   // Kill any orphaned processes that executors left behind in the workspace
@@ -1665,12 +1534,8 @@ async function buildBenchmarkReport(error?: unknown) {
     }),
     reportError,
   )
-  const screenshot = page
-    ? await withTimeout(takeBenchmarkScreenshot(page), 15_000, "benchmark screenshot").catch(() => null)
-    : null
-  const currentOverlay = page
-    ? await withTimeout(overlaySnapshot(page), 8_000, "overlay snapshot").catch((cause) => ({ error: String(cause) }))
-    : { error: "no-browser mode" }
+  const screenshot = await withTimeout(takeBenchmarkScreenshot(page), 15_000, "benchmark screenshot")
+  const currentOverlay = await withTimeout(overlaySnapshot(page), 8_000, "overlay snapshot")
   const expectsFrontendDesignCard = expectsFrontendDesignProjection(TASK_REQUEST)
 
   return {

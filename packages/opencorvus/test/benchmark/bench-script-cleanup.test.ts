@@ -135,6 +135,23 @@ test("benchmark local visual verification waits for completed tasks", () => {
   expect(src).toContain('throw new Error("acceptance verification command is required")')
 })
 
+test("benchmark requires a visible overlay browser path", () => {
+  expect(src).not.toContain("--no-browser")
+  expect(src).not.toContain("noBrowser")
+  expect(src).not.toContain("no-browser mode")
+  expect(src).not.toContain("falling back to API")
+  expect(src).not.toContain("continuing API-only")
+  expect(src).not.toContain("continuing with API")
+  expect(src).not.toContain("if (page)")
+  expect(src).not.toContain("screenshot = page")
+  expect(src).not.toContain("currentOverlay = page")
+  expect(src).toContain("const browser = await launchBrowser()")
+  expect(src).toContain("let page = await browser.newPage()")
+  expect(src).toContain('await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })')
+  expect(src).toContain("const screenshot = await withTimeout(takeBenchmarkScreenshot(page)")
+  expect(src).toContain("const currentOverlay = await withTimeout(overlaySnapshot(page)")
+})
+
 test("benchmark auto verification uses task-scoped HTML skeleton workflow thresholds", () => {
   expect(src).toContain("WEB_CLONE_VISUAL_THRESHOLD")
   expect(src).toContain("WEB_CLONE_VISUAL_WORST_THRESHOLD")
