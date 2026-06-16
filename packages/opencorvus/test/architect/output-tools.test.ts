@@ -716,7 +716,35 @@ test("register_goal rejects script_ref acceptance specs whose scripts do not exi
   )
 
   expect(out).toContain("references missing script_ref acceptance scorer path(s)")
-  expect(out).toContain('Use spec.kind="shell" with cmd for inline checks')
+  expect(out).toContain("script_ref is only for existing repo scripts")
+  expect(out).toContain("contract_audit is a scorer type, not a script_ref path")
+  expect(out).toContain('Use spec.kind="shell" with cmd for inline page checks')
+  expect(kit.getCollector().goals).toEqual([])
+})
+
+test("register_goal explains contract_audit is not a script_ref path", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-contract-audit-script-ref-"))
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+
+  const out = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_contract_audit_confusion",
+      title: "Contract audit confusion",
+      objective: "Define a goal whose acceptance must not mistake contract_audit for a repo script.",
+      acceptance_specs: [scriptRefAcceptance("goal_contract_audit_confusion", ".opencorvus/scripts/contract-audit")],
+      owned_paths: ["src/page.tsx"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain(".opencorvus/scripts/contract-audit")
+  expect(out).toContain("contract_audit is a scorer type, not a script_ref path")
+  expect(out).toContain('type="contract_audit" with registered contract_ids')
+  expect(out).toContain("collector unchanged")
   expect(kit.getCollector().goals).toEqual([])
 })
 

@@ -369,7 +369,6 @@ export const BrowserPreviewRoutes = lazy(() =>
         const bytes = await captureBrowserPreviewLiveSnapshot({
           taskID,
           targetID: body.targetID,
-          url: target.url,
           viewportID: body.viewportID,
           signal: c.req.raw.signal,
         })
@@ -410,7 +409,6 @@ export const BrowserPreviewRoutes = lazy(() =>
         const bytes = await interactBrowserPreviewLive({
           taskID,
           targetID: body.targetID,
-          url: target.url,
           viewportID: body.viewportID,
           input: body.input,
           signal: c.req.raw.signal,

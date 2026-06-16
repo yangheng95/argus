@@ -53,6 +53,7 @@ export type BrowserPreviewVerificationInput = {
 }
 
 export type BrowserPreviewVerificationCaptureJobInput = {
+  projectRoot: string
   taskID: string
   targetID: string
   url: string
@@ -121,6 +122,7 @@ export async function runBrowserPreviewVerification(
   const captureID = Identifier.ascending("artifact")
   const outDir = ProjectRuntimePaths.taskAbsolute(projectRoot, input.taskID, "browser-preview", captureID)
   const { captures, manifest } = await captureJob({
+    projectRoot,
     taskID: input.taskID,
     targetID: input.targetID,
     url: input.target.url,

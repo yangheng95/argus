@@ -42,8 +42,15 @@ const HeuristicScorerSchema = z.object({
       cwd: z.string().optional(),
     }),
     z.object({
-      kind: z.literal("script_ref").describe("script_ref — run a repo script. Requires: path; optional args."),
-      path: z.string().min(1).describe("Repo-relative script path."),
+      kind: z
+        .literal("script_ref")
+        .describe(
+          "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
+        ),
+      path: z
+        .string()
+        .min(1)
+        .describe("Repo-relative script path that already exists at registration time."),
       args: z.array(z.string()).optional(),
     }),
   ]),
@@ -109,7 +116,7 @@ const ContractAuditScorerSchema = z.object({
   type: z
     .literal("contract_audit")
     .describe(
-      "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
+      "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
     ),
   name: z.string().min(1),
   spec: z.object({
