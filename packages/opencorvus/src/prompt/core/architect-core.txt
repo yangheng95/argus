@@ -65,6 +65,7 @@ Goal requirements:
 - Shell and script checks are `heuristic` scorers. Do not use `type: "shell"` or `type: "script_ref"`; those belong under `spec.kind`.
 - Shell scorer shape: `{ "type": "heuristic", "name": "tests", "spec": { "kind": "shell", "cmd": "..." }, "expect": { "exit_code": 0 } }`.
 - Script scorer shape: `{ "type": "heuristic", "name": "script", "spec": { "kind": "script_ref", "path": "...", "args": [] }, "expect": { "exit_code": 0 } }`.
+- Use `spec.kind:"script_ref"` only for repo scripts that already exist at registration time. For one-off checks, use `spec.kind:"shell"` with `cmd`; do not register helper-script goals or temporary test goals to probe the schema.
 - Use `contract_audit` only with `{ "kind": "contract_graph", "contract_ids": [...] }` and `expect: { "status": "passed" }`.
 - contract_audit.contract_ids must be copied from already-registered contract ids returned by register_contract; unknown ids are rejected.
 - The verification goal's `acceptance_specs` are the quality contract for final integration and regression checks.
