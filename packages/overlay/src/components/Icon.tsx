@@ -129,6 +129,7 @@ export type IconName =
   // Composer toolbar (was ChatComposer inline svg)
   | "attach"
   | "web-search"
+  | "expert-squad"
   | "send"
   | "stop"
   // Card header actions (was CardHeader inline svg)
@@ -216,6 +217,7 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   "folder-open": { component: FolderOpen },
   attach: { component: Paperclip },
   "web-search": { component: Globe },
+  "expert-squad": { component: BrainCircuit },
   send: { component: Send },
   stop: { component: Square },
   copy: { component: Copy },

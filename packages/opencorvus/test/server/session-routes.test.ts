@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
@@ -115,6 +116,44 @@ describe("session routes", () => {
     })
     expect(routeFailure?.error).toMatchObject({
       type: "DirectoryRequiredError",
+    })
+  })
+
+  test("PATCH /session/:id/config applies prompt profile overlay and rejects unknown profiles", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const session = await Session.create({ kind: "root", title: "profile-session" })
+
+        const saved = await app.request(`/session/${session.id}/config`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ prompt_profile: { active: "backend" } }),
+        })
+        expect(saved.status).toBe(200)
+        const body = (await saved.json()) as { config: Config.Info; origin: any }
+        expect(body.config.prompt_profile.active).toBe("backend")
+        expect(body.origin.prompt_profile.active).toBe("session")
+
+        const rejected = await app.request(`/session/${session.id}/config`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ prompt_profile: { active: "missing-profile" } }),
+        })
+        expect(rejected.status).toBe(400)
+        expect((await Session.get(session.id)).metadata?.configOverlay).toMatchObject({
+          prompt_profile: { active: "backend" },
+        })
+      },
     })
   })
 

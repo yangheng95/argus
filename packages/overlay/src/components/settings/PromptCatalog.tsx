@@ -28,7 +28,10 @@ interface PromptEntry {
   description?: string
   inherits_core?: boolean
   prompt?: string
+  editable_prompt?: string
   effective_prompt?: string
+  active_profile?: string
+  profile_prompt?: string | null
   configured_prompt: string | null
   default_prompt?: string
   prompt_mode?: "override" | "append"
@@ -89,6 +92,10 @@ function promptPreviewHtml(value: string): string {
   return renderMarkdown(value)
 }
 
+function editablePrompt(entry: PromptEntry): string {
+  return entry.editable_prompt ?? entry.prompt ?? ""
+}
+
 // ── Component ──
 
 export default function PromptCatalog() {
@@ -108,11 +115,11 @@ export default function PromptCatalog() {
     const id = promptEntryID(entry)
     // Access via proxy to track reactivity; undefined means no draft
     const val = (drafts as Record<string, string>)[id]
-    return val !== undefined ? val : entry.prompt || ""
+    return val !== undefined ? val : editablePrompt(entry)
   }
 
   function isDirty(entry: PromptEntry): boolean {
-    return draftValue(entry) !== (entry.prompt || "")
+    return draftValue(entry) !== editablePrompt(entry)
   }
 
   function viewMode(entryID: string): PromptViewMode {
@@ -147,7 +154,7 @@ export default function PromptCatalog() {
     const entryID = promptEntryID(entry)
     if (entry.configured_prompt === null) {
       // No server override — just reset local draft
-      setDrafts(entryID, entry.prompt || "")
+      setDrafts(entryID, editablePrompt(entry))
       return
     }
     setSaving(true)
@@ -191,6 +198,9 @@ export default function PromptCatalog() {
               const description = promptDescription(entry)
               const dirty = createMemo(() => isDirty(entry))
               const currentDraft = createMemo(() => draftValue(entry))
+              const previewPrompt = createMemo(() =>
+                dirty() ? currentDraft() : (entry.effective_prompt ?? currentDraft()),
+              )
               const canShowDefault = () => !!entry.default_prompt
 
               return (
@@ -294,7 +304,7 @@ export default function PromptCatalog() {
                         when={viewMode(entryID) === "default" && canShowDefault()}
                         fallback={
                           <div class="prompt-preview-card prompt-preview-card--attached">
-                            <div class="md-content prompt-preview-body" innerHTML={promptPreviewHtml(currentDraft())} />
+                            <div class="md-content prompt-preview-body" innerHTML={promptPreviewHtml(previewPrompt())} />
                           </div>
                         }
                       >

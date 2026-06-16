@@ -936,6 +936,21 @@ export type Config = {
     [key: string]: string
   }
   /**
+   * Active prompt profile and optional project-defined profile overlays.
+   */
+  prompt_profile?: {
+    active?: string
+    profiles?: {
+      [key: string]: {
+        label: string
+        description?: string
+        agents?: {
+          [key: string]: string
+        }
+      }
+    }
+  }
+  /**
    * Additional instruction files or patterns to include
    */
   instructions?: Array<string>
@@ -3881,6 +3896,36 @@ export type ConfigPromptResponses = {
 
 export type ConfigPromptResponse = ConfigPromptResponses[keyof ConfigPromptResponses]
 
+export type ConfigPromptProfileData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/config/prompt-profile"
+}
+
+export type ConfigPromptProfileResponses = {
+  /**
+   * Prompt profile catalog
+   */
+  200: {
+    active: string
+    default: string
+    profiles: Array<{
+      id: string
+      label: string
+      description?: string
+      built_in: boolean
+    }>
+  }
+}
+
+export type ConfigPromptProfileResponse = ConfigPromptProfileResponses[keyof ConfigPromptProfileResponses]
+
 export type ConfigProvidersData = {
   body?: never
   path?: never
@@ -5015,6 +5060,9 @@ export type SessionConfigUpdateData = {
     model?: string | null
     prompt?: {
       [key: string]: string | null
+    } | null
+    prompt_profile?: {
+      active?: string | null
     } | null
     agent?: {
       [key: string]: {
@@ -8588,6 +8636,7 @@ export type MissionWakeData = {
     text: string
     title?: string
     model?: string
+    promptProfile?: string
   }
   path?: never
   query?: {
@@ -9119,6 +9168,7 @@ export type TaskCreateData = {
     priority?: "critical" | "high" | "normal" | "low"
     queue?: boolean
     kind?: "workflow" | "build"
+    promptProfile?: string
     budget?: {
       maxExecutorGroups?: number
     }
@@ -12028,6 +12078,7 @@ export type TaskMessageData = {
     source: string
     target?: TaskMessageTarget
     user_id?: string
+    promptProfile?: string
     attachments?: Array<{
       mime: string
       data: string

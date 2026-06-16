@@ -7,6 +7,7 @@ import { EngineConfig } from "../../engine/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
+import { PromptProfile } from "@/agent/prompt-profile"
 import { PromptCatalog } from "../../config/prompt-catalog"
 import { mapValues } from "remeda"
 import { errors } from "../error"
@@ -94,6 +95,14 @@ export const ConfigRoutes = lazy(() =>
           }
         }
         await validateConfigModelReferences(partial, "config")
+        const mergedPreview = Config.mergeOverlay((await Config.get()) as Config.Info, partial as Config.Overlay)
+        const parsedPreview = Config.Info.safeParse(mergedPreview)
+        if (!parsedPreview.success) {
+          const issues = parsedPreview.error.issues
+            .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
+            .join("; ")
+          return c.json({ error: `config: ${issues}` }, 400)
+        }
         // Config.update() internally reads current config and deep-merges
         await Config.update(partial as Config.Info)
         const updated = await Config.get()
@@ -125,6 +134,40 @@ export const ConfigRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await PromptCatalog.list())
+      },
+    )
+    .get(
+      "/prompt-profile",
+      describeRoute({
+        summary: "List prompt profiles",
+        description: "Returns the active prompt profile and available built-in/project prompt profiles.",
+        operationId: "config.promptProfile",
+        responses: {
+          200: {
+            description: "Prompt profile catalog",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    active: z.string(),
+                    default: z.string(),
+                    profiles: z.array(
+                      z.object({
+                        id: z.string(),
+                        label: z.string(),
+                        description: z.string().optional(),
+                        built_in: z.boolean(),
+                      }),
+                    ),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(PromptProfile.list(await Config.get()))
       },
     )
     .get(

@@ -76,6 +76,8 @@ export interface CreateTaskOptions {
   executor?: "opencorvus" | "codex" | "claude-code"
   /** Optional OpenCorvus model override for this new task. */
   model?: string
+  /** Optional prompt profile for the task root session overlay. */
+  promptProfile?: string
   /** Title override. Server falls back to the request body when omitted. */
   title?: string
   signal?: AbortSignal
@@ -635,6 +637,7 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
     metadata,
     source: "panel",
     ...(options.model ? { model: options.model } : {}),
+    ...(options.promptProfile ? { promptProfile: options.promptProfile } : {}),
     ...(options.priority ? { priority: options.priority } : {}),
     ...(options.title ? { title: options.title } : {}),
     ...(budget ? { budget } : {}),

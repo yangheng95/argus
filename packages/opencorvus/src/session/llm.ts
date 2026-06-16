@@ -17,6 +17,7 @@ import { ProviderTransform } from "@/provider/transform"
 import { EffectiveConfig } from "@/config/effective"
 import { Instance } from "@/project/instance"
 import { Agent } from "@/agent/agent"
+import { PromptProfile } from "@/agent/prompt-profile"
 import { Message } from "./message"
 import { SessionEvents } from "./events"
 import { Plugin } from "@/plugin"
@@ -76,15 +77,26 @@ export namespace LLM {
     sessionID?: string
     runtimeSystemMode?: "complete"
   }) {
+    const config = input.sessionID
+      ? await EffectiveConfig.effective({ sessionID: input.sessionID })
+      : await EffectiveConfig.effective()
     const agent = Agent.resolveSessionAgent(
       input.agent,
       await resolveSessionOverlay(input.sessionID ? { sessionID: input.sessionID } : undefined),
     )
+    const completeSystemMode = input.runtimeSystemMode === "complete" || input.user.systemMode === "complete"
     const providerPrompt =
-      input.runtimeSystemMode === "complete" || input.user.systemMode === "complete"
+      completeSystemMode
         ? []
         : agent.prompt
-          ? [agent.prompt]
+          ? [
+              PromptProfile.composeAgentPrompt({
+                agentID: agent.name,
+                base: agent.prompt,
+                userAppend: agent.promptAppend,
+                config,
+              }),
+            ]
           : await SystemPrompt.provider(input.model, { sessionID: input.sessionID })
     const userSystem = input.runtimeSystemMode === "complete" ? [] : input.user.system ? [input.user.system] : []
 

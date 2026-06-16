@@ -824,6 +824,80 @@
         ]
       }
     },
+    "/config/prompt-profile": {
+      "get": {
+        "operationId": "config.promptProfile",
+        "summary": "List prompt profiles",
+        "description": "Returns the active prompt profile and available built-in/project prompt profiles.",
+        "responses": {
+          "200": {
+            "description": "Prompt profile catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "active": {
+                      "type": "string"
+                    },
+                    "default": {
+                      "type": "string"
+                    },
+                    "profiles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "built_in": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "built_in"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "active",
+                    "default",
+                    "profiles"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.config.promptProfile({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/config/providers": {
       "get": {
         "operationId": "config.providers",
@@ -3497,6 +3571,30 @@
                             }
                           ]
                         }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "prompt_profile": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "active": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
                       },
                       {
                         "type": "null"
@@ -13353,6 +13451,10 @@
                   },
                   "model": {
                     "type": "string"
+                  },
+                  "promptProfile": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
@@ -14307,7 +14409,8 @@
                 "required": [
                   "targetID",
                   "viewportIDs"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -15224,6 +15327,10 @@
                       "workflow",
                       "build"
                     ]
+                  },
+                  "promptProfile": {
+                    "type": "string",
+                    "minLength": 1
                   },
                   "budget": {
                     "type": "object",
@@ -26398,6 +26505,10 @@
                   "user_id": {
                     "type": "string"
                   },
+                  "promptProfile": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "attachments": {
                     "type": "array",
                     "items": {
@@ -34387,6 +34498,53 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "prompt_profile": {
+            "description": "Active prompt profile and optional project-defined profile overlays.",
+            "default": {
+              "active": "frontend"
+            },
+            "type": "object",
+            "properties": {
+              "active": {
+                "default": "frontend",
+                "type": "string",
+                "minLength": 1
+              },
+              "profiles": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "agents": {
+                      "default": {},
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
           },
           "instructions": {
             "description": "Additional instruction files or patterns to include",

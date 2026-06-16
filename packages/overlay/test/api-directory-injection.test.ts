@@ -127,6 +127,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("config/mcp", () => expectInjects("config/mcp"))
     test("config/skill", () => expectInjects("config/skill"))
     test("config/prompt", () => expectInjects("config/prompt"))
+    test("config/prompt-profile", () => expectInjects("config/prompt-profile"))
     test("config/executor", () => expectInjects("config/executor"))
     test("provider", () => expectInjects("provider"))
     test("project current", () => expectInjects("project/current"))
@@ -191,6 +192,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "path",
       "vcs",
       "config",
+      "config/prompt-profile",
       "project/current",
       "project/current/worktrees",
       "session/session_123/conversation",

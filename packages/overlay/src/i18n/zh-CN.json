@@ -674,6 +674,8 @@
   "prompt.none": "暂无可配置提示词",
   "prompt.preview": "Markdown 预览",
   "prompt.preview_empty": "当前提示词为空。",
+  "prompt_profile.selector_label": "专家团",
+  "prompt_profile.selector_title": "Prompt 专家团",
   "prompt.reset": "重置",
   "prompt.reset_done": "已重置",
   "prompt.append_core_edit_error": "此 Agent 使用代码内置默认 prompt。只能在默认 prompt 末尾追加自定义内容。",

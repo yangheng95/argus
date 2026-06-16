@@ -1,6 +1,7 @@
 import { Config } from "./config"
 import { Agent } from "@/agent/agent"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
+import { PromptProfile } from "@/agent/prompt-profile"
 
 import PROMPT_SYSTEM from "@/session/prompt/system.txt"
 import PROMPT_GENERATE from "@/agent/generate.txt"
@@ -29,7 +30,10 @@ export namespace PromptCatalog {
     group: string
     mode?: string
     prompt: string
+    editable_prompt: string
     effective_prompt: string
+    active_profile: string
+    profile_prompt: string | null
     configured_prompt: string | null
     default_prompt: string
     inherits_core: boolean
@@ -86,6 +90,7 @@ export namespace PromptCatalog {
   export async function list(): Promise<Entry[]> {
     const cfg = await Config.get()
     const configPrompts = cfg.prompt ?? {}
+    const activeProfile = PromptProfile.activeID(cfg)
     const agents = await Agent.list()
 
     const entries: Entry[] = []
@@ -100,7 +105,10 @@ export namespace PromptCatalog {
         label: slot.label,
         group: slot.group,
         prompt: configured ?? defaultPrompt,
+        editable_prompt: configured ?? defaultPrompt,
         effective_prompt: configured ?? defaultPrompt,
+        active_profile: activeProfile,
+        profile_prompt: null,
         configured_prompt: configured,
         default_prompt: defaultPrompt,
         inherits_core: false,
@@ -131,11 +139,23 @@ export namespace PromptCatalog {
       const configuredPrompt = promptMode === "append" ? (agentCfg?.prompt_append ?? null) : (agentCfg?.prompt ?? null)
       const nativeDefault = agent.native ? Agent.nativeDefaultPrompt(agent.name) : undefined
       const defaultPrompt = nativeDefault ?? agent.prompt ?? ""
-      const effectivePrompt =
+      const basePrompt =
         promptMode === "append"
-          ? [defaultPrompt, configuredPrompt].filter((item) => item && item.trim().length > 0).join("\n\n")
+          ? defaultPrompt
           : (configuredPrompt ?? defaultPrompt)
-      const prompt = effectivePrompt
+      const userAppend = promptMode === "append" ? configuredPrompt : null
+      const editablePrompt =
+        promptMode === "append"
+          ? [defaultPrompt, userAppend].filter((item) => item && item.trim().length > 0).join("\n\n")
+          : basePrompt
+      const profilePrompt = PromptProfile.overlayFor(agent.name, cfg) ?? null
+      const effectivePrompt = PromptProfile.composeAgentPrompt({
+        agentID: agent.name,
+        base: basePrompt,
+        userAppend,
+        config: cfg,
+      })
+      const prompt = editablePrompt
       const inheritsCore =
         promptMode === "override" && !configuredPrompt && (!defaultPrompt || defaultPrompt === PROMPT_SYSTEM)
       entries.push({
@@ -145,7 +165,10 @@ export namespace PromptCatalog {
         group: agentGroup(agent),
         mode: agent.mode,
         prompt,
+        editable_prompt: editablePrompt,
         effective_prompt: effectivePrompt,
+        active_profile: activeProfile,
+        profile_prompt: profilePrompt,
         configured_prompt: configuredPrompt,
         default_prompt: defaultPrompt,
         inherits_core: inheritsCore,

@@ -327,6 +327,58 @@ describe("task message routes", () => {
     })
   })
 
+  test("POST /task/:taskID/message applies selected prompt profile before waking scheduler", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "profile message" })
+        await seedRootSession(root.id)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "profile message",
+              request: "profile message",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "继续，但切换后端专家团。",
+            source: "panel",
+            promptProfile: "backend",
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
+          prompt_profile: { active: "backend" },
+        })
+      },
+    })
+  })
+
   test("POST /task/:taskID/message persists orchestrator agent on empty task root sessions", async () => {
     await using tmp = await tmpdir({
       git: true,
@@ -595,7 +647,38 @@ describe("task message routes", () => {
   })
 
   test("cancelled continuation uses a new orchestrator session when the prior one is terminal", async () => {
-    await using tmp = await tmpdir({ git: true, config: { model: "hexin/gpt-5.5" } })
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        model: "isolated/model",
+        provider: {
+          isolated: {
+            name: "Isolated Provider",
+            npm: "@ai-sdk/openai-compatible",
+            api: "https://example.invalid/v1",
+            env: [],
+            models: {
+              model: {
+                id: "model",
+                name: "Isolated Model",
+                release_date: "2026-05-27",
+                attachment: false,
+                reasoning: false,
+                tool_call: true,
+                cost: {
+                  input: 1,
+                  output: 1,
+                },
+                limit: {
+                  context: 1024,
+                  output: 1024,
+                },
+              },
+            },
+          },
+        },
+      },
+    })
 
     await Instance.provide({
       directory: tmp.path,

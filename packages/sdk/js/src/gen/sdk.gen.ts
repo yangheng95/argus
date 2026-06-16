@@ -44,6 +44,7 @@ import type {
   CommandListResponses,
   Config as Config4,
   ConfigGetResponses,
+  ConfigPromptProfileResponses,
   ConfigPromptResponses,
   ConfigProvidersResponses,
   ConfigUpdateErrors,
@@ -745,6 +746,25 @@ export class Config extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<ConfigPromptResponses, unknown, ThrowOnError>({
       url: "/config/prompt",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List prompt profiles
+   *
+   * Returns the active prompt profile and available built-in/project prompt profiles.
+   */
+  public promptProfile<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ConfigPromptProfileResponses, unknown, ThrowOnError>({
+      url: "/config/prompt-profile",
       ...options,
       ...params,
     })
@@ -1734,6 +1754,9 @@ export class Config2 extends HeyApiClient {
       prompt?: {
         [key: string]: string | null
       } | null
+      prompt_profile?: {
+        active?: string | null
+      } | null
       agent?: {
         [key: string]: {
           model?: string | null
@@ -1756,6 +1779,7 @@ export class Config2 extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "model" },
             { in: "body", key: "prompt" },
+            { in: "body", key: "prompt_profile" },
             { in: "body", key: "agent" },
           ],
         },
@@ -5111,6 +5135,7 @@ export class Mission extends HeyApiClient {
       text: string
       title?: string
       model?: string
+      promptProfile?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5124,6 +5149,7 @@ export class Mission extends HeyApiClient {
             { in: "body", key: "text" },
             { in: "body", key: "title" },
             { in: "body", key: "model" },
+            { in: "body", key: "promptProfile" },
           ],
         },
       ],
@@ -5943,6 +5969,7 @@ export class Task extends HeyApiClient {
       priority?: "critical" | "high" | "normal" | "low"
       queue?: boolean
       kind?: "workflow" | "build"
+      promptProfile?: string
       budget?: {
         maxExecutorGroups?: number
       }
@@ -6408,6 +6435,7 @@ export class Task extends HeyApiClient {
             { in: "body", key: "priority" },
             { in: "body", key: "queue" },
             { in: "body", key: "kind" },
+            { in: "body", key: "promptProfile" },
             { in: "body", key: "budget" },
             { in: "body", key: "checks" },
             { in: "body", key: "routing" },
@@ -6869,6 +6897,7 @@ export class Task extends HeyApiClient {
       source: string
       target?: TaskMessageTarget
       user_id?: string
+      promptProfile?: string
       attachments?: Array<{
         mime: string
         data: string
@@ -6890,6 +6919,7 @@ export class Task extends HeyApiClient {
             { in: "body", key: "source" },
             { in: "body", key: "target" },
             { in: "body", key: "user_id" },
+            { in: "body", key: "promptProfile" },
             { in: "body", key: "attachments" },
             { in: "body", key: "resolvedRole" },
             { in: "body", key: "channel" },

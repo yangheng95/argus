@@ -13,6 +13,7 @@ import {
 import { MissionID } from "@/mission/schema"
 import { listMissionTasks, listTaskRows } from "@/engine/store"
 import { deriveTaskStatus } from "@/engine/task-status"
+import { PromptProfile } from "@/agent/prompt-profile"
 import {
   MissionStatusSnapshot,
   StatusSnapshotState,
@@ -26,6 +27,7 @@ import { SessionPrompt } from "@/session/prompt"
 import { SessionWake } from "@/session/wake"
 import { Provider } from "@/provider/provider"
 import { isModelReference } from "@/provider/model-ref"
+import { Config } from "@/config/config"
 
 function newMissionID(): string {
   return randomBytes(8).toString("hex")
@@ -41,6 +43,7 @@ const MissionWakeInput = z.object({
       message: 'Model must be in the format "provider/model".',
     })
     .optional(),
+  promptProfile: z.string().min(1).optional(),
 })
 
 const MissionWakeResult = z.object({
@@ -317,6 +320,13 @@ export function MissionRoutes() {
       validator("json", MissionWakeInput),
       async (c) => {
         const input = c.req.valid("json")
+        if (input.promptProfile) {
+          try {
+            PromptProfile.assertKnownProfileID(input.promptProfile, await Config.get())
+          } catch (error) {
+            return c.json({ error: error instanceof Error ? error.message : String(error) }, 400)
+          }
+        }
         const missionID = input.missionID ?? newMissionID()
         // Snapshot existence BEFORE ensureMissionSession so the response
         // distinguishes "started" from "resumed". The lookup and the ensure
@@ -327,6 +337,12 @@ export function MissionRoutes() {
           missionID,
           defaultCwd: Instance.directory,
         })
+        if (input.promptProfile) {
+          await Session.mergeConfigOverlay({
+            sessionID: session.id,
+            patch: { prompt_profile: { active: input.promptProfile } },
+          })
+        }
         await SessionWake.wake({
           sessionID: session.id,
           prompt: input.text,

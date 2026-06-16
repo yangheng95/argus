@@ -142,6 +142,19 @@ export interface TaskOperatorModelContext {
   }
 }
 
+export interface PromptProfileOption {
+  id: string
+  label: string
+  description?: string
+  built_in?: boolean
+}
+
+export interface PromptProfileCatalog {
+  active: string
+  default: string
+  profiles: PromptProfileOption[]
+}
+
 export function modelContextID(context: TaskOperatorModelContext | null | undefined): string {
   const providerID = context?.model?.providerID
   const modelID = context?.model?.modelID
@@ -183,6 +196,13 @@ export async function getTaskOperatorModelContext(taskID: string): Promise<TaskO
     throw new Error("Cannot load task operator model context while disconnected")
   }
   return await apiJson(`task/${encodeURIComponent(taskID)}/operator-model-context`)
+}
+
+export async function loadPromptProfileCatalog(): Promise<PromptProfileCatalog> {
+  if (!appStore.connected) {
+    throw new Error("Cannot load prompt profiles while disconnected")
+  }
+  return await apiJson("config/prompt-profile")
 }
 
 export async function syncAgentPromptLocale(locale: string): Promise<void> {

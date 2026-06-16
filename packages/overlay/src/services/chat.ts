@@ -20,6 +20,7 @@ import { boardStore, setTasksData, loadBoard, loadTasks, activeTaskID, activeSes
 import { appStore, setConnectionStatus } from "../store/app"
 import { workspaceMode } from "./workspace"
 import { selectTask, createTask } from "./task"
+import { patchSessionConfig } from "./config"
 import { ingestPersistedConversationMessage } from "./tree-writer"
 
 // ── Types ──
@@ -409,6 +410,9 @@ export async function panelMessage(
 ): Promise<any> {
   const attachments = Array.isArray(attachmentsOrMeta) ? attachmentsOrMeta : []
   const meta = Array.isArray(attachmentsOrMeta) ? metadata : attachmentsOrMeta
+  const promptProfile = typeof meta?.promptProfile === "string" ? meta.promptProfile : undefined
+  const requestMetadata = { ...(meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {}) }
+  delete requestMetadata.promptProfile
   const requestID = crypto.randomUUID()
   const controller = new AbortController()
   const request: any = {
@@ -424,11 +428,14 @@ export async function panelMessage(
       setConnectionStatus("online")
       request.target = { kind: "session", sessionID }
       setChatRequest(request as any)
+      if (promptProfile) {
+        await patchSessionConfig(sessionID, { prompt_profile: { active: promptProfile } })
+      }
       const result = await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          parts: sessionPromptParts(text, attachments, meta),
+          parts: sessionPromptParts(text, attachments, requestMetadata),
         }),
         signal: controller.signal,
       })
@@ -443,7 +450,8 @@ export async function panelMessage(
       const createdTaskID = await createTask({
         text,
         attachments,
-        metadata: meta,
+        metadata: requestMetadata,
+        promptProfile,
         signal: controller.signal,
       })
       if (createdTaskID) {
@@ -462,6 +470,7 @@ export async function panelMessage(
       body: JSON.stringify({
         text,
         source: "panel",
+        ...(promptProfile ? { promptProfile } : {}),
         ...(attachments.length > 0
           ? {
               attachments: attachments.map((att) => ({

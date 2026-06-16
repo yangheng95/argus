@@ -52,6 +52,7 @@ import {
   PANEL_PANE_CONFIG,
 } from "./services/pane"
 import { panelMessage } from "./services/chat"
+import { loadPromptProfileCatalog, type PromptProfileOption } from "./services/config"
 import { NotificationCenter } from "./components/NotificationCenter"
 import { waitForLogDrain, AppLog } from "./utils/log"
 import { teardownApp } from "./services/init"
@@ -1097,9 +1098,35 @@ function deleteGoal(goalId: string): void {
 // finishes. Populated by a busy→idle effect below; cleared by the composer
 // via onSuggestionConsumed after it either injects or drops the value.
 const [pendingSuggestion, setPendingSuggestion] = createSignal("")
+const [promptProfiles, setPromptProfiles] = createSignal<PromptProfileOption[]>([])
+const [activePromptProfile, setActivePromptProfile] = createSignal("frontend")
 // Track the previous task-busy state so we only fire once per finish edge.
 let lastTaskBusy = false
 let lastSuggestionTaskID: string | null = null
+let promptProfileLoadSequence = 0
+
+async function refreshPromptProfiles(): Promise<void> {
+  if (!appStore.connected || !settingsStore.directory) return
+  const sequence = ++promptProfileLoadSequence
+  const catalog = await loadPromptProfileCatalog()
+  if (sequence !== promptProfileLoadSequence) return
+  setPromptProfiles(catalog.profiles)
+  setActivePromptProfile((current) =>
+    catalog.profiles.some((profile) => profile.id === current) ? current : catalog.active,
+  )
+}
+
+createEffect(() => {
+  const connected = appStore.connected
+  const directoryEpoch = settingsStore.directoryEpoch
+  const configuredActive = appStore.config?.prompt_profile?.active
+  if (typeof configuredActive === "string" && configuredActive.trim()) {
+    setActivePromptProfile(configuredActive)
+  }
+  if (!connected) return
+  void directoryEpoch
+  void refreshPromptProfiles().catch((error) => reportOverlayRuntimeError("prompt-profile", error))
+})
 
 const panelComposerDraftKey = () => {
   if (missionSubmitActive()) {
@@ -1163,7 +1190,14 @@ if (composerEl) {
         }
         pendingSuggestion={pendingSuggestion()}
         onSuggestionConsumed={() => setPendingSuggestion("")}
-        onSubmit={async (text, attachments, webSearch) => {
+        promptProfiles={promptProfiles()}
+        promptProfileID={activePromptProfile()}
+        onPromptProfileChange={setActivePromptProfile}
+        onSubmit={async (text, attachments, webSearch, promptProfile) => {
+          const metadata = {
+            ...(webSearch ? { web_search: true } : {}),
+            promptProfile,
+          }
           if (missionSubmitActive()) {
             if (attachments.length > 0) {
               throw new Error(t("mission.launcher.attachments_unsupported"))
@@ -1171,7 +1205,7 @@ if (composerEl) {
             setMissionLauncherSubmitting(true)
             try {
               const model = typeof appStore.config?.model === "string" ? appStore.config.model : undefined
-              const result = await wakeMission({ text, model })
+              const result = await wakeMission({ text, model, promptProfile })
               await openMissionSession(result)
               setMissionLauncherActive(false)
               return result
@@ -1184,13 +1218,13 @@ if (composerEl) {
             try {
               await createCodingAssistantSession()
               setAssistantLauncherActive(false)
-              return await panelMessage(text, attachments, webSearch ? { web_search: true } : {})
+              return await panelMessage(text, attachments, metadata)
             } finally {
               setAssistantLauncherSubmitting(false)
             }
           }
           const refreshMissionLedger = isMissionSessionSource()
-          const result = await panelMessage(text, attachments, webSearch ? { web_search: true } : {})
+          const result = await panelMessage(text, attachments, metadata)
           if (refreshMissionLedger) setMissionSharedRefreshToken((value) => value + 1)
           return result
         }}
