@@ -16,8 +16,8 @@ async function pause(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-describe("MCP status lazy startup", () => {
-  test("status does not spawn configured local MCP processes", async () => {
+describe("MCP status auto startup", () => {
+  test("status starts configured local MCP processes asynchronously", async () => {
     await using tmp = await tmpdir({
       config: {
         mcp: {
@@ -46,9 +46,9 @@ describe("MCP status lazy startup", () => {
         const status = await MCP.status()
 
         expect(status.browser).toEqual({ status: "disabled" })
-        expect(status.marker).toEqual({ status: "disconnected" })
+        expect(status.marker).toEqual({ status: "connecting" })
         await pause(300)
-        expect(await exists(marker)).toBe(false)
+        expect(await exists(marker)).toBe(true)
       },
     })
   })

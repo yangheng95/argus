@@ -342,6 +342,17 @@ export namespace MCP {
     await Promise.all(tasks)
   }
 
+  function startConfiguredConnections(state: McpState, config: NonNullable<Config.Info["mcp"]>) {
+    for (const [key, mcp] of entries(config)) {
+      if (!isMcpConfigured(mcp)) continue
+      if (mcp.enabled === false) continue
+      if (state.status[key]?.status === "connected") continue
+      if (state.status[key]?.status === "connecting") continue
+      if (state.status[key]?.status !== "disconnected") continue
+      startConnection(state, key, mcp)
+    }
+  }
+
   // Helper function to fetch prompts for a specific client
   async function fetchPromptsForClient(clientName: string, client: Client) {
     const prompts = await client.listPrompts().catch((e) => {
@@ -659,6 +670,7 @@ export namespace MCP {
     const s = await state()
     const cfg = await Config.get()
     const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
+    startConfiguredConnections(s, config)
     const result: Record<string, Status> = {}
 
     // Include all configured MCPs from config, not just connected ones
