@@ -59,6 +59,7 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
       else if (err.name === "WorktreeNotGitError") status = 412
       else if (err.name.startsWith("Worktree")) status = 400
       else if (err.name === "TaskEmptyMessageError") status = 400
+      else if (err.name === "TaskGlobalProjectBindingError") status = 409
       else if (err.name === "PtyCreateFailedError") status = 400
       else status = 500
       return c.json((err as NamedError & { toObject(): { name: string; data: unknown } }).toObject(), { status })
@@ -200,6 +201,24 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       400,
       "TaskEmptyMessageError",
+    )
+  })
+
+  test("TaskGlobalProjectBindingError maps to 409", async () => {
+    const TaskGlobalProjectBindingError = NamedError.create(
+      "TaskGlobalProjectBindingError",
+      z.object({ message: z.string(), taskID: z.string().optional(), projectID: z.string() }),
+    )
+    await expectMapping(
+      () => {
+        throw new TaskGlobalProjectBindingError({
+          message: "global task",
+          taskID: "task_global",
+          projectID: "global",
+        })
+      },
+      409,
+      "TaskGlobalProjectBindingError",
     )
   })
 

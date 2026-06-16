@@ -13,6 +13,7 @@ import { budgetRow } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
 import { EngineChannelBindingTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { EngineProtocol } from "./protocol"
+import { TaskGlobalProjectBindingError } from "./task-project-error"
 import type { RunRow } from "./store"
 
 const log = Log.create({ service: "engine-pipeline" })
@@ -87,6 +88,13 @@ export function persistQueuedTask(input: {
   projectID: string
   queue: boolean
 }) {
+  if (input.projectID === "global") {
+    throw new TaskGlobalProjectBindingError({
+      message: `Refusing to persist task ${input.taskID} under project global. Task persistence requires a concrete Git project.`,
+      taskID: input.taskID,
+      projectID: input.projectID,
+    })
+  }
   const taskStatus = input.queue ? "queued" : "active"
   const progressStatus = input.queue ? "created" : "active"
   const summary = input.queue ? "Task queued" : "Task started"
