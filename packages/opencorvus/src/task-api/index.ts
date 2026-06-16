@@ -24,14 +24,12 @@ import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { Session } from "@/session"
-import { SessionTable } from "@/session/session.sql"
 import { SessionContext } from "@/session/context"
 import { Message } from "@/session/message"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionAgentIdentity } from "@/session/agent-identity"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
-import { Filesystem } from "@/util/filesystem"
 import { compileBoard, boardTag } from "@/workbench/board"
 import { compileBrief } from "@/workbench/brief"
 import { recordNote } from "@/workbench/note-store"
@@ -83,6 +81,7 @@ import {
   isTaskTerminal,
 } from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
+import { TaskGlobalProjectBindingError } from "@/engine/task-project-error"
 import { discardQueuedTaskEvent } from "@/engine/queue"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
@@ -162,6 +161,15 @@ export const TaskEmptyMessageError = NamedError.create(
     taskID: z.string(),
   }),
 )
+
+function assertTaskProjectIsConcrete(task: TaskRow) {
+  if (task.project_id !== "global") return
+  throw new TaskGlobalProjectBindingError({
+    message: `Task ${task.id} is bound to project global. Task workflow state requires a concrete Git project; recreate the task after initializing the directory as a Git repository.`,
+    taskID: task.id,
+    projectID: task.project_id,
+  })
+}
 
 /**
  * Per-call deadline for `executor.abort()` during cancelTask / abortRun.
@@ -499,6 +507,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
   target?: TaskMessageTargetInput
 }): Promise<{ task: TaskRow; userMessage: { info: Message.User; parts: Message.Part[] }; resumed: boolean }> {
   const task = requireTask(input.taskID)
+  assertTaskProjectIsConcrete(task)
   assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
 
   // Append the user message to session history. The describe layer and
@@ -742,6 +751,12 @@ async function prepareProject(project?: string) {
       message: `Cannot create a task in ${Instance.directory}: the directory is not a git repository. Initialize it via POST /project/current/init-git or pick a different working directory.`,
     })
   }
+  if (Instance.project.id === "global") {
+    throw new TaskGlobalProjectBindingError({
+      message: `Cannot create a task in ${Instance.directory}: task creation requires a concrete Git project, but the active project resolved to global.`,
+      projectID: Instance.project.id,
+    })
+  }
   // Create .gitignore before executor starts so the agent's own commits never include node_modules/dist etc.
   await ensureGitignore()
   if (!project) return
@@ -886,103 +901,6 @@ type FileRef = {
   source?: string
 }
 type FileRefColumn = "attachments" | "system_artifacts"
-
-function taskFileRefs(task: TaskRow, column: FileRefColumn): FileRef[] {
-  const value = task[column]
-  return Array.isArray(value) ? value : []
-}
-
-async function rehomeTaskFileRefs(input: {
-  taskID: string
-  column: FileRefColumn
-  refs: FileRef[]
-  fromProjectID: string
-  toProjectID: string
-}): Promise<FileRef[]> {
-  const next: FileRef[] = []
-  for (const file of input.refs) {
-    const located = AttachmentStore.nameFromUrl(file.url)
-    if (!located) {
-      throw new Error(`${input.column}: file.url is not a valid /attachment/<projectID>/<name> reference: ${file.url}`)
-    }
-    if (located.projectID === input.toProjectID) {
-      next.push(file)
-      continue
-    }
-    if (located.projectID !== input.fromProjectID) {
-      throw new Error(
-        `${input.column}: cannot rebind ${input.taskID}; file.url belongs to project ${located.projectID}, expected ${input.fromProjectID} or ${input.toProjectID}: ${file.url}`,
-      )
-    }
-    const bytes = await AttachmentStore.read(located.projectID, located.name)
-    const rewritten = await AttachmentStore.write(input.toProjectID, bytes, file.mime, file.filename)
-    if (rewritten.sha !== file.sha) {
-      throw new Error(`${input.column}: rebinding ${input.taskID} changed attachment sha ${file.sha} -> ${rewritten.sha}`)
-    }
-    next.push({ ...file, ...rewritten, intent: file.intent, source: file.source })
-  }
-  return next
-}
-
-async function refreshGlobalTaskProjectBinding(taskID: string): Promise<TaskRow> {
-  const task = requireTask(taskID)
-  if (task.project_id !== "global") return task
-  if (!task.session_id) return task
-  if (Instance.project.id === "global") return task
-
-  const rootSession = await Session.get(task.session_id)
-  if (rootSession.projectID !== "global") {
-    throw new Error(
-      `Task ${task.id} is bound to project global but root session ${rootSession.id} is bound to ${rootSession.projectID}`,
-    )
-  }
-  if (Filesystem.resolve(rootSession.directory) !== Filesystem.resolve(Instance.directory)) {
-    return task
-  }
-  if (!Project.isGitRepo(rootSession.directory)) return task
-
-  const refreshed = await Project.fromDirectory(rootSession.directory)
-  if (refreshed.project.id !== Instance.project.id) {
-    throw new Error(
-      `Task ${task.id} project refresh mismatch: directory ${rootSession.directory} resolved to ${refreshed.project.id}, active instance is ${Instance.project.id}`,
-    )
-  }
-
-  const attachments = await rehomeTaskFileRefs({
-    taskID: task.id,
-    column: "attachments",
-    refs: taskFileRefs(task, "attachments"),
-    fromProjectID: "global",
-    toProjectID: Instance.project.id,
-  })
-  const systemArtifacts = await rehomeTaskFileRefs({
-    taskID: task.id,
-    column: "system_artifacts",
-    refs: taskFileRefs(task, "system_artifacts"),
-    fromProjectID: "global",
-    toProjectID: Instance.project.id,
-  })
-  const sessionIDs = await Session.treeInProject({ sessionID: rootSession.id, projectID: "global" })
-  const now = Date.now()
-  Database.transaction((db) => {
-    db.update(EngineTaskTable)
-      .set({
-        project_id: Instance.project.id,
-        attachments: attachments.length ? attachments : null,
-        system_artifacts: systemArtifacts,
-        time_updated: now,
-      })
-      .where(eq(EngineTaskTable.id, task.id))
-      .run()
-    if (sessionIDs.length > 0) {
-      db.update(SessionTable)
-        .set({ project_id: Instance.project.id, time_updated: now })
-        .where(inArray(SessionTable.id, sessionIDs))
-        .run()
-    }
-  })
-  return requireTask(task.id)
-}
 
 export namespace EngineService {
   export function init() {
@@ -1981,7 +1899,8 @@ export namespace EngineService {
 
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
     const input = TaskMessageInput.parse(raw)
-    const task = await refreshGlobalTaskProjectBinding(taskID)
+    const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
 
     // Decode base64 attachments once, write bytes to AttachmentStore, and carry
