@@ -1128,18 +1128,7 @@ try {
   logLine(`events: ${eventFile}`)
   logLine(`events_ndjson: ${eventLogFile}`)
 
-  const pass = stopAfterArchitect
-    ? out.assertions.planning_visible.pass &&
-      out.assertions.streaming_visible.pass &&
-      out.assertions.materialized.pass &&
-      out.assertions.frontend_design_agent_card.pass &&
-      out.assertions.architect_contract_graph.pass
-    : out.assertions.planning_visible.pass &&
-      out.assertions.streaming_visible.pass &&
-      out.assertions.materialized.pass &&
-      out.assertions.frontend_design_agent_card.pass &&
-      out.assertions.acceptance.pass &&
-      out.failure_matrix.verdict === "accepted"
+  const pass = benchmarkReportPass(out, { stopAfterArchitect })
   if (!pass) {
     process.exit(1)
   }
@@ -1706,6 +1695,19 @@ async function buildBenchmarkReport(error?: unknown) {
       report_api_errors: reportApiErrors,
     },
   }
+}
+
+type OverlayBenchmarkReport = Awaited<ReturnType<typeof buildBenchmarkReport>>
+
+function benchmarkReportPass(out: OverlayBenchmarkReport, options: { stopAfterArchitect: boolean }): boolean {
+  const requiredVisibleFlowPassed =
+    out.assertions.planning_visible.pass &&
+    out.assertions.streaming_visible.pass &&
+    out.assertions.materialized.pass &&
+    out.assertions.frontend_design_agent_card.pass &&
+    out.assertions.architect_contract_graph.pass
+  if (options.stopAfterArchitect) return requiredVisibleFlowPassed
+  return requiredVisibleFlowPassed && out.assertions.acceptance.pass && out.failure_matrix.verdict === "accepted"
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {

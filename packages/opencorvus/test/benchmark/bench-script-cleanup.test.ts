@@ -195,6 +195,18 @@ test("benchmark frontend-design card evidence must be viewport visible", () => {
   expect(snapshotSource).not.toContain("frontendRect.bottom > 0")
 })
 
+test("benchmark final pass requires architect contract graph in full runs", () => {
+  const passHelper = src.slice(
+    src.indexOf("function benchmarkReportPass"),
+    src.indexOf("async function withTimeout"),
+  )
+
+  expect(src).toContain("const pass = benchmarkReportPass(out, { stopAfterArchitect })")
+  expect(passHelper).toContain("out.assertions.architect_contract_graph.pass")
+  expect(passHelper).toContain("out.assertions.acceptance.pass")
+  expect(passHelper).toContain('out.failure_matrix.verdict === "accepted"')
+})
+
 test("benchmark screenshot evidence is required and decoded", () => {
   const screenshotFn = src.slice(
     src.indexOf("async function takeBenchmarkScreenshot"),
