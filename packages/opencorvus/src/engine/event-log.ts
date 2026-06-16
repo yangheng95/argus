@@ -1,7 +1,8 @@
 import { mkdirSync, appendFileSync } from "fs"
 import { dirname } from "path"
 import { Bus } from "@/bus"
-import { Instance } from "@/project/instance"
+import { requireTask } from "@/engine/store"
+import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
 
@@ -74,6 +75,13 @@ export namespace EngineEventLog {
   const tasks = new Map<string, TaskCtx>()
 
   // -- I/O helpers --
+
+  export function eventLogPathsForTask(taskID: string) {
+    const task = requireTask(taskID)
+    const project = Project.get(task.project_id)
+    if (!project) throw new Error(`Project not found for task ${taskID}: ${task.project_id}`)
+    return ProjectRuntimePaths.eventLogPath(project.worktree, taskID)
+  }
 
   function elapsed(ctx: TaskCtx) {
     const ms = Date.now() - ctx.t0
@@ -271,7 +279,7 @@ export namespace EngineEventLog {
 
       if (!tasks.has(taskID)) {
         try {
-          const paths = ProjectRuntimePaths.eventLogPath(Instance.directory, taskID)
+          const paths = eventLogPathsForTask(taskID)
           mkdirSync(dirname(paths.ndjson), { recursive: true })
           tasks.set(taskID, {
             ndjson: paths.ndjson,
