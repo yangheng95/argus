@@ -1269,7 +1269,7 @@ test("session.status preserves terminal reason when status arrives before the ca
   expect(statusBadge(card)).toEqual({ tone: "cancelled", glyph: "⊘" })
 })
 
-test("session.status materializes frontend research card when preparation fails before any message", () => {
+test("session.status without a message does not materialize a blank frontend research card", () => {
   resetWriter()
   setBoardStore("board", {
     task: {
@@ -1303,19 +1303,11 @@ test("session.status materializes frontend research card when preparation fails 
     },
   })
 
-  const card = cardTreeStore.cards[cardID]!
-  expect(card).toBeDefined()
-  expect(card.kind).toBe("agent")
-  expect(card.sessionID).toBe(sessionID)
-  expect(card.messageID).toBeUndefined()
-  expect(card.stage).toBe("frontend-research")
-  expect(card.status).toBe("error")
-  expect(card.terminalReason).toBe("error")
-  expect(card.errorReason).toContain("page.goto timeout")
-  expect(cardTreeStore.order).toContain(cardID)
+  expect(cardTreeStore.cards[cardID]).toBeUndefined()
+  expect(cardTreeStore.order).not.toContain(cardID)
 })
 
-test("message arrival migrates lifecycle-only frontend card without leaving a duplicate", () => {
+test("message arrival applies buffered lifecycle status without creating a duplicate blank card", () => {
   resetWriter()
   setBoardStore("board", {
     task: {
@@ -1347,8 +1339,8 @@ test("message arrival migrates lifecycle-only frontend card without leaving a du
     },
   })
 
-  expect(cardTreeStore.cards[lifecycleCardID]).toBeDefined()
-  expect(cardTreeStore.order).toContain(lifecycleCardID)
+  expect(cardTreeStore.cards[lifecycleCardID]).toBeUndefined()
+  expect(cardTreeStore.order).not.toContain(lifecycleCardID)
 
   applyEvent({
     type: "message.updated",
@@ -1465,14 +1457,18 @@ test("session.error marks the session card with the original stream error", () =
   expect(card.timeCompleted).toBe(1_776_000_010_000)
 })
 
-test("session.error with channel materializes a lifecycle-only assistant card", () => {
+test("session.error with channel buffers until a real assistant message card exists", () => {
   resetWriter()
+
+  const sessionID = "ses_queue_error"
+  const lifecycleCardID = `assistant:session:${sessionID}`
+  const messageCardID = `assistant:session:${sessionID}:message:msg_queue_error`
 
   applyEvent({
     type: "session.error",
     emittedAt: 1_776_000_012_000,
     properties: {
-      sessionID: "ses_queue_error",
+      sessionID,
       channel: "assistant",
       resolvedRole: "assistant",
       error: {
@@ -1482,12 +1478,43 @@ test("session.error with channel materializes a lifecycle-only assistant card", 
     },
   })
 
-  const card = cardTreeStore.cards["assistant:session:ses_queue_error"]!
+  expect(cardTreeStore.cards[lifecycleCardID]).toBeUndefined()
+  expect(cardTreeStore.order).not.toContain(lifecycleCardID)
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      info: stampedInfo("assistant", {
+        id: "msg_queue_error",
+        sessionID,
+        role: "assistant",
+        time: { created: 1_776_000_012_500 },
+      }),
+    },
+  })
+
+  const card = cardTreeStore.cards[messageCardID]!
   expect(card).toBeDefined()
   expect(card.status).toBe("error")
   expect(card.terminalReason).toBe("error")
   expect(card.errorReason).toBe("provider rejected request")
   expect(card.timeCompleted).toBe(1_776_000_012_000)
+  expect(cardTreeStore.order).not.toContain(messageCardID)
+
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      part: stampedPart("assistant", {
+        id: "part_queue_error",
+        messageID: "msg_queue_error",
+        sessionID,
+        type: "text",
+        text: "Visible assistant output after queued error.",
+      }),
+    },
+  })
+
+  expect(cardTreeStore.order).toContain(messageCardID)
 })
 
 // ── Message-turn cards (2026-05-16) ──
