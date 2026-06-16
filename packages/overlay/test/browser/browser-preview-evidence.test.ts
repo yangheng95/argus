@@ -102,6 +102,7 @@ test(
     const errors: string[] = []
     const requestLog: string[] = []
     let selectedTargetID = targetID
+    const pendingAlternateLiveSnapshots: Array<() => void> = []
 
     const pngBytes = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAABACAYAAADbER1AAAAAdElEQVR4AQXBAQ3AIAADsGaqEDMxFzMvyOKt892XqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZ+SrVB/bxIzVQAAAAASUVORK5CYII=",
@@ -346,7 +347,11 @@ test(
         })
       }
       if (path === `/task/${taskID}/browser-preview/live/snapshot` && req.method === "POST") {
-        liveSnapshotBodies.push(await req.json())
+        const body = await req.json()
+        liveSnapshotBodies.push(body)
+        if ((body as any)?.targetID === alternateTargetID) {
+          await new Promise<void>((resolve) => pendingAlternateLiveSnapshots.push(resolve))
+        }
         return new Response(pngBytes, {
           headers: { "content-type": "image/png" },
         })
@@ -432,8 +437,13 @@ test(
         "online connection badge",
         () => ({ errors, requestLog }),
       )
-      await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`)
-      await page.click(`.task-row-main[data-task-id="${taskID}"]`)
+      await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached" })
+      const taskRowVisible = await page.$eval(`.task-row-main[data-task-id="${taskID}"]`, (node: Element) => {
+        const element = node as HTMLElement
+        const rect = element.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden"
+      })
+      if (taskRowVisible) await page.click(`.task-row-main[data-task-id="${taskID}"]`)
       await waitForPageState(
         page,
         () =>
@@ -469,17 +479,29 @@ test(
           }),
         )
       })
+      for (let i = 0; i < 100 && liveInputBodies.length < 2; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      const initialLiveInputCount = liveInputBodies.length
       await page.click('[data-ui="browser-preview-candidate-trigger"]')
       await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await waitForPageText(page, alternatePreviewTarget(), "alternate preview target text")
       for (
         let i = 0;
-        i < 100 && !liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID));
+        i < 100 && pendingAlternateLiveSnapshots.length === 0;
         i += 1
       ) {
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
+      const pendingAlternateState = await page.evaluate(() => ({
+        hasLiveImage: !!document.querySelector('[data-ui="browser-preview-live-screenshot"]'),
+        hasLoading: !!document.querySelector('[data-ui="browser-preview-live-loading"]'),
+      }))
+      assert.equal(pendingAlternateState.hasLiveImage, false)
+      assert.equal(pendingAlternateState.hasLoading, true)
+      assert.equal(liveInputBodies.length, initialLiveInputCount)
+      for (const release of pendingAlternateLiveSnapshots.splice(0)) release()
       assert.ok(
         liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID)),
         `interactive browser preview reloaded after selecting an alternate target\n${JSON.stringify(
@@ -498,12 +520,19 @@ test(
         "reloaded alternate interactive browser preview screenshot",
         () => ({ errors, requestLog }),
       )
-      for (let i = 0; i < 100 && liveInputBodies.length < 2; i += 1) {
+      await page.click('[data-ui="browser-preview-live-screenshot"]', { position: { x: 8, y: 8 } })
+      for (let i = 0; i < 100 && liveInputBodies.length <= initialLiveInputCount; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
       assert.ok(
-        liveInputBodies.length >= 2,
+        liveInputBodies.length > initialLiveInputCount,
         `interactive browser preview input routed to backend\n${JSON.stringify({ errors, requestLog }, null, 2)}`,
+      )
+      await waitForPageState(
+        page,
+        () => document.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')?.dataset.status === "ready",
+        "alternate interactive browser preview ready after input",
+        () => ({ errors, requestLog }),
       )
 
       const preview = await page.evaluate(() => {
@@ -533,6 +562,7 @@ test(
         "live snapshot should reload after selecting an alternate target",
       )
       assert.deepEqual(liveInputBodies.map((body) => (body as any).input.kind).slice(0, 2), ["click", "wheel"])
+      assert.equal((liveInputBodies.at(-1) as any)?.targetID, alternateTargetID)
       assert.ok(
         requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/capture`)),
         "capture route should be called through the task-scoped backend",
