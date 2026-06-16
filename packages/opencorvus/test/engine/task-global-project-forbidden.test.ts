@@ -1,9 +1,10 @@
 import { $ } from "bun"
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineChannelBindingTable, EngineProgressSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { persistQueuedTask } from "../../src/engine/pipeline"
 import { TaskGlobalProjectBindingError } from "../../src/engine/task-project-error"
 import { Identifier } from "../../src/id/id"
+import * as TaskLoop from "../../src/orchestrator/loop"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
 import { Session } from "../../src/session"
@@ -60,7 +61,9 @@ describe("task global project binding is forbidden", () => {
           }),
         ).rejects.toThrow(TaskGlobalProjectBindingError)
 
-        const sessions = Database.use((db) => db.select().from(SessionTable).all())
+        const sessions = Database.use((db) =>
+          db.select().from(SessionTable).where(eq(SessionTable.title, "must not create root session")).all(),
+        )
         expect(sessions).toHaveLength(0)
       },
     })
@@ -110,9 +113,96 @@ describe("task global project binding is forbidden", () => {
 
     expect(messageCount(legacy.sessionID)).toBe(0)
   })
+
+  test("retryTask refuses a legacy global task before dispatching", async () => {
+    const legacy = await seedLegacyGlobalTask()
+    const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+    await Instance.provide({
+      directory: legacy.directory,
+      fn: async () => {
+        expect(Instance.project.id).not.toBe("global")
+        await expect(EngineService.retryTask(legacy.taskID)).rejects.toThrow(TaskGlobalProjectBindingError)
+      },
+    })
+
+    expect(runTaskLoop).not.toHaveBeenCalled()
+  })
+
+  test("recordOperatorNote refuses a legacy global task before writing progress", async () => {
+    const legacy = await seedLegacyGlobalTask()
+    const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+    await Instance.provide({
+      directory: legacy.directory,
+      fn: async () => {
+        expect(Instance.project.id).not.toBe("global")
+        await expect(EngineService.recordOperatorNote(legacy.taskID, "continue")).rejects.toThrow(
+          TaskGlobalProjectBindingError,
+        )
+      },
+    })
+
+    expect(progressCount(legacy.taskID)).toBe(0)
+    expect(runTaskLoop).not.toHaveBeenCalled()
+  })
+
+  test("direct task file registration refuses a legacy global task before URL fallback", async () => {
+    const legacy = await seedLegacyGlobalTask()
+
+    await Instance.provide({
+      directory: legacy.directory,
+      fn: async () => {
+        await expect(
+          EngineService.appendTaskSystemArtifact(legacy.taskID, {
+            sha: "sha_global_system",
+            url: "/not-an-attachment-url",
+            mime: "text/plain",
+            size: 1,
+          }),
+        ).rejects.toThrow(TaskGlobalProjectBindingError)
+        await expect(
+          EngineService.appendTaskAttachment(legacy.taskID, {
+            sha: "sha_global_attachment",
+            url: "/not-an-attachment-url",
+            mime: "text/plain",
+            size: 1,
+          }),
+        ).rejects.toThrow(TaskGlobalProjectBindingError)
+      },
+    })
+  })
+
+  test("channel binding recovery refuses a binding that points to a legacy global task", async () => {
+    const binding = {
+      platform: "slack",
+      channel: "C_global",
+      thread: "T_global",
+    }
+    await seedLegacyGlobalTask({ binding })
+    await using real = await tmpdir({ git: true, config: { model: "project/default" } })
+    const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+    await Instance.provide({
+      directory: real.path,
+      fn: async () => {
+        await expect(
+          EngineService.createTask({
+            request: "must not recover global binding",
+            source: "test",
+            channelBinding: binding,
+          }),
+        ).rejects.toThrow(TaskGlobalProjectBindingError)
+      },
+    })
+
+    expect(runTaskLoop).not.toHaveBeenCalled()
+  })
 })
 
-async function seedLegacyGlobalTask(): Promise<{ directory: string; taskID: string; sessionID: string }> {
+async function seedLegacyGlobalTask(input?: {
+  binding?: { platform: string; channel: string; thread: string }
+}): Promise<{ directory: string; taskID: string; sessionID: string }> {
   await using tmp = await tmpdir()
   let taskID = ""
   let sessionID = ""
@@ -145,6 +235,23 @@ async function seedLegacyGlobalTask(): Promise<{ directory: string; taskID: stri
           })
           .run(),
       )
+      if (input?.binding) {
+        Database.use((db) =>
+          db
+            .insert(EngineChannelBindingTable)
+            .values({
+              id: Identifier.ascending("binding"),
+              task_id: taskID,
+              platform: input.binding.platform,
+              channel: input.binding.channel,
+              thread: input.binding.thread,
+              payload: {},
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+      }
     },
   })
 
@@ -154,4 +261,10 @@ async function seedLegacyGlobalTask(): Promise<{ directory: string; taskID: stri
 
 function messageCount(sessionID: string): number {
   return Database.use((db) => db.select().from(MessageTable).where(eq(MessageTable.session_id, sessionID)).all()).length
+}
+
+function progressCount(taskID: string): number {
+  return Database.use((db) =>
+    db.select().from(EngineProgressSnapshotTable).where(eq(EngineProgressSnapshotTable.task_id, taskID)).all(),
+  ).length
 }
