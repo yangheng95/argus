@@ -12287,6 +12287,9 @@
                       "archived": {
                         "type": "number"
                       },
+                      "interruptible": {
+                        "type": "boolean"
+                      },
                       "tasks": {
                         "type": "array",
                         "items": {
@@ -12396,6 +12399,7 @@
                       "directory",
                       "created",
                       "updated",
+                      "interruptible",
                       "tasks",
                       "taskStats"
                     ]
@@ -13024,6 +13028,9 @@
                     "archived": {
                       "type": "number"
                     },
+                    "interruptible": {
+                      "type": "boolean"
+                    },
                     "tasks": {
                       "type": "array",
                       "items": {
@@ -13133,6 +13140,7 @@
                     "directory",
                     "created",
                     "updated",
+                    "interruptible",
                     "tasks",
                     "taskStats"
                   ]
@@ -15892,12 +15900,12 @@
                                               "type": "object",
                                               "properties": {
                                                 "kind": {
-                                                  "description": "script_ref — run a repo script. Requires: path; optional args.",
+                                                  "description": "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
                                                   "type": "string",
                                                   "const": "script_ref"
                                                 },
                                                 "path": {
-                                                  "description": "Repo-relative script path.",
+                                                  "description": "Repo-relative script path that already exists at registration time.",
                                                   "type": "string",
                                                   "minLength": 1
                                                 },
@@ -16074,7 +16082,7 @@
                                       "type": "object",
                                       "properties": {
                                         "type": {
-                                          "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                          "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                           "type": "string",
                                           "const": "contract_audit"
                                         },
@@ -16345,12 +16353,12 @@
                                                     "type": "object",
                                                     "properties": {
                                                       "kind": {
-                                                        "description": "script_ref — run a repo script. Requires: path; optional args.",
+                                                        "description": "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
                                                         "type": "string",
                                                         "const": "script_ref"
                                                       },
                                                       "path": {
-                                                        "description": "Repo-relative script path.",
+                                                        "description": "Repo-relative script path that already exists at registration time.",
                                                         "type": "string",
                                                         "minLength": 1
                                                       },
@@ -16527,7 +16535,7 @@
                                             "type": "object",
                                             "properties": {
                                               "type": {
-                                                "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                                "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                                 "type": "string",
                                                 "const": "contract_audit"
                                               },
@@ -29329,12 +29337,12 @@
                                         "type": "object",
                                         "properties": {
                                           "kind": {
-                                            "description": "script_ref — run a repo script. Requires: path; optional args.",
+                                            "description": "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
                                             "type": "string",
                                             "const": "script_ref"
                                           },
                                           "path": {
-                                            "description": "Repo-relative script path.",
+                                            "description": "Repo-relative script path that already exists at registration time.",
                                             "type": "string",
                                             "minLength": 1
                                           },
@@ -29511,7 +29519,7 @@
                                 "type": "object",
                                 "properties": {
                                   "type": {
-                                    "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                    "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                     "type": "string",
                                     "const": "contract_audit"
                                   },
@@ -38709,6 +38717,94 @@
           "enabled"
         ]
       },
+      "Event.installation.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "installation.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.installation.update-available": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "installation.update-available"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.project.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "project.updated"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/Project"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.server.instance.disposed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "server.instance.disposed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "directory"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.server.connected": {
         "type": "object",
         "properties": {
@@ -38736,6 +38832,571 @@
           "properties": {
             "type": "object",
             "properties": {}
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.lsp.client.diagnostics": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "lsp.client.diagnostics"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "serverID": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "serverID",
+              "path"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.lsp.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "lsp.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.todo.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "todo.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "todos": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Todo"
+                }
+              }
+            },
+            "required": [
+              "sessionID",
+              "todos"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.message.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "message.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "info": {
+                "$ref": "#/components/schemas/Message"
+              }
+            },
+            "required": [
+              "info"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.message.removed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "message.removed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "messageID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.message.part.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "message.part.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "part": {
+                "$ref": "#/components/schemas/Part"
+              }
+            },
+            "required": [
+              "part"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.message.part.delta": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "message.part.delta"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              },
+              "partID": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
+              },
+              "delta": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "messageID",
+              "partID",
+              "field",
+              "delta"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.message.part.removed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "message.part.removed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              },
+              "partID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "messageID",
+              "partID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.error": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.error"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "error": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ProviderAuthError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnknownError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MessageOutputLengthError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MessageAbortedError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StructuredOutputError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StructuredOutputPayloadError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TerminalToolMissingError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SnapshotIntegrityError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SnapshotEmptyTreeError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ContextOverflowError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PromptBudgetOverflowError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ToolSchemaBudgetError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/APIError"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.tools.changed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.tools.changed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "server"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.browser.open.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.browser.open.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "mcpName": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "mcpName",
+              "url"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.auth.required": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.auth.required"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "needs_auth",
+                  "needs_client_registration"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "message",
+              "reason"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.prompts.changed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.prompts.changed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.resources.changed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.resources.changed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.command.executed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "command.executed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "arguments": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string",
+                "pattern": "^msg.*"
+              }
+            },
+            "required": [
+              "name",
+              "sessionID",
+              "arguments",
+              "messageID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.permission.asked": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "permission.asked"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/PermissionRequest"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.permission.replied": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "permission.replied"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "requestID": {
+                "type": "string"
+              },
+              "reply": {
+                "type": "string",
+                "enum": [
+                  "once",
+                  "always",
+                  "reject"
+                ]
+              },
+              "autoReply": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "sessionID",
+              "requestID",
+              "reply",
+              "autoReply"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.status": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.status"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/SessionStatus"
+              }
+            },
+            "required": [
+              "sessionID",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.idle": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.idle"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID"
+            ]
           }
         },
         "required": [
@@ -41122,659 +41783,6 @@
           "properties"
         ]
       },
-      "Event.installation.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "installation.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "version": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "version"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.installation.update-available": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "installation.update-available"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "version": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "version"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.project.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "project.updated"
-          },
-          "properties": {
-            "$ref": "#/components/schemas/Project"
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.server.instance.disposed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "server.instance.disposed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "directory": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "directory"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.lsp.client.diagnostics": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "lsp.client.diagnostics"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "serverID": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "serverID",
-              "path"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.lsp.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "lsp.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {}
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.todo.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "todo.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "todos": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Todo"
-                }
-              }
-            },
-            "required": [
-              "sessionID",
-              "todos"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.message.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "message.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "info": {
-                "$ref": "#/components/schemas/Message"
-              }
-            },
-            "required": [
-              "info"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.message.removed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "message.removed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "messageID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.message.part.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "message.part.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "part": {
-                "$ref": "#/components/schemas/Part"
-              }
-            },
-            "required": [
-              "part"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.message.part.delta": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "message.part.delta"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string"
-              },
-              "partID": {
-                "type": "string"
-              },
-              "field": {
-                "type": "string"
-              },
-              "delta": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "messageID",
-              "partID",
-              "field",
-              "delta"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.message.part.removed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "message.part.removed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string"
-              },
-              "partID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "messageID",
-              "partID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.error": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.error"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "error": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/ProviderAuthError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/UnknownError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/MessageOutputLengthError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/MessageAbortedError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StructuredOutputError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StructuredOutputPayloadError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/TerminalToolMissingError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SnapshotIntegrityError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SnapshotEmptyTreeError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContextOverflowError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PromptBudgetOverflowError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ToolSchemaBudgetError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/APIError"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.mcp.tools.changed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "mcp.tools.changed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "server": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "server"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.mcp.browser.open.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "mcp.browser.open.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "mcpName": {
-                "type": "string"
-              },
-              "url": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "mcpName",
-              "url"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.mcp.auth.required": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "mcp.auth.required"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              },
-              "reason": {
-                "type": "string",
-                "enum": [
-                  "needs_auth",
-                  "needs_client_registration"
-                ]
-              }
-            },
-            "required": [
-              "name",
-              "message",
-              "reason"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.mcp.prompts.changed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "mcp.prompts.changed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "server": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.mcp.resources.changed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "mcp.resources.changed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "server": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.command.executed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "command.executed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "arguments": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string",
-                "pattern": "^msg.*"
-              }
-            },
-            "required": [
-              "name",
-              "sessionID",
-              "arguments",
-              "messageID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.permission.asked": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "permission.asked"
-          },
-          "properties": {
-            "$ref": "#/components/schemas/PermissionRequest"
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.permission.replied": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "permission.replied"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "requestID": {
-                "type": "string"
-              },
-              "reply": {
-                "type": "string",
-                "enum": [
-                  "once",
-                  "always",
-                  "reject"
-                ]
-              },
-              "autoReply": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID",
-              "reply",
-              "autoReply"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.status": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.status"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "status": {
-                "$ref": "#/components/schemas/SessionStatus"
-              }
-            },
-            "required": [
-              "sessionID",
-              "status"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.idle": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.idle"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.task-queue.completed": {
         "type": "object",
         "properties": {
@@ -42566,10 +42574,79 @@
       "Event": {
         "anyOf": [
           {
+            "$ref": "#/components/schemas/Event.installation.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.installation.update-available"
+          },
+          {
+            "$ref": "#/components/schemas/Event.project.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.server.instance.disposed"
+          },
+          {
             "$ref": "#/components/schemas/Event.server.connected"
           },
           {
             "$ref": "#/components/schemas/Event.global.disposed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.lsp.client.diagnostics"
+          },
+          {
+            "$ref": "#/components/schemas/Event.lsp.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.todo.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.removed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.part.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.part.delta"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.part.removed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.error"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.tools.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.auth.required"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.prompts.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.resources.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.command.executed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.permission.asked"
+          },
+          {
+            "$ref": "#/components/schemas/Event.permission.replied"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.status"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.idle"
           },
           {
             "$ref": "#/components/schemas/Event.task.created"
@@ -42678,75 +42755,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.integrity.review.completed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.installation.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.installation.update-available"
-          },
-          {
-            "$ref": "#/components/schemas/Event.project.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.server.instance.disposed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.lsp.client.diagnostics"
-          },
-          {
-            "$ref": "#/components/schemas/Event.lsp.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.todo.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.removed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.part.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.part.delta"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.part.removed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.error"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.tools.changed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.auth.required"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.prompts.changed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.resources.changed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.command.executed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.permission.asked"
-          },
-          {
-            "$ref": "#/components/schemas/Event.permission.replied"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.status"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.idle"
           },
           {
             "$ref": "#/components/schemas/Event.task-queue.completed"

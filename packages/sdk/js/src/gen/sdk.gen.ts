@@ -5424,18 +5424,20 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<BrowserPreviewCompareTaskTargetRegionsResponses, unknown, ThrowOnError>(
-      {
-        url: "/task/{taskID}/browser-preview/compare",
-        ...options,
-        ...params,
-        headers: {
-          "Content-Type": "application/json",
-          ...options?.headers,
-          ...params.headers,
-        },
+    return (options?.client ?? this.client).post<
+      BrowserPreviewCompareTaskTargetRegionsResponses,
+      unknown,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/browser-preview/compare",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
       },
-    )
+    })
   }
 
   /**
@@ -6103,11 +6105,11 @@ export class Task extends HeyApiClient {
                     }
                   | {
                       /**
-                       * script_ref — run a repo script. Requires: path; optional args.
+                       * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
                        */
                       kind: "script_ref"
                       /**
-                       * Repo-relative script path.
+                       * Repo-relative script path that already exists at registration time.
                        */
                       path: string
                       args?: Array<string>
@@ -6184,7 +6186,7 @@ export class Task extends HeyApiClient {
               }
             | {
                 /**
-                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.
+                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                  */
                 type: "contract_audit"
                 name: string
@@ -6268,11 +6270,11 @@ export class Task extends HeyApiClient {
                       }
                     | {
                         /**
-                         * script_ref — run a repo script. Requires: path; optional args.
+                         * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
                          */
                         kind: "script_ref"
                         /**
-                         * Repo-relative script path.
+                         * Repo-relative script path that already exists at registration time.
                          */
                         path: string
                         args?: Array<string>
@@ -6349,7 +6351,7 @@ export class Task extends HeyApiClient {
                 }
               | {
                   /**
-                   * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.
+                   * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                    */
                   type: "contract_audit"
                   name: string
@@ -7598,11 +7600,11 @@ export class Goal extends HeyApiClient {
                   }
                 | {
                     /**
-                     * script_ref — run a repo script. Requires: path; optional args.
+                     * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
                      */
                     kind: "script_ref"
                     /**
-                     * Repo-relative script path.
+                     * Repo-relative script path that already exists at registration time.
                      */
                     path: string
                     args?: Array<string>
@@ -7679,7 +7681,7 @@ export class Goal extends HeyApiClient {
             }
           | {
               /**
-               * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. Requires: name, spec.contract_ids, expect.status='passed'.
+               * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                */
               type: "contract_audit"
               name: string
