@@ -7,6 +7,7 @@ import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sq
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Server } from "../../src/server/server"
+import { SessionTable } from "../../src/session/session.sql"
 import { closeBrowserPreviewLiveSessions } from "../../src/browser-preview/live"
 import {
   latestBrowserPreviewEvidenceID,
@@ -33,19 +34,36 @@ describe("browser preview routes", () => {
     await Instance.provide({
       directory,
       fn: () => {
+        const time = Date.now()
+        const sessionID = `${taskID}_root`
         Database.use((db) =>
-          db
-            .insert(EngineTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              title: "Preview task",
-              request: "Preview task",
-              source: "api",
-              time_created: Date.now(),
-              time_updated: Date.now(),
-            })
-            .run(),
+          db.transaction((tx) => {
+            tx.insert(SessionTable)
+              .values({
+                id: sessionID,
+                project_id: Instance.project.id,
+                slug: taskID,
+                directory,
+                title: "Preview task",
+                version: "test",
+                kind: "root",
+                time_created: time,
+                time_updated: time,
+              })
+              .run()
+            tx.insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                session_id: sessionID,
+                title: "Preview task",
+                request: "Preview task",
+                source: "api",
+                time_created: time,
+                time_updated: time,
+              })
+              .run()
+          }),
         )
       },
     })
@@ -265,7 +283,6 @@ describe("browser preview routes", () => {
       await fs.writeFile(screenshotPath, "browser-preview-screenshot")
       const sha = sha16("browser-preview-screenshot")
       const evidenceID = persistBrowserPreviewEvidence({
-        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -290,6 +307,7 @@ describe("browser preview routes", () => {
         targetID: string
         viewportID: string
         status: string
+        projectRoot?: string
         capture?: { path?: string; sha?: string }
         diagnostics?: string[]
       }
@@ -298,6 +316,7 @@ describe("browser preview routes", () => {
       expect(body.targetID).toBe(target.id)
       expect(body.viewportID).toBe("desktop")
       expect(body.status).toBe("passed")
+      expect(body.projectRoot).toBeUndefined()
       expect(body.capture?.path).toBeUndefined()
       expect(body.capture?.sha).toBe(sha)
       expect(body.diagnostics).toEqual(["all runtime capture layers passed"])
@@ -322,7 +341,6 @@ describe("browser preview routes", () => {
       const bytes = Buffer.from("browser-preview-png-bytes")
       await fs.writeFile(screenshotPath, bytes)
       const evidenceID = persistBrowserPreviewEvidence({
-        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -364,7 +382,6 @@ describe("browser preview routes", () => {
       const bytes = Buffer.from("region-comparison-png-bytes")
       await fs.writeFile(artifactPath, bytes)
       const evidenceID = persistBrowserPreviewEvidence({
-        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -402,6 +419,97 @@ describe("browser preview routes", () => {
   )
 
   test(
+    "browser preview evidence artifact routes read from the evidence task project",
+    async () => {
+      await using evidenceProject = await tmpdir()
+      await using selectedProject = await tmpdir()
+      const evidenceTaskID = await seedTask(evidenceProject.path, "tsk_browserpreviewroute_evidence_project")
+      await seedTask(selectedProject.path, "tsk_browserpreviewroute_selected_project")
+      const target = await persistBrowserPreviewTarget({
+        taskID: evidenceTaskID,
+        url: "http://127.0.0.1:5174/task",
+      })
+      const screenshotPath = await browserPreviewArtifactPath(evidenceProject.path, evidenceTaskID, "desktop.png")
+      const sideBySidePath = await browserPreviewArtifactPath(
+        evidenceProject.path,
+        evidenceTaskID,
+        "side-by-side.png",
+      )
+      await fs.writeFile(screenshotPath, "evidence-project-capture")
+      await fs.writeFile(sideBySidePath, "evidence-project-side-by-side")
+      const screenshotRelativePath = path.relative(evidenceProject.path, screenshotPath).replaceAll(path.sep, "/")
+      const sideBySideRelativePath = path.relative(evidenceProject.path, sideBySidePath).replaceAll(path.sep, "/")
+      const selectedCapturePath = path.join(selectedProject.path, ...screenshotRelativePath.split("/"))
+      const selectedSideBySidePath = path.join(selectedProject.path, ...sideBySideRelativePath.split("/"))
+      await fs.mkdir(path.dirname(selectedCapturePath), { recursive: true })
+      await fs.mkdir(path.dirname(selectedSideBySidePath), { recursive: true })
+      await fs.writeFile(selectedCapturePath, "selected-project-capture")
+      await fs.writeFile(selectedSideBySidePath, "selected-project-side-by-side")
+      const captureEvidenceID = persistBrowserPreviewEvidence({
+        taskID: evidenceTaskID,
+        targetID: target.id,
+        viewportID: "desktop",
+        status: "passed",
+        summary: "capture passed",
+        capture: { path: screenshotPath, sha: sha16("evidence-project-capture") },
+        diagnostics: ["capture passed"],
+        now: 1000,
+      })
+      const artifactEvidenceID = persistBrowserPreviewEvidence({
+        taskID: evidenceTaskID,
+        targetID: target.id,
+        viewportID: "desktop",
+        operationKind: "reference-comparison",
+        regionID: "economy",
+        status: "passed",
+        summary: "comparison passed",
+        artifactPaths: { side_by_side: sideBySidePath },
+        diagnostics: ["comparison passed"],
+        now: 2000,
+      })
+      Database.use((db) => {
+        for (const evidenceID of [captureEvidenceID, artifactEvidenceID]) {
+          const row = db
+            .select()
+            .from(EngineArtifactTable)
+            .where(eq(EngineArtifactTable.id, evidenceID))
+            .limit(1)
+            .get()
+          if (!row) throw new Error(`Browser preview evidence row missing: ${evidenceID}`)
+          db.update(EngineArtifactTable)
+            .set({ payload: { ...(row.payload as Record<string, unknown>), project_root: selectedProject.path } })
+            .where(eq(EngineArtifactTable.id, evidenceID))
+            .run()
+        }
+      })
+      const app = Server.App()
+
+      const capture = await app.request(
+        `/task/${evidenceTaskID}/browser-preview/evidence/${captureEvidenceID}/capture.png`,
+        {
+          headers: {
+            "x-opencorvus-directory": selectedProject.path,
+          },
+        },
+      )
+      const artifact = await app.request(
+        `/task/${evidenceTaskID}/browser-preview/evidence/${artifactEvidenceID}/artifact/side-by-side`,
+        {
+          headers: {
+            "x-opencorvus-directory": selectedProject.path,
+          },
+        },
+      )
+
+      expect(capture.status).toBe(200)
+      expect(Buffer.from(await capture.arrayBuffer()).toString("utf8")).toBe("evidence-project-capture")
+      expect(artifact.status).toBe(200)
+      expect(Buffer.from(await artifact.arrayBuffer()).toString("utf8")).toBe("evidence-project-side-by-side")
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "GET /task/:taskID/browser-preview/evidence/:evidenceID rejects missing or mismatched screenshot artifacts",
     async () => {
       await using tmp = await tmpdir()
@@ -409,7 +517,6 @@ describe("browser preview routes", () => {
       const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const missingPath = ProjectRuntimePaths.browserPreviewJobRelative(taskID, "art_route_test_job", "missing.png")
       const missingEvidenceID = persistBrowserPreviewEvidence({
-        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -421,7 +528,6 @@ describe("browser preview routes", () => {
       const screenshotPath = await browserPreviewArtifactPath(tmp.path, taskID, "mismatch.png")
       await fs.writeFile(screenshotPath, "actual-screenshot")
       const mismatchEvidenceID = persistBrowserPreviewEvidence({
-        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -458,7 +564,6 @@ describe("browser preview routes", () => {
 
       expect(() =>
         persistBrowserPreviewEvidence({
-          projectRoot: tmp.path,
           taskID,
           targetID: target.id,
           viewportID: "desktop",
@@ -617,7 +722,6 @@ describe("browser preview routes", () => {
       await fs.writeFile(screenshotPath, "preview-capture")
       await fs.writeFile(sideBySidePath, "side-by-side")
       const captureID = persistBrowserPreviewEvidence({
-        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",
@@ -628,7 +732,6 @@ describe("browser preview routes", () => {
         now: 1000,
       })
       persistBrowserPreviewEvidence({
-        projectRoot: tmp.path,
         taskID,
         targetID: target.id,
         viewportID: "desktop",

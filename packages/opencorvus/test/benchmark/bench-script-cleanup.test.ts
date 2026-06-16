@@ -152,6 +152,35 @@ test("benchmark requires a visible overlay browser path", () => {
   expect(src).toContain("const currentOverlay = await withTimeout(overlaySnapshot(page)")
 })
 
+test("benchmark planning evidence must come from visible task-list DOM rows", () => {
+  const planningFn = src.slice(
+    src.indexOf("async function waitForPlanningVisible"),
+    src.indexOf("async function waitForStreamingVisible"),
+  )
+  const createdFn = src.slice(
+    src.indexOf("async function waitForTaskCreated"),
+    src.indexOf("async function verifyResume"),
+  )
+  const planningAssertion = src.slice(
+    src.indexOf("planning_visible: {"),
+    src.indexOf("streaming_visible: {"),
+  )
+  const materializedAssertion = src.slice(src.indexOf("materialized: {"), src.indexOf("frontend_design_agent_card: {"))
+
+  expect(planningFn).not.toContain('api("/tasks")')
+  expect(planningFn).not.toContain("taskIDs: [taskID")
+  expect(planningFn).toContain("taskListPanelVisible")
+  expect(planningFn).toContain("pendingTaskRowCount")
+  expect(planningFn).toContain("visibleTaskRowCount")
+  expect(createdFn).not.toContain('api("/tasks")')
+  expect(createdFn).toContain("visibleTaskRowIDs.includes")
+  expect(createdFn).toContain("visibleTaskRowIDs[0]")
+  expect(planningAssertion).toContain("taskListPanelVisible")
+  expect(planningAssertion).toContain("pendingTaskRowCount")
+  expect(planningAssertion).toContain("visibleTaskRowIDs.includes")
+  expect(materializedAssertion).toContain("visibleTaskRowIDs.includes(taskID)")
+})
+
 test("benchmark screenshot evidence is required and decoded", () => {
   const screenshotFn = src.slice(
     src.indexOf("async function takeBenchmarkScreenshot"),

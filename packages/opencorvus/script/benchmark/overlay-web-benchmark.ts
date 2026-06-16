@@ -1036,10 +1036,10 @@ try {
         `--resume-task-id=${taskID} --resume-home-dir="${temp.home}" --project-dir="${temp.dir}" --executor=${executor}`,
     )
 
-    planning = await waitForPlanningVisible(page, api)
+    planning = await waitForPlanningVisible(page)
     marks.planningAt = Date.now()
 
-    taskID = await waitForTaskCreated(page, api)
+    taskID = await waitForTaskCreated(page)
     marks.createdAt = Date.now()
     await api(`/task/${taskID}/budget`, {
       method: "PATCH",
@@ -1625,7 +1625,12 @@ async function buildBenchmarkReport(error?: unknown) {
     },
     assertions: {
       planning_visible: {
-        pass: !!planning && (planning.pendingCount > 0 || planning.taskIDs.length > 0 || !!planning.selectedTaskID),
+        pass:
+          !!planning &&
+          planning.taskListPanelVisible &&
+          (planning.pendingTaskRowCount > 0 ||
+            planning.visibleTaskRowCount > 0 ||
+            (!!planning.selectedTaskID && planning.visibleTaskRowIDs.includes(planning.selectedTaskID))),
         sample: planning,
       },
       streaming_visible: {
@@ -1637,11 +1642,17 @@ async function buildBenchmarkReport(error?: unknown) {
         sample: streaming,
       },
       materialized: {
-        pass: !!taskID && (currentBoard?.task?.id || "") === taskID && marks.boardAt > 0,
+        pass:
+          !!taskID &&
+          (currentBoard?.task?.id || "") === taskID &&
+          marks.boardAt > 0 &&
+          Array.isArray((currentOverlay as any)?.visibleTaskRowIDs) &&
+          (currentOverlay as any).visibleTaskRowIDs.includes(taskID),
         sample: {
           taskID,
           boardTaskID: currentBoard?.task?.id || "",
           boardLoaded: marks.boardAt > 0,
+          visibleTaskRowIDs: (currentOverlay as any)?.visibleTaskRowIDs ?? [],
         },
       },
       frontend_design_agent_card: {
@@ -1982,15 +1993,12 @@ function progressSignature(progress: any) {
   })
 }
 
-async function waitForPlanningVisible(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
+async function waitForPlanningVisible(page: Page) {
   while (true) {
     const overlay = await overlaySnapshot(page)
-    if (overlay.pendingCount > 0 || overlay.selectedTaskID || overlay.taskIDs[0]) return overlay
-    const board = await api("/tasks")
-      .then((res) => res.json())
-      .catch(() => null)
-    const taskID = Array.isArray(board?.tasks) ? board.tasks[0]?.task?.id || "" : ""
-    if (taskID) return { ...overlay, taskIDs: [taskID, ...overlay.taskIDs].filter(Boolean).slice(0, 5) }
+    if (overlay.taskListPanelVisible && (overlay.pendingTaskRowCount > 0 || overlay.visibleTaskRowCount > 0)) {
+      return overlay
+    }
     await Bun.sleep(250)
   }
 }
@@ -2005,16 +2013,13 @@ async function waitForStreamingVisible(page: Page) {
   }
 }
 
-async function waitForTaskCreated(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
+async function waitForTaskCreated(page: Page) {
   while (true) {
     const overlay = await overlaySnapshot(page)
-    if (overlay.selectedTaskID) return overlay.selectedTaskID
-    if (overlay.taskIDs[0]) return overlay.taskIDs[0]
-    const board = await api("/tasks")
-      .then((res) => res.json())
-      .catch(() => null)
-    const taskID = Array.isArray(board?.tasks) ? board.tasks[0]?.task?.id || "" : ""
-    if (taskID) return taskID
+    if (overlay.selectedTaskID && overlay.visibleTaskRowIDs.includes(overlay.selectedTaskID)) {
+      return overlay.selectedTaskID
+    }
+    if (overlay.visibleTaskRowIDs[0]) return overlay.visibleTaskRowIDs[0]
     await Bun.sleep(1_000)
   }
 }
@@ -2222,6 +2227,56 @@ async function overlaySnapshot(page: Page) {
       workspaceTaskID: localStorage.getItem("oc_workspace_task") || "",
     }
     const firstText = (sel: string) => document.querySelector(sel)?.textContent?.trim() || ""
+    const viewportVisible = (element: HTMLElement | null | undefined) => {
+      if (!element) return false
+      const rect = element.getBoundingClientRect()
+      const style = window.getComputedStyle(element)
+      return (
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.bottom > 0 &&
+        rect.top < window.innerHeight &&
+        rect.right > 0 &&
+        rect.left < window.innerWidth
+      )
+    }
+    const taskListPanel = document.querySelector<HTMLElement>("#taskListPanel")
+    const taskRowSamples = Array.from(
+      document.querySelectorAll<HTMLElement>("#taskListPanel .task-row-main[data-task-id]"),
+    )
+      .map((element) => {
+        const rect = element.getBoundingClientRect()
+        return {
+          id: element.dataset.taskId || "",
+          text: element.textContent?.trim().slice(0, 160) || "",
+          viewportVisible: viewportVisible(element),
+          rect: {
+            top: Math.round(rect.top),
+            left: Math.round(rect.left),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          },
+        }
+      })
+      .filter((row) => row.id)
+    const pendingTaskRowSamples = Array.from(document.querySelectorAll<HTMLElement>("#taskListPanel .global-task-row"))
+      .filter((element) => !element.querySelector(".task-row-main[data-task-id]"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect()
+        return {
+          text: element.textContent?.trim().slice(0, 160) || "",
+          viewportVisible: viewportVisible(element),
+          rect: {
+            top: Math.round(rect.top),
+            left: Math.round(rect.left),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          },
+        }
+      })
+      .filter((row) => row.text)
     const cardTree = overlay.cardTree || (window as any).cardTree
     const order = Array.isArray(cardTree?.order) ? cardTree.order : []
     const cards = cardTree?.cards && typeof cardTree.cards === "object" ? cardTree.cards : {}
@@ -2270,7 +2325,13 @@ async function overlaySnapshot(page: Page) {
             .filter(Boolean)
             .slice(0, 5)
         : [],
-      taskList: document.querySelector("#taskListPanel")?.textContent?.trim() || "",
+      taskList: taskListPanel?.textContent?.trim() || "",
+      taskListPanelVisible: viewportVisible(taskListPanel),
+      taskRows: taskRowSamples.slice(0, 5),
+      visibleTaskRowIDs: taskRowSamples.filter((row) => row.viewportVisible).map((row) => row.id).slice(0, 5),
+      visibleTaskRowCount: taskRowSamples.filter((row) => row.viewportVisible).length,
+      pendingTaskRows: pendingTaskRowSamples.slice(0, 5),
+      pendingTaskRowCount: pendingTaskRowSamples.filter((row) => row.viewportVisible).length,
       reasoning:
         firstText('.card[data-role="assistant"] .reasoning-text') ||
         firstText('.card[data-kind="agent"] .reasoning-text') ||
