@@ -624,24 +624,29 @@ export async function convergeDeadOwnerLiveExecution(input: {
   let corruptTasks = 0
 
   for (const task of listActiveTasks()) {
-    const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
-      (row) => row.status !== "queued" && isGoalRunOrphaned(row),
-    )
-    if (orphanGoalRuns.length === 0 && !latestRunWasTerminalizedByReason(task.id, input.reason)) continue
-    if (task.project_id === "global") {
-      corruptTasks += 1
-      log.error("convergeDeadOwnerLiveExecution: corrupt global task terminalized", { taskID: task.id })
-    }
+    await provideTaskRootSessionDirectory(task, async () => {
+      const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
+        (row) => row.status !== "queued" && isGoalRunOrphaned(row),
+      )
+      if (orphanGoalRuns.length === 0 && !latestRunWasTerminalizedByReason(task.id, input.reason)) return
+      if (task.project_id === "global") {
+        corruptTasks += 1
+        log.error("convergeDeadOwnerLiveExecution: corrupt global task terminalized", { taskID: task.id })
+      }
 
-    if (orphanGoalRuns.length > 0) {
-      goalRuns += await abortGoalRunsForRows(orphanGoalRuns, input.reason)
-      const affectedRuns = affectedRunsForGoalRuns(task.id, orphanGoalRuns)
-      runs += await abortRunsForRows(affectedRuns, input.reason)
-    }
-    const taskResult = await terminateTaskOwnedSessionsAndFail({ task: findTask(task.id) ?? task, reason: input.reason })
-    tasks += taskResult.tasks
-    sessions += taskResult.sessions
-    toolParts += taskResult.toolParts
+      if (orphanGoalRuns.length > 0) {
+        goalRuns += await abortGoalRunsForRows(orphanGoalRuns, input.reason)
+        const affectedRuns = affectedRunsForGoalRuns(task.id, orphanGoalRuns)
+        runs += await abortRunsForRows(affectedRuns, input.reason)
+      }
+      const taskResult = await terminateTaskOwnedSessionsAndFail({
+        task: findTask(task.id) ?? task,
+        reason: input.reason,
+      })
+      tasks += taskResult.tasks
+      sessions += taskResult.sessions
+      toolParts += taskResult.toolParts
+    })
   }
 
   return { tasks, sessions, toolParts, goalRuns, runs, ownerships: 0, corruptTasks }
