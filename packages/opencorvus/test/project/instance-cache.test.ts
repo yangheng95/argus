@@ -1,22 +1,27 @@
 import { afterEach, expect, test } from "bun:test"
 import { $ } from "bun"
 import { Instance } from "../../src/project/instance"
+import { Project } from "../../src/project/project"
 import { Worktree } from "../../src/worktree"
 import { tmpdir } from "../fixture/fixture"
 import { resetDatabase } from "../fixture/db"
 
 afterEach(async () => {
+  await Instance.disposeAll()
   await resetDatabase()
 })
 
-test("refreshes a cached global project when the directory becomes a git repository", async () => {
+test("refreshes a cached directory project when the directory becomes a git repository", async () => {
   await using tmp = await tmpdir()
+  let initialProjectID = ""
 
   await Instance.provide({
     directory: tmp.path,
     fn: () => {
-      expect(Instance.project.id).toBe("global")
-      expect(Instance.worktree).toBe("/")
+      initialProjectID = Instance.project.id
+      expect(Instance.project.id).toBe(Project.directoryProjectID(tmp.path))
+      expect(Instance.project.id).not.toBe("global")
+      expect(Instance.worktree).toBe(tmp.path)
     },
   })
 
@@ -26,6 +31,7 @@ test("refreshes a cached global project when the directory becomes a git reposit
     directory: tmp.path,
     async fn() {
       expect(Instance.project.id).not.toBe("global")
+      expect(Instance.project.id).toBe(initialProjectID)
       expect(Instance.directory).toBe(tmp.path)
       expect(Instance.worktree).toBe(tmp.path)
       expect(Instance.project.worktree).toBe(tmp.path)

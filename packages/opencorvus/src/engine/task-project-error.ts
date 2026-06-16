@@ -9,3 +9,16 @@ export const TaskGlobalProjectBindingError = NamedError.create(
     projectID: z.string(),
   }),
 )
+
+export const TaskChannelBindingProjectConflictError = NamedError.create(
+  "TaskChannelBindingProjectConflictError",
+  z.object({
+    message: z.string(),
+    platform: z.string(),
+    channel: z.string(),
+    thread: z.string(),
+    taskID: z.string(),
+    projectID: z.string(),
+    activeProjectID: z.string(),
+  }),
+)

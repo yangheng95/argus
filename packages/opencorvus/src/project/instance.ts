@@ -12,6 +12,7 @@ interface Context {
   directory: string
   worktree: string
   project: Project.Info
+  git: boolean
 }
 
 type StateFactory = <S>(
@@ -43,7 +44,7 @@ const disposal = {
 }
 
 function needsProjectRefresh(ctx: Context) {
-  return ctx.project.id === "global" && ctx.worktree === "/" && Project.isGitRepo(ctx.directory)
+  return (ctx.project.id === "global" || ctx.worktree === "/" || !ctx.git) && Project.isGitRepo(ctx.directory)
 }
 
 async function bootstrapContext(ctx: Context, init?: () => Promise<unknown>) {
@@ -56,20 +57,16 @@ async function bootstrapContext(ctx: Context, init?: () => Promise<unknown>) {
   // (specs/acceptance-attachment-store-single-source-2026-05-11.md).
   // `AttachmentStore.write` is content-addressed and write-only — without
   // this hook, removed parts / archived sessions leave bytes on disk forever.
-  // Skipped for the "global" pseudo-project (worktree="/") because reading
-  // C:\.opencorvus\ would fail and the global project never holds real
-  // attachments. Errors degrade to a log line — sweep failure must not turn
-  // into a 500-storm (rule 1 / W2-V32 lesson).
-  if (ctx.project.id !== "global") {
-    try {
-      const { AttachmentStore } = await import("@/storage/attachment-store")
-      await AttachmentStore.sweep(ctx.project.id)
-    } catch (err) {
-      Log.Default.warn("AttachmentStore.sweep failed during bootstrap", {
-        projectID: ctx.project.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
+  // Errors degrade to a log line — sweep failure must not turn into a
+  // 500-storm (rule 1 / W2-V32 lesson).
+  try {
+    const { AttachmentStore } = await import("@/storage/attachment-store")
+    await AttachmentStore.sweep(ctx.project.id)
+  } catch (err) {
+    Log.Default.warn("AttachmentStore.sweep failed during bootstrap", {
+      projectID: ctx.project.id,
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
   await init?.()
 }
@@ -83,23 +80,21 @@ export const Instance: InstanceApi = {
       Log.Default.info("creating instance", { directory })
       existing = iife(async () => {
         const { project, sandbox } = await Project.fromDirectory(directory)
-        if (project.id !== "global") {
-          const legacy = (
-            await Promise.all(
-              ProjectRuntimePaths.legacyRuntimeRelativePaths.map(async (relative) => ({
-                relative,
-                exists: await Filesystem.exists(path.join(project.worktree, ...relative.split("/"))),
-              })),
-            )
+        const legacy = (
+          await Promise.all(
+            ProjectRuntimePaths.legacyRuntimeRelativePaths.map(async (relative) => ({
+              relative,
+              exists: await Filesystem.exists(path.join(project.worktree, ...relative.split("/"))),
+            })),
           )
-            .filter((entry) => entry.exists)
-            .map((entry) => entry.relative)
-          if (legacy.length > 0) {
-            throw new Error(
-              `Legacy OpenCorvus runtime paths exist under ${project.worktree}: ${legacy.join(", ")}. ` +
-                `Move or delete these runtime directories before starting; new task/session state lives under ${ProjectRuntimePaths.relativeRuntimeRoot()}.`,
-            )
-          }
+        )
+          .filter((entry) => entry.exists)
+          .map((entry) => entry.relative)
+        if (legacy.length > 0) {
+          throw new Error(
+            `Legacy OpenCorvus runtime paths exist under ${project.worktree}: ${legacy.join(", ")}. ` +
+              `Move or delete these runtime directories before starting; new task/session state lives under ${ProjectRuntimePaths.relativeRuntimeRoot()}.`,
+          )
         }
         // Note (W2-V32): the previous bootstrap auto-ran `Project.initGit` for
         // any non-git directory. That violated rule 7 (silent fallback) and
@@ -115,6 +110,7 @@ export const Instance: InstanceApi = {
           directory,
           worktree: sandbox,
           project,
+          git: Project.isGitRepo(project.worktree),
         }
         await context.provide(ctx, () => bootstrapContext(ctx, input.init))
         return ctx
@@ -155,6 +151,7 @@ export const Instance: InstanceApi = {
         directory: key,
         worktree: next.sandbox,
         project: next.project,
+        git: Project.isGitRepo(next.project.worktree),
       }
       cache.set(key, Promise.resolve(ctx))
       return ctx
@@ -163,6 +160,7 @@ export const Instance: InstanceApi = {
     ctx.directory = key
     ctx.worktree = next.sandbox
     ctx.project = next.project
+    ctx.git = Project.isGitRepo(next.project.worktree)
     cache.set(key, Promise.resolve(ctx))
     return ctx
   },
@@ -173,9 +171,6 @@ export const Instance: InstanceApi = {
    */
   containsPath(filepath: string) {
     if (Filesystem.contains(Instance.directory, filepath)) return true
-    // Non-git projects set worktree to "/" which would match ANY absolute path.
-    // Skip worktree check in this case to preserve external_directory permissions.
-    if (Instance.worktree === "/") return false
     return Filesystem.contains(Instance.worktree, filepath)
   },
   state<S>(
