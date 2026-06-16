@@ -8,6 +8,8 @@ import { deriveTaskStatus } from "../../src/engine/task-status"
 import { convergeDeadOwnerLiveExecution } from "../../src/engine/writer"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
+import { Session } from "../../src/session"
+import { Message } from "../../src/session/message"
 import { Database, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -84,12 +86,13 @@ describe("isGoalRunOrphaned — owner-stamp orphan predicate", () => {
   })
 })
 
-function seedTaskRun(taskID: string, runID: string, now: number) {
+function seedTaskRun(taskID: string, runID: string, now: number, sessionID?: string) {
   Database.use((db) => {
     db.insert(EngineTaskTable)
       .values({
         id: taskID,
         project_id: Instance.project.id,
+        session_id: sessionID,
         source: "test",
         title: "Owner orphan",
         request: "build x",
@@ -248,6 +251,47 @@ function fakeGoal(goalID: string) {
   } as any
 }
 
+async function appendPendingToolPart(input: {
+  sessionID: string
+  messageID: string
+  partID: string
+  directory: string
+  now: number
+}) {
+  await Session.updateMessage({
+    id: input.messageID,
+    sessionID: input.sessionID,
+    role: "assistant",
+    time: { created: input.now },
+    parentID: `${input.messageID}_parent`,
+    agent: "build",
+    providerID: "hexin",
+    modelID: "kimi-k2.6",
+    path: { cwd: input.directory, root: input.directory },
+    cost: 0,
+    tokens: {
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      total: 0,
+      cache: { read: 0, write: 0 },
+    },
+  })
+  await Session.updatePart({
+    id: input.partID,
+    messageID: input.messageID,
+    sessionID: input.sessionID,
+    type: "tool",
+    callID: `${input.partID}:call`,
+    tool: "write",
+    state: {
+      status: "pending",
+      input: {},
+      raw: "",
+    },
+  })
+}
+
 describe("owner-orphan derivation across describe / orphan (restart scenario)", () => {
   beforeEach(async () => {
     await resetDatabase()
@@ -375,16 +419,33 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
 
   test.serial("startup convergence terminalizes task after prior owner-death run abort already removed live orphan tips", async () => {
     await using tmp = await tmpdir({ git: true })
+    let taskID = ""
+    let runID = ""
+    let goalRunID = ""
+    let messageID = ""
+    let partID = ""
+    let reason = ""
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const now = Date.now()
-        const taskID = `tsk_converge_half_${now}`
-        const runID = `run_converge_half_${now}`
-        const goalRunID = "grun_converge_half"
+        taskID = `tsk_converge_half_${now}`
+        runID = `run_converge_half_${now}`
+        goalRunID = "grun_converge_half"
         const goalID = "gol_converge_half"
-        const reason = "Server startup: previous owner process died before terminalization"
-        seedTaskRun(taskID, runID, now)
+        reason = "Server startup: previous owner process died before terminalization"
+        const root = await Session.create({ kind: "root", title: "half-converged root" })
+        const build = await Session.create({ kind: "build", parentID: root.id, title: "half-converged build" })
+        messageID = `msg_converge_half_${now}`
+        partID = `prt_converge_half_${now}`
+        await appendPendingToolPart({
+          sessionID: build.id,
+          messageID,
+          partID,
+          directory: tmp.path,
+          now,
+        })
+        seedTaskRun(taskID, runID, now, root.id)
         seedGoalRun(taskID, runID, goalRunID, goalID, DEAD_OWNER, now + 1)
         appendGoalRunStatus(taskID, runID, goalRunID, goalID, "aborted", reason, DEAD_OWNER, now + 2)
         appendRunStatus(taskID, runID, "aborted", reason, now + 3)
@@ -392,18 +453,28 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
         expect(findRun(runID)?.status).toBe("aborted")
         expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
-
-        const result = await convergeDeadOwnerLiveExecution({ reason })
-
-        expect(result.tasks).toBeGreaterThanOrEqual(1)
-        expect(result.goalRuns).toBe(0)
-        expect(result.runs).toBe(0)
-        const task = findTask(taskID)
-        expect(task).toBeDefined()
-        expect(deriveTaskStatus(task!)).toBe("failed")
-        expect(task?.error).toBe(reason)
       },
     })
+
+    await Instance.disposeAll()
+    expect(Instance.current()).toBeUndefined()
+
+    const result = await convergeDeadOwnerLiveExecution({ reason })
+
+    expect(result.tasks).toBeGreaterThanOrEqual(1)
+    expect(result.goalRuns).toBe(0)
+    expect(result.runs).toBe(0)
+    expect(result.toolParts).toBe(1)
+    const task = findTask(taskID)
+    expect(task).toBeDefined()
+    expect(deriveTaskStatus(task!)).toBe("failed")
+    expect(task?.error).toBe(reason)
+    const part = (await Message.parts(messageID))[0]
+    expect(part?.type).toBe("tool")
+    if (part?.type !== "tool") throw new Error("expected tool part")
+    expect(part.id).toBe(partID)
+    expect(part.state.status).toBe("error")
+    expect(part.state.failure.message).toBe(reason)
   })
 
   test.serial("startup convergence terminalizes legacy global dead-owner task instead of skipping it", async () => {
