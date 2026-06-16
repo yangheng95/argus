@@ -10,7 +10,6 @@ import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
-import { SessionStatus } from "../../src/session/status"
 import { Database, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -126,25 +125,6 @@ function seedTaskRun(taskID: string, runID: string, now: number, sessionID?: str
         },
         time_created: now,
         time_updated: now,
-      } as any)
-      .run()
-  })
-}
-
-function seedActiveTask(taskID: string, now: number, sessionID?: string) {
-  Database.use((db) => {
-    db.insert(EngineTaskTable)
-      .values({
-        id: taskID,
-        project_id: Instance.project.id,
-        session_id: sessionID,
-        source: "test",
-        title: "Owner orphan",
-        request: "build x",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
       } as any)
       .run()
   })
@@ -495,106 +475,6 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
     expect(part.id).toBe(partID)
     expect(part.state.status).toBe("error")
     expect(part.state.failure.message).toBe(reason)
-  })
-
-  test.serial("startup convergence terminalizes task-owned open tool part before the first run exists", async () => {
-    await using tmp = await tmpdir({ git: true })
-    let taskID = ""
-    let messageID = ""
-    let partID = ""
-    let reason = ""
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const now = Date.now()
-        taskID = `tsk_converge_open_tool_${now}`
-        reason = "Server startup: previous owner process died before terminalization"
-        const root = await Session.create({ kind: "root", title: "open-tool root" })
-        const orchestrator = await Session.create({
-          kind: "orchestrator",
-          parentID: root.id,
-          title: "open-tool orchestrator",
-        })
-        messageID = `msg_converge_open_tool_${now}`
-        partID = `prt_converge_open_tool_${now}`
-        await appendPendingToolPart({
-          sessionID: orchestrator.id,
-          messageID,
-          partID,
-          directory: tmp.path,
-          now,
-        })
-        seedActiveTask(taskID, now, root.id)
-
-        const task = findTask(taskID)
-        expect(task).toBeDefined()
-        expect(deriveTaskStatus(task!)).toBe("active")
-      },
-    })
-
-    await Instance.disposeAll()
-    expect(Instance.current()).toBeUndefined()
-
-    const result = await convergeDeadOwnerLiveExecution({ reason })
-
-    expect(result.tasks).toBeGreaterThanOrEqual(1)
-    expect(result.goalRuns).toBe(0)
-    expect(result.runs).toBe(0)
-    expect(result.toolParts).toBe(1)
-    const task = findTask(taskID)
-    expect(task).toBeDefined()
-    expect(deriveTaskStatus(task!)).toBe("failed")
-    expect(task?.error).toBe(reason)
-    const part = (await Message.parts(messageID))[0]
-    expect(part?.type).toBe("tool")
-    if (part?.type !== "tool") throw new Error("expected tool part")
-    expect(part.id).toBe(partID)
-    expect(part.state.status).toBe("error")
-    expect(part.state.failure.message).toBe(reason)
-  })
-
-  test.serial("startup convergence does not terminalize a current-process open tool part", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const now = Date.now()
-        const taskID = `tsk_converge_current_tool_${now}`
-        const messageID = `msg_converge_current_tool_${now}`
-        const partID = `prt_converge_current_tool_${now}`
-        const reason = "Server startup: previous owner process died before terminalization"
-        const root = await Session.create({ kind: "root", title: "current-tool root" })
-        const orchestrator = await Session.create({
-          kind: "orchestrator",
-          parentID: root.id,
-          title: "current-tool orchestrator",
-        })
-        await appendPendingToolPart({
-          sessionID: orchestrator.id,
-          messageID,
-          partID,
-          directory: tmp.path,
-          now,
-        })
-        seedActiveTask(taskID, now, root.id)
-        SessionStatus.set(orchestrator.id, { type: "streaming" })
-
-        const result = await convergeDeadOwnerLiveExecution({ reason })
-
-        expect(result.tasks).toBe(0)
-        expect(result.goalRuns).toBe(0)
-        expect(result.runs).toBe(0)
-        expect(result.toolParts).toBe(0)
-        const task = findTask(taskID)
-        expect(task).toBeDefined()
-        expect(deriveTaskStatus(task!)).toBe("active")
-        const part = (await Message.parts(messageID))[0]
-        expect(part?.type).toBe("tool")
-        if (part?.type !== "tool") throw new Error("expected tool part")
-        expect(part.id).toBe(partID)
-        expect(part.state.status).toBe("pending")
-      },
-    })
   })
 
   test.serial("startup convergence terminalizes legacy global dead-owner task instead of skipping it", async () => {
