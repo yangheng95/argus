@@ -181,6 +181,20 @@ test("benchmark planning evidence must come from visible task-list DOM rows", ()
   expect(materializedAssertion).toContain("visibleTaskRowIDs.includes(taskID)")
 })
 
+test("benchmark frontend-design card evidence must be viewport visible", () => {
+  const frontendCardAssertion = src.slice(
+    src.indexOf("frontend_design_agent_card: {"),
+    src.indexOf("architect_contract_graph: {"),
+  )
+  const snapshotSource = src.slice(src.indexOf("const frontendDesignCard = {"), src.indexOf("return {", src.indexOf("const frontendDesignCard = {")))
+
+  expect(frontendCardAssertion).toContain("frontendDesignCard?.storePresent")
+  expect(frontendCardAssertion).toContain("frontendDesignCard?.renderedPresent")
+  expect(frontendCardAssertion).toContain("frontendDesignCard?.viewportVisible")
+  expect(snapshotSource).toContain("viewportVisible: viewportVisible(frontendElement)")
+  expect(snapshotSource).not.toContain("frontendRect.bottom > 0")
+})
+
 test("benchmark screenshot evidence is required and decoded", () => {
   const screenshotFn = src.slice(
     src.indexOf("async function takeBenchmarkScreenshot"),
