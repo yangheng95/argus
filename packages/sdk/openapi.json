@@ -2554,14 +2554,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "in": "query",
-            "name": "projectId",
-            "schema": {
-              "type": "string"
-            },
-            "required": true
           }
         ],
         "x-codeSamples": [
@@ -2617,9 +2609,6 @@
                   "prompt": {
                     "type": "string"
                   },
-                  "projectId": {
-                    "type": "string"
-                  },
                   "sessionId": {
                     "type": "string"
                   },
@@ -2630,8 +2619,7 @@
                 "required": [
                   "name",
                   "expression",
-                  "prompt",
-                  "projectId"
+                  "prompt"
                 ]
               }
             }
@@ -2690,14 +2678,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "in": "query",
-            "name": "projectId",
-            "schema": {
-              "type": "string"
-            },
-            "required": true
           },
           {
             "schema": {
@@ -2818,14 +2798,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "in": "query",
-            "name": "projectId",
-            "schema": {
-              "type": "string"
-            },
-            "required": true
           }
         ],
         "x-codeSamples": [
@@ -2900,9 +2872,6 @@
                   "prompt": {
                     "type": "string"
                   },
-                  "projectId": {
-                    "type": "string"
-                  },
                   "sessionId": {
                     "type": "string"
                   },
@@ -2918,8 +2887,7 @@
                 "required": [
                   "name",
                   "eventType",
-                  "prompt",
-                  "projectId"
+                  "prompt"
                 ]
               }
             }
@@ -2978,14 +2946,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "in": "query",
-            "name": "projectId",
-            "schema": {
-              "type": "string"
-            },
-            "required": true
           },
           {
             "schema": {

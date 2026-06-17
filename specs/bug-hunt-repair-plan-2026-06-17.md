@@ -671,3 +671,47 @@ LINE:
 - Independent agent review rejected the first caller-precheck/global-delete shape; the final implementation moves delete ownership into `Memory.deleteFileInProject({ fileId, projectId })`.
 - Focused tests passed: `bun test packages/opencorvus/test/server/panel-memory-routes.test.ts packages/opencorvus/test/tool/memory.test.ts packages/opencorvus/test/memory/stages.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+
+## Batch P1-H: experimental schedule route project ownership
+
+### Findings
+
+- BH-015: `packages/opencorvus/src/server/routes/experimental.ts` accepts caller-supplied `projectId` on cron schedule list/create/delete and event-schedule list/create/delete routes.
+- `sessionId` is also caller-supplied on create routes and can point at another project's session while the new job is stored under whichever project ID the caller supplied.
+- `CronService` and `EventService` correctly filter by the project ID they are handed; the HTTP route is the untrusted boundary that currently chooses that project ID from request data.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/experimental.ts` is the only caller of `CronService.list/create/remove` and `EventService.list/create/remove`.
+- `packages/opencorvus/src/scheduler/cron-service.ts` stores cron jobs in `CronJobTable`, polls only `Instance.project.id`, and wakes the optional stored `session_id`.
+- `packages/opencorvus/src/scheduler/event-service.ts` stores event jobs in `EventJobTable`, processes events only for `Instance.project.id`, and wakes the optional stored `session_id`.
+- `packages/opencorvus/src/tool/schedule.ts` already binds schedule operations to `Instance.project.id` directly and is not the vulnerable route surface.
+- `Session.get()` exposes `projectID` for validating that optional schedule `sessionId` belongs to the active project.
+
+### Fix Shape
+
+- Remove `projectId` from experimental schedule and event-schedule route query/body contracts. Reject caller-supplied `projectId` via strict validators instead of ignoring it.
+- Bind all six routes to `Instance.project.id` and pass that project ID into `CronService` / `EventService`.
+- Add service-level session ownership validation for create calls: if `sessionId` is present, it must resolve to a session row in the same `projectId`, otherwise throw `NotFoundError`.
+- Change service remove calls to return whether a row was deleted; route delete returns 404 when the job ID is absent from the active project.
+- Do not add allowlists, compatibility fallbacks, or cross-project schedule endpoints.
+
+### Regression Tests
+
+- Add a `Server.App()` route test with projects A and B. Under project A, `GET/DELETE` with `?projectId=<B>` must return 400 and leave B rows intact.
+- Under project A, `POST /experimental/schedule` and `/event-schedule` with body `projectId: <B>` must return 400 and create no B rows.
+- Under project A, create calls with a project B `sessionId` must return 404 and create no rows.
+- Valid creates under project A without `projectId` must create rows under project A only; deleting project B job IDs from project A must return 404 and leave B rows intact.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/experimental-schedule-routes.test.ts packages/opencorvus/test/scheduler/cron-service.test.ts packages/opencorvus/test/scheduler/event-service.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Independent agent review confirmed the vulnerable boundary is the experimental route contract, and flagged the additional SDK/OpenAPI `projectId` contract leak and legal `directory` query requirement.
+- Focused tests passed: `bun test packages/opencorvus/test/server/experimental-schedule-routes.test.ts packages/opencorvus/test/server/experimental-schedule-contract.test.ts packages/opencorvus/test/scheduler/cron-service.test.ts packages/opencorvus/test/scheduler/event-service.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus` and `bunx turbo run typecheck --filter=@opencorvus-ai/sdk`.
+- Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.

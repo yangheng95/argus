@@ -8,6 +8,7 @@ import { tmpdir } from "../fixture/fixture"
 import { SessionWake } from "../../src/session/wake"
 import { Bus } from "../../src/bus"
 import { BusEvent } from "../../src/bus/bus-event"
+import { Session } from "../../src/session"
 
 const TestEvent = BusEvent.define(
   "test.event",
@@ -122,6 +123,63 @@ describe("scheduler.event-service", () => {
 
     wake.mockRestore()
   })
+
+  test(
+    "create rejects foreign sessions and remove reports only current-project rows",
+    async () => {
+      await using one = await tmpdir({ git: true })
+      await using two = await tmpdir({ git: true })
+      const foreignJobID = "evt_foreign_remove_" + Math.random().toString(36).slice(2)
+      let oneProjectID = ""
+      let twoProjectID = ""
+      let twoSessionID = ""
+
+      await Instance.provide({
+        directory: one.path,
+        fn: async () => {
+          oneProjectID = Instance.project.id
+        },
+      })
+
+      await Instance.provide({
+        directory: two.path,
+        fn: async () => {
+          twoProjectID = Instance.project.id
+          twoSessionID = (await Session.create({ kind: "assistant", title: "foreign event session" })).id
+          Database.use((db) =>
+            db
+              .insert(EventJobTable)
+              .values({
+                id: foreignJobID,
+                project_id: twoProjectID,
+                session_id: twoSessionID,
+                name: "foreign remove sentinel",
+                event_type: "test.foreign",
+                prompt: "foreign",
+                enabled: true,
+                one_shot: false,
+                cooldown_ms: 0,
+              })
+              .run(),
+          )
+        },
+      })
+
+      expect(() =>
+        EventService.create({
+          name: "bad event session",
+          eventType: "test.bad",
+          prompt: "bad",
+          projectId: oneProjectID,
+          sessionId: twoSessionID,
+        }),
+      ).toThrow("Session not found")
+
+      expect(EventService.remove(foreignJobID, oneProjectID)).toBe(false)
+      expect(Database.use((db) => db.select().from(EventJobTable).where(eq(EventJobTable.id, foreignJobID)).get())).toBeDefined()
+    },
+    30_000,
+  )
 
   test("one failed job does not block other matching jobs", async () => {
     await using tmp = await tmpdir({ git: true })

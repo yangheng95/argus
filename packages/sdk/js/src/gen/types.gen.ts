@@ -4590,12 +4590,11 @@ export type WorktreeResetResponse = WorktreeResetResponses[keyof WorktreeResetRe
 export type ExperimentalScheduleListData = {
   body?: never
   path?: never
-  query: {
+  query?: {
     /**
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
-    projectId: string
   }
   url: "/experimental/schedule"
 }
@@ -4626,7 +4625,6 @@ export type ExperimentalScheduleCreateData = {
     name: string
     expression: string
     prompt: string
-    projectId: string
     sessionId?: string
     oneShot?: boolean
   }
@@ -4659,12 +4657,11 @@ export type ExperimentalScheduleDeleteData = {
   path: {
     id: string
   }
-  query: {
+  query?: {
     /**
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
-    projectId: string
   }
   url: "/experimental/schedule/{id}"
 }
@@ -4684,12 +4681,11 @@ export type ExperimentalScheduleDeleteResponse =
 export type ExperimentalEventscheduleListData = {
   body?: never
   path?: never
-  query: {
+  query?: {
     /**
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
-    projectId: string
   }
   url: "/experimental/event-schedule"
 }
@@ -4725,7 +4721,6 @@ export type ExperimentalEventscheduleCreateData = {
       [key: string]: string | number | boolean
     }
     prompt: string
-    projectId: string
     sessionId?: string
     oneShot?: boolean
     cooldownMs?: number
@@ -4759,12 +4754,11 @@ export type ExperimentalEventscheduleDeleteData = {
   path: {
     id: string
   }
-  query: {
+  query?: {
     /**
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
-    projectId: string
   }
   url: "/experimental/event-schedule/{id}"
 }

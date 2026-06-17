@@ -1401,23 +1401,12 @@ export class Schedule extends HeyApiClient {
    * List scheduled tasks
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      projectId: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "projectId" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<ExperimentalScheduleListResponses, unknown, ThrowOnError>({
       url: "/experimental/schedule",
       ...options,
@@ -1434,7 +1423,6 @@ export class Schedule extends HeyApiClient {
       name: string
       expression: string
       prompt: string
-      projectId: string
       sessionId?: string
       oneShot?: boolean
     },
@@ -1449,7 +1437,6 @@ export class Schedule extends HeyApiClient {
             { in: "body", key: "name" },
             { in: "body", key: "expression" },
             { in: "body", key: "prompt" },
-            { in: "body", key: "projectId" },
             { in: "body", key: "sessionId" },
             { in: "body", key: "oneShot" },
           ],
@@ -1475,7 +1462,6 @@ export class Schedule extends HeyApiClient {
     parameters: {
       id: string
       directory?: string
-      projectId: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1486,7 +1472,6 @@ export class Schedule extends HeyApiClient {
           args: [
             { in: "path", key: "id" },
             { in: "query", key: "directory" },
-            { in: "query", key: "projectId" },
           ],
         },
       ],
@@ -1504,23 +1489,12 @@ export class Eventschedule extends HeyApiClient {
    * List event-triggered tasks
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      projectId: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "projectId" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<ExperimentalEventscheduleListResponses, unknown, ThrowOnError>({
       url: "/experimental/event-schedule",
       ...options,
@@ -1540,7 +1514,6 @@ export class Eventschedule extends HeyApiClient {
         [key: string]: string | number | boolean
       }
       prompt: string
-      projectId: string
       sessionId?: string
       oneShot?: boolean
       cooldownMs?: number
@@ -1557,7 +1530,6 @@ export class Eventschedule extends HeyApiClient {
             { in: "body", key: "eventType" },
             { in: "body", key: "match" },
             { in: "body", key: "prompt" },
-            { in: "body", key: "projectId" },
             { in: "body", key: "sessionId" },
             { in: "body", key: "oneShot" },
             { in: "body", key: "cooldownMs" },
@@ -1584,7 +1556,6 @@ export class Eventschedule extends HeyApiClient {
     parameters: {
       id: string
       directory?: string
-      projectId: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1595,7 +1566,6 @@ export class Eventschedule extends HeyApiClient {
           args: [
             { in: "path", key: "id" },
             { in: "query", key: "directory" },
-            { in: "query", key: "projectId" },
           ],
         },
       ],
