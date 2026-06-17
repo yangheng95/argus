@@ -870,15 +870,23 @@ describe("overlay architecture guards", () => {
     for (const className of [
       "executor-dualbar",
       "executor-chip-slot",
-      "executor-chip-identity",
+      "executor-chip-copy",
+      "executor-chip-label-row",
       "executor-chip-label",
-      "executor-chip-model",
-      "executor-chip-provider",
-      "executor-chip-name",
+      "executor-chip-value",
       "executor-chip-caret",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const className of [
+      "executor-chip-identity",
+      "executor-chip-model",
+      "executor-chip-provider",
+      "executor-chip-name",
+    ]) {
+      expect(composerSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
     }
 
     // executor-chip must not appear in any theme selector in styles.css
@@ -899,7 +907,7 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(
       /\.executor-chip-slot\[data-open="true"\] \.oc-button\[data-ui\^="executor-chip-"\]\s*\{/,
     )
-    expect(composerSurface).toMatch(/\.executor-chip-model\[data-empty="true"\]/)
+    expect(composerSurface).toMatch(/\.executor-chip-value\[data-empty="true"\]/)
   })
 
   test("workspace panel and diff preview are owned by surfaces/workspace.css", () => {
@@ -1852,13 +1860,17 @@ describe("overlay architecture guards", () => {
     expect(conversationAt).toBeGreaterThan(-1)
   })
 
-  test("composer build/version row and reflow are owned by surfaces/composer.css", () => {
+  test("composer version footer and reflow are owned by surfaces/composer.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
-    for (const className of ["chat-build", "chat-version", "chat-version-link", "chat-version-sep"]) {
+    for (const className of ["chat-version", "chat-version-copy"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const className of ["chat-build", "chat-version-link", "chat-version-sep", "chat-version-name"]) {
+      expect(composerSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
     }
 
     expect(composerSurface).toMatch(/@container \(max-width: 520px\)/)
@@ -1881,12 +1893,13 @@ describe("overlay architecture guards", () => {
       "chat-compose-row",
       "chat-compose-meta",
       "chat-compose-meta-left",
-      "chat-compose-meta-right",
       "chat-resize-handle",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+
+    expect(composerSurface).not.toMatch(/(^|\n)\.chat-compose-meta-right(?:\s|\.|:|\{|,|\[)/)
 
     expect(composerSurface).toMatch(/\.chat-attachment-remove:hover\s*\{/)
     expect(composerSurface).toMatch(/\.chat-input\[data-dragover\]\s+\.chat-compose-row\s*\{/)

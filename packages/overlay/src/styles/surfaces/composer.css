@@ -323,16 +323,6 @@
   min-width: 0;
 }
 
-.chat-compose-meta-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
-  flex: 1 1 100%;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
 .chat-compose-meta-left a {
   color: var(--text-muted);
   text-decoration: none;
@@ -460,20 +450,6 @@
   white-space: nowrap;
 }
 
-/* Build/version block: the small text strip beneath the textarea showing
-   the active engine + model and the build version link. Wraps onto a
-   second line on narrow composers. */
-.chat-build {
-  display: flex;
-  flex: 1 1 calc(220px * var(--ui-scale));
-  min-width: 0;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: calc(8px * var(--ui-scale));
-  padding: 0;
-  color: var(--text-soft);
-}
-
 .chat-version {
   display: inline-flex;
   align-items: center;
@@ -488,31 +464,9 @@
   text-overflow: ellipsis;
 }
 
-.chat-version-copy,
-.chat-version-name {
+.chat-version-copy {
   color: inherit;
   white-space: nowrap;
-}
-
-.chat-version-sep {
-  opacity: var(--ui-opacity-faint);
-}
-
-.chat-version-link {
-  display: inline-flex;
-  align-items: center;
-  color: inherit;
-  text-decoration: none;
-  transition:
-    color var(--ui-duration-base) var(--ui-timing-standard),
-    opacity var(--ui-duration-base) var(--ui-timing-standard);
-  opacity: var(--ui-opacity-subtle);
-  white-space: nowrap;
-}
-
-.chat-version-link:hover {
-  color: var(--text-soft);
-  opacity: var(--ui-opacity-full);
 }
 
 /* Send button SVG icon sizing. Kept separate from the `.chat-send`
@@ -688,7 +642,7 @@
   flex: 0 0 auto;
 }
 
-.executor-budget-row {
+.executor-budget-inline {
   display: inline-flex;
   flex: 0 1 auto;
   align-items: center;
@@ -704,11 +658,11 @@
   line-height: 1;
 }
 
-.executor-budget-row[data-over-budget="true"] {
+.executor-budget-inline[data-over-budget="true"] {
   color: var(--bad);
 }
 
-.executor-budget-row[data-low-budget="true"] .executor-budget-value {
+.executor-budget-inline[data-low-budget="true"] .executor-budget-value {
   color: var(--bad);
 }
 
@@ -716,15 +670,6 @@
   min-width: 0;
   overflow: hidden;
   color: color-mix(in srgb, var(--text-muted) 88%, transparent);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.executor-budget-error {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--bad);
-  font-weight: var(--ui-font-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
