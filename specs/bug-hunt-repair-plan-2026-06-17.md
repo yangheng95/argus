@@ -1424,3 +1424,52 @@ LINE:
 - Herschel confirmed the root cause is the global workspace ID delete crossing the active-project route boundary and reaching `Worktree.remove()` before ownership validation.
 - Herschel required the workspace service API to be project-scoped, not just the route, and flagged the old global `Workspace.remove(id)` as a second unsafe delete source.
 - Herschel also recommended the 200 response schema be non-optional and missing workspace IDs return 404; both are reflected in the final route contract.
+
+## Batch P1-Q: BH-101 destructive DB operations must fail closed after dispose failure
+
+### Findings
+
+- BH-101 is a P1 destructive database safety bug: `/global/db/mysql/import` and `opencorvus db reset --force` swallowed `Instance.disposeAll()` failures before mutating SQLite state or deleting database/runtime files.
+- `/global/db/reset` already awaits `Instance.disposeAll()` directly, so the HTTP reset path is not part of the remaining defect.
+- A failed dispose means in-memory runtime state may still own SQLite handles, worktree state, or executor/session resources. Continuing with import/reset under that condition can corrupt DB/filesystem state and hide the real runtime failure.
+- Independent review found the deeper root: `State.disposeEntry()` logged disposer failures and swallowed them, so real state disposer failures could make `Instance.disposeAll()` appear successful even after the route/CLI callers stopped swallowing the returned promise.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/global.ts` owns `/global/db/reset`, `/global/db/mysql/schema`, `/global/db/mysql/export`, and `/global/db/mysql/import`.
+- `packages/opencorvus/src/cli/cmd/db.ts` owns `opencorvus db reset --force`; the CLI top-level already turns thrown handler errors into `process.exitCode = 1`.
+- `packages/opencorvus/src/storage/db.ts` owns `Database.reset(projectDir)` and `Database.rebuildSqlite(...)` used by MySQL import.
+- `packages/opencorvus/src/storage/mysql-transfer.ts` owns `importMysqlTransferSnapshot(...)`, which rebuilds SQLite from the provided transfer snapshot.
+- `packages/opencorvus/src/project/state.ts` owns project-scoped state disposal for `Instance.dispose()` and `Instance.disposeAll()`.
+- `rg -n "Instance\\.disposeAll|Database\\.reset|importMysqlTransferSnapshot|db/mysql/import" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` shows the remaining swallowed destructive dispose paths are the MySQL import route and CLI reset command.
+
+### Fix Shape
+
+- Replace the MySQL import route's swallowed `await Instance.disposeAll().catch(() => undefined)` with direct `await Instance.disposeAll()` before reading the validated snapshot or calling `importMysqlTransferSnapshot(...)`.
+- Replace the CLI reset command's swallowed `await Instance.disposeAll().catch(() => undefined)` with direct `await Instance.disposeAll()` before calling `Database.reset(projectDir)`.
+- Make `State.disposeEntry()` rethrow disposer failures after logging them, and only remove state entries after successful disposal. Failed entries remain registered so a later dispose retry can clean them up instead of pretending the runtime state was released.
+- Export the CLI reset command object for focused handler-level regression tests, matching existing exported CLI subcommand test patterns.
+- Do not add fallback reset/import behavior, route-local retry gates, alternate cleanup paths, or compatibility branches. The destructive operation must stop at the dispose failure.
+
+### Regression Tests
+
+- Add a server route test that exports a valid MySQL snapshot, changes the DB to a different sentinel state, makes `Instance.disposeAll()` reject, posts the snapshot to `/global/db/mysql/import`, and asserts non-2xx plus unchanged DB state.
+- Add a CLI reset test that creates DB/WAL/SHM and project runtime sentinel files, makes `Instance.disposeAll()` reject, invokes `ResetCommand.handler({ force: true })`, and asserts it rejects, `Database.reset()` is not called, and all sentinel files remain.
+- Extend `packages/opencorvus/test/project/state-reset-dispose.test.ts` so `reset()` and `State.dispose(key)` reject on disposer failure and retain the failed entry for retry.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/global-db-destructive.test.ts packages/opencorvus/test/cli/db-reset.test.ts packages/opencorvus/test/project/state-reset-dispose.test.ts`
+- Typecheck command: `bun run --cwd packages/opencorvus typecheck`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused destructive DB/state disposal tests passed: `bun test packages/opencorvus/test/server/global-db-destructive.test.ts packages/opencorvus/test/cli/db-reset.test.ts packages/opencorvus/test/project/state-reset-dispose.test.ts`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Independent Review Feedback
+
+- Newton confirmed the immediate destructive-path fix should be direct `await Instance.disposeAll()` with existing HTTP 500 / CLI nonzero propagation, not a local fallback or compatibility path.
+- Newton identified `State.disposeEntry()` as the deeper source of false-success disposal. The final patch now rethrows disposer failures and keeps failed entries registered for retry.
+- Newton warned not to mix the unrelated `global.ts` SSE envelope changes or other dirty workspace files into this batch; commit staging must remain limited to BH-101 files/hunks.
