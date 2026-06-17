@@ -35,6 +35,7 @@ import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { deriveUrlSignals } from "@/engine/task-signals"
 import { EngineConfig } from "@/engine/config"
+import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
 import { BashTool } from "@/tool/bash"
 import { EditTool } from "@/tool/edit"
@@ -880,43 +881,26 @@ async function createFrontendTool(
   trace: FrontendDesignAgent.ProcessTrace,
   initCtx?: Tool.InitContext,
 ) {
-  const initialized = await info.init(initCtx)
-  return tool({
-    description: initialized.description,
-    inputSchema: initialized.parameters,
-    execute: async (args, options) => {
-      const meta = (
-        options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined
-      )?.opencorvus
-      const abort =
-        (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ??
-        input.signal ??
-        new AbortController().signal
+  return createAiSdkToolFromInfo({
+    info,
+    agent: "frontend-design",
+    taskID: input.taskID,
+    signal: input.signal,
+    initCtx,
+    beforeExecute: () => {
       recordFrontendProcessEvent(trace, { name: info.id, status: "started" })
-      try {
-        const result = await initialized.execute(args as never, {
-          sessionID: meta?.sessionID ?? "",
-          messageID: meta?.messageID ?? "",
-          callID: meta?.toolCallID,
-          agent: "frontend-design",
-          abort,
-          messages: [],
-          extra: { taskID: input.taskID },
-          metadata: () => {},
-          ask: async () => {},
-        })
-        recordFrontendToolResultEvents(trace, info.id, args, result)
-        await flushFrontendProcessTracePersistence(trace)
-        return result
-      } catch (error) {
-        recordFrontendProcessEvent(trace, {
-          name: info.id,
-          status: "failed",
-          details: { error: error instanceof Error ? error.message : String(error) },
-        })
-        await flushFrontendProcessTracePersistence(trace)
-        throw error
-      }
+    },
+    afterExecute: async (args, result) => {
+      recordFrontendToolResultEvents(trace, info.id, args, result)
+      await flushFrontendProcessTracePersistence(trace)
+    },
+    onExecuteError: async (_args, error) => {
+      recordFrontendProcessEvent(trace, {
+        name: info.id,
+        status: "failed",
+        details: { error: error instanceof Error ? error.message : String(error) },
+      })
+      await flushFrontendProcessTracePersistence(trace)
     },
   })
 }

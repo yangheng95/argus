@@ -40,7 +40,7 @@ import { Shell } from "@/shell/shell"
 import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { ProcessSupervisor } from "@/shell/process-supervisor"
 import { isHostKillingCommand } from "@/tool/bash"
-import { BrowserPreviewTool, BrowserPreviewToolParameters } from "@/tool/browser-preview"
+import { BrowserPreviewTool, BrowserPreviewToolStaticDefinition } from "@/tool/browser-preview"
 import { WAIT_MAX_MS, WAIT_MIN_MS, WaitToolDescription, WaitToolParameters, executeWait } from "@/tool/wait"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
@@ -6961,9 +6961,8 @@ export function createOrchestratorTools(input: {
     }),
 
     browser_preview: tool({
-      description:
-        "Explicitly start a long-lived frontend preview service for this task and save the resulting task-scoped browser preview target. Use this when orchestrator needs the right-side Preview panel or downstream visual evidence to point at a real running app. This is the only tool path that may infer preview URLs from service startup output; ordinary command output does not update preview targets.",
-      inputSchema: BrowserPreviewToolParameters,
+      description: BrowserPreviewToolStaticDefinition.description,
+      inputSchema: BrowserPreviewToolStaticDefinition.parameters,
       execute: async (params, options) => {
         const meta = requireOrchestratorToolExecutionContext(options, "browser_preview")
         const initialized = await BrowserPreviewTool.init()
