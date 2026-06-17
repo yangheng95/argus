@@ -4,6 +4,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { Instance } from "@/project/instance"
 
 /**
  * Export routes only expose session transcript export. Task JSON/archive
@@ -35,7 +36,7 @@ export const ExportRoutes = lazy(() =>
     validator("param", z.object({ sessionID: z.string() })),
     async (c) => {
       const sessionID = c.req.valid("param").sessionID
-      const session = await Session.get(sessionID)
+      const session = await Session.getInProject({ sessionID, projectID: Instance.project.id })
       const messages = await Session.messages({ sessionID })
 
       return c.json({
