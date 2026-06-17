@@ -45,7 +45,7 @@ Call-point decisions:
 | `packages/overlay/src/services/notify.ts` | `showNotification` is the primitive. Native permission/send failures currently log to console only. | Native notification send/probe/request failures must create semantic in-app diagnostics when operator-actionable. |
 | `packages/overlay/src/services/sse.ts` | SSE dispatch errors already call `notifyError`. | Stress tests must keep dispatch errors visible with event type and details. |
 | `packages/overlay/src/main.tsx` | Runtime diagnostics call `AppLog.error` and `notifyError`. | Runtime error and unhandled rejection must use the actual error summary as visible message and keep source in details. |
-| `packages/overlay/src/utils/log.ts` | `AppLog` posts overlay logs to `/log`; upload failures currently only requeue or drop internally. | Log upload failures must be semantic notification-center errors with the failing HTTP/transport cause, and queue retry scheduling must not stall silently. |
+| `packages/overlay/src/utils/log.ts` | `AppLog` posts overlay logs to `/log`; error entries and upload failures could diverge from the notification center. | `AppLog.error(...)` must create semantic notification-center diagnostics, log upload failures must include the failing HTTP/transport cause, and queue retry scheduling must not stall silently. |
 | `packages/opencorvus/src/util/log.ts` | `Log.files()` and `Log.read()` are the unified log read API. | Route tests must reject traversal and keep `/log`, `/log/files`, `/log/tail` unified. |
 | `packages/opencorvus/src/engine/event-log.ts` | Task log write/init failures only warn to the main log. | Event-log failures must be explicit enough to diagnose path/task/project failures; tests must cover no ambient instance context. |
 
@@ -73,6 +73,7 @@ Call-point decisions:
    - A failed log upload schedules the existing retry queue instead of leaving queued entries with no timer.
    - Runtime error and unhandled rejection create detailed in-app notifications.
    - SSE dispatch failure creates detailed in-app notifications with event type and JSON payload.
+   - Any overlay `AppLog.error(...)` entry creates a sticky center-history notification with details.
 
 4. Log route pressure:
    - `GET /log`, `GET /log/files`, and `GET /log/tail` read through `Log`.

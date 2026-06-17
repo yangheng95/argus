@@ -37,6 +37,35 @@ afterEach(async () => {
   clearNotifications()
 })
 
+test("overlay error logs create notification-center diagnostics through AppLog", async () => {
+  let requests = 0
+  __setHostTransportForTest(
+    logTransport((req) => {
+      expect(req.path).toBe("log")
+      requests++
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: { ok: true },
+      }
+    }),
+  )
+
+  AppLog.error("ui", "Failed to delete memory", { error: "database locked" })
+
+  await waitForLogDrain(2_500)
+
+  expect(requests).toBe(1)
+  const item = notificationStore.items.find((entry) => entry.id === "log:error:ui:Failed to delete memory")
+  expect(item?.tone).toBe("error")
+  expect(item?.title).toBe("Overlay ui error")
+  expect(item?.message).toBe("Failed to delete memory")
+  expect(item?.details).toContain("database locked")
+  expect(item?.centerHistory).toBe(true)
+  expect(item?.timeoutMs).toBe(0)
+})
+
 test("overlay log upload failure creates a semantic notification and retries the queued entry", async () => {
   let requests = 0
   __setHostTransportForTest(
@@ -65,8 +94,13 @@ test("overlay log upload failure creates a semantic notification and retries the
   await waitForLogDrain(2_500)
 
   expect(requests).toBe(2)
-  expect(notificationStore.items).toHaveLength(1)
-  const item = notificationStore.items[0]
+  const loggedError = notificationStore.items.find(
+    (entry) => entry.id === "log:error:unit:cannot persist overlay diagnostics",
+  )
+  expect(loggedError?.message).toBe("cannot persist overlay diagnostics")
+  expect(loggedError?.details).toContain("task-log-failure")
+
+  const item = notificationStore.items.find((entry) => entry.id === "system:overlay-log-upload-failed")
   expect(item?.id).toBe("system:overlay-log-upload-failed")
   expect(item?.tone).toBe("error")
   expect(item?.title).toBe("Overlay log upload failed")

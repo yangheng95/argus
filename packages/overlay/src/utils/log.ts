@@ -71,6 +71,22 @@ function reportFlushFailure(entry: AppLogEntry, error: unknown): void {
   })
 }
 
+function notifyLoggedError(entry: AppLogEntry): void {
+  if (entry.level !== "error") return
+  const extra = isRecord(entry.extra) ? entry.extra : undefined
+  const summary = typeof extra?.message === "string" && extra.message.trim() ? extra.message : entry.message
+  const details = formatErrorDetails(entry.extra)
+  showNotification({
+    id: entry.service === "runtime" ? `runtime:${entry.message}` : `log:error:${entry.service}:${entry.message}`,
+    tone: "error",
+    title: entry.service === "runtime" ? "Overlay runtime error" : `Overlay ${entry.service} error`,
+    message: summary,
+    details,
+    centerHistory: true,
+    timeoutMs: 0,
+  })
+}
+
 function flush(): void {
   _flushTimer = null
   const batch = _flushQueue.splice(0)
@@ -143,6 +159,7 @@ function log(level: LogLevel, service: string, message: string, extra?: unknown)
     source: "overlay",
   }
   appendLog(storeEntry)
+  notifyLoggedError(entry)
 
   return entry
 }
