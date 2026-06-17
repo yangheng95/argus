@@ -16,6 +16,8 @@ import { join } from "node:path"
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"), "utf8")
 const PRIMITIVES_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/primitives.tsx"), "utf8")
+const AGENT_MODELS_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/AgentModelsPanel.tsx"), "utf8")
+const SKILL_MARKET_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/SkillMarketPanel.tsx"), "utf8")
 
 describe("settings primitives — CSS contract", () => {
   test.each([
@@ -101,6 +103,7 @@ describe("settings primitives — Solid exports", () => {
       "SettingsPill",
       "SettingsToolbar",
       "SettingsEmpty",
+      "SettingsSelect",
       "SettingsSegmented",
     ]) {
       expect(PRIMITIVES_SRC).toContain(`export function ${name}`)
@@ -135,6 +138,32 @@ describe("settings primitives — Solid exports", () => {
     expect(PRIMITIVES_SRC).toContain("<KobalteToggleGroupItem")
     expect(PRIMITIVES_SRC).not.toContain('role="group"')
     expect(PRIMITIVES_SRC).not.toContain("aria-pressed")
+  })
+
+  test("Select delegates combobox semantics to Kobalte with one accessible label source", () => {
+    expect(PRIMITIVES_SRC).toContain('import * as Select from "@kobalte/core/select"')
+    expect(PRIMITIVES_SRC).toContain("export interface SettingsSelectOption")
+    expect(PRIMITIVES_SRC).toContain("export function SettingsSelect")
+    expect(PRIMITIVES_SRC).toContain("<Select.Root<T>")
+    expect(PRIMITIVES_SRC).toContain("<Select.Trigger")
+    expect(PRIMITIVES_SRC).toContain("<Select.HiddenSelect aria-label={props.ariaLabel}")
+    expect(PRIMITIVES_SRC).toContain("aria-label={props.ariaLabel}")
+    expect(PRIMITIVES_SRC).toContain("props.optionData?.(option())")
+    expect(PRIMITIVES_SRC).toContain(
+      "const selectedOption = () => props.options.find((option) => option.value === props.value) ?? null",
+    )
+    expect(PRIMITIVES_SRC).not.toContain("?? props.options[0]")
+  })
+
+  test("settings panels reuse SettingsSelect instead of local Select wrappers", () => {
+    for (const source of [AGENT_MODELS_SRC, SKILL_MARKET_SRC]) {
+      expect(source).toContain("SettingsSelect")
+      expect(source).not.toContain('import * as Select from "@kobalte/core/select"')
+      expect(source).not.toContain("<Select.Root")
+      expect(source).not.toContain("<Select.Trigger")
+      expect(source).not.toContain("<Select.HiddenSelect")
+      expect(source).not.toMatch(/function \w*SelectOptionItem/)
+    }
   })
 })
 

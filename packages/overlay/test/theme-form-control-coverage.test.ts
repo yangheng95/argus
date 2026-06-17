@@ -89,7 +89,8 @@ describe("shared Kobalte select popup colors", () => {
     const optionBlock = fieldCss.match(/\.oc-select-option\s*{[^}]*}/)?.[0] ?? ""
     const secondaryBlock = fieldCss.match(/\.oc-select-option\s+small\s*{[^}]*}/)?.[0] ?? ""
 
-    expect(contentBlock).toMatch(/background\s*:\s*var\(--surface\)/)
+    expect(contentBlock).toMatch(/background\s*:\s*var\(--menu-panel-bg\)/)
+    expect(contentBlock).not.toMatch(/background\s*:\s*var\(--surface\)/)
     expect(contentBlock).toMatch(/color\s*:\s*var\(--text-strong\)/)
     expect(optionBlock).toMatch(/color\s*:\s*var\(--text-strong\)/)
     expect(secondaryBlock).toMatch(/color\s*:\s*var\(--text-soft\)/)

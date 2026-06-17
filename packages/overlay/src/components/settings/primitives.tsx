@@ -11,8 +11,10 @@
  * specs/overlay-settings-primitives-2026-05-26.md.
  */
 import { For, Show, mergeProps, splitProps } from "solid-js"
+import * as Select from "@kobalte/core/select"
 import { Item as KobalteToggleGroupItem, Root as KobalteToggleGroupRoot } from "@kobalte/core/toggle-group"
 import type { JSX } from "solid-js"
+import { Icon } from "../Icon"
 
 export type SettingsPillTone = "ok" | "warn" | "bad" | "accent" | "muted" | "neutral"
 
@@ -132,6 +134,99 @@ export interface SettingsEmptyProps {
 
 export function SettingsEmpty(props: SettingsEmptyProps): JSX.Element {
   return <div class="s-empty">{props.children}</div>
+}
+
+export interface SettingsSelectOption {
+  value: string
+  label: string
+  description?: string
+}
+
+export interface SettingsSelectProps<T extends SettingsSelectOption> {
+  options: T[]
+  value: string
+  ariaLabel: string
+  onChange: (next: string) => void
+  disabled?: boolean
+  placeholder?: string
+  testid?: string
+  class?: string
+  triggerClass?: string
+  contentClass?: string
+  listboxClass?: string
+  optionClass?: string
+  indicatorClass?: string
+  optionTextClass?: string
+  optionData?: (option: T) => Record<string, string | undefined>
+}
+
+export function SettingsSelect<T extends SettingsSelectOption>(props: SettingsSelectProps<T>): JSX.Element {
+  const selectedOption = () => props.options.find((option) => option.value === props.value) ?? null
+  const setSelectedOption = (option: T | null) => {
+    if (!option || option.value === props.value) return
+    props.onChange(option.value)
+  }
+  const rootClass = () => (props.class ? `settings-select ${props.class}` : "settings-select")
+  const triggerClass = () =>
+    props.triggerClass ? `field-input oc-select-trigger ${props.triggerClass}` : "field-input oc-select-trigger"
+  const contentClass = () =>
+    props.contentClass ? `oc-select-content ${props.contentClass}` : "oc-select-content settings-select-content"
+  const listboxClass = () =>
+    props.listboxClass ? `oc-select-listbox ${props.listboxClass}` : "oc-select-listbox settings-select-listbox"
+  const optionClass = () =>
+    props.optionClass ? `oc-select-option ${props.optionClass}` : "oc-select-option settings-select-option"
+  const indicatorClass = () =>
+    props.indicatorClass ? `oc-select-indicator ${props.indicatorClass}` : "oc-select-indicator"
+
+  function SettingsSelectOptionItem(itemProps: Select.SelectRootItemComponentProps<T>): JSX.Element {
+    const option = () => itemProps.item.rawValue
+    const optionData = () => props.optionData?.(option()) ?? {}
+    const optionCopy = () => (
+      <>
+        <Select.ItemLabel>{option().label}</Select.ItemLabel>
+        <Show when={option().description}>{(description) => <small>{description()}</small>}</Show>
+      </>
+    )
+    return (
+      <Select.Item item={itemProps.item} class={optionClass()} {...optionData()}>
+        <Show when={props.optionTextClass || option().description} fallback={optionCopy()}>
+          <span class={props.optionTextClass}>{optionCopy()}</span>
+        </Show>
+        <Select.ItemIndicator class={indicatorClass()}>
+          <Icon name="status-completed" size={12} />
+        </Select.ItemIndicator>
+      </Select.Item>
+    )
+  }
+
+  return (
+    <Select.Root<T>
+      class={rootClass()}
+      options={props.options}
+      optionValue="value"
+      optionTextValue="label"
+      value={selectedOption()}
+      onChange={setSelectedOption}
+      itemComponent={SettingsSelectOptionItem}
+      disabled={props.disabled}
+      disallowEmptySelection
+      gutter={4}
+      sameWidth
+    >
+      <Select.Trigger class={triggerClass()} data-testid={props.testid} aria-label={props.ariaLabel}>
+        <Select.Value<T>>{(state) => <span>{state.selectedOption()?.label ?? props.placeholder ?? ""}</span>}</Select.Value>
+        <Select.Icon>
+          <Icon name="caret-down" size={12} />
+        </Select.Icon>
+      </Select.Trigger>
+      <Select.HiddenSelect aria-label={props.ariaLabel} />
+      <Select.Portal>
+        <Select.Content class={contentClass()}>
+          <Select.Listbox class={listboxClass()} />
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
+  )
 }
 
 export interface SettingsSegmentedOption<T extends string> {

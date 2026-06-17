@@ -16,7 +16,6 @@
 // removed because they silently switched provider/model between goal retries
 // and collapsed prompt cache.
 
-import * as Select from "@kobalte/core/select"
 import { createSignal, createMemo, createResource, For, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import {
@@ -32,7 +31,7 @@ import { t } from "../../utils/i18n"
 import { loadAgentModelsData, type AgentInfo, type ProvidersPayload } from "./agent-models-data"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
-import { Icon } from "../Icon"
+import { SettingsSelect, type SettingsSelectOption } from "./primitives"
 
 // Tier groupings are display-only: they organize the UI list but no longer
 // affect default model resolution (all agents inherit the project default).
@@ -193,11 +192,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
     models: Array<{ value: string; label: string }>
   }
 
-  interface ModelSelectOption {
-    value: string
-    label: string
-    groupLabel?: string
-  }
+  interface ModelSelectOption extends SettingsSelectOption {}
 
   function providerGroups(payload: ProvidersPayload | undefined): ProviderGroup[] {
     if (!payload) return []
@@ -247,34 +242,16 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
     }
     for (const group of props.groups) {
       for (const model of group.models) {
-        options.push({ value: model.value, label: model.label, groupLabel: group.name })
+        options.push({ value: model.value, label: model.label, description: group.name })
       }
     }
     return options
   }
 
-  function ModelSelectOptionItem(props: Select.SelectRootItemComponentProps<ModelSelectOption>): JSX.Element {
-    const option = () => props.item.rawValue
-    return (
-      <Select.Item
-        item={props.item}
-        class="oc-select-option agent-model-select-option"
-        data-model-value={option().value}
-      >
-        <span class="agent-model-select-option-text">
-          <Select.ItemLabel>{option().label}</Select.ItemLabel>
-          <Show when={option().groupLabel}>{(groupLabel) => <small>{groupLabel()}</small>}</Show>
-        </span>
-        <Select.ItemIndicator class="oc-select-indicator">
-          <Icon name="status-completed" size={12} />
-        </Select.ItemIndicator>
-      </Select.Item>
-    )
-  }
-
   function ModelSelect(props: {
     id: string
     testid: string
+    ariaLabel: string
     value: string
     groups: ProviderGroup[]
     unavailable: boolean
@@ -284,41 +261,23 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
     onSelect: (value: string) => void
   }) {
     const options = createMemo(() => modelOptions(props))
-    const selectedOption = () => options().find((option) => option.value === props.value) ?? options()[0] ?? null
-    const setSelectedOption = (option: ModelSelectOption | null) => {
-      if (!option) return
-      if (option.value === props.value) return
-      props.onSelect(option.value)
-    }
     return (
-      <Select.Root<ModelSelectOption>
+      <SettingsSelect<ModelSelectOption>
         class="agent-model-select"
+        value={props.value}
         options={options()}
-        optionValue="value"
-        optionTextValue="label"
-        value={selectedOption()}
-        onChange={setSelectedOption}
-        itemComponent={ModelSelectOptionItem}
+        ariaLabel={props.ariaLabel}
+        onChange={props.onSelect}
         disabled={props.disabled}
-        disallowEmptySelection
-        gutter={4}
-        sameWidth
-      >
-        <Select.Trigger class="field-input oc-select-trigger agent-model-select-trigger" data-testid={props.testid}>
-          <Select.Value<ModelSelectOption>>
-            {(state) => <span>{state.selectedOption()?.label ?? props.emptyLabel}</span>}
-          </Select.Value>
-          <Select.Icon>
-            <Icon name="caret-down" size={12} />
-          </Select.Icon>
-        </Select.Trigger>
-        <Select.HiddenSelect />
-        <Select.Portal>
-          <Select.Content class="oc-select-content agent-model-select-content">
-            <Select.Listbox class="oc-select-listbox agent-model-select-listbox" />
-          </Select.Content>
-        </Select.Portal>
-      </Select.Root>
+        placeholder={props.emptyLabel}
+        testid={props.testid}
+        triggerClass="agent-model-select-trigger"
+        contentClass="agent-model-select-content"
+        listboxClass="agent-model-select-listbox"
+        optionClass="agent-model-select-option"
+        optionTextClass="agent-model-select-option-text"
+        optionData={(option) => ({ "data-model-value": option.value })}
+      />
     )
   }
 
@@ -394,6 +353,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
                     <ModelSelect
                       id="project"
                       testid="agent-model-select-project"
+                      ariaLabel={t("agent_models.project_default")}
                       value={currentProjectModel()}
                       disabled={savingDefault()}
                       groups={groups}
@@ -432,6 +392,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
                                 <ModelSelect
                                   id={`agent:${agent.name}`}
                                   testid={`agent-model-select-${agent.name}`}
+                                  ariaLabel={agent.name}
                                   value={current()}
                                   disabled={savingAgents().has(agent.name)}
                                   groups={groups}
