@@ -5,15 +5,18 @@ describe("system terminal external launch command", () => {
   test("Windows opens the selected shell through the system console launcher", () => {
     const command = SystemTerminal.buildCommand({
       platform: "win32",
-      cwd: "C:\\repo",
+      cwd: "C:\\repo & whoami | sort",
       terminalApp: "cmd.exe",
       profile: { command: "powershell.exe", args: ["-NoLogo"], icon: "powershell" },
     })
 
     expect(command).toEqual({
-      command: "cmd.exe",
-      args: ["/d", "/s", "/c", "start", "", "/D", "C:\\repo", "powershell.exe", "-NoLogo"],
+      command: "powershell.exe",
+      args: ["-NoLogo"],
+      detached: true,
     })
+    expect(command.args).not.toContain("start")
+    expect(command.args).not.toContain("C:\\repo & whoami | sort")
   })
 
   test("Windows coding CLI opens inside the system console without PTY", () => {
@@ -31,17 +34,34 @@ describe("system terminal external launch command", () => {
     expect(command.args).toEqual([
       "/d",
       "/s",
-      "/c",
-      "start",
-      "",
-      "/D",
-      "C:\\repo",
-      "cmd.exe",
       "/k",
-      "C:\\Tools\\Codex CLI\\codex.cmd",
-      "--dangerously-bypass-approvals-and-sandbox",
+      '"C:\\Tools\\Codex CLI\\codex.cmd" "--dangerously-bypass-approvals-and-sandbox"',
     ])
+    expect(command.detached).toBe(true)
     expect(command.args.join(" ")).not.toContain("pty")
+  })
+
+  test("Windows command prompt profile keeps metacharacters inside one escaped command string", () => {
+    const command = SystemTerminal.buildCommand({
+      platform: "win32",
+      cwd: "C:\\repo & whoami | sort",
+      terminalApp: "cmd.exe",
+      profile: { command: "cmd.exe", args: [], icon: "command-prompt" },
+      command: "C:\\Tools\\Codex & CLI\\codex%.cmd",
+      args: ["--filter=a|b", "100%"],
+      keepOpen: true,
+    })
+
+    expect(command.command).toBe("cmd.exe")
+    expect(command.args).toEqual([
+      "/d",
+      "/s",
+      "/k",
+      '"C:\\Tools\\Codex & CLI\\codex%%.cmd" "--filter=a|b" "100%%"',
+    ])
+    expect(command.detached).toBe(true)
+    expect(command.args).not.toContain("start")
+    expect(command.args).not.toContain("C:\\repo & whoami | sort")
   })
 
   test("Windows coding CLI unwraps user-supplied executable quotes before argv handoff", () => {
@@ -55,9 +75,8 @@ describe("system terminal external launch command", () => {
       keepOpen: true,
     })
 
-    expect(command.args.at(-1)).toBe("C:\\Users\\hengu\\.local\\bin\\claude.exe")
+    expect(command.args.at(-1)).toBe('"C:\\Users\\hengu\\.local\\bin\\claude.exe"')
     expect(command.args.at(-1)).not.toContain("'")
-    expect(command.args.at(-1)).not.toContain('"')
   })
 
   test("Windows PowerShell profile receives a PowerShell command, not cmd.exe quoting", () => {
@@ -72,19 +91,13 @@ describe("system terminal external launch command", () => {
     })
 
     expect(command.args).toEqual([
-      "/d",
-      "/s",
-      "/c",
-      "start",
-      "",
-      "/D",
-      "C:\\repo",
-      "powershell.exe",
       "-NoLogo",
       "-NoExit",
       "-Command",
       "& 'C:\\Users\\chuan\\.local\\bin\\claude.exe' '--version'",
     ])
+    expect(command.command).toBe("powershell.exe")
+    expect(command.detached).toBe(true)
   })
 
   test("macOS opens Terminal.app through osascript", () => {

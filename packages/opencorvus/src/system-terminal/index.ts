@@ -1,5 +1,6 @@
 import { NamedError } from "@opencorvus-ai/util/error"
 import { existsSync } from "fs"
+import { spawn as spawnChildProcess } from "node:child_process"
 import path from "path"
 import z from "zod"
 import { Plugin } from "@/plugin"
@@ -27,6 +28,7 @@ export namespace SystemTerminal {
   export interface CommandSpec {
     command: string
     args: string[]
+    detached?: boolean
   }
 
   export interface BuildOptions {
@@ -93,6 +95,15 @@ export namespace SystemTerminal {
     return `'${value.replaceAll("'", "''")}'`
   }
 
+  function cmdQuote(value: string): string {
+    const escaped = value
+      .replaceAll("^", "^^")
+      .replaceAll("%", "%%")
+      .replaceAll("!", "^!")
+      .replaceAll('"', '""')
+    return `"${escaped}"`
+  }
+
   function appleScriptString(value: string): string {
     return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
   }
@@ -106,6 +117,15 @@ export namespace SystemTerminal {
     if (options.command) return [unwrapCommandQuotes(options.command), ...(options.args ?? [])]
     if (options.profile) return [unwrapCommandQuotes(options.profile.command), ...options.profile.args]
     return []
+  }
+
+  function windowsInteractiveArgv(options: BuildOptions): string[] {
+    if (options.profile) return [unwrapCommandQuotes(options.profile.command), ...options.profile.args]
+    return ["cmd.exe", "/k"]
+  }
+
+  function cmdCommandLine(argv: string[]): string {
+    return argv.map(cmdQuote).join(" ")
   }
 
   function shellLine(options: BuildOptions): string {
@@ -132,23 +152,14 @@ export namespace SystemTerminal {
     if (options.profile.icon === "bash") {
       return [profileCommand, ...options.profile.args, "-lc", shellLine(options)]
     }
-    return [profileCommand, ...options.profile.args, keepFlag, ...argv]
+    return [profileCommand, ...options.profile.args, "/d", "/s", keepFlag, cmdCommandLine(argv)]
   }
 
   export function buildCommand(options: BuildOptions): CommandSpec {
     const argv = commandArgv(options)
     if (options.platform === "win32") {
-      if (options.command) {
-        return {
-          command: options.terminalApp,
-          args: ["/d", "/s", "/c", "start", "", "/D", options.cwd, ...windowsCommandProfileArgs(options, argv)],
-        }
-      }
-      const command = argv.length > 0 ? argv : ["cmd.exe", "/k"]
-      return {
-        command: options.terminalApp,
-        args: ["/d", "/s", "/c", "start", "", "/D", options.cwd, ...command],
-      }
+      const command = options.command ? windowsCommandProfileArgs(options, argv) : windowsInteractiveArgv(options)
+      return { command: command[0], args: command.slice(1), detached: true }
     }
 
     if (options.platform === "darwin") {
@@ -167,7 +178,60 @@ export namespace SystemTerminal {
     }
   }
 
+  async function launchDetached(spec: CommandSpec, cwd: string, env: Record<string, string>): Promise<OpenResponse> {
+    let child
+    try {
+      child = spawnChildProcess(spec.command, spec.args, {
+        cwd,
+        detached: true,
+        env: {
+          ...process.env,
+          ...env,
+        },
+        shell: false,
+        stdio: "ignore",
+        windowsHide: false,
+      })
+    } catch (error) {
+      throw new ConfigError({ message: error instanceof Error ? error.message : String(error) })
+    }
+
+    let earlyExit: number | undefined
+    try {
+      earlyExit = await new Promise<number | undefined>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          cleanup()
+          resolve(undefined)
+        }, 300)
+        const cleanup = () => {
+          clearTimeout(timeout)
+          child.off("error", onError)
+          child.off("exit", onExit)
+        }
+        const onError = (error: Error) => {
+          cleanup()
+          reject(error)
+        }
+        const onExit = (code: number | null) => {
+          cleanup()
+          resolve(code ?? 1)
+        }
+        child.once("error", onError)
+        child.once("exit", onExit)
+      })
+    } catch (error) {
+      throw new ConfigError({ message: error instanceof Error ? error.message : String(error) })
+    }
+    if (typeof earlyExit === "number" && earlyExit !== 0) {
+      throw new ConfigError({ message: `System terminal launcher exited with code ${earlyExit}: ${spec.command}` })
+    }
+    if (earlyExit === undefined) child.unref()
+    return { ok: true }
+  }
+
   async function launch(spec: CommandSpec, cwd: string, env: Record<string, string>): Promise<OpenResponse> {
+    if (spec.detached) return await launchDetached(spec, cwd, env)
+
     let child: Bun.Subprocess<"ignore", "ignore", "ignore">
     try {
       child = Bun.spawn([spec.command, ...spec.args], {

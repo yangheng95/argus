@@ -4,6 +4,8 @@ import { Instance } from "../../src/project/instance"
 import { SystemTerminal } from "../../src/system-terminal"
 import { tmpdir } from "../fixture/fixture"
 
+const INSTANCE_STARTUP_TIMEOUT_MS = 60_000
+
 function terminalConfig() {
   return {
     terminal: {
@@ -61,34 +63,38 @@ describe("coding CLI external launch", () => {
     })
 
     expect(command.command).toBe("cmd.exe")
-    expect(command.args.slice(0, 9)).toEqual(["/d", "/s", "/c", "start", "", "/D", "C:\\repo", "cmd.exe", "/k"])
-    expect(command.args.at(-1)).toBe("C:\\Tools\\Codex CLI\\codex.cmd")
+    expect(command.args).toEqual(["/d", "/s", "/k", '"C:\\Tools\\Codex CLI\\codex.cmd"'])
+    expect(command.detached).toBe(true)
   })
 
-  test("open rejects unknown CLI and outside cwd before spawning", async () => {
-    await using dir = await tmpdir({ git: true, config: terminalConfig() })
-    await using outside = await tmpdir({ git: true })
+  test(
+    "open rejects unknown CLI and outside cwd before spawning",
+    async () => {
+      await using dir = await tmpdir({ git: true, config: terminalConfig() })
+      await using outside = await tmpdir({ git: true })
 
-    const previous = process.env.OPENCORVUS_CODING_CLI_CODEX_BIN
-    process.env.OPENCORVUS_CODING_CLI_CODEX_BIN = process.execPath
-    try {
-      await Instance.provide({
-        directory: dir.path,
-        fn: async () => {
-          await expect(
-            CodingCli.open({ cliID: "missing", terminalProfileID: "powershell", cwd: dir.path }),
-          ).rejects.toBeInstanceOf(CodingCli.ConfigError)
-          await expect(
-            CodingCli.open({ cliID: "codex", terminalProfileID: "powershell", cwd: outside.path }),
-          ).rejects.toBeInstanceOf(SystemTerminal.ConfigError)
-          await expect(
-            CodingCli.open({ cliID: "codex", terminalProfileID: "missing", cwd: dir.path }),
-          ).rejects.toBeInstanceOf(SystemTerminal.ConfigError)
-        },
-      })
-    } finally {
-      if (previous === undefined) delete process.env.OPENCORVUS_CODING_CLI_CODEX_BIN
-      else process.env.OPENCORVUS_CODING_CLI_CODEX_BIN = previous
-    }
-  })
+      const previous = process.env.OPENCORVUS_CODING_CLI_CODEX_BIN
+      process.env.OPENCORVUS_CODING_CLI_CODEX_BIN = process.execPath
+      try {
+        await Instance.provide({
+          directory: dir.path,
+          fn: async () => {
+            await expect(
+              CodingCli.open({ cliID: "missing", terminalProfileID: "powershell", cwd: dir.path }),
+            ).rejects.toBeInstanceOf(CodingCli.ConfigError)
+            await expect(
+              CodingCli.open({ cliID: "codex", terminalProfileID: "powershell", cwd: outside.path }),
+            ).rejects.toBeInstanceOf(SystemTerminal.ConfigError)
+            await expect(
+              CodingCli.open({ cliID: "codex", terminalProfileID: "missing", cwd: dir.path }),
+            ).rejects.toBeInstanceOf(SystemTerminal.ConfigError)
+          },
+        })
+      } finally {
+        if (previous === undefined) delete process.env.OPENCORVUS_CODING_CLI_CODEX_BIN
+        else process.env.OPENCORVUS_CODING_CLI_CODEX_BIN = previous
+      }
+    },
+    { timeout: INSTANCE_STARTUP_TIMEOUT_MS },
+  )
 })
