@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { createHmac, generateKeyPairSync, sign, type JsonWebKey, type KeyObject } from "node:crypto"
+import {
+  createHmac,
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  sign,
+  type JsonWebKey,
+  type KeyObject,
+} from "node:crypto"
 import { WhatsappAdapter } from "../src/adapters/whatsapp"
 import { GoogleChatAdapter } from "../src/adapters/googlechat"
 import { MSTeamsAdapter } from "../src/adapters/msteams"
@@ -41,10 +49,29 @@ function stub() {
   }
 }
 
-function qqSigned(adapter: QQAdapter, body: Record<string, unknown>, timestamp = "1710000") {
+function qqSeed(secret: string) {
+  const source = Buffer.from(secret)
+  const result = Buffer.alloc(32)
+  for (let i = 0; i < result.length; i++) result[i] = source[i % source.length]!
+  return result
+}
+
+function qqPrivateKey(secret: string) {
+  return createPrivateKey({
+    key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), qqSeed(secret)]),
+    format: "der",
+    type: "pkcs8",
+  })
+}
+
+function qqPublicKeyRaw(secret: string) {
+  const der = createPublicKey(qqPrivateKey(secret)).export({ format: "der", type: "spki" })
+  return Buffer.from(der).subarray(-32).toString("hex")
+}
+
+function qqSigned(appSecret: string, body: Record<string, unknown>, timestamp = "1710000") {
   const raw = JSON.stringify(body)
-  const key = (adapter as unknown as { privateKey: KeyObject }).privateKey
-  const signature = sign(null, Buffer.from(timestamp + raw), key).toString("hex")
+  const signature = sign(null, Buffer.from(timestamp + raw), qqPrivateKey(appSecret)).toString("hex")
   return {
     raw,
     headers: {
@@ -1047,10 +1074,11 @@ describe("mainstream adapters", () => {
   })
 
   test("qq handles validation and c2c outbound replies", async () => {
+    const appSecret = "qq_secret"
     const s = stub()
     const adapter = new QQAdapter({
       appId: "1024",
-      appSecret: "qq_secret",
+      appSecret,
       serve: s.serve,
     })
     const seen: Array<any> = []
@@ -1059,7 +1087,7 @@ describe("mainstream adapters", () => {
     })
     await adapter.start()
 
-    const validation = qqSigned(adapter, {
+    const validation = qqSigned(appSecret, {
       op: 13,
       d: {
         plain_token: "plain-token",
@@ -1076,9 +1104,29 @@ describe("mainstream adapters", () => {
     expect(handshake.status).toBe(200)
     const ack = (await handshake.json()) as { plain_token?: string; signature?: string }
     expect(ack.plain_token).toBe("plain-token")
-    expect((ack.signature?.length ?? 0) > 10).toBe(true)
+    expect(ack.signature).toBe(
+      "7df074d3a6ea308ed5d08d15e7e8a77a0dcf759da89a0be3ff39f933de7a37116587a233967ec0f6c3d1fde9b6000ff03386a1f2db4af90b573ebc53ee4e6b0e",
+    )
 
-    const inbound = qqSigned(adapter, {
+    const wrong = qqSigned("wrong-secret", {
+      op: 0,
+      t: "C2C_MESSAGE_CREATE",
+      d: {
+        id: "bad-mid",
+        content: "bad",
+        author: { id: "u-1" },
+      },
+    })
+    const rejected = await s.route()(
+      new Request("http://127.0.0.1:19999/qqbot", {
+        method: "POST",
+        headers: wrong.headers,
+        body: wrong.raw,
+      }),
+    )
+    expect(rejected.status).toBe(401)
+
+    const inbound = qqSigned(appSecret, {
       op: 0,
       t: "C2C_MESSAGE_CREATE",
       d: {
@@ -1132,16 +1180,17 @@ describe("mainstream adapters", () => {
   })
 
   test("qq routes channel at-messages to channel send API", async () => {
+    const appSecret = "qq_secret"
     const s = stub()
     const adapter = new QQAdapter({
       appId: "1024",
-      appSecret: "qq_secret",
+      appSecret,
       serve: s.serve,
     })
     adapter.onMessage(async () => {})
     await adapter.start()
 
-    const inbound = qqSigned(adapter, {
+    const inbound = qqSigned(appSecret, {
       op: 0,
       t: "AT_MESSAGE_CREATE",
       d: {
@@ -1185,5 +1234,40 @@ describe("mainstream adapters", () => {
     expect(payload.content).toBe("done")
     expect(payload.msg_id).toBe("mid-2")
     expect(payload.message_reference?.message_id).toBe("mid-2")
+  })
+
+  test("qq webhook key derivation is deterministic from app secret", async () => {
+    expect(qqPublicKeyRaw("naOC0ocQE3shWLAfffVLB1rhYPG7")).toBe(
+      "d7c362fe78aef81ff23287b493628b5db02a3c4fe30b215e4d19609b5d76673a",
+    )
+
+    const challenge = {
+      op: 13,
+      d: {
+        plain_token: "same-token",
+        event_ts: "1710001",
+      },
+    }
+
+    async function responseSignature() {
+      const s = stub()
+      const adapter = new QQAdapter({ appId: "1024", appSecret: "same-secret", serve: s.serve })
+      await adapter.start()
+      const request = qqSigned("same-secret", challenge)
+      const response = await s.route()(
+        new Request("http://127.0.0.1:19999/qqbot", {
+          method: "POST",
+          headers: request.headers,
+          body: request.raw,
+        }),
+      )
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as { signature?: string }
+      return body.signature
+    }
+
+    const first = await responseSignature()
+    const second = await responseSignature()
+    expect(first).toBe(second)
   })
 })
