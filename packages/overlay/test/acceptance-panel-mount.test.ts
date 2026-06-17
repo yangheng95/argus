@@ -220,13 +220,12 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain(
     'const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])',
   )
-  expect(main).toContain(
-    "const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)",
-  )
-  expect(main).toContain("const activeRightActivity = () => selectedRightActivity()")
-  expect(main).toContain('setSelectedRightActivity(panel === "task" ? "workflow" : null)')
-  expect(main).toContain('if (panel !== "file") setSelectedRightActivity(panel)')
-  expect(main).toContain("const selected = untrack(selectedRightActivity)")
+  expect(main).not.toContain("selectedRightActivity")
+  expect(main).not.toContain("setSelectedRightActivity")
+  expect(main).toContain("const activeRightActivity = (): RightActivity | null =>")
+  expect(main).toContain("const panel = selectedCenterWorkbenchPanel()")
+  expect(main).toContain('return panel && panel !== "file" ? panel : null')
+  expect(main).not.toContain('primaryCenterPanel() === "task" && isCenterWorkbenchPanelOpen("workflow")')
   expect(main).toContain("function selectedCenterWorkbenchPanel(panels = centerWorkbenchPanels()): CenterWorkbenchPanel | null")
   expect(main).toContain("const selectedPanel = selectedCenterWorkbenchPanel(panels)")
   expect(main).toContain("body.dataset.selected = String(open && panel === selectedPanel)")
