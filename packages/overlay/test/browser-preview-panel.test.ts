@@ -77,6 +77,8 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("if (lastAutoLiveFrameKey === key) return")
   expect(component).toContain('data-ui="browser-preview-live-loading"')
   expect(component).toContain('data-ui="browser-preview-live-error"')
+  expect(component).toContain('t("browser_preview.empty.live_failed")')
+  expect(component).toContain("evidenceStatusLabel(evidence().status)")
   expect(component).toContain('data-ui="browser-preview-target-failed"')
   expect(component).toContain('data-ui="browser-preview-live"')
   expect(component).toContain('data-ui="browser-preview-live-screenshot"')
