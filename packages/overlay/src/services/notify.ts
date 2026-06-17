@@ -94,6 +94,15 @@ async function readHostPermission(): Promise<HostPermission> {
     return result
   } catch (err) {
     console.warn("[notify] permission probe failed", err)
+    showNotification({
+      id: "system:notification-permission-probe-failed",
+      tone: "warning",
+      title: "Desktop notification permission check failed",
+      message: "OpenCorvus could not read the desktop notification permission state. OS notifications will not be sent until this is fixed.",
+      details: formatErrorDetails(err),
+      centerHistory: true,
+      timeoutMs: 0,
+    })
     return "unsupported"
   }
 }
@@ -106,6 +115,15 @@ async function requestHostPermission(): Promise<HostPermission> {
     return result
   } catch (err) {
     console.warn("[notify] permission request failed", err)
+    showNotification({
+      id: "system:notification-permission-request-failed",
+      tone: "warning",
+      title: "Desktop notification permission request failed",
+      message: "OpenCorvus could not ask the host for desktop notification permission.",
+      details: formatErrorDetails(err),
+      centerHistory: true,
+      timeoutMs: 0,
+    })
     return "denied"
   }
 }
@@ -117,6 +135,15 @@ async function sendHostNotification(title: string, body: string, tag: string): P
     await transport.native({ kind: "notification.send", title, body, tag })
   } catch (err) {
     console.warn("[notify] failed to dispatch notification", err)
+    showNotification({
+      id: `system:notification-send-failed:${tag}`,
+      tone: "warning",
+      title: "Desktop notification failed",
+      message: "OpenCorvus could not dispatch the OS notification. The in-app notification remains available in the notification center.",
+      details: formatErrorDetails(err),
+      centerHistory: true,
+      timeoutMs: 0,
+    })
   }
 }
 

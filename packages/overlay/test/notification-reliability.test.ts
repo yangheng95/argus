@@ -1,8 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test"
+import path from "node:path"
 import {
   clearNotifications,
   ackTaskNotification,
   computeBadge,
+  ensureDesktopNotificationPermission,
   notificationStore,
   replaceBadgeAcksForTest,
   recomputeBadgeFromTasks,
@@ -17,6 +19,7 @@ import {
 } from "../src/services/host-transport"
 import { setBoardStore } from "../src/store/board"
 import { setSettingsStore } from "../src/store/settings"
+import { setLocaleData } from "../src/utils/i18n"
 ;(globalThis as any).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 let events: typeof import("../src/services/events")
@@ -30,9 +33,16 @@ beforeAll(async () => {
     },
   }))
   events = await import("../src/services/events")
+  setLocaleData("en-US", await Bun.file(path.resolve(import.meta.dir, "../src/i18n/en-US.json")).json())
 })
 
-function installTransport() {
+function installTransport(input: {
+  kind?: "tauri" | "browser"
+  permissionState?: "granted" | "denied" | "default"
+  sendError?: Error
+  permissionError?: Error
+  requestError?: Error
+} = {}) {
   const calls = {
     sends: 0,
     permission: 0,
@@ -42,8 +52,8 @@ function installTransport() {
     lastAttention: undefined as boolean | undefined,
   }
   const transport: HostTransport = {
-    kind: "tauri",
-    capabilities: HOST_CAPABILITIES.tauri,
+    kind: input.kind ?? "tauri",
+    capabilities: HOST_CAPABILITIES[input.kind ?? "tauri"],
     async request() {
       throw new Error("not used")
     },
@@ -56,10 +66,16 @@ function installTransport() {
     async native(command: NativeCommand) {
       if (command.kind === "notification.permission") {
         calls.permission += 1
+        if (input.permissionError) throw input.permissionError
+        return input.permissionState ?? "granted"
+      }
+      if (command.kind === "notification.requestPermission") {
+        if (input.requestError) throw input.requestError
         return "granted"
       }
       if (command.kind === "notification.send") {
         calls.sends += 1
+        if (input.sendError) throw input.sendError
         return undefined
       }
       if (command.kind === "badge.set") {
@@ -212,6 +228,44 @@ describe("routeNotification tier matrix", () => {
     await flushNotifications()
     expect(notificationStore.items).toHaveLength(1)
     expect(notificationStore.items[0]?.details).toBe('{"error":"provider quota exceeded"}')
+  })
+
+  test("native notification send failures surface as semantic in-app diagnostics", async () => {
+    installTransport({ sendError: new Error("native bridge down") })
+
+    routeNotification({ type: "task.completed", taskID: "tsk_notify", notify: { tier: 2 } })
+    await flushNotifications()
+
+    const diagnostic = notificationStore.items.find((item) => item.id.startsWith("system:notification-send-failed:"))
+    expect(diagnostic?.tone).toBe("warning")
+    expect(diagnostic?.title).toBe("Desktop notification failed")
+    expect(diagnostic?.message).toContain("OpenCorvus could not dispatch the OS notification")
+    expect(diagnostic?.details).toContain("native bridge down")
+    expect(diagnostic?.centerHistory).toBe(true)
+  })
+
+  test("permission probe failures surface as semantic in-app diagnostics", async () => {
+    installTransport({ kind: "browser", permissionError: new Error("permission API unavailable") })
+
+    routeNotification({ type: "task.completed", taskID: "tsk_notify", notify: { tier: 2 } })
+    await flushNotifications()
+
+    const diagnostic = notificationStore.items.find((item) => item.id === "system:notification-permission-probe-failed")
+    expect(diagnostic?.tone).toBe("warning")
+    expect(diagnostic?.title).toBe("Desktop notification permission check failed")
+    expect(diagnostic?.details).toContain("permission API unavailable")
+  })
+
+  test("permission request failures keep the thrown cause in notification details", async () => {
+    installTransport({ kind: "browser", permissionState: "default", requestError: new Error("browser denied gesture") })
+
+    const result = await ensureDesktopNotificationPermission()
+
+    expect(result).toBe("denied")
+    const diagnostic = notificationStore.items.find((item) => item.id === "system:notification-permission-request-failed")
+    expect(diagnostic?.tone).toBe("warning")
+    expect(diagnostic?.title).toBe("Desktop notification permission request failed")
+    expect(diagnostic?.details).toContain("browser denied gesture")
   })
 })
 

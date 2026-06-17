@@ -4,6 +4,7 @@
 
 import { appendLog, type LogEntry, type LogLevel } from "../store/app"
 import { apiJson } from "../services/api"
+import { formatErrorDetails, showNotification } from "../services/notify"
 
 // ── Types ──
 
@@ -31,7 +32,9 @@ const entries: AppLogEntry[] = []
 let filterLevel: LogLevel = "debug"
 let _flushQueue: AppLogEntry[] = []
 let _flushTimer: ReturnType<typeof setTimeout> | null = null
+let _flushInFlight = 0
 let _flushFailCount = 0
+let _flushFailureReported = false
 
 // ── Helpers ──
 
@@ -46,6 +49,26 @@ function add(level: LogLevel, service: string, message: string, extra: unknown):
     entries.splice(0, entries.length - MAX_ENTRIES)
   }
   return entry
+}
+
+function scheduleFlush(): void {
+  if (!_flushTimer) {
+    _flushTimer = setTimeout(flush, 500)
+  }
+}
+
+function reportFlushFailure(entry: AppLogEntry, error: unknown): void {
+  if (_flushFailureReported) return
+  _flushFailureReported = true
+  showNotification({
+    id: "system:overlay-log-upload-failed",
+    tone: "error",
+    title: "Overlay log upload failed",
+    message: `OpenCorvus could not write overlay log entry "${entry.message}" to the backend log store.`,
+    details: formatErrorDetails(error),
+    centerHistory: true,
+    timeoutMs: 0,
+  })
 }
 
 function flush(): void {
@@ -68,26 +91,36 @@ function flush(): void {
     })
       .then(() => {
         _flushFailCount = 0
+        if (_flushQueue.length === 0 && _flushInFlight === 0) {
+          _flushFailureReported = false
+        }
       })
-      .catch(() => {
+      .catch((error) => {
         _flushFailCount++
         if (_flushFailCount <= MAX_FLUSH_FAILURES) {
           _flushQueue.push(entry)
+          scheduleFlush()
+        }
+        reportFlushFailure(entry, error)
+      })
+      .finally(() => {
+        _flushInFlight--
+        if (_flushFailCount === 0 && _flushQueue.length === 0 && _flushInFlight === 0) {
+          _flushFailureReported = false
         }
       })
+    _flushInFlight++
   }
 }
 
 function persist(entry: AppLogEntry): void {
   _flushQueue.push(entry)
-  if (!_flushTimer) {
-    _flushTimer = setTimeout(flush, 500)
-  }
+  scheduleFlush()
 }
 
 export async function waitForLogDrain(timeoutMs = 2_000): Promise<void> {
   const started = Date.now()
-  while (_flushTimer || _flushQueue.length > 0) {
+  while (_flushTimer || _flushQueue.length > 0 || _flushInFlight > 0) {
     if (Date.now() - started >= timeoutMs) return
     await new Promise((resolve) => setTimeout(resolve, 25))
   }

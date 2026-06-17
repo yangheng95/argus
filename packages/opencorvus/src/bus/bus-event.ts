@@ -25,6 +25,9 @@ export namespace BusEvent {
     properties: Properties,
     notify?: NotifyDescriptor | NotifyResolver<Properties>,
   ) {
+    if (registry.has(type)) {
+      throw new Error(`BusEvent duplicate event type registration: ${type}`)
+    }
     const result = {
       type,
       properties,

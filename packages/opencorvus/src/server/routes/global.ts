@@ -4,6 +4,7 @@ import { streamSSE } from "../sse"
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
+import { Event as ServerEvent } from "../event"
 import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { Installation } from "@/installation"
@@ -25,7 +26,6 @@ import {
 
 const log = Log.create({ service: "server" })
 
-export const GlobalDisposedEvent = BusEvent.define("global.disposed", z.object({}))
 
 export const GlobalRoutes = lazy(() =>
   new Hono()
@@ -233,7 +233,7 @@ export const GlobalRoutes = lazy(() =>
         GlobalBus.emit("event", {
           directory: "global",
           payload: {
-            type: GlobalDisposedEvent.type,
+            type: ServerEvent.Disposed.type,
             properties: {},
           },
         })

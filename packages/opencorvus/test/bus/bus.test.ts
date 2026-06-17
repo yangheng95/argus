@@ -1,4 +1,6 @@
 import { describe, test, expect } from "bun:test"
+import { readFileSync, readdirSync, statSync } from "node:fs"
+import path from "node:path"
 import z from "zod"
 import { Bus } from "../../src/bus"
 import { BusEvent } from "../../src/bus/bus-event"
@@ -127,6 +129,29 @@ describe("Bus.subscribe / Bus.publish", () => {
 })
 
 describe("BusEvent notification registry", () => {
+  test("duplicate event type registration fails loudly instead of overwriting the registry", () => {
+    expect(() => BusEvent.define(TestEvent.type, z.object({ other: z.string() }))).toThrow(/duplicate event type/i)
+  })
+
+  test("source event definitions do not register the same event type twice", () => {
+    const srcRoot = path.resolve(import.meta.dir, "../../src")
+    const files = collectTypeScriptFiles(srcRoot)
+    const definitions = new Map<string, string[]>()
+
+    for (const file of files) {
+      const source = readFileSync(file, "utf8")
+      for (const match of source.matchAll(/BusEvent\.define\(\s*["']([^"']+)["']/g)) {
+        const type = match[1]!
+        const list = definitions.get(type) ?? []
+        list.push(path.relative(srcRoot, file).replaceAll("\\", "/"))
+        definitions.set(type, list)
+      }
+    }
+
+    const duplicates = [...definitions.entries()].filter(([, locations]) => locations.length > 1)
+    expect(duplicates).toEqual([])
+  })
+
   test("resolveNotify handles descriptor, payload resolver, and omitted NOOP entries", () => {
     expect(BusEvent.resolveNotify(NotifyDescriptorEvent.type, { value: "x" })).toEqual({ tier: 1, badge: true })
     expect(BusEvent.resolveNotify(NotifyResolverEvent.type, { verdict: "rejected" })).toEqual({
@@ -159,6 +184,20 @@ describe("BusEvent notification registry", () => {
     expect(BusEvent.resolveNotify(Workspace.Event.Failed.type, { message: "workspace failed" })).toBeUndefined()
   })
 })
+
+function collectTypeScriptFiles(root: string): string[] {
+  const result: string[] = []
+  for (const entry of readdirSync(root)) {
+    const full = path.join(root, entry)
+    const stat = statSync(full)
+    if (stat.isDirectory()) {
+      result.push(...collectTypeScriptFiles(full))
+    } else if (entry.endsWith(".ts")) {
+      result.push(full)
+    }
+  }
+  return result
+}
 
 describe("Bus.subscribeAll", () => {
   test("wildcard subscriber receives events of any type", async () => {
