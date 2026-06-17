@@ -83,6 +83,7 @@ describe("tool.browser_preview", () => {
         directory: path.join(__dirname, "../.."),
         fn: async () => {
           await expect(ToolRegistry.ids()).resolves.toContain("browser_preview")
+          await expect(ToolRegistry.ids()).resolves.toContain("browser_preview_bind_local_module")
           await expect(ToolRegistry.ids()).resolves.toContain("browser_preview_compare_regions")
         },
       })
