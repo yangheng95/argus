@@ -4,6 +4,7 @@ import { join } from "node:path"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const WORKSPACE_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "workspace.css"), "utf8")
+const ACTIVITY_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "activity.css"), "utf8")
 
 function bodyOf(selector: string): string {
   const css = WORKSPACE_CSS.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -15,15 +16,37 @@ function bodyOf(selector: string): string {
   throw new Error(`CSS rule not found: ${selector}`)
 }
 
-test("workspace panels share a neutral surface family", () => {
-  expect(bodyOf(".workspace-mount")).toMatch(/background:\s*var\(--surface-inset\)/)
-  expect(bodyOf(".workspace-header")).toMatch(/background:\s*var\(--surface-strong\)/)
+function retiredSelector(className: string): RegExp {
+  return new RegExp(`(^|[\\n,{])\\s*\\.${className}(?:\\s|[,>{:+~.#\\[]|$)`, "m")
+}
+
+test("retired workspace panel shell stays removed from workspace.css", () => {
+  for (const className of [
+    "workspace-mount",
+    "workspace",
+    "workspace-header",
+    "workspace-tabs",
+    "workspace-tab",
+    "workspace-tab-label",
+    "workspace-tab-file",
+    "workspace-close",
+    "workspace-body",
+    "workspace-view",
+  ]) {
+    expect(WORKSPACE_CSS).not.toMatch(retiredSelector(className))
+  }
   expect(bodyOf(".diff-preview-panel > \.oc-panel__header")).toMatch(/background:\s*var\(--surface-strong\)/)
 
   const emptyBody = bodyOf(".diff-preview-empty")
   expect(emptyBody).toContain("linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%)")
   expect(emptyBody).toContain("color-mix(in srgb, var(--surface-inset) 92%, transparent)")
   expect(WORKSPACE_CSS).not.toContain("file-view")
+})
+
+test("file changes diff close button uses the Button primitive surface", () => {
+  expect(ACTIVITY_CSS).toContain('.file-changes-diff-header .oc-button[data-ui="file-changes-diff-close"]')
+  expect(ACTIVITY_CSS).toContain("color-mix(in srgb, var(--bad) 12%, transparent)")
+  expect(WORKSPACE_CSS).not.toContain("file-changes-diff-close")
 })
 
 test("compact center workbench scrolls open panels instead of crushing them", () => {
