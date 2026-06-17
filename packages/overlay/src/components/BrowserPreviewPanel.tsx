@@ -561,7 +561,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               >
                 <div class="browser-preview-evidence-header">
                   <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={16} />
-                  <span>{statusLabel(evidence().status)}</span>
+                  <span>{evidenceStatusLabel(evidence().status)}</span>
                   <code>{evidence().id}</code>
                 </div>
                 <p>{evidence().summary}</p>
@@ -628,7 +628,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             {(error) => (
               <div class="browser-preview-empty" data-status="failed" data-ui="browser-preview-live-error">
                 <Icon name="status-failed" size={18} />
-                <p>{t("browser_preview.empty.failed")}</p>
+                <p>{t("browser_preview.empty.live_failed")}</p>
                 <Show when={targetUrl()}>{(url) => <code>{url()}</code>}</Show>
                 <code>{error()}</code>
               </div>
@@ -712,6 +712,17 @@ function statusLabel(status: string): string {
       return t("browser_preview.status.failed")
     default:
       return t("browser_preview.status.missing")
+  }
+}
+
+function evidenceStatusLabel(status: string): string {
+  switch (status) {
+    case "passed":
+      return t("browser_preview.evidence.passed")
+    case "failed":
+      return t("browser_preview.evidence.failed")
+    default:
+      return status
   }
 }
 
