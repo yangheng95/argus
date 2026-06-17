@@ -275,19 +275,14 @@ export const BrowserPreviewRoutes = lazy(() =>
         const body = c.req.valid("json")
         requireTask(taskID)
         const persisted = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
-        const target = persisted
-          ? taskBrowserPreviewTarget({
-              id: persisted.id,
-              taskID,
-              projectRoot: Instance.directory,
-              url: persisted.url,
-              diagnostics: [`Using task browser preview target ${persisted.id}.`],
-            })
-          : failedBrowserPreviewTarget({
-              projectRoot: Instance.directory,
-              taskID,
-              diagnostics: [`Browser preview target not found: ${body.targetID}`],
-            })
+        if (!persisted) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        const target = taskBrowserPreviewTarget({
+          id: persisted.id,
+          taskID,
+          projectRoot: Instance.directory,
+          url: persisted.url,
+          diagnostics: [`Using task browser preview target ${persisted.id}.`],
+        })
         const verification = await verifyBrowserPreview({
           projectRoot: Instance.directory,
           target,

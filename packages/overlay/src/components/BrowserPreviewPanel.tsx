@@ -24,6 +24,13 @@ import { browserPreviewLivePoint } from "./browser-preview-live-point"
 
 type BrowserPreviewCandidate = BrowserPreviewTarget["candidates"][number]
 
+type BrowserPreviewLiveImage = {
+  taskID: string
+  targetID: string
+  viewportID: BrowserPreviewViewportID
+  url: string
+}
+
 export interface BrowserPreviewPanelProps {
   active: () => boolean
   directory: () => string
@@ -38,7 +45,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [refreshToken, setRefreshToken] = createSignal(0)
   const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
   const [lastAutoCapturedPreviewKey, setLastAutoCapturedPreviewKey] = createSignal("")
-  const [liveImageUrl, setLiveImageUrl] = createSignal("")
+  const [pendingSelectedTargetID, setPendingSelectedTargetID] = createSignal("")
+  const [liveImage, setLiveImage] = createSignal<BrowserPreviewLiveImage>()
   const [liveError, setLiveError] = createSignal("")
   const [liveLoading, setLiveLoading] = createSignal(false)
   const [verificationRequest, setVerificationRequest] = createSignal<{
@@ -69,8 +77,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (!taskID || !props.directory()) return undefined
     const resolved = target()
     if (!resolved || resolved.taskID !== taskID) return undefined
+    const pendingTargetID = pendingSelectedTargetID()
+    if (pendingTargetID && resolved.id !== pendingTargetID) return undefined
     return resolved
   })
+  const targetTransitionPending = createMemo(() => Boolean(pendingSelectedTargetID() && !currentTarget()))
   const [latestEvidence] = createResource(
     () => {
       const taskID = props.taskID()
@@ -92,6 +103,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
   const selectedViewport = createMemo(() => viewports().find((viewport) => viewport.id === viewportID()))
   const targetUrl = createMemo(() => currentTarget()?.url)
+  const readyTarget = createMemo(() => {
+    const resolved = currentTarget()
+    return resolved?.status === "ready" && Boolean(resolved.id && resolved.url)
+  })
   const currentVerificationRequest = createMemo(() => {
     const request = verificationRequest()
     const taskID = props.taskID()
@@ -109,6 +124,12 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const viewport = selectedViewport()
     if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.id || !viewport) return undefined
     return { taskID, targetID: resolved.id, viewportID: viewport.id, viewport }
+  })
+  const liveImageUrl = createMemo(() => {
+    const scope = liveScope()
+    const image = liveImage()
+    if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return ""
+    return image.url
   })
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
     const verified = currentVerification()
@@ -146,8 +167,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   onCleanup(() => {
     const current = captureImageUrl()
     if (current) URL.revokeObjectURL(current)
-    const live = liveImageUrl()
-    if (live) URL.revokeObjectURL(live)
+    const live = liveImage()
+    if (live) URL.revokeObjectURL(live.url)
   })
 
   createEffect(() => {
@@ -158,6 +179,12 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (lastAutoFocusedPreviewKey() === previewKey) return
     setLastAutoFocusedPreviewKey(previewKey)
     props.onReady?.(resolved)
+  })
+
+  createEffect(() => {
+    const pendingTargetID = pendingSelectedTargetID()
+    const resolved = target()
+    if (pendingTargetID && resolved?.id === pendingTargetID) setPendingSelectedTargetID("")
   })
 
   createEffect(() => {
@@ -186,12 +213,21 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     setVerificationRequest({ taskID, targetID: resolved.id, viewportIDs, token: Date.now() })
   })
 
+  createEffect(() => {
+    const error = currentVerificationError()
+    if (error instanceof ApiError && error.status === 404) {
+      setVerificationRequest(undefined)
+      void refetchTarget()
+    }
+  })
+
   const selectCandidate = (candidate: BrowserPreviewCandidate | null) => {
     const taskID = props.taskID()
     if (!taskID || !candidate || candidate.selected) return
-    void selectTaskBrowserPreviewTarget({ taskID, targetID: candidate.id }).then(() =>
-      setRefreshToken((value) => value + 1),
-    )
+    setPendingSelectedTargetID(candidate.id)
+    setVerificationRequest(undefined)
+    clearLiveImageUrl()
+    void selectTaskBrowserPreviewTarget({ taskID, targetID: candidate.id }).then(() => setRefreshToken((value) => value + 1))
   }
 
   const captureEvidence = () => {
@@ -204,18 +240,29 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   }
 
   let liveFrameRequestSequence = 0
+  let lastAutoLiveFrameKey = ""
 
-  const replaceLiveImageUrl = (next: string) => {
-    const previous = liveImageUrl()
-    setLiveImageUrl(next)
-    if (previous && previous !== next) URL.revokeObjectURL(previous)
+  const replaceLiveImageUrl = (scope: NonNullable<ReturnType<typeof liveScope>>, next: string) => {
+    const previous = liveImage()
+    setLiveImage({
+      taskID: scope.taskID,
+      targetID: scope.targetID,
+      viewportID: scope.viewportID,
+      url: next,
+    })
+    if (previous && previous.url !== next) URL.revokeObjectURL(previous.url)
   }
 
   const clearLiveImageUrl = () => {
-    const previous = liveImageUrl()
+    const previous = liveImage()
     if (!previous) return
-    setLiveImageUrl("")
-    URL.revokeObjectURL(previous)
+    setLiveImage(undefined)
+    URL.revokeObjectURL(previous.url)
+  }
+
+  const isCurrentLiveScope = (scope: NonNullable<ReturnType<typeof liveScope>>) => {
+    const current = liveScope()
+    return Boolean(current && browserPreviewLiveScopeKey(current) === browserPreviewLiveScopeKey(scope))
   }
 
   const loadLiveFrame = async (scope: NonNullable<ReturnType<typeof liveScope>>, input?: BrowserPreviewLiveInput) => {
@@ -230,9 +277,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         URL.revokeObjectURL(next)
         return
       }
-      replaceLiveImageUrl(next)
+      if (!isCurrentLiveScope(scope)) {
+        URL.revokeObjectURL(next)
+        return
+      }
+      replaceLiveImageUrl(scope, next)
     } catch (error) {
-      if (sequence === liveFrameRequestSequence) {
+      if (sequence === liveFrameRequestSequence && isCurrentLiveScope(scope)) {
         setLiveError(String(error))
         if (error instanceof ApiError && error.status === 404) {
           clearLiveImageUrl()
@@ -240,7 +291,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         }
       }
     } finally {
-      if (sequence === liveFrameRequestSequence) setLiveLoading(false)
+      if (sequence === liveFrameRequestSequence && isCurrentLiveScope(scope)) setLiveLoading(false)
     }
   }
 
@@ -254,7 +305,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   const sendLiveInput = (input: BrowserPreviewLiveInput) => {
     const scope = liveScope()
-    if (!scope) return
+    const image = liveImage()
+    if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return
     void loadLiveFrame(scope, input)
   }
 
@@ -284,11 +336,18 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   createEffect(() => {
     const scope = liveScope()
+    const key = scope ? `${browserPreviewLiveScopeKey(scope)}:${refreshToken()}` : ""
     if (!scope) {
+      lastAutoLiveFrameKey = ""
       clearLiveImageUrl()
       setLiveError("")
+      setLiveLoading(false)
       return
     }
+    if (lastAutoLiveFrameKey === key) return
+    lastAutoLiveFrameKey = key
+    clearLiveImageUrl()
+    setLiveError("")
     void loadLiveFrame(scope)
   })
 
@@ -315,7 +374,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         />
 
         <div class="browser-preview-controls">
-          <div class="browser-preview-status" data-status={currentTarget()?.status ?? "loading"}>
+          <div
+            class="browser-preview-status"
+            data-status={targetTransitionPending() ? "loading" : (currentTarget()?.status ?? "loading")}
+          >
             <Switch
               fallback={
                 <>
@@ -324,7 +386,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 </>
               }
             >
-              <Match when={target.loading}>
+              <Match when={target.loading || targetTransitionPending()}>
                 <span class="card__spinner" />
                 <span>{t("browser_preview.loading")}</span>
               </Match>
@@ -352,41 +414,43 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             </Switch>
           </div>
 
-          <Select.Root<BrowserPreviewCandidate>
-            class="browser-preview-candidate-select"
-            options={candidates()}
-            optionValue="id"
-            optionTextValue="url"
-            value={selectedCandidate()}
-            onChange={selectCandidate}
-            itemComponent={BrowserPreviewCandidateOption}
-            disabled={candidates().length <= 1}
-            disallowEmptySelection
-            gutter={4}
-            sameWidth
-          >
-            <Icon name="external-link" size={13} />
-            <Select.Trigger
-              class="browser-preview-candidate-trigger"
-              aria-label={t("browser_preview.candidates.label")}
-              data-ui="browser-preview-candidate-trigger"
+          <Show when={readyTarget() && candidates().length > 0}>
+            <Select.Root<BrowserPreviewCandidate>
+              class="browser-preview-candidate-select"
+              options={candidates()}
+              optionValue="id"
+              optionTextValue="url"
+              value={selectedCandidate()}
+              onChange={selectCandidate}
+              itemComponent={BrowserPreviewCandidateOption}
+              disabled={candidates().length <= 1}
+              disallowEmptySelection
+              gutter={4}
+              sameWidth
             >
-              <Select.Value<BrowserPreviewCandidate>>
-                {(state) => <span>{state.selectedOption()?.url ?? targetUrl() ?? ""}</span>}
-              </Select.Value>
-              <Select.Icon>
-                <Icon name="caret-down" size={12} />
-              </Select.Icon>
-            </Select.Trigger>
-            <Select.HiddenSelect aria-label={t("browser_preview.candidates.label")} />
-            <Select.Portal>
-              <Select.Content class="browser-preview-candidate-content">
-                <Select.Listbox class="browser-preview-candidate-listbox" />
-              </Select.Content>
-            </Select.Portal>
-          </Select.Root>
+              <Icon name="external-link" size={13} />
+              <Select.Trigger
+                class="browser-preview-candidate-trigger"
+                aria-label={t("browser_preview.candidates.label")}
+                data-ui="browser-preview-candidate-trigger"
+              >
+                <Select.Value<BrowserPreviewCandidate>>
+                  {(state) => <span>{state.selectedOption()?.url ?? targetUrl() ?? ""}</span>}
+                </Select.Value>
+                <Select.Icon>
+                  <Icon name="caret-down" size={12} />
+                </Select.Icon>
+              </Select.Trigger>
+              <Select.HiddenSelect aria-label={t("browser_preview.candidates.label")} />
+              <Select.Portal>
+                <Select.Content class="browser-preview-candidate-content">
+                  <Select.Listbox class="browser-preview-candidate-listbox" />
+                </Select.Content>
+              </Select.Portal>
+            </Select.Root>
+          </Show>
 
-          <Show when={viewports().length > 0}>
+          <Show when={readyTarget() && viewports().length > 0}>
             <div class="browser-preview-viewport-controls">
               <Tabs
                 size="sm"
@@ -429,45 +493,47 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             <span>{t("browser_preview.capture")}</span>
           </Button>
 
-          <div
-            class="browser-preview-evidence-status"
-            data-status={
-              currentVerificationError()
-                ? "failed"
-                : (currentVerification()?.status ?? renderedEvidence()?.status ?? (currentVerificationLoading() ? "loading" : "idle"))
-            }
-          >
-            <Switch>
-              <Match when={currentVerificationError()}>
-                {(error) => (
-                  <>
-                    <Icon name="status-failed" size={14} />
-                    <span>{String(error())}</span>
-                  </>
-                )}
-              </Match>
-              <Match when={currentVerificationLoading()}>
-                <span class="card__spinner" />
-                <span>{t("browser_preview.capture_loading")}</span>
-              </Match>
-              <Match when={currentVerification()}>
-                {(resolved) => (
-                  <>
-                    <Icon name={resolved().status === "passed" ? "status-completed" : "status-failed"} size={14} />
-                    <span>{resolved().captures[viewportID()]?.summary ?? resolved().diagnostics.join(" ")}</span>
-                  </>
-                )}
-              </Match>
-              <Match when={renderedEvidence()}>
-                {(evidence) => (
-                  <>
-                    <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={14} />
-                    <span>{evidence().summary}</span>
-                  </>
-                )}
-              </Match>
-            </Switch>
-          </div>
+          <Show when={currentVerificationError() || currentVerificationLoading() || currentVerification() || renderedEvidence()}>
+            <div
+              class="browser-preview-evidence-status"
+              data-status={
+                currentVerificationError()
+                  ? "failed"
+                  : (currentVerification()?.status ?? renderedEvidence()?.status ?? (currentVerificationLoading() ? "loading" : "idle"))
+              }
+            >
+              <Switch>
+                <Match when={currentVerificationError()}>
+                  {(error) => (
+                    <>
+                      <Icon name="status-failed" size={14} />
+                      <span>{String(error())}</span>
+                    </>
+                  )}
+                </Match>
+                <Match when={currentVerificationLoading()}>
+                  <span class="card__spinner" />
+                  <span>{t("browser_preview.capture_loading")}</span>
+                </Match>
+                <Match when={currentVerification()}>
+                  {(resolved) => (
+                    <>
+                      <Icon name={resolved().status === "passed" ? "status-completed" : "status-failed"} size={14} />
+                      <span>{resolved().captures[viewportID()]?.summary ?? resolved().diagnostics.join(" ")}</span>
+                    </>
+                  )}
+                </Match>
+                <Match when={renderedEvidence()}>
+                  {(evidence) => (
+                    <>
+                      <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={14} />
+                      <span>{evidence().summary}</span>
+                    </>
+                  )}
+                </Match>
+              </Switch>
+            </div>
+          </Show>
         </div>
       </div>
 
@@ -480,11 +546,49 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             </div>
           }
         >
-          <Match when={target.loading}>
+          <Match when={target.loading || targetTransitionPending()}>
             <div class="browser-preview-empty" data-status="loading">
               <span class="card__spinner" />
               <p>{t("browser_preview.loading")}</p>
             </div>
+          </Match>
+          <Match when={renderedEvidence()}>
+            {(evidence) => (
+              <section
+                class="browser-preview-evidence"
+                data-status={evidence().status}
+                data-ui="browser-preview-evidence"
+              >
+                <div class="browser-preview-evidence-header">
+                  <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={16} />
+                  <span>{statusLabel(evidence().status)}</span>
+                  <code>{evidence().id}</code>
+                </div>
+                <p>{evidence().summary}</p>
+                <Show when={captureImageUrl()}>
+                  {(url) => (
+                    <figure class="browser-preview-evidence-shot">
+                      <img src={url()} alt={evidence().summary} data-ui="browser-preview-screenshot" decoding="async" />
+                    </figure>
+                  )}
+                </Show>
+                <dl class="browser-preview-evidence-facts">
+                  <div>
+                    <dt>{t("browser_preview.viewport.label")}</dt>
+                    <dd>{viewportLabel(evidence().viewportID)}</dd>
+                  </div>
+                  <Show when={evidence().capture?.url}>
+                    {(url) => (
+                      <div>
+                        <dt>{t("browser_preview.url_label")}</dt>
+                        <dd>{url()}</dd>
+                      </div>
+                    )}
+                  </Show>
+                </dl>
+                <For each={evidence().diagnostics}>{(item) => <code>{item}</code>}</For>
+              </section>
+            )}
           </Match>
           <Match when={liveImageUrl()}>
             {(url) => (
@@ -528,44 +632,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 <Show when={targetUrl()}>{(url) => <code>{url()}</code>}</Show>
                 <code>{error()}</code>
               </div>
-            )}
-          </Match>
-          <Match when={renderedEvidence()}>
-            {(evidence) => (
-              <section
-                class="browser-preview-evidence"
-                data-status={evidence().status}
-                data-ui="browser-preview-evidence"
-              >
-                <div class="browser-preview-evidence-header">
-                  <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={16} />
-                  <span>{statusLabel(evidence().status)}</span>
-                  <code>{evidence().id}</code>
-                </div>
-                <p>{evidence().summary}</p>
-                <Show when={captureImageUrl()}>
-                  {(url) => (
-                    <figure class="browser-preview-evidence-shot">
-                      <img src={url()} alt={evidence().summary} data-ui="browser-preview-screenshot" decoding="async" />
-                    </figure>
-                  )}
-                </Show>
-                <dl class="browser-preview-evidence-facts">
-                  <div>
-                    <dt>{t("browser_preview.viewport.label")}</dt>
-                    <dd>{viewportLabel(evidence().viewportID)}</dd>
-                  </div>
-                  <Show when={evidence().capture?.url}>
-                    {(url) => (
-                      <div>
-                        <dt>{t("browser_preview.url_label")}</dt>
-                        <dd>{url()}</dd>
-                      </div>
-                    )}
-                  </Show>
-                </dl>
-                <For each={evidence().diagnostics}>{(item) => <code>{item}</code>}</For>
-              </section>
             )}
           </Match>
           <Match when={currentTarget()?.status === "failed" ? currentTarget() : undefined}>
@@ -681,4 +747,19 @@ function evidenceFromVerification(
     timeCompleted: 0,
     timeCreated: 0,
   }
+}
+
+function browserPreviewLiveScopeKey(input: {
+  taskID: string
+  targetID: string
+  viewportID: BrowserPreviewViewportID
+}): string {
+  return `${input.taskID}:${input.targetID}:${input.viewportID}`
+}
+
+function browserPreviewLiveImageMatchesScope(
+  image: BrowserPreviewLiveImage,
+  scope: { taskID: string; targetID: string; viewportID: BrowserPreviewViewportID },
+): boolean {
+  return browserPreviewLiveScopeKey(image) === browserPreviewLiveScopeKey(scope)
 }

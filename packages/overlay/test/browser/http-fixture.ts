@@ -1,9 +1,15 @@
 import { createServer, type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from "node:http"
+import type { Socket } from "node:net"
+import { Readable } from "node:stream"
 
 export type BrowserFixtureServer = {
   origin: string
   port: number
   close(): Promise<void>
+}
+
+export type BrowserFixtureOptions = {
+  port?: number
 }
 
 function headersFromIncoming(headers: IncomingHttpHeaders): Headers {
@@ -35,12 +41,26 @@ async function writeResponse(res: ServerResponse, response: Response) {
     res.end()
     return
   }
+  if (response.body) {
+    await new Promise<void>((resolve, reject) => {
+      const stream = Readable.fromWeb(response.body as never)
+      const done = () => resolve()
+      stream.once("error", reject)
+      res.once("error", reject)
+      res.once("close", done)
+      res.once("finish", done)
+      stream.pipe(res)
+    })
+    return
+  }
   res.end(Buffer.from(await response.arrayBuffer()))
 }
 
 export async function startBrowserFixture(
   handler: (req: Request) => Response | Promise<Response>,
+  options: BrowserFixtureOptions = {},
 ): Promise<BrowserFixtureServer> {
+  const sockets = new Set<Socket>()
   const server = createServer(async (incoming, outgoing) => {
     try {
       const host = incoming.headers.host || "127.0.0.1"
@@ -64,7 +84,21 @@ export async function startBrowserFixture(
       outgoing.end(message)
     }
   })
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  server.on("connection", (socket) => {
+    sockets.add(socket)
+    socket.once("close", () => sockets.delete(socket))
+  })
+  await new Promise<void>((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off("error", onError)
+      reject(error)
+    }
+    server.once("error", onError)
+    server.listen(options.port ?? 0, "127.0.0.1", () => {
+      server.off("error", onError)
+      resolve()
+    })
+  })
   const address = server.address()
   if (!address || typeof address === "string") throw new Error("Browser fixture server did not bind a TCP port")
   return {
@@ -72,6 +106,7 @@ export async function startBrowserFixture(
     port: address.port,
     close: () =>
       new Promise<void>((resolve, reject) => {
+        for (const socket of sockets) socket.destroy()
         server.close((error) => (error ? reject(error) : resolve()))
       }),
   }
