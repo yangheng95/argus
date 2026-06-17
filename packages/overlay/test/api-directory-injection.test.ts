@@ -130,6 +130,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("config/prompt-profile", () => expectInjects("config/prompt-profile"))
     test("config/executor", () => expectInjects("config/executor"))
     test("provider", () => expectInjects("provider"))
+    test("provider hexin budget", () => expectInjects("provider/hexin/budget"))
     test("project current", () => expectInjects("project/current"))
     test("project current worktrees", () => expectInjects("project/current/worktrees"))
     test("mission wake", () => expectInjects("mission/wake"))
@@ -192,6 +193,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "path",
       "vcs",
       "config",
+      "provider/hexin/budget",
       "config/prompt-profile",
       "project/current",
       "project/current/worktrees",

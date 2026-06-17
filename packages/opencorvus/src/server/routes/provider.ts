@@ -12,6 +12,47 @@ import { Auth } from "../../auth"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
+const HexinBudget = z
+  .object({
+    maxBudget: z.number(),
+    spend: z.number(),
+    remaining: z.number(),
+    overBudget: z.boolean(),
+  })
+  .meta({ ref: "HexinBudget" })
+
+const HexinBudgetResponse = z
+  .discriminatedUnion("ok", [
+    z.object({
+      ok: z.literal(true),
+      budget: HexinBudget,
+    }),
+    z.object({
+      ok: z.literal(false),
+      error: z.string(),
+    }),
+  ])
+  .meta({ ref: "HexinBudgetResponse" })
+
+const HexinBudgetUpstream = z.object({
+  max_budget: z.number(),
+  spend: z.number(),
+  remaining: z.number(),
+  over_budget: z.boolean(),
+})
+
+function hexinBudgetURL(): string {
+  const url = new URL(ModelsDev.HEXIN_GATEWAY_URL)
+  const parts = url.pathname.split("/").filter(Boolean)
+  if (parts[parts.length - 1] !== "v1") {
+    throw new Error("ModelsDev.HEXIN_GATEWAY_URL must end with /v1 to derive the Hexin budget endpoint")
+  }
+  parts[parts.length - 1] = "key"
+  parts.push("budget")
+  url.pathname = `/${parts.join("/")}`
+  return url.toString()
+}
+
 export const ProviderRoutes = lazy(() =>
   new Hono()
     .get(
@@ -27,7 +68,7 @@ export const ProviderRoutes = lazy(() =>
               "application/json": {
                 schema: resolver(
                   z.object({
-                    all: ModelsDev.Provider.array(),
+                    all: Provider.Info.array(),
                     default: z.record(z.string(), z.string()),
                     connected: z.array(z.string()),
                   }),
@@ -159,6 +200,87 @@ export const ProviderRoutes = lazy(() =>
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           return c.json({ ok: false, count: 0, ids: [], error: message })
+        }
+      },
+    )
+    .get(
+      "/hexin/budget",
+      describeRoute({
+        summary: "Get hexin gateway key budget",
+        description:
+          "Fetch the Hexin LiteLLM key budget using the configured Hexin provider credential. This route never exposes the API key to the overlay.",
+        operationId: "provider.hexin.budget",
+        responses: {
+          200: {
+            description: "Hexin budget lookup result",
+            content: {
+              "application/json": {
+                schema: resolver(HexinBudgetResponse),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const apiKey = await Provider.resolveHexinApiKey(await Config.get())
+        if (!apiKey) {
+          return c.json({
+            ok: false,
+            error: "HEXIN_API_KEY unset",
+          })
+        }
+
+        const url = hexinBudgetURL()
+        try {
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              Accept: "application/json",
+            },
+            signal: AbortSignal.timeout(15_000),
+          })
+          const text = await response.text()
+          if (!response.ok) {
+            return c.json({
+              ok: false,
+              error: `GET ${url} returned HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}.`,
+            })
+          }
+
+          let parsed: unknown
+          try {
+            parsed = JSON.parse(text)
+          } catch {
+            return c.json({
+              ok: false,
+              error: `GET ${url} did not return JSON.`,
+            })
+          }
+
+          const budget = HexinBudgetUpstream.safeParse(parsed)
+          if (!budget.success) {
+            return c.json({
+              ok: false,
+              error: `GET ${url} response must contain max_budget, spend, remaining, and over_budget.`,
+            })
+          }
+
+          return c.json({
+            ok: true,
+            budget: {
+              maxBudget: budget.data.max_budget,
+              spend: budget.data.spend,
+              remaining: budget.data.remaining,
+              overBudget: budget.data.over_budget,
+            },
+          })
+        } catch (error) {
+          const message = (error instanceof Error ? error.message : String(error)).replaceAll(apiKey, "[redacted]")
+          return c.json({
+            ok: false,
+            error: `GET ${url} failed: ${message}`,
+          })
         }
       },
     )

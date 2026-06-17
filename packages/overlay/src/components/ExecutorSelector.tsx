@@ -18,7 +18,7 @@
 //     otherwise appStore.config.model via patchConfig
 
 import * as Popover from "@kobalte/core/popover"
-import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import { appStore } from "../store/app"
 import { activeTaskID, hasSelectedTask } from "../store/board"
 import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings"
@@ -34,14 +34,17 @@ import {
 } from "../services/executor"
 import {
   getTaskOperatorModelContext,
+  getHexinBudget,
   modelContextID,
   patchConfig,
   patchSessionConfig,
   sessionConfigRefreshToken,
+  type HexinBudgetResponse,
   type TaskOperatorModelContext,
 } from "../services/config"
 import { loadProviderInfo } from "../services/init"
-import { t } from "../utils/i18n"
+import { activeDirectory } from "../services/workspace"
+import { localeTag, t } from "../utils/i18n"
 import { Button } from "./ui/Button"
 import { Tab, Tabs } from "./ui/Tabs"
 
@@ -62,6 +65,8 @@ interface ProviderGroup {
 const INTERNAL_EXECUTOR_ID = "opencorvus"
 const EXTERNAL_DISABLED_TAB_ID = "disabled"
 const EXTERNAL_EXECUTOR_IDS = ["codex", "claude-code"]
+const HEXIN_BUDGET_REFRESH_MS = 10 * 60 * 1000
+const HEXIN_BUDGET_LOW_USD = 20
 
 function splitModelID(modelID: string): ModelParts {
   const trimmed = modelID.trim()
@@ -174,6 +179,72 @@ function ChipModel(props: { model: string; placeholder: string }) {
   )
 }
 
+function formatBudgetAmount(value: number): string {
+  return new Intl.NumberFormat(localeTag(), {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(value)
+}
+
+function budgetErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  return String(error || "")
+}
+
+function HexinBudgetInline(props: {
+  response: HexinBudgetResponse | undefined
+  loading: boolean
+  error: unknown
+}) {
+  const budget = createMemo(() => (props.response?.ok ? props.response.budget : undefined))
+  const lowBudget = createMemo(() => {
+    const value = budget()
+    return !!value && value.remaining < HEXIN_BUDGET_LOW_USD
+  })
+  const providerError = createMemo(() => {
+    const response = props.response
+    return response?.ok === false ? response.error : ""
+  })
+  const transportError = createMemo(() => budgetErrorMessage(props.error))
+  const displayText = createMemo(() => {
+    const value = budget()
+    if (props.loading) return t("executor.hexin_budget_inline_loading")
+    if (value) {
+      return t("executor.hexin_budget_inline", {
+        remaining: formatBudgetAmount(value.remaining),
+        max: formatBudgetAmount(value.maxBudget),
+      })
+    }
+    if (providerError() || transportError()) return t("executor.hexin_budget_inline_error")
+    return ""
+  })
+  const title = createMemo(() => {
+    const value = budget()
+    if (value) {
+      return t("executor.hexin_budget_value", {
+        remaining: formatBudgetAmount(value.remaining),
+        max: formatBudgetAmount(value.maxBudget),
+        spend: formatBudgetAmount(value.spend),
+      })
+    }
+    return providerError() || transportError() || t("executor.hexin_budget_label")
+  })
+  return (
+    <span
+      class="executor-budget-row"
+      data-ui="executor-hexin-budget"
+      data-loading={props.loading ? "true" : "false"}
+      data-over-budget={budget()?.overBudget ? "true" : "false"}
+      data-low-budget={lowBudget() ? "true" : "false"}
+      title={title()}
+      role="status"
+      aria-live="polite"
+    >
+      <span class="executor-budget-value">{displayText()}</span>
+    </span>
+  )
+}
+
 export function ExecutorSelector() {
   // Two independent disclosures — opening one closes the other so the
   // popover stack never overlaps.
@@ -210,6 +281,33 @@ export function ExecutorSelector() {
       return modelContextID(currentTaskOperatorContext())
     }
     return projectModelFromConfig()
+  })
+  const [hexinBudgetRefreshTick, setHexinBudgetRefreshTick] = createSignal(0)
+  const hexinBudgetBaseKey = createMemo(() => {
+    if (!appStore.connected) return null
+    const parts = splitModelID(openCorvusModel())
+    if (parts.provider !== "hexin" || !parts.name) return null
+    return {
+      directory: activeDirectory().trim(),
+      model: parts.name,
+      refresh: sessionConfigRefreshToken(),
+      taskID: taskID(),
+    }
+  })
+  createEffect(() => {
+    if (!hexinBudgetBaseKey()) return
+    const timer = window.setInterval(
+      () => setHexinBudgetRefreshTick((value) => value + 1),
+      HEXIN_BUDGET_REFRESH_MS,
+    )
+    onCleanup(() => window.clearInterval(timer))
+  })
+  const hexinBudgetKey = createMemo(() => {
+    const key = hexinBudgetBaseKey()
+    return key ? { ...key, tick: hexinBudgetRefreshTick() } : null
+  })
+  const [hexinBudget] = createResource(hexinBudgetKey, async () => {
+    return await getHexinBudget()
   })
   const openCorvusModelPlaceholder = createMemo(() => {
     if (!hasSelectedTask()) return t("agent_models.option_not_set")
@@ -364,161 +462,168 @@ export function ExecutorSelector() {
   }
 
   return (
-    <div class="executor-dualbar" data-ui="executor-dualbar" data-ui-group="executor-selector">
-      <ExecutorChip
-        side="mirror"
-        disclosure={mirror}
-        onActivate={openMirror}
-        label={executorLabel(INTERNAL_EXECUTOR_ID)}
-        model={openCorvusModel()}
-        modelPlaceholder={openCorvusModelPlaceholder()}
-        title={t("executor.mirror_chip_title", {
-          model: openCorvusModelLabel(),
-        })}
-        ariaLabel={t("executor.mirror_chip_aria", {
-          model: openCorvusModelLabel(),
-        })}
-      >
-        <>
-          <div class="executor-popover-header">
-            <span class="executor-popover-title">{t("executor.mirror_popover_title")}</span>
-            <span class="executor-popover-hint">{t("executor.mirror_popover_hint")}</span>
-          </div>
-          <Show
-            when={mirrorGroups().length > 0}
-            fallback={
-              <div class="executor-popover-empty">
-                {providerLoading() ? t("common.loading") : t("executor.mirror_no_connected_providers")}
-              </div>
-            }
-          >
+    <div class="executor-selector-stack" data-ui="executor-selector-stack" data-ui-group="executor-selector">
+      <div class="executor-dualbar" data-ui="executor-dualbar">
+        <ExecutorChip
+          side="mirror"
+          disclosure={mirror}
+          onActivate={openMirror}
+          label={executorLabel(INTERNAL_EXECUTOR_ID)}
+          model={openCorvusModel()}
+          modelPlaceholder={openCorvusModelPlaceholder()}
+          title={t("executor.mirror_chip_title", {
+            model: openCorvusModelLabel(),
+          })}
+          ariaLabel={t("executor.mirror_chip_aria", {
+            model: openCorvusModelLabel(),
+          })}
+          meta={
+            <Show when={hexinBudgetKey()}>
+              <HexinBudgetInline response={hexinBudget()} loading={hexinBudget.loading} error={hexinBudget.error} />
+            </Show>
+          }
+        >
+          <>
+            <div class="executor-popover-header">
+              <span class="executor-popover-title">{t("executor.mirror_popover_title")}</span>
+              <span class="executor-popover-hint">{t("executor.mirror_popover_hint")}</span>
+            </div>
             <Show
-              when={!mirrorContextLoading()}
-              fallback={<div class="executor-popover-empty">{t("common.loading")}</div>}
+              when={mirrorGroups().length > 0}
+              fallback={
+                <div class="executor-popover-empty">
+                  {providerLoading() ? t("common.loading") : t("executor.mirror_no_connected_providers")}
+                </div>
+              }
             >
               <Show
-                when={!mirrorContextError()}
+                when={!mirrorContextLoading()}
+                fallback={<div class="executor-popover-empty">{t("common.loading")}</div>}
+              >
+                <Show
+                  when={!mirrorContextError()}
+                  fallback={
+                    <div class="executor-popover-empty executor-popover-error" data-ui="executor-mirror-context-error">
+                      <span>{errorMessage(mirrorContextError()) || t("common.error")}</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="mini"
+                        tone="neutral"
+                        onClick={retryTaskOperatorContext}
+                      >
+                        {t("common.retry")}
+                      </Button>
+                    </div>
+                  }
+                >
+                  <div class="executor-popover-body">
+                    <For each={mirrorGroups()}>
+                      {(group) => (
+                        <ProviderModelGroup
+                          group={group}
+                          currentModel={openCorvusModel()}
+                          disabled={mirrorWriteDisabled()}
+                          onPick={(modelID) => void pickMirrorModel(modelID)}
+                        />
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </Show>
+            </Show>
+          </>
+        </ExecutorChip>
+
+        <ExecutorChip
+          side="external"
+          disclosure={external}
+          onActivate={openExternal}
+          label={externalChipLabel()}
+          model={externalModel()}
+          modelPlaceholder={externalModelPlaceholder()}
+          title={
+            isExternalActive()
+              ? t("executor.external_chip_title", {
+                  executor: executorLabel(activeID()),
+                  model: externalModel() || t("agent_models.option_not_set"),
+                })
+              : t("executor.external_chip_title_disabled")
+          }
+          ariaLabel={
+            isExternalActive()
+              ? t("executor.external_chip_aria_active", {
+                  executor: executorLabel(activeID()),
+                  model: externalModel() || t("agent_models.option_not_set"),
+                })
+              : t("executor.external_chip_aria_disabled")
+          }
+        >
+          <>
+            <div class="executor-popover-header">
+              <span class="executor-popover-title">{t("executor.external_popover_title")}</span>
+              <span class="executor-popover-hint">{t("executor.external_popover_hint")}</span>
+            </div>
+            <Tabs
+              size="sm"
+              tone="neutral"
+              value={isExternalActive() ? focusedExternalID() : EXTERNAL_DISABLED_TAB_ID}
+              onValueChange={changeExternalTab}
+              data-ui="executor-popover-tabs"
+            >
+              <Tab
+                value={EXTERNAL_DISABLED_TAB_ID}
+                active={!isExternalActive()}
+                size="sm"
+                tone="neutral"
+                data-ui="executor-popover-tab"
+              >
+                {t("executor.external_disabled")}
+              </Tab>
+              <For each={externalTabs()}>
+                {(tab) => (
+                  <Tab
+                    value={tab.id}
+                    active={tab.id === focusedExternalID()}
+                    size="sm"
+                    tone="neutral"
+                    data-ui="executor-popover-tab"
+                    disabled={!tab.selectable}
+                    title={tab.title}
+                  >
+                    {tab.label}
+                  </Tab>
+                )}
+              </For>
+            </Tabs>
+            <Show
+              when={isExternalActive()}
+              fallback={<div class="executor-popover-empty">{t("executor.external_disabled_hint")}</div>}
+            >
+              <Show
+                when={focusedGroups().length > 0}
                 fallback={
-                  <div class="executor-popover-empty executor-popover-error" data-ui="executor-mirror-context-error">
-                    <span>{errorMessage(mirrorContextError()) || t("common.error")}</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="mini"
-                      tone="neutral"
-                      onClick={retryTaskOperatorContext}
-                    >
-                      {t("common.retry")}
-                    </Button>
+                  <div class="executor-popover-empty">
+                    {providerLoading() ? t("common.loading") : t("executor.external_no_models")}
                   </div>
                 }
               >
                 <div class="executor-popover-body">
-                  <For each={mirrorGroups()}>
+                  <For each={focusedGroups()}>
                     {(group) => (
                       <ProviderModelGroup
                         group={group}
-                        currentModel={openCorvusModel()}
-                        disabled={mirrorWriteDisabled()}
-                        onPick={(modelID) => void pickMirrorModel(modelID)}
+                        currentModel={focusedCurrentModel()}
+                        onPick={(modelID) => void pickExternalModel(focusedExternalID(), modelID)}
                       />
                     )}
                   </For>
                 </div>
               </Show>
             </Show>
-          </Show>
-        </>
-      </ExecutorChip>
-
-      <ExecutorChip
-        side="external"
-        disclosure={external}
-        onActivate={openExternal}
-        label={externalChipLabel()}
-        model={externalModel()}
-        modelPlaceholder={externalModelPlaceholder()}
-        title={
-          isExternalActive()
-            ? t("executor.external_chip_title", {
-                executor: executorLabel(activeID()),
-                model: externalModel() || t("agent_models.option_not_set"),
-              })
-            : t("executor.external_chip_title_disabled")
-        }
-        ariaLabel={
-          isExternalActive()
-            ? t("executor.external_chip_aria_active", {
-                executor: executorLabel(activeID()),
-                model: externalModel() || t("agent_models.option_not_set"),
-              })
-            : t("executor.external_chip_aria_disabled")
-        }
-      >
-        <>
-          <div class="executor-popover-header">
-            <span class="executor-popover-title">{t("executor.external_popover_title")}</span>
-            <span class="executor-popover-hint">{t("executor.external_popover_hint")}</span>
-          </div>
-          <Tabs
-            size="sm"
-            tone="neutral"
-            value={isExternalActive() ? focusedExternalID() : EXTERNAL_DISABLED_TAB_ID}
-            onValueChange={changeExternalTab}
-            data-ui="executor-popover-tabs"
-          >
-            <Tab
-              value={EXTERNAL_DISABLED_TAB_ID}
-              active={!isExternalActive()}
-              size="sm"
-              tone="neutral"
-              data-ui="executor-popover-tab"
-            >
-              {t("executor.external_disabled")}
-            </Tab>
-            <For each={externalTabs()}>
-              {(tab) => (
-                <Tab
-                  value={tab.id}
-                  active={tab.id === focusedExternalID()}
-                  size="sm"
-                  tone="neutral"
-                  data-ui="executor-popover-tab"
-                  disabled={!tab.selectable}
-                  title={tab.title}
-                >
-                  {tab.label}
-                </Tab>
-              )}
-            </For>
-          </Tabs>
-          <Show
-            when={isExternalActive()}
-            fallback={<div class="executor-popover-empty">{t("executor.external_disabled_hint")}</div>}
-          >
-            <Show
-              when={focusedGroups().length > 0}
-              fallback={
-                <div class="executor-popover-empty">
-                  {providerLoading() ? t("common.loading") : t("executor.external_no_models")}
-                </div>
-              }
-            >
-              <div class="executor-popover-body">
-                <For each={focusedGroups()}>
-                  {(group) => (
-                    <ProviderModelGroup
-                      group={group}
-                      currentModel={focusedCurrentModel()}
-                      onPick={(modelID) => void pickExternalModel(focusedExternalID(), modelID)}
-                    />
-                  )}
-                </For>
-              </div>
-            </Show>
-          </Show>
-        </>
-      </ExecutorChip>
+          </>
+        </ExecutorChip>
+      </div>
     </div>
   )
 }
@@ -533,6 +638,7 @@ interface ExecutorChipProps {
   title: string
   ariaLabel: string
   disabled?: boolean
+  meta?: any
   children: any
 }
 
@@ -572,7 +678,10 @@ function ExecutorChip(props: ExecutorChipProps) {
           disabled={props.disabled}
         >
           <span class="executor-chip-copy">
-            <span class="executor-chip-label">{props.label}</span>
+            <span class="executor-chip-label-row">
+              <span class="executor-chip-label">{props.label}</span>
+              {props.meta}
+            </span>
             <ChipModel model={props.model} placeholder={props.modelPlaceholder} />
           </span>
           <ChevronCaret open={props.disclosure.open()} />
