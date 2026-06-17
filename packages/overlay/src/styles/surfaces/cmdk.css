@@ -1,22 +1,18 @@
 /* ─────────────────────────────────────────────────────────────
    Command Palette (cmdk-*)
    The Cmd/Ctrl-K modal launcher used to invoke commands across
-   the overlay. The `.cmdk-backdrop` is a fixed-position fullscreen
-   overlay; the `.cmdk-panel` is the centered modal.
+   the overlay. `.cmdk-backdrop` styles the shared Dialog primitive
+   overlay; `.cmdk-panel` styles the primitive form as the search modal.
    Component: src/components/CommandPalette.tsx.
    ───────────────────────────────────────────────────────────── */
 
 .cmdk-backdrop {
   position: fixed;
   inset: 0;
-  z-index: var(--ui-z-toast);
+  z-index: var(--ui-z-overlay);
   background: color-mix(in srgb, var(--bg) 60%, transparent);
   backdrop-filter: blur(calc(2px * var(--ui-scale)));
   -webkit-backdrop-filter: blur(calc(2px * var(--ui-scale)));
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 12vh;
   animation: cmdk-fade var(--ui-duration-base) ease;
 }
 
@@ -30,15 +26,32 @@
 }
 
 .cmdk-panel {
+  top: 12vh;
+  transform: translateX(-50%);
   width: min(calc(640px * var(--ui-scale)), calc(100vw - calc(64px * var(--ui-scale))));
   max-height: 60vh;
   display: flex;
   flex-direction: column;
+  gap: 0;
   background: var(--dialog-bg);
   border: var(--oc-border-width) solid var(--border-strong);
   border-radius: var(--oc-radius-large);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+  padding: 0;
+}
+
+.dialog-form.cmdk-panel > .dialog-header.cmdk-header {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  clip-path: inset(50%);
 }
 
 .cmdk-input {
