@@ -46,20 +46,13 @@ export const BrowserPreviewToolParameters = z.object({
 })
 export type BrowserPreviewToolParameters = z.infer<typeof BrowserPreviewToolParameters>
 
-export const BrowserPreviewToolDescription =
-  "Explicitly start a long-lived frontend preview service for the current task and save the resulting task-scoped browser preview target. Reuses the bash process supervisor and browser_preview_target artifacts; use this when a real running app must back the Preview panel or downstream visual evidence. This is the only tool path that may infer preview URLs from service startup output; ordinary command output does not update preview targets."
-
-export const BrowserPreviewToolStaticDefinition = {
-  description: BrowserPreviewToolDescription,
-  parameters: BrowserPreviewToolParameters,
-} as const
-
 export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx) => {
   const bash = await BashTool.init(initCtx)
 
   return {
-    description: BrowserPreviewToolStaticDefinition.description,
-    parameters: BrowserPreviewToolStaticDefinition.parameters,
+    description:
+      "Start a long-lived frontend preview service for the current task and open the overlay Preview panel by saving a task-scoped browser preview target. Reuses the bash process supervisor and browser_preview_target artifacts; do not use this for one-shot commands or tests.",
+    parameters: BrowserPreviewToolParameters,
     async execute(params: BrowserPreviewToolParameters, ctx: Tool.Context) {
       const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID.trim() : ""
       if (!taskID) {
