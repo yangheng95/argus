@@ -7,13 +7,14 @@ description: Mattermost 适配器走 Outgoing Webhook 模式。
 
 1. 在 Mattermost System Console → Integrations 启用 Outgoing Webhooks。
 2. 创建一个 Bot Account，获取 Bot Token。
-3. 配置 Outgoing Webhook 指向 `https://<你的公网>/mattermost`。
+3. 配置 Outgoing Webhook 指向 `https://<你的公网>/mattermost`，并复制它的 Token。
 
 ## 环境变量
 
 ```bash
 export MATTERMOST_SERVER_URL=https://mattermost.example.com
 export MATTERMOST_BOT_TOKEN=...
+export MATTERMOST_WEBHOOK_TOKEN=...
 export MATTERMOST_WEBHOOK_HOST=0.0.0.0
 export MATTERMOST_WEBHOOK_PORT=16671
 export MATTERMOST_WEBHOOK_PATH=/mattermost

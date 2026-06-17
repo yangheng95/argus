@@ -19,10 +19,11 @@ type AdapterOptions = {
   whatsapp: {
     token: string
     numberId: string
+    appSecret: string
     host?: string
     port?: number
     path?: string
-    verifyToken?: string
+    verifyToken: string
   }
   googlechat: {
     serviceAccount: string
@@ -48,6 +49,7 @@ type AdapterOptions = {
   mattermost: {
     url: string
     token: string
+    webhookToken: string
     host?: string
     port?: number
     path?: string
@@ -149,10 +151,11 @@ function build(id: ChannelName, create: AdapterFactory, values: Values) {
       return create.whatsapp({
         token: values.token!,
         numberId: values.numberId!,
+        appSecret: values.appSecret!,
         host: values.webhookHost,
         port: parsePort(values.webhookPort),
         path: values.webhookPath,
-        verifyToken: values.verifyToken,
+        verifyToken: values.verifyToken!,
       })
     case "googlechat":
       return create.googlechat({
@@ -187,6 +190,7 @@ function build(id: ChannelName, create: AdapterFactory, values: Values) {
       return create.mattermost({
         url: values.url!,
         token: values.token!,
+        webhookToken: values.webhookToken!,
         host: values.webhookHost,
         port: parsePort(values.webhookPort),
         path: values.webhookPath,

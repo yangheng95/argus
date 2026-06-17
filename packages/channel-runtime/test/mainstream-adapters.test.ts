@@ -67,6 +67,19 @@ function lineSignedRequest(body: unknown, secret: string) {
   })
 }
 
+function whatsappSignedRequest(body: unknown, appSecret: string, signature?: string) {
+  const raw = JSON.stringify(body)
+  return new Request("http://127.0.0.1:19999/whatsapp", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-hub-signature-256":
+        signature ?? `sha256=${createHmac("sha256", appSecret).update(raw).digest("hex")}`,
+    },
+    body: raw,
+  })
+}
+
 let oldFetch: typeof globalThis.fetch
 
 beforeEach(() => {
@@ -80,9 +93,11 @@ afterEach(() => {
 describe("mainstream adapters", () => {
   test("whatsapp handles webhook and outbound send", async () => {
     const s = stub()
+    const appSecret = "wa_app_secret"
     const adapter = new WhatsappAdapter({
       token: "wa_token",
       numberId: "wa_number",
+      appSecret,
       verifyToken: "check",
       serve: s.serve,
     })
@@ -117,13 +132,7 @@ describe("mainstream adapters", () => {
         },
       ],
     }
-    const ok = await s.route()(
-      new Request("http://127.0.0.1:19999/whatsapp", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(inbound),
-      }),
-    )
+    const ok = await s.route()(whatsappSignedRequest(inbound, appSecret))
     expect(ok.status).toBe(200)
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({
@@ -141,6 +150,63 @@ describe("mainstream adapters", () => {
     }) as typeof globalThis.fetch
     await adapter.sendMessage("15550001", "wamid.1", "done")
     expect(calls[0]).toContain("/wa_number/messages")
+  })
+
+  test("whatsapp requires verify token and valid webhook signature before dispatch", async () => {
+    const s = stub()
+    const appSecret = "wa_app_secret"
+    const adapter = new WhatsappAdapter({
+      token: "wa_token",
+      numberId: "wa_number",
+      appSecret,
+      verifyToken: "check",
+      serve: s.serve,
+    })
+    const seen: Array<any> = []
+    adapter.onMessage(async (msg) => {
+      seen.push(msg)
+    })
+    await adapter.start()
+
+    const wrongChallenge = await s.route()(
+      new Request("http://127.0.0.1:19999/whatsapp?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=abc"),
+    )
+    expect(wrongChallenge.status).toBe(401)
+
+    const inbound = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    id: "wamid.1",
+                    from: "15550001",
+                    type: "text",
+                    text: { body: "hello" },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+    const unsigned = await s.route()(
+      new Request("http://127.0.0.1:19999/whatsapp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(inbound),
+      }),
+    )
+    const wrongSignature = await s.route()(whatsappSignedRequest(inbound, appSecret, "sha256=deadbeef"))
+    const valid = await s.route()(whatsappSignedRequest(inbound, appSecret))
+
+    expect(unsigned.status).toBe(401)
+    expect(wrongSignature.status).toBe(401)
+    expect(valid.status).toBe(200)
+    expect(seen).toHaveLength(1)
   })
 
   test("googlechat maps inbound and sends outbound with service account", async () => {
@@ -514,6 +580,7 @@ describe("mainstream adapters", () => {
     const adapter = new MattermostAdapter({
       url: "https://mm.example.com",
       token: "mm_token",
+      webhookToken: "hook_token",
       serve: s.serve,
     })
     const seen: Array<any> = []
@@ -527,6 +594,7 @@ describe("mainstream adapters", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          token: "hook_token",
           channel_id: "ch-1",
           user_id: "u-1",
           post_id: "p-1",
@@ -550,6 +618,68 @@ describe("mainstream adapters", () => {
     }) as typeof globalThis.fetch
     await adapter.sendMessage("ch-1", "p-1", "done")
     expect(calls[0]).toContain("/api/v4/posts")
+  })
+
+  test("mattermost requires webhook token before dispatch", async () => {
+    const s = stub()
+    const adapter = new MattermostAdapter({
+      url: "https://mm.example.com",
+      token: "mm_token",
+      webhookToken: "hook_token",
+      serve: s.serve,
+    })
+    const seen: Array<any> = []
+    adapter.onMessage(async (msg) => {
+      seen.push(msg)
+    })
+    await adapter.start()
+
+    const payload = {
+      channel_id: "ch-1",
+      user_id: "u-1",
+      post_id: "p-1",
+      text: "hello",
+    }
+    const missing = await s.route()(
+      new Request("http://127.0.0.1:19999/mattermost", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    )
+    const wrong = await s.route()(
+      new Request("http://127.0.0.1:19999/mattermost", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...payload, token: "wrong" }),
+      }),
+    )
+    const form = new URLSearchParams({
+      token: "hook_token",
+      channel_id: "ch-1",
+      user_id: "u-1",
+      post_id: "p-2",
+      text: "from form",
+    })
+    const valid = await s.route()(
+      new Request("http://127.0.0.1:19999/mattermost", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: form,
+      }),
+    )
+
+    expect(missing.status).toBe(401)
+    expect(wrong.status).toBe(401)
+    expect(valid.status).toBe(200)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toMatchObject({
+      platform: "mattermost",
+      channel: "ch-1",
+      thread: "p-2",
+      user: "u-1",
+      text: "from form",
+    })
   })
 
   test("signal sends outbound message", async () => {
