@@ -410,6 +410,14 @@ export function markCardTreeVisibleChanged(): void {
   setCardTreeStore("visibleVersion", (version) => version + 1)
 }
 
+export function setHydratedRewindCursor(cursorTime: number | null): void {
+  if (cursorTime !== null && (!Number.isFinite(cursorTime) || cursorTime <= 0)) {
+    throw new Error(`setHydratedRewindCursor: cursorTime must be positive or null, got ${JSON.stringify(cursorTime)}`)
+  }
+  setCardTreeStore("rewindCursor", cursorTime)
+  markCardTreeVisibleChanged()
+}
+
 /**
  * Prune all top-level cards (and their orphaned children) whose `time` is
  * strictly greater than `cursorTime`. Called when the backend emits
@@ -449,14 +457,5 @@ export function pruneCardsAfterCursor(cursorTime: number) {
       }
     }),
   )
-  markCardTreeVisibleChanged()
-}
-
-/** Clear the rewind cursor without re-fetching — used when the backend
- *  emits `task.rewound` with cursorTime=0 (undo-the-undo). The pruned
- *  cards are gone from memory; the caller may choose to reload timeline
- *  from the server if full restoration is desired. */
-export function clearPruneCursor() {
-  setCardTreeStore("rewindCursor", null)
   markCardTreeVisibleChanged()
 }

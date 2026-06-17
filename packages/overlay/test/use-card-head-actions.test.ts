@@ -1,4 +1,6 @@
 import { afterEach, expect, mock, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { createRoot } from "solid-js"
 
 import type { CardNode } from "../src/store/card-tree"
@@ -9,17 +11,17 @@ let dialogResult: { confirmed: boolean; value: string | null } = {
 }
 const dialogCalls: any[] = []
 
-const realAppDialog = await import("../src/services/app-dialog")
-
 mock.module("../src/services/app-dialog", () => ({
-  ...realAppDialog,
   showAppDialog: async (options: any) => {
     dialogCalls.push(options)
     return dialogResult
   },
 }))
 
+const { setLocaleData } = await import("../src/utils/i18n")
 const { useCardHeadActions } = await import("../src/hooks/use-card-head-actions")
+
+setLocaleData("en-US", JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")))
 
 function node(partial: Partial<CardNode> = {}): CardNode {
   return {
@@ -154,4 +156,14 @@ test("cancel uses the injected sessionID and clears pending state after 800ms", 
       })()
     })
   })
+})
+
+test("rewind submitters do not optimistically prune the visible tree", () => {
+  const card = readFileSync(join(import.meta.dir, "../src/components/Card.tsx"), "utf8")
+  const bubble = readFileSync(join(import.meta.dir, "../src/components/ChatBubble.tsx"), "utf8")
+  const cardTree = readFileSync(join(import.meta.dir, "../src/store/card-tree.ts"), "utf8")
+
+  expect(card).not.toContain("pruneCardsAfterCursor")
+  expect(bubble).not.toContain("pruneCardsAfterCursor")
+  expect(cardTree).not.toContain("clearPruneCursor")
 })

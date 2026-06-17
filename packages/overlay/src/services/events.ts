@@ -109,6 +109,17 @@ function scheduleSelectedTaskRecovery(reason: string, taskID = activeTaskID()): 
     })
 }
 
+function scheduleRewindClearRecovery(reason: string, taskID = activeTaskID()): void {
+  const selectedTaskID = String(taskID || "")
+  if (!selectedTaskID) return
+  void import("./selected-task-recovery")
+    .then(({ recoverSelectedTaskAfterRewindClear }) => recoverSelectedTaskAfterRewindClear(reason, selectedTaskID))
+    .catch((error) => {
+      if (error instanceof DOMException && error.name === "AbortError") return
+      console.error("[sse] rewind clear recovery failed", reason, selectedTaskID, error)
+    })
+}
+
 /** Parse tool input from various executor formats. */
 function parseToolInput(raw: any): Record<string, any> {
   if (record(raw)) return raw
@@ -494,6 +505,17 @@ const CONFIG_EVENT_DEBOUNCE = 50
 let tasksKickTimer: ReturnType<typeof setTimeout> | null = null
 let configKickTimer: ReturnType<typeof setTimeout> | null = null
 
+export function __resetEventTimersForTest(): void {
+  if (tasksKickTimer) {
+    clearTimeout(tasksKickTimer)
+    tasksKickTimer = null
+  }
+  if (configKickTimer) {
+    clearTimeout(configKickTimer)
+    configKickTimer = null
+  }
+}
+
 function scheduleConfigReload(): void {
   if (configKickTimer) clearTimeout(configKickTimer)
   configKickTimer = setTimeout(() => {
@@ -596,19 +618,15 @@ export function routeSSEEvent(event: any): boolean {
     // Only prune when the event concerns the currently-selected task —
     // other tasks' card trees are not loaded in this overlay instance.
     if (evtTaskID === activeTaskID() && cursorTime > 0) {
-      // Idempotent — pruneCardsAfterCursor is a no-op if the cards are
-      // already gone (e.g. the local initiator already pruned optimistically).
+      // Idempotent — duplicate task.rewound events keep the same cursor.
       void (async () => {
-        const { pruneCardsAfterCursor, clearPruneCursor } = await import("../store/card-tree")
+        const { pruneCardsAfterCursor } = await import("../store/card-tree")
         pruneCardsAfterCursor(cursorTime)
         if (resetWorktree) setSnapshotVersion(`${evtTaskID}:${cursorTime}:${Date.now()}`)
-        // cursorTime === 0 means "undo the undo"; reload to bring events back.
-        void clearPruneCursor
       })()
       advanceHandledSelectedTaskSequence(event)
     } else if (evtTaskID === activeTaskID() && cursorTime === 0) {
-      // Rewind cleared by backend — full reload to restore the suppressed tail.
-      scheduleSelectedTaskRecovery("task rewind cleared", evtTaskID)
+      scheduleRewindClearRecovery("task rewind cleared", evtTaskID)
     }
     advanceHandledSelectedTaskSequence(event)
     markHandledSelectedLiveEvent(event)

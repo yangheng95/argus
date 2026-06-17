@@ -344,6 +344,7 @@ export function resetWriter(
       for (const k of Object.keys(c)) delete c[k]
     }),
   )
+  setCardTreeStore("rewindCursor", null)
   markCardTreeReplaced({
     scrollIntent: options.scrollIntent ?? "preserve",
     cause: options.cause ?? "writer-reset",

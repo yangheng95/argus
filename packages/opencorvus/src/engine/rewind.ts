@@ -2,26 +2,24 @@
  * Task timeline rewind — the single entry point for "回到这一步".
  *
  * Rewind is a task projection cursor. `resetWorktree=false` only filters
- * UI-facing task history. `resetWorktree=true` additionally replays the
- * PatchPart snapshots after the anchor so the worktree returns to the
- * anchored point. No session-scoped rewind implementation may exist beside it.
+ * UI-facing task history. `resetWorktree=true` additionally resets/removes
+ * affected goal worktrees through Worktree.reset/remove, using the
+ * goal_run_attempt artifact payload as the single workspace source. Task
+ * rewind must stay out of the session snapshot subsystem.
  */
 import z from "zod"
 import { Identifier } from "@/id/id"
-import { Snapshot } from "@/snapshot"
-import { Message } from "@/session/message"
-import { Session } from "@/session"
-import { MessageTable, PartTable } from "@/session/session.sql"
-import { SessionSummary } from "@/session/summary"
-import { Bus } from "@/bus"
-import { Database, and, asc, eq, gt, gte, inArray } from "@/storage/db"
+import { MessageTable } from "@/session/session.sql"
+import { Database, and, eq, gt } from "@/storage/db"
 import { Log } from "@/util/log"
 import { interruptTaskLoop, awaitTaskLoopIdle } from "@/orchestrator/loop"
 import { taskIDForSession } from "@/orchestrator/task-event"
-import { EngineTaskTable } from "./engine.sql"
+import { Worktree } from "@/worktree"
+import { EngineGoalTable, EngineTaskTable, type EngineGoalRunStatus } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
-import { findTask, sessionIDsForTask } from "./store"
+import { updateGoalRun } from "./persist"
+import { findTask, listGoalRunsForTask, type GoalRunRow } from "./store"
 
 const log = Log.create({ service: "engine-rewind" })
 const WORKTREE_RESET_IDLE_TIMEOUT_MS = 10_000
@@ -54,38 +52,6 @@ export interface RewindTaskResult {
   anchorKind: RewindTaskInput["anchor"]["kind"]
 }
 
-type PatchPartRow = {
-  id: string
-  sessionID: string
-  messageID: string
-  timeCreated: number
-  patch: Snapshot.Patch
-}
-
-function patchFromPartRow(row: typeof PartTable.$inferSelect): PatchPartRow | undefined {
-  const parsed = Message.PatchPart.omit({ id: true, sessionID: true, messageID: true }).safeParse(row.data)
-  if (!parsed.success) return undefined
-  const data = parsed.data
-  return {
-    id: row.id,
-    sessionID: row.session_id,
-    messageID: row.message_id,
-    timeCreated: row.time_created,
-    patch: {
-      hash: data.hash,
-      files: data.files,
-    },
-  }
-}
-
-function normalizePatchRows(rows: Array<typeof PartTable.$inferSelect>): PatchPartRow[] {
-  return rows.map(patchFromPartRow).filter((row): row is PatchPartRow => !!row)
-}
-
-function patchList(rows: PatchPartRow[]): Snapshot.Patch[] {
-  return rows.map((row) => row.patch)
-}
-
 function requireMessageAnchor(input: Extract<RewindTaskInput["anchor"], { kind: "message" }>) {
   const row = Database.use((db) =>
     db
@@ -105,79 +71,97 @@ function ensureAnchorBelongsToTask(taskID: string, sessionID: string) {
   }
 }
 
-async function collectPatchesAfterCursor(taskID: string, cursorTime: number): Promise<PatchPartRow[]> {
-  const sessionIDs = sessionIDsForTask(taskID)
-  if (sessionIDs.length === 0) return []
-  const rows = Database.use((db) =>
-    db
-      .select()
-      .from(PartTable)
-      .where(and(inArray(PartTable.session_id, sessionIDs), gt(PartTable.time_created, cursorTime)))
-      .orderBy(asc(PartTable.time_created), asc(PartTable.id))
-      .all(),
-  )
-  return normalizePatchRows(rows)
+const TERMINAL_GOAL_RUN_STATUSES = new Set<EngineGoalRunStatus>(["completed", "failed", "aborted"])
+
+type RewindWorkspaceAction = {
+  goalID: string
+  goalRunID: string
+  workspaceDir: string | null
+  workspaceBaseRef: string | null
+  remove: boolean
+  status: EngineGoalRunStatus
 }
 
-async function collectPatchesFromMessageAnchor(
-  input: Extract<RewindTaskInput["anchor"], { kind: "message" }>,
-  messageTime: number,
-): Promise<PatchPartRow[]> {
-  if (!input.partID) {
-    const rows = Database.use((db) =>
-      db
-        .select()
-        .from(PartTable)
-        .where(and(eq(PartTable.session_id, input.sessionID), gt(PartTable.time_created, messageTime)))
-        .orderBy(asc(PartTable.time_created), asc(PartTable.id))
-        .all(),
-    )
-    return normalizePatchRows(rows)
-  }
-
-  const anchorPart = Database.use((db) =>
-    db
-      .select()
-      .from(PartTable)
-      .where(and(eq(PartTable.id, input.partID!), eq(PartTable.session_id, input.sessionID)))
-      .get(),
-  )
-  if (!anchorPart) throw new Error(`rewindTask: part ${input.partID} not found in session ${input.sessionID}`)
-
-  const rows = Database.use((db) =>
-    db
-      .select()
-      .from(PartTable)
-      .where(and(eq(PartTable.session_id, input.sessionID), gte(PartTable.time_created, anchorPart.time_created)))
-      .orderBy(asc(PartTable.time_created), asc(PartTable.id))
-      .all(),
-  ).filter((row) => row.time_created > anchorPart.time_created || row.id >= anchorPart.id)
-  return normalizePatchRows(rows)
+function runTimeForRewind(row: GoalRunRow): number {
+  const started = Number(row.time_started)
+  return Number.isFinite(started) && started > 0 ? started : row.time_created
 }
 
-async function publishDiffsBySession(rows: PatchPartRow[]) {
-  const sessionIDs = [...new Set(rows.map((row) => row.sessionID))]
-  for (const sessionID of sessionIDs) {
-    const messageIDs = new Set(rows.filter((row) => row.sessionID === sessionID).map((row) => row.messageID))
-    const all = await Session.messages({ sessionID })
-    const messages = all.filter((msg) => messageIDs.has(msg.info.id))
-    const diff = await SessionSummary.computeDiff({ messages })
-    await SessionSummary.writeDiff(sessionID, diff)
-    Bus.publish(Session.Event.Diff, { sessionID, diff })
+function goalsCreatedAfterCursor(taskID: string, cursorTime: number): Set<string> {
+  const rows = Database.use((db) =>
+    db
+      .select({ id: EngineGoalTable.id })
+      .from(EngineGoalTable)
+      .where(and(eq(EngineGoalTable.task_id, taskID), gt(EngineGoalTable.time_created, cursorTime)))
+      .all(),
+  )
+  return new Set(rows.map((row) => row.id))
+}
+
+function latestRunByGoal(rows: GoalRunRow[]): Map<string, GoalRunRow> {
+  const out = new Map<string, GoalRunRow>()
+  for (const row of rows) {
+    const prev = out.get(row.goal_id)
+    if (
+      !prev ||
+      row.time_updated > prev.time_updated ||
+      (row.time_updated === prev.time_updated && row.time_created > prev.time_created)
+    ) {
+      out.set(row.goal_id, row)
+    }
   }
+  return out
+}
+
+function collectWorkspaceActions(taskID: string, cursorTime: number): RewindWorkspaceAction[] {
+  const runs = listGoalRunsForTask(taskID)
+  const goalsAfterCursor = goalsCreatedAfterCursor(taskID, cursorTime)
+  const affectedGoalIDs = new Set<string>(goalsAfterCursor)
+  for (const run of runs) {
+    if (runTimeForRewind(run) > cursorTime) affectedGoalIDs.add(run.goal_id)
+  }
+  const latest = latestRunByGoal(runs)
+  return [...affectedGoalIDs].flatMap((goalID) => {
+    const run = latest.get(goalID)
+    if (!run) return []
+    return [
+      {
+        goalID,
+        goalRunID: run.id,
+        workspaceDir: run.workspace_dir,
+        workspaceBaseRef: run.workspace_base_ref,
+        remove: goalsAfterCursor.has(goalID),
+        status: run.status,
+      },
+    ]
+  })
 }
 
 async function applyWorktreeReset(input: RewindTaskInput, cursorTime: number): Promise<void> {
   interruptTaskLoop(input.taskID, "task rewind worktree reset")
   await awaitTaskLoopIdle(input.taskID, WORKTREE_RESET_IDLE_TIMEOUT_MS)
 
-  const rows =
-    input.anchor.kind === "cursorTime"
-      ? await collectPatchesAfterCursor(input.taskID, cursorTime)
-      : await collectPatchesFromMessageAnchor(input.anchor, cursorTime)
-
-  await Snapshot.revert(patchList(rows))
-  await publishDiffsBySession(rows)
+  const actions = collectWorkspaceActions(input.taskID, cursorTime)
+  for (const action of actions) {
+    if (!action.workspaceDir) continue
+    if (action.remove) {
+      await Worktree.remove({ directory: action.workspaceDir })
+      updateGoalRun(action.goalRunID, {
+        workspace_dir: null,
+        workspace_branch: null,
+        workspace_base_ref: null,
+        ...(!TERMINAL_GOAL_RUN_STATUSES.has(action.status) ? { status: "aborted" as const } : {}),
+      })
+      continue
+    }
+    if (!action.workspaceBaseRef) {
+      throw new Error(`rewindTask: goal ${action.goalID} workspace is missing workspace_base_ref`)
+    }
+    await Worktree.reset({ directory: action.workspaceDir, baseRef: action.workspaceBaseRef })
+    if (!TERMINAL_GOAL_RUN_STATUSES.has(action.status)) {
+      updateGoalRun(action.goalRunID, { status: "aborted" })
+    }
+  }
 }
 
 export async function rewindTask(raw: RewindTaskInput): Promise<RewindTaskResult> {

@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import type { CardNode } from "../store/card-tree"
-import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree"
+import { cardTreeStore } from "../store/card-tree"
 import {
   buildPhaseChildForStep,
   collectActivityCounts,
@@ -151,21 +151,13 @@ export function Card(props: { node: CardNode; depth: number }) {
   }
 
   /**
-   * Rewind handler — issues POST /task/:id/rewind and immediately prunes
-   * the local card tree so the UI reflects the rollback without waiting
-   * for the server's task.rewound SSE event to arrive. The backend also
-   * emits that event so any other subscribers (sidebars, peers) stay in
-   * sync. No full-refresh — we walk the store incrementally.
+   * Rewind handler — submits POST /task/:id/rewind. The visible tree changes
+   * only after the backend emits task.rewound, keeping HTTP failure from
+   * creating local-only rewind state.
    */
   const onRewind = async (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => {
     const taskID = activeTaskID()
     if (!taskID) return
-    // Optimistic local prune — user feels instant feedback. If the HTTP
-    // call fails the cards are gone until selected-task recovery reloads, which is
-    // acceptable (worst case: user reloads). We avoid a full-refresh
-    // because that was the source of the "user message → overlay 卡顿"
-    // symptom the operator flagged.
-    pruneCardsAfterCursor(cursorTime)
     // Pre-M3 this called fetch() with a relative URL (`/task/...`) which
     // worked under "/ui" but not under any other origin (e.g. Tauri).
     // Routing through apiRequest() also gives us the VS Code webview

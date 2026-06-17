@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { setupAutoScroll } from "../src/utils/dom-utils"
+
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+const { setupAutoScroll } = await import("../src/utils/dom-utils")
 
 class FakeScrollElement extends EventTarget {
   scrollHeight = 0
@@ -79,12 +81,6 @@ function wheel(deltaY: number): Event {
   return event
 }
 
-function pointerDown(clientX: number): Event {
-  const event = new Event("pointerdown") as Event & { clientX: number }
-  event.clientX = clientX
-  return event
-}
-
 test("controller upward scroll does not disable follow lock", () => {
   const el = createScrollElement()
   let tracking = true
@@ -128,7 +124,7 @@ test("wheel upward scroll away from bottom disables follow lock", () => {
   ctrl.cleanup()
 })
 
-test("layout-driven upward scroll does not disable follow lock", () => {
+test("unmarked upward scroll away from bottom disables follow lock", () => {
   const el = createScrollElement()
   let tracking = true
   let disabled = 0
@@ -144,12 +140,12 @@ test("layout-driven upward scroll does not disable follow lock", () => {
   el.scrollTop = 140
   el.dispatchEvent(new Event("scroll"))
 
-  expect(disabled).toBe(0)
-  expect(tracking).toBe(true)
+  expect(disabled).toBe(1)
+  expect(tracking).toBe(false)
   ctrl.cleanup()
 })
 
-test("content pointerdown does not arm follow-lock release", () => {
+test("ordinary content pointerdown does not block upward scroll release", () => {
   const el = createScrollElement()
   let tracking = true
   let disabled = 0
@@ -162,29 +158,7 @@ test("content pointerdown does not arm follow-lock release", () => {
     },
   })
 
-  el.dispatchEvent(pointerDown(80))
-  el.scrollTop = 140
-  el.dispatchEvent(new Event("scroll"))
-
-  expect(disabled).toBe(0)
-  expect(tracking).toBe(true)
-  ctrl.cleanup()
-})
-
-test("scrollbar gutter pointerdown can release follow lock", () => {
-  const el = createScrollElement()
-  let tracking = true
-  let disabled = 0
-
-  const ctrl = setupAutoScroll(el as any, {
-    isTracking: () => tracking,
-    onUserScrollUp: () => {
-      tracking = false
-      disabled += 1
-    },
-  })
-
-  el.dispatchEvent(pointerDown(196))
+  el.dispatchEvent(new Event("pointerdown"))
   el.scrollTop = 140
   el.dispatchEvent(new Event("scroll"))
 

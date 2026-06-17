@@ -606,6 +606,7 @@ export namespace Worktree {
   export const ResetInput = z
     .object({
       directory: z.string(),
+      baseRef: z.string().optional(),
     })
     .meta({
       ref: "WorktreeResetInput",
@@ -1963,7 +1964,7 @@ export namespace Worktree {
         throw new ResetFailedError({ message: "Worktree not found" })
       }
 
-      const target = primaryInfo.branch
+      const target = input.baseRef ?? primaryInfo.branch
 
       const worktreePath = entry.path
       const resetToTarget = await runGit(["reset", "--hard", target], {
