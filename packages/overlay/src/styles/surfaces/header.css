@@ -43,44 +43,6 @@
   gap: var(--oc-header-gap);
 }
 
-/* The Inspector header is `[title] [actions]` only — the in-between tabs
- * row was retired with the old preview header layout, so
- * the actions block no longer needs to fill the row or space-between two
- * siblings. The parent `.sections-header` already uses
- * `justify-content: space-between`, which keeps the title left-aligned and
- * the collapse-control right-aligned with the actions group sized to its
- * intrinsic width. */
-.sections-header-actions.oc-surface-header__actions {
-  flex: 0 0 auto;
-  justify-content: flex-end;
-}
-
-.panel-header-collapse-mount {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-
-.panel-header-collapse-mount .oc-button[data-size="icon"] {
-  --oc-button-height: calc(24px * var(--ui-scale));
-  --oc-button-padding-x: 0;
-  --oc-button-border: var(--oc-border-width) solid transparent;
-  --oc-button-bg: transparent;
-  --oc-button-color: var(--text-soft);
-
-  width: calc(24px * var(--ui-scale));
-  height: calc(24px * var(--ui-scale));
-  box-shadow: none;
-}
-
-.panel-header-collapse-mount .oc-button[data-size="icon"]:hover,
-.panel-header-collapse-mount .oc-button[data-size="icon"]:focus-visible {
-  --oc-button-border: var(--oc-border-width) solid var(--oc-control-border-hover);
-  --oc-button-bg: var(--oc-control-bg-hover);
-  --oc-button-color: var(--text-strong);
-}
-
 .oc-surface-header__title {
   min-width: var(--oc-radius-none);
   overflow: hidden;

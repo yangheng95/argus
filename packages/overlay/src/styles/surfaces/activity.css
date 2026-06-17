@@ -70,14 +70,6 @@
   color: var(--text-muted);
 }
 
-.side-activity-toolbar .panel-header-collapse-mount .oc-button {
-  width: calc(38px * var(--ui-scale));
-  height: calc(36px * var(--ui-scale));
-  min-width: calc(38px * var(--ui-scale));
-  min-height: calc(36px * var(--ui-scale));
-  border-radius: 0;
-}
-
 .side-activity-toolbar [data-ui="side-activity-button"][data-active="true"] {
   color: var(--text-strong);
   background: color-mix(in srgb, var(--accent) 13%, transparent);

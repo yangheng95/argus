@@ -93,6 +93,13 @@ test("surface header main and action slots own flex layout primitives", () => {
   expect(exactBlockBody(ALL_SURFACE_CSS, ".sidebar-header-actions")).not.toMatch(primitiveLayout)
 })
 
+test("retired panel collapse header mounts stay out of active CSS", () => {
+  const headerCss = readFileSync(HEADER_CSS, "utf8")
+
+  expect(ALL_SURFACE_CSS).not.toContain("panel-header-collapse-mount")
+  expect(headerCss).not.toContain("sections-header-actions")
+})
+
 test("surface header titles own title typography outside theme resets", () => {
   const titleBlocks = blocksForSelectors(ALL_SURFACE_CSS, ["sidebar-title", "chat-title", "sections-title"])
   const typography = /\b(?:font(?:-size|-weight)?|line-height|color|letter-spacing|text-transform)\s*:/

@@ -1037,10 +1037,6 @@
   flex: 0 0 var(--ui-collapsed-pane-width);
 }
 
-.sidebar[data-collapsed="true"] .panel-header-collapse-mount {
-  width: auto;
-}
-
 /* ─────────────────────────────────────────────────────────────
    Header equal-height button row. Chat header controls use the same
    22px cap while left ledgers share one new-action button contract.
