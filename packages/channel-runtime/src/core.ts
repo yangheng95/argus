@@ -1,6 +1,6 @@
 import path from "node:path"
 import { createOpenCorvus, createOpenCorvusClient, type Event, type OpenCorvusClient } from "@opencorvus-ai/sdk"
-import { mkdir } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import type { ChannelAdapter, IncomingMessage } from "./adapter"
 import type { STTPipeline } from "./stt/pipeline"
 import type { VisionPipeline } from "./vision"
@@ -202,6 +202,16 @@ export class ChannelRuntime {
   private async _doStart(): Promise<void> {
     this.running = true
     this.directory = this.requireDirectory()
+
+    // Validate existing shared-session state before starting server, event subscriptions, or adapters.
+    if (this.sharedMode() && !this.sharedSessionId) {
+      const fromFile = await this.readSharedSessionFile()
+      if (fromFile) {
+        this.sharedSessionId = fromFile
+        console.log(`[ChannelRuntime] Pre-loaded shared session: ${fromFile}`)
+      }
+    }
+
     const baseUrl = this.options?.baseUrl?.trim()
     if (baseUrl) {
       this.client = createOpenCorvusClient({ baseUrl, directory: this.directory })
@@ -233,16 +243,6 @@ export class ChannelRuntime {
       })
     if (this.adapters.length === 0) {
       console.warn("[ChannelRuntime] No chat adapter started successfully.")
-    }
-
-    // Pre-load shared session ID so overlay-originated events can be mirrored to Slack
-    // even before the first Slack message arrives (which would otherwise populate sharedSessionId).
-    if (this.sharedMode() && !this.sharedSessionId) {
-      const fromFile = await this.readSharedSessionFile()
-      if (fromFile) {
-        this.sharedSessionId = fromFile
-        console.log(`[ChannelRuntime] Pre-loaded shared session: ${fromFile}`)
-      }
     }
 
     // Overlay is managed by OpenCorvus's overlay-client.ts (spawned on first tool use)
@@ -728,36 +728,66 @@ export class ChannelRuntime {
 
   private async readSharedSessionFile() {
     const file = this.sharedFile()
-    // File may not exist or contain invalid JSON on first startup
-    const raw = (await Bun.file(file)
-      .json()
-      .catch(() => undefined)) as { session_id?: unknown } | undefined
-    if (!raw) return undefined
-    if (typeof raw.session_id !== "string") return undefined
-    const id = raw.session_id.trim()
-    if (!id) return undefined
+    const text = await readFile(file, "utf8").catch((error: unknown) => {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined
+      throw new Error(`Failed to read shared session file ${file}: ${String(error)}`)
+    })
+    if (text === undefined) return undefined
+
+    let raw: unknown
+    try {
+      raw = JSON.parse(text)
+    } catch (error) {
+      throw new Error(`Invalid shared session file JSON ${file}: ${String(error)}`)
+    }
+    const sessionId =
+      raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as { session_id?: unknown }).session_id : undefined
+    if (typeof sessionId !== "string") {
+      throw new Error(`Invalid shared session file shape ${file}: expected non-empty session_id`)
+    }
+    const id = sessionId.trim()
+    if (!id) {
+      throw new Error(`Invalid shared session file shape ${file}: expected non-empty session_id`)
+    }
     return id
   }
 
-  private async writeSharedSessionFile(sessionId: string) {
+  private async prepareSharedSessionFile() {
     const file = this.sharedFile()
-    const dir = path.dirname(file)
-    await mkdir(dir, { recursive: true })
+    await mkdir(path.dirname(file), { recursive: true })
+    return file
+  }
+
+  private async writeSharedSessionFile(file: string, sessionId: string) {
     const payload = {
       session_id: sessionId,
       updated_at: Date.now(),
     }
-    await Bun.write(file, JSON.stringify(payload, null, 2) + "\n")
+    await writeFile(file, JSON.stringify(payload, null, 2) + "\n")
   }
 
   private async ensureSharedSession(msg: IncomingMessage) {
     if (!this.sharedMode()) return undefined
     if (this.sharedSessionId) return this.sharedSessionId
 
-    const fromFile = await this.readSharedSessionFile()
+    let fromFile: string | undefined
+    try {
+      fromFile = await this.readSharedSessionFile()
+    } catch (error) {
+      console.error("[ChannelRuntime] shared session file read failed:", error)
+      return undefined
+    }
     if (fromFile) {
       this.sharedSessionId = fromFile
       return fromFile
+    }
+
+    let sharedFile: string
+    try {
+      sharedFile = await this.prepareSharedSessionFile()
+    } catch (error) {
+      console.error("[ChannelRuntime] shared session file prepare failed:", error)
+      return undefined
     }
 
     const createResult = await this.client.session.create({
@@ -769,10 +799,13 @@ export class ChannelRuntime {
       return undefined
     }
 
+    try {
+      await this.writeSharedSessionFile(sharedFile, createResult.data.id)
+    } catch (error) {
+      console.error("[ChannelRuntime] shared session file write failed:", error)
+      return undefined
+    }
     this.sharedSessionId = createResult.data.id
-    await this.writeSharedSessionFile(createResult.data.id).catch((err) => {
-      console.warn("[ChannelRuntime] shared session file write failed:", err)
-    })
     console.log(`[ChannelRuntime] Created shared session ${createResult.data.id}`)
     return createResult.data.id
   }
