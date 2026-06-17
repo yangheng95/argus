@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fs from "fs"
 import os from "os"
 import path from "path"
+import { readSidecarHandshake } from "./sidecar-test-utils"
 
 /**
  * Integration smoke for `opencorvus sidecar`:
@@ -48,23 +49,12 @@ describe("opencorvus sidecar (managed mode)", () => {
     )
 
     try {
-      const reader = proc.stdout.getReader()
-      const decoder = new TextDecoder()
-      let buf = ""
-      const deadline = Date.now() + 30_000
-      while (Date.now() < deadline) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value)
-        const m = buf.match(/^OPENCORVUS_LISTEN=127\.0\.0\.1:(\d+)$/m)
-        if (m) {
-          port = Number(m[1])
-          break
-        }
-      }
-      try {
-        reader.releaseLock()
-      } catch {}
+      port = (
+        await readSidecarHandshake(proc.stdout, {
+          idleTimeoutMs: 30_000,
+          label: "sidecar smoke stdout handshake",
+        })
+      ).port
 
       expect(port).toBeDefined()
       expect(port).toBeGreaterThan(0)

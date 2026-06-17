@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fs from "fs"
 import os from "os"
 import path from "path"
+import { readSidecarHandshake } from "./sidecar-test-utils"
 
 /**
  * audit-2026-04-29 W2-G5. Locks the F2 fix end-to-end: two managed
@@ -63,29 +64,12 @@ describe("opencorvus sidecar contention (audit W2-G5 / F2)", () => {
       // then is the lock guaranteed-acquired and a second start
       // exercises the contention path. Without the wait, the
       // ordering is racy.
-      const reader = first.stdout.getReader()
-      const decoder = new TextDecoder()
-      let buf = ""
-      const deadline = Date.now() + 30_000
-      while (Date.now() < deadline) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value)
-        const m = buf.match(/^OPENCORVUS_LISTEN=127\.0\.0\.1:(\d+)$/m)
-        if (m) {
-          firstPort = Number(m[1])
-          break
-        }
-      }
-      try {
-        reader.releaseLock()
-      } catch {}
-      if (firstPort === undefined) {
-        const stderrText = await new Response(first.stderr).text().catch(() => "")
-        throw new Error(
-          `first sidecar never printed handshake within 30s. stderr=${stderrText.slice(0, 2000)} stdout-buf=${buf.slice(0, 500)}`,
-        )
-      }
+      firstPort = (
+        await readSidecarHandshake(first.stdout, {
+          idleTimeoutMs: 30_000,
+          label: "sidecar contention first stdout handshake",
+        })
+      ).port
       expect(firstPort).toBeDefined()
 
       // Second sidecar — must lose the contention.

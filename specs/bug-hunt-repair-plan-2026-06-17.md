@@ -2338,3 +2338,49 @@ LINE:
 - Parfit confirmed BH-036 was still present before the fix: the startup timeout callback only rejected, while `close()` was unreachable because the server handle is returned only after successful URL discovery.
 - Parfit agreed the root fix belongs in `createOpenCorvusServer(...)`'s startup lifecycle owner and does not require fallback binaries, gates, command parsing rewrites, or a supervisor.
 - Parfit recommended adding explicit timeout-path process-kill coverage. The final regression uses a real long-running fake server process and asserts the PID exits after timeout.
+
+## Batch P1-AI: BH-037 sidecar handshake tests must timeout on stdout inactivity
+
+### Findings
+
+- BH-037 targets `packages/opencorvus/test/cli/sidecar-smoke.test.ts`, where the handshake loop computes `deadline = Date.now() + 30_000` but then awaits `reader.read()` directly.
+- If the sidecar child keeps stdout open and silent, the pending `reader.read()` never resolves, so the loop never reaches the `Date.now() < deadline` check again.
+- The same raw handshake loop shape exists in `packages/opencorvus/test/cli/sidecar-chaos.test.ts` and `packages/opencorvus/test/cli/sidecar-contention.test.ts`.
+- This is a test-harness timeout bug, not a sidecar production behavior bug: the sidecar command already has a real stdout handshake contract, and the harness must fail with diagnostics when that contract stays silent.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/cli/cmd/sidecar.ts` writes the canonical handshake line `OPENCORVUS_LISTEN=127.0.0.1:<port>` after the server starts and the lock is acquired.
+- `packages/opencorvus/test/cli/sidecar-smoke.test.ts` reads that handshake before health, shutdown, and lock cleanup assertions.
+- `packages/opencorvus/test/cli/sidecar-chaos.test.ts::spawnSidecar(...)` optionally waits for the same handshake before lock-contention and parent-watchdog checks.
+- `packages/opencorvus/test/cli/sidecar-contention.test.ts` waits for the first sidecar's handshake before launching the contending sidecar.
+- `packages/opencorvus/test/cli/sidecar-chaos.test.ts` also drains stderr for diagnostics, but that drain is intentionally process-lifetime and does not define the stdout handshake timeout.
+
+### Fix Shape
+
+- Add one test-local `readSidecarHandshake(...)` helper under `packages/opencorvus/test/cli`.
+- The helper must parse the canonical handshake line from stdout and return `{ port, stdout }`.
+- The helper must wrap each `reader.read()` in an inactivity timeout. Any stdout chunk resets the timeout; a silent open stream rejects with a diagnostic that includes the configured label and stdout tail.
+- Replace the raw Date-deadline handshake loops in smoke, chaos, and contention tests with the helper.
+- Do not add production sidecar gates, alternate handshake formats, or fallback parsing.
+
+### Regression Tests
+
+- Add a silent open `ReadableStream<Uint8Array>` fixture and assert `readSidecarHandshake(...)` rejects after stdout inactivity with diagnostics.
+- Add a delayed-chunk fixture that emits non-handshake progress before the inactivity window and later emits the real handshake, proving the timeout is activity-based rather than a total wall-clock deadline.
+- Add a source guard that fails if sidecar CLI tests reintroduce a raw `while (Date.now() < deadline) { await reader.read() }` handshake loop.
+
+### Verification
+
+- New source guard failed before replacing the existing loops because `sidecar-smoke.test.ts`, `sidecar-chaos.test.ts`, and `sidecar-contention.test.ts` did not import or call `readSidecarHandshake(...)` and still contained the raw deadline-reader shape.
+- Implemented on 2026-06-18: added `packages/opencorvus/test/cli/sidecar-test-utils.ts::readSidecarHandshake(...)` and replaced the three sidecar handshake loops with that helper.
+- New harness regression passed: `bun test packages/opencorvus/test/cli/sidecar-handshake-timeout.test.ts --timeout 30000`.
+- Affected sidecar integration tests passed: `bun test packages/opencorvus/test/cli/sidecar-smoke.test.ts packages/opencorvus/test/cli/sidecar-chaos.test.ts packages/opencorvus/test/cli/sidecar-contention.test.ts --timeout 120000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Lorentz independently confirmed the original `sidecar-smoke.test.ts` loop could park forever on a silent open stdout stream because the Date deadline was checked only before awaiting `reader.read()`.
+- Lorentz confirmed this is a test-harness bug, not a production sidecar change: `sidecar.ts` emits the canonical handshake, and the VS Code production startup manager already has a stdout inactivity watchdog.
+- Lorentz also found the same raw handshake pattern in `sidecar-chaos.test.ts` and `sidecar-contention.test.ts`, matching the final shared-helper fix.
