@@ -619,7 +619,7 @@ async function reopenCancelledTaskFromOperatorMessage(task: TaskRow): Promise<Ta
 }
 
 async function reopenCompletedTaskFromOperatorMessage(task: TaskRow): Promise<TaskRow> {
-  return updateTask(task, { status: "active", error: null }, "Operator message reopened completed task")
+  return updateTask(task, { status: "queued", error: null }, "Operator message reopened completed task")
 }
 
 function terminalTaskNotificationText(input: {
