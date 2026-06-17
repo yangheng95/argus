@@ -498,7 +498,7 @@ export class ChannelRuntime {
       "Use `screen.bind_window` when app-level precision is needed (window-relative coordinates).",
       "- Prefer `screen.list_windows` + `window_id` for deterministic window selection.",
       "- Strategy: window first. Only when target window is not found should you use `screen.list_monitors` + `screen.bind_monitor`.",
-      "- `screen.bind_window` also supports title/app substring fallback (case-insensitive).",
+      "- Use title/app selectors only when the user names an exact window and no `window_id` has been listed yet.",
       "- Use `screen.list_windows` when multiple windows are possible, or bind_window fails.",
       "- After binding, take a `screenshot` to confirm you see the correct window.",
       "",
@@ -511,7 +511,7 @@ export class ChannelRuntime {
       '1. `bash(\'start "Claude Code" cmd /k "set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude"\')` to launch',
       "2. Skip wait when possible; if needed use `input.wait` with ms=10",
       "3. Run `screen.list_windows`, pick the Claude window `window_id`, then call `screen.bind_window` with that id",
-      "4. If needed, fallback to title matching with 'claude' or 'Claude Code'",
+      "4. If the Claude window is not listed, report the discovery failure instead of switching selectors",
       "5. `screenshot` to verify",
       "6. `input.type` to enter commands, then `input.key` with key='Return' to submit",
       "",
@@ -626,13 +626,9 @@ export class ChannelRuntime {
       const image = imageAttachment(item)
       if (!image) continue
       if (adapter.uploadImageUrl) {
-        try {
-          const url = await this.publishChannelAttachment(item.mime, image.buffer, image.filename)
-          await adapter.uploadImageUrl(channel, thread, url, image.filename, result.message || image.filename)
-          continue
-        } catch (error) {
-          console.warn("[ChannelRuntime] uploadImageUrl fallback:", error)
-        }
+        const url = await this.publishChannelAttachment(item.mime, image.buffer, image.filename)
+        await adapter.uploadImageUrl(channel, thread, url, image.filename, result.message || image.filename)
+        continue
       }
       await adapter.uploadImage(channel, thread, image.buffer, image.filename, result.message || image.filename)
     }
@@ -978,7 +974,7 @@ export class ChannelRuntime {
 
   /**
    * Upload screenshot attachment and optionally run vision analysis in parallel.
-   * Prefer event payload attachments and fall back to fetching message parts if needed.
+   * Use event payload attachments when present; fetch message parts only when the event omitted attachments.
    */
   private async processScreenshot(
     sessions: SessionEntry[],
@@ -1404,10 +1400,10 @@ function imageAttachment(input: ChannelAttachment) {
   const match = input.url.match(/^data:[^;]+;base64,(.+)$/)
   if (!match) return
   const buffer = Buffer.from(match[1], "base64")
-  const fallback = input.mime === "image/png" ? "opencorvus-gui.png" : "opencorvus-gui.jpg"
+  const defaultFilename = input.mime === "image/png" ? "opencorvus-gui.png" : "opencorvus-gui.jpg"
   return {
     buffer,
-    filename: input.filename ?? fallback,
+    filename: input.filename ?? defaultFilename,
   }
 }
 

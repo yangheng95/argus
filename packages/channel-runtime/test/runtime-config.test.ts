@@ -11,15 +11,15 @@ describe("runtime config", () => {
     })
     const result = resolveRuntimeConfig(input, "standard")
     const permission = result.config.permission as Record<string, string>
-    expect(result.profileState.profile).toBe("standard")
+    expect(result.profile).toBe("standard")
     expect(permission.bash).toBe("allow")
     expect(permission["*"]).toBe("deny")
   })
 
-  test("falls back to empty config for invalid JSON", () => {
-    const result = resolveRuntimeConfig("{bad", "unknown_profile")
-    expect(result.profileState.profile).toBe("standard")
-    expect(result.profileState.invalid).toBe(true)
-    expect(result.config.permission).toBeDefined()
+  test("rejects invalid JSON and unknown profile instead of using defaults", () => {
+    expect(() => resolveRuntimeConfig("{bad", "standard")).toThrow()
+    expect(() => resolveRuntimeConfig(undefined, "unknown_profile")).toThrow(
+      "Unknown OPENCORVUS_CHANNEL_PERMISSION_PROFILE",
+    )
   })
 })
