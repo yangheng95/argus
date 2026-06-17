@@ -22,6 +22,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-popup-contrast-light-palette.md](2026-06-18-popup-contrast-light-palette.md) | Popup Contrast Light Palette |
 | [2026-06-18-prompt-profile-trigger-select-primitive.md](2026-06-18-prompt-profile-trigger-select-primitive.md) | Prompt Profile Trigger Select Primitive |
 | [2026-06-18-prompt-profile-textarea-accessible-names.md](2026-06-18-prompt-profile-textarea-accessible-names.md) | Prompt Profile Textarea Accessible Names |
+| [2026-06-18-retire-prompt-editor-css-residue.md](2026-06-18-retire-prompt-editor-css-residue.md) | Retire Prompt Editor CSS Residue |
 | [2026-06-18-select-popup-readability-impact-review.md](2026-06-18-select-popup-readability-impact-review.md) | Select Popup Readability Impact Review |
 | [2026-06-18-settings-segmented-aria-label-forwarding.md](2026-06-18-settings-segmented-aria-label-forwarding.md) | Settings Segmented Aria Label Forwarding |
 

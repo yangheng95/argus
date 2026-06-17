@@ -1696,10 +1696,6 @@
 
 /* ── PromptCatalog.tsx (Prompts tab) ─────────────────────── */
 
-.prompt-grid {
-  display: grid;
-  gap: calc(12px * var(--ui-scale));
-}
 
 .prompt-profile-layout {
   display: grid;
@@ -1928,100 +1924,6 @@
   font-family: "Iosevka Term", "JetBrains Mono", monospace;
 }
 
-.prompt-card {
-  display: grid;
-  gap: calc(12px * var(--ui-scale));
-  padding: 0;
-  border-radius: 0;
-  border: 0 solid transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
-.prompt-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: calc(10px * var(--ui-scale));
-  flex-wrap: wrap;
-}
-
-.prompt-card-copy {
-  min-width: 0;
-  display: grid;
-  gap: calc(4px * var(--ui-scale));
-}
-
-.prompt-card-copy strong {
-  font-size: var(--ui-font-control);
-  color: var(--text-strong);
-  letter-spacing: var(--ui-letter-spacing-loose);
-}
-
-.prompt-card-copy span,
-.prompt-card-copy small {
-  font-size: var(--ui-font-control);
-  line-height: 1.4;
-  color: var(--text-soft);
-}
-
-.prompt-editor {
-  display: grid;
-  gap: calc(7px * var(--ui-scale));
-}
-
-.prompt-editor-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(10px * var(--ui-scale));
-  flex-wrap: wrap;
-}
-
-.prompt-editor-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(6px * var(--ui-scale));
-  margin-left: auto;
-}
-
-.oc-tabs[data-ui="prompt-view-tabs"] {
-  --oc-tabs-gap: calc(2px * var(--ui-scale));
-  --oc-tabs-padding-x: calc(2px * var(--ui-scale));
-  --oc-tab-padding-x: calc(9px * var(--ui-scale));
-  --oc-tab-active-bg: var(--surface);
-  --oc-tab-active-color: var(--text-strong);
-
-  padding: calc(2px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  background: var(--settings-surface-muted);
-}
-
-.oc-tab[data-ui="prompt-view-tab"] {
-  --oc-tabs-height: calc(24px * var(--ui-scale));
-
-  border: 0 solid transparent;
-  border-radius: calc(var(--oc-radius-soft) - calc(2px * var(--ui-scale)));
-  font: inherit;
-  font-size: var(--ui-font-control);
-  line-height: 1.2;
-}
-
-.oc-tab[data-ui="prompt-view-tab"]:hover {
-  --oc-tab-color: var(--text-strong);
-  --oc-tab-bg: var(--settings-surface-hover);
-}
-
-.oc-tab[data-ui="prompt-view-tab"][data-active="true"] {
-  --oc-tab-color: var(--text-strong);
-  --oc-tab-bg: var(--surface);
-}
-
-.prompt-textarea {
-  min-height: calc(160px * var(--ui-scale));
-  font-family: "Iosevka Term", "JetBrains Mono", monospace;
-}
 
 .prompt-preview-card {
   display: grid;
