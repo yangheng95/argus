@@ -11,6 +11,7 @@ import { WorktreeGC } from "../../worktree/gc"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { NotFoundError } from "../../storage/db"
 
 const OwnershipMarker = z.object({
   taskID: z.string(),
@@ -228,6 +229,9 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const projectID = c.req.valid("param").projectID
         const body = c.req.valid("json")
+        if (projectID !== Instance.project.id) {
+          throw new NotFoundError({ message: `Project not found: ${projectID}` })
+        }
         const project = await Project.update({ ...body, projectID })
         return c.json(project)
       },

@@ -589,3 +589,43 @@ LINE:
 - Implemented on 2026-06-17.
 - Focused tests passed: `bun test packages/opencorvus/test/mcp/oauth-callback-cancel.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+
+## Batch P1-F: active project route update ownership
+
+### Findings
+
+- BH-013: `PATCH /project/:projectID` validates the path parameter and body, then calls `Project.update({ ...body, projectID })`.
+- Server project routes are project-scoped by directory middleware. A request carrying directory for project A can still put project B's ID in the path and mutate B, because the handler does not compare the path ID against `Instance.project.id`.
+- `Project.update()` is a lower-level global project mutation used by internal project discovery and should not be narrowed to ambient `Instance` context. The HTTP route is the ownership boundary.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/project.ts` owns `PATCH /project/:projectID` and has active `Instance.project.id` available after directory binding.
+- `packages/opencorvus/src/project/project.ts` owns `Project.update()` and updates by global project ID.
+- `packages/opencorvus/test/server/project-routes.test.ts` already exercises real `Server.App()` project routes with `x-opencorvus-directory`.
+- `packages/opencorvus/src/server/error-handler.ts` maps `NotFoundError` to HTTP 404, which matches the route's documented `errors(400, 404)`.
+
+### Fix Shape
+
+- In `PATCH /project/:projectID`, require the path project ID to equal `Instance.project.id`.
+- On mismatch, throw `NotFoundError` and do not call `Project.update()`.
+- Do not add a new cross-project update route, fallback to `directory`, or accept path/body disagreement. The active project selected by directory is the single project mutation target for this route.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/server/project-routes.test.ts`.
+- Create project A and project B through real `Instance.provide()` directory binding.
+- Send `PATCH /project/<projectB>` with project A's directory header and assert 404.
+- Re-read project B from storage and assert its name is unchanged.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/project-routes.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused ownership test passed: `bun test packages/opencorvus/test/server/project-routes.test.ts -t "PATCH /project/:projectID"`.
+- Full `project-routes.test.ts` currently exposes a separate pre-existing cleanup-candidates failure: `GET /project/current/cleanup-candidates is read-only ownership inspection` returns no `processOrphans` for the seeded dead PID in this environment. That failure is outside BH-013 and was not masked.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
