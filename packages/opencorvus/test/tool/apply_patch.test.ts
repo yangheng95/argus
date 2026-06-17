@@ -265,9 +265,9 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
-  test("adds file overwriting existing file", async () => {
+  test("rejects add file when target already exists before asking permission", async () => {
     await using fixture = await tmpdir()
-    const { ctx } = makeCtx()
+    const { ctx, calls } = makeCtx()
 
     await Instance.provide({
       directory: fixture.path,
@@ -277,8 +277,38 @@ describe("tool.apply_patch freeform", () => {
 
         const patchText = "*** Begin Patch\n*** Add File: duplicate.txt\n+new content\n*** End Patch"
 
-        await execute({ patchText }, ctx)
-        expect(await fs.readFile(target, "utf-8")).toBe("new content\n")
+        await expect(execute({ patchText }, ctx)).rejects.toThrow(
+          "apply_patch verification failed: Add File target already exists",
+        )
+        expect(calls).toHaveLength(0)
+        expect(await fs.readFile(target, "utf-8")).toBe("old content\n")
+      },
+    })
+  })
+
+  test("rejects mixed patch with existing add target without side effects", async () => {
+    await using fixture = await tmpdir()
+    const { ctx, calls } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const existingAddTarget = path.join(fixture.path, "duplicate.txt")
+        const updateTarget = path.join(fixture.path, "update.txt")
+        const newTarget = path.join(fixture.path, "new.txt")
+        await fs.writeFile(existingAddTarget, "old duplicate\n", "utf-8")
+        await fs.writeFile(updateTarget, "old update\n", "utf-8")
+
+        const patchText =
+          "*** Begin Patch\n*** Add File: new.txt\n+created\n*** Update File: update.txt\n@@\n-old update\n+new update\n*** Add File: duplicate.txt\n+new duplicate\n*** End Patch"
+
+        await expect(execute({ patchText }, ctx)).rejects.toThrow(
+          "apply_patch verification failed: Add File target already exists",
+        )
+        expect(calls).toHaveLength(0)
+        await expect(fs.readFile(newTarget, "utf-8")).rejects.toThrow()
+        expect(await fs.readFile(updateTarget, "utf-8")).toBe("old update\n")
+        expect(await fs.readFile(existingAddTarget, "utf-8")).toBe("old duplicate\n")
       },
     })
   })

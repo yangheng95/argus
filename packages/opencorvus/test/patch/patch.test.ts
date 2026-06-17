@@ -150,6 +150,47 @@ PATCH`
       expect(content).toBe("Hello World\nThis is a new file")
     })
 
+    test("should reject add when target file already exists", async () => {
+      const filePath = path.join(tempDir, "existing.txt")
+      await fs.writeFile(filePath, "old content\n")
+
+      const patchText = `*** Begin Patch
+*** Add File: ${filePath}
++new content
+*** End Patch`
+
+      await expect(Patch.applyPatch(patchText)).rejects.toThrow(
+        "apply_patch verification failed: Add File target already exists",
+      )
+      expect(await fs.readFile(filePath, "utf-8")).toBe("old content\n")
+    })
+
+    test("should reject mixed patch with existing add target before writing earlier changes", async () => {
+      const existingAddTarget = path.join(tempDir, "duplicate.txt")
+      const updateTarget = path.join(tempDir, "update.txt")
+      const newTarget = path.join(tempDir, "new.txt")
+      await fs.writeFile(existingAddTarget, "old duplicate\n")
+      await fs.writeFile(updateTarget, "old update\n")
+
+      const patchText = `*** Begin Patch
+*** Add File: ${newTarget}
++created
+*** Update File: ${updateTarget}
+@@
+-old update
++new update
+*** Add File: ${existingAddTarget}
++new duplicate
+*** End Patch`
+
+      await expect(Patch.applyPatch(patchText)).rejects.toThrow(
+        "apply_patch verification failed: Add File target already exists",
+      )
+      await expect(fs.readFile(newTarget, "utf-8")).rejects.toThrow()
+      expect(await fs.readFile(updateTarget, "utf-8")).toBe("old update\n")
+      expect(await fs.readFile(existingAddTarget, "utf-8")).toBe("old duplicate\n")
+    })
+
     test("should delete an existing file", async () => {
       const filePath = path.join(tempDir, "to-delete.txt")
       await fs.writeFile(filePath, "This file will be deleted")
@@ -258,6 +299,25 @@ PATCH`
         .then(() => true)
         .catch(() => false)
       expect(exists).toBe(true)
+    })
+  })
+
+  describe("maybeParseApplyPatchVerified", () => {
+    test("should reject add when target file already exists", async () => {
+      const filePath = path.join(tempDir, "verified-existing.txt")
+      await fs.writeFile(filePath, "old content\n")
+
+      const patchText = `*** Begin Patch
+*** Add File: ${filePath}
++new content
+*** End Patch`
+
+      const result = await Patch.maybeParseApplyPatchVerified(["apply_patch", patchText], tempDir)
+      expect(result.type).toBe(Patch.MaybeApplyPatchVerified.CorrectnessError)
+      if (result.type === Patch.MaybeApplyPatchVerified.CorrectnessError) {
+        expect(result.error.message).toContain("apply_patch verification failed: Add File target already exists")
+      }
+      expect(await fs.readFile(filePath, "utf-8")).toBe("old content\n")
     })
   })
 
