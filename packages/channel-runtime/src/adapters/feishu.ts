@@ -188,19 +188,19 @@ export class FeishuAdapter implements ChannelAdapter {
     const body = (await req.json().catch(() => undefined)) as Body | undefined
     if (!body) return Response.json({ error: "invalid body" }, { status: 400 })
 
-    const challenge = typeof body.challenge === "string" ? body.challenge : undefined
-    if (body.type === "url_verification" && challenge) return Response.json({ challenge })
-    if (challenge) return Response.json({ challenge })
-
     const token =
       typeof body.header?.token === "string"
         ? body.header.token
         : typeof body.token === "string"
           ? body.token
           : undefined
-    if (this.verificationToken && token && token !== this.verificationToken) {
+    if (this.verificationToken && token !== this.verificationToken) {
       return Response.json({ error: "invalid token" }, { status: 401 })
     }
+
+    const challenge = typeof body.challenge === "string" ? body.challenge : undefined
+    if (body.type === "url_verification" && challenge) return Response.json({ challenge })
+    if (challenge) return Response.json({ challenge })
 
     const eventType = body.header?.event_type
     if (eventType !== "im.message.receive_v1") return Response.json({ ok: true })

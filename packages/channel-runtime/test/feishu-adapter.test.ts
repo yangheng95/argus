@@ -24,6 +24,28 @@ afterEach(() => {
 })
 
 describe("feishu adapter", () => {
+  function textEvent(token?: string) {
+    return {
+      header: {
+        event_type: "im.message.receive_v1",
+        ...(token ? { token } : {}),
+      },
+      event: {
+        sender: {
+          sender_type: "user",
+          sender_id: { open_id: "ou_1" },
+        },
+        message: {
+          chat_id: "oc_1",
+          message_id: "om_2",
+          root_id: "om_1",
+          message_type: "text",
+          content: JSON.stringify({ text: "@_user_1 hello" }),
+        },
+      },
+    }
+  }
+
   test("maps webhook text event into IncomingMessage", async () => {
     let route: ((req: Request) => Response | Promise<Response>) | undefined
     const serve = (opts: ServeOpts) => {
@@ -47,24 +69,7 @@ describe("feishu adapter", () => {
     })
     await adapter.start()
 
-    const body = {
-      header: {
-        event_type: "im.message.receive_v1",
-      },
-      event: {
-        sender: {
-          sender_type: "user",
-          sender_id: { open_id: "ou_1" },
-        },
-        message: {
-          chat_id: "oc_1",
-          message_id: "om_2",
-          root_id: "om_1",
-          message_type: "text",
-          content: JSON.stringify({ text: "@_user_1 hello" }),
-        },
-      },
-    }
+    const body = textEvent()
 
     const res = await route!(
       new Request("http://127.0.0.1:16666/feishu", {
@@ -75,6 +80,58 @@ describe("feishu adapter", () => {
     )
 
     expect(res.status).toBe(200)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toMatchObject({
+      platform: "feishu",
+      channel: "oc_1",
+      thread: "om_1",
+      user: "ou_1",
+      text: "hello",
+    })
+
+    await adapter.stop()
+  })
+
+  test("requires configured verification token before dispatch", async () => {
+    let route: ((req: Request) => Response | Promise<Response>) | undefined
+    const serve = (opts: ServeOpts) => {
+      route = opts.fetch
+      return {
+        hostname: "127.0.0.1",
+        port: 16666,
+        stop() {},
+      } as Server
+    }
+
+    const adapter = new FeishuAdapter({
+      appId: "cli_a",
+      appSecret: "sec_a",
+      verificationToken: "verify_a",
+      serve,
+    })
+
+    const seen: Array<any> = []
+    adapter.onMessage(async (msg) => {
+      seen.push(msg)
+    })
+    await adapter.start()
+
+    const post = (body: unknown) =>
+      route!(
+        new Request("http://127.0.0.1:16666/feishu", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      )
+
+    const missing = await post(textEvent())
+    const wrong = await post(textEvent("wrong"))
+    const valid = await post(textEvent("verify_a"))
+
+    expect(missing.status).toBe(401)
+    expect(wrong.status).toBe(401)
+    expect(valid.status).toBe(200)
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({
       platform: "feishu",

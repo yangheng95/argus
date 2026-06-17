@@ -42,7 +42,7 @@ type AdapterOptions = {
     host?: string
     port?: number
     path?: string
-    secret?: string
+    secret: string
   }
   matrix: { homeserver: string; token: string; since?: string }
   mattermost: {
@@ -175,7 +175,7 @@ function build(id: ChannelName, create: AdapterFactory, values: Values) {
         host: values.webhookHost,
         port: parsePort(values.webhookPort),
         path: values.webhookPath,
-        secret: values.secret,
+        secret: values.secret!,
       })
     case "matrix":
       return create.matrix({

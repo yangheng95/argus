@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { generateKeyPairSync, sign, type KeyObject } from "node:crypto"
+import { createHmac, generateKeyPairSync, sign, type KeyObject } from "node:crypto"
 import { WhatsappAdapter } from "../src/adapters/whatsapp"
 import { GoogleChatAdapter } from "../src/adapters/googlechat"
 import { MSTeamsAdapter } from "../src/adapters/msteams"
@@ -53,6 +53,18 @@ function qqSigned(adapter: QQAdapter, body: Record<string, unknown>, timestamp =
       "x-signature-timestamp": timestamp,
     },
   }
+}
+
+function lineSignedRequest(body: unknown, secret: string) {
+  const raw = JSON.stringify(body)
+  return new Request("http://127.0.0.1:19999/line", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-line-signature": createHmac("sha256", secret).update(raw).digest("base64"),
+    },
+    body: raw,
+  })
 }
 
 let oldFetch: typeof globalThis.fetch
@@ -321,8 +333,10 @@ describe("mainstream adapters", () => {
 
   test("line maps inbound and pushes outbound", async () => {
     const s = stub()
+    const secret = "line_secret"
     const adapter = new LineAdapter({
       token: "line_token",
+      secret,
       serve: s.serve,
     })
     const seen: Array<any> = []
@@ -332,10 +346,8 @@ describe("mainstream adapters", () => {
     await adapter.start()
 
     await s.route()(
-      new Request("http://127.0.0.1:19999/line", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      lineSignedRequest(
+        {
           events: [
             {
               type: "message",
@@ -343,8 +355,9 @@ describe("mainstream adapters", () => {
               message: { id: "mid-1", type: "text", text: "hello" },
             },
           ],
-        }),
-      }),
+        },
+        secret,
+      ),
     )
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({
@@ -362,6 +375,74 @@ describe("mainstream adapters", () => {
     }) as typeof globalThis.fetch
     await adapter.sendMessage("u-1", "", "done")
     expect(calls[0]).toContain("/v2/bot/message/push")
+  })
+
+  test("line requires channel secret and valid signature before dispatch", async () => {
+    const body = {
+      events: [
+        {
+          type: "message",
+          source: { userId: "u-1" },
+          message: { id: "mid-1", type: "text", text: "hello" },
+        },
+      ],
+    }
+
+    const unsigned = stub()
+    const noSecret = new LineAdapter({
+      token: "line_token",
+      serve: unsigned.serve,
+    })
+    const unsignedSeen: Array<any> = []
+    noSecret.onMessage(async (msg) => {
+      unsignedSeen.push(msg)
+    })
+    await noSecret.start()
+    const missingSecret = await unsigned.route()(
+      new Request("http://127.0.0.1:19999/line", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    )
+    expect(missingSecret.status).toBe(401)
+    expect(unsignedSeen).toHaveLength(0)
+
+    const signed = stub()
+    const adapter = new LineAdapter({
+      token: "line_token",
+      secret: "line_secret",
+      serve: signed.serve,
+    })
+    const seen: Array<any> = []
+    adapter.onMessage(async (msg) => {
+      seen.push(msg)
+    })
+    await adapter.start()
+
+    const missingSignature = await signed.route()(
+      new Request("http://127.0.0.1:19999/line", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    )
+    const wrongSignature = await signed.route()(
+      new Request("http://127.0.0.1:19999/line", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-line-signature": "wrong",
+        },
+        body: JSON.stringify(body),
+      }),
+    )
+    const valid = await signed.route()(lineSignedRequest(body, "line_secret"))
+
+    expect(missingSignature.status).toBe(401)
+    expect(wrongSignature.status).toBe(401)
+    expect(valid.status).toBe(200)
+    expect(seen).toHaveLength(1)
   })
 
   test("line sends screenshot image messages from a public image URL", async () => {
