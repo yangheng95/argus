@@ -75,7 +75,13 @@ test("center workbench panel weights persist through the existing settings sourc
   expect(storage).toContain('writeOptionalJSON("oc_center_workbench_panel_weights", input.centerWorkbenchPanelWeights)')
   expect(main).toContain('setSettingsStore("centerWorkbenchPanelWeights"')
   expect(main).toContain("renderCenterWorkbenchPanelWeights")
+  expect(main).toContain("renderCenterWorkbenchPanelSeparators")
+  expect(main).toContain("resizeCenterWorkbenchPanelByKeyboard")
+  expect(main).toContain('"[data-center-workbench-separator]"')
+  expect(main).toContain('"aria-controls"')
   expect(css).toContain("--center-workbench-panel-grow")
+  expect(css).toContain(".center-workbench-panel-separator")
+  expect(css).not.toContain('.center-workbench-view[data-resizable-next="true"]::after')
   expect(css).toContain('body[data-center-workbench-panel-resizing="true"]')
 })
 

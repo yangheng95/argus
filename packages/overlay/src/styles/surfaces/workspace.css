@@ -312,43 +312,48 @@ body[data-center-workbench-resizing="true"] .center-workbench-resizer {
   border-right: 0;
 }
 
-.center-workbench-view[data-resizable-next="true"]::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: calc(-4px * var(--ui-scale));
-  bottom: 0;
-  width: calc(8px * var(--ui-scale));
-  z-index: 4;
-  cursor: col-resize;
-  touch-action: none;
-  background: transparent;
-}
-
-.center-workbench-view[data-resizable-prev="true"]::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: calc(-4px * var(--ui-scale));
-  bottom: 0;
-  width: calc(8px * var(--ui-scale));
-  z-index: 4;
-  cursor: col-resize;
-  touch-action: none;
-  background: transparent;
-}
-
-.center-workbench-view[data-resizable-next="true"]:hover::after,
-.center-workbench-view[data-resizable-prev="true"]:hover::before,
-body[data-center-workbench-panel-resizing="true"] .center-workbench-view[data-resizable-next="true"]::after,
-body[data-center-workbench-panel-resizing="true"] .center-workbench-view[data-resizable-prev="true"]::before {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-}
-
 body[data-center-workbench-panel-resizing="true"],
 body[data-center-workbench-panel-resizing="true"] * {
   cursor: col-resize;
   user-select: none;
+}
+
+.center-workbench-panel-separator {
+  position: relative;
+  flex: 0 0 calc(8px * var(--ui-scale));
+  width: calc(8px * var(--ui-scale));
+  min-width: calc(8px * var(--ui-scale));
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  z-index: 4;
+}
+
+.center-workbench-panel-separator[hidden] {
+  display: none;
+}
+
+.center-workbench-panel-separator::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--oc-border-width);
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.center-workbench-panel-separator:hover,
+.center-workbench-panel-separator:focus-visible,
+body[data-center-workbench-panel-resizing="true"] .center-workbench-panel-separator[data-disabled="false"] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.center-workbench-panel-separator:focus-visible {
+  outline: var(--oc-focus-ring-width) solid var(--focus);
+  outline-offset: calc(-1 * var(--oc-focus-ring-width));
 }
 
 .center-workbench-activity {
