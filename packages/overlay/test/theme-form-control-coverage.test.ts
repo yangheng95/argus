@@ -130,6 +130,11 @@ describe("shared Kobalte select popup colors", () => {
     expect(appDialogHost).toContain('class="field-input oc-select-trigger app-dialog-input app-dialog-select-trigger"')
     expect(appDialogHost).not.toContain('class="field-input app-dialog-input custom-select app-dialog-select-trigger"')
   })
+
+  test("native select chrome is not kept as a parallel Select style source", () => {
+    expect(fieldCss).not.toContain("select.field-input")
+    expect(fieldCss).not.toContain(".custom-select")
+  })
 })
 
 describe("accent-color is declared once globally", () => {
