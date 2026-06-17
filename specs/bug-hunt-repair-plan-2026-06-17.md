@@ -2570,3 +2570,52 @@ LINE:
 - Bacon confirmed the shared-writer root cause and recommended the same minimal fix: remove the `append(...)` catch and do not add retry, fallback storage, memory queues, or alternate stores.
 - Bacon confirmed the real SQLite `NOT NULL` regression is stronger than mocking `Database.use(...)` because it covers the actual Drizzle/SQLite insert path.
 - Bacon identified caller-level decision-log catch blocks as an extra risk. This batch removes the production caller-level decision-log swallowing found by follow-up search.
+
+## Batch P1-AN: BH-042 aggregator metrics require every configured input to be fresh
+
+### Findings
+
+- BH-042 targets `packages/opencorvus/src/metrics/executor.ts::runAggregator(...)`.
+- `runAggregator(...)` reads all `metric_result` rows for the target iteration, filters to configured metric IDs that are fresh, and computes the aggregate from the remaining values.
+- That means an aggregate over `[a, b]` becomes fresh when only `a` has a fresh result and `b` is missing or stale.
+- This incorrectly awards score credit for incomplete evidence and hides the real missing-input condition.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/metrics/executor.ts` is the only implementation of the aggregator evaluator and dispatches it from `evaluateSpec(...)`.
+- `packages/opencorvus/src/metrics/types.ts` documents `aggregator` as composing other `metric_result` rows.
+- `packages/opencorvus/test/metrics/executor.test.ts` currently covers all-fresh aggregation and zero-fresh aggregation, but not partial-fresh aggregation.
+
+### Fix Shape
+
+- Build an input lookup for the configured `of` metric IDs at the aggregator's target iteration.
+- Treat any configured metric with no row, or only non-fresh evidence, as an incomplete aggregate.
+- Return `evidence_fresh=false`, zero raw/normalized value through the existing evaluator path, and a diagnostic `evidence_ref` that identifies missing and stale inputs.
+- Keep all aggregate operations unchanged when every configured input is present and fresh.
+- Do not add fallback scoring, partial credit, retry, or a host gate around metric execution.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/metrics/executor.test.ts`.
+- Seed a previous iteration with one fresh input for a two-input aggregate and leave the second input missing.
+- Execute the aggregator with `iteration_offset: -1` so current-iteration base spec execution cannot accidentally satisfy the aggregate.
+- Assert the aggregate is skipped/stale with no score credit and records the missing-input reason.
+- Add a sibling stale-input regression where the second configured input has a row but `evidence_fresh=false`, and assert the aggregate is still skipped/stale.
+
+### Verification
+
+- New missing-input regression failed before implementation: the aggregate used the lone fresh input and wrote `raw_value=0.8`.
+- Implemented on 2026-06-18: `runAggregator(...)` now groups result rows by configured metric ID, requires every configured input to have a fresh result, and returns `aggregator://incomplete_inputs ...` with missing/stale IDs when the aggregate evidence is incomplete.
+- Duplicate rows for the same configured input are no longer counted multiple times; the evaluator selects the latest fresh row for that input before computing the aggregate.
+- Focused missing-input regression passed: `bun test packages/opencorvus/test/metrics/executor.test.ts -t "aggregator with a missing configured input" --timeout 30000`.
+- Existing all-fresh aggregation path passed: `bun test packages/opencorvus/test/metrics/executor.test.ts -t "mean of named specs" --timeout 30000`.
+- Metrics suites passed: `bun test packages/opencorvus/test/metrics/executor.test.ts packages/opencorvus/test/metrics/store.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Noether confirmed the root cause: `runAggregator(...)` filtered to present fresh rows and only checked `values.length === 0`, so partial fresh inputs were treated as complete evidence.
+- Noether confirmed the score impact: `weightedMean(...)` accepts `evidence_fresh=true`, so the wrong fresh aggregate directly awarded score credit.
+- Noether recommended the same fix shape: inspect each configured metric ID, return stale on any missing or stale input, keep all-fresh aggregation unchanged, and avoid partial credit, retry, fallback scoring, or host gates.
+- Noether identified duplicate result rows for the same spec/iteration as a related risk. This batch uses a per-metric lookup and latest fresh row selection so repeated rows for one input do not duplicate that input's weight.
