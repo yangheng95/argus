@@ -229,6 +229,16 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
   { id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp" },
 ]
 
+const LEFT_ACTIVITY_BY_ID: ReadonlyMap<LeftActivity, SideActivity<LeftActivity>> = new Map(
+  LEFT_ACTIVITIES.map((activity) => [activity.id, activity]),
+)
+
+function leftActivityDefinition(activity: LeftActivity): SideActivity<LeftActivity> {
+  const definition = LEFT_ACTIVITY_BY_ID.get(activity)
+  if (!definition) throw new Error(`Unknown left activity: ${activity}`)
+  return definition
+}
+
 const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
 const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)
 const activeRightActivity = () => selectedRightActivity()
@@ -885,29 +895,26 @@ const LEFT_ACTIVITY_BODY_IDS: Record<LeftActivity, string> = {
   mcp: "leftPanelMcp",
 }
 
-const LEFT_ACTIVITY_TITLE_KEYS: Record<LeftActivity, string> = {
-  tasks: "task.ledger.title",
-  mission: "mission.title",
-  assistant: "coding_assistant.title",
-  memory: "memory.title",
-  skill: "skill.title",
-  mcp: "mcp.title",
-}
-
 disposers.push(
   createRoot((dispose) => {
     createEffect(() => {
       const activity = selectedLeftPanelActivity()
+      const activityDefinition = leftActivityDefinition(activity)
+      const titleKey = activityDefinition.labelKey
+      const titleText = t(titleKey)
       for (const [id, elementID] of Object.entries(LEFT_ACTIVITY_BODY_IDS) as Array<[LeftActivity, string]>) {
         const element = document.getElementById(elementID)
         if (element) element.dataset.active = id === activity ? "true" : "false"
       }
       const title = document.getElementById("leftPanelTitle")
-      if (title) title.textContent = t(LEFT_ACTIVITY_TITLE_KEYS[activity])
+      if (title) title.textContent = titleText
       const taskActions = document.getElementById("leftPanelTaskActions")
       if (taskActions) {
         const hasCreateAction = activity === "tasks" || activity === "mission" || activity === "assistant"
         taskActions.dataset.active = hasCreateAction ? "true" : "false"
+        taskActions.dataset.activityActions = activity
+        taskActions.dataset.i18nAriaLabel = titleKey
+        taskActions.setAttribute("aria-label", titleText)
         for (const button of taskActions.querySelectorAll<HTMLElement>("[data-left-action]")) {
           button.hidden = button.dataset.leftAction !== activity
         }
