@@ -103,6 +103,25 @@ describe("McpOAuthCallback.cancelPending (audit W2-V21)", () => {
     expect(() => McpOAuthCallback.cancelPending("m1")).not.toThrow()
   })
 
+  test("ensureRunning rejects when the callback port is owned by another process", async () => {
+    await McpOAuthCallback.stop()
+    const external = Bun.serve({
+      port: OAUTH_CALLBACK_PORT,
+      fetch() {
+        return new Response("external listener")
+      },
+    })
+
+    try {
+      await expect(McpOAuthCallback.ensureRunning()).rejects.toThrow(
+        `OAuth callback port ${OAUTH_CALLBACK_PORT} is already in use by another process`,
+      )
+      expect(McpOAuthCallback.isRunning()).toBe(false)
+    } finally {
+      external.stop()
+    }
+  })
+
   test("oauth provider errors are escaped before rendering callback HTML", async () => {
     await McpOAuthCallback.stop()
     await McpOAuthCallback.ensureRunning()
