@@ -549,3 +549,43 @@ LINE:
 - Implemented on 2026-06-17.
 - Focused tests passed: `bun test packages/opencorvus/test/mcp/oauth-callback-cancel.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+
+## Batch P1-E: OAuth callback port ownership fail-fast
+
+### Findings
+
+- BH-011: `McpOAuthCallback.ensureRunning()` treats any listener on fixed port `19876` as if the local callback server is already running.
+- `MCP.authenticate()` relies on process-local `McpOAuthCallback.waitForCallback()` state. If another process owns `19876`, the browser callback goes to that process, while the current process waits until the five-minute callback timeout.
+- The fixed callback port cannot be safely shared without a process-owned callback listener and matching in-memory state, so accepting an external listener is not a valid compatibility path.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/mcp/oauth-callback.ts` owns callback server creation, process-local pending callback state, and `isRunning()`.
+- `packages/opencorvus/src/mcp/index.ts` calls `McpOAuthCallback.ensureRunning()` before generating OAuth state and before `authenticate()` registers `waitForCallback()`.
+- `packages/opencorvus/src/mcp/oauth-provider.ts` owns the fixed `OAUTH_CALLBACK_PORT` and callback URL.
+- `packages/opencorvus/test/mcp/oauth-callback-cancel.test.ts` already owns focused callback-server lifecycle tests and can bind a dummy server to the fixed port.
+- `packages/opencorvus/test/mcp/oauth-browser.test.ts` owns higher-level `MCP.authenticate()` OAuth flow tests, but the current file already exceeds Bun's 5s default timeout in this workspace and is not a stable narrow regression target for this batch.
+
+### Fix Shape
+
+- Keep `if (server) return` for the local process-owned callback server.
+- Otherwise call `Bun.serve()` directly on `OAUTH_CALLBACK_PORT`; if the bind fails, throw a deterministic error naming the occupied callback port.
+- Do not attempt cross-process callback sharing, alternate-port fallback, provider allowlists, or delayed waiting. OAuth auth must fail before state registration when the local callback listener cannot be created.
+
+### Regression Tests
+
+- Bind a dummy `Bun.serve()` listener on `OAUTH_CALLBACK_PORT`.
+- Assert `McpOAuthCallback.ensureRunning()` rejects immediately and `McpOAuthCallback.isRunning()` remains false.
+- This covers the `MCP.authenticate()` failure point because `MCP.startAuth()` calls `ensureRunning()` before OAuth state generation, browser open, transport creation, or `waitForCallback()` registration.
+- Keep the existing callback cancel and HTML escaping tests unchanged.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/mcp/oauth-callback-cancel.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/opencorvus/test/mcp/oauth-callback-cancel.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
