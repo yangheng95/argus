@@ -14,6 +14,7 @@ import { EventService } from "../../scheduler/event-service"
 import { zodToJsonSchema } from "zod-to-json-schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { NotFoundError } from "../../storage/db"
 
 // Workspace shape for the workspace sub-tree (mounted at /workspace)
 const WorkspaceRoutes = lazy(() =>
@@ -126,6 +127,34 @@ const EventJobView = z.object({
   lastRun: z.number().nullable(),
   lastEvent: z.string().nullable(),
 })
+
+const ProjectScopedRouteQuery = z
+  .object({
+    directory: z.string().optional(),
+  })
+  .strict()
+
+const CreateScheduleBody = z
+  .object({
+    name: z.string(),
+    expression: z.string(),
+    prompt: z.string(),
+    sessionId: z.string().optional(),
+    oneShot: z.boolean().optional(),
+  })
+  .strict()
+
+const CreateEventScheduleBody = z
+  .object({
+    name: z.string(),
+    eventType: z.string(),
+    match: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+    prompt: z.string(),
+    sessionId: z.string().optional(),
+    oneShot: z.boolean().optional(),
+    cooldownMs: z.number().int().min(0).optional(),
+  })
+  .strict()
 
 export const ExperimentalRoutes = lazy(() =>
   new Hono()
@@ -300,10 +329,9 @@ export const ExperimentalRoutes = lazy(() =>
           },
         },
       }),
-      validator("query", z.object({ projectId: z.string() })),
+      validator("query", ProjectScopedRouteQuery),
       async (c) => {
-        const { projectId } = c.req.valid("query")
-        return c.json(CronService.list(projectId))
+        return c.json(CronService.list(Instance.project.id))
       },
     )
     .post(
@@ -322,20 +350,10 @@ export const ExperimentalRoutes = lazy(() =>
           },
         },
       }),
-      validator(
-        "json",
-        z.object({
-          name: z.string(),
-          expression: z.string(),
-          prompt: z.string(),
-          projectId: z.string(),
-          sessionId: z.string().optional(),
-          oneShot: z.boolean().optional(),
-        }),
-      ),
+      validator("json", CreateScheduleBody),
       async (c) => {
         const body = c.req.valid("json")
-        return c.json(CronService.create(body))
+        return c.json(CronService.create({ ...body, projectId: Instance.project.id }))
       },
     )
     .delete(
@@ -350,11 +368,12 @@ export const ExperimentalRoutes = lazy(() =>
           },
         },
       }),
-      validator("query", z.object({ projectId: z.string() })),
+      validator("query", ProjectScopedRouteQuery),
       async (c) => {
-        const { projectId } = c.req.valid("query")
         const id = c.req.param("id")
-        CronService.remove(id, projectId)
+        if (!CronService.remove(id, Instance.project.id)) {
+          throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+        }
         return c.json({ ok: true })
       },
     )
@@ -371,10 +390,9 @@ export const ExperimentalRoutes = lazy(() =>
           },
         },
       }),
-      validator("query", z.object({ projectId: z.string() })),
+      validator("query", ProjectScopedRouteQuery),
       async (c) => {
-        const { projectId } = c.req.valid("query")
-        return c.json(EventService.list(projectId))
+        return c.json(EventService.list(Instance.project.id))
       },
     )
     .post(
@@ -393,22 +411,10 @@ export const ExperimentalRoutes = lazy(() =>
           },
         },
       }),
-      validator(
-        "json",
-        z.object({
-          name: z.string(),
-          eventType: z.string(),
-          match: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
-          prompt: z.string(),
-          projectId: z.string(),
-          sessionId: z.string().optional(),
-          oneShot: z.boolean().optional(),
-          cooldownMs: z.number().int().min(0).optional(),
-        }),
-      ),
+      validator("json", CreateEventScheduleBody),
       async (c) => {
         const body = c.req.valid("json")
-        return c.json(EventService.create(body))
+        return c.json(EventService.create({ ...body, projectId: Instance.project.id }))
       },
     )
     .delete(
@@ -423,11 +429,12 @@ export const ExperimentalRoutes = lazy(() =>
           },
         },
       }),
-      validator("query", z.object({ projectId: z.string() })),
+      validator("query", ProjectScopedRouteQuery),
       async (c) => {
-        const { projectId } = c.req.valid("query")
         const id = c.req.param("id")
-        EventService.remove(id, projectId)
+        if (!EventService.remove(id, Instance.project.id)) {
+          throw new NotFoundError({ message: `Event task not found: ${id}` })
+        }
         return c.json({ ok: true })
       },
     )

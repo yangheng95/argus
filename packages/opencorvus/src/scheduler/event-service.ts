@@ -1,8 +1,9 @@
 import { Bus } from "@/bus"
 import { Instance, lazyInstanceState } from "@/project/instance"
-import { Database, and, eq } from "@/storage/db"
+import { Database, NotFoundError, and, eq } from "@/storage/db"
 import { Log } from "@/util/log"
 import { SessionWake } from "@/session"
+import { SessionTable } from "@/session/session.sql"
 import { Wildcard } from "@/util/wildcard"
 import { Identifier } from "@/id/id"
 import { EventJobTable } from "./event.sql"
@@ -75,7 +76,21 @@ export namespace EventService {
     }))
   }
 
+  function assertSessionInProject(input: { sessionId?: string; projectId: string }) {
+    const sessionId = input.sessionId
+    if (!sessionId) return
+    const session = Database.use((db) =>
+      db
+        .select({ id: SessionTable.id })
+        .from(SessionTable)
+        .where(and(eq(SessionTable.id, sessionId), eq(SessionTable.project_id, input.projectId)))
+        .get(),
+    )
+    if (!session) throw new NotFoundError({ message: `Session not found: ${sessionId}` })
+  }
+
   export function create(input: CreateEventJobInput): { id: string; name: string; eventType: string } {
+    assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
     const id = Identifier.ascending("cron")
     Database.use((db) =>
       db
@@ -97,13 +112,15 @@ export namespace EventService {
     return { id, name: input.name, eventType: input.eventType }
   }
 
-  export function remove(id: string, projectID: string): void {
-    Database.use((db) =>
+  export function remove(id: string, projectID: string): boolean {
+    const row = Database.use((db) =>
       db
         .delete(EventJobTable)
         .where(and(eq(EventJobTable.id, id), eq(EventJobTable.project_id, projectID)))
-        .run(),
+        .returning({ id: EventJobTable.id })
+        .get(),
     )
+    return !!row
   }
 
   async function on(event: { type: string; properties: unknown }) {
@@ -192,7 +209,7 @@ export namespace EventService {
           last_event: type,
           enabled: job.one_shot ? false : true,
         })
-        .where(eq(EventJobTable.id, job.id))
+        .where(and(eq(EventJobTable.id, job.id), eq(EventJobTable.project_id, job.project_id)))
         .run(),
     )
 

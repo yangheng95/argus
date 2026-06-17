@@ -5,6 +5,7 @@ import { Database, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { SessionWake } from "../../src/session/wake"
+import { Session } from "../../src/session"
 
 async function waitUntil(check: () => boolean, timeout = 2000) {
   const end = Date.now() + timeout
@@ -85,45 +86,106 @@ describe("scheduler.cron-service", () => {
     })
   })
 
-  test("poll only processes cron jobs for the current project", async () => {
-    await using one = await tmpdir({ git: true })
-    await using two = await tmpdir({ git: true })
-    const id = "crn_scope_" + Math.random().toString(36).slice(2)
-    const wake = spyOn(SessionWake, "wake").mockResolvedValue("ses_mock")
+  test(
+    "poll only processes cron jobs for the current project",
+    async () => {
+      await using one = await tmpdir({ git: true })
+      await using two = await tmpdir({ git: true })
+      const id = "crn_scope_" + Math.random().toString(36).slice(2)
+      const wake = spyOn(SessionWake, "wake").mockResolvedValue("ses_mock")
 
-    await Instance.provide({
-      directory: two.path,
-      fn: async () => {
-        const now = Date.now()
-        Database.use((db) =>
-          db
-            .insert(CronJobTable)
-            .values({
-              id,
-              project_id: Instance.project.id,
-              name: "other-project",
-              expression: "1m",
-              prompt: "hello",
-              enabled: true,
-              one_shot: false,
-              next_run: now - 1000,
-            })
-            .run(),
-        )
-      },
-    })
+      await Instance.provide({
+        directory: two.path,
+        fn: async () => {
+          const now = Date.now()
+          Database.use((db) =>
+            db
+              .insert(CronJobTable)
+              .values({
+                id,
+                project_id: Instance.project.id,
+                name: "other-project",
+                expression: "1m",
+                prompt: "hello",
+                enabled: true,
+                one_shot: false,
+                next_run: now - 1000,
+              })
+              .run(),
+          )
+        },
+      })
 
-    await Instance.provide({
-      directory: one.path,
-      fn: async () => {
-        await CronService.runNow()
-      },
-    })
+      await Instance.provide({
+        directory: one.path,
+        fn: async () => {
+          await CronService.runNow()
+        },
+      })
 
-    const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, id)).get())
-    expect(wake).toHaveBeenCalledTimes(0)
-    expect((row?.last_run ?? null) === null).toBe(true)
-  })
+      const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, id)).get())
+      expect(wake).toHaveBeenCalledTimes(0)
+      expect((row?.last_run ?? null) === null).toBe(true)
+    },
+    30_000,
+  )
+
+  test(
+    "create rejects foreign sessions and remove reports only current-project rows",
+    async () => {
+      await using one = await tmpdir({ git: true })
+      await using two = await tmpdir({ git: true })
+      const foreignJobID = "crn_foreign_remove_" + Math.random().toString(36).slice(2)
+      let oneProjectID = ""
+      let twoProjectID = ""
+      let twoSessionID = ""
+
+      await Instance.provide({
+        directory: one.path,
+        fn: async () => {
+          oneProjectID = Instance.project.id
+        },
+      })
+
+      await Instance.provide({
+        directory: two.path,
+        fn: async () => {
+          twoProjectID = Instance.project.id
+          twoSessionID = (await Session.create({ kind: "assistant", title: "foreign cron session" })).id
+          Database.use((db) =>
+            db
+              .insert(CronJobTable)
+              .values({
+                id: foreignJobID,
+                project_id: twoProjectID,
+                session_id: twoSessionID,
+                name: "foreign remove sentinel",
+                expression: "1m",
+                prompt: "foreign",
+                enabled: true,
+                one_shot: true,
+                next_run: Date.now() + 60_000,
+              })
+              .run(),
+          )
+        },
+      })
+
+      expect(() =>
+        CronService.create({
+          name: "bad cron session",
+          expression: "1m",
+          prompt: "bad",
+          projectId: oneProjectID,
+          sessionId: twoSessionID,
+        }),
+      ).toThrow("Session not found")
+
+      expect(CronService.remove(foreignJobID, oneProjectID)).toBe(false)
+      expect(Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, foreignJobID)).get())).toBeDefined()
+    },
+    30_000,
+  )
 
   test("reentry guard prevents overlapping poll runs", async () => {
     await using tmp = await tmpdir({ git: true })

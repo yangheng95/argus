@@ -1,8 +1,9 @@
-import { Database, and, eq, sql } from "@/storage/db"
+import { Database, NotFoundError, and, eq, sql } from "@/storage/db"
 import { CronJobTable } from "./cron.sql"
 import { Cron } from "./cron"
 import { Scheduler } from "./index"
 import { SessionWake } from "@/session"
+import { SessionTable } from "@/session/session.sql"
 import { Log } from "@/util/log"
 import { Instance, lazyInstanceState } from "@/project/instance"
 import { Identifier } from "@/id/id"
@@ -85,8 +86,22 @@ export namespace CronService {
     }))
   }
 
+  function assertSessionInProject(input: { sessionId?: string; projectId: string }) {
+    const sessionId = input.sessionId
+    if (!sessionId) return
+    const session = Database.use((db) =>
+      db
+        .select({ id: SessionTable.id })
+        .from(SessionTable)
+        .where(and(eq(SessionTable.id, sessionId), eq(SessionTable.project_id, input.projectId)))
+        .get(),
+    )
+    if (!session) throw new NotFoundError({ message: `Session not found: ${sessionId}` })
+  }
+
   export function create(input: CreateCronJobInput): { id: string; name: string; nextRun: number } {
     const parsed = Cron.parse(input.expression)
+    assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
     const now = Date.now()
     const nextRun = Cron.nextRun(parsed, now)
     const id = Identifier.ascending("cron")
@@ -110,13 +125,15 @@ export namespace CronService {
     return { id, name: input.name, nextRun }
   }
 
-  export function remove(id: string, projectID: string): void {
-    Database.use((db) =>
+  export function remove(id: string, projectID: string): boolean {
+    const row = Database.use((db) =>
       db
         .delete(CronJobTable)
         .where(and(eq(CronJobTable.id, id), eq(CronJobTable.project_id, projectID)))
-        .run(),
+        .returning({ id: CronJobTable.id })
+        .get(),
     )
+    return !!row
   }
 
   async function poll(): Promise<void> {
