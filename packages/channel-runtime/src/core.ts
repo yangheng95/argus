@@ -96,6 +96,7 @@ type PendingTask = {
 export interface ChannelRuntimeOptions {
   port?: number
   baseUrl?: string
+  directory?: string
   sharedMode?: boolean
   sharedFile?: string
 }
@@ -122,6 +123,7 @@ export class ChannelRuntime {
   private vision?: VisionPipeline
   /** Base URL of the OpenCorvus server */
   private serverUrl!: string
+  private directory!: string
   private sharedSessionId?: string
   /** Prevent creating duplicate overlay mirror threads */
   private overlayMirrorBound = false
@@ -199,16 +201,17 @@ export class ChannelRuntime {
 
   private async _doStart(): Promise<void> {
     this.running = true
+    this.directory = this.requireDirectory()
     const baseUrl = this.options?.baseUrl?.trim()
     if (baseUrl) {
-      this.client = createOpenCorvusClient({ baseUrl })
+      this.client = createOpenCorvusClient({ baseUrl, directory: this.directory })
       this.server = undefined
       this.serverUrl = baseUrl
     } else {
       const opencorvus = await createOpenCorvus({ port: this.options?.port ?? 0 })
-      this.client = opencorvus.client
       this.server = opencorvus.server
       this.serverUrl = opencorvus.server.url
+      this.client = createOpenCorvusClient({ baseUrl: this.serverUrl, directory: this.directory })
     }
     console.log(`[ChannelRuntime] OpenCorvus server running at ${this.serverUrl}`)
 
@@ -635,7 +638,9 @@ export class ChannelRuntime {
   }
 
   private async publishChannelAttachment(mime: string, buffer: Buffer, filename: string) {
-    const res = await fetch(`${this.serverUrl.replace(/\/+$/, "")}/channel/attachment`, {
+    const endpoint = new URL(`${this.serverUrl.replace(/\/+$/, "")}/channel/attachment`)
+    endpoint.searchParams.set("directory", this.directory)
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -653,6 +658,14 @@ export class ChannelRuntime {
     const data = (await res.json()) as { url?: string }
     if (!data.url) throw new Error("channel attachment publish failed: missing url")
     return data.url
+  }
+
+  private requireDirectory(): string {
+    const directory = this.options?.directory?.trim()
+    if (!directory) {
+      throw new Error("ChannelRuntime requires options.directory for project-scoped channel routes")
+    }
+    return directory
   }
 
   private mirror(

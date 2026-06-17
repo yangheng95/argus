@@ -265,6 +265,7 @@ describe("channel runtime channel protocol", () => {
     const core = new ChannelRuntime() as unknown as {
       adapters: ChannelAdapter[]
       serverUrl: string
+      directory: string
       client: {
         channel: {
           message(input: unknown): Promise<{
@@ -282,6 +283,7 @@ describe("channel runtime channel protocol", () => {
 
     core.adapters = [a]
     core.serverUrl = "http://127.0.0.1:7878"
+    core.directory = "D:/repo/runtime"
     core.client = {
       channel: {
         message: async (input) => {
@@ -303,7 +305,10 @@ describe("channel runtime channel protocol", () => {
       },
     }
     installFetchMock(async (input, init) => {
-      expect(String(input)).toBe("http://127.0.0.1:7878/channel/attachment")
+      const url = new URL(String(input))
+      expect(url.origin).toBe("http://127.0.0.1:7878")
+      expect(url.pathname).toBe("/channel/attachment")
+      expect(url.searchParams.get("directory")).toBe("D:/repo/runtime")
       expect(init?.method).toBe("POST")
       return Response.json({
         id: "att_test",
@@ -342,6 +347,7 @@ describe("channel runtime channel protocol", () => {
     const core = new ChannelRuntime() as unknown as {
       adapters: ChannelAdapter[]
       serverUrl: string
+      directory: string
       client: {
         channel: {
           message(input: unknown): Promise<{
@@ -358,6 +364,7 @@ describe("channel runtime channel protocol", () => {
 
     core.adapters = [a]
     core.serverUrl = "http://127.0.0.1:7878"
+    core.directory = "D:/repo/runtime"
     core.client = {
       channel: {
         message: async () => ({
