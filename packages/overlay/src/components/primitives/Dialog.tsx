@@ -30,10 +30,16 @@ export interface DialogProps {
   modal?: boolean
   /** Extra class names applied to the dialog content element. */
   class?: string
+  /** Extra class names applied to the Kobalte overlay element. */
+  overlayClass?: string
   /** Extra class names applied to .dialog-form. */
   formClass?: string
   /** Forwarded ref for imperative focus or metrics. */
   ref?: ((el: HTMLElement) => void) | HTMLElement
+  /** Kobalte autofocus hook forwarded to dialog content. */
+  onOpenAutoFocus?: (event: Event) => void
+  /** Kobalte close autofocus hook forwarded to dialog content. */
+  onCloseAutoFocus?: (event: Event) => void
   /** Close callback fired after Kobalte requests the controlled dialog to close. */
   onClose?: (dialog: HTMLElement) => void
   /** Dialog body content. */
@@ -60,6 +66,7 @@ export function Dialog(rawProps: DialogProps) {
     "backdropClose",
     "modal",
     "class",
+    "overlayClass",
     "formClass",
     "ref",
     "onClose",
@@ -87,7 +94,7 @@ export function Dialog(rawProps: DialogProps) {
     <KobalteDialogRoot open={local.open} onOpenChange={closeFromKobalte} modal={local.modal}>
       <KobalteDialogPortal>
         <KobalteDialogOverlay
-          class="dialog-overlay"
+          class={["dialog-overlay", local.overlayClass].filter(Boolean).join(" ")}
           data-dialog-modal={local.modal ? "true" : "false"}
           style={dialogOverlayStyle()}
         />
@@ -96,6 +103,7 @@ export function Dialog(rawProps: DialogProps) {
           class={["dialog", local.wide ? "dialog-wide" : "", local.wider ? "dialog-wider" : "", local.class]
             .filter(Boolean)
             .join(" ")}
+          aria-modal={local.modal ? "true" : undefined}
           ref={(el) => {
             dialogRef = el
             if (typeof local.ref === "function") local.ref(el)
