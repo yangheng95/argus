@@ -349,3 +349,43 @@ LINE:
 - Implemented on 2026-06-17.
 - Focused tests passed: `bun test packages/opencorvus/test/server/request-origin.test.ts packages/opencorvus/test/server/onerror-mapping.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+
+## Batch P1-B: SVG attachments served as non-executable downloads
+
+### Findings
+
+- BH-007: `AttachmentStore.write` accepts `image/svg+xml` and stores it as `<sha>.svg`, then `GET /attachment/:projectID/:name` derives `Content-Type: image/svg+xml` from the extension.
+- Opening a same-origin `/attachment/...svg` URL as a top-level document can execute active SVG script in the server origin.
+- Existing non-HTTP consumers still need the raw bytes: `AttachmentStore.read`, `dataUrlFromReference`, staging, and read tools all work from the stored blob path. Rejecting SVG at write time would remove a useful asset/reference format for agent workflows.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/storage/attachment-store.ts` is the single writer/reader for content-addressed task attachments and maps `image/svg+xml` to `svg`.
+- `packages/opencorvus/src/server/routes/attachment.ts` is the HTTP serving surface that currently turns `.svg` into `image/svg+xml`.
+- `packages/opencorvus/src/tool/read.ts` and `packages/opencorvus/src/tool/webfetch.ts` already avoid treating SVG as a normal image render path.
+- `packages/overlay/src/components/ChatComposer.tsx` can still produce `image/svg+xml` attachments from user-selected files.
+- `packages/opencorvus/test/storage/*` covers store naming/staging/read behavior but not the HTTP serving headers.
+
+### Fix Shape
+
+- Keep `AttachmentStore` storage unchanged so raw SVG bytes remain available to tools and LLM attachment materialization.
+- Change only the HTTP response policy in `AttachmentRoutes`: when the stored filename resolves to SVG, serve bytes as `application/octet-stream`, add `Content-Disposition: attachment; filename="<stored-name>"`, and set `X-Content-Type-Options: nosniff`.
+- Add `X-Content-Type-Options: nosniff` to all attachment responses to keep MIME policy explicit.
+- Do not add a second attachment URL, sanitizer, route allowlist, or write-time fallback.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/server/attachment-routes.test.ts`.
+- Store a script-bearing SVG, fetch it through `Server.App()` with a project directory header, and assert raw bytes round-trip while response headers force non-executable download semantics.
+- Store a PNG and assert normal image attachments still serve `image/png` without forced attachment disposition.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/attachment-routes.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/opencorvus/test/server/attachment-routes.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.

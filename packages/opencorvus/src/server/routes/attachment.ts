@@ -33,12 +33,28 @@ function mimeFromName(name: string): string {
   return MIME_FROM_EXT[ext] ?? "application/octet-stream"
 }
 
+function attachmentHeaders(name: string, size: number) {
+  const mime = mimeFromName(name)
+  const headers: Record<string, string> = {
+    "content-type": mime,
+    "content-length": String(size),
+    "cache-control": "public, max-age=31536000, immutable",
+    "x-content-type-options": "nosniff",
+  }
+  if (mime === "image/svg+xml") {
+    headers["content-type"] = "application/octet-stream"
+    headers["content-disposition"] = `attachment; filename="${name}"`
+  }
+  return headers
+}
+
 /**
  * GET /attachment/:projectID/:name
  * Serves a content-addressed attachment previously written by AttachmentStore.
- * Content-Type is derived from the stored file extension (which in turn was
- * chosen from the original MIME at write time), so what comes out matches what
- * went in. 404 when the project or file is unknown — no fallback lookups.
+ * Content-Type is derived from the stored file extension, except SVG files:
+ * those are served as download-only octet-streams because active SVG can run
+ * same-origin script when opened as a top-level document.
+ * 404 when the project or file is unknown — no fallback lookups.
  */
 export const AttachmentRoutes = lazy(() =>
   new Hono().get(
@@ -64,11 +80,7 @@ export const AttachmentRoutes = lazy(() =>
       const body = await readFile(abs)
       return new Response(body as unknown as BodyInit, {
         status: 200,
-        headers: {
-          "content-type": mimeFromName(name),
-          "content-length": String(info.size),
-          "cache-control": "public, max-age=31536000, immutable",
-        },
+        headers: attachmentHeaders(name, info.size),
       })
     },
   ),
