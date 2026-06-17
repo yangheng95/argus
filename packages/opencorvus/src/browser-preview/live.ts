@@ -395,6 +395,7 @@ let page;
 let currentUrl = "";
 let currentViewport = "";
 let inputBuffer = "";
+let commandChain = Promise.resolve();
 
 function viewportKey(viewport) {
   return viewport.width + "x" + viewport.height;
@@ -470,6 +471,25 @@ async function handle(message) {
   process.stdout.write(JSON.stringify({ id: message.id, ok: true, result }) + "\n");
 }
 
+function writeErrorResponse(id, error) {
+  process.stdout.write(JSON.stringify({
+    id,
+    ok: false,
+    error: String(error && error.message || error),
+  }) + "\n");
+}
+
+function enqueueCommand(message) {
+  const run = async () => {
+    try {
+      await handle(message);
+    } catch (error) {
+      writeErrorResponse(message && message.id, error);
+    }
+  };
+  commandChain = commandChain.then(run, run);
+}
+
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
   inputBuffer += chunk;
@@ -483,16 +503,10 @@ process.stdin.on("data", (chunk) => {
     try {
       message = JSON.parse(line);
     } catch (error) {
-      process.stdout.write(JSON.stringify({ id: 0, ok: false, error: String(error && error.message || error) }) + "\n");
+      writeErrorResponse(0, error);
       continue;
     }
-    handle(message).catch((error) => {
-      process.stdout.write(JSON.stringify({
-        id: message && message.id,
-        ok: false,
-        error: String(error && error.message || error),
-      }) + "\n");
-    });
+    enqueueCommand(message);
   }
 });
 

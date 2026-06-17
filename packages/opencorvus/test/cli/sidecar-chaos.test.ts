@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import fs from "fs"
 import os from "os"
 import path from "path"
+import { readSidecarHandshake } from "./sidecar-test-utils"
 
 /**
  * Chaos integration tests for `opencorvus sidecar` (plan
@@ -90,23 +91,12 @@ async function spawnSidecar(opts: {
   void stderrDone
 
   if (opts.awaitHandshake) {
-    const reader = proc.stdout.getReader()
-    const decoder = new TextDecoder()
-    let buf = ""
-    const deadline = Date.now() + (opts.handshakeTimeoutMs ?? 30_000)
-    while (Date.now() < deadline) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value)
-      const m = buf.match(/^OPENCORVUS_LISTEN=127\.0\.0\.1:(\d+)$/m)
-      if (m) {
-        port = Number(m[1])
-        break
-      }
-    }
-    try {
-      reader.releaseLock()
-    } catch {}
+    port = (
+      await readSidecarHandshake(proc.stdout, {
+        idleTimeoutMs: opts.handshakeTimeoutMs ?? 30_000,
+        label: "sidecar chaos stdout handshake",
+      })
+    ).port
   }
 
   return {
