@@ -8,7 +8,7 @@
 //   </Section>
 //
 //   Controlled open state — hold a ref and set detailsEl.open imperatively,
-//   or pass `id` so DOM accessors (like board's acceptanceSection) resolve:
+//   or pass `id` when a surrounding surface needs a stable section anchor:
 //   <Section id="acceptanceSection" ref={el => detailsEl = el} ...>
 //
 // CSS: src/styles/primitives/section.css
@@ -31,9 +31,9 @@ export interface SectionProps {
   badgeId?: string
   /** data-variant applied to .oc-section__badge ("status" | "metric"). */
   badgeVariant?: string
-  /** id applied to .oc-section__body — used by DOM accessors like syncSectionPhases. */
+  /** id applied to .oc-section__body for stable section anchors. */
   bodyId?: string
-  /** id forwarded to the <details> root — used by DOM accessors. */
+  /** id forwarded to the <details> root for stable section anchors. */
   id?: string
   /** Ref forwarded to the <details> element. */
   ref?: ((el: HTMLDetailsElement) => void) | HTMLDetailsElement

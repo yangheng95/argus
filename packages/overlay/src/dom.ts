@@ -74,9 +74,6 @@ export interface DomRefs {
   goalsBadge: HTMLElement | null
   goalsBody: HTMLElement | null
 
-  // Evaluation
-  evalBody: HTMLElement | null
-
   // Changes
   changesBadge: HTMLElement | null
   changesBody: HTMLElement | null
@@ -204,9 +201,6 @@ export function getDomRefs(): DomRefs {
     // Goals
     goalsBadge: $<HTMLElement>("#goalsBadge"),
     goalsBody: $<HTMLElement>("#goalsBody"),
-
-    // Evaluation
-    evalBody: $<HTMLElement>("#evalBody"),
 
     // Changes
     changesBadge: $<HTMLElement>("#changesBadge"),

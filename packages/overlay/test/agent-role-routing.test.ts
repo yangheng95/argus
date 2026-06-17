@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   AGENT_CARD_STAGES,
+  agentRoleToSectionPhase,
   agentStageLabel,
   classifyMessage,
   normalizeAgentRole,
@@ -63,4 +64,10 @@ test("explore aliases and channel classification stay in the explore card", () =
       "root",
     ),
   ).toBe("explore")
+})
+
+test("evaluation agents route to the live acceptance section phase", () => {
+  expect(agentRoleToSectionPhase(normalizeAgentRole("visual-qa"))).toBe("acceptance")
+  expect(agentRoleToSectionPhase(normalizeAgentRole("evaluator"))).toBe("acceptance")
+  expect(agentRoleToSectionPhase(normalizeAgentRole("evaluation"))).toBe("acceptance")
 })
