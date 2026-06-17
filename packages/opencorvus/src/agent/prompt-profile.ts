@@ -3,6 +3,16 @@ import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 
 export const DEFAULT_PROMPT_PROFILE_ID = "frontend"
 
+const PROMPT_PROFILE_ID_PATTERN = /^(?!.*--)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+const PromptProfileIDSchema = z
+  .string()
+  .min(1, "prompt profile id cannot be empty.")
+  .max(64, "prompt profile id must be at most 64 characters.")
+  .regex(
+    PROMPT_PROFILE_ID_PATTERN,
+    "prompt profile id must use lowercase letters, digits, and single hyphens, and must start with a letter.",
+  )
+
 const USER_PROFILE_TARGETS = [
   "coding",
   "coding-assistant",
@@ -29,23 +39,23 @@ export type PromptProfileTargetID =
 
 export const PromptProfileDefinitionSchema = z
   .object({
-    label: z.string().min(1),
-    description: z.string().optional(),
+    label: z.string().trim().min(1, "prompt profile label cannot be empty."),
+    description: z.string().trim().min(1, "prompt profile description cannot be empty when provided.").optional(),
     agents: z.record(z.string(), z.string()).default({}),
   })
   .strict()
 
 export const PromptProfileConfigSchema = z
   .object({
-    active: z.string().min(1).default(DEFAULT_PROMPT_PROFILE_ID),
-    profiles: z.record(z.string(), PromptProfileDefinitionSchema).optional(),
+    active: PromptProfileIDSchema.default(DEFAULT_PROMPT_PROFILE_ID),
+    profiles: z.record(PromptProfileIDSchema, PromptProfileDefinitionSchema).optional(),
   })
   .strict()
   .default({ active: DEFAULT_PROMPT_PROFILE_ID })
 
 export const PromptProfileOverlaySchema = z
   .object({
-    active: z.string().min(1).nullable().optional(),
+    active: PromptProfileIDSchema.nullable().optional(),
   })
   .strict()
 
@@ -177,7 +187,7 @@ export namespace PromptProfile {
         coding:
           "Prioritize precise problem framing, invariants, complexity, numerical behavior, and demonstrable correctness.",
         "coding-assistant":
-          "Explain algorithm changes in terms of invariants, edge cases, complexity tradeoffs, and proof obligations so the reasoning stays inspectable.",
+          "Explain algorithm changes with invariants, edge cases, complexity tradeoffs, and proof obligations that a reviewer can check against code or benchmarks.",
         general:
           "Anchor algorithm-heavy work to invariants, asymptotic cost, adversarial cases, reproducibility, and proof obligations.",
         explore:
@@ -329,6 +339,14 @@ export namespace PromptProfile {
             code: "custom",
             path: [...path, "profiles", profileID, "agents", target],
             message: `prompt profile target ${target} is built-in-only and cannot be configured by project profiles.`,
+          })
+        }
+        const prompt = profile.agents[target]
+        if (typeof prompt === "string" && prompt.trim().length === 0) {
+          ctx.addIssue({
+            code: "custom",
+            path: [...path, "profiles", profileID, "agents", target],
+            message: `prompt profile target ${target} overlay cannot be blank; omit the target when no overlay is needed.`,
           })
         }
       }

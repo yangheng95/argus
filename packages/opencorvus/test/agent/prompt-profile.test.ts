@@ -2,6 +2,56 @@ import { describe, expect, test } from "bun:test"
 import { PromptProfile } from "../../src/agent/prompt-profile"
 import { Config } from "../../src/config/config"
 
+const requiredBuiltInTargetMatrix = {
+  frontend: [
+    "coding",
+    "coding-assistant",
+    "mission",
+    "intent-analysis",
+    "requirements",
+    "architect",
+    "frontend-design",
+    "frontend-research",
+    "build",
+    "visual-qa",
+    "integrity",
+    "orchestrator",
+  ],
+  backend: [
+    "coding",
+    "coding-assistant",
+    "mission",
+    "intent-analysis",
+    "requirements",
+    "architect",
+    "build",
+    "deep-research",
+    "fact-check",
+    "integrity",
+    "orchestrator",
+  ],
+  algorithm: [
+    "coding",
+    "coding-assistant",
+    "mission",
+    "intent-analysis",
+    "requirements",
+    "architect",
+    "build",
+    "deep-research",
+    "fact-check",
+    "goal-workload-analyst",
+    "integrity",
+    "orchestrator",
+  ],
+} as const
+
+function expectConfigRejected(input: unknown, expectedMessage: string) {
+  const parsed = Config.Info.safeParse(input)
+  expect(parsed.success).toBe(false)
+  if (!parsed.success) expect(JSON.stringify(parsed.error.issues)).toContain(expectedMessage)
+}
+
 describe("prompt profiles", () => {
   test("Config.Info materializes frontend as the explicit default profile", () => {
     const config = Config.Info.parse({})
@@ -107,6 +157,130 @@ describe("prompt profiles", () => {
     })
     expect(builtInOnly.success).toBe(false)
     if (!builtInOnly.success) expect(JSON.stringify(builtInOnly.error.issues)).toContain("built-in-only")
+  })
+
+  test("schema pressure rejects unstable custom identifiers, blank labels, and blank target overlays", () => {
+    expectConfigRejected(
+      {
+        prompt_profile: {
+          active: "custom squad",
+          profiles: {
+            "custom squad": {
+              label: "Custom Squad",
+              agents: {
+                build: "Verify the route contract and runtime evidence.",
+              },
+            },
+          },
+        },
+      },
+      "prompt profile id",
+    )
+
+    expectConfigRejected(
+      {
+        prompt_profile: {
+          active: " frontend ",
+        },
+      },
+      "prompt profile id",
+    )
+
+    expectConfigRejected(
+      {
+        prompt_profile: {
+          active: "custom-squad",
+          profiles: {
+            "custom-squad": {
+              label: "   ",
+              agents: {
+                build: "Verify the route contract and runtime evidence.",
+              },
+            },
+          },
+        },
+      },
+      "prompt profile label cannot be empty",
+    )
+
+    expectConfigRejected(
+      {
+        prompt_profile: {
+          active: "custom-squad",
+          profiles: {
+            "custom-squad": {
+              label: "Custom Squad",
+              agents: {
+                build: "   ",
+              },
+            },
+          },
+        },
+      },
+      "cannot be blank",
+    )
+  })
+
+  test("session overlay schema pressure rejects malformed active profile ids before route lookup", () => {
+    const malformed = Config.Overlay.safeParse({ prompt_profile: { active: "Backend!" } })
+    expect(malformed.success).toBe(false)
+    if (!malformed.success) expect(JSON.stringify(malformed.error.issues)).toContain("prompt profile id")
+
+    const validSyntax = Config.Overlay.safeParse({ prompt_profile: { active: "custom-squad" } })
+    expect(validSyntax.success).toBe(true)
+  })
+
+  test("built-in registry pressure covers required target matrices without noncanonical targets", () => {
+    expect(Object.keys(PromptProfile.builtIns)).toEqual(["general", "frontend", "backend", "algorithm"])
+    const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
+    expect(PromptProfile.targets).toHaveLength(targetIDs.size)
+
+    for (const [profileID, requiredTargets] of Object.entries(requiredBuiltInTargetMatrix)) {
+      const profile = PromptProfile.builtIns[profileID]
+      expect(profile).toBeDefined()
+      for (const targetID of requiredTargets) {
+        expect(profile.agents[targetID]?.trim().length ?? 0).toBeGreaterThan(0)
+      }
+    }
+
+    for (const [profileID, profile] of Object.entries(PromptProfile.builtIns)) {
+      for (const targetID of Object.keys(profile.agents)) {
+        expect(targetIDs.has(targetID), `${profileID} references noncanonical target ${targetID}`).toBe(true)
+      }
+    }
+  })
+
+  test("built-in registry pressure keeps overlays sharp, role-scoped, and free of workflow mechanics", () => {
+    const forbiddenFragments = [
+      "active prompt profile",
+      "bias planning",
+      "dispatch roster",
+      "fallback",
+      "handoff graph",
+      "host-side",
+      "ownership lines",
+      "prioritize these tools",
+      "retry strategy",
+      "state machine",
+      "tool inventory",
+      "tool list",
+      "workflow graph",
+    ]
+    const vagueFragments = ["operational assumptions", "reasoning stays", "workflow mechanics"]
+
+    for (const [profileID, profile] of Object.entries(PromptProfile.builtIns)) {
+      const seen = new Set<string>()
+      for (const [targetID, overlay] of Object.entries(profile.agents)) {
+        const normalized = overlay.trim().toLowerCase()
+        expect(normalized.length, `${profileID}.${targetID} is too short to be actionable`).toBeGreaterThanOrEqual(80)
+        expect(normalized.length, `${profileID}.${targetID} is too long for an overlay`).toBeLessThanOrEqual(240)
+        expect(seen.has(normalized), `${profileID}.${targetID} duplicates another target overlay`).toBe(false)
+        seen.add(normalized)
+        for (const fragment of [...forbiddenFragments, ...vagueFragments]) {
+          expect(normalized.includes(fragment), `${profileID}.${targetID} contains ${fragment}`).toBe(false)
+        }
+      }
+    }
   })
 
   test("session overlay rejects prompt edits for prompt-mode none agents", () => {
