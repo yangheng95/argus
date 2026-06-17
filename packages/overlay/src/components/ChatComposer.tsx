@@ -2,7 +2,9 @@
 // Solid.js port of renderChatComposer / renderChatAttachments / chatForm submit
 // and related attachment/keyboard logic
 
+import * as Select from "@kobalte/core/select"
 import { createSignal, createMemo, createEffect, For, Show, onCleanup, onMount } from "solid-js"
+import type { JSX } from "solid-js"
 import { t, tArray } from "../utils/i18n"
 import { ExecutorSelector } from "./ExecutorSelector"
 import { nativeMessage } from "../services/app-dialog"
@@ -89,6 +91,26 @@ export interface ChatComposerProps {
   onPromptProfileChange: (profileID: string) => void
 }
 
+function PromptProfileSelectOptionItem(props: Select.SelectRootItemComponentProps<PromptProfileOption>): JSX.Element {
+  const option = () => props.item.rawValue
+  return (
+    <Select.Item
+      item={props.item}
+      class="oc-select-option prompt-profile-select-option"
+      data-profile-id={option().id}
+      title={option().description ?? option().label}
+    >
+      <span class="prompt-profile-select-option-copy">
+        <Select.ItemLabel>{option().label}</Select.ItemLabel>
+        <Show when={option().description}>{(description) => <small>{description()}</small>}</Show>
+      </span>
+      <Select.ItemIndicator class="oc-select-indicator">
+        <Icon name="status-completed" size={12} />
+      </Select.ItemIndicator>
+    </Select.Item>
+  )
+}
+
 // ── Constants ──
 
 // MAX_ATTACHMENT_SIZE / MAX_TOTAL_ATTACHMENT_SIZE imported from
@@ -143,7 +165,6 @@ function utf8ByteLength(value: string): number {
 export function ChatComposer(props: ChatComposerProps) {
   let textareaRef!: HTMLTextAreaElement
   let formRef!: HTMLFormElement
-  let promptProfileSelectRef!: HTMLSelectElement
 
   const [text, setText] = createSignal("")
   let loadedDraftKey: string | null = null
@@ -517,17 +538,18 @@ export function ChatComposer(props: ChatComposerProps) {
   }
   const sendAriaLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"))
   const sendLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"))
+  const selectedPromptProfile = createMemo(() => {
+    return props.promptProfiles.find((profile) => profile.id === props.promptProfileID) ?? null
+  })
   const promptProfileLabel = createMemo(() => {
-    return props.promptProfiles.find((profile) => profile.id === props.promptProfileID)?.label ?? props.promptProfileID
+    return selectedPromptProfile()?.label ?? props.promptProfileID
   })
   const promptProfileDisabled = createMemo(() => props.promptProfiles.length === 0 || !props.enabled || props.busy)
 
-  createEffect(() => {
-    props.promptProfiles.length
-    if (promptProfileSelectRef && promptProfileSelectRef.value !== props.promptProfileID) {
-      promptProfileSelectRef.value = props.promptProfileID
-    }
-  })
+  function selectPromptProfile(profile: PromptProfileOption | null): void {
+    if (!profile || profile.id === props.promptProfileID) return
+    props.onPromptProfileChange(profile.id)
+  }
 
   return (
     <form
@@ -652,39 +674,40 @@ export function ChatComposer(props: ChatComposerProps) {
        * stays clean. */}
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
-          <label class="prompt-profile-select-wrap" title={t("prompt_profile.selector_title")}>
-            <span class="prompt-profile-select-chrome" aria-hidden="true">
+          <Select.Root<PromptProfileOption>
+            class="prompt-profile-select-wrap"
+            options={props.promptProfiles}
+            optionValue="id"
+            optionTextValue="label"
+            value={selectedPromptProfile()}
+            onChange={selectPromptProfile}
+            itemComponent={PromptProfileSelectOptionItem}
+            disabled={promptProfileDisabled()}
+            disallowEmptySelection
+            gutter={4}
+            sameWidth
+          >
+            <Select.Trigger
+              class="prompt-profile-select-trigger"
+              data-ui="prompt-profile-selector"
+              aria-label={t("prompt_profile.selector_title")}
+              title={t("prompt_profile.selector_title")}
+            >
               <span class="prompt-profile-select-copy">
                 <span class="prompt-profile-select-label">{t("prompt_profile.selector_label")}</span>
                 <span class="prompt-profile-select-value">{promptProfileLabel()}</span>
               </span>
-              <span class="prompt-profile-select-caret">
+              <Select.Icon class="prompt-profile-select-caret">
                 <Icon name="caret-down" size={9} />
-              </span>
-            </span>
-            <select
-              ref={promptProfileSelectRef}
-              class="prompt-profile-select"
-              data-ui="prompt-profile-selector"
-              aria-label={t("prompt_profile.selector_title")}
-              disabled={promptProfileDisabled()}
-              value={props.promptProfileID}
-              onChange={(event) => props.onPromptProfileChange(event.currentTarget.value)}
-            >
-              <Show
-                when={props.promptProfiles.length > 0}
-                fallback={<option value={props.promptProfileID}>{promptProfileLabel()}</option>}
-              >
-                <For each={props.promptProfiles}>
-                  {(profile) => (
-                    <option value={profile.id} title={profile.description ?? profile.label}>
-                      {profile.label}
-                    </option>
-                  )}
-                </For>
-              </Show>
-            </select>
-          </label>
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.HiddenSelect aria-label={t("prompt_profile.selector_title")} />
+            <Select.Portal>
+              <Select.Content class="oc-select-content prompt-profile-select-content">
+                <Select.Listbox class="oc-select-listbox prompt-profile-select-listbox" />
+              </Select.Content>
+            </Select.Portal>
+          </Select.Root>
           <ExecutorSelector />
         </div>
       </div>
