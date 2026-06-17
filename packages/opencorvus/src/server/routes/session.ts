@@ -39,7 +39,7 @@ import { SessionAgentIdentity } from "@/session/agent-identity"
 const log = Log.create({ service: "server" })
 
 async function applySessionPromptRouteOverlay(sessionID: string, prompt: Omit<SessionPrompt.PromptInput, "sessionID">) {
-  const session = await Session.get(sessionID)
+  const session = await getActiveProjectSession(sessionID)
   if (isRightSidebarCodingAssistantSession(session)) {
     return applyRightSidebarCodingAssistantPromptOverlay(prompt)
   }
@@ -138,8 +138,12 @@ async function sessionConfig(input: {
   }
 }
 
+async function getActiveProjectSession(sessionID: string) {
+  return Session.getInProject({ sessionID, projectID: Instance.project.id })
+}
+
 async function assertActiveProjectSession(sessionID: string) {
-  await Session.getInProject({ sessionID, projectID: Instance.project.id })
+  await getActiveProjectSession(sessionID)
 }
 
 export const SessionRoutes = lazy(() =>
@@ -357,7 +361,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        const session = await Session.get(sessionID)
+        const session = await getActiveProjectSession(sessionID)
         const transcript = enrichStandaloneSessionTranscript(await Session.messages({ sessionID })).filter(
           conversationMessageHasDisplay,
         )
@@ -409,7 +413,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await Session.get(sessionID)
+        await assertActiveProjectSession(sessionID)
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
@@ -488,7 +492,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        const session = await Session.get(sessionID)
+        const session = await getActiveProjectSession(sessionID)
         log.info("session.get", { sessionID, session })
         return c.json(session)
       },
@@ -516,6 +520,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
+        await assertActiveProjectSession(sessionID)
         return c.json(await Session.children(sessionID))
       },
     )
@@ -594,6 +599,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
+        await assertActiveProjectSession(sessionID)
         await EngineService.deleteSession(sessionID, {
           deleteTasks: c.req.valid("query").deleteTasks === true,
         })
@@ -635,7 +641,7 @@ export const SessionRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const updates = c.req.valid("json")
 
-        let session = await Session.get(sessionID)
+        let session = await getActiveProjectSession(sessionID)
         if (updates.title !== undefined) {
           session = await Session.setTitle({ sessionID, title: updates.title })
         }
@@ -669,6 +675,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        await assertActiveProjectSession(sessionID)
         await Session.initialize({ ...body, sessionID })
         return c.json(true)
       },
@@ -693,6 +700,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        await assertActiveProjectSession(sessionID)
         const result = await Session.fork({ ...body, sessionID })
         return c.json(result)
       },
@@ -719,6 +727,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
+        await assertActiveProjectSession(sessionID)
         SessionPrompt.cancel(sessionID)
         TaskQueueService.cancelSessionPrompts({
           sessionIDs: [sessionID],
@@ -757,6 +766,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const query = c.req.valid("query")
         const params = c.req.valid("param")
+        await assertActiveProjectSession(params.sessionID)
         const result = await SessionSummary.diff({
           sessionID: params.sessionID,
           messageID: query.messageID,
@@ -796,7 +806,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
-        const session = await Session.get(sessionID)
+        const session = await getActiveProjectSession(sessionID)
         await clearRewindCursorForSession(sessionID)
         const msgs = await Session.messages({ sessionID })
         let source: Message.User | undefined
@@ -1125,6 +1135,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const taskID = c.req.valid("param").taskID
+        await assertActiveProjectSession(sessionID)
         const status = TaskQueueService.getStatus({
           sessionID,
           taskID,
@@ -1167,6 +1178,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        await assertActiveProjectSession(sessionID)
         const msg = await SessionPrompt.command({ ...body, sessionID })
         return c.json(msg)
       },
@@ -1195,6 +1207,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        await assertActiveProjectSession(sessionID)
         const msg = await SessionPrompt.shell({ ...body, sessionID })
         return c.json(msg)
       },
