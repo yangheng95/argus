@@ -16,7 +16,7 @@
 // rendering as ALL CAPS themselves. Pin a single contract here so
 // the entire settings surface stays in one typographic voice.
 //
-// Tier-3 status pills (req-type, req-status, gwg-step-status,
+// Tier-3 status pills (req-type, req-status, gwg-verdict,
 // verdict-pill, …) keep their uppercase styling. The negative
 // control pins that distinction so a future "remove all uppercase"
 // sweep can't quietly strip the legitimate pill styling.
@@ -69,7 +69,7 @@ describe("settings-panel section headers render Title Case", () => {
 })
 
 describe("tier-3 status pills keep uppercase (negative control)", () => {
-  for (const sel of [".verdict-pill", ".req-type", ".req-status", ".gwg-step-status"]) {
+  for (const sel of [".verdict-pill", ".req-type", ".req-status", ".gwg-verdict"]) {
     test(`${sel} stays uppercase`, () => {
       expect(ruleBody(sel)).toContain("text-transform: uppercase")
     })

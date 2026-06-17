@@ -12,7 +12,7 @@
 // transparent secondary controls, 5f0f209d3 remove right panel
 // decorative borders, a5723925a flatten themes).
 //
-// Tier-3 status pills (verdict-pill, req-type, req-status, gwg-step-
+// Tier-3 status pills (verdict-pill, req-type, req-status, gwg-verdict)
 // status, etc.) DO keep their uppercase styling — those are short
 // single-word color-coded chips where the pill convention reads as a
 // status tag, not as a screaming action. The negative control below

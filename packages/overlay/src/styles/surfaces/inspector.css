@@ -1118,51 +1118,6 @@
   line-height: 1.4;
 }
 
-/* GWG header action buttons (edit / delete) — hidden until the
-   parent card is hovered or focus-within. Tone shifts on hover via
-   surface-inset wash, and the delete variant tints to var(--bad). */
-.gwg-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--ui-font-control);
-  line-height: 1;
-  cursor: pointer;
-  border-radius: var(--oc-radius-pill);
-  flex-shrink: 0;
-  opacity: var(--ui-opacity-hidden);
-  pointer-events: none;
-  transform: translateY(calc(1px * var(--ui-scale)));
-  transition:
-    background var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-base) var(--ui-timing-standard),
-    opacity var(--ui-duration-base) var(--ui-timing-standard),
-    transform var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.gwg:hover .gwg-action-btn,
-.gwg:focus-within .gwg-action-btn {
-  opacity: var(--ui-opacity-subtle);
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.gwg-action-btn:hover {
-  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
-  color: var(--text);
-}
-
-.gwg-action-delete:hover {
-  background: var(--bad-dim);
-  color: var(--bad);
-}
-
 /* GWG body: container that opens beneath the header when a goal is
    expanded. Top border separates header from body, with a faint
    white wash gradient on top to lift the panel. */
@@ -1309,188 +1264,6 @@
   margin-bottom: 0;
 }
 
-/* GWG step row: icon + label + status pill, repeated inside the
-   goal body to render the agent's ordered todo list. The 1px-bias
-   on the vertical padding keeps the row visually centered against
-   the 16-tall icon. Status modifiers retint icon + status pill
-   based on `[--pending|--running|--done|--failed|--skipped]`. */
-.gwg-step {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  padding: calc(1px * var(--ui-scale) + var(--ui-gap-xs)) var(--ui-gap-sm);
-  font-size: var(--ui-font-control);
-  border-radius: var(--oc-radius-soft);
-  transition: background var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-/* Step icon: small round chip carrying the per-step glyph. The
-   absolute-bounded font-size clamp that used to sit here was
-   dropped for the same reason it was dropped on the goal-card
-   status icon — the bounds escaped `--ui-scale` and the glyph
-   never overflows. */
-.gwg-step-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(16px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--gwg-surface-hover);
-  color: var(--text-muted);
-  font-size: calc(10px * var(--ui-scale));
-  font-weight: var(--ui-font-weight-strong);
-  line-height: 1;
-  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--border) 72%, transparent) inset;
-}
-
-.gwg-step-label {
-  flex: 1;
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--text);
-  letter-spacing: var(--ui-letter-spacing-loose);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.gwg-step-summary {
-  font-size: var(--ui-font-small);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.gwg-step-status {
-  font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  background: var(--gwg-surface-hover);
-  color: var(--text-muted);
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Status-tinted variants — `--pending` / `--running` / `--done` /
-   `--failed` / `--skipped`. The previous raw rgba fills on the
-   running/failed inset rings routed through color-mix on
-   var(--accent) and var(--bad). */
-.gwg-step--pending .gwg-step-icon {
-  background: var(--gwg-surface-hover);
-  color: var(--text-muted);
-}
-
-.gwg-step--pending .gwg-step-status {
-  background: var(--gwg-surface-hover);
-  color: var(--text-muted);
-}
-
-.gwg-step--running {
-  background: linear-gradient(90deg, var(--accent-dim), transparent 92%);
-}
-
-.gwg-step--running .gwg-step-icon {
-  background: var(--accent-dim);
-  color: var(--accent);
-  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 40%, transparent) inset;
-}
-
-.gwg-step--running .gwg-step-status {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-
-.gwg-step--done .gwg-step-icon {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: color-mix(in srgb, var(--accent) 68%, var(--text-soft));
-  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 22%, transparent) inset;
-}
-
-.gwg-step--done .gwg-step-status {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: color-mix(in srgb, var(--accent) 68%, var(--text-soft));
-}
-
-.gwg-step--failed {
-  background: linear-gradient(90deg, var(--bad-dim), transparent 92%);
-}
-
-.gwg-step--failed .gwg-step-icon {
-  background: var(--bad-dim);
-  color: var(--bad);
-  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
-}
-
-.gwg-step--failed .gwg-step-status {
-  background: var(--bad-dim);
-  color: var(--bad);
-}
-
-.gwg-step--skipped .gwg-step-icon {
-  background: var(--gwg-surface-base);
-  color: var(--text-muted);
-}
-
-.gwg-step--skipped .gwg-step-label {
-  text-decoration: line-through;
-  color: var(--text-muted);
-}
-
-.gwg-step--skipped .gwg-step-status {
-  background: var(--gwg-surface-base);
-  color: var(--text-muted);
-}
-
-/* Expandable step (details/summary) — wraps a step row in a
-   <details> shell so the agent log/diff can collapse beneath it. */
-.gwg-step-detail {
-  border-radius: var(--oc-radius-soft);
-  overflow: hidden;
-}
-
-.gwg-step-detail > .gwg-step {
-  cursor: pointer;
-  list-style: none;
-}
-
-.gwg-step-detail[open] > .gwg-step {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.gwg-step-detail > .gwg-step:hover {
-  filter: brightness(1.08);
-}
-
-.gwg-step-detail > .gwg-step::-webkit-details-marker,
-.gwg-step-detail > .gwg-step::marker {
-  display: none;
-}
-
-.gwg-step-count {
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  padding: 0 calc(4px * var(--ui-scale));
-}
-
-/* Step body — collapsible content beneath each step row. Hosts
-   the plan-node list, diff stats, changed files, eval summary,
-   and message log. Border-top separates body from row, faint
-   subtle wash gives the body its own depth. */
-.gwg-step-body {
-  padding: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
-  background: var(--gwg-surface-base);
-  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-}
-
 /* Plan-node list (inside the plan-step body): numbered cards
    with a leading absolute counter chip. The counter container
    sits to the left of the body content via padding-inline-start
@@ -1543,98 +1316,6 @@
   line-height: 1.5;
 }
 
-/* Changed files + diff stats (inside the execute-step body). The
-   `.gwg-diff-additions` / `-deletions` chips reuse `--good-dim`
-   and `--bad-dim` semantic dims. */
-.gwg-changed-files {
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-}
-
-.gwg-diff-stats {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  margin-bottom: var(--ui-gap-xs);
-  padding-bottom: var(--ui-gap-xs);
-  border-bottom: var(--oc-border-width) dashed color-mix(in srgb, var(--border) 72%, transparent);
-  font-size: var(--ui-font-tiny);
-  font-variant-numeric: tabular-nums;
-}
-
-.gwg-diff-files {
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-}
-
-.gwg-diff-additions {
-  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  background: var(--good-dim);
-  color: var(--good);
-  font-weight: var(--ui-font-weight-strong);
-}
-
-.gwg-diff-deletions {
-  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  background: var(--bad-dim);
-  color: var(--bad);
-  font-weight: var(--ui-font-weight-strong);
-}
-
-.gwg-changed-file {
-  padding: calc(2px * var(--ui-scale)) var(--ui-gap-sm);
-  font-family: var(--mono);
-  font-size: var(--ui-font-tiny);
-  color: var(--text);
-  border-radius: var(--oc-radius-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: background var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.gwg-changed-file:hover {
-  background: var(--gwg-surface-muted);
-  color: var(--text-strong);
-}
-
-/* Open-session action — the "open in chat" button surfaced at
-   the bottom of a step body when a goal has an attached session. */
-.gwg-open-session {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.gwg-open-session-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale)) var(--ui-gap-md);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-pill);
-  background: transparent;
-  color: var(--text);
-  font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-strong);
-  letter-spacing: var(--ui-letter-spacing-loose);
-  cursor: pointer;
-  transition:
-    background var(--ui-duration-base) var(--ui-timing-standard),
-    border-color var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.gwg-open-session-btn:hover {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 /* Eval verdict pill — accepted / rejected / inconclusive. The
    inset rings' raw rgba(--good/--bad/--warn at 35%) routed
    through color-mix on the matching semantic token. */
@@ -1676,17 +1357,6 @@
   font-size: var(--ui-font-small);
   color: var(--text);
   line-height: 1.5;
-}
-
-/* Step message log — scrollable container for live agent output
-   inside the step body. */
-.gwg-step-messages {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-  max-height: calc(240px * var(--ui-scale));
-  overflow-y: auto;
-  padding-right: calc(2px * var(--ui-scale));
 }
 
 /* Eval checks list — itemized pass/fail rows shown after the
@@ -2179,47 +1849,8 @@
   background: var(--surface-muted);
 }
 
-/* Dimension row: shows a single integrity dimension's verdict +
-   issue counts. The left rail carries state without drawing a card. */
-.integrity__dimension {
-  display: flex;
-  gap: var(--ui-gap-sm);
-  align-items: baseline;
-  padding: var(--ui-gap-xs) var(--ui-gap-sm);
-  background: transparent;
-  border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 0;
-  font-size: var(--ui-font-control);
-  line-height: 1.5;
-}
-
-.integrity__dimension[data-verdict="pass"] {
-  border-left-color: var(--good);
-}
-
-.integrity__dimension[data-verdict="concerns"] {
-  border-left-color: var(--warn);
-}
-
-.integrity__dimension[data-verdict="needs_correction"] {
-  border-left-color: var(--bad);
-}
-
-.integrity__dimension-name {
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-  flex: 1;
-  min-width: 0;
-}
-
-.integrity__dimension-counts {
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Issue / correction / missing row: the same flat rail pattern as
-   `.integrity__dimension`. */
+/* Issue / correction / missing rows use the current integrity card's
+   flat left-rail pattern. */
 .integrity__issue,
 .integrity__correction,
 .integrity__missing {
@@ -2274,21 +1905,6 @@
   color: var(--warn);
 }
 
-.integrity__tag[data-action="modify"] {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-
-.integrity__tag[data-action="split"] {
-  background: var(--warn-dim);
-  color: var(--warn);
-}
-
-.integrity__tag[data-action="remove"] {
-  background: var(--bad-dim);
-  color: var(--bad);
-}
-
 /* Issue type taxonomy: hard violations push the rail to `--bad`;
    softer concerns route to `--warn`. */
 .integrity__issue[data-type="uncovered"],
@@ -2314,35 +1930,6 @@
   border-left-color: var(--warn);
 }
 
-/* REQ-N / acceptance-spec id chip strip on issue rows. Lights up when
-   requirement_fidelity issues cite the affected REQs (always required by
-   prompt rule), or when post-build issues point at failing acceptance specs
-   surfaced by the Requirement Status Snapshot. */
-.integrity__chips {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: calc(2px * var(--ui-scale));
-  margin-left: calc(6px * var(--ui-scale));
-}
-
-.integrity__chip {
-  font-family: var(--mono);
-  font-size: var(--ui-font-tiny, var(--ui-font-small));
-  padding: 0 calc(4px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  line-height: 1.6;
-}
-
-.integrity__chip--req {
-  color: var(--accent);
-  background: var(--accent-dim);
-}
-
-.integrity__chip--spec {
-  color: var(--warn);
-  background: var(--warn-dim);
-}
-
 /* Correction sub-block: head row layered on the shared chrome. */
 .integrity__correction-head {
   display: flex;
@@ -2357,48 +1944,10 @@
   min-width: 0;
 }
 
-.integrity__goal-id {
-  font-family: var(--mono);
-  font-size: var(--ui-font-small);
-  color: var(--accent);
-  background: var(--accent-dim);
-  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  flex-shrink: 0;
-}
-
-/* Definition-list diff inside a correction: shows before/after for
-   each changed field. */
-.integrity__diff {
-  margin: var(--ui-gap-xs) 0 0 0;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: calc(2px * var(--ui-scale)) var(--ui-gap-sm);
-  font-size: var(--ui-font-small);
-}
-
-.integrity__diff dt {
-  color: var(--text-muted);
-  font-weight: var(--ui-font-weight-strong);
-  font-variant: small-caps;
-}
-
-.integrity__diff dd {
-  margin: 0;
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 /* Missing-coverage row sub-text. */
 .integrity__missing-title {
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-}
-
-.integrity__missing-objective {
-  color: var(--text);
-  margin-top: calc(2px * var(--ui-scale));
 }
 
 .integrity__missing-reason {

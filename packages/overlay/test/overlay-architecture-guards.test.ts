@@ -738,12 +738,11 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
-  test("gwg actions + body + objective are owned by surfaces/inspector.css", () => {
+  test("gwg body + objective are owned by surfaces/inspector.css without retired action buttons", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
-      "gwg-action-btn",
       "gwg-body",
       "gwg-objective",
       "gwg-objective-label",
@@ -756,8 +755,9 @@ describe("overlay architecture guards", () => {
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(inspectorSurface).toMatch(/\.gwg:hover \.gwg-action-btn,/)
-    expect(inspectorSurface).toMatch(/\.gwg-action-delete:hover\s*\{/)
+    for (const className of ["gwg-action-btn", "gwg-action-delete"]) {
+      expect(inspectorSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[|-)`))
+    }
     expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
@@ -1470,19 +1470,22 @@ describe("overlay architecture guards", () => {
       "integrity__section",
       "integrity__section-title",
       "integrity__list",
-      "integrity__dimension",
-      "integrity__dimension-name",
-      "integrity__dimension-counts",
+      "integrity__reviewer-list",
+      "integrity__reviewer",
+      "integrity__reviewer-head",
+      "integrity__reviewer-title",
+      "integrity__reviewer-name",
+      "integrity__reviewer-summary",
+      "integrity__reviewer-meta",
+      "integrity__reviewer-chip",
+      "integrity__manifest-meta",
       "integrity__issue-body",
       "integrity__issue-desc",
       "integrity__issue-title",
       "integrity__tag",
       "integrity__correction-head",
       "integrity__correction-reason",
-      "integrity__goal-id",
-      "integrity__diff",
       "integrity__missing-title",
-      "integrity__missing-objective",
       "integrity__missing-reason",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -1490,15 +1493,23 @@ describe("overlay architecture guards", () => {
     }
 
     for (const verdict of ["pass", "concerns", "needs_correction"]) {
-      expect(inspectorSurface).toMatch(new RegExp(`\\.integrity__dimension\\[data-verdict="${verdict}"\\]\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`\\.integrity__reviewer\\[data-verdict="${verdict}"\\]\\s*\\{`))
     }
 
-    for (const action of ["modify", "split", "remove"]) {
-      expect(inspectorSurface).toMatch(new RegExp(`\\.integrity__tag\\[data-action="${action}"\\]\\s*\\{`))
+    for (const className of [
+      "integrity__dimension",
+      "integrity__dimension-name",
+      "integrity__dimension-counts",
+      "integrity__goal-id",
+      "integrity__diff",
+      "integrity__missing-objective",
+      "integrity__chips",
+      "integrity__chip",
+    ]) {
+      expect(inspectorSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[|-)`))
     }
 
-    expect(inspectorSurface).toMatch(/\.integrity__diff dt\s*\{/)
-    expect(inspectorSurface).toMatch(/\.integrity__diff dd\s*\{/)
+    expect(inspectorSurface).not.toMatch(/\.integrity__tag\[data-action=/)
   })
 
   test("requirements panel is owned by surfaces/inspector.css", () => {
@@ -1554,26 +1565,17 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/clamp\([^,]*,\s*calc\(10px/)
   })
 
-  test("gwg step body, plan nodes, diff stats, verdict are owned by surfaces/inspector.css", () => {
+  test("gwg payload plan nodes, checks, and verdict are owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
-      "gwg-step-body",
       "gwg-plan-nodes",
       "gwg-plan-node",
       "gwg-plan-node-title",
       "gwg-plan-node-brief",
-      "gwg-changed-files",
-      "gwg-diff-stats",
-      "gwg-diff-additions",
-      "gwg-diff-deletions",
-      "gwg-changed-file",
-      "gwg-open-session",
-      "gwg-open-session-btn",
       "gwg-verdict",
       "gwg-eval-summary",
-      "gwg-step-messages",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -1589,11 +1591,20 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/rgba\(212,\s*167,\s*44/)
   })
 
-  test("gwg step row family is owned by surfaces/inspector.css", () => {
+  test("retired gwg step row family stays removed from surfaces/inspector.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
+      "gwg-step-body",
+      "gwg-changed-files",
+      "gwg-diff-stats",
+      "gwg-diff-additions",
+      "gwg-diff-deletions",
+      "gwg-changed-file",
+      "gwg-open-session",
+      "gwg-open-session-btn",
+      "gwg-step-messages",
       "gwg-step",
       "gwg-step-icon",
       "gwg-step-label",
@@ -1603,20 +1614,20 @@ describe("overlay architecture guards", () => {
       "gwg-step-count",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
     }
 
     for (const status of ["pending", "running", "done", "failed", "skipped"]) {
       expect(styles).not.toMatch(
         new RegExp(`(^|\\n)\\.gwg-step--${status}(?:\\s+\\.gwg-step-(?:icon|label|status))?\\s*\\{`),
       )
-      expect(inspectorSurface).toMatch(
+      expect(inspectorSurface).not.toMatch(
         new RegExp(`\\.gwg-step--${status}(?:\\s+\\.gwg-step-(?:icon|label|status))?\\s*\\{`),
       )
     }
 
-    expect(inspectorSurface).toMatch(/\.gwg-step-detail \> \.gwg-step:hover\s*\{/)
-    expect(inspectorSurface).toMatch(/\.gwg-step-detail \> \.gwg-step::-webkit-details-marker,/)
+    expect(inspectorSurface).not.toMatch(/\.gwg-step-detail \> \.gwg-step:hover\s*\{/)
+    expect(inspectorSurface).not.toMatch(/\.gwg-step-detail \> \.gwg-step::-webkit-details-marker,/)
     expect(inspectorSurface).not.toMatch(/clamp\(10px,/)
     expect(inspectorSurface).not.toMatch(/rgba\(84,\s*138,\s*247,\s*0\.4\)/)
     expect(inspectorSurface).not.toMatch(/rgba\(247,\s*84,\s*100,\s*0\.35\)/)
