@@ -1657,9 +1657,12 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("var(--ui-shadow-tone)")
   })
 
-  test("criteria group baseline is owned by surfaces/inspector.css", () => {
+  test("retired criteria DOM and CSS selectors stay removed", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
+    const domSource = readText(join(OVERLAY_ROOT, "src/dom.ts"))
+    const sectionSource = readText(join(OVERLAY_ROOT, "src/utils/section.ts"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+    const messagesSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/messages.css"))
 
     for (const className of [
       "criteria-group",
@@ -1668,12 +1671,24 @@ describe("overlay architecture guards", () => {
       "criteria-group-title",
       "criteria-group-count",
       "criteria-group-list",
+      "criteria-grid",
+      "criteria-check",
+      "criteria-result",
+      "goal-criteria",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(messagesSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}[,\\s]`))
     }
 
-    expect(inspectorSurface).toMatch(/\.criteria-group-icon svg\s*\{/)
+    expect(inspectorSurface).not.toMatch(/\.criteria-group-icon svg\s*\{/)
+    expect(domSource).not.toContain("criteriaSection")
+    expect(domSource).not.toContain("criteriaBadge")
+    expect(domSource).not.toContain("criteriaList")
+    expect(domSource).not.toContain("#criteriaSection")
+    expect(domSource).not.toContain("#criteriaBadge")
+    expect(domSource).not.toContain("#criteriaList")
+    expect(sectionSource).not.toContain("evaluation: dom.criteriaSection")
   })
 
   test("acceptance panel chrome is owned by surfaces/inspector.css", () => {
@@ -2095,7 +2110,7 @@ describe("overlay architecture guards", () => {
     }
   })
 
-  test("criteria groups do not rely on theme layout or chrome resets", () => {
+  test("retired criteria groups do not rely on theme layout or chrome resets", () => {
     const styles = readLegacyStylesCss("src/styles.css")
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {

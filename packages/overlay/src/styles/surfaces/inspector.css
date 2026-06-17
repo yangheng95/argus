@@ -1021,69 +1021,6 @@
   display: none;
 }
 
-/* Criteria group — flat content grouping a set of acceptance-criteria
-   checkboxes inside the eval/inspector tab. Structure is carried by
-   spacing and type hierarchy; rows own hover affordance only. */
-.criteria-group {
-  display: flex;
-  flex-direction: column;
-  gap: calc(3px * var(--ui-scale));
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  transition:
-    border-color var(--ui-duration-base),
-    background var(--ui-duration-base);
-  flex: 1 1 calc(180px * var(--ui-scale));
-  min-width: calc(160px * var(--ui-scale));
-}
-
-.criteria-group-head {
-  display: flex;
-  align-items: center;
-  min-height: calc(26px * var(--ui-scale));
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-}
-
-.criteria-group-icon {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  width: calc(14px * var(--ui-scale));
-  height: calc(14px * var(--ui-scale));
-  color: var(--text-soft);
-  opacity: var(--ui-opacity-dim);
-}
-
-.criteria-group-icon svg {
-  width: 100%;
-  height: 100%;
-}
-
-.criteria-group-title {
-  flex: 1;
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-  letter-spacing: var(--ui-letter-spacing-loose);
-}
-
-.criteria-group-count {
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  font-family: var(--mono);
-}
-
-.criteria-group-list {
-  display: flex;
-  flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-  padding: 0;
-}
-
 /* GWG (Goal-Workflow-Graph) card — flat shell. Status is carried by
    the icon and header/body content, not a decorative left rail. The
    richer `.gwg-header` / `-title` / `-revision` /
@@ -2736,224 +2673,6 @@
   white-space: nowrap;
 }
 
-.criteria-panel {
-  display: flex;
-  flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
-}
-.criteria-summary {
-  display: flex;
-  gap: calc(12px * var(--ui-scale));
-  font-size: var(--ui-font-small);
-  color: var(--text-soft);
-  margin-bottom: calc(4px * var(--ui-scale));
-}
-.criteria-summary-item {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-}
-.criteria-summary-item--passed {
-  color: var(--good);
-}
-.criteria-summary-item--failed {
-  color: var(--bad);
-}
-.criteria-summary-item--skipped {
-  color: var(--text-muted);
-}
-.criteria-family {
-  display: flex;
-  flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-}
-
-.criteria-family-head {
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-muted);
-  letter-spacing: var(--ui-letter-spacing-loose);
-}
-.criteria-item .criteria-name {
-  font-family: var(--mono);
-  font-size: var(--ui-font-small);
-  color: var(--text);
-}
-.criteria-item[data-criteria-status="failed"] .criteria-name {
-  color: var(--bad);
-}
-.criteria-item[data-criteria-status="skipped"] .criteria-name {
-  color: var(--text-muted);
-}
-.criteria-evidence {
-  grid-column: 2;
-  font-family: var(--mono);
-  font-size: var(--ui-font-tiny);
-  color: var(--text-soft);
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin-top: calc(2px * var(--ui-scale));
-}
-
-.criteria-list {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: calc(8px * var(--ui-scale));
-}
-
-/* The legacy .criteria-item rule (4-col grid card chip used inside
- * .criteria-list) and the older 2-col-grid .criteria-panel list-row
- * rule both lived in styles.css; the older rule's only surviving
- * contribution after the newer rule's `border:` shorthand stomp was
- * `list-style: none`, so the merged canonical adds that here. The
- * .criteria-item:last-child border-bottom override is preserved as a
- * state rule because border-bottom: none defeats the chip's all-side
- * `border:1px solid transparent` baseline only on the trailing item. */
-.criteria-item {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto;
-  align-items: center;
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid transparent;
-  border-radius: var(--oc-radius-soft);
-  list-style: none;
-  cursor: pointer;
-  transition:
-    border-color var(--ui-duration-base),
-    background var(--ui-duration-base),
-    box-shadow var(--ui-duration-base);
-}
-.criteria-item:last-child {
-  border-bottom: none;
-}
-.criteria-item:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 14%, transparent);
-}
-
-.criteria-item input[type="checkbox"] {
-  display: none;
-}
-
-.check-mark {
-  width: calc(14px * var(--ui-scale));
-  height: calc(14px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  border: calc(1.2px * var(--ui-scale)) solid var(--border-strong);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all var(--ui-duration-base);
-  background: transparent;
-}
-.criteria-item input:checked + .check-mark {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.criteria-item input:checked + .check-mark::after {
-  content: "";
-  width: calc(6px * var(--ui-scale));
-  height: calc(4px * var(--ui-scale));
-  border-left: calc(1.2px * var(--ui-scale)) solid var(--text-on-accent);
-  border-bottom: calc(1.2px * var(--ui-scale)) solid var(--text-on-accent);
-  transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
-}
-
-.criteria-copy {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  min-width: 0;
-  gap: calc(6px * var(--ui-scale));
-}
-
-.criteria-name {
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--text-strong);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.criteria-desc {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  line-height: 1.3;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.criteria-status {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(16px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  flex-shrink: 0;
-}
-
-.criteria-status svg {
-  width: calc(14px * var(--ui-scale));
-  height: calc(14px * var(--ui-scale));
-}
-.criteria-result {
-  min-width: calc(40px * var(--ui-scale));
-  font-size: var(--ui-font-control);
-  font-family: var(--mono);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  color: var(--text-muted);
-  text-align: right;
-}
-.criteria-status[data-result="pending"] {
-  background: var(--surface-hover);
-  color: var(--text-muted);
-}
-.criteria-status[data-result="passed"] {
-  background: var(--good-dim);
-  color: var(--good);
-  box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--good) 40%, transparent);
-}
-.criteria-status[data-result="failed"] {
-  background: var(--bad-dim);
-  color: var(--bad);
-  box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--bad) 40%, transparent);
-}
-.criteria-status[data-result="skipped"] {
-  background: var(--surface-hover);
-  color: var(--text-muted);
-}
-.criteria-status[data-result="off"] {
-  background: transparent;
-  color: var(--text-muted);
-  border: var(--oc-border-width) solid var(--border);
-  box-shadow: none;
-}
-.criteria-status[data-result="passed"] + .criteria-result {
-  color: var(--good);
-}
-.criteria-status[data-result="failed"] + .criteria-result {
-  color: var(--bad);
-}
-.criteria-status[data-result="skipped"] + .criteria-result {
-  color: var(--text-soft);
-}
-.criteria-status[data-result="off"] + .criteria-result {
-  color: var(--text-muted);
-}
-.criteria-status:not([data-result]) {
-  display: none;
-}
-
 .goals-list {
   display: flex;
   flex-direction: column;
@@ -3047,12 +2766,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   color: var(--text);
   line-height: 1.5;
 }
-.goal-item-body .goal-criteria {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  margin-top: calc(3px * var(--ui-scale));
-  line-height: 1.45;
-}
 .goal-item-body .plan-version {
   font-size: var(--ui-font-control);
   color: var(--text-muted);
@@ -3096,14 +2809,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  word-break: break-word;
-}
-
-.goal-criteria {
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  margin-top: calc(2px * var(--ui-scale));
-  line-height: 1.45;
   word-break: break-word;
 }
 
@@ -3309,38 +3014,9 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-small);
 }
 
-.criteria-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--ui-gap-xs);
-  margin-top: var(--ui-gap-xs);
-}
-
-.criteria-check {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  padding: calc(6px * var(--ui-scale)) var(--ui-section-padding-x);
-  border-radius: var(--oc-radius-soft);
-  cursor: pointer;
-  font-size: var(--ui-font-control);
-  color: var(--text);
-  transition: background var(--ui-duration-fast);
-}
-.criteria-check:hover {
-  background: var(--surface-hover);
-}
-.criteria-check input {
-  /* `accent-color` declared globally on body (tokens/design-language.css). */
-}
-.criteria-check input:checked + span {
-  color: var(--text-strong);
-  font-weight: var(--ui-font-weight-medium);
-}
-
 /* Inspector ("sections" container) bounds the height of the
  * narrative blocks the operator scrolls through (plan summary,
- * overview, overview-next-step, goal desc + criteria, change-path,
+ * overview, overview-next-step, goal desc, change-path,
  * eval summary + error-detail). Each card scrolls vertically
  * inside the rail without pushing the rail itself off-screen. The
  * 112px ceiling is a density choice for the rail-vs-content split
@@ -3350,7 +3026,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .sections .overview-summary,
 .sections .overview-next-step,
 .sections .goal-desc,
-.sections .goal-criteria,
 .sections .change-path,
 .sections .eval-summary,
 .sections .eval-error-detail {
@@ -3361,8 +3036,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 /* ─────────────────────────────────────────────────────────────
    Inspector misc (extracted 2026-05-04): section-actions toolbar
-   inside section bodies, embedded session list panel, criteria
-   typography helpers.
+   inside section bodies, and embedded session list panel.
    ───────────────────────────────────────────────────────────── */
 
 .section-actions {
@@ -3394,7 +3068,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   background: transparent;
 }
 
-.criteria-result,
 .pref-item-key {
   font-family: var(--font);
   font-variant-numeric: tabular-nums;
@@ -3402,15 +3075,14 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 /* ─────────────────────────────────────────────────────────────
    Inspector list-row variants (extracted 2026-05-04): goal/
-   knowledge/pref/criteria card chrome + their unified hover lift,
+   knowledge/pref card chrome + their unified hover lift,
    gwg list + priority badge, goalsSection scroll override. Settings
    market-card chrome is owned by surfaces/settings.css.
    ───────────────────────────────────────────────────────────── */
 
 .goal-item,
 .knowledge-item,
-.pref-item,
-.criteria-check {
+.pref-item {
   border: 0 solid transparent;
   border-radius: 0;
   background: transparent;
@@ -3426,9 +3098,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .extension-row:hover,
 .channel-doc-card:hover,
 .knowledge-item:hover,
-.pref-item:hover,
-.criteria-check:hover,
-.criteria-group:hover {
+.pref-item:hover {
   background: var(--surface-hover);
   border-color: transparent;
   box-shadow: none;
