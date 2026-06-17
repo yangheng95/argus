@@ -2,13 +2,11 @@ import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
-import { BrowserNodeSidecarError, runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
-import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
-import { BrowserRuntime } from "@/browser/runtime"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
-import { browserPreviewViewportByID, BrowserPreviewViewportID } from "./viewport"
+import { runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"
+import { BrowserPreviewViewportID } from "./viewport"
 import { normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
@@ -105,7 +103,6 @@ type BrowserPreviewRegionComparisonInput = {
   projectRoot: string
   taskID: string
   targetID: string
-  url: string
   bindings: BrowserPreviewRegionBinding[]
   viewportIDs: BrowserPreviewViewportID[]
   includeFullpageOverview?: boolean
@@ -114,26 +111,6 @@ type BrowserPreviewRegionComparisonInput = {
   signal?: AbortSignal
 }
 
-type SidecarLocator = BrowserPreviewRegionLocator
-type SidecarBinding = {
-  regionID: string
-  viewportID: BrowserPreviewViewportID
-  route: string
-  locator: SidecarLocator
-}
-type SidecarResult = {
-  ok: true
-  fullpagePath?: string
-  regions: Array<{
-    regionID: string
-    viewportID: BrowserPreviewViewportID
-    status: "completed" | "failed"
-    bbox?: BrowserPreviewRegionBox
-    screenshotPath?: string
-    reason?: string
-  }>
-} | { ok: false; message: string; stack?: string }
-
 export async function compareBrowserPreviewRegions(
   input: BrowserPreviewRegionComparisonInput,
 ): Promise<BrowserPreviewRegionComparisonResult> {
@@ -141,8 +118,8 @@ export async function compareBrowserPreviewRegions(
     throw new Error("Browser preview region comparison requires taskID and targetID.")
   }
   const jobID = Identifier.ascending("artifact")
-  const outDir = ProjectRuntimePaths.taskAbsolute(input.projectRoot, input.taskID, "browser-preview", jobID)
-  await fs.mkdir(outDir, { recursive: true })
+  let outDir = ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, jobID)
+  let resultJobID = jobID
 
   const selectedViewportIDs = dedupeViewportIDs(input.viewportIDs)
   const selectedBindings = input.bindings.filter((binding) => selectedViewportIDs.includes(binding.viewport_id))
@@ -184,15 +161,21 @@ export async function compareBrowserPreviewRegions(
 
   const runnableBindings = selectedBindings.filter((binding) => sourceRefs.has(bindingKey(binding)))
   const sidecar = runnableBindings.length
-    ? await runImplementationCapture({
-        url: input.url,
-        outDir,
+    ? await runBrowserPreviewRegionComparisonCapture({
+        projectRoot: input.projectRoot,
+        taskID: input.taskID,
+        targetID: input.targetID,
         viewportIDs: selectedViewportIDs,
         bindings: runnableBindings,
         includeFullpageOverview: input.includeFullpageOverview === true,
         signal: input.signal,
       })
     : undefined
+  if (sidecar) {
+    outDir = sidecar.outDir
+    resultJobID = sidecar.jobID
+  }
+  await fs.mkdir(outDir, { recursive: true })
 
   const regions: BrowserPreviewRegionComparisonResult["regions"] = [...initialRegions]
   if (sidecar) {
@@ -259,7 +242,7 @@ export async function compareBrowserPreviewRegions(
   const result: BrowserPreviewRegionComparisonResult = {
     status: regions.length > 0 && regions.every((region) => region.status === "completed") ? "passed" : "failed",
     manifestPath,
-    jobID,
+    jobID: resultJobID,
     taskID: input.taskID,
     targetID: input.targetID,
     operation: "reference-comparison",
@@ -296,63 +279,6 @@ export function resolveSourceReferencePath(input: {
     throw new Error(`Source reference escapes web-clone-source: ${input.referenceArtifactID}`)
   }
   return resolved
-}
-
-async function runImplementationCapture(input: {
-  url: string
-  outDir: string
-  viewportIDs: BrowserPreviewViewportID[]
-  bindings: BrowserPreviewRegionBinding[]
-  includeFullpageOverview: boolean
-  signal?: AbortSignal
-}): Promise<Extract<SidecarResult, { ok: true }>> {
-  const executablePath = await BrowserRuntime.findBrowserExecutable()
-  const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(undefined)
-  const runtime = await resolveBrowserNodeSidecarRuntime()
-  const sidecarBindings: SidecarBinding[] = input.bindings.map((binding) => ({
-    regionID: binding.region_id,
-    viewportID: binding.viewport_id,
-    route: binding.implementation.route,
-    locator: binding.implementation.locator,
-  }))
-  const sidecar = await runBrowserNodeSidecar<SidecarResult>({
-    runtime,
-    script: REGION_COMPARISON_SCRIPT,
-    payload: {
-      url: input.url,
-      outDir: input.outDir,
-      executablePath,
-      launchArgs: BrowserRuntime.defaultLaunchArgs(),
-      launchTimeoutMs,
-      viewportIDs: input.viewportIDs,
-      viewportByID: Object.fromEntries(
-        input.viewportIDs.map((id) => {
-          const viewport = browserPreviewViewportByID(id)
-          return [id, { width: viewport.width, height: viewport.height }]
-        }),
-      ),
-      bindings: sidecarBindings,
-      includeFullpageOverview: input.includeFullpageOverview,
-    },
-    payloadEnvName: "OPENCORVUS_BROWSER_PREVIEW_REGION_COMPARISON_INPUT",
-    hardTimeoutMs: launchTimeoutMs + input.bindings.length * 15_000 + 30_000,
-    label: "Browser preview region comparison runner",
-    signal: input.signal,
-  }).catch((error) => {
-    if (error instanceof BrowserNodeSidecarError) throw error
-    throw new Error(error instanceof Error ? error.message : String(error), { cause: error })
-  })
-  if (!sidecar.result.ok) {
-    throw new Error(
-      `Browser preview region comparison runner failed: ${sidecar.result.message}${sidecar.result.stack ? `\n${sidecar.result.stack}` : ""}`,
-    )
-  }
-  if (sidecar.exitCode !== 0) {
-    throw new Error(
-      `Browser preview region comparison runner exited with ${sidecar.signal ?? sidecar.exitCode}. ${sidecar.stderr.trim()}`,
-    )
-  }
-  return sidecar.result
 }
 
 async function materializeRegionComparison(input: {
@@ -493,115 +419,3 @@ function escapeXml(value: string): string {
     return entities[char] ?? char
   })
 }
-
-const REGION_COMPARISON_SCRIPT = String.raw`
-const fs = require("node:fs/promises");
-const path = require("node:path");
-const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
-
-function routeUrl(base, route) {
-  return new URL(route || "/", base).toString();
-}
-
-async function locate(page, locator) {
-  if (locator.kind === "role") {
-    const box = await page.getByRole(locator.role, { name: locator.name }).first().boundingBox().catch(() => null);
-    return box ? toBox(box) : null;
-  }
-  const selector = selectorFor(locator);
-  return page.evaluate((input) => {
-    const node = document.querySelector(input.selector);
-    if (!node) return null;
-    return toBox(node.getBoundingClientRect());
-    function toBox(rect) {
-      return {
-        x: Math.max(0, Math.round(rect.x)),
-        y: Math.max(0, Math.round(rect.y)),
-        width: Math.max(1, Math.round(rect.width)),
-        height: Math.max(1, Math.round(rect.height)),
-      };
-    }
-  }, { selector });
-}
-
-function selectorFor(locator) {
-  if (locator.kind === "selector") return locator.value;
-  if (locator.kind === "test-id") return "[data-testid=" + JSON.stringify(locator.value) + "]";
-  if (locator.kind === "data-oc-region") return "[data-oc-region=" + JSON.stringify(locator.value) + "]";
-  throw new Error("Unsupported locator kind: " + locator.kind);
-}
-
-function toBox(rect) {
-  return {
-    x: Math.max(0, Math.round(rect.x)),
-    y: Math.max(0, Math.round(rect.y)),
-    width: Math.max(1, Math.round(rect.width)),
-    height: Math.max(1, Math.round(rect.height)),
-  };
-}
-
-async function main() {
-  const input = JSON.parse(Buffer.from(process.env.OPENCORVUS_BROWSER_PREVIEW_REGION_COMPARISON_INPUT || "", "base64").toString("utf8"));
-  let browser;
-  try {
-    browser = await chromium.launch({
-      executablePath: input.executablePath,
-      headless: true,
-      timeout: input.launchTimeoutMs,
-      args: input.launchArgs,
-    });
-    const regions = [];
-    for (const viewportID of input.viewportIDs) {
-      const viewport = input.viewportByID[viewportID];
-      const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
-      try {
-        const page = await context.newPage();
-        const firstRoute = input.bindings.find((binding) => binding.viewportID === viewportID)?.route || "/";
-        await page.goto(routeUrl(input.url, firstRoute), { waitUntil: "networkidle", timeout: 30000 });
-        const viewportDir = path.join(input.outDir, "implementation", viewportID);
-        await fs.mkdir(viewportDir, { recursive: true });
-        const screenshotPath = path.join(viewportDir, "full.png");
-        await page.screenshot({ path: screenshotPath, type: "png", fullPage: false });
-        for (const binding of input.bindings.filter((item) => item.viewportID === viewportID)) {
-          if (binding.route !== firstRoute) {
-            await page.goto(routeUrl(input.url, binding.route), { waitUntil: "networkidle", timeout: 30000 });
-          }
-          const regionScreenshotPath = path.join(viewportDir, sanitizeSegment(binding.regionID) + ".png");
-          await page.screenshot({ path: regionScreenshotPath, type: "png", fullPage: false });
-          const bbox = await locate(page, binding.locator);
-          if (!bbox) {
-            regions.push({
-              regionID: binding.regionID,
-              viewportID,
-              status: "failed",
-              reason: "Implementation locator did not match any visible element.",
-            });
-            continue;
-          }
-          regions.push({
-            regionID: binding.regionID,
-            viewportID,
-            status: "completed",
-            bbox,
-            screenshotPath: regionScreenshotPath,
-          });
-        }
-      } finally {
-        await context.close().catch(() => {});
-      }
-    }
-    process.stdout.write(JSON.stringify({ ok: true, regions }));
-  } catch (error) {
-    process.stdout.write(JSON.stringify({ ok: false, message: error?.message || String(error), stack: error?.stack }));
-    process.exitCode = 1;
-  } finally {
-    if (browser) await browser.close().catch(() => {});
-  }
-}
-
-function sanitizeSegment(value) {
-  return String(value).replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 96) || "region";
-}
-
-main();
-`

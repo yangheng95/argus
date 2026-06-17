@@ -39,7 +39,6 @@ export const BrowserPreviewCompareRegionsTool = Tool.define("browser_preview_com
       projectRoot: Instance.directory,
       taskID,
       targetID: params.targetID,
-      url: target.url,
       viewportIDs: params.viewportIDs,
       bindings: params.inlineBindings,
       includeDiff: params.includeDiff,

@@ -329,7 +329,6 @@ export const BrowserPreviewRoutes = lazy(() =>
           projectRoot: Instance.directory,
           taskID,
           targetID: body.targetID,
-          url: target.url,
           viewportIDs: body.viewportIDs,
           bindings: body.inlineBindings,
           includeFullpageOverview: body.output.include_fullpage_overview,
