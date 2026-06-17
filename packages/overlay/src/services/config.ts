@@ -137,6 +137,32 @@ export interface TaskOperatorModelContext {
   }
 }
 
+export interface HexinBudget {
+  maxBudget: number
+  spend: number
+  remaining: number
+  overBudget: boolean
+}
+
+export type HexinBudgetResponse = { ok: true; budget: HexinBudget } | { ok: false; error: string }
+
+export interface NetworkProxyDraft {
+  url: string
+  llmProvider: boolean
+  webResearch: boolean
+  username?: string
+  password?: string
+}
+
+export interface NetworkProxyTestResult {
+  ok: boolean
+  status: "connected" | "error"
+  targetUrl: string
+  statusCode?: number
+  durationMs: number
+  message: string
+}
+
 export interface PromptProfileOption {
   id: string
   label: string
@@ -169,6 +195,13 @@ export interface PromptProfileDraft {
   description?: string
   agents: Record<string, string>
 }
+
+export interface PromptProfileImportPreview {
+  active?: string
+  profiles: PromptProfileDraft[]
+}
+
+const PROMPT_PROFILE_IMPORT_ID_PATTERN = /^(?!.*--)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 
 export function modelContextID(context: TaskOperatorModelContext | null | undefined): string {
   const providerID = context?.model?.providerID
@@ -213,6 +246,24 @@ export async function getTaskOperatorModelContext(taskID: string): Promise<TaskO
   return await apiJson(`task/${encodeURIComponent(taskID)}/operator-model-context`)
 }
 
+export async function getHexinBudget(): Promise<HexinBudgetResponse> {
+  if (!appStore.connected) {
+    throw new Error("Cannot load Hexin budget while disconnected")
+  }
+  return await apiJson("provider/hexin/budget")
+}
+
+export async function testNetworkProxy(proxy: NetworkProxyDraft): Promise<NetworkProxyTestResult> {
+  if (!appStore.connected) {
+    throw new Error("Cannot test network proxy while disconnected")
+  }
+  return await apiJson("config/proxy/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ proxy }),
+  })
+}
+
 export async function loadPromptProfileCatalog(sessionID?: string): Promise<PromptProfileCatalog> {
   if (!appStore.connected) {
     throw new Error("Cannot load prompt profiles while disconnected")
@@ -234,7 +285,9 @@ function promptProfileConfigShape(
       ? { ...promptProfile.profiles }
       : {}
   const active =
-    typeof promptProfile.active === "string" && promptProfile.active.trim().length > 0 ? promptProfile.active : defaultActive
+    typeof promptProfile.active === "string" && promptProfile.active.trim().length > 0
+      ? promptProfile.active
+      : defaultActive
   return { active, profiles }
 }
 
@@ -245,6 +298,132 @@ function compactPromptProfileAgents(agents: Record<string, string>): Record<stri
       return [[agentID, prompt]]
     }),
   )
+}
+
+function readImportString(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a string.`)
+  }
+  const trimmed = value.trim()
+  if (!trimmed) {
+    throw new Error(`${field} cannot be empty.`)
+  }
+  return trimmed
+}
+
+function readImportProfileID(value: unknown, field: string): string {
+  const id = readImportString(value, field)
+  if (id !== value || !PROMPT_PROFILE_IMPORT_ID_PATTERN.test(id)) {
+    throw new Error(`${field} must use lowercase kebab-case.`)
+  }
+  return id
+}
+
+export function parsePromptProfileImportPayload(payload: unknown): PromptProfileImportPreview {
+  if (!isRecord(payload)) {
+    throw new Error("Prompt profile import must be a JSON object.")
+  }
+  if (!isRecord(payload.prompt_profile)) {
+    throw new Error("Prompt profile import must contain a prompt_profile object.")
+  }
+  const promptProfile = payload.prompt_profile
+  const rawProfiles = promptProfile.profiles
+  if (!isRecord(rawProfiles) || Object.keys(rawProfiles).length === 0) {
+    throw new Error("Prompt profile import must contain prompt_profile.profiles.")
+  }
+  const active =
+    promptProfile.active === undefined
+      ? undefined
+      : readImportProfileID(promptProfile.active, "prompt_profile.active")
+  const profiles: PromptProfileDraft[] = []
+  for (const [profileID, rawProfile] of Object.entries(rawProfiles)) {
+    const canonicalProfileID = readImportProfileID(profileID, `prompt_profile.profiles.${profileID}`)
+    if (!isRecord(rawProfile)) {
+      throw new Error(`prompt_profile.profiles.${profileID} must be an object.`)
+    }
+    const label = readImportString(rawProfile.label, `prompt_profile.profiles.${profileID}.label`)
+    const description =
+      rawProfile.description === undefined
+        ? undefined
+        : readImportString(rawProfile.description, `prompt_profile.profiles.${profileID}.description`)
+    const rawAgents = rawProfile.agents === undefined ? {} : rawProfile.agents
+    if (!isRecord(rawAgents)) {
+      throw new Error(`prompt_profile.profiles.${profileID}.agents must be an object.`)
+    }
+    const agents: Record<string, string> = {}
+    for (const [targetID, prompt] of Object.entries(rawAgents)) {
+      if (!targetID || targetID.trim() !== targetID) {
+        throw new Error(`prompt_profile.profiles.${profileID}.agents contains an invalid target id.`)
+      }
+      agents[targetID] = readImportString(prompt, `prompt_profile.profiles.${profileID}.agents.${targetID}`)
+    }
+    profiles.push({ id: canonicalProfileID, label, description, agents })
+  }
+  return { ...(active ? { active } : {}), profiles }
+}
+
+export function importPromptProfileConfig(
+  config: Record<string, any>,
+  preview: PromptProfileImportPreview,
+  catalog: PromptProfileCatalog,
+): void {
+  const catalogProfiles = new Map(catalog.profiles.map((profile) => [profile.id, profile]))
+  const catalogTargets = new Map(catalog.targets.map((target) => [target.id, target]))
+  const importedIDs = new Set(preview.profiles.map((profile) => profile.id))
+  if (preview.active && !catalogProfiles.has(preview.active) && !importedIDs.has(preview.active)) {
+    throw new Error(`Unknown prompt profile ${JSON.stringify(preview.active)}.`)
+  }
+
+  const { active, profiles } = promptProfileConfigShape(config, catalog.default)
+  for (const profile of preview.profiles) {
+    readImportProfileID(profile.id, `prompt_profile.profiles.${profile.id}`)
+    const existing = catalogProfiles.get(profile.id)
+    if (existing?.built_in) {
+      throw new Error(`prompt_profile.profiles.${profile.id} cannot override a built-in prompt profile.`)
+    }
+    if (existing && !existing.built_in) {
+      throw new Error(`Prompt profile ${profile.id} already exists.`)
+    }
+    if (Object.hasOwn(profiles, profile.id)) {
+      throw new Error(`Prompt profile ${profile.id} already exists.`)
+    }
+    for (const targetID of Object.keys(profile.agents ?? {})) {
+      const prompt = profile.agents[targetID]
+      if (typeof prompt !== "string" || prompt.trim().length === 0) {
+        throw new Error(`prompt_profile.profiles.${profile.id}.agents.${targetID} cannot be empty.`)
+      }
+      const target = catalogTargets.get(targetID)
+      if (!target) {
+        throw new Error(`Unknown prompt profile target ${JSON.stringify(targetID)}.`)
+      }
+      if (!target.editable || target.built_in_only) {
+        throw new Error(`prompt profile target ${targetID} is built-in-only and cannot be imported.`)
+      }
+    }
+    const nextLabel = profile.label.trim()
+    if (!nextLabel) {
+      throw new Error(`prompt_profile.profiles.${profile.id}.label cannot be empty.`)
+    }
+    const nextDescription = typeof profile.description === "string" ? profile.description.trim() : ""
+    profiles[profile.id] = {
+      label: nextLabel,
+      ...(nextDescription ? { description: nextDescription } : {}),
+      agents: compactPromptProfileAgents(profile.agents ?? {}),
+    }
+  }
+  config.prompt_profile = {
+    active: preview.active ?? active,
+    profiles,
+  }
+}
+
+export async function importPromptProfiles(
+  preview: PromptProfileImportPreview,
+  catalog: PromptProfileCatalog,
+): Promise<any> {
+  return await updateConfig((current) => {
+    importPromptProfileConfig(current, preview, catalog)
+  })
 }
 
 export function createPromptProfileID(existingIDs: Iterable<string>, baseLabel: string): string {
@@ -306,11 +485,7 @@ export async function savePromptProfile(profile: PromptProfileDraft, defaultActi
   })
 }
 
-export async function deletePromptProfile(
-  profileID: string,
-  nextActive: string,
-  defaultActive: string,
-): Promise<any> {
+export async function deletePromptProfile(profileID: string, nextActive: string, defaultActive: string): Promise<any> {
   return await updateConfig((current) => {
     deletePromptProfileConfig(current, profileID, nextActive, defaultActive)
   })
@@ -329,7 +504,10 @@ export async function setProjectPromptProfileActive(profileID: string): Promise<
   })
 }
 
-export async function setSessionPromptProfileActive(sessionID: string, profileID: string): Promise<SessionConfigResponse> {
+export async function setSessionPromptProfileActive(
+  sessionID: string,
+  profileID: string,
+): Promise<SessionConfigResponse> {
   return await patchSessionConfig(sessionID, { prompt_profile: { active: profileID } })
 }
 
@@ -488,13 +666,8 @@ export function applyPromptEntries(items: any[]): void {
  * Load prompt entries from the server and push them into the store.
  */
 export async function loadPromptCatalog(): Promise<void> {
-  try {
-    const items = await apiJson("config/prompt")
-    applyPromptEntries(items)
-  } catch (e) {
-    AppLog.debug("prompt", "loadPromptCatalog failed, resetting to empty", { error: String(e) })
-    applyPromptEntries([])
-  }
+  const items = await apiJson("config/prompt")
+  applyPromptEntries(items)
 }
 
 /**

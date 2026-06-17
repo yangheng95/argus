@@ -1791,6 +1791,64 @@
   gap: calc(6px * var(--ui-scale));
 }
 
+.prompt-profile-import-preview {
+  display: grid;
+  gap: calc(10px * var(--ui-scale));
+  margin-bottom: calc(12px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.prompt-profile-import-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  flex-wrap: wrap;
+}
+
+.prompt-profile-import-head > div:first-child,
+.prompt-profile-import-item {
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+  min-width: 0;
+}
+
+.prompt-profile-import-head strong,
+.prompt-profile-import-item strong {
+  color: var(--text-strong);
+  font-size: var(--ui-font-title);
+  line-height: 1.35;
+}
+
+.prompt-profile-import-head small,
+.prompt-profile-import-item small {
+  color: var(--text-soft);
+  font-size: var(--ui-font-body);
+  line-height: 1.45;
+}
+
+.prompt-profile-import-list {
+  display: grid;
+  gap: calc(8px * var(--ui-scale));
+  grid-template-columns: repeat(auto-fit, minmax(calc(180px * var(--ui-scale)), 1fr));
+}
+
+.prompt-profile-import-item {
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface);
+}
+
+.prompt-profile-import-item span {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--ui-font-meta);
+}
+
 .prompt-profile-detail {
   display: flex;
   flex-direction: column;

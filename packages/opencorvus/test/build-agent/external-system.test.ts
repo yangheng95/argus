@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { BuildAgent, externalEventPartText, externalToolProtocolErrorMessage } from "../../src/build/agent"
+import { Config } from "../../src/config/config"
 
 describe("BuildAgent external coding system prompt", () => {
   test("injects OpenCorvus MCP executor aliases without reopening webpage evidence tools", () => {
     const composed = BuildAgent.composeExternalCodingSystem({
       executor: "codex",
+      config: Config.Info.parse({ prompt_profile: { active: "frontend" } }),
       baseSystem: "base system",
       userAppend: "operator build append",
     })
@@ -36,6 +38,7 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("On Windows, start Playwright only through Node Package Manager (`npm`)")
     expect(composed.system).toContain("never through `bun`")
     expect(composed.system).toContain("severe connection-timeout bug on Windows")
+    expect(composed.system).toContain("Convert the approved frontend target into working code")
     expect(composed.system).toContain("For any frontend project")
     expect(composed.system).toContain("each file-changing pass must open the task preview")
     expect(composed.system).toContain("task-scoped browser evidence route")
@@ -43,12 +46,16 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("parent container, adjacent components, spacing, typography, color")
     expect(composed.system).toContain("responsive framing, and local visual style")
     expect(composed.system).toContain("operator build append")
+    expect(composed.system!.indexOf("Convert the approved frontend target")).toBeLessThan(
+      composed.system!.indexOf("operator build append"),
+    )
     expect(composed.system).not.toContain("skill prompt")
   })
 
   test("leaves Claude Code MCP alias injection to the Claude provider", () => {
     const composed = BuildAgent.composeExternalCodingSystem({
       executor: "claude-code",
+      config: Config.Info.parse({ prompt_profile: { active: "general" } }),
       baseSystem: "base system",
     })
 

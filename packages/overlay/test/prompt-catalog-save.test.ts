@@ -40,20 +40,26 @@ describe("prompt catalog save values", () => {
     ).toBe("Custom coding prompt.")
   })
 
-  test("PromptCatalog editor uses editable_prompt instead of profile-applied effective_prompt", () => {
+  test("PromptCatalog no longer renders per-agent prompt editor cards", () => {
     const source = readFileSync(join(import.meta.dir, "../src/components/settings/PromptCatalog.tsx"), "utf8")
-    expect(source).toContain("function editablePrompt")
-    expect(source).toContain("entry.editable_prompt ?? entry.prompt ??")
-    expect(source).toContain("entry.effective_prompt ?? currentDraft()")
+    expect(source).not.toContain("savePromptEntry")
+    expect(source).not.toContain("resetPromptEntry")
+    expect(source).not.toContain("loadPromptCatalog")
+    expect(source).not.toContain("data-prompt-entry")
+    expect(source).not.toContain("serviceSave(entry, value)")
+    expect(source).not.toContain("prompt-textarea")
   })
 
-  test("PromptCatalog exposes visible prompt-profile management separate from per-agent prompt saves", () => {
+  test("PromptCatalog exposes prompt-profile management and import as the editable prompt surface", () => {
     const source = readFileSync(join(import.meta.dir, "../src/components/settings/PromptCatalog.tsx"), "utf8")
     expect(source).toContain('data-ui="prompt-profile-panel"')
+    expect(source).toContain('data-ui="prompt-profile-import-input"')
+    expect(source).toContain('data-ui="prompt-profile-import-preview"')
     expect(source).toContain("savePromptProfile(")
+    expect(source).toContain("importPromptProfiles(")
+    expect(source).toContain("parsePromptProfileImportPayload(")
     expect(source).toContain("setProjectPromptProfileActive(")
     expect(source).toContain("setSessionPromptProfileActive(")
     expect(source).toContain("target.editable")
-    expect(source).toContain("serviceSave(entry, value)")
   })
 })

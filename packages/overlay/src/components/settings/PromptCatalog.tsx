@@ -1,12 +1,7 @@
 // ── PromptCatalog ──
-// Solid.js component that renders both:
-//   1. prompt profile inspection/customization
-//   2. individual prompt override editing
-// Data sources:
-//   - appStore.promptEntries for per-slot prompt editing
-//   - GET /config/prompt-profile for visible prompt-profile definitions
-// Save/reset delegates to config service helpers so profile text never leaks
-// into config.agent.* prompt fields.
+// Expert-squad prompt profile surface. Code-owned base prompts are not edited
+// here; this component only exposes scenario append prompts stored under
+// config.prompt_profile.profiles.
 
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
@@ -18,111 +13,26 @@ import { settingsStore } from "../../store/settings"
 import {
   createPromptProfileID,
   deletePromptProfile,
-  loadPromptCatalog,
+  importPromptProfiles,
   loadPromptProfileCatalog,
-  savePromptEntry as serviceSave,
-  resetPromptEntry as serviceReset,
+  parsePromptProfileImportPayload,
   savePromptProfile,
   setProjectPromptProfileActive,
   setSessionPromptProfileActive,
   type PromptProfileCatalog as PromptProfileCatalogResponse,
   type PromptProfileDraft,
+  type PromptProfileImportPreview,
   type PromptProfileOption,
   type PromptProfileTarget,
 } from "../../services/config"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
-import { Tab, Tabs } from "../ui/Tabs"
-
-// ── Types ──
-
-interface PromptEntry {
-  key: string
-  label?: string
-  group: string
-  mode?: string
-  scope: string
-  description?: string
-  inherits_core?: boolean
-  prompt?: string
-  editable_prompt?: string
-  effective_prompt?: string
-  active_profile?: string
-  profile_prompt?: string | null
-  configured_prompt: string | null
-  default_prompt?: string
-  prompt_mode?: "override" | "append"
-}
-
-interface PromptStatus {
-  label: string
-  tone: string
-}
-
-type PromptViewMode = "code" | "preview" | "default"
-
-// ── Helpers ──
-
-function promptEntryID(entry: PromptEntry): string {
-  return `${entry.scope}:${entry.key}`
-}
-
-function promptGroupLabel(group: string): string {
-  if (group === "core") return t("prompt.group.core")
-  if (group === "generator") return t("prompt.group.generator")
-  if (group === "assistant") return t("prompt.group.assistant")
-  if (group === "subagent") return t("prompt.group.subagent")
-  if (group === "hidden_agent") return t("prompt.group.hidden_agent")
-  if (group === "custom_agent") return t("prompt.group.custom_agent")
-  return t("prompt.group.primary_agent")
-}
-
-function promptDescription(entry: PromptEntry): string {
-  if (entry.key === "core_header") return t("prompt.desc.core_header")
-  if (entry.key === "agent_generate") return t("prompt.desc.agent_generate")
-  return entry.description || ""
-}
-
-function promptStatus(entry: PromptEntry): PromptStatus {
-  if (entry.configured_prompt !== null) {
-    return { label: t("prompt.status.custom"), tone: "active" }
-  }
-  if (entry.scope === "system") {
-    return { label: t("prompt.status.default"), tone: "ready" }
-  }
-  if (entry.default_prompt) {
-    return { label: t("prompt.status.default"), tone: "ready" }
-  }
-  if (entry.inherits_core) {
-    return { label: t("prompt.status.inherits_core"), tone: "warn" }
-  }
-  if (entry.prompt) {
-    return { label: t("prompt.status.default"), tone: "ready" }
-  }
-  return { label: t("prompt.status.empty"), tone: "" }
-}
 
 function promptPreviewHtml(value: string): string {
   if (!value.trim()) {
     return `<p class="empty-hint">${t("prompt.preview_empty")}</p>`
   }
   return renderMarkdown(value)
-}
-
-function editablePrompt(entry: PromptEntry): string {
-  return entry.editable_prompt ?? entry.prompt ?? ""
-}
-
-function effectivePreviewPrompt(entry: PromptEntry, draft: string): string {
-  if (entry.scope === "system") return draft
-  if (entry.prompt_mode === "append") {
-    return [entry.default_prompt ?? "", entry.profile_prompt ?? "", draft]
-      .filter((part) => typeof part === "string" && part.trim().length > 0)
-      .join("\n\n")
-  }
-  return [draft, entry.profile_prompt ?? ""]
-    .filter((part) => typeof part === "string" && part.trim().length > 0)
-    .join("\n\n")
 }
 
 function compactProfileAgents(agents: Record<string, string> | undefined): Record<string, string> {
@@ -145,12 +55,15 @@ function promptProfileDraft(profile: PromptProfileOption | undefined): PromptPro
 }
 
 function samePromptProfile(profile: PromptProfileOption | undefined, draft: PromptProfileDraft): boolean {
-  return JSON.stringify(promptProfileDraft(profile)) === JSON.stringify({
-    id: draft.id,
-    label: draft.label,
-    description: draft.description ?? "",
-    agents: compactProfileAgents(draft.agents),
-  })
+  return (
+    JSON.stringify(promptProfileDraft(profile)) ===
+    JSON.stringify({
+      id: draft.id,
+      label: draft.label,
+      description: draft.description ?? "",
+      agents: compactProfileAgents(draft.agents),
+    })
+  )
 }
 
 function profileTypeLabel(profile: PromptProfileOption): string {
@@ -161,11 +74,7 @@ function targetValue(draft: PromptProfileDraft, targetID: string): string {
   return draft.agents?.[targetID] ?? ""
 }
 
-// ── Component ──
-
 export default function PromptCatalog() {
-  const [drafts, setDrafts] = createStore<Record<string, string>>({})
-  const [viewModes, setViewModes] = createStore<Record<string, PromptViewMode>>({})
   const [profileDraftState, setProfileDraftState] = createStore<PromptProfileDraft>({
     id: "",
     label: "",
@@ -174,6 +83,7 @@ export default function PromptCatalog() {
   })
   const [selectedProfileID, setSelectedProfileID] = createSignal("")
   const [profileCatalog, setProfileCatalog] = createSignal<PromptProfileCatalogResponse | null>(null)
+  const [importPreview, setImportPreview] = createSignal<PromptProfileImportPreview | null>(null)
   const [notice, setNotice] = createSignal("")
   const [noticeTone, setNoticeTone] = createSignal("")
   const [saving, setSaving] = createSignal(false)
@@ -181,12 +91,7 @@ export default function PromptCatalog() {
 
   let noticeTimer: ReturnType<typeof setTimeout> | undefined
   let promptProfileLoadSequence = 0
-
-  // Data source: reactive from appStore (populated by Settings data loading)
-  const entries = createMemo((): PromptEntry[] => {
-    const raw = appStore.promptEntries
-    return Array.isArray(raw) ? (raw as PromptEntry[]) : []
-  })
+  let importFileInput: HTMLInputElement | undefined
 
   const profileConfigVersion = createMemo(() => JSON.stringify(appStore.config?.prompt_profile ?? null))
   const currentScopeSessionID = createMemo(() => rootTaskSessionID() || activeSessionID() || "")
@@ -222,7 +127,9 @@ export default function PromptCatalog() {
       if (sequence !== promptProfileLoadSequence) return
       setProfileCatalog(catalog)
       setSelectedProfileID((current) =>
-        catalog.profiles.some((profile) => profile.id === current) ? current : (catalog.active ?? catalog.profiles[0]?.id ?? ""),
+        catalog.profiles.some((profile) => profile.id === current)
+          ? current
+          : (catalog.active ?? catalog.profiles[0]?.id ?? ""),
       )
     } finally {
       if (sequence === promptProfileLoadSequence) setProfileLoading(false)
@@ -261,64 +168,9 @@ export default function PromptCatalog() {
     setProfileDraftState(reconcile(promptProfileDraft(profile)))
   })
 
-  function draftValue(entry: PromptEntry): string {
-    const id = promptEntryID(entry)
-    const val = (drafts as Record<string, string>)[id]
-    return val !== undefined ? val : editablePrompt(entry)
-  }
-
-  function isDirty(entry: PromptEntry): boolean {
-    return draftValue(entry) !== editablePrompt(entry)
-  }
-
-  function viewMode(entryID: string): PromptViewMode {
-    return (viewModes as Record<string, PromptViewMode>)[entryID] || "code"
-  }
-
-  function setViewMode(entryID: string, mode: PromptViewMode) {
-    setViewModes(entryID, mode)
-  }
-
-  function handleDraftChange(entryID: string, value: string) {
-    setDrafts(entryID, value)
-  }
-
   async function reloadPromptSurfaces(nextSelectedProfileID?: string): Promise<void> {
-    await Promise.all([loadPromptCatalog(), refreshPromptProfiles()])
+    await refreshPromptProfiles()
     if (nextSelectedProfileID) setSelectedProfileID(nextSelectedProfileID)
-  }
-
-  async function handleSave(entry: PromptEntry) {
-    const value = draftValue(entry)
-    setSaving(true)
-    try {
-      await serviceSave(entry, value)
-      const id = promptEntryID(entry)
-      setDrafts(id, undefined as any)
-      showNotice(t("common.saved"), "active")
-    } catch (e) {
-      showNotice(e instanceof Error ? e.message : String(e), "error")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleReset(entry: PromptEntry) {
-    const entryID = promptEntryID(entry)
-    if (entry.configured_prompt === null) {
-      setDrafts(entryID, editablePrompt(entry))
-      return
-    }
-    setSaving(true)
-    try {
-      await serviceReset(entry)
-      setDrafts(entryID, undefined as any)
-      showNotice(t("prompt.reset_done"), "active")
-    } catch (e) {
-      showNotice(e instanceof Error ? e.message : String(e), "error")
-    } finally {
-      setSaving(false)
-    }
   }
 
   async function handleCreateProfile() {
@@ -452,6 +304,55 @@ export default function PromptCatalog() {
     }
   }
 
+  function openImportPicker() {
+    importFileInput?.click()
+  }
+
+  async function handleImportFile(event: Event) {
+    const input = event.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    input.value = ""
+    if (!file) return
+    try {
+      const parsed = JSON.parse(await file.text())
+      setImportPreview(parsePromptProfileImportPayload(parsed))
+      showNotice(t("prompt_profile.import_loaded"), "active")
+    } catch (error) {
+      setImportPreview(null)
+      showNotice(error instanceof Error ? error.message : String(error), "error")
+    }
+  }
+
+  async function handleApplyImport() {
+    const catalog = profileCatalog()
+    const preview = importPreview()
+    if (!catalog || !preview) return
+    setSaving(true)
+    try {
+      await importPromptProfiles(preview, catalog)
+      const selected = preview.active ?? preview.profiles[0]?.id
+      setImportPreview(null)
+      await reloadPromptSurfaces(selected)
+      showNotice(t("prompt_profile.imported"), "active")
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : String(error), "error")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function importedTargetSummary(profile: PromptProfileDraft): string {
+    const catalog = profileCatalog()
+    const targets = Object.keys(profile.agents ?? {})
+    if (targets.length === 0) return t("prompt_profile.import_no_targets")
+    return targets
+      .map((targetID) => {
+        const target = catalog?.targets.find((item) => item.id === targetID)
+        return target ? `${target.label} (${target.id})` : targetID
+      })
+      .join(", ")
+  }
+
   function showNotice(msg: string, tone = "") {
     if (noticeTimer) clearTimeout(noticeTimer)
     setNotice(msg)
@@ -476,7 +377,24 @@ export default function PromptCatalog() {
             title={t("prompt_profile.settings_title")}
             actions={
               <div class="prompt-profile-head-actions">
-                <Button type="button" variant="ghost" size="sm" tone="neutral" disabled={saving()} onClick={handleCreateProfile}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  tone="neutral"
+                  disabled={saving()}
+                  onClick={openImportPicker}
+                >
+                  {t("prompt_profile.import")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  tone="neutral"
+                  disabled={saving()}
+                  onClick={handleCreateProfile}
+                >
                   {t("prompt_profile.create")}
                 </Button>
                 <Button
@@ -489,12 +407,70 @@ export default function PromptCatalog() {
                 >
                   {t("prompt_profile.duplicate")}
                 </Button>
+                <input
+                  ref={(element) => (importFileInput = element)}
+                  data-ui="prompt-profile-import-input"
+                  type="file"
+                  accept="application/json,.json"
+                  hidden
+                  onChange={handleImportFile}
+                />
               </div>
             }
           />
           <p class="agent-models-info">{t("prompt_profile.settings_intro")}</p>
           <Show when={currentScopeSessionID()}>
             <p class="agent-models-info">{t("prompt_profile.session_scope_hint")}</p>
+          </Show>
+
+          <Show when={importPreview()}>
+            {(preview) => (
+              <div class="prompt-profile-import-preview" data-ui="prompt-profile-import-preview">
+                <div class="prompt-profile-import-head">
+                  <div>
+                    <strong>{t("prompt_profile.import_preview")}</strong>
+                    <Show when={preview().active}>
+                      <small>
+                        {t("prompt_profile.import_active")}: {preview().active}
+                      </small>
+                    </Show>
+                  </div>
+                  <div class="prompt-profile-detail-actions">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      tone="neutral"
+                      disabled={saving()}
+                      onClick={() => setImportPreview(null)}
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="solid"
+                      size="sm"
+                      tone="accent"
+                      disabled={saving()}
+                      onClick={handleApplyImport}
+                    >
+                      {t("prompt_profile.apply_import")}
+                    </Button>
+                  </div>
+                </div>
+                <div class="prompt-profile-import-list">
+                  <For each={preview().profiles}>
+                    {(profile) => (
+                      <div class="prompt-profile-import-item">
+                        <strong>{profile.label}</strong>
+                        <span>{profile.id}</span>
+                        <small>{importedTargetSummary(profile)}</small>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </div>
+            )}
           </Show>
 
           <Show when={!profileLoading()} fallback={<div class="loading-hint">{t("prompt_profile.loading")}</div>}>
@@ -658,7 +634,9 @@ export default function PromptCatalog() {
                                   rows={6}
                                   value={targetValue(profileDraftState, target.id)}
                                   disabled={saving() || !target.editable}
-                                  onInput={(event) => setProfileDraftState("agents", target.id, event.currentTarget.value)}
+                                  onInput={(event) =>
+                                    setProfileDraftState("agents", target.id, event.currentTarget.value)
+                                  }
                                 />
                               </Show>
                             </div>
@@ -670,152 +648,6 @@ export default function PromptCatalog() {
                 </Show>
               </div>
             </Show>
-          </Show>
-        </div>
-
-        <div class="config-panel-group">
-          <SurfaceHeader variant="settings-group" title={t("prompt.title")} />
-          <Show when={entries().length > 0} fallback={<div class="empty-hint">{t("prompt.none")}</div>}>
-            <div class="prompt-grid">
-              <For each={entries()}>
-                {(entry) => {
-                  const entryID = promptEntryID(entry)
-                  const status = createMemo(() => promptStatus(entry))
-                  const description = promptDescription(entry)
-                  const dirty = createMemo(() => isDirty(entry))
-                  const currentDraft = createMemo(() => draftValue(entry))
-                  const previewPrompt = createMemo(() =>
-                    dirty() ? effectivePreviewPrompt(entry, currentDraft()) : (entry.effective_prompt ?? currentDraft()),
-                  )
-                  const canShowDefault = () => !!entry.default_prompt
-
-                  return (
-                    <div class="prompt-card" data-prompt-entry={entryID}>
-                      <div class="prompt-card-head">
-                        <div class="prompt-card-copy">
-                          <strong>{entry.label || entry.key}</strong>
-                          <span>
-                            {promptGroupLabel(entry.group)}
-                            {entry.mode ? ` · ${entry.mode}` : ""}
-                            {entry.inherits_core ? " · ← core_header" : ""}
-                          </span>
-                          <Show when={entry.active_profile}>
-                            <small>
-                              {t("prompt_profile.project_active")}: {entry.active_profile}
-                            </small>
-                          </Show>
-                          <Show when={entry.profile_prompt}>
-                            <small>{t("prompt_profile.profile_overlay_visible")}</small>
-                          </Show>
-                          <Show when={description}>
-                            <small>{description}</small>
-                          </Show>
-                        </div>
-                        <Show when={status().tone !== "ready"}>
-                          <span class="extension-status" data-state={status().tone}>
-                            {status().label}
-                          </span>
-                        </Show>
-                      </div>
-
-                      <div class="prompt-editor">
-                        <div class="prompt-editor-head">
-                          <Tabs
-                            size="sm"
-                            tone="neutral"
-                            value={viewMode(entryID)}
-                            onValueChange={(value) => setViewMode(entryID, value as PromptViewMode)}
-                            aria-label={t("prompt.title")}
-                            data-ui="prompt-view-tabs"
-                          >
-                            <Tab
-                              value="code"
-                              active={viewMode(entryID) === "code"}
-                              size="sm"
-                              tone="neutral"
-                              data-ui="prompt-view-tab"
-                            >
-                              {t("prompt.editor_label")}
-                            </Tab>
-                            <Tab
-                              value="preview"
-                              active={viewMode(entryID) === "preview"}
-                              size="sm"
-                              tone="neutral"
-                              data-ui="prompt-view-tab"
-                            >
-                              {t("prompt.preview")}
-                            </Tab>
-                            <Show when={canShowDefault()}>
-                              <Tab
-                                value="default"
-                                active={viewMode(entryID) === "default"}
-                                size="sm"
-                                tone="neutral"
-                                data-ui="prompt-view-tab"
-                              >
-                                {t("prompt.default_label")}
-                              </Tab>
-                            </Show>
-                          </Tabs>
-                          <div class="prompt-editor-actions">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              tone="neutral"
-                              disabled={saving() || (entry.configured_prompt === null && !dirty())}
-                              onClick={() => handleReset(entry)}
-                            >
-                              {t("prompt.reset")}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="solid"
-                              size="sm"
-                              tone="accent"
-                              disabled={saving() || !dirty()}
-                              onClick={() => handleSave(entry)}
-                            >
-                              {t("common.save")}
-                            </Button>
-                          </div>
-                        </div>
-                        <Show
-                          when={viewMode(entryID) !== "code"}
-                          fallback={
-                            <textarea
-                              class="field-input prompt-textarea"
-                              rows={8}
-                              value={currentDraft()}
-                              disabled={saving()}
-                              aria-label={t("prompt.editor_label")}
-                              onInput={(e) => handleDraftChange(entryID, e.currentTarget.value)}
-                            />
-                          }
-                        >
-                          <Show
-                            when={viewMode(entryID) === "default" && canShowDefault()}
-                            fallback={
-                              <div class="prompt-preview-card prompt-preview-card--attached">
-                                <div class="md-content prompt-preview-body" innerHTML={promptPreviewHtml(previewPrompt())} />
-                              </div>
-                            }
-                          >
-                            <div class="prompt-preview-card prompt-preview-card--attached">
-                              <div
-                                class="md-content prompt-preview-body"
-                                innerHTML={promptPreviewHtml(entry.default_prompt || "")}
-                              />
-                            </div>
-                          </Show>
-                        </Show>
-                      </div>
-                    </div>
-                  )
-                }}
-              </For>
-            </div>
           </Show>
         </div>
       </div>
