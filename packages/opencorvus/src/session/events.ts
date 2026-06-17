@@ -7,7 +7,7 @@ export namespace SessionEvents {
     "session.error",
     z.object({
       sessionID: z.string().optional(),
-      error: Message.Assistant.shape.error,
+      error: Message.Assistant.shape.error.unwrap(),
     }),
     { tier: 1 },
   )

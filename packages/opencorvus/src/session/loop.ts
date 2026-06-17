@@ -851,7 +851,7 @@ export namespace SessionLoop {
   async function stopTurnWithPredictiveBudgetError(input: {
     processor: SessionProcessor.Info
     sessionID: string
-    error: Message.Assistant["error"]
+    error: NonNullable<Message.Assistant["error"]>
   }) {
     const message = typeof input.error?.data?.message === "string" ? input.error.data.message : input.error?.name
     input.processor.message.error = input.error
