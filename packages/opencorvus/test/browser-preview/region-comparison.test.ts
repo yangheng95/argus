@@ -135,7 +135,7 @@ describe("browser preview region comparison", () => {
         expect(evidenceID).toBeTruthy()
         const evidence = await Instance.provide({
           directory: tmp.path,
-          fn: () => findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID }),
+          fn: () => findReadableBrowserPreviewEvidenceByID({ projectRoot: tmp.path, taskID, evidenceID }),
         })
         expect(evidence?.operationKind).toBe("reference-comparison")
         expect(evidence?.regionID).toBe("economy")
@@ -200,7 +200,7 @@ describe("browser preview region comparison", () => {
           expect(evidenceID).toBeTruthy()
           const evidence = await Instance.provide({
             directory: tmp.path,
-            fn: () => findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID }),
+            fn: () => findReadableBrowserPreviewEvidenceByID({ projectRoot: tmp.path, taskID, evidenceID }),
           })
           expect(evidence?.operationKind).toBe("reference-comparison")
           expect(evidence?.status).toBe("failed")
