@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { readFileSync, readdirSync, statSync } from "node:fs"
+import path from "node:path"
 import { createDecisionLog } from "../../src/decision-log"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
@@ -36,6 +38,54 @@ describe("DecisionLog type & interface", () => {
     }
     expect(entry.key).toBe("runtime")
     expect(entry.goalID).toBeNull()
+  })
+})
+
+describe("DecisionLog.append failure visibility", () => {
+  beforeEach(async () => {
+    await resetDatabase()
+  })
+
+  afterEach(async () => {
+    await resetDatabase()
+  })
+
+  test("throws when the decision row cannot be inserted", () => {
+    const log = createDecisionLog("tsk_decision_log_failure")
+
+    expect(() =>
+      log.append({
+        phase: "review",
+        key: "db_insert_failure",
+        value: null as unknown as string,
+        reason: "exercise the decision_log value NOT NULL constraint",
+      }),
+    ).toThrow()
+    expect(log.readByKey("db_insert_failure")).toBeUndefined()
+  })
+
+  test("production decision-log append failures are not marked non-fatal", () => {
+    function tsFiles(dir: string): string[] {
+      return readdirSync(dir).flatMap((name) => {
+        const full = path.join(dir, name)
+        if (statSync(full).isDirectory()) return tsFiles(full)
+        return full.endsWith(".ts") ? [full] : []
+      })
+    }
+
+    const forbidden = [
+      "decision log append failed",
+      "decision_log append failed",
+      "decision_log write failed",
+      "decision_log entry (non-fatal)",
+      "build report decision_log append failed",
+    ]
+    for (const file of tsFiles(path.join(process.cwd(), "packages/opencorvus/src"))) {
+      const source = readFileSync(file, "utf8")
+      for (const phrase of forbidden) {
+        expect(source).not.toContain(phrase)
+      }
+    }
   })
 })
 

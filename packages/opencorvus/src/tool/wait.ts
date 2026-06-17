@@ -38,19 +38,12 @@ export async function executeWait(input: {
 }): Promise<{ elapsed: number; aborted: boolean; output: string }> {
   const startedAt = Date.now()
   if (input.taskID) {
-    try {
-      createDecisionLog(input.taskID).append({
-        phase: input.logPhase ?? "wait",
-        key: `wait_${startedAt}`,
-        value: `wait ${input.duration_ms}ms`,
-        reason: input.reason,
-      })
-    } catch (error) {
-      log.warn("wait decision log append failed", {
-        taskID: input.taskID,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
+    createDecisionLog(input.taskID).append({
+      phase: input.logPhase ?? "wait",
+      key: `wait_${startedAt}`,
+      value: `wait ${input.duration_ms}ms`,
+      reason: input.reason,
+    })
   }
 
   let aborted = false
