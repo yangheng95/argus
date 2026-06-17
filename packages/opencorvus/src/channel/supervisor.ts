@@ -191,6 +191,7 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
 
   const runtime = new ChannelRuntime({
     baseUrl: serverUrl,
+    directory: env.OPENCORVUS_PROJECT_DIR,
     sharedMode: process.env.OPENCORVUS_SHARED_SESSION_MODE === "1",
     sharedFile: process.env.OPENCORVUS_SHARED_SESSION_FILE,
   })

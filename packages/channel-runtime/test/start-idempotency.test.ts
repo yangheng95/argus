@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 // test swaps `_impl` to the desired behaviour.
 let createCount = 0
 let throwOnNext = false
+let clientInputs: unknown[] = []
 
 const recordingMock = {
   createOpencode: async () => {
@@ -23,7 +24,10 @@ const recordingMock = {
   },
   createOpencodeClient: () => stubClient(),
   createOpenCorvus: async () => recordingMock.createOpencode(),
-  createOpenCorvusClient: () => stubClient(),
+  createOpenCorvusClient: (input?: unknown) => {
+    clientInputs.push(input)
+    return stubClient()
+  },
   createOpenCorvusServer: async () => ({ url: "http://127.0.0.1:0", close() {} }),
   createOpencodeServer: async () => ({ url: "http://127.0.0.1:0", close() {} }),
   OpencodeClient: class {} as any,
@@ -64,17 +68,25 @@ describe("ChannelRuntime.start idempotency (audit W2-V14)", () => {
   beforeEach(() => {
     createCount = 0
     throwOnNext = false
+    clientInputs = []
   })
 
   test("two concurrent start() calls share one OpenCorvus spawn", async () => {
-    const rt = new ChannelRuntime() as unknown as { start: () => Promise<void>; stop: () => Promise<void> }
+    const rt = new ChannelRuntime({ directory: "D:/repo/runtime" }) as unknown as {
+      start: () => Promise<void>
+      stop: () => Promise<void>
+    }
     await Promise.all([rt.start(), rt.start(), rt.start()])
     expect(createCount).toBe(1)
+    expect(clientInputs).toEqual([{ baseUrl: "http://127.0.0.1:0", directory: "D:/repo/runtime" }])
     await rt.stop()
   })
 
   test("subsequent start() after a successful start is a no-op (createCount stays 1)", async () => {
-    const rt = new ChannelRuntime() as unknown as { start: () => Promise<void>; stop: () => Promise<void> }
+    const rt = new ChannelRuntime({ directory: "D:/repo/runtime" }) as unknown as {
+      start: () => Promise<void>
+      stop: () => Promise<void>
+    }
     await rt.start()
     expect(createCount).toBe(1)
     await rt.start()
@@ -84,7 +96,7 @@ describe("ChannelRuntime.start idempotency (audit W2-V14)", () => {
   })
 
   test("a failed start rolls back `running` so a retry can proceed", async () => {
-    const rt = new ChannelRuntime() as unknown as {
+    const rt = new ChannelRuntime({ directory: "D:/repo/runtime" }) as unknown as {
       start: () => Promise<void>
       stop: () => Promise<void>
       running: boolean
@@ -97,6 +109,34 @@ describe("ChannelRuntime.start idempotency (audit W2-V14)", () => {
     await rt.start()
     expect(rt.running).toBe(true)
     expect(createCount).toBe(2)
+    await rt.stop()
+  })
+
+  test("start fails loudly without a configured project directory", async () => {
+    const rt = new ChannelRuntime() as unknown as {
+      start: () => Promise<void>
+      running: boolean
+    }
+
+    await expect(rt.start()).rejects.toThrow("ChannelRuntime requires options.directory")
+    expect(rt.running).toBe(false)
+    expect(createCount).toBe(0)
+    expect(clientInputs).toEqual([])
+  })
+
+  test("existing-server mode binds the SDK client to the configured directory", async () => {
+    const rt = new ChannelRuntime({
+      baseUrl: "http://127.0.0.1:7878",
+      directory: "D:/repo/from-env",
+    }) as unknown as {
+      start: () => Promise<void>
+      stop: () => Promise<void>
+    }
+
+    await rt.start()
+
+    expect(createCount).toBe(0)
+    expect(clientInputs).toEqual([{ baseUrl: "http://127.0.0.1:7878", directory: "D:/repo/from-env" }])
     await rt.stop()
   })
 })

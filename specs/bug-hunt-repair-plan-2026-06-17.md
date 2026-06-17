@@ -431,3 +431,49 @@ LINE:
 - Implemented on 2026-06-17.
 - Focused tests passed: `bun test packages/opencorvus/test/server/channel-attachment-routes.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus --filter=@opencorvus-ai/transport-protocol`.
+
+## Batch P1-C2: channel runtime attachment creation keeps project scope
+
+### Findings
+
+- Rawls' follow-up review found a related integration issue after BH-008/BH-009: `ChannelRuntime.publishChannelAttachment()` posts directly to `/channel/attachment`, while that create route intentionally remains project-scoped.
+- `ChannelSupervisor.desired()` already sets `OPENCORVUS_PROJECT_DIR = Instance.directory` for managed runtimes, but `startInProcess()` did not pass that directory into `ChannelRuntime`.
+- `ChannelRuntime.start()` creates SDK clients without directory context, so channel protocol calls such as `/channel/message` and the direct attachment create POST can fail the server's directory middleware.
+- `Server.openapi()` already derives directory parameters from `routeRequiresProjectDirectory()`: current source generation keeps `directory` on `POST /channel/attachment` and removes it from `GET /channel/attachment/{id}`. The tracked SDK generated files are already dirty with unrelated changes, so this batch will add source-level OpenAPI regression coverage instead of rewriting generated artifacts.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/channel/supervisor.ts` owns managed runtime environment construction and already has the active `Instance.directory`.
+- `packages/channel-runtime/src/main.ts` owns standalone runtime environment adaptation.
+- `packages/channel-runtime/src/core.ts` owns SDK client creation and direct `fetch()` attachment publish.
+- `packages/channel-runtime/test/start-idempotency.test.ts` covers `ChannelRuntime.start()` client construction with mocked SDK helpers.
+- `packages/channel-runtime/test/core-channel-protocol.test.ts` covers URL-attachment publish flow with mocked `fetch`.
+- `packages/opencorvus/test/server/app-routes.test.ts` covers `Server.openapi()` route metadata.
+- `packages/overlay/src/services/api.ts` already consumes `routeRequiresProjectDirectory()` for directory injection; existing dirty overlay tests will not be mixed into this batch.
+
+### Fix Shape
+
+- Add `directory` to `ChannelRuntimeOptions` and require it when `start()` needs to bind the SDK client. No implicit `process.cwd()` or default project fallback.
+- Pass `env.OPENCORVUS_PROJECT_DIR` from `ChannelSupervisor.startInProcess()` and `process.env.OPENCORVUS_PROJECT_DIR` from the standalone `main.ts` adapter into `ChannelRuntime`.
+- Build the SDK client through `createOpenCorvusClient({ baseUrl, directory })` for both existing-server and newly-created-server modes so project-scoped channel calls carry the same directory.
+- Add the same directory as a query parameter on the direct `POST /channel/attachment` publish request. Keep `POST /channel/attachment` project-scoped.
+- Add OpenAPI regression assertions for `/channel/attachment` POST and `/channel/attachment/{id}` GET without editing generated SDK artifacts in the dirty worktree.
+
+### Regression Tests
+
+- Extend `packages/channel-runtime/test/start-idempotency.test.ts` to assert `createOpenCorvusClient()` receives the configured directory and start fails loudly without one.
+- Extend `packages/channel-runtime/test/core-channel-protocol.test.ts` to assert `publishChannelAttachment()` posts with the configured directory and still surfaces upload failures.
+- Extend `packages/opencorvus/test/server/app-routes.test.ts` to assert `Server.openapi()` removes the `directory` query from public signed GET while preserving it on project-scoped POST.
+
+### Verification
+
+- Focused test command: `bun test packages/channel-runtime/test/start-idempotency.test.ts packages/channel-runtime/test/core-channel-protocol.test.ts packages/opencorvus/test/server/app-routes.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=@opencorvus-ai/channel-runtime --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused channel-runtime tests passed: `bun test packages/channel-runtime/test/start-idempotency.test.ts packages/channel-runtime/test/core-channel-protocol.test.ts`.
+- Focused OpenAPI directory assertion passed: `bun test packages/opencorvus/test/server/app-routes.test.ts -t "directory query"`.
+- Full `app-routes.test.ts` currently exposes a separate pre-existing browser-preview request-body schema failure (`schema.properties.url.type` is undefined); that failure is outside this channel attachment batch and was not masked.
+- Typecheck passed: `bunx turbo run typecheck --filter=@opencorvus-ai/channel-runtime --filter=opencorvus`.
