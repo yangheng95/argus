@@ -14,7 +14,7 @@
 // is Title Case across themes; the global `text-transform: uppercase`
 // fights that intent and produces TitleCase-but-LOOKS-LIKE-CAPS.
 //
-// Tier-3 status chips (req-type, req-status, gwg-step-status,
+// Tier-3 status chips (req-type, req-status, gwg-verdict,
 // verdict-pill, …) keep their own uppercase styling — those ARE
 // short single-word color-coded pills, the convention reads as a
 // status tag.
@@ -66,7 +66,7 @@ describe(".field-label is rendered in Title Case", () => {
 })
 
 describe("tier-3 status pills keep uppercase (negative control)", () => {
-  for (const sel of [".req-type", ".req-status", ".verdict-pill", ".gwg-step-status"]) {
+  for (const sel of [".req-type", ".req-status", ".verdict-pill", ".gwg-verdict"]) {
     test(`${sel} stays uppercase`, () => {
       expect(ruleBody(sel)).toContain("text-transform: uppercase")
     })
