@@ -853,13 +853,6 @@
   text-transform: uppercase;
 }
 
-.executor-popover-group-status {
-  color: var(--text-muted);
-  font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-medium);
-  text-transform: none;
-  letter-spacing: var(--ui-letter-spacing-normal);
-}
 
 .executor-popover-models {
   display: flex;
@@ -917,12 +910,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.executor-popover-model-badge {
-  font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--text-muted);
 }
 
 
