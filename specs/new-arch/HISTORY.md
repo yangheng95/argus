@@ -12,6 +12,12 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [right-sidebar-opencode-tui-upgrade-2026-06-04.md](right-sidebar-opencode-tui-upgrade-2026-06-04.md) | Right Sidebar OpenCode TUI Upgrade |
 | [spec-vscode-extension.md](spec-vscode-extension.md) | spec: opencorvus VSCode 扩展 |
 
+## 2026-06-17
+
+| File | Title |
+| --- | --- |
+| [2026-06-17-prompt-profile-schema-pressure-benchmark.md](2026-06-17-prompt-profile-schema-pressure-benchmark.md) | Prompt Profile Schema Pressure Benchmark |
+
 ## 2026-06-15
 
 | File | Title |
