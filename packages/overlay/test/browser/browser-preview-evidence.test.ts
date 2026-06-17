@@ -109,6 +109,23 @@ async function waitForPageText(page: any, text: string, label: string) {
   assert.fail(`Timed out waiting for ${label}\n${JSON.stringify(snapshot, null, 2)}`)
 }
 
+async function openBrowserPreviewFromTask(page: any, taskID: string, label: string, diagnostics?: () => unknown) {
+  await page.$eval(
+    '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
+    (node) => (node as HTMLButtonElement).click(),
+  )
+  await waitForPageState(
+    page,
+    () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
+    `${label} task activity visible before preview selection`,
+    diagnostics,
+  )
+  await page.$eval(`.task-row-main[data-task-id="${taskID}"]`, (node) => (node as HTMLButtonElement).click())
+  await page.$eval('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]', (node) =>
+    (node as HTMLButtonElement).click(),
+  )
+}
+
 test(
   "browser preview panel captures task-scoped manifest evidence through the backend",
   async () => {
@@ -482,21 +499,7 @@ test(
         "browser preview task row rendered",
         () => ({ errors, requestLog }),
       )
-      await page.$eval(
-        '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
-        (node) => (node as HTMLButtonElement).click(),
-      )
-      await waitForPageState(
-        page,
-        () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
-        "task activity visible before preview selection",
-        () => ({ errors, requestLog }),
-      )
-      await page.$eval(`.task-row-main[data-task-id="${taskID}"]`, (node) => (node as HTMLButtonElement).click())
-      await page.$eval(
-        '[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]',
-        (node) => (node as HTMLButtonElement).click(),
-      )
+      await openBrowserPreviewFromTask(page, taskID, "browser preview", () => ({ errors, requestLog }))
       await waitForPageState(
         page,
         () => document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active === "true",
@@ -849,21 +852,7 @@ test(
         "persisted browser preview task row rendered",
         () => ({ errors, requestLog }),
       )
-      await page.$eval(
-        '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
-        (node) => (node as HTMLButtonElement).click(),
-      )
-      await waitForPageState(
-        page,
-        () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
-        "task activity visible before persisted preview selection",
-        () => ({ errors, requestLog }),
-      )
-      await page.$eval(`.task-row-main[data-task-id="${taskID}"]`, (node) => (node as HTMLButtonElement).click())
-      await page.$eval(
-        '[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]',
-        (node) => (node as HTMLButtonElement).click(),
-      )
+      await openBrowserPreviewFromTask(page, taskID, "persisted preview", () => ({ errors, requestLog }))
       await waitForPageState(
         page,
         () => document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active === "true",
