@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { PROTOCOL_VERSION, type ExtensionMessage } from "@opencorvus-ai/transport-protocol"
-import { UnsupportedNativeCommandError } from "../src/services/host-transport"
+import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, UnsupportedNativeCommandError } from "../src/services/host-transport"
 import { __resetVsCodeTransportForTest, createVsCodeTransport } from "../src/services/vscode-transport"
 
 /**
@@ -359,6 +359,58 @@ describe("vscode-transport native command bridge", () => {
       error: { name: "NativeCommandError", message: "missing path" },
     } as any)
     await expect(promise).rejects.toThrow("missing path")
+  })
+
+  test("supported native commands timeout and ignore late responses", async () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const originalClearTimeout = globalThis.clearTimeout
+    const timers: Array<{ handler: TimerHandler; timeout?: number; args: unknown[] }> = []
+    const cleared = new Set<unknown>()
+    globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+      const timer = { handler, timeout, args }
+      timers.push(timer)
+      return timer as unknown as ReturnType<typeof setTimeout>
+    }) as typeof setTimeout
+    globalThis.clearTimeout = ((timer?: ReturnType<typeof setTimeout>) => {
+      cleared.add(timer)
+    }) as typeof clearTimeout
+    try {
+      const fake = installFakeWindow()
+      cleanupFake = fake.cleanup
+      const t = createVsCodeTransport()
+      const promise = t
+        .native({ kind: "workspace.pickDir", start: "D:/workspace" })
+        .then((value) => ({ status: "resolved" as const, value }))
+        .catch((error) => ({
+          status: "rejected" as const,
+          name: error instanceof Error ? error.name : "",
+          message: error instanceof Error ? error.message : String(error),
+        }))
+      const request = fake.fake.posted.find((message) => message.type === "native.request")!
+
+      expect(timers).toHaveLength(1)
+      expect(timers[0]!.timeout).toBe(DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)
+
+      timers[0]!.handler()
+      const result = await promise
+
+      expect(result.status).toBe("rejected")
+      expect(result.name).toBe("TimeoutError")
+      expect(result.message).toContain("workspace.pickDir")
+      expect(cleared.has(timers[0])).toBe(true)
+
+      fake.trigger({
+        protocol: PROTOCOL_VERSION,
+        type: "native.response",
+        id: request.id,
+        ok: true,
+        value: "D:/workspace/late",
+      } as any)
+      expect(await Promise.race([Promise.resolve(result), new Promise((resolve) => setTimeout(resolve, 0))])).toBe(result)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.clearTimeout = originalClearTimeout
+    }
   })
 
   test("unsupported native commands still fail locally without posting", async () => {
