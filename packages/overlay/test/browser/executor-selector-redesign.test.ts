@@ -126,7 +126,8 @@ test(
       if (path === "/config" && req.method === "PATCH") {
         return send(await req.json())
       }
-      if (path === "/config/prompt") return send([])
+      if (path === "/config/prompt" || path === "/config/prompt-profile") return send([])
+      if (path === "/mission") return send([])
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
       if (path === "/executor") {
@@ -322,12 +323,15 @@ test(
       assert.equal(await page.$('[data-section="external"]'), null)
 
       // Clicking the external chip closes the mirror popover and opens its own.
-      // Dispatch via .click() directly because startup notifications can hover
-      // over the bottom-right of the composer at low viewports and intercept a
-      // pixel-based Playwright click.
-      await page.evaluate(() =>
-        (document.querySelector('[data-ui="executor-chip-external"]') as HTMLButtonElement).click(),
-      )
+      const externalChipSelector = '[data-ui="executor-chip-external"]'
+      await page.waitForSelector(externalChipSelector, { visible: true })
+      const externalChipHitTest = await page.$eval(externalChipSelector, (node: HTMLElement, selector) => {
+        const rect = node.getBoundingClientRect()
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        return hit?.closest(String(selector)) === node
+      }, externalChipSelector)
+      assert.equal(externalChipHitTest, true)
+      await page.click(externalChipSelector)
       await page.waitForSelector('[data-section="external"]')
       assert.equal(await page.$('[data-section="mirror"]'), null)
 
@@ -394,6 +398,7 @@ test(
       assert.ok(placement!.popoverRight <= placement!.viewportWidth + 1, JSON.stringify(placement))
       assert.ok(placement!.popoverLeft <= placement!.triggerLeft + 1, JSON.stringify(placement))
       assert.ok(placement!.popoverRight >= placement!.triggerRight - 1, JSON.stringify(placement))
+      assert.deepEqual(pageErrors, [])
     } finally {
       await browser.close().catch(() => undefined)
       await server.close()
