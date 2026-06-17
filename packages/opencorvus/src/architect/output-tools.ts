@@ -649,7 +649,7 @@ function scriptRefError(goalID: string, missing: readonly string[]): string {
 function isEssentialVisualEvidenceAcceptanceSpec(spec: AcceptanceSpec): boolean {
   return (
     spec.severity === "essential" &&
-    (spec.trigger === "on_integrity" || spec.trigger === "on_acceptance") &&
+    spec.trigger === "on_integrity" &&
     spec.scorers.some((scorer) => {
       if (scorer.type === "prebuilt") {
         return scorer.name === "visual-evidence-bundle" && scorer.spec?.kind === "visual_evidence_bundle"
