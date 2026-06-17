@@ -389,3 +389,45 @@ LINE:
 - Implemented on 2026-06-17.
 - Focused tests passed: `bun test packages/opencorvus/test/server/attachment-routes.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+
+## Batch P1-C: signed public channel attachment reads
+
+### Findings
+
+- BH-008: `ChannelAttachment.create()` signs temporary URLs with `e` and `s`, and `ChannelAttachment.authorize()` validates expiry and HMAC, but `GET /channel/attachment/:id` never calls `authorize()`.
+- BH-009: the generated URL path is `/channel/attachment/:id`, but `routeRequiresProjectDirectory()` still treats all `/channel/*` routes as project-scoped. A remote channel cannot fetch the generated URL without the private project directory header.
+- The route surface is mixed: attachment creation and channel ingress are project-scoped operations, while reading one signed attachment is the only public operation.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/channel/attachment.ts` owns attachment persistence, URL signing, and authorization.
+- `packages/opencorvus/src/server/routes/channel.ts` is the only HTTP reader for temporary channel attachments.
+- `packages/transport-protocol/src/index.ts` is the single shared source for server route directory policy used by server middleware and clients.
+- `packages/opencorvus/src/server/server.ts` calls `routeRequiresProjectDirectory()` before dispatching to project routes.
+- `packages/opencorvus/test/channel/routes.test.ts` and gateway tests cover project-scoped channel routes, but not public signed attachment fetches.
+- `packages/transport-protocol/test/contract.test.ts` already has uncommitted local changes, so this batch will add a new focused test instead of mixing into that dirty file.
+
+### Fix Shape
+
+- Keep `POST /channel/attachment`, `/channel/message`, and `/channel/runtime` project-scoped.
+- Add an exact method/path directory-policy exception for `GET /channel/attachment/:id` only; do not add a broad `/channel/` bypass prefix.
+- In the GET handler, call `ChannelAttachment.authorize(id, e, s)` before reading the file. Missing, invalid, expired, or mismatched signatures return the same 404 shape as missing metadata.
+- Keep the existing no-secret behavior inside `ChannelAttachment.authorize()` unchanged for this batch; the security requirement here is enforcement when `OPENCORVUS_PUBLIC_URL_SECRET` or server password is configured.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/server/channel-attachment-routes.test.ts`.
+- Create a signed attachment under `OPENCORVUS_PUBLIC_URL_SECRET`, fetch the generated URL path through `Server.App()` without `x-opencorvus-directory`, and assert raw bytes are returned.
+- Assert missing signature, invalid signature, expired timestamp, and missing metadata all return 404 under the configured secret.
+- Assert `routeRequiresProjectDirectory("/channel/attachment/<id>", "GET")` is false, while `POST /channel/attachment` and other `/channel/*` routes remain true.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/channel-attachment-routes.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus --filter=@opencorvus-ai/transport-protocol`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/opencorvus/test/server/channel-attachment-routes.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus --filter=@opencorvus-ai/transport-protocol`.

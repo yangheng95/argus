@@ -82,7 +82,11 @@ export const ChannelRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const file = await ChannelAttachment.get(c.req.param("id"))
+        const id = c.req.param("id")
+        if (!ChannelAttachment.authorize(id, c.req.query("e") ?? null, c.req.query("s") ?? null)) {
+          return c.json({ error: "not found" }, 404)
+        }
+        const file = await ChannelAttachment.get(id)
         if (!file) return c.json({ error: "not found" }, 404)
         return new Response(Bun.file(file.path), {
           headers: {

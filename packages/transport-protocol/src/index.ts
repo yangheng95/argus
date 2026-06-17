@@ -37,6 +37,7 @@ const TASK_CONVERSATION_RECORD_ROUTE = new RegExp(
   `^/task/${TASK_ROUTE_ID_SEGMENT}/conversation(?:/(?:history|events|session/${TASK_ROUTE_ID_SEGMENT}))?$`,
 )
 const TASK_ROOT_RECORD_ROUTE = new RegExp(`^/task/${TASK_ROUTE_ID_SEGMENT}$`)
+const CHANNEL_ATTACHMENT_PUBLIC_ROUTE = /^\/channel\/attachment\/[^/]+$/
 
 export function normalizedServerRoutePath(routePath: string): string {
   const withoutQuery = String(routePath || "").split("?", 1)[0] || "/"
@@ -56,6 +57,7 @@ export function routeRequiresProjectDirectory(routePath: string, method?: string
   if (pathOnly === "/global" || pathOnly === "/auth" || pathOnly === "/ui") return false
   if (routeMethod === "GET" && TASK_CONVERSATION_RECORD_ROUTE.test(pathOnly)) return false
   if (routeMethod === "DELETE" && TASK_ROOT_RECORD_ROUTE.test(pathOnly)) return false
+  if (routeMethod === "GET" && CHANNEL_ATTACHMENT_PUBLIC_ROUTE.test(pathOnly)) return false
   return !(PROJECT_DIRECTORY_BYPASS_PREFIXES as readonly string[]).some((prefix) => pathOnly.startsWith(prefix))
 }
 
