@@ -1221,3 +1221,53 @@ LINE:
 - Helmholtz confirmed the runtime root cause was schema reuse: `Message.Assistant.shape.error` is optional for normal assistant messages, while `session.error` must require structured `error`.
 - Helmholtz confirmed `sessionID` should remain optional because some global error publishers do not have a session, and raw executor `type: "session.error"` stream payloads are separate from this BusEvent schema.
 - Helmholtz also warned not to mix unrelated current `bus.test.ts` churn into this batch; duplicate event registration coverage must remain intact.
+
+## Batch P1-M: BH-108 shared channel session persistence must fail closed
+
+### Findings
+
+- BH-108 is a P1 shared-session consistency bug in `ChannelRuntime`: corrupt shared-session files were treated like missing files, and shared-session file write failures were logged as warnings after `sharedSessionId` had already been set.
+- That let shared-mode runtimes create and use replacement sessions that were not safely persisted. Later restarts or parallel runtimes could then fork channel threads across different sessions.
+- Missing file is the only valid "create a new shared session" state. Existing unreadable, invalid, or invalid-shaped shared-session files are corrupt state and must fail initialization visibly.
+
+### Call-point Inventory
+
+- `packages/channel-runtime/src/core.ts` owns `sharedMode()`, `sharedFile()`, `readSharedSessionFile()`, `writeSharedSessionFile()`, and `ensureSharedSession()`.
+- `ChannelRuntime.start()` preloads an existing shared-session file before messages arrive.
+- `ChannelRuntime.handleMessage()` calls `ensureSharedSession()` and already sends "Failed to initialize shared session." when it returns no ID.
+- `packages/channel-runtime/src/main.ts` and `packages/opencorvus/src/channel/supervisor.ts` only pass `sharedMode/sharedFile` options and do not own persistence semantics.
+- `packages/channel-runtime/test/core-session-isolation.test.ts` already covers per-thread session behavior and is the narrow test home for shared-session behavior.
+
+### Fix Shape
+
+- Replace `Bun.file(file).json().catch(() => undefined)` with explicit file reading: only `ENOENT` means absent, while read errors, invalid JSON, missing `session_id`, or empty `session_id` throw.
+- In message handling, `ensureSharedSession()` catches shared-file read/preparation failures and returns undefined so the existing user-visible failure notice is sent and no message is prompted.
+- Prepare the shared-session file directory before `session.create()` so obviously unwritable paths fail before creating a replacement session.
+- Write the shared-session file before setting `this.sharedSessionId`; if the write fails after session creation, return undefined and do not bind or prompt with the unpersisted session.
+- No fallback replacement session, no corrupt-file overwrite, and no warning-only write path is retained.
+
+### Regression Tests
+
+- Corrupt shared-session JSON rejects initialization, preserves the corrupt file, does not call `session.create()`, and does not call `promptAsync()`.
+- Existing shared-session files with missing, non-string, or empty `session_id` reject initialization with the same no-create/no-prompt behavior.
+- Unusable shared-session file directory fails before `session.create()`, preserves the blocker file, and does not call `promptAsync()`.
+- Normal shared mode creates once, writes `session_id`, and a fresh runtime using the same file prompts into the persisted shared session without creating a second session.
+- Corrupt shared-session files make `start()` reject before starting adapters and roll back `running`.
+- Post-create write failure does not bind the thread, does not prompt, and does not set `sharedSessionId`.
+
+### Verification
+
+- Focused test command: `bun test packages/channel-runtime/test/core-session-isolation.test.ts`
+- Typecheck command: `bun run --cwd packages/channel-runtime typecheck`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/channel-runtime/test/core-session-isolation.test.ts`.
+- Package typecheck passed: `bun run --cwd packages/channel-runtime typecheck`.
+
+### Independent Review Feedback
+
+- Kant confirmed that only `ENOENT` may mean "shared session not initialized"; corrupt JSON, invalid shape, empty `session_id`, and non-`ENOENT` read errors must fail closed.
+- Kant required write failure to remain non-binding and non-prompting, with no warning-only use of an unpersisted session.
+- Kant also flagged `start()` preloading as a side-effect risk; shared-session validation now runs before server/event/adapter startup so corrupt files reject without half-started runtime state.
