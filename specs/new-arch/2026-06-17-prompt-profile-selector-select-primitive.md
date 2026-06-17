@@ -53,6 +53,16 @@ Required properties:
   listbox semantics to Kobalte Select and no longer carries the native select
   synchronization ref.
 - Browser test opens the selector on a light surface and asserts all visible
-  options have readable contrast against the popup background.
+  options have readable contrast against the popup background, including
+  unselected option labels and secondary description text.
 - Manual visual screenshot shows the open Expert Squad dropdown on white/light
   theme with unselected options readable.
+
+## Follow-up Review
+
+The first Kobalte Select migration removed the native select/chrome double
+source. A later impact review found a remaining light-theme readability gap:
+the shared option label was readable, but prompt-profile descriptions still
+used `--text-muted` through a page-local rule. Select option secondary text now
+belongs to `.oc-select-option small` so prompt-profile and model-picker
+descriptions share the same readable token contract.

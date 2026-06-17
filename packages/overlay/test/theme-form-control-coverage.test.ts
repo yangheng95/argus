@@ -72,6 +72,22 @@ describe(".field-input strips UA widget chrome", () => {
   })
 })
 
+describe("shared Kobalte select popup colors", () => {
+  const fieldCss = stripComments(readCss(join("surfaces", "field.css")))
+
+  test(".oc-select content and options use readable foreground tokens", () => {
+    const contentBlock = fieldCss.match(/\.oc-select-content\s*{[^}]*}/)?.[0] ?? ""
+    const optionBlock = fieldCss.match(/\.oc-select-option\s*{[^}]*}/)?.[0] ?? ""
+    const secondaryBlock = fieldCss.match(/\.oc-select-option\s+small\s*{[^}]*}/)?.[0] ?? ""
+
+    expect(contentBlock).toMatch(/background\s*:\s*var\(--surface\)/)
+    expect(contentBlock).toMatch(/color\s*:\s*var\(--text-strong\)/)
+    expect(optionBlock).toMatch(/color\s*:\s*var\(--text-strong\)/)
+    expect(secondaryBlock).toMatch(/color\s*:\s*var\(--text-soft\)/)
+    expect(secondaryBlock).not.toMatch(/var\(--text-muted\)/)
+  })
+})
+
 describe("accent-color is declared once globally", () => {
   test("design-language body{} block carries the canonical accent-color", () => {
     const css = stripComments(readCss(join("tokens", "design-language.css")))

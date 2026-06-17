@@ -450,7 +450,6 @@
 
 .prompt-profile-select-option-copy small {
   overflow: hidden;
-  color: var(--text-muted);
   font-size: var(--ui-font-tiny);
   line-height: 1.25;
   text-overflow: ellipsis;

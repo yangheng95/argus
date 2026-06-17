@@ -108,6 +108,10 @@
   cursor: default;
 }
 
+.oc-select-option small {
+  color: var(--text-soft);
+}
+
 .oc-select-option[data-highlighted],
 .oc-select-option:hover {
   background: var(--surface-hover);
