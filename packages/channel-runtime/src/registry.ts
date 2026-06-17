@@ -232,7 +232,7 @@ function build(id: ChannelName, create: AdapterFactory, values: Values) {
 
 export function registerAdapters(
   runtime: { register(adapter: ChannelAdapter): unknown },
-  env: Env = process.env,
+  env: Env,
   create: AdapterFactory,
 ) {
   const names: string[] = []
