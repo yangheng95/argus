@@ -19,7 +19,7 @@ import { muteAISdkWarnings } from "@/runtime/shims"
 import { OverlayUI } from "./overlay-ui"
 import { DEFAULT_SERVER_PORT } from "./defaults"
 import { requestID, serverErrorResponse } from "./error-handler"
-import { configureCorsOrigins, isAllowedCorsOrigin } from "./cors"
+import { configureCorsOrigins, isAllowedCorsOrigin, isAllowedRequestOrigin } from "./cors"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 
 muteAISdkWarnings()
@@ -38,6 +38,14 @@ export namespace Server {
     "DirectoryRequiredError",
     z.object({
       message: z.string(),
+    }),
+  )
+  export const RequestOriginForbiddenError = NamedError.create(
+    "RequestOriginForbiddenError",
+    z.object({
+      message: z.string(),
+      origin: z.string(),
+      host: z.string().optional(),
     }),
   )
 
@@ -216,6 +224,16 @@ export namespace Server {
             }
             throw error
           }
+        })
+        .use(async (c, next) => {
+          const origin = c.req.header("origin")
+          const host = c.req.header("host")
+          if (isAllowedRequestOrigin(origin, host)) return next()
+          throw new RequestOriginForbiddenError({
+            message: `Request Origin is not allowed: ${origin}`,
+            origin: origin!,
+            host,
+          })
         })
         .use(
           cors({

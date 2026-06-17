@@ -307,3 +307,45 @@ LINE:
 - Focused tests passed: `bun test packages/opencorvus/test/script/published-package-bin.test.ts packages/opencorvus/test/script/package-test-entry.test.ts`.
 - Staged diff check passed: `git diff --cached --check`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+
+## Batch P1-A: request Origin enforcement before side effects
+
+### Findings
+
+- BH-006: `packages/opencorvus/src/server/cors.ts` already has two concepts: `isAllowedCorsOrigin` for response headers and `isAllowedRequestOrigin` for request-side validation against `Origin` plus `Host`.
+- `packages/opencorvus/src/server/server.ts` only wires `isAllowedCorsOrigin` into Hono's response CORS middleware. A hostile browser can still send actual side-effect requests with a disallowed `Origin`; the browser may hide the response, but the handler can already have mutated state.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/cors.ts` owns configured origins, built-in opencorvus/localhost/Tauri origins, and same-host request validation.
+- `packages/opencorvus/src/server/server.ts` owns global middleware ordering: auth, request logging, CORS response headers, control-plane routes, project-directory middleware, and project route dispatch.
+- `packages/opencorvus/src/cli/network.ts` resolves `--cors` and config `server.cors` into `Server.listen({ cors })`.
+- `packages/opencorvus/test/server/task-create-route.test.ts` covers a real state-mutating `POST /task` through `Server.App()`.
+- `packages/opencorvus/test/server/directory-required.test.ts` covers middleware ordering for control-plane and project-scoped routes, but not hostile `Origin`.
+
+### Fix Shape
+
+- Add a request-origin middleware in `Server.App()` after request logging and before response CORS/routes.
+- Requests without `Origin` remain valid for local SDK/CLI callers.
+- Requests with `Origin` must satisfy `isAllowedRequestOrigin(origin, host)`, so same-host UI, localhost/Tauri/opencorvus origins, and configured `server.cors` entries use the same allow rules as response CORS.
+- Reject disallowed origins with a structured `RequestOriginForbiddenError` and HTTP 403 before project bootstrap or route handlers run.
+- Do not add route allowlists, per-method bypasses, or browser-only heuristics; the presence of a disallowed `Origin` is the boundary violation.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/server/request-origin.test.ts`.
+- Send `POST /task` with a hostile `Origin`, valid project directory, and complete body; assert 403, no task row, and `runTaskLoop` is not called.
+- Send the same route with same-host `Origin`/`Host`; assert it reaches the handler.
+- Configure an explicit allowed origin and assert that origin reaches a side-effect route.
+- Update `packages/opencorvus/test/server/onerror-mapping.test.ts` for the new named error status mapping.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/request-origin.test.ts packages/opencorvus/test/server/onerror-mapping.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/opencorvus/test/server/request-origin.test.ts packages/opencorvus/test/server/onerror-mapping.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
