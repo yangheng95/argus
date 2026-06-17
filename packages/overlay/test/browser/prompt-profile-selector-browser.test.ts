@@ -1,5 +1,9 @@
 import assert from "node:assert/strict"
+import { mkdirSync } from "node:fs"
+import { writeFile } from "node:fs/promises"
+import { dirname, join, resolve } from "node:path"
 import test from "node:test"
+import { fileURLToPath } from "node:url"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
@@ -7,8 +11,18 @@ import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
+const OVERLAY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
+const SCRATCH_ROOT = resolve(OVERLAY_ROOT, "../../.scratch")
+
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
+}
+
+async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+  const target = join(SCRATCH_ROOT, name)
+  mkdirSync(dirname(target), { recursive: true })
+  await writeFile(target, await element.screenshot({}))
+  return target
 }
 
 function send(value: unknown, init?: ResponseInit) {
@@ -232,6 +246,11 @@ test("prompt profile selector options remain readable on the light popup surface
     await page.waitForSelector(".prompt-profile-select-content")
     await page.waitForSelector(".prompt-profile-select-option")
 
+    const contentElement = await page.$(".prompt-profile-select-content")
+    assert.ok(contentElement)
+    const screenshot = await saveScreenshot(contentElement, "prompt-profile-selector-current.png")
+    assert.ok(screenshot.endsWith("prompt-profile-selector-current.png"))
+
     const result = await page.evaluate(() => {
       function parseRgb(value: string): [number, number, number] {
         const match = value.match(/rgba?\(([^)]+)\)/)
@@ -255,8 +274,14 @@ test("prompt profile selector options remain readable on the light popup surface
 
       const rootTheme = document.documentElement.dataset.theme
       const bodyTheme = document.body.dataset.theme
+      const trigger = document.querySelector('[data-ui="prompt-profile-selector"]') as HTMLElement | null
+      if (!trigger) throw new Error("Missing prompt profile select trigger")
       const content = document.querySelector(".prompt-profile-select-content") as HTMLElement | null
       if (!content) throw new Error("Missing prompt profile select content")
+      const triggerStyle = getComputedStyle(trigger)
+      const scaleText = getComputedStyle(document.body).getPropertyValue("--ui-scale").trim()
+      const uiScale = Number.parseFloat(scaleText)
+      if (!Number.isFinite(uiScale)) throw new Error(`Invalid --ui-scale: ${scaleText}`)
       const contentBackground = getComputedStyle(content).backgroundColor
       const contentBackgroundParts = contentBackground.match(/rgba?\(([^)]+)\)/)?.[1].split(",") ?? []
       const contentBackgroundAlpha =
@@ -290,11 +315,23 @@ test("prompt profile selector options remain readable on the light popup surface
           textParts,
         }
       })
-      return { rootTheme, bodyTheme, contentBackground, contentBackgroundAlpha, options }
+      return {
+        rootTheme,
+        bodyTheme,
+        triggerClassList: Array.from(trigger.classList),
+        triggerGapPixels: Number.parseFloat(triggerStyle.columnGap),
+        expectedTriggerGapPixels: 10 * uiScale,
+        contentBackground,
+        contentBackgroundAlpha,
+        options,
+      }
     })
 
     assert.equal(result.rootTheme, "light")
     assert.equal(result.bodyTheme, "light")
+    assert.ok(result.triggerClassList.includes("oc-select-trigger"))
+    assert.ok(result.triggerClassList.includes("prompt-profile-select-trigger"))
+    assert.equal(Math.abs(result.triggerGapPixels - result.expectedTriggerGapPixels) < 0.01, true)
     assert.match(result.contentBackground, /^rgb\(/)
     assert.equal(result.contentBackgroundAlpha, 1)
     assert.deepEqual(

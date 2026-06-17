@@ -688,7 +688,7 @@ export function ChatComposer(props: ChatComposerProps) {
             sameWidth
           >
             <Select.Trigger
-              class="prompt-profile-select-trigger"
+              class="oc-select-trigger prompt-profile-select-trigger"
               data-ui="prompt-profile-selector"
               aria-label={t("prompt_profile.selector_title")}
               title={t("prompt_profile.selector_title")}

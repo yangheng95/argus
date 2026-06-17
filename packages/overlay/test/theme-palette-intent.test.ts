@@ -113,11 +113,18 @@ describe("overlay theme palette intent", () => {
   test("light popup foreground tokens keep secondary and warning text readable", () => {
     const popupBackground = toRgba(resolveThemeValue(light, themeToken(light, "--menu-panel-bg")))
     const warnDim = composite(toRgba(resolveThemeValue(light, themeToken(light, "--warn-dim"))), popupBackground)
+    const accentDim = colorMixWithTransparentToRgba(
+      light,
+      resolveThemeValue(light, themeToken(light, "--accent-dim")),
+      popupBackground,
+    )
 
     expect(contrastRatio(toRgba(themeToken(light, "--text-soft")), popupBackground)).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(toRgba(themeToken(light, "--text-muted")), popupBackground)).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(toRgba(themeToken(light, "--warn")), popupBackground)).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(toRgba(themeToken(light, "--warn")), warnDim)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(toRgba(themeToken(light, "--accent")), accentDim)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(toRgba(themeToken(light, "--text-muted")), accentDim)).toBeGreaterThanOrEqual(4.5)
   })
 })
 
@@ -179,6 +186,17 @@ function toRgba(value: string): Rgba {
     return { r, g, b, a: a! }
   }
   throw new Error(`Unsupported color ${value}`)
+}
+
+function colorMixWithTransparentToRgba(css: string, value: string, background: Rgba): Rgba {
+  const match = value
+    .trim()
+    .match(/^color-mix\(\s*in\s+srgb\s*,\s*([^,]+?)\s+([0-9.]+)%\s*,\s*transparent\s*\)$/i)
+  if (!match) throw new Error(`Unsupported transparent color-mix ${value}`)
+  const color = toRgba(resolveThemeValue(css, match[1]!.trim()))
+  color.a = Number.parseFloat(match[2]!) / 100
+  if (!Number.isFinite(color.a)) throw new Error(`Invalid color-mix percent ${value}`)
+  return composite(color, background)
 }
 
 function composite(foreground: Rgba, background: Rgba): Rgba {

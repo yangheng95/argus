@@ -372,7 +372,7 @@
     0 0 0 calc(2px * var(--ui-scale)) var(--accent-ring);
 }
 
-.prompt-profile-select-trigger {
+.prompt-profile-select-trigger.oc-select-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -387,6 +387,10 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.prompt-profile-select-trigger.oc-select-trigger > .prompt-profile-select-copy {
+  white-space: normal;
 }
 
 .prompt-profile-select-copy {
@@ -423,7 +427,7 @@
   color: var(--text-muted);
 }
 
-.prompt-profile-select-trigger:disabled {
+.prompt-profile-select-trigger.oc-select-trigger:disabled {
   cursor: default;
   opacity: var(--ui-opacity-disabled);
 }

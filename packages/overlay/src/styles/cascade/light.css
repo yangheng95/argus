@@ -46,8 +46,8 @@ body[data-theme="light"] {
   --text: #35405c;
   --text-strong: #101527;
   --text-soft: #5f6b87;
-  --text-muted: #66708e;
-  --accent: #5b5ff0;
+  --text-muted: #616b87;
+  --accent: #5256e8;
   --accent-dim: color-mix(in srgb, var(--accent) 11%, transparent);
   --accent-hover: #474add;
   --accent-start: #4b8dff;
