@@ -268,8 +268,10 @@ function leftActivityDefinition(activity: LeftActivity): SideActivity<LeftActivi
 }
 
 const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
-const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>(null)
-const activeRightActivity = () => selectedRightActivity()
+const activeRightActivity = (): RightActivity | null => {
+  const panel = selectedCenterWorkbenchPanel()
+  return panel && panel !== "file" ? panel : null
+}
 const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")
 const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("mission")
 const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")
@@ -333,7 +335,7 @@ function isCenterWorkbenchPanelOpen(panel: CenterWorkbenchPanel): boolean {
 }
 
 function isRightActivityOpen(activity: RightActivity): boolean {
-  if (activity === "workflow") return primaryCenterPanel() === "task" && isCenterWorkbenchPanelOpen("workflow")
+  if (activity === "workflow") return isCenterWorkbenchPanelOpen("workflow")
   return isCenterWorkbenchPanelOpen(activity)
 }
 
@@ -368,7 +370,6 @@ function resetCenterWorkbenchToFocusedPanel(activity: PrimaryLeftActivity): void
   closeFileEditor()
   setPrimaryCenterPanel(panel)
   setCenterWorkbenchPanels(["workflow"])
-  setSelectedRightActivity(panel === "task" ? "workflow" : null)
   queueMicrotask(() => {
     getCenterWorkbenchViews().workflow?.scrollIntoView({ block: "nearest", inline: "nearest" })
   })
@@ -520,7 +521,6 @@ function selectTaskFromTaskList(taskID: string): void {
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
   setCenterWorkbenchPanels((current) => (current.includes(panel) ? current : [...current, panel]))
-  if (panel !== "file") setSelectedRightActivity(panel)
   queueMicrotask(() => {
     getCenterWorkbenchViews()[panel]?.scrollIntoView({ block: "nearest", inline: "nearest" })
   })
@@ -531,10 +531,6 @@ function closeCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
   if (panel === "diff") setWorkspaceOpen(false)
   if (panel === "file") closeFileEditor()
   setCenterWorkbenchPanels((current) => current.filter((item) => item !== panel))
-  const selected = untrack(selectedRightActivity)
-  if (selected === panel) {
-    setSelectedRightActivity(null)
-  }
 }
 
 function getCenterWorkbenchViews(): Record<CenterWorkbenchPanel, HTMLElement | null> {
