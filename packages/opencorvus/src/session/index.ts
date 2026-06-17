@@ -349,6 +349,23 @@ export namespace Session {
     return result
   }
 
+  const SessionProjectInput = z.object({
+    sessionID: Identifier.schema("session"),
+    projectID: z.string().min(1),
+  })
+
+  export const getInProject = fn(SessionProjectInput, async ({ sessionID, projectID }) => {
+    const row = Database.use((db) =>
+      db
+        .select()
+        .from(SessionTable)
+        .where(and(eq(SessionTable.id, sessionID), eq(SessionTable.project_id, projectID)))
+        .get(),
+    )
+    if (!row) throw new NotFoundError({ message: `Session not found: ${sessionID}` })
+    return fromRow(row)
+  })
+
   export const get = fn(Identifier.schema("session"), async (id) => {
     const row = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, id)).get())
     if (!row) throw new NotFoundError({ message: `Session not found: ${id}` })
@@ -449,14 +466,22 @@ export namespace Session {
     },
   )
 
-  export const mergeConfigOverlay = fn(
-    z.object({
-      sessionID: Identifier.schema("session"),
-      patch: Config.Overlay,
+  const MergeConfigOverlayInput = z.object({
+    sessionID: Identifier.schema("session"),
+    patch: Config.Overlay,
+  })
+
+  export const mergeConfigOverlayInProject = fn(
+    MergeConfigOverlayInput.extend({
+      projectID: z.string().min(1),
     }),
     async (input) => {
       return Database.transaction((db) => {
-        const row = db.select().from(SessionTable).where(eq(SessionTable.id, input.sessionID)).get()
+        const row = db
+          .select()
+          .from(SessionTable)
+          .where(and(eq(SessionTable.id, input.sessionID), eq(SessionTable.project_id, input.projectID)))
+          .get()
         if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
         assertConfigurableRoot(fromRow(row))
         const stored = (row.metadata as Record<string, unknown> | null | undefined)?.configOverlay ?? {}
@@ -471,7 +496,7 @@ export namespace Session {
         const updated = db
           .update(SessionTable)
           .set({ metadata, time_updated: Date.now() })
-          .where(eq(SessionTable.id, input.sessionID))
+          .where(and(eq(SessionTable.id, input.sessionID), eq(SessionTable.project_id, input.projectID)))
           .returning()
           .get()!
         const info = fromRow(updated)
@@ -481,6 +506,10 @@ export namespace Session {
       })
     },
   )
+
+  export const mergeConfigOverlay = fn(MergeConfigOverlayInput, async (input) => {
+    return mergeConfigOverlayInProject({ ...input, projectID: Instance.project.id })
+  })
 
   export const setArchived = fn(
     z.object({
@@ -756,11 +785,6 @@ export namespace Session {
         .all(),
     )
     return rows.map(fromRow)
-  })
-
-  const SessionProjectInput = z.object({
-    sessionID: Identifier.schema("session"),
-    projectID: z.string().min(1),
   })
 
   // Flat list of session IDs in the subtree rooted at `sessionID`, parent
