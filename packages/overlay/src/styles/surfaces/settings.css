@@ -1209,26 +1209,8 @@
 .config-tab-panel > .config-section-body {
   display: flex;
   flex-direction: column;
-  /* Density refresh: 14 → 10 between siblings inside a tab panel. */
+  /* Density refresh: 14 -> 10 between siblings inside a tab panel. */
   gap: calc(10px * var(--ui-scale));
-}
-
-/* Subsection density inside the content panel — overrides the
-   bare `.config-subsection-*` defaults to fit within the dialog
-   padding. */
-.config-content .config-subsection {
-  overflow: hidden;
-  margin-bottom: calc(8px * var(--ui-scale));
-}
-
-.config-content .config-subsection-head {
-  min-height: calc(40px * var(--ui-scale));
-  padding: calc(9px * var(--ui-scale)) calc(14px * var(--ui-scale));
-}
-
-.config-content .config-subsection-body {
-  padding: 0 calc(14px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  gap: calc(12px * var(--ui-scale));
 }
 
 .config-content .extension-head,
@@ -1273,106 +1255,7 @@
   flex: 1;
 }
 
-/* ── Settings collapsible section + subsection ───────────── */
-
-/* Outer collapsible group. In settings, groups are flat owner
-   surfaces: no card border, no nested background block. */
-.config-section {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  overflow: visible;
-  box-shadow: none;
-  transition:
-    border-color var(--ui-duration-base),
-    background var(--ui-duration-base),
-    box-shadow var(--ui-duration-base),
-    transform var(--ui-duration-base);
-}
-
-.config-section[open] {
-  background: transparent;
-}
-
-.config-section:hover,
-.config-section:focus-within {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
-.config-section[open]:hover,
-.config-section[open]:focus-within {
-  background: transparent;
-}
-
-/* Section head: clickable summary row. The early `::before`
-   Unicode-glyph chevron + its `[open]` rotate(90deg) sibling
-   that lived in styles.css were dead source — fully shadowed by
-   the late CSS-drawn chevron pair (`content: "" + border-right/
-   border-bottom + rotate(-45/45)`) that's now the canonical
-   below. Dropped per rule 8 (already known dead per iter29). */
-.config-section-head {
-  font-size: var(--ui-font-title);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-  letter-spacing: var(--ui-letter-spacing-normal);
-  line-height: 1.2;
-  box-sizing: border-box;
-  min-height: calc(32px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: var(--section-field-gap);
-  border: 0 solid transparent;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  position: relative;
-  transition:
-    background var(--ui-duration-base),
-    border-color var(--ui-duration-base),
-    box-shadow var(--ui-duration-base),
-    color var(--ui-duration-base),
-    transform var(--ui-duration-base);
-}
-
-.config-section-head::-webkit-details-marker {
-  display: none;
-}
-
-.config-section-head::marker {
-  content: "";
-}
-
-/* CSS-drawn chevron — single source after iter29. The closed
-   state rotates -45deg (right-pointing arrow); `[open]` flips
-   to +45deg (down-pointing). */
-.config-section-head::before {
-  content: "";
-  width: calc(7px * var(--ui-scale));
-  height: calc(7px * var(--ui-scale));
-  flex-shrink: 0;
-  border-right: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
-  border-bottom: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
-  transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
-  transition:
-    transform var(--ui-duration-base) var(--ui-timing-standard),
-    border-color var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.config-section[open] > .config-section-head::before {
-  transform: rotate(45deg) translateY(calc(-1px * var(--ui-scale)));
-}
-
-.config-section-head:hover {
-  color: var(--text-strong);
-  background: var(--settings-surface-hover);
-  border-color: transparent;
-  box-shadow: none;
-}
+/* ── Config tab panel body ────────────────────────────────── */
 
 .config-section-body {
   padding: var(--section-body-padding-y) var(--section-body-padding-x) calc(8px * var(--ui-scale));
@@ -1389,126 +1272,9 @@
     transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 
-.config-section:hover > .config-section-body,
-.config-section:focus-within > .config-section-body {
-  background: transparent;
-  border-color: transparent;
-  border-top-color: transparent;
-  box-shadow: none;
-}
-
-/* Inner collapsible group. It follows the same flat settings
-   surface contract as the outer group. */
-.config-subsection {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  transition:
-    border-color var(--ui-duration-base),
-    background var(--ui-duration-base),
-    box-shadow var(--ui-duration-base),
-    transform var(--ui-duration-base);
-}
-
-.config-subsection[open] {
-  background: transparent;
-}
-
-.config-subsection:hover,
-.config-subsection:focus-within {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
-.config-subsection[open]:hover,
-.config-subsection[open]:focus-within {
-  background: transparent;
-}
-
-.config-subsection-head {
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-  padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: var(--section-field-gap);
-  min-height: calc(32px * var(--ui-scale));
-  line-height: 1.2;
-  border: 0 solid transparent;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  transition:
-    background var(--ui-duration-base),
-    border-color var(--ui-duration-base),
-    box-shadow var(--ui-duration-base),
-    color var(--ui-duration-base),
-    transform var(--ui-duration-base);
-}
-
-.config-subsection-head::-webkit-details-marker {
-  display: none;
-}
-
-.config-subsection-head::marker {
-  content: "";
-}
-
-.config-subsection-head::before {
-  content: "";
-  width: calc(6px * var(--ui-scale));
-  height: calc(6px * var(--ui-scale));
-  flex-shrink: 0;
-  border-right: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
-  border-bottom: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
-  transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
-  transition:
-    transform var(--ui-duration-base) var(--ui-timing-standard),
-    border-color var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.config-subsection[open] > .config-subsection-head::before {
-  transform: rotate(45deg) translateY(calc(-1px * var(--ui-scale)));
-}
-
-.config-subsection-head:hover {
-  background: var(--settings-surface-hover);
-  border-color: transparent;
-  box-shadow: none;
-}
-
-.config-subsection-body {
-  padding: 0 calc(9px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  display: flex;
-  flex-direction: column;
-  gap: var(--section-row-gap);
-  border: 0 solid transparent;
-  border-top: none;
-  border-radius: 0;
-  transition:
-    background var(--ui-duration-base) var(--ui-timing-standard),
-    border-color var(--ui-duration-base) var(--ui-timing-standard),
-    box-shadow var(--ui-duration-base) var(--ui-timing-standard),
-    transform var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.config-subsection:hover > .config-subsection-body,
-.config-subsection:focus-within > .config-subsection-body {
-  background: transparent;
-  border-color: transparent;
-  border-top-color: transparent;
-  box-shadow: none;
-}
-
 /* Flat (non-collapsible) groups inside the Extensions tab —
-   replaces nested <details class="config-subsection"> that
-   produced redundant collapsible bars inside an already-
-   collapsible outer section. */
+   keeps nested extension lists visually grouped without adding
+   another shell surface. */
 .ext-group {
   display: flex;
   flex-direction: column;
@@ -1923,7 +1689,6 @@
   min-height: calc(120px * var(--ui-scale));
   font-family: "Iosevka Term", "JetBrains Mono", monospace;
 }
-
 
 .prompt-preview-card {
   display: grid;
@@ -2692,25 +2457,6 @@
 .config-content .pref-item:hover {
   border-color: transparent;
   background: var(--settings-surface-hover);
-  box-shadow: none;
-  transform: none;
-}
-
-.config-content .config-subsection-head:hover,
-.config-content .config-subsection-head:focus-visible {
-  border-color: transparent;
-  background: var(--settings-surface-hover);
-  box-shadow: none;
-  transform: none;
-}
-
-.config-content .config-subsection:hover > .config-subsection-body,
-.config-content .config-subsection:focus-within > .config-subsection-body,
-.config-content .config-subsection[open]:hover > .config-subsection-body,
-.config-content .config-subsection[open]:focus-within > .config-subsection-body {
-  background: transparent;
-  border-color: transparent;
-  border-top-color: transparent;
   box-shadow: none;
   transform: none;
 }
