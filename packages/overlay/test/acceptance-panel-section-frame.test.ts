@@ -66,28 +66,19 @@ describe("AcceptancePanel renders inside a collapsible section frame", () => {
     expect(slice).toMatch(/badgeTone=\{[\s\S]*"accepted"[\s\S]*"good"[\s\S]*"rejected"[\s\S]*"bad"[\s\S]*\}/)
   })
 
-  test("the Section forwards id=acceptanceSection and bodyId=acceptanceBody so dom.ts accessors resolve", () => {
-    // iter31 functional fix: dom.ts queries `#acceptanceSection` and
-    // `#acceptanceBody` to attach data-phase-state. Section forwards
-    // both `id` and `bodyId` to the underlying `<details>` /
-    // `.oc-section__body` so the highlight pipeline still reaches
-    // the real nodes after the primitive migration.
+  test("the Section forwards id=acceptanceSection and bodyId=acceptanceBody as stable anchors", () => {
+    // Keep the section anchors stable for browser tests, deep links, and
+    // surrounding layout code after the primitive migration.
     const fnStart = BOARD.indexOf("export function AcceptancePanel")
     const slice = BOARD.slice(fnStart, fnStart + 4000)
     expect(slice).toContain('id="acceptanceSection"')
     expect(slice).toContain('bodyId="acceptanceBody"')
   })
 
-  test("the <details> does NOT hardcode data-phase-state (owned by syncSectionPhases)", () => {
-    // iter31: removed the iter24 hardcoded
-    // `data-phase-state={props.acceptance ? "active" :
-    // undefined}` — that attribute belongs to
-    // `syncSectionPhases` which computes it from the live
-    // conversation phase + board state. Hardcoding it
-    // here pinned the section to "active" forever whenever
-    // acceptance data existed.
+  test("the <details> derives data-phase-state from phaseState, not acceptance presence", () => {
     const fnStart = BOARD.indexOf("export function AcceptancePanel")
     const slice = BOARD.slice(fnStart, fnStart + 4000)
+    expect(slice).toContain("attr:data-phase-state={props.phaseState || undefined}")
     expect(slice).not.toMatch(/data-phase-state=\{props\.acceptance/)
   })
 })

@@ -1,8 +1,7 @@
 // ── Board Panel Components ──
 // Solid.js components that mirror the board rendering logic
-// renderBoard, renderSpec, renderPlan, renderGoals, renderCriteria,
-// renderEvaluation, renderBudget, renderAcceptanceSection, renderTaskActions,
-// renderInteractions, statusIcon, statusLabel.
+// renderBoard, renderSpec, renderPlan, renderGoals, renderBudget,
+// renderAcceptanceSection, renderTaskActions, statusIcon, statusLabel.
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
 import { createEffect, createMemo, createSignal, For, Show, onMount } from "solid-js"
@@ -11,7 +10,6 @@ import { boardStore } from "../store/board"
 import { cardTreeStore, type CardNode } from "../store/card-tree"
 import { t, tc } from "../utils/i18n"
 import { renderMarkdown } from "../utils/markdown"
-import { acceptanceGoalProgress } from "../utils/goal-workflow"
 import { orderedReachableCardIDs, cardMessageSegments } from "../utils/card-tree"
 import { statusIconName } from "../utils/status-mapping"
 import { activeTone, verdictTone } from "../utils/verdict-tone"
@@ -19,8 +17,6 @@ import { GoalWorkflowList } from "./GoalWorkflowGroup"
 import { RequirementsPanel } from "./RequirementsPanel"
 import { FrontendResearchPanel } from "./FrontendResearchPanel"
 import { ArchitectPanel } from "./ArchitectPanel"
-import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel"
-import { InteractionCardList, type InteractionData } from "./InteractionCard"
 import { taskScopeSectionVisibility, taskScopeWorkflowSectionID } from "../utils/task-scope-sections"
 import { Button } from "./ui/Button"
 import { Icon, type IconName } from "./Icon"
@@ -439,24 +435,7 @@ export function Board(props: BoardProps) {
 
   const spec = () => board()?.spec
   const acceptance = () => acceptancePanelAcceptance(board())
-  const interactions = () => board()?.interactions || []
   const overview = () => board()?.overview
-  // Task-level criteria rollup. Backend (workbench/board.ts) folds the
-  // acceptance-agent verdict (deferred_checks + rejection_details + overall
-  // verdict) and the in-process visual-diff gate into one list per task.
-  // Hidden entirely for kind=build tasks since build self-verifies and does
-  // not produce acceptance-stage criteria.
-  const criteriaResults = () =>
-    board()?.criteriaResults as
-      | Array<{
-          name: string
-          label?: string
-          family?: string
-          status: "passed" | "failed" | "skipped"
-          evidence?: string
-        }>
-      | undefined
-  const taskKind = () => (board()?.task as { kind?: string } | undefined)?.kind
 
   // ── Workflow-structured data (new) ──
   const workflow = () => board()?.workflow
@@ -496,8 +475,6 @@ export function Board(props: BoardProps) {
   // the section gets `data-phase-state="active"` highlighting. Falls back to
   // the most recently completed/failed step when nothing is running.
   const activeSection = createMemo<string>(() => {
-    const interactionsPending = interactions().some((i: any) => i.status === "pending")
-    if (interactionsPending) return "interactions"
     const wf = workflow()
     if (!wf || !Array.isArray(wf.steps)) return ""
     const running = wf.steps.find((s: any) => s.status === "running")
@@ -701,96 +678,6 @@ export function Board(props: BoardProps) {
           <AcceptancePanel acceptance={acceptance()} phaseState={phaseFor("acceptance")} />
         </Show>
       </div>
-
-      {/* TODO(2026-04-20): 评估指标 / 交付 / interactions 三个板块同步下线待重做。
-          理由同上——避免与 goal 卡片信息重复；重做时评估每块是否该独立 section
-          还是内嵌 goal step payload。不要无脑恢复。 */}
-      <Show when={false}>
-        <Show when={taskKind() !== "build"}>
-          <SectionFrame
-            id="evaluationCriteriaSection"
-            title={t("section.criteria")}
-            icon="criteria"
-            bodyId="evaluationCriteriaBody"
-            badgeId="evaluationCriteriaBadge"
-            badgeText={(() => {
-              // badge MUST read the same source as the body (criteriaResults)
-              // — falling back to goalWorkflows when criteria is empty made
-              // the badge claim "0/1" while the body showed nothing, which
-              // is a pure fallback (CLAUDE.md 1) that lied to operators.
-              const list = criteriaResults() ?? []
-              if (list.length === 0) return ""
-              const failed = list.filter((c) => c.status === "failed").length
-              const passed = list.filter((c) => c.status === "passed").length
-              return failed > 0 ? `${failed} failed` : `${passed}/${list.length}`
-            })()}
-            badgeTone={(() => {
-              const list = criteriaResults() ?? []
-              if (list.length === 0) return ""
-              const failed = list.filter((c) => c.status === "failed").length
-              const passed = list.filter((c) => c.status === "passed").length
-              return verdictTone({ passed, failed, total: list.length })
-            })()}
-          >
-            <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
-          </SectionFrame>
-        </Show>
-
-        <SectionFrame
-          id="acceptanceSection"
-          title={t("section.acceptance")}
-          icon="acceptance"
-          bodyId="acceptanceBody"
-          badgeId="acceptanceBadge"
-          phaseState={phaseFor("acceptance")}
-          badgeText={(() => {
-            const gs = goalWorkflows()
-            if (gs.length === 0) {
-              const d = acceptance()
-              return d ? verdictPillLabel(deriveVerdictTone(d)) : ""
-            }
-            const progress = acceptanceGoalProgress(gs)
-            return `${progress.completed}/${progress.total}`
-          })()}
-          badgeVariant="metric"
-          badgeTone={(() => {
-            const gs = goalWorkflows()
-            if (gs.length === 0) {
-              // Verdict drives the badge tone — same single source the panel
-              // uses. Lifecycle status (publishing / candidate) deliberately
-              // ignored here so a rejected verdict never paints the section
-              // header green.
-              const tone = deriveVerdictTone(acceptance())
-              return tone === "accepted" ? "good" : tone === "rejected" ? "bad" : tone === "inflight" ? "accent" : ""
-            }
-            const progress = acceptanceGoalProgress(gs)
-            if (progress.total === 0 && progress.completed === 0) return ""
-            return verdictTone({
-              passed: progress.completed,
-              failed: progress.failed,
-              total: progress.total,
-            })
-          })()}
-        >
-          <AcceptancePanel acceptance={acceptance()} />
-        </SectionFrame>
-
-        <SectionFrame
-          id="interactionsSection"
-          title={t("workflow.interactions")}
-          icon="criteria"
-          bodyId="interactionsBody"
-          badgeId="interactionsBadge"
-          phaseState={phaseFor("interactions")}
-          badgeText={(() => {
-            const n = interactions().filter((i: any) => i.status === "pending").length
-            return n > 0 ? String(n) : ""
-          })()}
-          badgeTone="warn"
-        >
-          <InteractionCardList interactions={interactions() as InteractionData[]} />
-        </SectionFrame>
-      </Show>
     </>
   )
 }
