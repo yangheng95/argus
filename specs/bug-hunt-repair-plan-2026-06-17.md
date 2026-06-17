@@ -2619,3 +2619,66 @@ LINE:
 - Noether confirmed the score impact: `weightedMean(...)` accepts `evidence_fresh=true`, so the wrong fresh aggregate directly awarded score credit.
 - Noether recommended the same fix shape: inspect each configured metric ID, return stale on any missing or stale input, keep all-fresh aggregation unchanged, and avoid partial credit, retry, fallback scoring, or host gates.
 - Noether identified duplicate result rows for the same spec/iteration as a related risk. This batch uses a per-metric lookup and latest fresh row selection so repeated rows for one input do not duplicate that input's weight.
+
+## Batch P1-AO: BH-050 VS Code native bridge requests must timeout and clear pending state
+
+### Findings
+
+- BH-050 targets `packages/overlay/src/services/vscode-transport.ts::createVsCodeTransport().native(...)`.
+- HTTP-style bridge requests already default to `AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)` and remove their `pending` entry on abort.
+- Native bridge requests post `native.request` and store `{ resolve, reject }` in `pendingNative`, but there is no timeout, abort signal, or cleanup path if the VS Code extension host never sends `native.response`.
+- UI actions that call host native commands, such as workspace picking, opening paths, notification permission checks, and project editor launch, can remain pending forever after a dropped extension-host response.
+
+### Call-point Inventory
+
+- `packages/overlay/src/services/vscode-transport.ts` owns the only `pendingNative` map and the `native.response` dispatcher.
+- `packages/overlay/src/services/host-transport.ts` owns `DEFAULT_REQUEST_TIMEOUT_MILLISECONDS` and the `HostTransport.native(...)` contract shared by overlay callers.
+- Overlay callers of `getHostTransport().native(...)` include connection startup, config file writes, workspace directory picking, open path/editor commands, window commands, notifications, titlebar actions, and settings persistence.
+- `packages/overlay/test/vscode-transport-ui-command.test.ts` currently covers native success, native error response, and unsupported command rejection, but not missing response cleanup.
+- `packages/overlay/test/vscode-transport-decode.test.ts` already covers default timeout semantics for non-native VS Code transport requests.
+
+### Fix Shape
+
+- Add a timer to supported VS Code native requests using `DEFAULT_REQUEST_TIMEOUT_MILLISECONDS`.
+- On timeout, remove the `pendingNative` entry and reject the promise with a visible timeout error that names the command kind.
+- Clear the timer when `native.response` resolves or rejects the pending command.
+- If `postMessage(...)` throws, delete the pending entry and clear the timer before rejecting the original error.
+- Do not add fallback native command paths, retries, synthetic success, or UI-side gates.
+
+### Regression Tests
+
+- Extend `packages/overlay/test/vscode-transport-ui-command.test.ts`.
+- Stub `setTimeout` / `clearTimeout` so the default native timeout can be triggered deterministically without waiting 15 seconds.
+- Start a supported native command without sending `native.response`; assert it rejects with a timeout error, the timer used `DEFAULT_REQUEST_TIMEOUT_MILLISECONDS`, and a later `native.response` for the same ID is ignored.
+- Keep existing native success and native error response tests green.
+
+### Verification
+
+- New regression failed before implementation: supported VS Code native requests created no timer, so the test observed zero scheduled timeouts.
+- Implemented on 2026-06-18: supported VS Code native requests now store a timeout with the pending native command, reject with `TimeoutError` after `DEFAULT_REQUEST_TIMEOUT_MILLISECONDS`, delete the pending entry, clear the timer on response/error/timeout/post failure, and ignore late `native.response` messages.
+- Focused native timeout regression passed: `bun test packages/overlay/test/vscode-transport-ui-command.test.ts -t "supported native commands timeout" --timeout 30000`.
+- VS Code transport suites passed: `bun test packages/overlay/test/vscode-transport-ui-command.test.ts packages/overlay/test/vscode-transport-decode.test.ts packages/overlay/test/auth-change-stream.test.ts --timeout 60000`.
+- Overlay typecheck passed: `bun run --cwd packages/overlay typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Darwin reviewed the repaired working tree and confirmed the current `pendingNative` shape stores a timer, `native.response` clears it, timeout rejects visibly, and postMessage failure cleans up pending state.
+- Darwin listed runtime native callers that depend on this boundary: workspace pick/open commands, open-url/open-path helpers, notification permission/request/send, and project editor launch.
+- Darwin confirmed this fix does not add fallback native paths or gates; it gives each native bridge request an explicit response timeout.
+
+## Batch P1-AO-note: BH-049 rewind clear is already covered in current HEAD
+
+### Findings
+
+- BH-049 recorded an older overlay rewind-clear bug: clearing the rewind cursor referenced `clearPruneCursor` without calling it and did not rehydrate the older pruned events.
+- Current HEAD no longer has a `clearPruneCursor` production reference.
+- `task.rewound` with `cursorTime > 0` still prunes locally, but `cursorTime === 0` now calls `scheduleRewindClearRecovery(...)`, which invokes `recoverSelectedTaskAfterRewindClear(...)`.
+- `recoverSelectedTaskAfterRewindClear(...)` hydrates the authoritative conversation before restarting the selected-task stream, and the tree writer clears local `rewindCursor` during hydrate.
+
+### Verification
+
+- Verified current behavior on 2026-06-18 without code changes.
+- Selected-task recovery and event routing tests passed: `bun test packages/overlay/test/selected-task-recovery.test.ts packages/overlay/test/events-refresh.test.ts --timeout 60000`.
+- Bernoulli independently confirmed the current implementation no longer contains the `clearPruneCursor` production bug and identified the current recovery path from `events.ts` through `selected-task-recovery.ts`, `conversation.ts`, and `tree-writer.ts`.
+- Bernoulli also confirmed the backend close loop: `clearRewindCursor(...)` emits `task.rewound` with `cursorTime: 0`, and the conversation route no longer filters the transcript when the task rewind cursor is null.
