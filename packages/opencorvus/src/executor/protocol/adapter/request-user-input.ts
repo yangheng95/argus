@@ -19,9 +19,54 @@ export const RequestUserInputToolAdapter: ToolAdapter = {
           properties: {
             questions: {
               type: "array",
+              description: "Questions that must be answered by the operator before the executor can continue.",
+              minItems: 1,
+              items: {
+                type: "object",
+                required: ["question", "header", "options"],
+                additionalProperties: false,
+                properties: {
+                  question: {
+                    type: "string",
+                    description: "Complete operator-facing question that must be answered before continuing.",
+                  },
+                  header: {
+                    type: "string",
+                    description: "Short label for the question.",
+                  },
+                  options: {
+                    type: "array",
+                    description: "Concrete selectable answers for the operator.",
+                    items: {
+                      type: "object",
+                      required: ["label", "description"],
+                      additionalProperties: false,
+                      properties: {
+                        label: {
+                          type: "string",
+                          description: "Short answer label.",
+                        },
+                        description: {
+                          type: "string",
+                          description: "One sentence explaining when to choose this answer.",
+                        },
+                      },
+                    },
+                  },
+                  multiple: {
+                    type: "boolean",
+                    description: "Whether the operator may select more than one option.",
+                  },
+                  custom: {
+                    type: "boolean",
+                    description: "Whether the operator may provide a free-form answer.",
+                  },
+                },
+              },
             },
           },
-          additionalProperties: true,
+          required: ["questions"],
+          additionalProperties: false,
         },
         metadata: {
           tool_kind: "input",

@@ -906,6 +906,19 @@ export namespace ProviderTransform {
     return Math.min(model.limit.output, OUTPUT_TOKEN_MAX) || OUTPUT_TOKEN_MAX
   }
 
+  function mergedSchemaDescription(left: unknown, right: unknown): { description?: string } {
+    const leftDescription =
+      left && typeof left === "object" && typeof (left as { description?: unknown }).description === "string"
+        ? (left as { description: string }).description
+        : undefined
+    if (leftDescription) return { description: leftDescription }
+    const rightDescription =
+      right && typeof right === "object" && typeof (right as { description?: unknown }).description === "string"
+        ? (right as { description: string }).description
+        : undefined
+    return rightDescription ? { description: rightDescription } : {}
+  }
+
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
     /*
     if (["openai", "azure"].includes(providerID)) {
@@ -989,12 +1002,17 @@ export namespace ProviderTransform {
                 } else if (v?.const !== undefined && (merged[k]?.const !== undefined || merged[k]?.enum)) {
                   // Discriminator field: merge const values into enum
                   const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-                  merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
+                  merged[k] = {
+                    type: "string",
+                    enum: [...new Set([...existing, v.const].map(String))],
+                    ...mergedSchemaDescription(merged[k], v),
+                  }
                 } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
                   const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
                   merged[k] = {
                     type: merged[k].type ?? v.type ?? "string",
                     enum: [...new Set([...existing, ...v.enum].map(String))],
+                    ...mergedSchemaDescription(merged[k], v),
                   }
                 }
                 // else: keep first definition (properties with same name across variants)
@@ -1034,12 +1052,17 @@ export namespace ProviderTransform {
               merged[k] = v
             } else if (v?.const !== undefined && (merged[k]?.const !== undefined || merged[k]?.enum)) {
               const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-              merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
+              merged[k] = {
+                type: "string",
+                enum: [...new Set([...existing, v.const].map(String))],
+                ...mergedSchemaDescription(merged[k], v),
+              }
             } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
               const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
               merged[k] = {
                 type: merged[k].type ?? v.type ?? "string",
                 enum: [...new Set([...existing, ...v.enum].map(String))],
+                ...mergedSchemaDescription(merged[k], v),
               }
             }
           }

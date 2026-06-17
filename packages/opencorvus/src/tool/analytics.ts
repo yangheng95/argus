@@ -26,7 +26,12 @@ export const AnalyticsTool = Tool.define("analytics", {
         .enum(["queued", "active", "completed", "failed", "cancelled"])
         .optional()
         .describe("Filter by task status"),
-      limit: z.number().int().positive().default(20).describe("Max results"),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .default(20)
+        .describe("Maximum number of matching task rows to return from the analytics search."),
     }),
     z.object({
       action: z.literal("goal_stats"),

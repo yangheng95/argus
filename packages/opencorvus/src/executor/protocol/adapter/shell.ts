@@ -17,8 +17,14 @@ export const ShellToolAdapter: ToolAdapter = {
         inputSchema: {
           type: "object",
           properties: {
-            command: { type: "string" },
-            cwd: { type: "string" },
+            command: {
+              type: "string",
+              description: "Shell command to execute in the active workspace.",
+            },
+            cwd: {
+              type: "string",
+              description: "Optional working directory for the shell command.",
+            },
           },
           required: ["command"],
           additionalProperties: false,

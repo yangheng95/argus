@@ -33,7 +33,10 @@ export const PlannerTool = Tool.define("planner", {
     z.object({
       action: z.literal("update_task"),
       taskId: z.string().describe("Task ID to update"),
-      status: z.enum(["pending", "in_progress", "completed", "blocked", "cancelled"]).optional(),
+      status: z
+        .enum(["pending", "in_progress", "completed", "blocked", "cancelled"])
+        .describe("Lifecycle state to assign to the task after this update.")
+        .optional(),
       notes: z.string().optional().describe("Update task notes"),
       progressPct: z.coerce.number().int().min(0).max(100).optional().describe("Progress percentage 0-100"),
     }),

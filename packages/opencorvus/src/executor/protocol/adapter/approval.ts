@@ -12,24 +12,11 @@ export const ApprovalToolAdapter: ToolAdapter = {
   id: "approval",
   kind: "approval",
   aliases: names,
-  supports(input) {
-    return input.capabilities.approvals.length > 0
+  supports() {
+    return false
   },
   declare() {
-    return [
-      {
-        name: "approval",
-        description: "Represents a provider-native approval or permission request.",
-        inputSchema: {
-          type: "object",
-          properties: {},
-          additionalProperties: true,
-        },
-        metadata: {
-          tool_kind: "approval",
-        },
-      },
-    ] satisfies ToolDefinitionInfo[]
+    return undefined satisfies ToolDefinitionInfo[] | undefined
   },
   accept(call) {
     const value = call.name.trim().toLowerCase()
