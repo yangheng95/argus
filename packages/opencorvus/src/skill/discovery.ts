@@ -19,6 +19,36 @@ export namespace Discovery {
     return path.join(Global.Path.cache, "skills")
   }
 
+  function resolveDiscoveryChild(parent: string, value: string, label: string, options?: { singleSegment?: boolean }) {
+    const trimmed = value.trim()
+    const segments = trimmed.split("/")
+    if (
+      !trimmed ||
+      trimmed !== value ||
+      value.includes("\\") ||
+      value.includes(":") ||
+      value.includes("?") ||
+      value.includes("#") ||
+      (options?.singleSegment && segments.length !== 1) ||
+      segments.some((segment) => !segment || segment === "." || segment === "..") ||
+      path.isAbsolute(value) ||
+      path.posix.isAbsolute(value) ||
+      path.win32.isAbsolute(value)
+    ) {
+      throw new Error(`Unsafe skill discovery path ${label}: ${value}`)
+    }
+
+    const root = path.resolve(parent)
+    const resolved = path.resolve(root, ...segments)
+    if (resolved === root || !Filesystem.contains(root, resolved)) {
+      throw new Error(`Unsafe skill discovery path ${label}: ${value}`)
+    }
+    return {
+      localPath: resolved,
+      remotePath: segments.map(encodeURIComponent).join("/"),
+    }
+  }
+
   async function get(url: string, dest: string): Promise<boolean> {
     if (await Filesystem.exists(dest)) return true
     return fetch(url)
@@ -76,13 +106,24 @@ export namespace Discovery {
       return true
     })
 
+    const downloads = list.map((skill) => {
+      const root = resolveDiscoveryChild(cache, skill.name, "skill name", { singleSegment: true })
+      const files = skill.files.map((file) => ({
+        ...resolveDiscoveryChild(root.localPath, file, "file"),
+      }))
+      return {
+        root: root.localPath,
+        files: files.map((file) => ({
+          link: new URL(`${root.remotePath}/${file.remotePath}`, `${host}/`).href,
+          dest: file.localPath,
+        })),
+      }
+    })
+
     await Promise.all(
-      list.map(async (skill) => {
-        const root = path.join(cache, skill.name)
+      downloads.map(async ({ root, files }) => {
         await Promise.all(
-          skill.files.map(async (file) => {
-            const link = new URL(file, `${host}/${skill.name}/`).href
-            const dest = path.join(root, file)
+          files.map(async ({ link, dest }) => {
             await mkdir(path.dirname(dest), { recursive: true })
             await get(link, dest)
           }),
