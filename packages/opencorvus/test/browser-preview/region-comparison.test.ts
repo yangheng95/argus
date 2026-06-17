@@ -8,6 +8,7 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 import {
+  BrowserPreviewRegionComparisonRequest,
   compareBrowserPreviewRegions,
   resolveSourceReferencePath,
   type BrowserPreviewRegionBinding,
@@ -160,6 +161,53 @@ describe("browser preview region comparison", () => {
     expect(source).not.toContain("resolveBrowserNodeSidecarRuntime")
     expect(source).not.toContain("REGION_COMPARISON_SCRIPT")
     expect(source).not.toContain("runImplementationCapture")
+  })
+
+  test("request schema rejects direct URL and output directory fields", () => {
+    const binding: BrowserPreviewRegionBinding = {
+      region_id: "economy",
+      viewport_id: "desktop",
+      state_id: "default",
+      region_scope: "page-section",
+      source: {
+        reference_artifact_id: "reference.png",
+        bbox: { x: 0, y: 0, width: 100, height: 80 },
+        semantic_role: "economy section",
+        text_anchors: [],
+        source_refs: [],
+      },
+      implementation: {
+        route: "/",
+        locator: { kind: "data-oc-region", value: "economy" },
+        component_files: [],
+      },
+      acceptance_refs: [],
+    }
+
+    expect(() =>
+      BrowserPreviewRegionComparisonRequest.parse({
+        targetID: "art_previewtarget_1",
+        viewportIDs: ["desktop"],
+        inlineBindings: [binding],
+        url: "http://127.0.0.1:5173/",
+      }),
+    ).toThrow(/url/)
+
+    expect(() =>
+      BrowserPreviewRegionComparisonRequest.parse({
+        targetID: "art_previewtarget_1",
+        viewportIDs: ["desktop"],
+        inlineBindings: [
+          {
+            ...binding,
+            source: {
+              ...binding.source,
+              outDir: ".opencorvus/other",
+            },
+          },
+        ],
+      }),
+    ).toThrow(/outDir/)
   })
 })
 

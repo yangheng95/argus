@@ -18,54 +18,63 @@ export const BrowserPreviewRegionBox = z.object({
   y: z.number().finite().nonnegative(),
   width: z.number().finite().positive(),
   height: z.number().finite().positive(),
-})
+}).strict()
 export type BrowserPreviewRegionBox = z.infer<typeof BrowserPreviewRegionBox>
 
 export const BrowserPreviewRegionLocator = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("test-id"), value: z.string().min(1) }),
-  z.object({ kind: z.literal("data-oc-region"), value: z.string().min(1) }),
-  z.object({ kind: z.literal("role"), role: z.string().min(1), name: z.string().min(1) }),
-  z.object({ kind: z.literal("selector"), value: z.string().min(1), owner_file: z.string().min(1) }),
+  z.object({ kind: z.literal("test-id"), value: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("data-oc-region"), value: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("role"), role: z.string().min(1), name: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("selector"), value: z.string().min(1), owner_file: z.string().min(1) }).strict(),
 ])
 export type BrowserPreviewRegionLocator = z.infer<typeof BrowserPreviewRegionLocator>
 
-export const BrowserPreviewRegionBinding = z.object({
-  region_id: z.string().min(1),
-  viewport_id: BrowserPreviewViewportID,
-  state_id: z.string().min(1).default("default"),
-  region_scope: z.enum(["page-section", "card", "content", "title", "chart", "table", "control", "navigation"]),
-  source: z.object({
-    reference_artifact_id: z.string().min(1),
-    bbox: BrowserPreviewRegionBox,
-    semantic_role: z.string().min(1),
-    text_anchors: z.array(z.string().min(1)).default([]),
-    source_refs: z.array(z.string().min(1)).default([]),
-  }),
-  implementation: z.object({
-    route: z.string().min(1).default("/"),
-    locator: BrowserPreviewRegionLocator,
-    component_files: z.array(z.string().min(1)).default([]),
-  }),
-  acceptance_refs: z.array(z.string().min(1)).default([]),
-})
+export const BrowserPreviewRegionBinding = z
+  .object({
+    region_id: z.string().min(1),
+    viewport_id: BrowserPreviewViewportID,
+    state_id: z.string().min(1).default("default"),
+    region_scope: z.enum(["page-section", "card", "content", "title", "chart", "table", "control", "navigation"]),
+    source: z
+      .object({
+        reference_artifact_id: z.string().min(1),
+        bbox: BrowserPreviewRegionBox,
+        semantic_role: z.string().min(1),
+        text_anchors: z.array(z.string().min(1)).default([]),
+        source_refs: z.array(z.string().min(1)).default([]),
+      })
+      .strict(),
+    implementation: z
+      .object({
+        route: z.string().min(1).default("/"),
+        locator: BrowserPreviewRegionLocator,
+        component_files: z.array(z.string().min(1)).default([]),
+      })
+      .strict(),
+    acceptance_refs: z.array(z.string().min(1)).default([]),
+  })
+  .strict()
 export type BrowserPreviewRegionBinding = z.infer<typeof BrowserPreviewRegionBinding>
 
-export const BrowserPreviewRegionComparisonRequest = z.object({
-  targetID: z.string().min(1),
-  viewportIDs: BrowserPreviewViewportID.array().min(1),
-  inlineBindings: BrowserPreviewRegionBinding.array().min(1),
-  output: z
-    .object({
-      include_fullpage_overview: z.boolean().default(false),
-      include_side_by_side: z.boolean().default(true),
-      include_diff: z.boolean().default(false),
-    })
-    .default({
-      include_fullpage_overview: false,
-      include_side_by_side: true,
-      include_diff: false,
-    }),
-})
+export const BrowserPreviewRegionComparisonRequest = z
+  .object({
+    targetID: z.string().min(1),
+    viewportIDs: BrowserPreviewViewportID.array().min(1),
+    inlineBindings: BrowserPreviewRegionBinding.array().min(1),
+    output: z
+      .object({
+        include_fullpage_overview: z.boolean().default(false),
+        include_side_by_side: z.boolean().default(true),
+        include_diff: z.boolean().default(false),
+      })
+      .strict()
+      .default({
+        include_fullpage_overview: false,
+        include_side_by_side: true,
+        include_diff: false,
+      }),
+  })
+  .strict()
 export type BrowserPreviewRegionComparisonRequest = z.infer<typeof BrowserPreviewRegionComparisonRequest>
 
 export const BrowserPreviewRegionComparisonResult = z.object({
