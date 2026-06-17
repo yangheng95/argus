@@ -511,3 +511,41 @@ LINE:
 - Implemented on 2026-06-17.
 - Focused tests passed: `bun test packages/opencorvus/test/server/provider-hexin-budget.test.ts packages/opencorvus/test/server/provider-discover-models.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+
+## Batch P1-D: OAuth callback error HTML escaping
+
+### Findings
+
+- BH-010: `packages/opencorvus/src/mcp/oauth-callback.ts` renders `HTML_ERROR(error)` with `${error}` directly inside `<div class="error">`.
+- The route sets `errorMsg = errorDescription || error` from OAuth callback query parameters before rendering the error page, so a malicious OAuth provider can reflect HTML/script into the local callback page.
+- This is a response-rendering bug, not an OAuth-state bug. The callback promise should still reject with the original provider error text; only the HTML response must encode it.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/mcp/oauth-callback.ts` owns the local Bun callback server, `HTML_ERROR`, pending callback resolution/rejection, and fixed callback path handling.
+- `packages/opencorvus/src/mcp/index.ts` starts the callback flow and registers `McpOAuthCallback.waitForCallback()` before opening the browser.
+- `packages/opencorvus/test/mcp/oauth-callback-cancel.test.ts` already owns focused callback namespace tests and stops the server after each case.
+- `packages/opencorvus/test/mcp/oauth-browser.test.ts` exercises full MCP OAuth browser behavior but has slower mocked browser timing and should not be expanded for this narrow HTML rendering contract.
+
+### Fix Shape
+
+- Add a small local HTML text escaping helper for `&`, `<`, `>`, `"`, and `'`.
+- Call the helper inside `HTML_ERROR` at the interpolation boundary.
+- Do not add UI-side sanitization, content-type gates, or callback-state gates; the route's HTML renderer is the single source of this output contract.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/mcp/oauth-callback-cancel.test.ts` with a real callback-server request containing HTML in `error_description` and `error`.
+- Register a matching pending state so the error path also exercises rejection cleanup.
+- Assert the response contains escaped text and does not contain raw `<script>`, `<img`, or unescaped quoted attributes.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/mcp/oauth-callback-cancel.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/opencorvus/test/mcp/oauth-callback-cancel.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
