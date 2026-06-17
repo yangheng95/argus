@@ -259,28 +259,6 @@ code .file-link:hover {
   display: none;
 }
 
-.center-workbench-resizer {
-  flex: 0 0 var(--ui-resizer-width);
-  width: var(--ui-resizer-width);
-  min-width: var(--ui-resizer-width);
-  cursor: col-resize;
-  background: color-mix(in srgb, var(--border) 44%, transparent);
-  touch-action: none;
-}
-
-.center-workbench-resizer[hidden] {
-  display: none;
-}
-
-.center-workbench-resizer {
-  display: none;
-}
-
-.center-workbench-resizer:hover,
-body[data-center-workbench-resizing="true"] .center-workbench-resizer {
-  background: color-mix(in srgb, var(--accent) 62%, transparent);
-}
-
 .center-workbench-body {
   flex: 1 1 auto;
   min-width: 0;
@@ -294,7 +272,6 @@ body[data-center-workbench-resizing="true"] .center-workbench-resizer {
   flex: var(--center-workbench-panel-grow, 1) 1 0;
   min-width: 0;
   min-height: 0;
-  border-right: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .center-workbench-view[data-open="false"] {
@@ -306,10 +283,6 @@ body[data-center-workbench-resizing="true"] .center-workbench-resizer {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.center-workbench-view[data-resizable-next="false"] {
-  border-right: 0;
 }
 
 body[data-center-workbench-panel-resizing="true"],
@@ -786,15 +759,6 @@ body[data-resizing="true"] .pane-resizer::after {
 
   .center-workbench-view[data-open="true"] {
     flex: 0 0 min(100%, max(calc(280px * var(--ui-scale)), calc(50vw)));
-  }
-
-  .center-workbench-resizer {
-    flex: 0 0 var(--ui-resizer-width);
-    width: 100%;
-    min-width: 0;
-    height: var(--ui-resizer-width);
-    min-height: var(--ui-resizer-width);
-    cursor: row-resize;
   }
 
   .left-activity-shell,
