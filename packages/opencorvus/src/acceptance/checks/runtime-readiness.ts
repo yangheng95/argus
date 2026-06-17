@@ -1,6 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { spawn } from "node:child_process"
+import { runProcessWithInactivityTimeout } from "./inactivity-timeout-process"
 import { clip } from "./types"
 
 const INSTALL_TIMEOUT_MS = 300_000
@@ -318,36 +318,10 @@ async function runInstallCommand(input: {
   cwd: string
   timeoutMs: number
 }): Promise<{ exitCode: number | undefined; stdout: string; stderr: string }> {
-  const proc = spawn(input.executable, input.args, {
+  return runProcessWithInactivityTimeout({
+    executable: input.executable,
+    args: input.args,
     cwd: input.cwd,
-    windowsHide: true,
-    stdio: ["ignore", "pipe", "pipe"],
+    timeoutMs: input.timeoutMs,
   })
-  const stdoutChunks: Buffer[] = []
-  const stderrChunks: Buffer[] = []
-  proc.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)))
-  proc.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)))
-  let timedOut = false
-  const exitCode = await new Promise<number | undefined>((resolve) => {
-    const timer = setTimeout(() => {
-      timedOut = true
-      proc.kill()
-      resolve(undefined)
-    }, input.timeoutMs)
-    proc.once("error", () => {
-      clearTimeout(timer)
-      resolve(undefined)
-    })
-    proc.once("exit", (code) => {
-      clearTimeout(timer)
-      resolve(code ?? undefined)
-    })
-  })
-  const stdout = Buffer.concat(stdoutChunks).toString("utf8")
-  const stderr = Buffer.concat(stderrChunks).toString("utf8")
-  return {
-    exitCode,
-    stdout,
-    stderr: timedOut ? `${stderr}\nCommand timed out after ${input.timeoutMs}ms.` : stderr,
-  }
 }

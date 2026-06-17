@@ -1473,3 +1473,48 @@ LINE:
 - Newton confirmed the immediate destructive-path fix should be direct `await Instance.disposeAll()` with existing HTTP 500 / CLI nonzero propagation, not a local fallback or compatibility path.
 - Newton identified `State.disposeEntry()` as the deeper source of false-success disposal. The final patch now rethrows disposer failures and keeps failed entries registered for retry.
 - Newton warned not to mix the unrelated `global.ts` SSE envelope changes or other dirty workspace files into this batch; commit staging must remain limited to BH-101 files/hunks.
+
+## Batch P1-R: BH-082 acceptance command timeouts must be inactivity-based
+
+### Findings
+
+- BH-082 is a P1 unattended verification bug: acceptance project checks and runtime dependency install checks start one fixed wall-clock timer when the child process starts.
+- Commands that continuously emit useful stdout/stderr progress can be killed at the fixed deadline even though they are active, violating the project rule that test timeouts must be real inactivity timeouts.
+- The same timeout implementation is duplicated in `project-gate.ts` and `runtime-readiness.ts`, so fixing only one path would leave a second source of false failures.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/acceptance/checks/project-gate.ts` owns `runShellCommand(...)` for acceptance check commands and injects `OPENCORVUS_TASK_ID` / `OPENCORVUS_PROJECT_DIR`.
+- `packages/opencorvus/src/acceptance/checks/runtime-readiness.ts` owns `runInstallCommand(...)` for frozen dependency installs.
+- `rg -n "setTimeout|proc.kill|stdout|stderr|COMMAND_TIMEOUT_MS|INSTALL_TIMEOUT_MS" packages/opencorvus/src/acceptance packages/opencorvus/test/acceptance -g "*.ts"` shows the two duplicated fixed-timer child-process runners.
+
+### Fix Shape
+
+- Add one acceptance-local process helper that runs a child process with stdout/stderr collection and an inactivity timeout.
+- Start the inactivity timer when the process starts, reset it on every stdout or stderr data event, and clear it on process exit/error.
+- Keep the existing `exitCode === undefined` timeout contract and captured output contract so callers can report failures consistently.
+- Replace both duplicated wall-clock timer implementations with the shared helper. Do not add a longer timeout, retry, command allowlist, or fallback path.
+
+### Regression Tests
+
+- Add a focused helper test where a command emits progress beyond the nominal timeout and exits 0; it must not be killed.
+- Add a silent command fixture that exceeds the timeout without output; it must return `exitCode: undefined` and include an inactivity timeout diagnostic.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/acceptance/inactivity-timeout-process.test.ts`
+- Existing acceptance gate compatibility command: `bun test packages/opencorvus/test/acceptance/project-gate.test.ts`
+- Typecheck command: `bun run --cwd packages/opencorvus typecheck`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused inactivity timeout tests passed: `bun test packages/opencorvus/test/acceptance/inactivity-timeout-process.test.ts`.
+- Existing acceptance project gate tests passed: `bun test packages/opencorvus/test/acceptance/project-gate.test.ts`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Independent Review Feedback
+
+- Lovelace confirmed both original child-process runners used fixed wall-clock timers and did not refresh on stdout/stderr activity.
+- Lovelace confirmed the correct boundary is a shared acceptance-local helper used by both project checks and runtime install checks, without changing timeout constants or adding retries/fallbacks.
+- Lovelace flagged the first draft of the regression test as insufficient because the active command exited before the inactivity window. The final test now runs longer than the timeout window while emitting output more frequently than the window.
