@@ -8,7 +8,6 @@ const GOD_CSS_ARCHIVE_DIR = join(REPO_ROOT, "docs/archive/overlay-god-css")
 const THIS_FILE = join(import.meta.dir, "overlay-architecture-guards.test.ts")
 const SURFACE_DUPLICATE_SELECTOR_LIMITS = new Map<string, number>([
   ["activity.css", 15],
-  ["agent-card.css", 0],
   ["card.css", 6],
   ["changes.css", 3],
   ["chat-bubble.css", 0],
@@ -340,6 +339,12 @@ describe("overlay architecture guards", () => {
       if (debt > limit) overBudget.push(`${file}: ${debt} > ${limit}`)
     }
     expect(overBudget).toEqual([])
+  })
+
+  test("retired agent-card stylesheet stays out of the runtime graph", () => {
+    const html = readText(join(OVERLAY_ROOT, "src/index.html"))
+    expect(html).not.toContain('href="styles/surfaces/agent-card.css"')
+    expect(existsSync(join(OVERLAY_ROOT, "src/styles/surfaces/agent-card.css"))).toBe(false)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
