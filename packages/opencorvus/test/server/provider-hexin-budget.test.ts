@@ -152,9 +152,12 @@ test("GET /provider/hexin/budget redacts upstream error bodies", async () => {
 
         expect(response.status).toBe(200)
         expect(body.ok).toBe(false)
-        expect(body.error).toContain("HTTP 401")
+        expect(body.error).toBe(
+          "GET https://aimemodeldev.myhexin.com/litellm/key/budget returned HTTP 401 Unauthorized.",
+        )
         expect(body.error).not.toContain("hexin-budget-key")
         expect(body.error).not.toContain("Authorization")
+        expect(body.error).not.toContain("Bearer")
       },
     })
   } finally {
