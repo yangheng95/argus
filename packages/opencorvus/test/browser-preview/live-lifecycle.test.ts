@@ -40,6 +40,16 @@ test("interactive browser preview sidecars close on parent pipe teardown", () =>
   expect(live).toContain("if (browser) await browser.close().catch")
 })
 
+test("interactive browser preview sidecar serializes commands inside one live session", () => {
+  const live = source("src/browser-preview/live.ts")
+
+  expect(live).toContain("let commandChain = Promise.resolve();")
+  expect(live).toContain("function enqueueCommand(message)")
+  expect(live).toContain("commandChain = commandChain.then(run, run);")
+  expect(live).toContain("enqueueCommand(message);")
+  expect(live).not.toContain("handle(message).catch((error) =>")
+})
+
 test("server dispose and shutdown paths close interactive browser preview sessions", () => {
   const serve = source("src/cli/cmd/serve.ts")
   const appRoutes = source("src/server/routes/app.ts")

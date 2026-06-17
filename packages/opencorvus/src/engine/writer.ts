@@ -616,6 +616,16 @@ export async function abortCurrentProcessLiveExecution(input: {
 export async function convergeDeadOwnerLiveExecution(input: {
   reason: string
 }): Promise<AbortProcessLiveExecutionResult> {
+  return convergeDeadOwnerLiveExecutionForTasks({
+    tasks: listActiveTasks(),
+    reason: input.reason,
+  })
+}
+
+export async function convergeDeadOwnerLiveExecutionForTasks(input: {
+  tasks: TaskRow[]
+  reason: string
+}): Promise<AbortProcessLiveExecutionResult> {
   let tasks = 0
   let sessions = 0
   let toolParts = 0
@@ -623,7 +633,9 @@ export async function convergeDeadOwnerLiveExecution(input: {
   let runs = 0
   let corruptTasks = 0
 
-  for (const task of listActiveTasks()) {
+  for (const candidate of input.tasks) {
+    const task = findTask(candidate.id)
+    if (!task || task.time_started == null || task.time_completed != null) continue
     await provideTaskRootSessionDirectory(task, async () => {
       const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
         (row) => row.status !== "queued" && isGoalRunOrphaned(row),

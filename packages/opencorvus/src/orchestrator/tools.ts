@@ -103,7 +103,13 @@ import {
   type RunRow,
   type TaskRow,
 } from "@/engine/store"
-import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engine/describe"
+import {
+  describeTask,
+  goalStatusByID,
+  renderCollaborationClosure,
+  renderGoal,
+  renderTerminalGoalBatchNotifications,
+} from "@/engine/describe"
 import { isLiveGoalRunStatus } from "@/engine/catalog"
 import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
@@ -4921,26 +4927,20 @@ export function createOrchestratorTools(input: {
           if (closureLines.length > 0) {
             sections.push(closureLines.join("\n"))
           }
-          const goals = listGoals(taskID)
-          sections.push(`## Goals (${goals.length})`)
-          for (const g of goals) {
-            const label = `#G${g.order_index + 1}V${getGoalRetryCount(g.id) + 1}`
-            sections.push(`- [${goalStatusByID(g.id)}] ${label} ${g.id}: ${g.title} [${g.priority}]`)
-            sections.push(`  objective: ${g.objective.slice(0, 200)}`)
-            sections.push(`  requirement_ids: ${(g.requirement_ids ?? []).join(", ") || "(none)"}`)
-            sections.push(
-              `  acceptance_specs:\n${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 400)}`,
-            )
-            const latestGoalRun = findLatestTipGoalRun(g.id)
-            if (latestGoalRun) {
-              sections.push(`  latest_goal_run_id: ${latestGoalRun.id}`)
-              sections.push(`  latest_goal_run_status: ${latestGoalRun.status}`)
-              if (latestGoalRun.session_id) {
-                sections.push(`  latest_goal_session_id: ${latestGoalRun.session_id}`)
-              }
+          const terminalGoalBatchLines = renderTerminalGoalBatchNotifications(desc.recent_terminal_goal_batches)
+          if (terminalGoalBatchLines.length > 0) {
+            sections.push(terminalGoalBatchLines.join("\n"))
+          }
+          if (desc.goals.length === 0) {
+            sections.push("## Goals (none authored yet)")
+          } else {
+            sections.push(`## Goals (${desc.goals.length})`)
+            if (desc.active_bootstrap_goal_id) {
+              sections.push(`Bootstrap-first goal: ${desc.active_bootstrap_goal_id}`)
             }
-            if (g.owned_paths?.length) sections.push(`  owned_paths: ${g.owned_paths.join(", ")}`)
-            if (g.depends_on?.length) sections.push(`  depends_on: ${g.depends_on.join(", ")}`)
+            for (const g of desc.goals) {
+              sections.push(renderGoal(g).join("\n"))
+            }
           }
         }
 
