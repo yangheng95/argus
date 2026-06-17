@@ -148,6 +148,141 @@ describe("orchestrator protocol", () => {
     ).toEqual({ tier: 2 })
   })
 
+  test("notification schema pressure matrix stays single-sourced across task and task-list projections", () => {
+    const emitted = Date.now()
+    const cases: Array<{
+      name: string
+      event: any
+      notify?: { tier: 1 | 2 | 3; badge?: boolean }
+      details?: boolean
+    }> = [
+      {
+        name: "task failed",
+        event: {
+          id: "pev_matrix_task_failed",
+          type: "task.failed",
+          taskID,
+          sequence: 21,
+          summary: "Task failed",
+          payload: { taskID, status: "failed", summary: "Task failed", error: "executor died" },
+          time: { emitted, created: emitted, updated: emitted },
+        },
+        notify: { tier: 1, badge: true },
+        details: true,
+      },
+      {
+        name: "task completed",
+        event: {
+          id: "pev_matrix_task_completed",
+          type: "task.completed",
+          taskID,
+          sequence: 22,
+          summary: "Task completed",
+          payload: { taskID, status: "completed", summary: "Task completed" },
+          time: { emitted, created: emitted, updated: emitted },
+        },
+        notify: { tier: 2 },
+        details: true,
+      },
+      {
+        name: "evaluation rejected",
+        event: {
+          id: "pev_matrix_eval_rejected",
+          type: "evaluation.completed",
+          taskID,
+          runID: "run_matrix_eval",
+          sequence: 23,
+          summary: "Evaluation rejected",
+          payload: {
+            taskID,
+            runID: "run_matrix_eval",
+            evaluationID: "art_matrix_rejected",
+            status: "failed",
+            verdict: "rejected",
+            summary: "Evaluation rejected",
+          },
+          time: { emitted, created: emitted, updated: emitted },
+        },
+        notify: { tier: 1, badge: true },
+        details: true,
+      },
+      {
+        name: "evaluation accepted",
+        event: {
+          id: "pev_matrix_eval_accepted",
+          type: "evaluation.completed",
+          taskID,
+          runID: "run_matrix_eval",
+          sequence: 24,
+          summary: "Evaluation accepted",
+          payload: {
+            taskID,
+            runID: "run_matrix_eval",
+            evaluationID: "art_matrix_accepted",
+            status: "passed",
+            verdict: "accepted",
+            summary: "Evaluation accepted",
+          },
+          time: { emitted, created: emitted, updated: emitted },
+        },
+        notify: { tier: 2 },
+        details: true,
+      },
+      {
+        name: "message delta noise",
+        event: {
+          id: "pev_matrix_message_delta",
+          type: "message.part.delta",
+          taskID,
+          sequence: 25,
+          summary: "delta",
+          payload: {
+            sessionID: "ses_matrix",
+            messageID: "msg_matrix",
+            partID: "prt_matrix",
+            field: "text",
+            delta: "hello",
+          },
+          time: { emitted, created: emitted, updated: emitted },
+        },
+        notify: { tier: 3 },
+        details: true,
+      },
+      {
+        name: "resolved interaction no notification",
+        event: {
+          id: "pev_matrix_interaction_resolved",
+          type: "interaction.resolved",
+          taskID,
+          sequence: 26,
+          summary: "Interaction answered",
+          payload: {
+            taskID,
+            interactionID: "int_matrix",
+            status: "answered",
+            summary: "Interaction answered",
+          },
+          time: { emitted, created: emitted, updated: emitted },
+        },
+      },
+    ]
+
+    for (const item of cases) {
+      const perTask = TaskEvent.parse(protocolTaskEvent(item.event))
+      const taskList = TaskListEvent.parse(taskListProtocolEvent(item.event))
+
+      expect(perTask.notify, item.name).toEqual(item.notify)
+      expect(taskList.notify, item.name).toEqual(item.notify)
+      if (item.details) {
+        expect(taskList.notificationDetails, item.name).toContain(`"type": "${item.event.type}"`)
+        expect(taskList.notificationDetails, item.name).toContain(`"sequence": ${item.event.sequence}`)
+        expect(taskList.notificationDetails, item.name).toContain('"payload"')
+      } else {
+        expect(taskList.notificationDetails, item.name).toBeUndefined()
+      }
+    }
+  })
+
   test("ephemeral task events carry live cursors and replay without task-list cursor leakage", async () => {
     const seen: any[] = []
     const stop = ProtocolStore.subscribeEvents(
