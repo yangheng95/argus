@@ -47,14 +47,8 @@ const runtimeConfig = resolveRuntimeConfig(
   process.env.OPENCORVUS_CONFIG_CONTENT,
   process.env.OPENCORVUS_CHANNEL_PERMISSION_PROFILE,
 )
-const profileState = runtimeConfig.profileState
 process.env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify(runtimeConfig.config)
-if (profileState.invalid) {
-  console.warn(
-    `[ChannelRuntime] Unknown OPENCORVUS_CHANNEL_PERMISSION_PROFILE=${process.env.OPENCORVUS_CHANNEL_PERMISSION_PROFILE}. Fallback to profile: ${profileState.profile}.`,
-  )
-}
-console.log(`[ChannelRuntime] Permission profile: ${profileState.profile}`)
+console.log(`[ChannelRuntime] Permission profile: ${runtimeConfig.profile}`)
 
 console.log(
   "[ChannelRuntime] Model/provider config source: opencorvus auth + opencorvus.json + OPENCORVUS_CONFIG_CONTENT",

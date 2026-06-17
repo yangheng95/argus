@@ -8,6 +8,10 @@ mock.module("@opencorvus-ai/sdk", () => sdkMock)
 const { ChannelRuntime } = await import("../src/core")
 let oldFetch: typeof globalThis.fetch
 
+function installFetchMock(handler: (...args: Parameters<typeof globalThis.fetch>) => ReturnType<typeof globalThis.fetch>) {
+  globalThis.fetch = Object.assign(handler, { preconnect: oldFetch.preconnect })
+}
+
 function adapter(
   platform: "slack" | "telegram" | "discord" | "feishu" | "googlechat",
   sent: string[],
@@ -298,7 +302,7 @@ describe("channel runtime channel protocol", () => {
         },
       },
     }
-    globalThis.fetch = (async (input, init) => {
+    installFetchMock(async (input, init) => {
       expect(String(input)).toBe("http://127.0.0.1:7878/channel/attachment")
       expect(init?.method).toBe("POST")
       return Response.json({
@@ -308,7 +312,7 @@ describe("channel runtime channel protocol", () => {
         filename: "overlay.png",
         expires_at: 1,
       })
-    }) as typeof globalThis.fetch
+    })
 
     await core.handleMessage(incoming("googlechat", "send gui"))
 
@@ -324,5 +328,63 @@ describe("channel runtime channel protocol", () => {
         title: "Captured OpenCorvus GUI.",
       },
     ])
+  })
+
+  test("surfaces URL attachment upload failures instead of uploading binary copy", async () => {
+    const sent: string[] = []
+    const uploads: Array<{ channel: string; thread: string; filename: string; title?: string }> = []
+    const a: ChannelAdapter = {
+      ...adapter("googlechat", sent, uploads),
+      uploadImageUrl: async () => {
+        throw new Error("url upload failed")
+      },
+    }
+    const core = new ChannelRuntime() as unknown as {
+      adapters: ChannelAdapter[]
+      serverUrl: string
+      client: {
+        channel: {
+          message(input: unknown): Promise<{
+            data: {
+              kind: "panel_response"
+              message: string
+              attachments: Array<{ mime: string; url: string; filename?: string }>
+            }
+          }>
+        }
+      }
+      handleMessage(msg: IncomingMessage): Promise<void>
+    }
+
+    core.adapters = [a]
+    core.serverUrl = "http://127.0.0.1:7878"
+    core.client = {
+      channel: {
+        message: async () => ({
+          data: {
+            kind: "panel_response",
+            message: "Captured OpenCorvus GUI.",
+            attachments: [
+              {
+                mime: "image/png",
+                filename: "overlay.png",
+                url: "data:image/png;base64,aGVsbG8=",
+              },
+            ],
+          },
+        }),
+      },
+    }
+    installFetchMock(async () =>
+      Response.json({
+        id: "att_test",
+        url: "https://public.opencorvus.dev/channel/attachment/att_test?e=1&s=1",
+        mime: "image/png",
+        filename: "overlay.png",
+        expires_at: 1,
+      }))
+
+    await expect(core.handleMessage(incoming("googlechat", "send gui"))).rejects.toThrow("url upload failed")
+    expect(uploads).toHaveLength(0)
   })
 })
