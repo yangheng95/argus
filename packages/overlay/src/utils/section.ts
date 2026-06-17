@@ -20,7 +20,6 @@ function phaseSections(): Record<string, HTMLElement | null> {
     plan: dom.planSection,
     goals: dom.goalsSection,
     executor: dom.executorSection,
-    evaluation: dom.criteriaSection,
     acceptance: dom.acceptanceSection,
     files: dom.changesSection,
   }
