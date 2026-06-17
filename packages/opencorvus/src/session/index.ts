@@ -976,9 +976,12 @@ export namespace Session {
     async (input) => {
       // CASCADE delete handles parts automatically
       Database.use((db) => {
-        db.delete(MessageTable)
+        const removed = db
+          .delete(MessageTable)
           .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
-          .run()
+          .returning({ id: MessageTable.id })
+          .get()
+        if (!removed) throw new NotFoundError({ message: `Message not found: ${input.messageID}` })
         Database.effect(() =>
           Bus.publish(Message.Event.Removed, {
             sessionID: input.sessionID,
@@ -998,9 +1001,18 @@ export namespace Session {
     }),
     async (input) => {
       Database.use((db) => {
-        db.delete(PartTable)
-          .where(and(eq(PartTable.id, input.partID), eq(PartTable.session_id, input.sessionID)))
-          .run()
+        const removed = db
+          .delete(PartTable)
+          .where(
+            and(
+              eq(PartTable.id, input.partID),
+              eq(PartTable.session_id, input.sessionID),
+              eq(PartTable.message_id, input.messageID),
+            ),
+          )
+          .returning({ id: PartTable.id })
+          .get()
+        if (!removed) throw new NotFoundError({ message: `Part not found: ${input.partID}` })
         Database.effect(() =>
           Bus.publish(Message.Event.PartRemoved, {
             sessionID: input.sessionID,

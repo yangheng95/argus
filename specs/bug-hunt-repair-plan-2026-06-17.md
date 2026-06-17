@@ -935,3 +935,87 @@ LINE:
 - Adjacent session tests passed after aligning stale token fixtures with the current `Message.TokenUsage` schema: `bun test packages/opencorvus/test/session/part-delta.test.ts packages/opencorvus/test/session/session.test.ts packages/opencorvus/test/session/prompt.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
 - Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
+
+## Batch P1-N: remaining session route active-project ownership
+
+### Findings
+
+- Independent follow-up review found P1 cross-project reads and writes outside the BH-020/BH-021 message routes.
+- `GET /session/:sessionID/conversation` read `Session.get(sessionID)` and `Session.messages({ sessionID })` before proving the requested session belonged to `Instance.project.id`, so project A could hydrate project B's conversation transcript.
+- `POST /session/:sessionID/summarize` read a global session, cleared rewind state, created a compaction control row, and started a summary loop for a caller-supplied session ID.
+- Adjacent `:sessionID` HTTP handlers still called global services that trust the supplied ID: `events`, `get`, `children`, `delete`, `patch`, `init`, `fork`, `abort`, `diff`, sync prompt, async prompt, async prompt status, command, and shell.
+
+### Call-point Inventory
+
+- `Session.get(sessionID)` in `applySessionPromptRouteOverlay`, conversation, events, get, patch, and summarize was replaced or guarded with active-project session resolution.
+- `Session.children(sessionID)`, `Session.fork({ sessionID })`, `Session.initialize({ sessionID })`, `SessionSummary.diff({ sessionID })`, `SessionPrompt.cancel(sessionID)`, `TaskQueueService.cancelSessionPrompts({ sessionIDs })`, `TaskQueueService.executePrompt`, `TaskQueueService.enqueuePromptAfterPersistingUserMessage`, `TaskQueueService.getStatus`, `SessionPrompt.command`, and `SessionPrompt.shell` remain service primitives, but the HTTP handlers now prove the session belongs to the active project before calling them.
+- Already-fixed message list/get/delete and part delete/patch handlers keep using `assertActiveProjectSession`.
+- `Session.getInProject({ sessionID, projectID: Instance.project.id })` is the existing single source for this route boundary; no route allowlist, fallback lookup, or client-side compatibility path was added.
+
+### Fix Shape
+
+- Introduce a route-local `getActiveProjectSession(sessionID)` helper that returns `Session.getInProject({ sessionID, projectID: Instance.project.id })`; keep `assertActiveProjectSession` as a thin wrapper for handlers that do not need the session object.
+- Replace global reads in conversation/get/summarize and prompt overlay with `getActiveProjectSession`.
+- Add `await assertActiveProjectSession(sessionID)` before each remaining untrusted `:sessionID` HTTP operation that reads, mutates, queues, or executes session-scoped work.
+- Preserve owned-session success payloads and return 404 for missing or foreign sessions.
+
+### Regression Tests
+
+- Add a `Server.App()` route test with projects A and B. Seed project B with a session, message, and text part.
+- Under project A, request B's conversation and assert 404 with no B title/message leaked.
+- Under project A, request B's summarize route and assert 404 and no `manual_summarize` control row is created for B.
+- Under project A, exercise the remaining read/mutate/queue/execute session routes with B's session ID and assert 404 before side effects.
+- Under the owning project B, assert representative owned routes still succeed.
+
+### Result
+
+- Implemented on 2026-06-17.
+- Added route-local `getActiveProjectSession(sessionID)` and reused `Session.getInProject({ sessionID, projectID: Instance.project.id })` as the single active-project session boundary.
+- Replaced global session reads in prompt overlay, conversation hydrate, session get, and summarize with active-project session reads.
+- Added active-project checks before events, children, delete, patch, init, fork, abort, diff, async prompt status, command, and shell handlers call their session-scoped service primitives.
+- Added `packages/opencorvus/test/server/session-ownership-routes.test.ts` covering foreign-session rejection for conversation, summarize, events, get, children, delete, patch, init, fork, abort, diff, sync prompt, async prompt, async prompt status, command, and shell.
+- Focused test passed: `bun test packages/opencorvus/test/server/session-ownership-routes.test.ts`.
+- Combined focused tests passed: `bun test packages/opencorvus/test/server/session-ownership-routes.test.ts packages/opencorvus/test/server/session-message-routes.test.ts packages/opencorvus/test/server/session-prompt-async.test.ts packages/opencorvus/test/session/part-delta.test.ts packages/opencorvus/test/session/session.test.ts packages/opencorvus/test/session/prompt.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+- Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
+
+## Batch P2-A: BH-022 message and part delete row ownership
+
+### Findings
+
+- BH-022 remained after route-level project checks: `Session.removeMessage` and `Session.removePart` issued deletes without inspecting affected rows.
+- A nonexistent or wrong-session message/part delete returned success and published a removal event even when the database row was not deleted.
+- `Session.removePart` also deleted by `(partID, sessionID)` without `messageID`, so a same-session request for `/message/M1/part/P2` could delete a part that actually belonged to `M2` and publish the removal under the wrong message.
+
+### Call-point Inventory
+
+- `Session.removeMessage` is called by the HTTP delete-message route and session rewind cleanup paths.
+- `Session.removePart` is called by the HTTP delete-part route and compaction cleanup paths.
+- `Message.Event.Removed` and `Message.Event.PartRemoved` are consumed by protocol/message bridge and session mirror subscribers; publishing them for zero-row deletes corrupts observable state.
+- `NotFoundError` from `storage/db` is the existing server-mapped 404 error class.
+
+### Fix Shape
+
+- Make `removeMessage` delete with the complete `(messageID, sessionID)` key and require one returned row before publishing `Message.Event.Removed`.
+- Make `removePart` delete with the complete `(partID, sessionID, messageID)` key and require one returned row before publishing `Message.Event.PartRemoved`.
+- Throw `NotFoundError` when the complete key does not match a row; do not publish removal events on miss.
+- Do not add service fallback reads, route compatibility behavior, or silent no-op deletes.
+
+### Regression Tests
+
+- Delete nonexistent message/part and assert 404 plus no removal event.
+- Delete a project A session with project B message/part IDs and assert 404 plus no removal event.
+- Delete a same-session part through the wrong message ID and assert 404, original row still exists, and no removal event.
+- Delete owned message/part rows and assert 200 with one correct removal event.
+
+### Result
+
+- Implemented on 2026-06-17.
+- Changed `Session.removeMessage` to delete by `(messageID, sessionID)` with a returned-row check before publishing `Message.Event.Removed`.
+- Changed `Session.removePart` to delete by `(partID, sessionID, messageID)` with a returned-row check before publishing `Message.Event.PartRemoved`.
+- Missing, wrong-session, and same-session wrong-message deletes now throw `NotFoundError` and publish no removal event.
+- Added route regression coverage in `packages/opencorvus/test/server/session-message-routes.test.ts` for nonexistent rows, wrong-session rows, same-session wrong-message part rows, and owned delete success events.
+- Focused test passed: `bun test packages/opencorvus/test/server/session-message-routes.test.ts`.
+- Combined focused tests passed: `bun test packages/opencorvus/test/server/session-ownership-routes.test.ts packages/opencorvus/test/server/session-message-routes.test.ts packages/opencorvus/test/server/session-prompt-async.test.ts packages/opencorvus/test/session/part-delta.test.ts packages/opencorvus/test/session/session.test.ts packages/opencorvus/test/session/prompt.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+- Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
