@@ -76,6 +76,59 @@ describe("plugin service routes", () => {
     })
   }, 30_000)
 
+  test("rewrites plugin service IDs that overlap the route prefix exactly", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writePlugin(
+          dir,
+          "prefix-overlap.ts",
+          `
+            export const PrefixOverlapPlugin = async () => ({
+              service: async () => ({
+                id: "plug",
+                app: {
+                  fetch: async (request) => {
+                    const url = new URL(request.url)
+                    return Response.json({
+                      path: url.pathname,
+                      method: request.method,
+                      query: url.searchParams.get("x"),
+                      header: request.headers.get("x-fixture"),
+                      body: await request.json(),
+                    })
+                  },
+                },
+              }),
+            })
+          `,
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const response = await Server.App().request("/plugin/plug/ping?x=1", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-fixture": "seen",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ ok: true }),
+        })
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({
+          path: "/ping",
+          method: "POST",
+          query: "1",
+          header: "seen",
+          body: { ok: true },
+        })
+      },
+    })
+  }, 30_000)
+
   test("requires project directory before plugin dispatch", async () => {
     const response = await Server.App().request("/plugin/fixture/ping", {
       method: "POST",

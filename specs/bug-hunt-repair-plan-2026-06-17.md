@@ -1564,3 +1564,53 @@ LINE:
 - Kierkegaard confirmed the bug is specific to the selection route: the route already validates the coding session by current project and directory, but the selected task check only used project ownership.
 - Kierkegaard confirmed task directory is projected from `EngineTaskTable.session_id -> SessionTable.directory`, falling back to `ProjectTable.worktree`; the route must use the projected task directory instead of inventing another source.
 - Kierkegaard recommended expressing the invariant as selected task `projectID/directory` matching the validated session `projectID/directory`; the final route uses the session fields directly.
+
+## Batch P1-T: BH-061 plugin service path rewrite must use route segments
+
+### Findings
+
+- BH-061 is a P1 plugin service proxy bug in `packages/opencorvus/src/server/routes/plugin.ts`.
+- `pluginRequest(...)` searched the full URL pathname with `indexOf("/" + serviceID)`.
+- For service IDs that overlap the route prefix, such as `plug`, the first match in `/plugin/plug/ping` is the `plug` inside `/plugin`; the forwarded plugin request is rewritten to the wrong suffix instead of `/ping`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/app.ts` mounts `PluginRoutes()` at `/plugin`.
+- `packages/opencorvus/src/server/routes/plugin.ts` owns all plugin service proxy dispatch under `/:id/*`.
+- `packages/opencorvus/src/plugin/index.ts` owns plugin service registration and duplicate/diagnostic errors; no service registration shape change is required.
+- `packages/opencorvus/test/server/plugin-service-routes.test.ts` already covers normal path rewrite, missing directory enforcement, unknown service errors, manifest services, duplicate service IDs, and registration failure errors.
+- `rg -n "PluginRoutes|/plugin|serviceID|pluginRequest|pathname" packages/opencorvus/src packages/opencorvus/test` showed no other plugin proxy rewrite implementation.
+
+### Fix Shape
+
+- Rewrite forwarded plugin request paths by checking the exact route segments `/plugin/{serviceID}`.
+- Decode only the service ID segment for equality with Hono's route parameter, then preserve the remaining path segments as the forwarded suffix.
+- Keep query string, method, headers, and body by constructing the new `Request` from the original request after changing only `url.pathname`.
+- Reject a route-prefix mismatch as an internal invariant failure; do not fall back to scanning the whole URL or forwarding `/`.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/server/plugin-service-routes.test.ts`.
+- Register service ID `plug` and request `/plugin/plug/ping`.
+- Assert the plugin service receives pathname `/ping`.
+
+### Verification
+
+- Focused regression command: `bun test packages/opencorvus/test/server/plugin-service-routes.test.ts -t "rewrites plugin service IDs" --timeout 30000`
+- Full plugin route command: `bun test packages/opencorvus/test/server/plugin-service-routes.test.ts --timeout 60000`
+- Typecheck command: `bun run --cwd packages/opencorvus typecheck`
+
+### Result
+
+- Implemented on 2026-06-17.
+- The first wildcard-based draft failed the focused regression by forwarding `/`; the implementation was corrected to exact segment parsing before completion.
+- Focused regression passed: `bun test packages/opencorvus/test/server/plugin-service-routes.test.ts -t "rewrites plugin service IDs" --timeout 30000`.
+- Full plugin service route tests passed: `bun test packages/opencorvus/test/server/plugin-service-routes.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Independent Review Feedback
+
+- James confirmed the segment-based rewrite closes BH-061 and removes the previous fallback behavior that forwarded `/` when no marker was found.
+- James confirmed the mismatch check is a fail-fast route invariant, not a compatibility path or gate.
+- James noted the first overlap regression only asserted pathname; the final test now also asserts method, query, header, and JSON body preservation for the overlapping service ID.
+- James noted URL-encoded service IDs are not explicitly covered. Current plugin service IDs are route path parameters and existing registration tests use plain IDs; encoded-ID policy should be handled as a separate contract decision rather than silently expanding this batch.
