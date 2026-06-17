@@ -844,3 +844,20 @@ body[data-resizing="true"] .pane-resizer::after {
     display: none;
   }
 }
+
+@media (max-width: 520px) {
+  .center-workbench,
+  .center-workbench[data-open="true"] {
+    flex: 0 0 min(60vh, calc(480px * var(--ui-scale)));
+  }
+
+  .center-workbench-view[data-open="true"] {
+    display: none;
+  }
+
+  .center-workbench-view[data-open="true"][data-selected="true"] {
+    flex: 0 0 100%;
+    width: 100%;
+    display: flex;
+  }
+}
