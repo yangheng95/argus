@@ -9,7 +9,7 @@ import { Log } from "../util/log"
 import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod"
 import path from "path"
-import { mkdirSync, rmSync } from "fs"
+import { mkdirSync } from "fs"
 import { rm } from "fs/promises"
 import * as schema from "./schema"
 import { SCHEMA_DDL } from "./ddl"
@@ -19,6 +19,15 @@ export const NotFoundError = NamedError.create(
   "NotFoundError",
   z.object({
     message: z.string(),
+  }),
+)
+
+export const DatabaseSchemaResetRequiredError = NamedError.create(
+  "DatabaseSchemaResetRequiredError",
+  z.object({
+    message: z.string(),
+    path: z.string(),
+    reason: z.string(),
   }),
 )
 
@@ -97,12 +106,6 @@ function configureSqlite(sqlite: BunDatabase) {
   sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
 }
 
-function removeDatabaseFiles(dbPath: string) {
-  rmSync(dbPath, { force: true })
-  rmSync(`${dbPath}-wal`, { force: true })
-  rmSync(`${dbPath}-shm`, { force: true })
-}
-
 function dropCurrentSchema(sqlite: BunDatabase) {
   const triggers = sqlite
     .query<{ name: string }, []>("SELECT name FROM sqlite_schema WHERE type = 'trigger' AND name NOT LIKE 'sqlite_%'")
@@ -128,43 +131,41 @@ function openSqlite(dbPath: string) {
   return sqlite
 }
 
-function recreateWithCurrentSchema(sqlite: BunDatabase, dbPath: string): BunDatabase {
+function throwSchemaResetRequired(sqlite: BunDatabase, dbPath: string, reason: string): never {
   sqlite.close()
-  removeDatabaseFiles(dbPath)
-
-  const fresh = openSqlite(dbPath)
-  fresh.exec(SCHEMA_DDL)
-  const drift = findSchemaDrift(fresh)
-  if (drift) {
-    fresh.close()
-    throw new Error(`Fresh database schema does not match SCHEMA_DDL: ${drift}`)
-  }
-  return fresh
+  throw new DatabaseSchemaResetRequiredError({
+    path: dbPath,
+    reason,
+    message:
+      `OpenCorvus database schema reset required at ${dbPath}: ${reason}. ` +
+      "Run `opencorvus db path` to confirm the database location, then run `opencorvus db reset --force` from the project directory.",
+  })
 }
 
 function ensureCurrentSchema(sqlite: BunDatabase, dbPath: string): BunDatabase {
   if (hasOrdinaryTables(sqlite)) {
     const drift = findSchemaDrift(sqlite)
     if (drift) {
-      log.warn("database schema drift detected; recreating database", { path: dbPath, reason: drift })
-      return recreateWithCurrentSchema(sqlite, dbPath)
+      log.warn("database schema drift detected; reset required", { path: dbPath, reason: drift })
+      throwSchemaResetRequired(sqlite, dbPath, drift)
     }
   }
 
   try {
     sqlite.exec(SCHEMA_DDL)
   } catch (err) {
-    log.warn("database schema apply failed on empty/current database; recreating database", {
+    const reason = err instanceof Error ? err.message : String(err)
+    log.warn("database schema apply failed; reset required", {
       path: dbPath,
-      error: err instanceof Error ? err.message : String(err),
+      error: reason,
     })
-    return recreateWithCurrentSchema(sqlite, dbPath)
+    throwSchemaResetRequired(sqlite, dbPath, reason)
   }
 
   const drift = findSchemaDrift(sqlite)
   if (drift) {
-    log.warn("database schema drift detected after schema apply; recreating database", { path: dbPath, reason: drift })
-    return recreateWithCurrentSchema(sqlite, dbPath)
+    log.warn("database schema drift detected after schema apply; reset required", { path: dbPath, reason: drift })
+    throwSchemaResetRequired(sqlite, dbPath, drift)
   }
   return sqlite
 }
@@ -222,16 +223,20 @@ export namespace Database {
   export async function reset(
     projectDir: string,
   ): Promise<Array<{ label: string; path: string; ok: boolean; error?: string }>> {
+    const normalizedProjectDir = projectDir.trim()
+    if (!path.isAbsolute(normalizedProjectDir)) {
+      throw new Error(`Database.reset projectDir must be an absolute path: ${projectDir}`)
+    }
     close()
     const dbPath = Path()
     const targets: Array<{ label: string; path: string }> = [
       { label: "db", path: dbPath },
       { label: "db-wal", path: `${dbPath}-wal` },
       { label: "db-shm", path: `${dbPath}-shm` },
-      { label: "runtime", path: ProjectRuntimePaths.projectRuntimeRoot(projectDir) },
+      { label: "runtime", path: ProjectRuntimePaths.projectRuntimeRoot(normalizedProjectDir) },
       ...ProjectRuntimePaths.legacyRuntimeRelativePaths.map((relative) => ({
         label: `legacy:${relative}`,
-        path: path.join(projectDir, ...relative.split("/")),
+        path: path.join(normalizedProjectDir, ...relative.split("/")),
       })),
     ]
     const results: Array<{ label: string; path: string; ok: boolean; error?: string }> = []

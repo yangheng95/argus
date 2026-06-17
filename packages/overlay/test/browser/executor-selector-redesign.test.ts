@@ -8,6 +8,8 @@
 //     the active executor appear, but provider auth is not presented as
 //     executor connectivity.
 //   - Opening one popover closes the other.
+//   - Wide popovers stay attached to their trigger while Kobalte keeps
+//     them inside compact one-row composer viewports.
 
 import assert from "node:assert/strict"
 import test from "node:test"
@@ -38,8 +40,9 @@ test(
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
 
-    const projectModel = "openai/gpt-5.5-pro"
+    const projectModel = "hexin/kimi-k2.7-code"
     const codexModel = "openai/gpt-5.5-codex"
+    let budgetRequests = 0
 
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
@@ -68,12 +71,19 @@ test(
         })
       }
       if (path === "/provider") {
-        // openai is connected; anthropic is configured but NOT connected.
-        // OpenCorvus should hide anthropic, while the external Claude Code
-        // tab still lists anthropic models without mislabeling Claude Code
-        // itself as disconnected.
+        // openai and hexin are connected; anthropic is configured but NOT
+        // connected. OpenCorvus should hide anthropic, while the external
+        // Claude Code tab still lists anthropic models without mislabeling
+        // Claude Code itself as disconnected.
         return send({
           all: [
+            {
+              id: "hexin",
+              name: "Hexin OpenAI Gateway",
+              models: {
+                "kimi-k2.7-code": { id: "kimi-k2.7-code" },
+              },
+            },
             {
               id: "openai",
               name: "OpenAI",
@@ -90,8 +100,20 @@ test(
               },
             },
           ],
-          connected: ["openai"],
+          connected: ["hexin", "openai"],
           default: { openai: "gpt-5.5-pro" },
+        })
+      }
+      if (path === "/provider/hexin/budget") {
+        budgetRequests++
+        return send({
+          ok: true,
+          budget: {
+            maxBudget: 4435.3,
+            spend: 4415.312612080029,
+            remaining: 19.9873879199713,
+            overBudget: false,
+          },
         })
       }
       if (path === "/provider/auth") return send({})
@@ -186,9 +208,16 @@ test(
       await page.waitForSelector('[data-ui="executor-chip-external"]')
       await page.waitForFunction(() =>
         (document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null)?.innerText.includes(
-          "gpt-5.5-pro",
+          "kimi-k2.7-code",
         ),
       )
+      await page.waitForSelector('[data-ui="executor-hexin-budget"]')
+      await page.waitForFunction(() =>
+        (document.querySelector('[data-ui="executor-hexin-budget"]') as HTMLElement | null)?.innerText.includes(
+          "19.99",
+        ),
+      )
+      assert.equal(budgetRequests, 1)
 
       // Both chips share one bar that spans the composer row.
       const layout = await page.evaluate(() => {
@@ -211,9 +240,53 @@ test(
       assert.ok(layout.barRight >= layout.externalRight - 1, JSON.stringify(layout))
       assert.ok(layout.externalLeft > layout.mirrorRight - 1, JSON.stringify(layout))
       assert.ok(layout.mirrorText.includes("OpenCorvus"))
-      assert.ok(layout.mirrorText.includes("gpt-5.5-pro"))
+      assert.ok(layout.mirrorText.includes("kimi-k2.7-code"))
       assert.ok(layout.externalText.includes("Codex"))
       assert.ok(layout.externalText.includes("gpt-5.5-codex"))
+      const budgetLayout = await page.evaluate(() => {
+        const budget = document.querySelector('[data-ui="executor-hexin-budget"]') as HTMLElement | null
+        const value = budget?.querySelector(".executor-budget-value") as HTMLElement | null
+        const mirrorSlot = document.querySelector('[data-side="mirror"]') as HTMLElement | null
+        const externalSlot = document.querySelector('[data-side="external"]') as HTMLElement | null
+        const promptProfile = document.querySelector('[data-ui="prompt-profile-selector"]') as HTMLElement | null
+        const meta = document.querySelector(".chat-compose-meta-left") as HTMLElement | null
+        const budgetRect = budget?.getBoundingClientRect()
+        const mirrorRect = mirrorSlot?.getBoundingClientRect()
+        const externalRect = externalSlot?.getBoundingClientRect()
+        const promptRect = promptProfile?.getBoundingClientRect()
+        const metaRect = meta?.getBoundingClientRect()
+        const color = value ? getComputedStyle(value).color : ""
+        return {
+          role: budget?.getAttribute("role") ?? "",
+          live: budget?.getAttribute("aria-live") ?? "",
+          low: budget?.dataset.lowBudget ?? "",
+          parentSide: budget?.closest("[data-side]")?.getAttribute("data-side") ?? "",
+          budgetLeft: budgetRect?.left ?? 0,
+          budgetRight: budgetRect?.right ?? 0,
+          mirrorLeft: mirrorRect?.left ?? 0,
+          mirrorRight: mirrorRect?.right ?? 0,
+          mirrorTop: mirrorRect?.top ?? 0,
+          externalLeft: externalRect?.left ?? 0,
+          externalTop: externalRect?.top ?? 0,
+          promptTop: promptRect?.top ?? 0,
+          metaHeight: metaRect?.height ?? 0,
+          color,
+        }
+      })
+      assert.equal(budgetLayout.role, "status")
+      assert.equal(budgetLayout.live, "polite")
+      assert.equal(budgetLayout.low, "true")
+      assert.equal(budgetLayout.parentSide, "mirror")
+      assert.ok(budgetLayout.budgetLeft >= budgetLayout.mirrorLeft - 1, JSON.stringify(budgetLayout))
+      assert.ok(budgetLayout.budgetRight <= budgetLayout.mirrorRight + 1, JSON.stringify(budgetLayout))
+      assert.ok(budgetLayout.budgetRight < budgetLayout.externalLeft - 1, JSON.stringify(budgetLayout))
+      assert.ok(Math.abs(budgetLayout.promptTop - budgetLayout.mirrorTop) <= 1, JSON.stringify(budgetLayout))
+      assert.ok(Math.abs(budgetLayout.externalTop - budgetLayout.mirrorTop) <= 1, JSON.stringify(budgetLayout))
+      assert.ok(budgetLayout.metaHeight < 48, JSON.stringify(budgetLayout))
+      const colorMatch = budgetLayout.color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+      assert.notEqual(colorMatch, null, budgetLayout.color)
+      assert.ok(Number(colorMatch![1]) > Number(colorMatch![2]), budgetLayout.color)
+      assert.ok(Number(colorMatch![1]) > Number(colorMatch![3]), budgetLayout.color)
 
       // Mirror popover: opens above the left chip and lists only connected
       // providers (openai). Anthropic stays hidden because it isn't connected.
@@ -229,9 +302,22 @@ test(
         await page.$eval('[data-section="mirror"]', (node) => (node as HTMLElement).innerText)
       ).toLowerCase()
       assert.ok(mirrorBody.includes("openai"))
+      assert.ok(mirrorBody.includes("hexin"))
       assert.equal(mirrorBody.includes("anthropic"), false)
       assert.ok(mirrorBody.includes("gpt-5.5-pro"))
       assert.ok(mirrorBody.includes("gpt-5.5-codex"))
+      assert.ok(mirrorBody.includes("kimi-k2.7-code"))
+
+      await page.click('[data-section="mirror"] .executor-popover-model[title="openai/gpt-5.5-pro"]')
+      await page.waitForFunction(() =>
+        (document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null)?.innerText.includes(
+          "gpt-5.5-pro",
+        ),
+      )
+      await page.waitForFunction(() => document.querySelector('[data-ui="executor-hexin-budget"]') === null)
+      assert.equal(budgetRequests, 1)
+      await page.click('[data-ui="executor-chip-mirror"]')
+      await page.waitForSelector('[data-section="mirror"]')
       // The external popover should NOT be open while the mirror popover is.
       assert.equal(await page.$('[data-section="external"]'), null)
 
@@ -294,6 +380,7 @@ test(
           triggerRight: triggerRect?.right ?? 0,
           popoverLeft: popoverRect.left,
           popoverRight: popoverRect.right,
+          viewportWidth: window.innerWidth,
           inlineStyle: popover.getAttribute("style") || "",
           position: style.position,
           left: style.left,
@@ -301,7 +388,12 @@ test(
         }
       })
       assert.notEqual(placement, null)
-      assert.ok(Math.abs(placement!.popoverLeft - placement!.slotLeft) <= 1, JSON.stringify(placement))
+      assert.notEqual(placement!.position, "static", JSON.stringify(placement))
+      assert.equal(placement!.left, "0px", JSON.stringify(placement))
+      assert.ok(placement!.popoverLeft >= 0, JSON.stringify(placement))
+      assert.ok(placement!.popoverRight <= placement!.viewportWidth + 1, JSON.stringify(placement))
+      assert.ok(placement!.popoverLeft <= placement!.triggerLeft + 1, JSON.stringify(placement))
+      assert.ok(placement!.popoverRight >= placement!.triggerRight - 1, JSON.stringify(placement))
     } finally {
       await browser.close().catch(() => undefined)
       await server.close()

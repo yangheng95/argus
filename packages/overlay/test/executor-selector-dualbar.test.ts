@@ -23,6 +23,15 @@ const TITLEBAR_SRC = readFileSync(
 )
 const CSS = readFileSync(path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "composer.css"), "utf8")
 
+function cssBlock(selector: string): string {
+  const marker = `${selector} {`
+  const start = CSS.indexOf(marker)
+  expect(start).toBeGreaterThanOrEqual(0)
+  const end = CSS.indexOf("\n}", start)
+  expect(end).toBeGreaterThan(start)
+  return CSS.slice(start, end + 2)
+}
+
 describe("ExecutorSelector dual chip bar", () => {
   test("renders two distinct chip buttons rather than a single chip", () => {
     expect(SRC).toMatch(/data-ui=\{`executor-chip-\$\{props\.side\}`\}/)
@@ -63,6 +72,26 @@ describe("ExecutorSelector dual chip bar", () => {
   test("mirror picker only surfaces models from connected providers", () => {
     expect(SRC).toMatch(/connectedProviderIDs/)
     expect(SRC).toMatch(/function mirrorProviderGroups\(\)[\s\S]*?filter\(\(group\) => group\.available\)/)
+  })
+
+  test("Hexin budget row is requested only for the current OpenCorvus Hexin model", () => {
+    expect(SRC).toMatch(/getHexinBudget/)
+    expect(SRC).toContain("const HEXIN_BUDGET_REFRESH_MS = 10 * 60 * 1000")
+    expect(SRC).toContain("const HEXIN_BUDGET_LOW_USD = 20")
+    expect(SRC).toMatch(/const hexinBudgetBaseKey = createMemo/)
+    expect(SRC).toMatch(/const hexinBudgetKey = createMemo/)
+    expect(SRC).toMatch(/parts\.provider !== "hexin" \|\| !parts\.name/)
+    expect(SRC).toMatch(/directory: activeDirectory\(\)\.trim\(\)/)
+    expect(SRC).toMatch(/window\.setInterval\([\s\S]*?HEXIN_BUDGET_REFRESH_MS/)
+    expect(SRC).toMatch(/setHexinBudgetRefreshTick\(\(value\) => value \+ 1\)/)
+    expect(SRC).toMatch(/onCleanup\(\(\) => window\.clearInterval\(timer\)\)/)
+    expect(SRC).toMatch(/remaining < HEXIN_BUDGET_LOW_USD/)
+    expect(SRC).toMatch(/createResource\(hexinBudgetKey/)
+    expect(SRC).toMatch(/data-ui="executor-hexin-budget"/)
+    expect(SRC).toMatch(/data-low-budget=\{lowBudget\(\) \? "true" : "false"\}/)
+    expect(SRC).toMatch(/<Show when=\{hexinBudgetKey\(\)\}>/)
+    expect(SRC).toMatch(/meta=\{[\s\S]*?<Show when=\{hexinBudgetKey\(\)\}>/)
+    expect(SRC).toMatch(/executor\.hexin_budget_inline/)
   })
 
   test("external picker lists all configured providers for the executor without provider-auth status badges", () => {
@@ -120,10 +149,27 @@ describe("ExecutorSelector dual chip bar", () => {
   })
 
   test("dual bar CSS spans the composer width and both popovers share left-edge anchoring", () => {
+    const selectorStackBlock = cssBlock(".executor-selector-stack")
+    const metaBlock = cssBlock(".chat-compose-meta")
+    const metaLeftBlock = cssBlock(".chat-compose-meta-left")
+
+    expect(selectorStackBlock).toContain("display: block;")
     expect(CSS).toMatch(/\.executor-dualbar\s*\{[\s\S]*?width:\s*100%/)
-    expect(CSS).toMatch(/\.chat-compose-meta-left[\s\S]*?flex:\s*1\s*1\s*100%/)
+    expect(metaLeftBlock).toContain("flex: 1 1 100%;")
     expect(CSS).toMatch(/\.executor-popover\s*\{[\s\S]*?left:\s*0/)
     expect(CSS).not.toMatch(/\.executor-chip-slot\[data-side="external"\] \.executor-popover/)
+    expect(selectorStackBlock).not.toContain("grid-column: 1 / -1")
+    expect(metaBlock).not.toContain("flex-direction: column")
+  })
+
+  test("Hexin budget CSS belongs to the composer selector surface", () => {
+    expect(CSS).toMatch(/\.executor-budget-row\s*\{/)
+    expect(CSS).toMatch(/\.executor-budget-row\[data-over-budget="true"\]/)
+    expect(CSS).toMatch(/\.executor-budget-row\[data-low-budget="true"\] \.executor-budget-value/)
+    expect(CSS).toMatch(/\.executor-budget-value\s*\{[\s\S]*?text-overflow:\s*ellipsis/)
+    expect(CSS).toMatch(/\.executor-budget-error\s*\{[\s\S]*?color:\s*var\(--bad\)/)
+    expect(CSS).toMatch(/\.executor-chip-label-row\s*\{[\s\S]*?display:\s*flex/)
+    expect(CSS).toMatch(/\.executor-chip-slot\s*\{[\s\S]*?flex-direction:\s*row/)
   })
 
   test("retired key names from the old single-chip design are gone", () => {
@@ -141,6 +187,12 @@ describe("i18n keys for the dual bar exist in both locales", () => {
   for (const key of [
     "executor.mirror_chip_title",
     "executor.mirror_chip_aria",
+    "executor.hexin_budget_label",
+    "executor.hexin_budget_inline",
+    "executor.hexin_budget_inline_loading",
+    "executor.hexin_budget_inline_error",
+    "executor.hexin_budget_value",
+    "sidebar.reset_db_missing_context",
     "executor.mirror_popover_title",
     "executor.mirror_popover_hint",
     "executor.mirror_no_connected_providers",

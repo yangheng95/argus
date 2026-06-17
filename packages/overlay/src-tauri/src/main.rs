@@ -557,6 +557,43 @@ fn embedded_server_payload_dir_name() -> String {
     format!("sidecar-{}", EMBEDDED_SERVER_STAMP)
 }
 
+fn cleanup_stale_embedded_sidecars(parent: &Path, current_dir_name: &str) -> Vec<(PathBuf, String)> {
+    let entries = match fs::read_dir(parent) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(err) => return vec![(parent.to_path_buf(), err.to_string())],
+    };
+    let mut errors = Vec::new();
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                errors.push((parent.to_path_buf(), err.to_string()));
+                continue;
+            }
+        };
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == current_dir_name || !name.starts_with("sidecar-") {
+            continue;
+        }
+        let file_type = match entry.file_type() {
+            Ok(file_type) => file_type,
+            Err(err) => {
+                errors.push((path, err.to_string()));
+                continue;
+            }
+        };
+        if !file_type.is_dir() {
+            continue;
+        }
+        if let Err(err) = fs::remove_dir_all(&path) {
+            errors.push((path, err.to_string()));
+        }
+    }
+    errors
+}
+
 fn embedded_payload_complete(root: &Path) -> bool {
     EMBEDDED_SERVER_FILES.iter().all(|file| {
         fs::metadata(root.join(file.path))
@@ -603,12 +640,25 @@ fn ensure_embedded_server_path<R: Runtime>(app: &AppHandle<R>) -> Result<Option<
         return Ok(None);
     }
 
-    let mut root = app
+    let mut parent = app
         .path()
         .app_local_data_dir()
         .unwrap_or_else(|_| std::env::temp_dir());
-    root.push("embedded");
-    root.push(embedded_server_payload_dir_name());
+    parent.push("embedded");
+    let current_dir_name = embedded_server_payload_dir_name();
+    let cleanup_errors = cleanup_stale_embedded_sidecars(&parent, &current_dir_name);
+    if !cleanup_errors.is_empty() {
+        let joined = cleanup_errors
+            .into_iter()
+            .map(|(path, error)| format!("{}: {error}", path.to_string_lossy()))
+            .collect::<Vec<_>>()
+            .join("; ");
+        return Err(format!(
+            "failed to remove stale embedded sidecar payloads under {}: {joined}",
+            parent.to_string_lossy()
+        ));
+    }
+    let root = parent.join(current_dir_name);
     if !embedded_payload_complete(&root) {
         unpack_embedded_payload(&root)?;
     }
@@ -1831,6 +1881,64 @@ mod tests {
             info.sidecar_log_path,
             Some(path.to_string_lossy().to_string())
         );
+    }
+
+    fn unique_sidecar_test_dir(name: &str) -> PathBuf {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("{name}-{}-{stamp}", std::process::id()))
+    }
+
+    #[test]
+    fn stale_embedded_sidecar_cleanup_removes_only_old_payload_dirs() {
+        let parent = unique_sidecar_test_dir("oc-stale-embedded-sidecar");
+        let current = "sidecar-current";
+        let old_a = parent.join("sidecar-old-a");
+        let old_b = parent.join("sidecar-old-b");
+        let current_dir = parent.join(current);
+        let unrelated_dir = parent.join("cache");
+        let sidecar_file = parent.join("sidecar-file");
+
+        fs::create_dir_all(&old_a).expect("old sidecar directory should be created");
+        fs::create_dir_all(&old_b).expect("old sidecar directory should be created");
+        fs::create_dir_all(&current_dir).expect("current sidecar directory should be created");
+        fs::create_dir_all(&unrelated_dir).expect("unrelated directory should be created");
+        fs::write(&sidecar_file, b"binary").expect("sidecar-prefixed file should be created");
+
+        let errors = cleanup_stale_embedded_sidecars(&parent, current);
+
+        assert!(
+            errors.is_empty(),
+            "cleanup should not report errors: {errors:?}"
+        );
+        assert!(!old_a.exists(), "old sidecar directory should be removed");
+        assert!(!old_b.exists(), "old sidecar directory should be removed");
+        assert!(
+            current_dir.is_dir(),
+            "current sidecar directory should remain"
+        );
+        assert!(
+            unrelated_dir.is_dir(),
+            "non-sidecar directory should remain"
+        );
+        assert!(sidecar_file.is_file(), "sidecar-prefixed file should remain");
+
+        fs::remove_dir_all(&parent).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn stale_embedded_sidecar_cleanup_accepts_missing_parent() {
+        let parent = unique_sidecar_test_dir("oc-missing-embedded-sidecar-parent");
+
+        let errors = cleanup_stale_embedded_sidecars(&parent, "sidecar-current");
+
+        assert!(
+            errors.is_empty(),
+            "missing parent should not report cleanup errors: {errors:?}"
+        );
+        assert!(!parent.exists(), "cleanup should not create the parent");
     }
 
     #[test]

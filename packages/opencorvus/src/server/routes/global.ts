@@ -14,6 +14,7 @@ import { Config } from "../../config/config"
 import { Database } from "../../storage/db"
 import { errors } from "../error"
 import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
+import path from "node:path"
 import {
   MysqlTransferFullExport,
   MysqlTransferImportResult,
@@ -25,7 +26,6 @@ import {
 } from "@/storage/mysql-transfer"
 
 const log = Log.create({ service: "server" })
-
 
 export const GlobalRoutes = lazy(() =>
   new Hono()
@@ -268,7 +268,7 @@ export const GlobalRoutes = lazy(() =>
               },
             },
           },
-          ...errors(409),
+          ...errors(400, 409),
         },
       }),
       validator(
@@ -276,6 +276,9 @@ export const GlobalRoutes = lazy(() =>
         z.object({
           projectDir: z
             .string()
+            .trim()
+            .min(1)
+            .refine((value) => path.isAbsolute(value), "projectDir must be an absolute filesystem path")
             .describe(
               "Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB.",
             ),
@@ -287,7 +290,7 @@ export const GlobalRoutes = lazy(() =>
         if (hasActiveSessions()) {
           return c.json({ error: "Active executor sessions exist, refusing DB reset" }, 409)
         }
-        await Instance.disposeAll().catch(() => undefined)
+        await Instance.disposeAll()
         const targets = await Database.reset(projectDir)
         log.warn("db reset via /global/db/reset", { projectDir, targets })
         return c.json({ ok: targets.every((t) => t.ok), targets })

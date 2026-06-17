@@ -521,8 +521,9 @@
 }
 
 /* Container query: when the composer container itself drops below
-   520px, hide the send label (icon-only mode) and stack the meta row.
-   Container query so it activates per-composer regardless of viewport. */
+   520px, hide the send label (icon-only mode). The meta controls stay
+   on one row so model/budget selection never drops into the old
+   three-line layout. */
 @container (max-width: 520px) {
   .chat-send {
     padding: 0 calc(10px * var(--ui-scale));
@@ -530,19 +531,6 @@
 
   .chat-send-label {
     display: none;
-  }
-
-  .chat-compose-meta {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .chat-compose-meta-left {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .prompt-profile-select-wrap {
-    width: 100%;
   }
 
   .chat-version {
@@ -583,6 +571,13 @@
    OpenCorvus (left) and the external executor (right). Each chip
    is its own popover anchor; the bar itself spans the composer
    width so the controls align with the textarea above. */
+.executor-selector-stack {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
 .executor-dualbar {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -596,6 +591,8 @@
 .executor-chip-slot {
   position: relative;
   display: flex;
+  flex-direction: row;
+  align-items: stretch;
   min-width: 0;
 }
 
@@ -646,7 +643,16 @@
   gap: calc(2px * var(--ui-scale));
 }
 
+.executor-chip-label-row {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  max-width: 100%;
+  min-width: 0;
+}
+
 .executor-chip-label {
+  flex: 0 0 auto;
   min-width: 0;
   font-size: calc(10px * var(--ui-scale));
   font-weight: var(--ui-font-weight-medium);
@@ -679,15 +685,57 @@
   flex: 0 0 auto;
 }
 
-@container (max-width: 520px) {
+.executor-budget-row {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  max-width: 70%;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: var(--ui-font-weight-medium);
+  line-height: 1;
+}
+
+.executor-budget-row[data-over-budget="true"] {
+  color: var(--bad);
+}
+
+.executor-budget-row[data-low-budget="true"] .executor-budget-value {
+  color: var(--bad);
+}
+
+.executor-budget-value {
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text-muted) 88%, transparent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.executor-budget-error {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--bad);
+  font-weight: var(--ui-font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (max-width: 360px) {
   .executor-dualbar {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 /* ── Popover surface anchored above each chip ─────────────────
-   Each chip owns its own popover and anchors from the slot's left
-   edge so both pickers share the same bottom-left alignment rule. */
+   Each chip owns its own top-start popover anchor. The Kobalte
+   popper may shift horizontally so a wide menu stays visible in
+   compact one-row composer layouts. */
 .executor-popover {
   position: absolute;
   bottom: calc(100% + calc(6px * var(--ui-scale)));

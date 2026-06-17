@@ -4,7 +4,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { Global } from "../../src/global"
-import { Database } from "../../src/storage/db"
+import { Database, DatabaseSchemaResetRequiredError } from "../../src/storage/db"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 const originalCwd = process.cwd()
@@ -89,7 +89,7 @@ test("Database.reset removes the global DB and the specified project's scratch",
   expect(fs.existsSync(ownershipDir)).toBe(false)
 })
 
-test("Database.Client recreates stale on-disk schema instead of applying column compatibility", () => {
+test("Database.Client requires explicit reset for stale on-disk schema and preserves the file", () => {
   const tempHome = mktemp("opencorvus-db-stale-schema-")
   process.env.OPENCORVUS_HOME = tempHome
 
@@ -116,8 +116,13 @@ test("Database.Client recreates stale on-disk schema instead of applying column 
   `)
   stale.close()
 
-  Database.Client()
-  Database.close()
+  try {
+    Database.Client()
+    throw new Error("Database.Client should have required an explicit reset")
+  } catch (error) {
+    expect(DatabaseSchemaResetRequiredError.isInstance(error)).toBe(true)
+    expect(error instanceof Error ? error.message : String(error)).toContain(dbPath)
+  }
 
   const current = new BunDatabase(dbPath)
   try {
@@ -127,9 +132,21 @@ test("Database.Client recreates stale on-disk schema instead of applying column 
       .map((column) => column.name)
     const staleRows = current.query<{ count: number }, []>("SELECT count(*) AS count FROM engine_artifact").get()
 
-    expect(columns).toContain("acceptance_id")
-    expect(staleRows?.count).toBe(0)
+    expect(columns).not.toContain("acceptance_id")
+    expect(staleRows?.count).toBe(1)
   } finally {
     current.close()
   }
+})
+
+test("Database.reset rejects relative project directories before deleting files", async () => {
+  const tempHome = mktemp("opencorvus-db-reset-relative-home-")
+  process.env.OPENCORVUS_HOME = tempHome
+
+  const dbPath = Database.Path()
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+  fs.writeFileSync(dbPath, "db")
+
+  await expect(Database.reset("relative-project")).rejects.toThrow(/absolute path/)
+  expect(fs.existsSync(dbPath)).toBe(true)
 })
