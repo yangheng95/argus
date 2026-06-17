@@ -14524,7 +14524,8 @@
                 "required": [
                   "targetID",
                   "viewportIDs"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -14634,7 +14635,8 @@
                               "y",
                               "width",
                               "height"
-                            ]
+                            ],
+                            "additionalProperties": false
                           },
                           "implementation_bbox": {
                             "type": "object",
@@ -14661,7 +14663,8 @@
                               "y",
                               "width",
                               "height"
-                            ]
+                            ],
+                            "additionalProperties": false
                           },
                           "artifacts": {
                             "type": "object",
@@ -14833,7 +14836,8 @@
                                 "y",
                                 "width",
                                 "height"
-                              ]
+                              ],
+                              "additionalProperties": false
                             },
                             "semantic_role": {
                               "type": "string",
@@ -14860,7 +14864,8 @@
                             "reference_artifact_id",
                             "bbox",
                             "semantic_role"
-                          ]
+                          ],
+                          "additionalProperties": false
                         },
                         "implementation": {
                           "type": "object",
@@ -14887,7 +14892,8 @@
                                   "required": [
                                     "kind",
                                     "value"
-                                  ]
+                                  ],
+                                  "additionalProperties": false
                                 },
                                 {
                                   "type": "object",
@@ -14904,7 +14910,8 @@
                                   "required": [
                                     "kind",
                                     "value"
-                                  ]
+                                  ],
+                                  "additionalProperties": false
                                 },
                                 {
                                   "type": "object",
@@ -14926,7 +14933,8 @@
                                     "kind",
                                     "role",
                                     "name"
-                                  ]
+                                  ],
+                                  "additionalProperties": false
                                 },
                                 {
                                   "type": "object",
@@ -14948,7 +14956,8 @@
                                     "kind",
                                     "value",
                                     "owner_file"
-                                  ]
+                                  ],
+                                  "additionalProperties": false
                                 }
                               ]
                             },
@@ -14963,7 +14972,8 @@
                           },
                           "required": [
                             "locator"
-                          ]
+                          ],
+                          "additionalProperties": false
                         },
                         "acceptance_refs": {
                           "default": [],
@@ -14980,7 +14990,8 @@
                         "region_scope",
                         "source",
                         "implementation"
-                      ]
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "output": {
@@ -15003,14 +15014,16 @@
                         "default": false,
                         "type": "boolean"
                       }
-                    }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "required": [
                   "targetID",
                   "viewportIDs",
                   "inlineBindings"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -15084,7 +15097,8 @@
                 "required": [
                   "targetID",
                   "viewportID"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -15184,7 +15198,8 @@
                           "kind",
                           "x",
                           "y"
-                        ]
+                        ],
+                        "additionalProperties": false
                       },
                       {
                         "type": "object",
@@ -15214,7 +15229,8 @@
                           "y",
                           "deltaX",
                           "deltaY"
-                        ]
+                        ],
+                        "additionalProperties": false
                       },
                       {
                         "type": "object",
@@ -15232,7 +15248,8 @@
                         "required": [
                           "kind",
                           "key"
-                        ]
+                        ],
+                        "additionalProperties": false
                       }
                     ]
                   }
@@ -15241,7 +15258,8 @@
                   "targetID",
                   "viewportID",
                   "input"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },

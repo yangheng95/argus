@@ -31,10 +31,19 @@ import {
   compareBrowserPreviewRegions,
 } from "../../browser-preview/region-comparison"
 
-const BrowserPreviewLiveRequest = z.object({
-  targetID: z.string().min(1),
-  viewportID: BrowserPreviewViewportID,
-})
+const BrowserPreviewLiveRequest = z
+  .object({
+    targetID: z.string().min(1),
+    viewportID: BrowserPreviewViewportID,
+  })
+  .strict()
+
+const BrowserPreviewCaptureRequest = z
+  .object({
+    targetID: z.string().min(1),
+    viewportIDs: BrowserPreviewViewportID.array().min(1),
+  })
+  .strict()
 
 const BrowserPreviewTargetSelectionRequest = z
   .object({
@@ -44,25 +53,31 @@ const BrowserPreviewTargetSelectionRequest = z
 
 const BrowserPreviewLiveInputRequest = BrowserPreviewLiveRequest.extend({
   input: z.discriminatedUnion("kind", [
-    z.object({
-      kind: z.literal("click"),
-      x: z.number().finite().nonnegative(),
-      y: z.number().finite().nonnegative(),
-      button: z.enum(["left", "middle", "right"]).optional(),
-    }),
-    z.object({
-      kind: z.literal("wheel"),
-      x: z.number().finite().nonnegative(),
-      y: z.number().finite().nonnegative(),
-      deltaX: z.number().finite(),
-      deltaY: z.number().finite(),
-    }),
-    z.object({
-      kind: z.literal("key"),
-      key: z.string().min(1).max(80),
-    }),
+    z
+      .object({
+        kind: z.literal("click"),
+        x: z.number().finite().nonnegative(),
+        y: z.number().finite().nonnegative(),
+        button: z.enum(["left", "middle", "right"]).optional(),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("wheel"),
+        x: z.number().finite().nonnegative(),
+        y: z.number().finite().nonnegative(),
+        deltaX: z.number().finite(),
+        deltaY: z.number().finite(),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("key"),
+        key: z.string().min(1).max(80),
+      })
+      .strict(),
   ]),
-})
+}).strict()
 
 export const BrowserPreviewRoutes = lazy(() =>
   new Hono()
@@ -263,13 +278,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1) })),
-      validator(
-        "json",
-        z.object({
-          targetID: z.string().min(1),
-          viewportIDs: BrowserPreviewViewportID.array().min(1),
-        }),
-      ),
+      validator("json", BrowserPreviewCaptureRequest),
       async (c) => {
         const { taskID } = c.req.valid("param")
         const body = c.req.valid("json")

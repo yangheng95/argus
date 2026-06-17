@@ -3,7 +3,10 @@ import { createServer, type Server } from "node:http"
 import path from "node:path"
 import { PassThrough } from "node:stream"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
-import { BrowserPreviewCompareRegionsTool } from "../../src/tool/browser-preview-compare-regions"
+import {
+  BrowserPreviewCompareRegionsTool,
+  BrowserPreviewCompareRegionsToolParameters,
+} from "../../src/tool/browser-preview-compare-regions"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Instance } from "../../src/project/instance"
@@ -370,4 +373,46 @@ describe("tool.browser_preview", () => {
     },
     { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
   )
+
+  test("compare regions tool parameters reject direct URL and output directory fields", () => {
+    const binding = {
+      region_id: "economy",
+      viewport_id: "desktop",
+      region_scope: "page-section",
+      source: {
+        reference_artifact_id: "reference.png",
+        bbox: { x: 0, y: 0, width: 100, height: 80 },
+        semantic_role: "economy section",
+      },
+      implementation: {
+        route: "/",
+        locator: { kind: "data-oc-region", value: "economy" },
+      },
+    }
+
+    expect(() =>
+      BrowserPreviewCompareRegionsToolParameters.parse({
+        targetID: "art_previewtarget_1",
+        viewportIDs: ["desktop"],
+        inlineBindings: [binding],
+        url: "http://127.0.0.1:5173/",
+      }),
+    ).toThrow(/url/)
+
+    expect(() =>
+      BrowserPreviewCompareRegionsToolParameters.parse({
+        targetID: "art_previewtarget_1",
+        viewportIDs: ["desktop"],
+        inlineBindings: [
+          {
+            ...binding,
+            implementation: {
+              ...binding.implementation,
+              outDir: ".opencorvus/other",
+            },
+          },
+        ],
+      }),
+    ).toThrow(/outDir/)
+  })
 })

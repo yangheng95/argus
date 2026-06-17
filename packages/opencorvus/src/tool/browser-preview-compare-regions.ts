@@ -11,15 +11,17 @@ import { Instance } from "@/project/instance"
 import { buildMultimodalToolResult } from "./multimodal-result"
 import { Tool } from "./tool"
 
-export const BrowserPreviewCompareRegionsToolParameters = z.object({
-  targetID: z.string().min(1).describe("Persisted browser_preview_target artifact ID for the current task."),
-  viewportIDs: BrowserPreviewViewportID.array().min(1).describe("Viewport IDs to compare."),
-  inlineBindings: BrowserPreviewRegionBinding.array()
-    .min(1)
-    .describe("Task-scoped source/local region bindings produced from source visual evidence and local components."),
-  includeDiff: z.boolean().default(false).describe("Whether to also generate per-region difference PNGs."),
-  includeFullpageOverview: z.boolean().default(false).describe("Whether to retain full-page overview capture metadata."),
-})
+export const BrowserPreviewCompareRegionsToolParameters = z
+  .object({
+    targetID: z.string().min(1).describe("Persisted browser_preview_target artifact ID for the current task."),
+    viewportIDs: BrowserPreviewViewportID.array().min(1).describe("Viewport IDs to compare."),
+    inlineBindings: BrowserPreviewRegionBinding.array()
+      .min(1)
+      .describe("Task-scoped source/local region bindings produced from source visual evidence and local components."),
+    includeDiff: z.boolean().default(false).describe("Whether to also generate per-region difference PNGs."),
+    includeFullpageOverview: z.boolean().default(false).describe("Whether to retain full-page overview capture metadata."),
+  })
+  .strict()
 export type BrowserPreviewCompareRegionsToolParameters = z.infer<typeof BrowserPreviewCompareRegionsToolParameters>
 
 export const BrowserPreviewCompareRegionsTool = Tool.define("browser_preview_compare_regions", {

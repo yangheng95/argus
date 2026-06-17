@@ -630,6 +630,90 @@ describe("browser preview routes", () => {
   )
 
   test(
+    "browser preview task request schemas reject direct URL and output directory fields",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const app = Server.App()
+      const binding = {
+        region_id: "economy",
+        viewport_id: "desktop",
+        region_scope: "page-section",
+        source: {
+          reference_artifact_id: "reference.png",
+          bbox: { x: 0, y: 0, width: 100, height: 80 },
+          semantic_role: "economy section",
+        },
+        implementation: {
+          route: "/",
+          locator: { kind: "data-oc-region", value: "economy" },
+        },
+      }
+      const request = async (path: string, body: unknown) =>
+        app.request(`/task/${taskID}/browser-preview/${path}`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify(body),
+        })
+
+      const capture = await request("capture", {
+        targetID: target.id,
+        viewportIDs: ["desktop"],
+        url: "http://127.0.0.1:5173/",
+        outDir: ".opencorvus/other",
+      })
+      expect(capture.status).toBe(400)
+      expect(JSON.stringify(await capture.json())).toContain("url")
+
+      const compareTopLevel = await request("compare", {
+        targetID: target.id,
+        viewportIDs: ["desktop"],
+        inlineBindings: [binding],
+        url: "http://127.0.0.1:5173/",
+      })
+      expect(compareTopLevel.status).toBe(400)
+      expect(JSON.stringify(await compareTopLevel.json())).toContain("url")
+
+      const compareNested = await request("compare", {
+        targetID: target.id,
+        viewportIDs: ["desktop"],
+        inlineBindings: [
+          {
+            ...binding,
+            source: {
+              ...binding.source,
+              outDir: ".opencorvus/other",
+            },
+          },
+        ],
+      })
+      expect(compareNested.status).toBe(400)
+      expect(JSON.stringify(await compareNested.json())).toContain("outDir")
+
+      const liveSnapshot = await request("live/snapshot", {
+        targetID: target.id,
+        viewportID: "desktop",
+        url: "http://127.0.0.1:5173/",
+      })
+      expect(liveSnapshot.status).toBe(400)
+      expect(JSON.stringify(await liveSnapshot.json())).toContain("url")
+
+      const liveInput = await request("live/input", {
+        targetID: target.id,
+        viewportID: "desktop",
+        input: { kind: "click", x: 1, y: 1, outDir: ".opencorvus/other" },
+      })
+      expect(liveInput.status).toBe(400)
+      expect(JSON.stringify(await liveInput.json())).toContain("outDir")
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "POST /task/:taskID/browser-preview/compare requires a persisted targetID before launching comparison",
     async () => {
       await using tmp = await tmpdir()
