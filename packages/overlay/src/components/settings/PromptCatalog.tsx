@@ -74,6 +74,10 @@ function targetValue(draft: PromptProfileDraft, targetID: string): string {
   return draft.agents?.[targetID] ?? ""
 }
 
+function promptProfileTargetLabelID(targetID: string): string {
+  return `promptProfileTargetLabel-${targetID}`
+}
+
 export default function PromptCatalog() {
   const [profileDraftState, setProfileDraftState] = createStore<PromptProfileDraft>({
     id: "",
@@ -602,45 +606,49 @@ export default function PromptCatalog() {
                           <span>{t("prompt_profile.overlay_hint")}</span>
                         </div>
                         <For each={profileTargets()}>
-                          {(target) => (
-                            <div class="prompt-profile-target">
-                              <div class="prompt-profile-target-head">
-                                <div class="prompt-profile-target-copy">
-                                  <strong>{target.label}</strong>
-                                  <span>{target.id}</span>
+                          {(target) => {
+                            const labelID = promptProfileTargetLabelID(target.id)
+                            return (
+                              <div class="prompt-profile-target">
+                                <div class="prompt-profile-target-head">
+                                  <div class="prompt-profile-target-copy">
+                                    <strong id={labelID}>{target.label}</strong>
+                                    <span>{target.id}</span>
+                                  </div>
+                                  <Show when={target.built_in_only}>
+                                    <span class="s-pill" data-tone="muted">
+                                      {t("prompt_profile.built_in_only")}
+                                    </span>
+                                  </Show>
                                 </div>
-                                <Show when={target.built_in_only}>
-                                  <span class="s-pill" data-tone="muted">
-                                    {t("prompt_profile.built_in_only")}
-                                  </span>
+                                <Show when={target.description}>
+                                  <small class="prompt-profile-target-description">{target.description}</small>
+                                </Show>
+                                <Show
+                                  when={profile.editable}
+                                  fallback={
+                                    <div class="prompt-preview-card prompt-preview-card--attached">
+                                      <div
+                                        class="md-content prompt-preview-body"
+                                        innerHTML={promptPreviewHtml(targetValue(profileDraftState, target.id))}
+                                      />
+                                    </div>
+                                  }
+                                >
+                                  <textarea
+                                    class="field-input prompt-profile-textarea"
+                                    aria-labelledby={labelID}
+                                    rows={6}
+                                    value={targetValue(profileDraftState, target.id)}
+                                    disabled={saving() || !target.editable}
+                                    onInput={(event) =>
+                                      setProfileDraftState("agents", target.id, event.currentTarget.value)
+                                    }
+                                  />
                                 </Show>
                               </div>
-                              <Show when={target.description}>
-                                <small class="prompt-profile-target-description">{target.description}</small>
-                              </Show>
-                              <Show
-                                when={profile.editable}
-                                fallback={
-                                  <div class="prompt-preview-card prompt-preview-card--attached">
-                                    <div
-                                      class="md-content prompt-preview-body"
-                                      innerHTML={promptPreviewHtml(targetValue(profileDraftState, target.id))}
-                                    />
-                                  </div>
-                                }
-                              >
-                                <textarea
-                                  class="field-input prompt-profile-textarea"
-                                  rows={6}
-                                  value={targetValue(profileDraftState, target.id)}
-                                  disabled={saving() || !target.editable}
-                                  onInput={(event) =>
-                                    setProfileDraftState("agents", target.id, event.currentTarget.value)
-                                  }
-                                />
-                              </Show>
-                            </div>
-                          )}
+                            )
+                          }}
                         </For>
                       </div>
                     </div>
