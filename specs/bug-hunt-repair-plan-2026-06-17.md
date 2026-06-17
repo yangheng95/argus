@@ -1845,3 +1845,55 @@ LINE:
 - Huygens identified `install(git)`, `remove(git)`, and `slug(...)` as the root call chain, with API and overlay callers forwarding into that server boundary.
 - Huygens recommended a single shared `managedGitTarget(source)` function, strict child containment under `managedRoot()`, rejection before config or filesystem mutation, and tests for `.`, `..`, `.git`, `git://`, and `https://.git`.
 - Huygens also recommended removing the swallowed `rm(...)` error from git remove; the final implementation keeps real filesystem failures visible.
+
+## Batch P1-Y: BH-026 direct-reply failures stay structured instead of becoming task-root wakes
+
+### Findings
+
+- BH-026 was recorded against the generic task agent direct-reply path: direct-reply failures were suspected to become `202` task-root wakes while the route documented structured 4xx/410 errors.
+- Current HEAD no longer has that failure mode on `POST /task/:taskID/session/:sessionID/reply`.
+- The route calls `EngineService.replyAgentSession(...)` directly and only returns `202` after `appendDirectAgentSessionReply(...)` succeeds.
+- `InvalidReplyTargetKindError`, `BuildSessionDirectReplyError`, `ReplyTargetEnvelopeMissingError`, `SessionRuntimeContractMissingError`, and `MissingModelConfigError` bubble to `serverErrorResponse(...)`.
+- `namedErrorStatus(...)` maps those errors to 400, 409, 410, and 400 respectively.
+- `replyRouteErrors(...)` documents the reply-specific 400 NamedError union instead of the generic Hono validation error.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/orchestrator.ts` owns `POST /task/:taskID/session/:sessionID/reply`.
+- `packages/opencorvus/src/task-api/index.ts` owns `EngineService.replyAgentSession(...)`, `appendDirectAgentSessionReply(...)`, and `resolveDirectReplyTarget(...)`.
+- `packages/opencorvus/src/orchestrator/direct-reply.ts` owns direct-reply NamedError classes and the direct-reply/control kind sets.
+- `packages/opencorvus/src/server/error-handler.ts` owns NamedError-to-HTTP status mapping.
+- `packages/opencorvus/src/server/error.ts` owns OpenAPI response schemas for normal routes and reply-specific routes.
+- `packages/opencorvus/test/server/reply-error-taxonomy.test.ts` is the current regression suite for this bug class.
+- `packages/opencorvus/test/server/task-message-routes.test.ts` and `packages/overlay/test/agent-session-controls.test.ts` cover the adjacent task-root build guidance contract.
+
+### Design Boundary
+
+- `POST /task/:taskID/session/:sessionID/reply` is the only direct agent reply route.
+- `POST /task/:taskID/message` is task-root operator guidance. Its structured `target: { kind: "build_session" }` is not a direct-reply fallback; it is the explicit build guidance contract from `specs/new-arch/2026-06-10-build-card-steer-operator-guidance.md` and `specs/new-arch/2026-06-13-build-steer-live-ownership-interrupt-fix.md`.
+- Build sessions remain excluded from generic direct reply. Build guidance stays visible on the task root and lets the orchestrator decide whether to wait, inspect, cancel a stale owner, or dispatch a fresh build.
+- Do not remove `TaskMessageInput.target` as a BH-026 fix; doing so would regress the later build guidance design and conflate task-root operator guidance with direct reply again.
+- Do not add a catch-and-wake fallback from the direct-reply route to `/message`.
+
+### Regression Tests
+
+- `reply-error-taxonomy.test.ts` covers invalid session kind, build session kind, hybrid `envelope.agent === "build"`, missing envelope, missing runtime contract, missing model config, healthy worker success, and contract-without-descriptor rejection.
+- `task-message-routes.test.ts` covers task-root operator messages with structured source/target metadata and verifies build guidance remains a task-root wake, not a child direct reply.
+- `agent-session-controls.test.ts` covers overlay routing: non-build session replies go to `/session/:sessionID/reply`, build guidance goes to `/message` with structured source/target.
+
+### Verification
+
+- Direct-reply taxonomy passed: `bun test packages/opencorvus/test/server/reply-error-taxonomy.test.ts --timeout 30000`.
+- Overlay route selection passed: `bun test packages/overlay/test/agent-session-controls.test.ts --timeout 30000`.
+- Task message route contract passed: `bun test packages/opencorvus/test/server/task-message-routes.test.ts --timeout 30000`.
+
+### Result
+
+- Verified on 2026-06-18.
+- No code change was required for BH-026 in current HEAD; the direct-reply contract is already fixed by earlier reply taxonomy work.
+- The remaining `/message.target` behavior is an intentional task-root build guidance contract, not the BH-026 fallback path.
+
+### Independent Review Feedback
+
+- Galileo confirmed the dedicated direct-reply route currently has no catch-and-wake fallback: it returns 202 only on success and otherwise lets NamedError statuses surface.
+- Galileo also identified the adjacent `/task/:taskID/message` `target` field. After reviewing the 2026-06-10 and 2026-06-13 build guidance specs, this field is retained as structured task-root guidance metadata rather than treated as a direct-reply bug.
