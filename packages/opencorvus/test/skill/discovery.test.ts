@@ -88,6 +88,164 @@ describe("Discovery.pull", () => {
     }
   })
 
+  test("rejects traversal entries without writing outside discovery cache", async () => {
+    await rm(Discovery.dir(), { recursive: true, force: true })
+
+    const escapedSkillDir = path.resolve(Discovery.dir(), "..", "escaped-skill")
+    const escapedFile = path.resolve(Discovery.dir(), "..", "escape.txt")
+    const safeSkillDir = path.join(Discovery.dir(), "safe")
+    await rm(escapedSkillDir, { recursive: true, force: true })
+    await rm(escapedFile, { force: true })
+    await rm(safeSkillDir, { recursive: true, force: true })
+
+    const malicious = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url)
+        if (url.pathname === "/skills/index.json") {
+          return Response.json({
+            skills: [
+              { name: "../escaped-skill", description: "Escapes by name", files: ["SKILL.md"] },
+              { name: "safe", description: "Escapes by file path", files: ["SKILL.md", "../escape.txt"] },
+            ],
+          })
+        }
+        if (url.pathname.endsWith("SKILL.md")) {
+          return new Response("---\nname: escaped\ndescription: traversal\n---\n")
+        }
+        if (url.pathname.endsWith("escape.txt")) {
+          return new Response("escaped\n")
+        }
+        return new Response("Not Found", { status: 404 })
+      },
+    })
+
+    try {
+      await expect(Discovery.pull(`http://localhost:${malicious.port}/skills/`)).rejects.toThrow(
+        "Unsafe skill discovery path",
+      )
+      expect(await Filesystem.exists(path.join(escapedSkillDir, "SKILL.md"))).toBe(false)
+      expect(await Filesystem.exists(escapedFile)).toBe(false)
+      expect(await Filesystem.exists(path.join(safeSkillDir, "SKILL.md"))).toBe(false)
+    } finally {
+      malicious.stop()
+      await rm(escapedSkillDir, { recursive: true, force: true })
+      await rm(escapedFile, { force: true })
+      await rm(safeSkillDir, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects traversal file paths without writing partial skill files", async () => {
+    await rm(Discovery.dir(), { recursive: true, force: true })
+
+    const escapedFile = path.resolve(Discovery.dir(), "..", "file-escape.txt")
+    const safeSkillDir = path.join(Discovery.dir(), "safe")
+    await rm(escapedFile, { force: true })
+    await rm(safeSkillDir, { recursive: true, force: true })
+
+    const malicious = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url)
+        if (url.pathname === "/skills/index.json") {
+          return Response.json({
+            skills: [{ name: "safe", description: "Escapes by file path", files: ["SKILL.md", "../file-escape.txt"] }],
+          })
+        }
+        if (url.pathname.endsWith("SKILL.md")) {
+          return new Response("---\nname: safe\ndescription: safe\n---\n")
+        }
+        if (url.pathname.endsWith("file-escape.txt")) {
+          return new Response("escaped\n")
+        }
+        return new Response("Not Found", { status: 404 })
+      },
+    })
+
+    try {
+      await expect(Discovery.pull(`http://localhost:${malicious.port}/skills/`)).rejects.toThrow(
+        "Unsafe skill discovery path",
+      )
+      expect(await Filesystem.exists(escapedFile)).toBe(false)
+      expect(await Filesystem.exists(path.join(safeSkillDir, "SKILL.md"))).toBe(false)
+    } finally {
+      malicious.stop()
+      await rm(escapedFile, { force: true })
+      await rm(safeSkillDir, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects url-like file paths before requesting skill files", async () => {
+    await rm(Discovery.dir(), { recursive: true, force: true })
+
+    const safeSkillDir = path.join(Discovery.dir(), "safe")
+    await rm(safeSkillDir, { recursive: true, force: true })
+    const requests: string[] = []
+
+    const malicious = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url)
+        requests.push(url.pathname)
+        if (url.pathname === "/skills/index.json") {
+          return Response.json({
+            skills: [
+              {
+                name: "safe",
+                description: "URL-like file path",
+                files: ["SKILL.md", "https://attacker.invalid/SKILL.md"],
+              },
+            ],
+          })
+        }
+        return new Response("Not Found", { status: 404 })
+      },
+    })
+
+    try {
+      await expect(Discovery.pull(`http://localhost:${malicious.port}/skills/`)).rejects.toThrow(
+        "Unsafe skill discovery path",
+      )
+      expect(requests).toEqual(["/skills/index.json"])
+      expect(await Filesystem.exists(path.join(safeSkillDir, "SKILL.md"))).toBe(false)
+    } finally {
+      malicious.stop()
+      await rm(safeSkillDir, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects backslash file paths before requesting skill files", async () => {
+    await rm(Discovery.dir(), { recursive: true, force: true })
+
+    const safeSkillDir = path.join(Discovery.dir(), "safe")
+    const requests: string[] = []
+
+    const malicious = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url)
+        requests.push(url.pathname)
+        if (url.pathname === "/skills/index.json") {
+          return Response.json({
+            skills: [{ name: "safe", description: "Backslash file path", files: ["SKILL.md", "..\\escape.txt"] }],
+          })
+        }
+        return new Response("Not Found", { status: 404 })
+      },
+    })
+
+    try {
+      await expect(Discovery.pull(`http://localhost:${malicious.port}/skills/`)).rejects.toThrow(
+        "Unsafe skill discovery path",
+      )
+      expect(requests).toEqual(["/skills/index.json"])
+      expect(await Filesystem.exists(path.join(safeSkillDir, "SKILL.md"))).toBe(false)
+    } finally {
+      malicious.stop()
+      await rm(safeSkillDir, { recursive: true, force: true })
+    }
+  })
+
   test("caches downloaded files on second pull", async () => {
     // clear dir and downloadCount
     await rm(Discovery.dir(), { recursive: true, force: true })
