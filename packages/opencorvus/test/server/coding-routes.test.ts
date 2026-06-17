@@ -220,6 +220,41 @@ describe("coding assistant routes", () => {
           },
         })
 
+        const otherDirectorySession = await Session.createNext({
+          kind: "root",
+          directory: second.path,
+          title: "Other directory root",
+        })
+        const sameProjectOtherDirectoryTaskID = "task_same_project_other_directory"
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: sameProjectOtherDirectoryTaskID,
+              project_id: Instance.project.id,
+              session_id: otherDirectorySession.id,
+              title: "Same project other directory task",
+              request: "same project other directory",
+              source: "test",
+            })
+            .run(),
+        )
+        const crossDirectory = await app.request(`/coding/session/${session.id}/selection`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": first.path,
+          },
+          body: JSON.stringify({ taskID: sameProjectOtherDirectoryTaskID }),
+        })
+        expect(crossDirectory.status).toBe(404)
+        expect((await Session.get(session.id)).metadata).toEqual({
+          codingAssistant: {
+            surface: "right-sidebar",
+            selectedTaskID: taskID,
+          },
+        })
+
         const crossProject = await app.request(`/coding/session/${session.id}/selection`, {
           method: "PATCH",
           headers: {

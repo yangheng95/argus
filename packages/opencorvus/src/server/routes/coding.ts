@@ -298,7 +298,7 @@ export function CodingRoutes() {
         const { taskID } = c.req.valid("json")
         if (taskID !== null) {
           const task = await EngineService.getTask(taskID)
-          if (task.projectID !== Instance.project.id) {
+          if (task.projectID !== session.projectID || task.directory !== session.directory) {
             throw new HTTPException(404, { message: `Task not found: ${taskID}` })
           }
         }
