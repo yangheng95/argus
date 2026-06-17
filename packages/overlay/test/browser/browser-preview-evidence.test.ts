@@ -27,6 +27,32 @@ function eventStream() {
   })
 }
 
+function projectDiscovery(projectRoot: string) {
+  return {
+    root: projectRoot,
+    defaultDirectory: projectRoot,
+    projects: [{ directory: projectRoot, name: "app", marker: `${projectRoot}/.opencorvus` }],
+  }
+}
+
+const promptProfileCatalog = {
+  active: "default",
+  project_active: "default",
+  session_active: null,
+  default: "default",
+  targets: [{ id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false }],
+  profiles: [
+    {
+      id: "default",
+      label: "Default",
+      description: "Default implementation profile.",
+      built_in: true,
+      editable: false,
+      agents: {},
+    },
+  ],
+}
+
 async function waitForPageState(page: any, predicate: () => boolean, label: string, diagnostics?: () => unknown) {
   for (let i = 0; i < 100; i += 1) {
     if (await page.evaluate(predicate)) return
@@ -158,7 +184,10 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/projects/discover") return send(projectDiscovery(projectRoot))
+      if (path === "/project/current/worktrees") return send([])
       if (path === "/mission") return send([])
+      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
       if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
       if (path === "/path") return send({ directory: projectRoot })
       if (path === "/vcs") {
@@ -387,13 +416,15 @@ test(
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_right_panel_collapsed", "false")
+        localStorage.setItem("oc_workspace_task", "tsk_browserpreview_e2e")
+        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
         const settings = {
           serverUrl,
           autoServer: false,
           locale: "en-US",
           directory: "D:/overlay/workspace/app",
           directoryMode: "custom",
-          workspaceTaskID: "tsk_browserpreview_e2e",
+          workspaceTaskId: "tsk_browserpreview_e2e",
           workspaceDirectory: "D:/overlay/workspace/app",
         }
         window.__TAURI__ = {
@@ -422,7 +453,7 @@ test(
         }
       }, server.origin)
       page.on("pageerror", (error) => {
-        errors.push(`pageerror: ${error.message}`)
+        errors.push(`pageerror: ${error.stack || error.message}`)
       })
       page.on("requestfailed", (request) => {
         if (/\/task\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
@@ -446,46 +477,54 @@ test(
       await waitForPageState(
         page,
         () =>
-          document.querySelector<HTMLElement>(".global-task-row[data-active='true'] .task-row-main")?.dataset.taskId ===
+          document.querySelector<HTMLElement>(".task-row-main[data-task-id='tsk_browserpreview_e2e']")?.dataset.taskId ===
           "tsk_browserpreview_e2e",
-        "restored browser preview task selection",
+        "browser preview task row rendered",
         () => ({ errors, requestLog }),
+      )
+      await page.$eval(
+        '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
+        (node) => (node as HTMLButtonElement).click(),
       )
       await waitForPageState(
         page,
-        () =>
-          document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active === "true" &&
-          !!document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]'),
+        () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
+        "task activity visible before preview selection",
+        () => ({ errors, requestLog }),
+      )
+      await page.$eval(`.task-row-main[data-task-id="${taskID}"]`, (node) => (node as HTMLButtonElement).click())
+      await page.$eval(
+        '[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]',
+        (node) => (node as HTMLButtonElement).click(),
+      )
+      await waitForPageState(
+        page,
+        () => document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active === "true",
         "browser workbench active",
         () => ({ errors, requestLog }),
       )
-      await page.waitForSelector('[data-ui="browser-preview-live-screenshot"]')
+      await waitForPageText(page, previewTarget(), "preview target text")
+      await page.click('[aria-label="Capture Playwright evidence from the saved backend preview target."]')
+      await waitForPageText(page, "primary target desktop capture passed", "primary target evidence summary")
       await waitForPageState(
         page,
         () => {
-          const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
-          return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+          const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
+          const evidence = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-evidence"]')
+          const img = stage?.querySelector<HTMLImageElement>('[data-ui="browser-preview-screenshot"]')
+          const live = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')
+          return (
+            evidence?.textContent?.includes("primary target desktop capture passed") === true &&
+            !live &&
+            !!img &&
+            img.complete &&
+            img.naturalWidth > 0 &&
+            img.naturalHeight > 0
+          )
         },
-        "loaded interactive browser preview screenshot",
+        "primary browser preview evidence screenshot rendered in the stage",
         () => ({ errors, requestLog }),
       )
-      await waitForPageText(page, previewTarget(), "preview target text")
-      await page.click('[data-ui="browser-preview-live-screenshot"]', { position: { x: 5, y: 5 } })
-      await page.hover('[data-ui="browser-preview-live"]')
-      await page.evaluate(() => {
-        const image = document.querySelector<HTMLElement>('[data-ui="browser-preview-live-screenshot"]')
-        const rect = image?.getBoundingClientRect()
-        image?.dispatchEvent(
-          new WheelEvent("wheel", {
-            bubbles: true,
-            cancelable: true,
-            clientX: rect ? rect.left + 5 : 5,
-            clientY: rect ? rect.top + 5 : 5,
-            deltaX: 0,
-            deltaY: 180,
-          }),
-        )
-      })
       await page.click('[data-ui="browser-preview-candidate-trigger"]')
       await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
@@ -496,83 +535,53 @@ test(
         "stale preview evidence hidden after alternate target selection",
         () => ({ errors, requestLog, captureBodies }),
       )
+      await page.click('[aria-label="Capture Playwright evidence from the saved backend preview target."]')
       await waitForPageText(page, "alternate target desktop capture passed", "alternate target evidence summary")
-      for (
-        let i = 0;
-        i < 100 && !liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID));
-        i += 1
-      ) {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-      assert.ok(
-        liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID)),
-        `interactive browser preview reloaded after selecting an alternate target\n${JSON.stringify(
-          { errors, requestLog, liveSnapshotBodies },
-          null,
-          2,
-        )}`,
-      )
-
       await waitForPageState(
         page,
         () => {
-          const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
-          return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+          const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
+          const evidence = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-evidence"]')
+          const img = stage?.querySelector<HTMLImageElement>('[data-ui="browser-preview-screenshot"]')
+          const live = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')
+          return !!evidence && !live && !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
         },
-        "reloaded alternate interactive browser preview screenshot",
+        "alternate browser preview evidence screenshot rendered in the stage",
         () => ({ errors, requestLog }),
-      )
-      for (let i = 0; i < 100 && liveInputBodies.length < 2; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-      assert.ok(
-        liveInputBodies.length >= 2,
-        `interactive browser preview input routed to backend\n${JSON.stringify({ errors, requestLog }, null, 2)}`,
       )
 
       const preview = await page.evaluate(() => {
-        const live = document.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')
-        const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
+        const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
+        const evidence = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-evidence"]')
+        const live = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')
+        const img = stage?.querySelector<HTMLImageElement>('[data-ui="browser-preview-screenshot"]')
         return {
-          status: live?.dataset.status || "",
+          status: evidence?.dataset.status || "",
           text: document.body.textContent || "",
+          liveVisible: !!live,
           imageLoaded: !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0,
         }
       })
-      assert.equal(preview.status, "ready")
+      assert.equal(preview.status, "passed")
+      assert.equal(preview.liveVisible, false)
       assert.equal(preview.imageLoaded, true)
       assert.match(preview.text, /alternate target desktop capture passed/)
       assert.doesNotMatch(preview.text, /primary target desktop capture passed/)
       assert.match(preview.text, new RegExp(alternatePreviewTarget().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
       assert.deepEqual(selectedTargets, [{ targetID: alternateTargetID }])
-      assert.deepEqual(JSON.parse(JSON.stringify(captureBodies[0])), {
-        targetID,
-        viewportIDs: ["desktop", "tablet", "mobile"],
-      })
-      assert.deepEqual(JSON.parse(JSON.stringify(captureBodies[1])), {
-        targetID: alternateTargetID,
-        viewportIDs: ["desktop", "tablet", "mobile"],
-      })
       assert.ok(
-        liveSnapshotBodies.some((body) => JSON.stringify(body).includes(targetID)),
-        "live snapshot should use the selected task browser preview target ID",
+        captureBodies.some((body) => JSON.stringify(body) === JSON.stringify({ targetID, viewportIDs: ["desktop", "tablet", "mobile"] })),
+        "capture route should use the primary task browser preview target ID",
       )
       assert.ok(
-        liveSnapshotBodies.some((body) => JSON.stringify(body).includes(alternateTargetID)),
-        "live snapshot should reload after selecting an alternate target",
+        captureBodies.some(
+          (body) => JSON.stringify(body) === JSON.stringify({ targetID: alternateTargetID, viewportIDs: ["desktop", "tablet", "mobile"] }),
+        ),
+        "capture route should use the selected alternate task browser preview target ID",
       )
-      assert.deepEqual(liveInputBodies.map((body) => (body as any).input.kind).slice(0, 2), ["click", "wheel"])
       assert.ok(
         requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/capture`)),
         "capture route should be called through the task-scoped backend",
-      )
-      assert.ok(
-        requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/live/snapshot`)),
-        "live snapshot route should be called through the task-scoped backend",
-      )
-      assert.ok(
-        requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/live/input`)),
-        "live input route should be called through the task-scoped backend",
       )
       assert.ok(
         requestLog.some((entry) =>
@@ -697,6 +706,10 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/projects/discover") return send(projectDiscovery(projectRoot))
+      if (path === "/project/current/worktrees") return send([])
+      if (path === "/mission") return send([])
+      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
       if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
       if (path === "/path") return send({ directory: projectRoot })
       if (path === "/vcs")
@@ -776,13 +789,15 @@ test(
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_right_panel_collapsed", "false")
+        localStorage.setItem("oc_workspace_task", "tsk_browserpreview_persisted_viewport")
+        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
         const settings = {
           serverUrl,
           autoServer: false,
           locale: "en-US",
           directory: "D:/overlay/workspace/app",
           directoryMode: "custom",
-          workspaceTaskID: "tsk_browserpreview_persisted_viewport",
+          workspaceTaskId: "tsk_browserpreview_persisted_viewport",
           workspaceDirectory: "D:/overlay/workspace/app",
         }
         window.__TAURI__ = {
@@ -810,7 +825,7 @@ test(
           },
         }
       }, server.origin)
-      page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`))
+      page.on("pageerror", (error) => errors.push(`pageerror: ${error.stack || error.message}`))
       page.on("response", (response) => {
         if (response.status() >= 400) errors.push(`response${response.status()}: ${response.url()}`)
       })
@@ -829,18 +844,77 @@ test(
       await waitForPageState(
         page,
         () =>
-          document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active === "true" &&
-          !!document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]'),
-        "browser preview live frame rendered",
+          document.querySelector<HTMLElement>(".task-row-main[data-task-id='tsk_browserpreview_persisted_viewport']")
+            ?.dataset.taskId === "tsk_browserpreview_persisted_viewport",
+        "persisted browser preview task row rendered",
+        () => ({ errors, requestLog }),
+      )
+      await page.$eval(
+        '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
+        (node) => (node as HTMLButtonElement).click(),
+      )
+      await waitForPageState(
+        page,
+        () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
+        "task activity visible before persisted preview selection",
+        () => ({ errors, requestLog }),
+      )
+      await page.$eval(`.task-row-main[data-task-id="${taskID}"]`, (node) => (node as HTMLButtonElement).click())
+      await page.$eval(
+        '[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]',
+        (node) => (node as HTMLButtonElement).click(),
+      )
+      await waitForPageState(
+        page,
+        () => document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active === "true",
+        "browser preview workbench active",
         () => ({ errors, requestLog }),
       )
       await waitForPageText(page, "persisted desktop evidence passed", "desktop persisted evidence")
+      await waitForPageState(
+        page,
+        () => {
+          const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
+          const evidence = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-evidence"]')
+          const img = stage?.querySelector<HTMLImageElement>('[data-ui="browser-preview-screenshot"]')
+          const live = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')
+          return (
+            evidence?.dataset.status === "passed" &&
+            !live &&
+            !!img &&
+            img.complete &&
+            img.naturalWidth > 0 &&
+            img.naturalHeight > 0
+          )
+        },
+        "desktop persisted evidence screenshot rendered in the stage",
+        () => ({ errors, requestLog }),
+      )
       let text = await page.evaluate(() => document.querySelector(".browser-preview-evidence-status")?.textContent || "")
       assert.match(text, /persisted desktop evidence passed/)
       assert.doesNotMatch(text, /persisted mobile evidence passed/)
 
       await page.click('[data-ui="browser-preview-viewport"][data-viewport-id="mobile"]')
       await waitForPageText(page, "persisted mobile evidence passed", "mobile persisted evidence")
+      await waitForPageState(
+        page,
+        () => {
+          const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
+          const evidence = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-evidence"]')
+          const img = stage?.querySelector<HTMLImageElement>('[data-ui="browser-preview-screenshot"]')
+          const live = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')
+          return (
+            evidence?.textContent?.includes("persisted mobile evidence passed") === true &&
+            !live &&
+            !!img &&
+            img.complete &&
+            img.naturalWidth > 0 &&
+            img.naturalHeight > 0
+          )
+        },
+        "mobile persisted evidence screenshot rendered in the stage",
+        () => ({ errors, requestLog }),
+      )
       text = await page.evaluate(() => document.querySelector(".browser-preview-evidence-status")?.textContent || "")
       assert.match(text, /persisted mobile evidence passed/)
       assert.doesNotMatch(text, /persisted desktop evidence passed/)
