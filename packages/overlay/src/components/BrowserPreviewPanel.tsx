@@ -430,7 +430,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             >
               <Icon name="external-link" size={13} />
               <Select.Trigger
-                class="browser-preview-candidate-trigger"
+                class="oc-select-trigger browser-preview-candidate-trigger"
                 aria-label={t("browser_preview.candidates.label")}
                 data-ui="browser-preview-candidate-trigger"
               >
@@ -443,8 +443,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               </Select.Trigger>
               <Select.HiddenSelect aria-label={t("browser_preview.candidates.label")} />
               <Select.Portal>
-                <Select.Content class="browser-preview-candidate-content">
-                  <Select.Listbox class="browser-preview-candidate-listbox" />
+                <Select.Content class="oc-select-content browser-preview-candidate-content">
+                  <Select.Listbox class="oc-select-listbox browser-preview-candidate-listbox" />
                 </Select.Content>
               </Select.Portal>
             </Select.Root>
@@ -682,12 +682,12 @@ function BrowserPreviewCandidateOption(
   return (
     <Select.Item
       item={props.item}
-      class="browser-preview-candidate-option"
+      class="oc-select-option browser-preview-candidate-option"
       data-ui="browser-preview-candidate-option"
       data-target-id={candidate().id}
     >
       <Select.ItemLabel>{candidate().url}</Select.ItemLabel>
-      <Select.ItemIndicator class="browser-preview-candidate-indicator">
+      <Select.ItemIndicator class="oc-select-indicator browser-preview-candidate-indicator">
         <Icon name="status-completed" size={12} />
       </Select.ItemIndicator>
     </Select.Item>
