@@ -31,7 +31,7 @@ export const PersistedBrowserPreviewEvidence = z.object({
   taskID: z.string(),
   targetID: z.string(),
   viewportID: z.string(),
-  operationKind: z.enum(["preview-capture", "reference-comparison"]).default("preview-capture"),
+  operationKind: z.enum(["preview-capture", "reference-comparison"]),
   regionID: z.string().optional(),
   manifestPath: z.string().optional(),
   artifactPaths: z.record(z.string(), z.string()).optional(),
@@ -43,6 +43,7 @@ export const PersistedBrowserPreviewEvidence = z.object({
   timeCreated: z.number(),
 })
 export type PersistedBrowserPreviewEvidence = z.infer<typeof PersistedBrowserPreviewEvidence>
+type BrowserPreviewEvidenceOperationKind = PersistedBrowserPreviewEvidence["operationKind"]
 
 const PersistedBrowserPreviewTargetPayload = z.object({
   url: z.string(),
@@ -282,10 +283,7 @@ function findBrowserPreviewEvidenceByID(input: {
   const payload = row.payload as Record<string, unknown>
   const targetID = typeof payload.target_id === "string" ? payload.target_id : undefined
   const viewportID = typeof payload.viewport_id === "string" ? payload.viewport_id : undefined
-  const operationKind =
-    payload.operation_kind === "reference-comparison" || payload.operation_kind === "preview-capture"
-      ? payload.operation_kind
-      : "preview-capture"
+  const operationKind = parseBrowserPreviewEvidenceOperationKind(payload.operation_kind)
   const regionID = typeof payload.region_id === "string" ? payload.region_id : undefined
   const manifestPath = typeof payload.manifest_path === "string" ? payload.manifest_path : undefined
   const artifactPaths =
@@ -302,7 +300,7 @@ function findBrowserPreviewEvidenceByID(input: {
     ? payload.diagnostics.filter((item): item is string => typeof item === "string")
     : []
   const timeCompleted = typeof payload.time_completed === "number" ? payload.time_completed : row.time_updated
-  if (!targetID || !viewportID || !status || !summary) return undefined
+  if (!targetID || !viewportID || !operationKind || !status || !summary) return undefined
   return {
     id: row.id,
     taskID: row.task_id,
@@ -556,9 +554,15 @@ export function latestBrowserPreviewEvidenceIDs(input: {
 function sqlEvidenceMeta(payload: unknown): { targetID: string; viewportID: string } | undefined {
   if (!payload || typeof payload !== "object") return undefined
   const record = payload as Record<string, unknown>
-  if (record.operation_kind === "reference-comparison") return undefined
+  const operationKind = parseBrowserPreviewEvidenceOperationKind(record.operation_kind)
+  if (operationKind !== "preview-capture") return undefined
   const targetID = typeof record.target_id === "string" ? record.target_id : undefined
   const viewportID = typeof record.viewport_id === "string" ? record.viewport_id : undefined
   if (!targetID || !viewportID) return undefined
   return { targetID, viewportID }
+}
+
+function parseBrowserPreviewEvidenceOperationKind(input: unknown): BrowserPreviewEvidenceOperationKind | undefined {
+  if (input === "preview-capture" || input === "reference-comparison") return input
+  return undefined
 }

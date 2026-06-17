@@ -9,6 +9,7 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Server } from "../../src/server/server"
 import { closeBrowserPreviewLiveSessions } from "../../src/browser-preview/live"
 import {
+  BROWSER_PREVIEW_EVIDENCE_KIND,
   latestBrowserPreviewEvidenceIDs,
   persistBrowserPreviewEvidence,
   persistBrowserPreviewTarget,
@@ -805,6 +806,95 @@ describe("browser preview routes", () => {
   )
 
   test(
+    "malformed operation kind evidence is unreadable and does not become latest capture",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const screenshotPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop.png")
+      await fs.writeFile(screenshotPath, "preview-capture")
+      const captureID = persistBrowserPreviewEvidence({
+        projectRoot: tmp.path,
+        taskID,
+        targetID: target.id,
+        viewportID: "desktop",
+        status: "passed",
+        summary: "capture passed",
+        capture: { path: screenshotPath },
+        diagnostics: ["capture passed"],
+        now: 1000,
+      })
+      const badEvidence = [
+        {
+          id: "art_preview_missing_operation_kind",
+          payload: {
+            target_id: target.id,
+            viewport_id: "desktop",
+            status: "passed",
+            summary: "missing operation kind",
+            capture: { path: runtimeRelativePath(tmp.path, screenshotPath) },
+            diagnostics: [],
+            time_completed: 2000,
+          },
+          time: 2000,
+        },
+        {
+          id: "art_preview_unknown_operation_kind",
+          payload: {
+            target_id: target.id,
+            viewport_id: "desktop",
+            operation_kind: "comparison",
+            status: "passed",
+            summary: "unknown operation kind",
+            capture: { path: runtimeRelativePath(tmp.path, screenshotPath) },
+            diagnostics: [],
+            time_completed: 3000,
+          },
+          time: 3000,
+        },
+      ]
+      Database.use((db) => {
+        for (const item of badEvidence) {
+          db.insert(EngineArtifactTable)
+            .values({
+              id: item.id,
+              task_id: taskID,
+              run_id: null,
+              goal_run_id: null,
+              acceptance_id: null,
+              kind: BROWSER_PREVIEW_EVIDENCE_KIND,
+              label: "capture",
+              payload: item.payload,
+              time_created: item.time,
+              time_updated: item.time,
+            })
+            .run()
+        }
+      })
+
+      expect(latestBrowserPreviewEvidenceIDs({ taskID, targetID: target.id }).desktop).toBe(captureID)
+
+      const app = Server.App()
+      for (const item of badEvidence) {
+        const evidence = await app.request(`/task/${taskID}/browser-preview/evidence/${item.id}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(evidence.status).toBe(404)
+
+        const capture = await app.request(`/task/${taskID}/browser-preview/evidence/${item.id}/capture.png`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(capture.status).toBe(404)
+      }
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "POST /task/:taskID/browser-preview/live/snapshot returns a PNG from the persisted target",
     async () => {
       await using tmp = await tmpdir()
@@ -902,4 +992,8 @@ async function browserPreviewArtifactPath(projectRoot: string, taskID: string, f
   const output = ProjectRuntimePaths.taskAbsolute(projectRoot, taskID, "browser-preview", "route-test", filename)
   await fs.mkdir(path.dirname(output), { recursive: true })
   return output
+}
+
+function runtimeRelativePath(projectRoot: string, absolutePath: string): string {
+  return path.relative(path.resolve(projectRoot), path.resolve(absolutePath)).replaceAll(path.sep, "/")
 }
