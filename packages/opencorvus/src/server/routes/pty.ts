@@ -5,7 +5,9 @@ import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Pty } from "@/pty"
+import { Instance } from "@/project/instance"
 import { NotFoundError } from "../../storage/db"
+import { decodeProjectDirectory } from "../directory"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -156,8 +158,15 @@ export const PtyRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ ptyID: z.string() })),
+      async (c, next) => {
+        const id = c.req.valid("param").ptyID
+        if (!Pty.get(id)) throw new NotFoundError({ message: "PTY session not found" })
+        await next()
+      },
       upgradeWebSocket((c) => {
         const id = c.req.param("ptyID")
+        const rawDirectory = c.req.query("directory") || c.req.header("x-opencorvus-directory")
+        const directory = rawDirectory ? decodeProjectDirectory(rawDirectory) : undefined
         const cursor = (() => {
           const value = c.req.query("cursor")
           if (!value) return
@@ -166,27 +175,41 @@ export const PtyRoutes = lazy(() =>
           return parsed
         })()
         let handler: ReturnType<typeof Pty.connect> | undefined
+        const withProject = async (fn: () => void) => {
+          if (!directory) throw new Error("PTY websocket connect requires project directory")
+          await Instance.provide({ directory, fn })
+        }
 
         return {
           onOpen(_event, ws) {
-            handler = Pty.connect(
-              id,
-              {
-                send: (data) => ws.send(data),
-                close: (code, reason) => ws.close(code, reason),
-              },
-              cursor,
-            )
+            void withProject(() => {
+              handler = Pty.connect(
+                id,
+                {
+                  send: (data) => ws.send(data),
+                  close: (code, reason) => ws.close(code, reason),
+                },
+                cursor,
+              )
+            }).catch((error) => {
+              ws.close(4404, error instanceof Error ? error.message : "PTY session not found")
+            })
           },
           onMessage(event) {
-            if (typeof event.data === "string") handler?.onMessage(event.data)
-            else if (event.data instanceof ArrayBuffer) handler?.onMessage(new TextDecoder().decode(event.data))
+            void withProject(() => {
+              if (typeof event.data === "string") handler?.onMessage(event.data)
+              else if (event.data instanceof ArrayBuffer) handler?.onMessage(new TextDecoder().decode(event.data))
+            }).catch(() => {})
           },
           onClose() {
-            handler?.onClose()
+            void withProject(() => {
+              handler?.onClose()
+            }).catch(() => {})
           },
           onError() {
-            handler?.onClose()
+            void withProject(() => {
+              handler?.onClose()
+            }).catch(() => {})
           },
         }
       }),
