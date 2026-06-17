@@ -104,7 +104,7 @@ describe("loadConfigInfo", () => {
     expect(appStore.configLoadErrors.provider).toContain("provider request aborted")
   })
 
-  test("preserves existing provider data when a bootstrap route times out", async () => {
+  test("clears stale settings-only projections when their bootstrap routes fail", async () => {
     const existingCatalog = { provider: { openai: { id: "openai" } } }
     setAppStore({
       config: { model: "openai/gpt-4o-mini" },
@@ -135,7 +135,14 @@ describe("loadConfigInfo", () => {
           return { status: 200, ok: true, headers: {}, body: [{ id: "fresh-channel" }] }
         }
         if (req.path === "config/prompt") {
-          return { status: 200, ok: true, headers: {}, body: [{ id: "fresh-prompt" }] }
+          return new Promise((_, reject) => {
+            const abort = () => reject(new Error("prompt request aborted"))
+            if (req.signal?.aborted) {
+              abort()
+              return
+            }
+            req.signal?.addEventListener("abort", abort, { once: true })
+          })
         }
         throw new Error(`unexpected route ${req.path}`)
       }),
@@ -144,11 +151,12 @@ describe("loadConfigInfo", () => {
     await loadSettingsInfo(5)
 
     expect(appStore.config).toEqual({ model: "openai/gpt-4.1" })
-    expect(appStore.providerCatalog).toEqual(existingCatalog)
+    expect(appStore.providerCatalog).toBeNull()
     expect(appStore.providerAuth).toEqual({ openai: { authenticated: true } })
     expect(appStore.channels).toEqual([{ id: "fresh-channel" }])
-    expect(appStore.promptEntries).toEqual([{ id: "fresh-prompt" }])
+    expect(appStore.promptEntries).toEqual([])
     expect(appStore.configLoadErrors.provider).toContain("provider request aborted")
+    expect(appStore.configLoadErrors["config/prompt"]).toContain("prompt request aborted")
   })
 
   test("older config refresh cannot overwrite a newer completed refresh", async () => {
