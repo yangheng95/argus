@@ -1214,9 +1214,28 @@ body {
   line-height: 1.45;
   user-select: text;
   outline: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track);
   transition:
     border-color var(--ui-duration-base) var(--ui-timing-standard),
     background-color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.card__agent-reply-input::-webkit-scrollbar {
+  width: var(--session-scrollbar-size);
+}
+
+.card__agent-reply-input::-webkit-scrollbar-track {
+  background: var(--session-scrollbar-track);
+  border-radius: var(--oc-radius-pill);
+}
+
+.card__agent-reply-input::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--oc-radius-pill);
+  border: calc(2px * var(--ui-scale)) solid transparent;
+  background-clip: padding-box;
 }
 
 .card__agent-reply-input:focus {
@@ -1224,42 +1243,27 @@ body {
   background: var(--surface);
 }
 
-.card__agent-reply-send {
+.card__agent-reply .oc-button[data-ui="agent-reply-send"] {
   position: absolute;
   right: calc(10px * var(--ui-scale));
   top: 50%;
   transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(5px * var(--ui-scale));
-  min-height: calc(30px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 70%, transparent);
+  --oc-button-height: calc(30px * var(--ui-scale));
+  --oc-button-padding-x: calc(10px * var(--ui-scale));
+  --oc-button-gap: calc(5px * var(--ui-scale));
+
   border-radius: var(--oc-radius-pill);
-  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
   font-size: var(--card-sub-size);
-  font-weight: var(--ui-font-weight-strong);
-  cursor: pointer;
-  color: var(--surface);
-  background: var(--accent);
   box-shadow: 0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale))
     color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
-.card__agent-reply-send svg {
+.card__agent-reply .oc-button[data-ui="agent-reply-send"] svg {
   width: calc(13px * var(--ui-scale));
   height: calc(13px * var(--ui-scale));
 }
 
-.card__agent-reply-send:not(:disabled):hover,
-.card__agent-reply-send:not(:disabled):focus-visible {
-  background: var(--accent-hover);
-  border-color: color-mix(in srgb, var(--accent-hover) 76%, transparent);
-}
-
-.card__agent-reply-send:disabled {
-  cursor: default;
-  opacity: var(--ui-opacity-disabled);
+.card__agent-reply .oc-button[data-ui="agent-reply-send"]:disabled {
   box-shadow: none;
 }
 
@@ -1284,19 +1288,18 @@ body {
   min-width: 0;
   overflow-wrap: break-word;
 }
-.card__agent-reply-error-dismiss {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--bad);
-  cursor: pointer;
-  font-size: calc(14px * var(--ui-scale));
-  line-height: 1;
-  padding: 0 calc(4px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
+.card__agent-reply-error .oc-button[data-ui="agent-reply-error-dismiss"] {
+  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-shadow: none;
+
+  flex: none;
+  width: calc(22px * var(--ui-scale));
+  min-width: calc(22px * var(--ui-scale));
 }
-.card__agent-reply-error-dismiss:hover {
-  background: color-mix(in srgb, var(--bad) 18%, transparent);
+.card__agent-reply-error .oc-button[data-ui="agent-reply-error-dismiss"] svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
 }
 
 .trace-panel {

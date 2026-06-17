@@ -96,11 +96,18 @@ describe("agent session controls", () => {
     })
   })
 
-  test("agent steer input is constrained to two control rows", () => {
+  test("agent steer input reuses textarea and button primitives while staying compact", () => {
     const component = readFileSync(join(root, "src/components/AgentSessionReplyBox.tsx"), "utf8")
     const css = readFileSync(join(root, "src/styles/surfaces/card.css"), "utf8")
 
+    expect(component).toContain('import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"')
+    expect(component).toContain('import { Button } from "./ui/Button"')
+    expect(component).toContain("<AutoGrowTextarea")
+    expect(component).toContain("<Button")
     expect(component).toContain("rows={2}")
+    expect(component).toContain("maxLines={2}")
+    expect(component).not.toMatch(/<textarea\b/)
+    expect(component).not.toMatch(/<button\b/)
     expect(component).not.toContain("rows={3}")
     expect(component).not.toContain("card__agent-reply-field")
     expect(css).not.toContain(".card__agent-reply-field")
@@ -109,9 +116,12 @@ describe("agent session controls", () => {
     expect(css).toContain("resize: none;")
     expect(css).toContain("height: calc(58px * var(--ui-scale));")
     expect(css).toContain("max-height: calc(58px * var(--ui-scale));")
+    expect(css).toContain("overflow-y: auto;")
+    expect(css).toContain('data-ui="agent-reply-send"')
+    expect(css).toContain('data-ui="agent-reply-error-dismiss"')
     expect(css).toContain("top: 50%;")
     expect(component).toContain('<Icon name="send" />')
-    expect(css).not.toMatch(/\.card__agent-reply-send svg\s*\{[^}]*transform:\s*rotate\(180deg\)/)
+    expect(css).not.toMatch(/agent-reply-send[^}]*transform:\s*rotate\(180deg\)/)
     expect(css).not.toContain("min-height: calc(104px * var(--ui-scale));")
   })
 
