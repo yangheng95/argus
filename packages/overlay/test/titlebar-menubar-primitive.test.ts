@@ -20,9 +20,13 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).toContain("<Menubar.Item")
     expect(SOURCE).toContain("<Menubar.Group")
     expect(SOURCE).toContain("<Menubar.GroupLabel")
+    expect(SOURCE).toContain("<Menubar.RadioGroup")
+    expect(SOURCE).toContain("<Menubar.RadioItem")
     expect(SOURCE).not.toContain('role="menubar"')
     expect(SOURCE).not.toContain('role="menu"')
     expect(SOURCE).not.toContain('role="menuitem"')
+    expect(SOURCE).not.toContain('role="radiogroup"')
+    expect(SOURCE).not.toContain('role="radio"')
     expect(SOURCE).not.toContain('aria-haspopup="menu"')
     expect(SOURCE).not.toContain('document.addEventListener("pointerdown"')
   })
@@ -37,5 +41,9 @@ describe("TitlebarMenubar primitive ownership", () => {
   test("styles Kobalte disabled item state", () => {
     expect(CSS).toContain(".titlebar-menubar-item[data-disabled]")
     expect(CSS).toContain(":not([data-disabled])")
+  })
+
+  test("styles Kobalte highlighted theme radio items", () => {
+    expect(CSS).toContain(".titlebar-theme-option[data-highlighted]")
   })
 })

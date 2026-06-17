@@ -220,10 +220,13 @@
   min-width: 0;
 }
 
-.titlebar-theme-option:hover {
+.titlebar-theme-option:hover,
+.titlebar-theme-option[data-highlighted],
+.titlebar-theme-option:focus-visible {
   background: var(--surface-hover);
   border-color: var(--border-hover);
   color: var(--text-strong);
+  outline: none;
 }
 
 .titlebar-theme-option[data-active="true"] {

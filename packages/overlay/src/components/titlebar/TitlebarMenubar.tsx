@@ -561,28 +561,30 @@ export function TitlebarMenubar() {
 
                 <Show when={menu.id === "view"}>
                   <MenuGroup title={t("titlebar.menu.view")}>
-                    <div
+                    <Menubar.RadioGroup
                       class="titlebar-theme-options titlebar-theme-options-menubar"
-                      role="radiogroup"
                       aria-label={t("settings.theme.label")}
+                      value={settingsStore.theme}
+                      onChange={setTheme}
                     >
                       <For each={themeOptions}>
                         {(item) => (
-                          <button
+                          <Menubar.RadioItem
+                            as="button"
                             type="button"
                             class="titlebar-theme-option"
-                            role="radio"
-                            aria-checked={settingsStore.theme === item.id}
+                            value={item.id}
+                            textValue={t(`settings.theme.${item.i18nSlug}`)}
+                            closeOnSelect={false}
                             data-active={settingsStore.theme === item.id ? "true" : "false"}
                             data-testid={`titlebar-theme-${item.id}`}
-                            onClick={() => setTheme(item.id)}
                           >
                             <span class="titlebar-theme-option-swatch" data-theme={item.id} aria-hidden="true" />
                             <span class="titlebar-theme-option-label">{t(`settings.theme.${item.i18nSlug}`)}</span>
-                          </button>
+                          </Menubar.RadioItem>
                         )}
                       </For>
-                    </div>
+                    </Menubar.RadioGroup>
                     <MenuItem
                       onClick={() => setLocale(settingsStore.locale === "zh-CN" ? "en-US" : "zh-CN")}
                       meta={settingsStore.locale}
