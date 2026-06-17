@@ -2434,3 +2434,50 @@ LINE:
 - Ptolemy identified the first observable failure as `undefined !== null` in `processExited(...)`, and warned that patching only that pre-check would leave the missing event-listener contract.
 - Ptolemy confirmed TypeScript is the built-in affected LSP because it goes through `spawnSupervisedStdio(...)`; most other LSPs use `spawnStdio(...)` and return real child processes.
 - Ptolemy recommended boundary normalization plus a regression that asserts shutdown disposes the supervised handle; the final implementation and test use that shape.
+
+## Batch P1-AK: BH-039 Bus dispatch must isolate synchronous subscriber failures
+
+### Findings
+
+- BH-039 targets `packages/opencorvus/src/bus/index.ts::dispatch(...)`.
+- `dispatch(...)` already wraps returned promises with timeout and `.catch(...)`, so asynchronous subscriber rejection and timeout are observable through the bus warning log without rejecting `Bus.publish(...)`.
+- The synchronous call `const result = sub(payload)` happens before that wrapper is installed. A subscriber that throws synchronously aborts the dispatch loop, skips later subscribers for the same event, and makes `Bus.publish(...)` reject.
+- This violates the bus fan-out contract: one subscriber failure must not prevent remaining subscribers from seeing the event.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/bus/index.ts::publish(...)` builds the payload, starts `dispatch(payload)`, emits the global bridge event, and returns the dispatch promise.
+- `packages/opencorvus/src/bus/index.ts::dispatch(...)` fans out to exact-type subscribers and wildcard subscribers.
+- `packages/opencorvus/src/bus/index.ts::withTimeout(...)` owns async subscriber timeout handling.
+- `packages/opencorvus/src/bus/index.ts::raw(...)` registers exact and wildcard callbacks.
+- `packages/opencorvus/test/bus/bus.test.ts` covers subscribe/unsubscribe, wildcard subscribers, payload validation, notification metadata, and once semantics, but not synchronous subscriber failure isolation.
+- Bus subscribers are broad: session status, message bridge, scheduler, executor event streams, MCP browser notifications, PTY lifecycle, and route tests all depend on a single process-global fan-out path.
+
+### Fix Shape
+
+- Move subscriber invocation into the same isolated promise path used for async failures.
+- A synchronous throw should become a rejected promise that the existing catch logs as `subscriber timed out or failed`.
+- Continue dispatching all remaining exact and wildcard subscribers.
+- Keep `Bus.publish(...)` resolving with `Promise.allSettled(...)`; do not add retry, fallback subscriber paths, or a global gate.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/bus/bus.test.ts`.
+- Register a first subscriber that throws synchronously and a second subscriber that records the event.
+- Assert `Bus.publish(...)` resolves and the second subscriber receives the event.
+
+### Verification
+
+- Before the BH-039 fix, the new regression failed because `Bus.publish(TestEvent, ...)` rejected when the first subscriber threw synchronously.
+- While running the full bus suite, `packages/opencorvus/test/bus/bus.test.ts` exposed an existing test-chain break: `packages/opencorvus/src/server/event.ts` no longer exported `Heartbeat`, `payload(...)`, or `globalEnvelope(...)`, and `Bus.publish(...)` no longer parsed payloads before dispatch. This was restored as part of keeping the bus contract test meaningful.
+- Implemented on 2026-06-18: `dispatch(...)` now catches synchronous subscriber throws and routes them through the existing timed subscriber warning path, then continues dispatching remaining subscribers.
+- Focused regression passed: `bun test packages/opencorvus/test/bus/bus.test.ts -t "synchronous subscriber failure" --timeout 30000`.
+- Full bus suite passed: `bun test packages/opencorvus/test/bus/bus.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Bohr confirmed the root cause: the old `dispatch(...)` invoked `sub(payload)` before the timeout/error wrapper was installed, so synchronous throws escaped fan-out.
+- Bohr confirmed the current fix is the minimal no-fallback shape: wrap the subscriber call in `try/catch`, convert sync throws to `Promise.reject(...)`, and reuse the existing `withTimeout(...).catch(...)` warning path.
+- Bohr confirmed the regression covers the required behavior: first subscriber throws, second subscriber records the event, and `Bus.publish(...)` resolves.
