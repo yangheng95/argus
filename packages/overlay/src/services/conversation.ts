@@ -11,7 +11,7 @@ import {
   activeSessionID,
   type BoardSource,
 } from "../store/board"
-import { cardTreeStore } from "../store/card-tree"
+import { cardTreeStore, setHydratedRewindCursor } from "../store/card-tree"
 import { mergeLoadedConversationMessages } from "../store/messages"
 import { hydrateConversationAgentView, resetConversationAgentView } from "../store/conversation-agents"
 import { markSelectedMessageWatermark } from "./selected-stream-cursor"
@@ -152,6 +152,15 @@ function parseMessageWatermark(raw: any): number {
     throw new Error(`conversation messageWatermark invalid: ${JSON.stringify(raw)}`)
   }
   return Math.floor(value)
+}
+
+function parseRewindCursor(raw: any): number | null {
+  if (raw === null || raw === undefined) return null
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`conversation board rewindCursor invalid: ${JSON.stringify(raw)}`)
+  }
+  return value
 }
 
 function sourceKey(source: BoardSource): string {
@@ -318,6 +327,7 @@ export async function hydrateConversation(
         : { cursor: 0, latestSequence: 0, complete: true, limit: CONVERSATION_HISTORY_PAGE_LIMIT, sinceTimestamp: null }
     const history = parseHistoryState(data?.history, CONVERSATION_HISTORY_PAGE_LIMIT)
     const messageWatermark = parseMessageWatermark(data?.messageWatermark)
+    const rewindCursor = parseRewindCursor((board as any).rewindCursor)
     const mergedMessages = mergeLoadedConversationMessages(timeline, transcript)
     const lastSequence = source.kind === "task" ? requireNonnegativeInteger(data?.lastSequence, "lastSequence") : 0
 
@@ -334,6 +344,7 @@ export async function hydrateConversation(
     }
     setBoardUpdatedAt(Date.now())
     hydrateConversationView(view, mergedMessages)
+    setHydratedRewindCursor(rewindCursor)
     hydrateConversationAgentView(sourceKey(source), agentView)
     markSelectedMessageWatermark(messageWatermark)
     historySource = source
@@ -395,11 +406,13 @@ export async function mergeLatestConversationTail(
     const view = requireObject(data?.view, "view")
     const agentView = requireObject(data?.agentView ?? data?.view, "agentView")
     const messageWatermark = parseMessageWatermark(data?.messageWatermark)
+    const rewindCursor = parseRewindCursor((board as any).rewindCursor)
     requireNonnegativeInteger(data?.lastSequence, "lastSequence")
 
     setBoardData(board)
     setBoardUpdatedAt(Date.now())
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    setHydratedRewindCursor(rewindCursor)
     hydrateConversationAgentView(sourceKey({ kind: "task", id: selectedTaskID }), agentView)
     markSelectedMessageWatermark(messageWatermark)
     for (const event of events) {

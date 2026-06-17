@@ -1,7 +1,7 @@
 import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js"
 
 import type { CardNode } from "../store/card-tree"
-import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree"
+import { cardTreeStore } from "../store/card-tree"
 import { boardStore, rootTaskSessionID, activeTaskID } from "../store/board"
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import {
@@ -210,7 +210,6 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   const onRewind = async (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => {
     const taskID = activeTaskID()
     if (!taskID) return
-    pruneCardsAfterCursor(cursorTime)
     try {
       const response = await apiRequest<unknown>(`task/${encodeURIComponent(taskID)}/rewind`, {
         method: "POST",

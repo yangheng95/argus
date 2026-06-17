@@ -375,6 +375,14 @@ function resetCenterWorkbenchToFocusedPanel(activity: PrimaryLeftActivity): void
   })
 }
 
+function focusTaskPanel(): void {
+  resetCenterWorkbenchToFocusedPanel("tasks")
+  setSelectedLeftActivity("tasks")
+  setSelectedLeftPanelActivity("tasks")
+  setMissionLauncherActive(false)
+  setAssistantLauncherActive(false)
+}
+
 function hasWorkspaceDiffTarget(): boolean {
   return !!untrack(workspaceTarget).filePath
 }
@@ -458,11 +466,7 @@ function isMissionSessionSource(): boolean {
 }
 
 function selectMissionTask(taskID: string): void {
-  setMissionLauncherActive(false)
-  setAssistantLauncherActive(false)
-  resetCenterWorkbenchToFocusedPanel("tasks")
-  setSelectedLeftActivity("tasks")
-  setSelectedLeftPanelActivity("tasks")
+  focusTaskPanel()
   void selectTask(taskID)
 }
 
@@ -511,7 +515,7 @@ async function openMissionSession(result: MissionWakeResult): Promise<void> {
 }
 
 function selectTaskFromTaskList(taskID: string): void {
-  if (activeTaskID() !== taskID) resetCenterWorkbenchToFocusedPanel("tasks")
+  focusTaskPanel()
   void selectTask(taskID)
 }
 
@@ -1899,6 +1903,9 @@ void (async () => {
     await initApp({
       onSettingsLoaded: () => {
         setSettingsHydrated(true)
+      },
+      onConnected: () => {
+        if (activeTaskID()) focusTaskPanel()
       },
     })
     renderAboutVersion()

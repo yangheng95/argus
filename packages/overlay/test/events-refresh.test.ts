@@ -9,12 +9,15 @@ mock.module("../src/utils/icon-html", () => ({
   },
 }))
 
-const { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } = await import("../src/services/events")
+const { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification, __resetEventTimersForTest } = await import(
+  "../src/services/events"
+)
 const { boardStore, loadTasks, setBoardStore } = await import("../src/store/board")
 const { appStore, setAppStore } = await import("../src/store/app")
 const { resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
 const { sessionConfigRefreshToken } = await import("../src/services/config")
+const { configure } = await import("../src/services/api")
 const { HOST_CAPABILITIES, __setHostTransportForTest } = await import("../src/services/host-transport")
 const { resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor")
 
@@ -23,6 +26,8 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
 }
 
+const CONFIG_REFRESH_DIRECTORY = "D:/overlay/config-refresh"
+
 function fakeConfigTransport(paths: string[]): HostTransport {
   return {
     kind: "tauri",
@@ -30,7 +35,12 @@ function fakeConfigTransport(paths: string[]): HostTransport {
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       paths.push(req.path)
       if (req.path === "config") {
+        expect(req.query?.directory).toBe(CONFIG_REFRESH_DIRECTORY)
         return { status: 200, ok: true, headers: {}, body: { model: "openai/coalesced" } as T }
+      }
+      if (req.path === "channel") {
+        expect(req.query?.directory).toBe(CONFIG_REFRESH_DIRECTORY)
+        return { status: 200, ok: true, headers: {}, body: [] as T }
       }
       if (req.path === "provider") {
         return { status: 200, ok: true, headers: {}, body: { all: [] } as T }
@@ -38,7 +48,7 @@ function fakeConfigTransport(paths: string[]): HostTransport {
       if (req.path === "provider/auth") {
         return { status: 200, ok: true, headers: {}, body: {} as T }
       }
-      if (req.path === "channel" || req.path === "config/prompt") {
+      if (req.path === "config/prompt") {
         return { status: 200, ok: true, headers: {}, body: [] as T }
       }
       throw new Error(`unexpected route ${req.path}`)
@@ -96,8 +106,10 @@ function selectTaskForTest(taskID: string): void {
 }
 
 afterEach(() => {
+  __resetEventTimersForTest()
   mock.clearAllMocks()
   __setHostTransportForTest(undefined)
+  configure({ directory: "" })
   resetSelectedLiveCursor()
   selectTaskForTest("")
   setBoardStore("board", null)
@@ -894,6 +906,7 @@ test("config.changed SSE burst coalesces into one config refresh", async () => {
   resetWriter()
   const paths: string[] = []
   __setHostTransportForTest(fakeConfigTransport(paths))
+  configure({ directory: CONFIG_REFRESH_DIRECTORY })
   const beforeToken = sessionConfigRefreshToken()
 
   expect(routeSSEEvent({ type: "config.changed" })).toBe(true)

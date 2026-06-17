@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 import type {
@@ -10,15 +12,20 @@ import type {
 } from "../src/services/host-transport"
 
 const { setBoardStore } = await import("../src/store/board")
-const { cardTreeStore } = await import("../src/store/card-tree")
-const { recoverSelectedTaskConversation } = await import("../src/services/selected-task-recovery")
-const { routeSSEEvent, handleEventStreamEvent } = await import("../src/services/events")
+const { cardTreeStore, pruneCardsAfterCursor } = await import("../src/store/card-tree")
+const { recoverSelectedTaskAfterRewindClear, recoverSelectedTaskConversation } = await import(
+  "../src/services/selected-task-recovery"
+)
+const { routeSSEEvent, handleEventStreamEvent, __resetEventTimersForTest } = await import("../src/services/events")
 const { startSSE, stopSSE } = await import("../src/services/sse")
 const { __setHostTransportForTest } = await import("../src/services/host-transport")
 const { resetWriter } = await import("../src/services/tree-writer")
 const { markSelectedMessageWatermark, resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor")
+const { setLocaleData } = await import("../src/utils/i18n")
 const { __resetConversationRecoveryDiagnosticsSinkForTest, __setConversationRecoveryDiagnosticsSinkForTest } =
   await import("../src/services/refresh-diagnostics")
+
+setLocaleData("en-US", JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")))
 
 function fakeTransport(opts: {
   request: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>
@@ -77,6 +84,7 @@ function conversationPayload(taskID: string, transcript: any[] = [], view = { se
 }
 
 afterEach(() => {
+  __resetEventTimersForTest()
   stopSSE()
   __setHostTransportForTest(undefined)
   __resetConversationRecoveryDiagnosticsSinkForTest()
@@ -256,6 +264,103 @@ test("selected-task recovery restarts the stream from the current sequence witho
       taskID: "tsk_atomic",
       source: "selected-task-recovery",
       resumeSequence: 9,
+    }),
+  ])
+})
+
+test("rewind clear recovery hydrates the authoritative conversation before restarting the stream", async () => {
+  const streams: StreamOpenRequest[] = []
+  const requests: string[] = []
+  const closeCalls = { count: 0 }
+  const diagnostics: any[] = []
+  const transcript = [
+    {
+      info: {
+        id: "msg_tail_restored",
+        sessionID: "ses_tail_restored",
+        role: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        agent: "orchestrator",
+        time: { created: 1_779_000_100_000 },
+      },
+      parts: [
+        {
+          id: "part_tail_restored",
+          sessionID: "ses_tail_restored",
+          messageID: "msg_tail_restored",
+          type: "text",
+          text: "RW tail restored after clear.",
+        },
+      ],
+    },
+  ]
+  const view = {
+    sessions: [
+      {
+        sessionID: "ses_tail_restored",
+        stage: "orchestrator",
+        messageIDs: ["msg_tail_restored"],
+        firstMessageTime: 1_779_000_100_000,
+        lastMessageTime: 1_779_000_100_000,
+        placement: "top_level",
+      },
+    ],
+  }
+
+  __setConversationRecoveryDiagnosticsSinkForTest((_prefix, record) => {
+    diagnostics.push(record)
+  })
+  __setHostTransportForTest(
+    fakeTransport({
+      streams,
+      closeCalls,
+      request(req) {
+        requests.push(req.path)
+        expect(req.query?.tail_limit).toBe("80")
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: conversationPayload("tsk_rewind_clear", transcript, view),
+        }
+      },
+    }),
+  )
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_rewind_clear" })
+  setBoardStore("taskSequence", 2)
+  startSSE({ kind: "task", id: "tsk_rewind_clear" }, 2)
+  pruneCardsAfterCursor(1_779_000_050_000)
+  expect(cardTreeStore.rewindCursor).toBe(1_779_000_050_000)
+
+  await expect(recoverSelectedTaskAfterRewindClear("task rewind cleared", "tsk_rewind_clear")).resolves.toBe(5)
+
+  const restored = Object.values(cardTreeStore.cards).find((card: any) =>
+    card?.parts?.some((part: any) => String(part.text || "").includes("RW tail restored after clear.")),
+  )
+  expect(requests).toEqual(["task/tsk_rewind_clear/conversation"])
+  expect(closeCalls.count).toBe(1)
+  expect(streams).toEqual([
+    { path: "task/tsk_rewind_clear/events", query: { after: "2", after_live: "0" } },
+    { path: "task/tsk_rewind_clear/events", query: { after: "5", after_live: "0" } },
+  ])
+  expect(cardTreeStore.rewindCursor).toBe(null)
+  expect(restored).toBeDefined()
+  expect(diagnostics).toEqual([
+    {
+      event: "conversation-recovery.started",
+      channel: "rewind-clear",
+      reason: "task rewind cleared",
+      taskID: "tsk_rewind_clear",
+      source: "selected-task-recovery",
+    },
+    expect.objectContaining({
+      event: "conversation-recovery.succeeded",
+      channel: "rewind-clear",
+      reason: "task rewind cleared",
+      taskID: "tsk_rewind_clear",
+      source: "selected-task-recovery",
+      resumeSequence: 5,
     }),
   ])
 })
