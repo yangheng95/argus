@@ -2060,3 +2060,41 @@ LINE:
 - Confucius confirmed BH-029 is fixed in the dirty worktree by the queue-time convergence path.
 - Confucius identified all automatic queue advancement callers as affected and confirmed `queue=false` and `/task/:taskID/start-now` are explicit bypass/override semantics, not this bug's fix path.
 - Confucius recommended the current-process/live-owner negative regression, which was added before final verification.
+
+## Batch P1-AC: BH-030 open tool orphan detection must filter current owners before prompt cap
+
+### Findings
+
+- BH-030 targets `describe.ts::listOpenToolCallsWithoutCurrentOwner(...)`.
+- Current code queries open tool parts ordered newest-first with `LIMIT 5`, then filters out sessions whose `SessionStatus` is `streaming` or `retry`.
+- If the latest five open tool parts are still owned by the current process, a sixth older stale open tool call is dropped before the owner filter and never reaches the orchestrator prompt.
+- The stale open tool projection is read-only execution evidence. The fix must stay in the describe projection and must not mutate task/session/message state.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/describe.ts` owns `listOpenToolCallsWithoutCurrentOwner(...)`, `describeTask(...)`, and `renderTaskDescription(...)`.
+- `packages/opencorvus/src/session/status.ts` owns current-process session status facts used to exclude live `streaming`/`retry` sessions.
+- `packages/opencorvus/src/session/session.sql.ts` owns `part` rows and tool-part persisted status.
+- `packages/opencorvus/test/engine/describe-stream-error.test.ts` already covers stale open tool projection and current-process exclusion.
+- `specs/operator-wake-open-tool-facts-2026-06-17.md` defines the read-only boundary: describe surfaces orphaned open tool facts; startup convergence must not fail run-less active tasks merely because they have open tool parts.
+
+### Fix Shape
+
+- Query enough open tool candidates to survive current-process filtering, then apply `OPEN_TOOL_CALL_PROMPT_CAP` after filtering.
+- Keep the final rendered list capped at `OPEN_TOOL_CALL_PROMPT_CAP`.
+- Do not push current-process filtering into SQL because `SessionStatus` is in-memory process state, not a durable table.
+- Do not add task lifecycle mutation, synthetic tool results, or a queue/runtime gate.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/engine/describe-stream-error.test.ts`.
+- Seed five newest current-process `streaming` open tool parts and one older stale open tool part; assert the stale tool is still projected and rendered.
+
+### Verification
+
+- The cap-order regression failed before the implementation because `desc.open_tool_calls_without_current_owner` was `undefined` when the stale open tool was sixth after five current-process open tools.
+- Implemented on 2026-06-18: `listOpenToolCallsWithoutCurrentOwner(...)` now reads open tool candidates, filters current-process `streaming` and `retry` sessions through `SessionStatus`, and only then applies `OPEN_TOOL_CALL_PROMPT_CAP`.
+- Added a negative regression proving current-process `retry` open tools are excluded alongside `streaming`.
+- `bun test packages/opencorvus/test/engine/describe-stream-error.test.ts -t "describeTask.open_tool_calls_without_current_owner" --timeout 30000` passed with 3 tests.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- Independent agent Dirac reviewed the dirty worktree, confirmed BH-030 is fixed by moving the cap after current-process filtering, and recommended the `retry` negative coverage that was added before final verification.
