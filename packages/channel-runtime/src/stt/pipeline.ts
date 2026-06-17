@@ -1,11 +1,10 @@
-import type { AudioBuffer, STTConfig, STTProvider, STTResult } from "./types"
-
-const DEFAULT_MAX_FILE_SIZE = 25 * 1024 * 1024 // 25MB
+import type { AudioBuffer, AudioSource, STTConfig, STTProvider, STTResult } from "./types"
+import { assertSTTAudioSize, DEFAULT_STT_MAX_FILE_SIZE_BYTES } from "./limits"
 
 export class STTPipeline {
   private config: STTConfig
   private registry = new Map<string, STTProvider>()
-  private available: STTProvider[] = []
+  private provider?: STTProvider
 
   constructor(config: STTConfig) {
     this.config = config
@@ -16,54 +15,49 @@ export class STTPipeline {
     return this
   }
 
-  /** Probe each registered provider and build the prioritized fallback chain. */
+  /** Probe the configured provider and fail if it is unavailable. */
   async init(): Promise<void> {
-    this.available = []
-    for (const name of this.config.providers) {
-      const provider = this.registry.get(name)
-      if (!provider) {
-        console.warn(`[STT] Provider "${name}" not registered, skipping`)
-        continue
-      }
-      try {
-        if (await provider.isAvailable()) {
-          this.available.push(provider)
-          console.log(`[STT] Provider "${name}" available`)
-        } else {
-          console.warn(`[STT] Provider "${name}" not available`)
-        }
-      } catch (err) {
-        console.warn(`[STT] Provider "${name}" availability check failed:`, err)
-      }
+    this.provider = undefined
+    const name = this.config.provider.trim()
+    if (!name) {
+      throw new Error("[STT] STT_PROVIDER must name one provider.")
     }
-    console.log(`[STT] Pipeline initialized: ${this.available.map((p) => p.name).join(" → ") || "(none)"}`)
+    const provider = this.registry.get(name)
+    if (!provider) {
+      throw new Error(`[STT] Provider "${name}" is not registered.`)
+    }
+    if (!(await provider.isAvailable())) {
+      throw new Error(`[STT] Provider "${name}" is not available.`)
+    }
+    this.provider = provider
+    console.log(`[STT] Pipeline initialized: ${provider.name}`)
   }
 
   get isAvailable(): boolean {
-    return this.available.length > 0
+    return Boolean(this.provider)
   }
 
-  /** Transcribe audio, falling back through providers on failure. Returns null if all fail. */
-  async transcribe(audio: AudioBuffer): Promise<STTResult | null> {
-    const maxSize = this.config.maxFileSizeBytes ?? DEFAULT_MAX_FILE_SIZE
-    if (audio.size > maxSize) {
-      console.warn(
-        `[STT] Audio too large (${(audio.size / 1024 / 1024).toFixed(1)}MB > ${(maxSize / 1024 / 1024).toFixed(0)}MB limit)`,
-      )
-      return null
+  /** Transcribe audio with the configured provider. */
+  async transcribe(audio: AudioSource): Promise<STTResult> {
+    if (!this.provider) {
+      throw new Error("[STT] Pipeline is not initialized.")
     }
-
-    for (const provider of this.available) {
-      try {
-        const result = await provider.transcribe(audio, { language: this.config.language })
-        console.log(`[STT] "${provider.name}" transcribed in ${result.durationMs}ms: "${result.text.slice(0, 80)}"`)
-        return result
-      } catch (err) {
-        console.warn(`[STT] "${provider.name}" failed, trying next:`, err)
-      }
+    const maxSize = this.config.maxFileSizeBytes ?? DEFAULT_STT_MAX_FILE_SIZE_BYTES
+    if (audio.size !== undefined) {
+      assertSTTAudioSize(audio.size, maxSize)
     }
+    const data = await audio.read(maxSize)
+    const audioBuffer: AudioBuffer = {
+      data,
+      mime: audio.mime,
+      filename: audio.filename,
+      size: data.length,
+      duration: audio.duration,
+    }
+    assertSTTAudioSize(audioBuffer.size, maxSize)
 
-    console.error("[STT] All providers failed")
-    return null
+    const result = await this.provider.transcribe(audioBuffer, { language: this.config.language })
+    console.log(`[STT] "${this.provider.name}" transcribed in ${result.durationMs}ms: "${result.text.slice(0, 80)}"`)
+    return result
   }
 }

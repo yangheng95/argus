@@ -178,7 +178,7 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
   const { DingTalkAdapter } = await import("../../../channel-runtime/src/adapters/dingtalk")
   const { QQAdapter } = await import("../../../channel-runtime/src/adapters/qq")
   const { applyDashscopeRuntime } = await import("../../../channel-runtime/src/dashscope")
-  const { STTPipeline } = await import("../../../channel-runtime/src/stt/pipeline")
+  const { createConfiguredSTT } = await import("../../../channel-runtime/src/stt/setup")
   const { VisionPipeline } = await import("../../../channel-runtime/src/vision")
 
   const dashscope = await applyDashscopeRuntime()
@@ -191,16 +191,9 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
     sharedFile: process.env.OPENCORVUS_SHARED_SESSION_FILE,
   })
 
-  // STT pipeline (best-effort, no hard failure)
-  try {
-    const sttPipeline = new STTPipeline({
-      providers: (process.env.STT_PROVIDERS ?? "groq,openai-whisper,deepgram,google-gemini,local-cli").split(","),
-      language: process.env.STT_LANGUAGE,
-    })
-    await sttPipeline.init().catch(() => undefined)
+  const sttPipeline = await createConfiguredSTT(env)
+  if (sttPipeline) {
     runtime.setSTT(sttPipeline)
-  } catch {
-    /* STT optional */
   }
 
   // Vision pipeline (optional)

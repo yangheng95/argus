@@ -284,20 +284,20 @@ export class ChannelRuntime {
         await adapter.sendMessage(msg.channel, msg.thread, notice)
         if (!text) return
       } else {
-        const result = await this.stt.transcribe(msg.audio)
-        if (result) {
+        try {
+          const result = await this.stt.transcribe(msg.audio)
           const prefix = `[Voice message transcript]: ${result.text}`
           text = text ? `${prefix}\n\n${text}` : prefix
           console.log(`[ChannelRuntime] Transcribed voice (${result.provider}, ${result.durationMs}ms)`)
-        } else {
-          const notice = "Failed to transcribe voice message."
+        } catch (error) {
+          const notice = `Failed to transcribe voice message: ${String(error)}`
           this.mirror("system", notice, {
             platform: msg.platform,
             channel: msg.channel,
             thread: msg.thread,
           })
           await adapter.sendMessage(msg.channel, msg.thread, notice)
-          if (!text) return
+          return
         }
       }
     }

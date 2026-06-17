@@ -1,4 +1,5 @@
 import { App } from "@slack/bolt"
+import { createHttpAudioSource } from "./audio-download"
 import type { AudioAttachment, ChannelAdapter, MessageHandler } from "../adapter"
 
 const DEDUP_MAX_SIZE = 500
@@ -55,7 +56,7 @@ export class SlackAdapter implements ChannelAdapter {
             mimetype: string
             url_private: string
             name?: string
-            size: number
+            size?: number
             duration_ms?: number
           }>
         | undefined
@@ -63,26 +64,14 @@ export class SlackAdapter implements ChannelAdapter {
       if (files) {
         const audioFile = files.find((f) => f.mimetype?.startsWith("audio/"))
         if (audioFile) {
-          try {
-            const res = await fetch(audioFile.url_private, {
-              headers: { Authorization: `Bearer ${this.token}` },
-              signal: AbortSignal.timeout(30_000),
-            })
-            if (res.ok) {
-              const buffer = Buffer.from(await res.arrayBuffer())
-              audio = {
-                data: buffer,
-                mime: audioFile.mimetype,
-                filename: audioFile.name,
-                size: buffer.length,
-                duration: audioFile.duration_ms ? audioFile.duration_ms / 1000 : undefined,
-              }
-            } else {
-              console.error(`[Slack] Failed to download audio: ${res.status}`)
-            }
-          } catch (err) {
-            console.error("[Slack] Audio download error:", err)
-          }
+          audio = createHttpAudioSource({
+            url: audioFile.url_private,
+            headers: { Authorization: `Bearer ${this.token}` },
+            mime: audioFile.mimetype,
+            filename: audioFile.name,
+            size: audioFile.size,
+            duration: audioFile.duration_ms ? audioFile.duration_ms / 1000 : undefined,
+          })
         }
       }
 
