@@ -339,27 +339,28 @@ function listOpenToolCallsWithoutCurrentOwner(task: TaskRow): OpenToolCallDesc[]
       WHERE json_extract(p.data, '$.type') = 'tool'
         AND json_extract(p.data, '$.state.status') NOT IN ('completed', 'error')
       ORDER BY p.time_created DESC, p.id DESC
-      LIMIT ${OPEN_TOOL_CALL_PROMPT_CAP}
     `),
   )
 
-  return rows.flatMap((row) => {
-    const currentStatus = SessionStatus.get(row.session_id)
-    if (currentStatus.type === "streaming" || currentStatus.type === "retry") return []
-    if (!row.tool_name || !row.call_id || !row.status) return []
-    return [
-      {
-        time_created: row.time_created,
-        session_id: row.session_id,
-        session_kind: row.session_kind,
-        message_id: row.message_id,
-        part_id: row.part_id,
-        tool_name: row.tool_name,
-        call_id: row.call_id,
-        status: row.status,
-      },
-    ]
-  })
+  return rows
+    .flatMap((row) => {
+      const currentStatus = SessionStatus.get(row.session_id)
+      if (currentStatus.type === "streaming" || currentStatus.type === "retry") return []
+      if (!row.tool_name || !row.call_id || !row.status) return []
+      return [
+        {
+          time_created: row.time_created,
+          session_id: row.session_id,
+          session_kind: row.session_kind,
+          message_id: row.message_id,
+          part_id: row.part_id,
+          tool_name: row.tool_name,
+          call_id: row.call_id,
+          status: row.status,
+        },
+      ]
+    })
+    .slice(0, OPEN_TOOL_CALL_PROMPT_CAP)
 }
 
 // ---------------------------------------------------------------------------
