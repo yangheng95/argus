@@ -800,3 +800,44 @@ LINE:
 - Focused tests passed: `bun test packages/opencorvus/test/server/export-routes.test.ts packages/opencorvus/test/server/task-export-retired.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
 - Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
+
+## Batch P1-K: session artifact read route project ownership
+
+### Findings
+
+- BH-018: `GET /session/:sessionID/todo`, `GET /experimental/task-plan?sessionId=...`, and `GET /experimental/scratchpad?sessionId=...` read session-owned artifacts directly from caller-supplied session IDs.
+- The project-scoped route middleware has already selected `Instance.project.id`, but these handlers do not prove the requested session belongs to that project before calling global artifact readers.
+- `Todo.get`, `TaskPlan.list`, and `Scratchpad.get` are session-local storage primitives and intentionally do not receive a project ID; the HTTP routes are the untrusted boundary.
+
+### Call-point Inventory
+
+- `Todo.get(sessionID)` is used by the session todo route, todo read tool, session compaction, and ACP transcript mapping. Only the route accepts arbitrary user-supplied session IDs outside an existing session context.
+- `TaskPlan.list(sessionID)` is used by the experimental task-plan route, planner tool, and `TaskPlan.toMarkdown`; only the route accepts a query `sessionId` from HTTP callers.
+- `Scratchpad.get(sessionID)` is used by the experimental scratchpad route, planner tool, scratchpad append/system-prompt helpers, and compaction; only the route accepts a query `sessionId` from HTTP callers.
+- `Session.getInProject({ sessionID, projectID })` is the existing single-session project ownership primitive introduced for BH-016 and reused by BH-017.
+
+### Fix Shape
+
+- Before each artifact read route calls `Todo.get`, `TaskPlan.list`, or `Scratchpad.get`, call `Session.getInProject({ sessionID, projectID: Instance.project.id })`.
+- Preserve the success payloads for owned sessions and return 404 for missing or foreign sessions.
+- Do not add artifact-level fallback reads, compatibility query parameters, or allowlists.
+
+### Regression Tests
+
+- Add a `Server.App()` route test with projects A and B. Seed project B with todos, task-plan rows, and scratchpad content.
+- Under project A, request B's todo, task-plan, and scratchpad endpoints and assert 404 with no B marker text in the response.
+- Under project A, seed owned artifacts and assert the same endpoints still return the expected todo/task/scratchpad payloads.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/session-artifact-routes.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Independent agent review confirmed the three vulnerable endpoints are HTTP trust boundaries over session-local artifact stores.
+- Added project ownership checks via `Session.getInProject({ sessionID, projectID: Instance.project.id })` before reading todo, task-plan, or scratchpad rows.
+- Focused tests passed: `bun test packages/opencorvus/test/server/session-artifact-routes.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+- Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
