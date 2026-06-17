@@ -49,7 +49,9 @@ test("main.tsx mounts Mission through the left activity system", () => {
     'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
   )
   expect(MAIN).toContain('mission: "leftPanelMissions"')
-  expect(MAIN).toContain('mission: "mission.title"')
+  expect(MAIN).not.toContain("LEFT_ACTIVITY_TITLE_KEYS")
+  expect(MAIN).toContain("const titleKey = activityDefinition.labelKey")
+  expect(MAIN).toContain('taskActions.dataset.i18nAriaLabel = titleKey')
   expect(MAIN).toContain('document.getElementById("missionListPanel")')
   expect(MAIN).toContain("<Mission")
   expect(MAIN).toContain("refreshToken={missionSharedRefreshToken()}")

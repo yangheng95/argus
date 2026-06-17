@@ -419,10 +419,16 @@ test(
         await page.evaluate(() => {
           const active = (selector: string) => document.querySelector<HTMLElement>(selector)?.dataset.active ?? ""
           const display = (selector: string) => getComputedStyle(document.querySelector<HTMLElement>(selector)!).display
+          const leftHeaderActions = document.querySelector<HTMLElement>("#leftPanelTaskActions")
           return {
             leftTasks: active("#leftPanelTasks"),
             leftMission: active("#leftPanelMissions"),
             leftAssistant: active("#leftPanelAssistant"),
+            leftHeaderTitle: document.querySelector<HTMLElement>("#leftPanelTitle")?.textContent ?? "",
+            leftHeaderAriaLabel: leftHeaderActions?.getAttribute("aria-label") ?? "",
+            leftHeaderI18nKey: leftHeaderActions?.dataset.i18nAriaLabel ?? "",
+            leftHeaderActionScope: leftHeaderActions?.dataset.activityActions ?? "",
+            leftHeaderActionsActive: leftHeaderActions?.dataset.active ?? "",
             rightInspector: active("#rightPanelInspector"),
             centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open ?? "",
             centerWorkflow: active("#centerWorkbenchWorkflow"),
@@ -543,6 +549,11 @@ test(
         leftTasks: "false",
         leftMission: "true",
         leftAssistant: "false",
+        leftHeaderTitle: "Mission",
+        leftHeaderAriaLabel: "Mission",
+        leftHeaderI18nKey: "mission.title",
+        leftHeaderActionScope: "mission",
+        leftHeaderActionsActive: "true",
         rightInspector: "false",
         centerOpen: "true",
         centerWorkflow: "true",
@@ -630,6 +641,11 @@ test(
         leftMission: "true",
         leftMissionButton: "true",
         leftTasksButton: "false",
+        leftHeaderTitle: "Mission",
+        leftHeaderAriaLabel: "Mission",
+        leftHeaderI18nKey: "mission.title",
+        leftHeaderActionScope: "mission",
+        leftHeaderActionsActive: "true",
         chatTitle: "Mission",
         selectedSourceKind: "task",
         selectedSourceID: "tsk_side_activity",
@@ -791,6 +807,11 @@ test(
         leftMission: "false",
         leftTasksButton: "true",
         leftMissionButton: "false",
+        leftHeaderTitle: "Recent Tasks",
+        leftHeaderAriaLabel: "Recent Tasks",
+        leftHeaderI18nKey: "task.ledger.title",
+        leftHeaderActionScope: "tasks",
+        leftHeaderActionsActive: "true",
         selectedSourceKind: "task",
         selectedSourceID: "tsk_side_activity",
         chatAttachmentItems: 0,
@@ -816,6 +837,14 @@ test(
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
       await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-row")
+      assertMatchObject(await activeState(), {
+        leftHeaderTitle: "Skills",
+        leftHeaderAriaLabel: "Skills",
+        leftHeaderI18nKey: "skill.title",
+        leftHeaderActionScope: "skill",
+        leftHeaderActionsActive: "false",
+        leftSkillButton: "true",
+      })
       const skillPanelState = await page.evaluate(() => {
         const panel = document.querySelector<HTMLElement>("#leftPanelSkills")!
         const toolbar = panel.querySelector<HTMLElement>(".tool-panel-toolbar")
@@ -1073,6 +1102,11 @@ test(
         leftAssistantButton: "true",
         centerPreview: "false",
         rightPreviewButton: "false",
+        leftHeaderTitle: "Coding Assistant",
+        leftHeaderAriaLabel: "Coding Assistant",
+        leftHeaderI18nKey: "coding_assistant.title",
+        leftHeaderActionScope: "assistant",
+        leftHeaderActionsActive: "true",
         chatTitle: "Chat",
         selectedSourceKind: "session",
         selectedSourceID: "ses_right_sidebar_assistant",
