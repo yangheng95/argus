@@ -27,10 +27,6 @@
   flex: 0 0 var(--ui-collapsed-pane-width);
 }
 
-.sections[data-collapsed="true"] .panel-header-collapse-mount {
-  width: auto;
-}
-
 .sections-content {
   background: var(--inspector-surface);
 }
