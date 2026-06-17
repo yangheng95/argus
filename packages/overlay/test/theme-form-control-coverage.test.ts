@@ -24,8 +24,9 @@
 
 import { describe, expect, test } from "bun:test"
 import { readdirSync, readFileSync, statSync } from "node:fs"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 
+const SRC_ROOT = join(import.meta.dir, "..", "src")
 const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles")
 
 function readCss(rel: string): string {
@@ -42,6 +43,18 @@ function* walkCss(root: string): Iterable<string> {
     if (statSync(abs).isDirectory()) yield* walkCss(abs)
     else if (entry.endsWith(".css")) yield abs
   }
+}
+
+function* walkTsx(root: string): Iterable<string> {
+  for (const entry of readdirSync(root)) {
+    const abs = join(root, entry)
+    if (statSync(abs).isDirectory()) yield* walkTsx(abs)
+    else if (entry.endsWith(".tsx")) yield abs
+  }
+}
+
+function lineNumber(source: string, index: number): number {
+  return source.slice(0, index).split(/\r?\n/).length
 }
 
 describe("dialog top-layer color-scheme inheritance", () => {
@@ -132,6 +145,28 @@ describe("shared Kobalte select popup colors", () => {
   test("app dialog select trigger uses the shared Select trigger chrome", () => {
     expect(appDialogHost).toContain('class="field-input oc-select-trigger app-dialog-input app-dialog-select-trigger"')
     expect(appDialogHost).not.toContain('class="field-input app-dialog-input custom-select app-dialog-select-trigger"')
+  })
+
+  test("all Select.Trigger consumers use the shared trigger primitive", () => {
+    const violations: string[] = []
+
+    for (const file of walkTsx(SRC_ROOT)) {
+      const source = readFileSync(file, "utf8")
+      for (const match of source.matchAll(/<Select\.Trigger\b[\s\S]*?>/g)) {
+        const tag = match[0]
+        if (tag.includes("oc-select-trigger")) continue
+        if (
+          file.endsWith(join("components", "settings", "primitives.tsx")) &&
+          tag.includes("class={triggerClass()}") &&
+          source.includes('props.triggerClass ? `field-input oc-select-trigger ${props.triggerClass}` : "field-input oc-select-trigger"')
+        ) {
+          continue
+        }
+        violations.push(`${relative(SRC_ROOT, file)}:${lineNumber(source, match.index ?? 0)} ${tag.replace(/\s+/g, " ")}`)
+      }
+    }
+
+    expect(violations).toEqual([])
   })
 
   test("native select chrome is not kept as a parallel Select style source", () => {

@@ -86,6 +86,9 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
             .popup-sample .executor-popover,
             .popup-sample .project-worktree-panel,
             .popup-sample .recent-dir-panel,
+            .popup-sample .workspace-terminal-menu,
+            .popup-sample .workspace-editor-menu,
+            .popup-sample .workspace-coding-cli-menu,
             .popup-sample .titlebar-menubar-panel,
             .popup-sample .cmdk-panel {
               position: static;
@@ -139,6 +142,14 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                     </button>
                     <button class="project-worktree-remove" type="button" data-popup-text>×</button>
                   </div>
+                  <div class="project-worktree-row" data-status="active">
+                    <button class="project-worktree-item" type="button">
+                      <span class="project-worktree-name" data-popup-text>main</span>
+                      <span class="project-worktree-path" data-popup-text>C:/repo/main</span>
+                      <span class="project-worktree-branch" data-popup-text>coding-assistant</span>
+                      <span class="project-worktree-state" data-popup-text>Active</span>
+                    </button>
+                  </div>
                   <div class="project-worktree-empty" data-popup-text>No archived worktrees.</div>
                 </div>
               </div>
@@ -164,6 +175,28 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                     </div>
                   </section>
                 </div>
+              </div>
+            </section>
+
+            <section class="popup-sample" data-popup-sample="workspace-launcher-menu">
+              <strong>Workspace Launcher Menus</strong>
+              <div class="workspace-terminal-menu">
+                <button class="workspace-terminal-option" type="button">
+                  <span aria-hidden="true">T</span>
+                  <span class="workspace-terminal-option-label" data-popup-text>Open terminal</span>
+                </button>
+              </div>
+              <div class="workspace-editor-menu">
+                <button class="workspace-editor-option" type="button">
+                  <span aria-hidden="true">E</span>
+                  <span class="workspace-editor-option-label" data-popup-text>Open editor</span>
+                </button>
+              </div>
+              <div class="workspace-coding-cli-menu">
+                <button class="workspace-coding-cli-option" type="button">
+                  <span aria-hidden="true">C</span>
+                  <span class="workspace-coding-cli-option-label" data-popup-text>Open coding CLI</span>
+                </button>
               </div>
             </section>
 
@@ -193,6 +226,11 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                     <span class="cmdk-item-group" data-popup-text>Settings</span>
                     <span class="cmdk-item-label" data-popup-text>Open Skill Market</span>
                     <span class="cmdk-item-hint" data-popup-text>Ctrl+K</span>
+                  </div>
+                  <div class="cmdk-item cmdk-item--active" role="option" aria-selected="true">
+                    <span class="cmdk-item-group" data-popup-text>Workspace</span>
+                    <span class="cmdk-item-label" data-popup-text>Open recent workspace</span>
+                    <span class="cmdk-item-hint" data-popup-text>Enter</span>
                   </div>
                   <div class="cmdk-empty" data-popup-text>No matching commands.</div>
                 </div>
@@ -309,7 +347,14 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
 
     assert.deepEqual(
       result.map((sample) => sample.id),
-      ["executor-popover", "worktree-panel", "recent-directory", "titlebar-menu", "command-palette"],
+      [
+        "executor-popover",
+        "worktree-panel",
+        "recent-directory",
+        "workspace-launcher-menu",
+        "titlebar-menu",
+        "command-palette",
+      ],
     )
 
     for (const sample of result) {
