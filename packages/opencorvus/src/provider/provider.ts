@@ -143,7 +143,7 @@ export namespace Provider {
     return key
   }
 
-  async function hexinApiKey(config: Config.Info) {
+  export async function resolveHexinApiKey(config: Config.Info) {
     const configKey = config.provider?.hexin?.options?.apiKey
     const auth = await Auth.get("hexin")
     return (
@@ -670,7 +670,7 @@ export namespace Provider {
   export async function refreshHexin(): Promise<string[]> {
     const { refreshHexinCache } = await import("./hexin-discovery")
     const cfg = await Config.get()
-    const apiKey = await hexinApiKey(cfg)
+    const apiKey = await resolveHexinApiKey(cfg)
     const models = await refreshHexinCache(apiKey)
     reset()
     return Object.keys(models)

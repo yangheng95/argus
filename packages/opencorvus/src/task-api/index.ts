@@ -174,6 +174,33 @@ function assertTaskProjectIsConcrete(task: TaskRow) {
   })
 }
 
+function assertTaskBelongsToCurrentProject(task: TaskRow) {
+  assertTaskProjectIsConcrete(task)
+  const current = Instance.current()
+  if (!current) return
+  if (task.project_id === current.project.id) return
+  throw new NotFoundError({ message: `Task not found: ${task.id}` })
+}
+
+function requireTaskInCurrentProject(taskID: string): TaskRow {
+  const task = requireTask(taskID)
+  assertTaskBelongsToCurrentProject(task)
+  return task
+}
+
+function requireGoalInCurrentProject(goalID: string): GoalRow {
+  const row = Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get())
+  if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
+  requireTaskInCurrentProject(row.task_id)
+  return row
+}
+
+function requireInteractionInCurrentProject(interactionID: string): InteractionRow {
+  const row = requireInteraction(interactionID)
+  requireTaskInCurrentProject(row.task_id)
+  return row
+}
+
 /**
  * Per-call deadline for `executor.abort()` during cancelTask / abortRun.
  * Mirrorcode and other executors await child-process cooperation; if the
@@ -509,8 +536,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
   source: string
   target?: TaskMessageTargetInput
 }): Promise<{ task: TaskRow; userMessage: { info: Message.User; parts: Message.Part[] }; resumed: boolean }> {
-  const task = requireTask(input.taskID)
-  assertTaskProjectIsConcrete(task)
+  const task = requireTaskInCurrentProject(input.taskID)
   assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
 
   // Append the user message to session history. The describe layer and
@@ -559,7 +585,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
   })
 
   return {
-    task: requireTask(input.taskID),
+    task: requireTaskInCurrentProject(input.taskID),
     userMessage,
     resumed: true,
   }
@@ -1129,7 +1155,7 @@ export namespace EngineService {
 
   export async function getTask(taskID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
-    const task = requireTask(taskID)
+    const task = requireTaskInCurrentProject(taskID)
     const item = listTaskRows([task])[0]
     return viewTask(task, { directory: item?.directory })
   }
@@ -1151,8 +1177,7 @@ export namespace EngineService {
     file: FileRef,
     merge: (prev: FileRef[]) => { next: FileRef[]; reason: string } | null,
   ): Promise<FileRef[]> {
-    const task = requireTask(taskID)
-    assertTaskProjectIsConcrete(task)
+    const task = requireTaskInCurrentProject(taskID)
     const located = AttachmentStore.nameFromUrl(file.url)
     if (!located) {
       throw new Error(`${column}: file.url is not a valid /attachment/<projectID>/<name> reference: ${file.url}`)
@@ -1257,7 +1282,7 @@ export namespace EngineService {
   export async function getProgress(taskID: string) {
     // Do NOT call syncTask here — it triggers synchronous evaluation inside the GET request,
     // which blocks for minutes and causes request timeouts. The poll loop drives state advancement.
-    const task = requireTask(taskID)
+    const task = requireTaskInCurrentProject(taskID)
     const item = listTaskRows([task])[0]
     const plan = findActivePlanForTask(task.id)
     const run = findActiveRunForTask(task.id)
@@ -1289,7 +1314,7 @@ export namespace EngineService {
 
   export async function listRuns(taskID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
-    requireTask(taskID)
+    requireTaskInCurrentProject(taskID)
     return findRuns(taskID).map(viewRun)
   }
 
@@ -1300,7 +1325,7 @@ export namespace EngineService {
 
   export async function getBrief(input: { taskID: string; runID?: string }) {
     // Read-only — poll loop handles state advancement asynchronously.
-    const task = requireTask(input.taskID)
+    const task = requireTaskInCurrentProject(input.taskID)
     return compileBrief({
       taskID: task.id,
       runID: input.runID ?? findActiveRunForTask(task.id)?.id,
@@ -1311,11 +1336,13 @@ export namespace EngineService {
 
   export async function getBoard(taskID: string, _input?: { sync?: boolean }) {
     // Read-only — poll loop handles state advancement asynchronously.
+    requireTaskInCurrentProject(taskID)
     return compileBoard({ taskID })
   }
 
   export async function getBoardTag(taskID: string, _input?: { sync?: boolean }) {
     // Read-only — poll loop handles state advancement asynchronously.
+    requireTaskInCurrentProject(taskID)
     return boardTag({ taskID })
   }
 
@@ -1384,7 +1411,7 @@ export namespace EngineService {
   }
 
   export async function startQueuedTaskNow(taskID: string) {
-    const task = requireTask(taskID)
+    const task = requireTaskInCurrentProject(taskID)
     if (!isTaskQueued(task)) {
       throw new TaskQueueStartError(`Task ${taskID} is not queued`, "not_queued")
     }
@@ -1399,7 +1426,7 @@ export namespace EngineService {
     }
     await startQueuedTaskInCwd(taskID, cwd)
 
-    const updated = requireTask(taskID)
+    const updated = requireTaskInCurrentProject(taskID)
     const status = deriveTaskStatus(updated) as string
     const after = directoryQueueSnapshot(cwd)
     return {
@@ -1473,7 +1500,7 @@ export namespace EngineService {
     traceDir: string
     enabled: boolean
   }> {
-    requireTask(taskID)
+    requireTaskInCurrentProject(taskID)
     const { AgentTrace } = await import("@/trace")
     return {
       ok: true,
@@ -1497,18 +1524,18 @@ export namespace EngineService {
 
   export async function listProtocolEvents(taskID: string) {
     // Read-only — protocol_event is the persisted task event source.
-    requireTask(taskID)
+    requireTaskInCurrentProject(taskID)
     return ProtocolStore.listTaskEvents(taskID)
   }
 
   export async function listTaskInteractions(taskID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
-    requireTask(taskID)
+    requireTaskInCurrentProject(taskID)
     return listInteractions(taskID).map(viewInteraction)
   }
 
   export async function selectTaskChecks(taskID: string, selection: Record<string, boolean>) {
-    const task = requireTask(taskID)
+    const task = requireTaskInCurrentProject(taskID)
     const next = mergeTaskChecks(task.metadata?.checks, selection)
     return writeTaskChecks(task, next)
   }
@@ -1518,13 +1545,12 @@ export namespace EngineService {
     if (selection && Object.keys(selection).length > 0) {
       return selectTaskChecks(taskID, selection)
     }
-    return writeTaskChecks(requireTask(taskID), checks)
+    return writeTaskChecks(requireTaskInCurrentProject(taskID), checks)
   }
 
   export async function updateGoal(goalID: string, input: z.input<typeof UpdateGoalInput>) {
     const body = UpdateGoalInput.parse(input)
-    const row = Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get())
-    if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
+    requireGoalInCurrentProject(goalID)
     updateGoalRow({
       goalID,
       title: body.description,
@@ -1534,15 +1560,13 @@ export namespace EngineService {
   }
 
   export async function deleteGoal(goalID: string) {
-    const row = Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get())
-    if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
+    requireGoalInCurrentProject(goalID)
     deleteGoalRow(goalID)
     return true
   }
 
   export async function deleteTask(taskID: string) {
-    const task = requireTask(taskID)
-    assertTaskProjectIsConcrete(task)
+    const task = requireTaskInCurrentProject(taskID)
     discardQueuedTaskEvent(taskID)
     // Cancel if still active
     if (!isTaskTerminal(task)) {
@@ -1568,8 +1592,7 @@ export namespace EngineService {
   }
 
   export async function updateTaskBudget(taskID: string, budget: z.input<typeof Budget> | null) {
-    const task = requireTask(taskID)
-    assertTaskProjectIsConcrete(task)
+    const task = requireTaskInCurrentProject(taskID)
     const parsed = budget ? budgetRow(budget) : null
     Database.use((db) => db.update(EngineTaskTable).set({ budget: parsed }).where(eq(EngineTaskTable.id, taskID)).run())
     await Bus.publish(Event.TaskUpdated, {
@@ -1581,8 +1604,7 @@ export namespace EngineService {
   }
 
   export async function updateTaskTitle(taskID: string, title: string) {
-    const task = requireTask(taskID)
-    assertTaskProjectIsConcrete(task)
+    const task = requireTaskInCurrentProject(taskID)
     Database.use((db) => db.update(EngineTaskTable).set({ title }).where(eq(EngineTaskTable.id, taskID)).run())
     await Bus.publish(Event.TaskUpdated, {
       taskID,
@@ -1666,11 +1688,11 @@ export namespace EngineService {
 
   export async function replyInteraction(interactionID: string, raw: z.input<typeof ReplyInteractionInput>) {
     const input = ReplyInteractionInput.parse(raw)
-    const row = requireInteraction(interactionID)
+    const row = requireInteractionInCurrentProject(interactionID)
     if (row.payload?.protocol_request === true) {
       await resolveProtocolInteraction(row, input)
       await EngineRuntime.syncTask(row.task_id, hooks())
-      return viewInteraction(requireInteraction(interactionID))
+      return viewInteraction(requireInteractionInCurrentProject(interactionID))
     }
     if (row.request_type === "permission") {
       await PermissionNext.reply({
@@ -1689,16 +1711,16 @@ export namespace EngineService {
       })
     }
     await EngineRuntime.syncTask(row.task_id, hooks())
-    return viewInteraction(requireInteraction(interactionID))
+    return viewInteraction(requireInteractionInCurrentProject(interactionID))
   }
 
   export async function rejectInteraction(interactionID: string, raw: z.input<typeof RejectInteractionInput>) {
     const input = RejectInteractionInput.parse(raw)
-    const row = requireInteraction(interactionID)
+    const row = requireInteractionInCurrentProject(interactionID)
     if (row.payload?.protocol_request === true) {
       await rejectProtocolInteraction(row, input.message)
       await EngineRuntime.syncTask(row.task_id, hooks())
-      return viewInteraction(requireInteraction(interactionID))
+      return viewInteraction(requireInteractionInCurrentProject(interactionID))
     }
     if (row.request_type === "permission") {
       await PermissionNext.reply({
@@ -1712,12 +1734,11 @@ export namespace EngineService {
       await Question.reject(row.external_id)
     }
     await EngineRuntime.syncTask(row.task_id, hooks())
-    return viewInteraction(requireInteraction(interactionID))
+    return viewInteraction(requireInteractionInCurrentProject(interactionID))
   }
 
   export async function cancelTask(taskID: string, options?: CancelTaskOptions) {
-    const task = requireTask(taskID)
-    assertTaskProjectIsConcrete(task)
+    const task = requireTaskInCurrentProject(taskID)
     discardQueuedTaskEvent(taskID)
     const taskDirectory = taskCwd(taskID)
     const decisions = createDecisionLog(taskID)
@@ -1866,8 +1887,7 @@ export namespace EngineService {
   }
 
   export async function retryTask(taskID: string) {
-    const task = requireTask(taskID)
-    assertTaskProjectIsConcrete(task)
+    const task = requireTaskInCurrentProject(taskID)
     const metadata =
       task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
         ? { ...(task.metadata as Record<string, unknown>) }
@@ -1880,12 +1900,11 @@ export namespace EngineService {
         : await updateTask(task, { error: null, metadata }, "Retry requested by operator")
     await reopenActiveRunForOperatorWake(openedTask, "Retry reopened blocked run")
     void dispatchTaskLoop({ taskID, event: { note: OrchestratorEventNote.retry(task) } })
-    return viewTask(requireTask(taskID))
+    return viewTask(requireTaskInCurrentProject(taskID))
   }
 
   export async function recordOperatorNote(taskID: string, note: string) {
-    const task = requireTask(taskID)
-    assertTaskProjectIsConcrete(task)
+    const task = requireTaskInCurrentProject(taskID)
     const run = findActiveRunForTask(task.id)
     const now = Date.now()
     Database.use((db) =>
@@ -1919,16 +1938,15 @@ export namespace EngineService {
     const wakeTask = isTaskFailed(task) ? await reopenFailedTaskFromOperatorMessage(task) : task
     const reopenedRun = await reopenActiveRunForOperatorWake(wakeTask, "Operator note reopened blocked run")
     if (!reopenedRun || reopenedRun.status === run.status) {
-      return { resumed: false, status: reopenedRun?.status ?? deriveTaskStatus(requireTask(taskID)) }
+      return { resumed: false, status: reopenedRun?.status ?? deriveTaskStatus(requireTaskInCurrentProject(taskID)) }
     }
     void dispatchTaskLoop({ taskID: wakeTask.id, event: { note: OrchestratorEventNote.retry(task) } })
-    return { resumed: true, status: deriveTaskStatus(requireTask(taskID)) as string }
+    return { resumed: true, status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string }
   }
 
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
     const input = TaskMessageInput.parse(raw)
-    const task = requireTask(taskID)
-    assertTaskProjectIsConcrete(task)
+    const task = requireTaskInCurrentProject(taskID)
     assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
     if (input.promptProfile) {
       if (!task.session_id) {
@@ -1979,7 +1997,7 @@ export namespace EngineService {
   }
 
   export async function getTaskOperatorModelContext(taskID: string) {
-    const task = requireTask(taskID)
+    const task = requireTaskInCurrentProject(taskID)
     if (!task.session_id) {
       throw new Error(
         `Task ${task.id} has no root session — cannot resolve operator model context; recreate the task or repair task.session_id`,
@@ -2016,7 +2034,7 @@ export namespace EngineService {
       // Deprecated compatibility field: task injection wakes the orchestrator,
       // it does not resume a child executor/session.
       resumed: false,
-      status: deriveTaskStatus(requireTask(taskID)) as string,
+      status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string,
     }
   }
 
@@ -2026,7 +2044,7 @@ export namespace EngineService {
    * 任何任务状态。LLM 失败会抛出错误，调用方自行处理（禁止 fallback）。
    */
   export async function generateFollowup(taskID: string): Promise<{ suggestion: string }> {
-    const task = requireTask(taskID)
+    const task = requireTaskInCurrentProject(taskID)
     const sessionID = task.session_id ?? undefined
     const model = await resolveAgentModel("summary", { sessionID })
     const config = await EffectiveConfig.effective(sessionID ? { sessionID } : undefined)
