@@ -662,12 +662,15 @@ async function main() {
     const page = await context.newPage();
     await page.goto(routeUrl(input.url, input.route), { waitUntil: "networkidle", timeout: 30000 });
     const locator = await findNode(page, input.locator);
-    const count = await locator.count();
-    if (count < 1) throw new Error("Implementation locator did not match any visible element.");
+    const visible = await locator.isVisible().catch(() => false);
+    if (!visible) throw new Error("Implementation locator did not match any visible element.");
     await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
     await page.waitForTimeout(200);
-    const capture = await locator.evaluate((node) => {
-      const rect = node.getBoundingClientRect();
+    const box = await locator.boundingBox().catch(() => null);
+    if (!box || box.width <= 0 || box.height <= 0) {
+      throw new Error("Implementation locator did not match any visible element.");
+    }
+    const capture = await locator.evaluate((node, bbox) => {
       const fullText = (node.innerText || node.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
       const texts = [];
       function add(value) {
@@ -685,15 +688,15 @@ async function main() {
       }
       return {
         bbox: {
-          x: Math.max(0, Math.round(rect.left + window.scrollX)),
-          y: Math.max(0, Math.round(rect.top + window.scrollY)),
-          width: Math.max(1, Math.round(rect.width)),
-          height: Math.max(1, Math.round(rect.height)),
+          x: Math.max(0, Math.round(bbox.x + window.scrollX)),
+          y: Math.max(0, Math.round(bbox.y + window.scrollY)),
+          width: Math.ceil(bbox.width),
+          height: Math.ceil(bbox.height),
         },
         textAnchors: texts.slice(0, 16),
         fullText,
       };
-    });
+    }, box);
     await fs.mkdir(input.outDir, { recursive: true });
     const screenshotPath = path.join(input.outDir, "local-fullpage.png");
     await page.screenshot({ path: screenshotPath, type: "png", fullPage: true });
