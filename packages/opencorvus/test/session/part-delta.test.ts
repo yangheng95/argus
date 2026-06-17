@@ -38,6 +38,7 @@ test("updatePartDelta publishes ephemeral stream deltas without mutating transcr
           input: 0,
           output: 0,
           reasoning: 0,
+          total: 0,
           cache: { read: 0, write: 0 },
         },
       } as any)
@@ -149,6 +150,7 @@ test("updatePart waits for live part event before callers emit deltas", async ()
           input: 0,
           output: 0,
           reasoning: 0,
+          total: 0,
           cache: { read: 0, write: 0 },
         },
       } as any)

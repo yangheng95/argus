@@ -6,7 +6,7 @@ import { Identifier } from "../id/id"
 import { LSP } from "../lsp"
 import { Snapshot } from "@/snapshot"
 import { fn } from "@/util/fn"
-import { Database, eq, desc, inArray } from "@/storage/db"
+import { Database, NotFoundError, and, eq, desc, inArray } from "@/storage/db"
 import { MessageTable, PartTable } from "./session.sql"
 import { ProviderError } from "@/provider/error"
 import { type SystemError } from "bun"
@@ -1109,8 +1109,14 @@ export namespace Message {
       messageID: Identifier.schema("message"),
     }),
     async (input): Promise<WithParts> => {
-      const row = Database.use((db) => db.select().from(MessageTable).where(eq(MessageTable.id, input.messageID)).get())
-      if (!row) throw new Error(`Message not found: ${input.messageID}`)
+      const row = Database.use((db) =>
+        db
+          .select()
+          .from(MessageTable)
+          .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
+          .get(),
+      )
+      if (!row) throw new NotFoundError({ message: `Message not found: ${input.messageID}` })
       const info = { ...row.data, id: row.id, sessionID: row.session_id } as Message.Info
       return {
         info,
