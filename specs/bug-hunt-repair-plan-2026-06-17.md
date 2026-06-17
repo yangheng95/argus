@@ -715,3 +715,48 @@ LINE:
 - Focused tests passed: `bun test packages/opencorvus/test/server/experimental-schedule-routes.test.ts packages/opencorvus/test/server/experimental-schedule-contract.test.ts packages/opencorvus/test/scheduler/cron-service.test.ts packages/opencorvus/test/scheduler/event-service.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus` and `bunx turbo run typecheck --filter=@opencorvus-ai/sdk`.
 - Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
+
+## Batch P1-I: session config route project ownership
+
+### Findings
+
+- BH-016: `packages/opencorvus/src/server/routes/session.ts` accepts a raw `:sessionID` for `GET /session/:sessionID/config` and `PATCH /session/:sessionID/config`.
+- `sessionConfig()` calls global `Session.get(sessionID)` before `EffectiveConfig.base({ sessionID })`; for a foreign session, `EffectiveConfig.base` switches to the foreign session directory and can return that project's effective config.
+- `Session.mergeConfigOverlay()` reads and updates `SessionTable` by session ID only, so the route write path can mutate a foreign session's overlay.
+
+### Call-point Inventory
+
+- Config HTTP routes: `packages/opencorvus/src/server/routes/session.ts` is the only route owner for `session.config.get` and `session.config.update`.
+- Read helper: `sessionConfig(sessionID)` calls `Session.get`, `EffectiveConfig.base`, `Config.Overlay.parse`, and `Config.mergeOverlay`.
+- Write helper: `Session.mergeConfigOverlay()` is called by the session config route, mission route prompt-profile updates, task creation/model updates, task follow-up prompt-profile updates, and tests. All production callers are current-project contexts.
+- `Session.list()` and `Session.children()` already scope by `Instance.project.id`, and `treeInProject` / `childrenInProject` show the existing project-scoped service API pattern.
+- SDK/OpenAPI already model these routes with `directory` query and `sessionID` path only; no generated contract field needs to change.
+
+### Fix Shape
+
+- Add `Session.getInProject({ sessionID, projectID })` as the project-scoped read primitive for a single session row.
+- Add `Session.mergeConfigOverlayInProject({ sessionID, projectID, patch })` and make the existing `Session.mergeConfigOverlay({ sessionID, patch })` delegate to it with `Instance.project.id`, so the write boundary itself constrains the `UPDATE` by both session ID and project ID.
+- Change `sessionConfig()` to take a project ID, load the session with `Session.getInProject`, then resolve the base/effective config only after ownership is proven.
+- Change the GET/PATCH config routes to pass `Instance.project.id`; prompt-profile validation and the final response must use the project-scoped helper.
+- Do not add compatibility lookups, fallback project matching, or route-level allowlists.
+
+### Regression Tests
+
+- Add a `Server.App()` route test with projects A and B. Under project A, `GET /session/<B>/config` returns 404 and does not expose B's overlay or project config.
+- Under project A, `PATCH /session/<B>/config` returns 404 and leaves B's `metadata.configOverlay` unchanged.
+- Confirm valid project A GET/PATCH still works and returns the session origin tree.
+- Add direct service coverage that `Session.mergeConfigOverlay()` under project A rejects a project B session and does not mutate the foreign row.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/session-config-routes.test.ts packages/opencorvus/test/server/session-routes.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Independent agent review confirmed the vulnerable path is route-level raw `sessionID` use plus service-level `mergeConfigOverlay` reading/writing by session ID only.
+- Added project-scoped `Session.getInProject()` and `Session.mergeConfigOverlayInProject()`; the existing `Session.mergeConfigOverlay()` now binds writes to `Instance.project.id` instead of global session ID updates.
+- Focused tests passed: `bun test packages/opencorvus/test/server/session-config-routes.test.ts packages/opencorvus/test/server/session-routes.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+- Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.

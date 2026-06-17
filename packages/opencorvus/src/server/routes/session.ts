@@ -13,6 +13,7 @@ import { PromptProfile } from "@/agent/prompt-profile"
 import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "../../session/prompt"
 import { SessionContext } from "@/session/context"
+import { Instance } from "@/project/instance"
 import { clearRewindCursorForSession } from "@/engine/rewind"
 import { SessionCompaction } from "../../session/compaction"
 import { CompactionHandoff } from "@/session/compaction-handoff"
@@ -115,8 +116,12 @@ function assertNoStoredNull(value: unknown, path = "configOverlay"): void {
   }
 }
 
-async function sessionConfig(sessionID: string): Promise<z.output<typeof SessionConfigResponse>> {
-  const session = await Session.get(sessionID)
+async function sessionConfig(input: {
+  sessionID: string
+  projectID: string
+}): Promise<z.output<typeof SessionConfigResponse>> {
+  const { sessionID, projectID } = input
+  const session = await Session.getInProject({ sessionID, projectID })
   // R5.1 item 2: only a root session (task root or standalone root) owns a
   // config overlay; a child session is rejected (same guard as the write path).
   Session.assertConfigurableRoot(session)
@@ -272,7 +277,12 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        return c.json(await sessionConfig(c.req.valid("param").sessionID))
+        return c.json(
+          await sessionConfig({
+            sessionID: c.req.valid("param").sessionID,
+            projectID: Instance.project.id,
+          }),
+        )
       },
     )
     .patch(
@@ -300,6 +310,8 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const patch = c.req.valid("json")
+        const projectID = Instance.project.id
+        await Session.getInProject({ sessionID, projectID })
         await validateConfigModelReferences(patch, "configOverlay")
         if (typeof patch.prompt_profile?.active === "string") {
           try {
@@ -308,10 +320,10 @@ export const SessionRoutes = lazy(() =>
             return c.json({ error: error instanceof Error ? error.message : String(error) }, 400)
           }
         }
-        await Session.mergeConfigOverlay({ sessionID, patch })
+        await Session.mergeConfigOverlayInProject({ sessionID, projectID, patch })
         Provider.reset()
         Agent.reset()
-        return c.json(await sessionConfig(sessionID))
+        return c.json(await sessionConfig({ sessionID, projectID }))
       },
     )
     .get(
