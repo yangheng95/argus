@@ -163,11 +163,14 @@ describe("ExecutorSelector dual chip bar", () => {
   })
 
   test("Hexin budget CSS belongs to the composer selector surface", () => {
-    expect(CSS).toMatch(/\.executor-budget-row\s*\{/)
-    expect(CSS).toMatch(/\.executor-budget-row\[data-over-budget="true"\]/)
-    expect(CSS).toMatch(/\.executor-budget-row\[data-low-budget="true"\] \.executor-budget-value/)
+    expect(SRC).toContain('class="executor-budget-inline"')
+    expect(SRC).not.toContain('class="executor-budget-row"')
+    expect(CSS).toMatch(/\.executor-budget-inline\s*\{/)
+    expect(CSS).toMatch(/\.executor-budget-inline\[data-over-budget="true"\]/)
+    expect(CSS).toMatch(/\.executor-budget-inline\[data-low-budget="true"\] \.executor-budget-value/)
     expect(CSS).toMatch(/\.executor-budget-value\s*\{[\s\S]*?text-overflow:\s*ellipsis/)
-    expect(CSS).toMatch(/\.executor-budget-error\s*\{[\s\S]*?color:\s*var\(--bad\)/)
+    expect(CSS).not.toMatch(/\.executor-budget-row(?:\s|\.|:|\{|,|\[)/)
+    expect(CSS).not.toMatch(/\.executor-budget-error(?:\s|\.|:|\{|,|\[)/)
     expect(CSS).toMatch(/\.executor-chip-label-row\s*\{[\s\S]*?display:\s*flex/)
     expect(CSS).toMatch(/\.executor-chip-slot\s*\{[\s\S]*?flex-direction:\s*row/)
   })
