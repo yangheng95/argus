@@ -1897,3 +1897,630 @@ LINE:
 
 - Galileo confirmed the dedicated direct-reply route currently has no catch-and-wake fallback: it returns 202 only on success and otherwise lets NamedError statuses surface.
 - Galileo also identified the adjacent `/task/:taskID/message` `target` field. After reviewing the 2026-06-10 and 2026-06-13 build guidance specs, this field is retained as structured task-root guidance metadata rather than treated as a direct-reply bug.
+
+## Batch P1-Z: BH-027 direct-reply attachment failures must not degrade into summary-only task-root messages
+
+### Findings
+
+- BH-027 was recorded against a historical failure path where direct-reply failure became a task-root wake and only forwarded an attachment summary.
+- Current HEAD does not route direct-reply failure through task-root wake.
+- `POST /task/:taskID/session/:sessionID/reply` rejects invalid targets before persistence; even when the request includes `attachments`, the root and child sessions receive no message.
+- Explicit task-root messages still carry attachments structurally: `TaskMessageInput.attachments` are written through `AttachmentStore.write(...)`, appended to `task.attachments`, and persisted as `Message.FilePart` rows by `appendTaskSessionMessage(...)`.
+- `dispatchTaskLoop.event.operatorMessage.attachmentSummary` remains only a scheduler prompt summary and is not the durable attachment source.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/model.ts` owns `TaskMessageInput`, `TaskAttachmentInput`, and `AgentSessionReplyInput`.
+- `packages/opencorvus/src/server/routes/orchestrator.ts` owns `/task/:taskID/message` and `/task/:taskID/session/:sessionID/reply`.
+- `packages/opencorvus/src/task-api/index.ts` owns `appendDirectAgentSessionReply(...)`, `handleTaskMessage(...)`, `appendAndWakeTaskOperatorMessage(...)`, `appendTaskSessionMessage(...)`, and `appendTaskAttachment(...)`.
+- `packages/overlay/src/services/task.ts` owns overlay callers for non-build direct reply and build task-root guidance.
+- `packages/opencorvus/src/tool/panel.ts` and `packages/opencorvus/src/orchestrator/tools.ts` call task-message or direct-reply services through the same central APIs.
+
+### Fix Shape
+
+- No production code change was required in current HEAD.
+- Add regression coverage to keep the existing contract from regressing:
+  - direct-reply failure with attachments must reject structurally and must not persist a task-root fallback message;
+  - explicit task-root messages with attachments must persist file parts and append the same attachment reference to `task.attachments`.
+- Do not convert `AgentSessionReplyInput.attachments` into task-root attachments on failure.
+- Do not add a catch/retry path that re-sends failed direct replies through `/task/:taskID/message`.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/server/reply-error-taxonomy.test.ts`.
+- Add `invalid direct reply with attachments rejects without task-root fallback`; it posts a URL attachment to an invalid direct-reply target, expects `400 InvalidReplyTargetKindError`, and asserts both root and child sessions have no messages.
+- Extend `packages/opencorvus/test/server/task-message-routes.test.ts`.
+- Strengthen the attachment-summary test so the HTTP response and persisted root message include a `file` part, and the task row's `attachments` include the same user-upload/spec-artifact reference.
+
+### Verification
+
+- Direct-reply attachment fallback regression passed: `bun test packages/opencorvus/test/server/reply-error-taxonomy.test.ts --timeout 30000`.
+- Task-root attachment persistence regression passed: `bun test packages/opencorvus/test/server/task-message-routes.test.ts --timeout 30000`.
+- Task API attachment persistence suite passed: `bun test packages/opencorvus/test/task-api/handle-task-message-attachment-persistence.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Verified on 2026-06-18.
+- Direct-reply failure with attachments remains a structured error and writes no fallback task-root message.
+- Explicit task-root message attachments remain structured persisted file parts and task attachment references; the scheduler summary is only an auxiliary prompt summary.
+
+### Independent Review Feedback
+
+- Hegel confirmed BH-027 is not present in current source: direct reply and task-root message are separate paths, and task-root attachments are persisted as file parts plus task attachment refs.
+- Hegel recommended preserving the current split rather than adding fallback conversion, and recommended the two regression additions implemented in this batch.
+
+## Batch P1-AA: BH-028 interaction ask/resolve must update run blocking state
+
+### Findings
+
+- BH-028 was recorded against a runtime ownership regression: `EngineInteraction` creates and resolves durable interaction rows, then asks `EngineRuntime.syncRun(...)` or `syncTask(...)` to update the run blocker.
+- `EngineRuntime.syncRun(...)` is no longer a pipeline advancement mechanism. Its remaining responsibility for this surface is run-state convergence: pending interactions set the active run to `blocked`, and resolved interaction blockers are cleared.
+- Existing tests covered durable interaction rows and a pre-blocked run clearing path, but did not exercise the real ask/resolve path that starts with a `running` run.
+- Independent review found the remaining production hole in per-goal mode: `syncGoalRuns(...)` returned immediately while any goal_run was live, before projecting pending interactions or clearing a resolved interaction blocker on the parent run.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/interaction.ts` owns `EngineInteraction.subscribe(...)`, permission/question ask upserts, and `resolveInteraction(...)`; it is the single event-to-engine bridge for `PermissionNext` and `Question` prompts.
+- `packages/opencorvus/src/engine/runtime.ts` owns `EngineRuntime.syncRun(...)` and `syncTask(...)`; the relevant branches are pending-interaction blocking and no-queue interaction-blocker clearing.
+- `packages/opencorvus/src/engine/state.ts` owns `hooks().updateRun(...)`, which appends artifact-backed run rows and is the durable persistence path for `status` and `blocking_reason`.
+- `packages/opencorvus/src/task-api/index.ts` owns `EngineService.replyInteraction(...)` and `rejectInteraction(...)`; server routes, channel ingress, panel tools, and TUI callers converge here before emitting `PermissionNext` / `Question` replies.
+- `packages/opencorvus/src/channel/ingress.ts`, `packages/opencorvus/src/tool/panel.ts`, and `packages/opencorvus/src/server/routes/orchestrator.ts` are callers only; they must not add local blocking-state fixes.
+- `packages/opencorvus/src/session/processor.ts` and `packages/opencorvus/src/session/loop.ts` are ask producers through `PermissionNext.ask(...)`.
+- `packages/opencorvus/src/executor/contract.ts` and `packages/opencorvus/src/executor/managed.ts` own executor queue status typing; production executors use queued/retrying/running/completed/failed and do not provide a separate executor `blocked` status.
+
+### Fix Shape
+
+- Add a focused regression test that subscribes `EngineInteraction` with real `hooks()`, creates a live run with no queue ref, emits a permission ask from a child session, and asserts the persisted run becomes `blocked` with `blocking_reason = "permission"`.
+- Resolve the same interaction through `EngineService.replyInteraction(...)` and assert the persisted run returns to `running` with `blocking_reason = null`.
+- Add per-goal runtime coverage for a live goal_run with a pending interaction: `syncRun(...)` must persist the parent run as `blocked`, then clear it after the interaction resolves, without waking the terminal goal batch path.
+- Fix the central runtime path only. Do not add route-level updates, caller-specific gates, or a fallback wake path.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/engine/interaction-permission.test.ts`.
+- Cover both ask-side persistence and resolve-side clearing with `findRun(...)`, not only in-memory hook calls or interaction row status.
+- Extend `packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts`.
+- Cover live goal_run interaction blocking and resolved-blocker clearing before the live goal_run early return.
+- Extend `packages/opencorvus/test/engine/protocol-interaction.test.ts`.
+- Cover protocol reply clearing the persisted run blocker when the executor is still running.
+
+### Verification
+
+- Focused interaction regression passed before the per-goal fix: `bun test packages/opencorvus/test/engine/interaction-permission.test.ts --timeout 30000`.
+- New live goal_run regression failed before the runtime fix with `Expected: "blocked"; Received: "running"`.
+- Combined runtime/interaction/protocol regression passed after the fix: `bun test packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts packages/opencorvus/test/engine/interaction-permission.test.ts packages/opencorvus/test/engine/protocol-interaction.test.ts --timeout 30000`.
+- Package typecheck passed after the executor status contract cleanup: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Verified on 2026-06-18.
+- Implemented on 2026-06-18.
+- `syncGoalRuns(...)` now projects pending interactions and clears resolved interaction blockers before returning for live goal_run work.
+- Permission ask from a child build session persists the active run as `blocked` with `blocking_reason = "permission"`.
+- Replying through `EngineService.replyInteraction(...)` persists the run back to `running` with `blocking_reason = null`.
+- Protocol interaction replies now assert persisted run blocker clearing while the executor remains `running`.
+- Unsupported executor status `blocked` was removed from `ExecutorStatusInfo`; run-level `blocked` remains the durable engine state.
+
+### Independent Review Feedback
+
+- Epicurus confirmed the no-queue permission ask/reply path is covered by the first regression, but identified a remaining per-goal early return before interaction projection.
+- Epicurus recommended keeping all run blocking writes inside runtime/interaction/state rather than adding route, panel, or channel callers.
+- Epicurus also flagged the executor `blocked` status contract as adjacent debt: current production executors do not produce it (`ManagedCodingExecutor` excludes it and `TaskQueueStatus` has no `blocked` value). The final fix removes the unsupported executor status instead of inventing a default executor blocking reason.
+
+## Batch P1-AB: BH-029 dead-owner active tasks must not hold cwd queue ownership forever
+
+### Findings
+
+- BH-029 targets the directory queue: `claimNextForCwd(...)` treats any task with `time_started IS NOT NULL` and `time_completed IS NULL` in the same cwd as active ownership.
+- Dead-owner execution convergence exists in `engine/writer.ts::convergeDeadOwnerLiveExecution(...)`, but it only runs on server startup. A queued same-cwd task can remain blocked if queue advancement happens while an orphaned active task is still present.
+- The existing orphan model already defines the physical fact: a live goal_run with a foreign dead owner means the old owner process died and the mid-stream goal cannot resume.
+- The queue must not invent a synthetic wake or route-level bypass. The correct central fix is to converge dead-owner active tasks for that cwd before claiming the next queued task.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/queue.ts` owns cwd serialization: `claimNextForCwd(...)`, `advanceQueue(...)`, `dispatchTaskLoop(...)`, `startQueuedTaskInCwd(...)`, and `listActiveForCwd(...)`.
+- `packages/opencorvus/src/engine/writer.ts` owns live-execution terminalization for shutdown/startup: `convergeDeadOwnerLiveExecution(...)`, `abortCurrentProcessLiveExecution(...)`, `terminateTaskOwnedSessionsAndFail(...)`, `abortGoalRunsForRows(...)`, and `abortRunsForRows(...)`.
+- `packages/opencorvus/src/engine/orphan.ts` owns the owner-stamp orphan predicate used to distinguish dead-owner live goal_runs from still-live foreign owners.
+- `packages/opencorvus/src/task-api/index.ts` calls `dispatchTaskLoop(...)` after task creation, retry, operator messages, and `startQueuedTaskNow(...)`.
+- `packages/opencorvus/src/engine/runtime.ts` calls `dispatchTaskLoop(...)` when terminal goal batches settle.
+- `packages/opencorvus/src/cli/cmd/serve.ts` runs project-wide dead-owner convergence on server startup; BH-029 adds a queue-time convergence path for the same physical fact, not a second lifecycle rule.
+
+### Fix Shape
+
+- Add a writer helper that converges a caller-provided set of active tasks using the same dead-owner logic as startup convergence.
+- `advanceQueue(cwd)` should call that helper for `listActiveForCwd(cwd)` before `claimNextForCwd(cwd)`.
+- If an active task has a live owner or no dead-owner live execution facts, the helper must not mutate it and the queued sibling must remain queued.
+- If the active task is terminalized by dead-owner convergence, `advanceQueue(cwd)` can claim and start the next queued task through the existing queue path.
+- Do not make queued tasks bypass `claimNextForCwd(...)`, do not synthesize operator messages, and do not add route-specific cleanup.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/engine/queue.test.ts`.
+- Seed an active task with a live run and a dead-owner live goal_run, plus a queued same-cwd task; `advanceQueue(cwd)` must abort the dead-owner execution, mark the old task failed, and start the queued task.
+- Keep existing tests proving a live active task still blocks queued siblings.
+- Add a queue-level negative case where the active task's goal_run is owned by the current process; `advanceQueue(cwd)` must not terminalize it and the queued sibling must stay queued.
+
+### Verification
+
+- New dead-owner queue regression failed before the fix with `Expected: "failed"; Received: "active"`.
+- Queue suite passed after the fix: `bun test packages/opencorvus/test/engine/queue.test.ts --timeout 30000`.
+- Owner-orphan and shutdown convergence suites passed: `bun test packages/opencorvus/test/engine/goal-run-owner-orphan.test.ts packages/opencorvus/test/engine/shutdown-active-task-sessions.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Implemented on 2026-06-18.
+- `advanceQueue(cwd)` now first converges dead-owner active tasks in that cwd, then uses the existing `claimNextForCwd(...)` path to start queued work.
+- Startup convergence now delegates to the same task-scoped dead-owner helper, preserving a single terminalization implementation.
+- Current-process live owners are not terminalized by queue advancement, and their same-cwd queued siblings remain queued.
+
+### Independent Review Feedback
+
+- Confucius confirmed BH-029 is fixed in the dirty worktree by the queue-time convergence path.
+- Confucius identified all automatic queue advancement callers as affected and confirmed `queue=false` and `/task/:taskID/start-now` are explicit bypass/override semantics, not this bug's fix path.
+- Confucius recommended the current-process/live-owner negative regression, which was added before final verification.
+
+## Batch P1-AC: BH-030 open tool orphan detection must filter current owners before prompt cap
+
+### Findings
+
+- BH-030 targets `describe.ts::listOpenToolCallsWithoutCurrentOwner(...)`.
+- Current code queries open tool parts ordered newest-first with `LIMIT 5`, then filters out sessions whose `SessionStatus` is `streaming` or `retry`.
+- If the latest five open tool parts are still owned by the current process, a sixth older stale open tool call is dropped before the owner filter and never reaches the orchestrator prompt.
+- The stale open tool projection is read-only execution evidence. The fix must stay in the describe projection and must not mutate task/session/message state.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/describe.ts` owns `listOpenToolCallsWithoutCurrentOwner(...)`, `describeTask(...)`, and `renderTaskDescription(...)`.
+- `packages/opencorvus/src/session/status.ts` owns current-process session status facts used to exclude live `streaming`/`retry` sessions.
+- `packages/opencorvus/src/session/session.sql.ts` owns `part` rows and tool-part persisted status.
+- `packages/opencorvus/test/engine/describe-stream-error.test.ts` already covers stale open tool projection and current-process exclusion.
+- `specs/operator-wake-open-tool-facts-2026-06-17.md` defines the read-only boundary: describe surfaces orphaned open tool facts; startup convergence must not fail run-less active tasks merely because they have open tool parts.
+
+### Fix Shape
+
+- Query enough open tool candidates to survive current-process filtering, then apply `OPEN_TOOL_CALL_PROMPT_CAP` after filtering.
+- Keep the final rendered list capped at `OPEN_TOOL_CALL_PROMPT_CAP`.
+- Do not push current-process filtering into SQL because `SessionStatus` is in-memory process state, not a durable table.
+- Do not add task lifecycle mutation, synthetic tool results, or a queue/runtime gate.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/engine/describe-stream-error.test.ts`.
+- Seed five newest current-process `streaming` open tool parts and one older stale open tool part; assert the stale tool is still projected and rendered.
+
+### Verification
+
+- The cap-order regression failed before the implementation because `desc.open_tool_calls_without_current_owner` was `undefined` when the stale open tool was sixth after five current-process open tools.
+- Implemented on 2026-06-18: `listOpenToolCallsWithoutCurrentOwner(...)` now reads open tool candidates, filters current-process `streaming` and `retry` sessions through `SessionStatus`, and only then applies `OPEN_TOOL_CALL_PROMPT_CAP`.
+- Added a negative regression proving current-process `retry` open tools are excluded alongside `streaming`.
+- `bun test packages/opencorvus/test/engine/describe-stream-error.test.ts -t "describeTask.open_tool_calls_without_current_owner" --timeout 30000` passed with 3 tests.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- Independent agent Dirac reviewed the dirty worktree, confirmed BH-030 is fixed by moving the cap after current-process filtering, and recommended the `retry` negative coverage that was added before final verification.
+
+## Batch P1-AD: BH-031/BH-032 read_context must preserve describe-layer facts
+
+### Findings
+
+- BH-031 targets the terminal goal batch wake fact written by `packages/opencorvus/src/engine/runtime.ts::recordGoalBatchNotification(...)`.
+- The fact is persisted as `engine_artifact.kind = "goal_batch_notification"` after `dispatchTaskLoop(...)` starts, but no describe/read_context projection reads that artifact back.
+- BH-032 targets `packages/opencorvus/src/orchestrator/tools.ts::read_context`. The tool calls `describeTask(...)` for collaboration closure, then rebuilds the goal list from `listGoals(...)`, `goalStatusByID(...)`, and `findLatestTipGoalRun(...)`.
+- Rebuilding from raw goals loses describe-layer facts already present in `GoalDesc`: `needs_redispatch`, `latest_attempt.superseded_reason`, `is_orphaned`, and full attempt timeline details.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/runtime.ts` owns `terminalGoalBatchFingerprint(...)`, `hasGoalBatchNotification(...)`, and `recordGoalBatchNotification(...)`.
+- `packages/opencorvus/src/engine/store.ts` owns artifact list/read helpers used by describe-layer projections.
+- `packages/opencorvus/src/engine/describe.ts` owns `describeTask(...)`, `GoalDesc`, `TaskDesc`, and `renderTaskDescription(...)`; it is the correct single model-visible task fact source.
+- `packages/opencorvus/src/orchestrator/tools.ts` owns `read_context`; the `scope=goals` branch must render `desc.goals`, not rebuild raw goal rows.
+- Existing coverage lives in `packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts`, `packages/opencorvus/test/engine/goal-run-owner-orphan.test.ts`, and `packages/opencorvus/test/orchestrator/tools.test.ts`.
+
+### Fix Shape
+
+- Add a store helper for recent `goal_batch_notification` artifacts, then project them into `TaskDesc` through `describeTask(...)`.
+- Render terminal goal batch wake facts in `renderTaskDescription(...)` and in `read_context scope=goals/all`.
+- Export and reuse the describe-layer goal renderer from `read_context` so `needs_redispatch`, superseded reason, orphan state, and attempt details have one text source.
+- Include `session_id` in rendered attempts so `read_context` keeps its live child-session steering fact while moving to `GoalDesc`.
+- Do not add a scheduler gate, retry state machine, synthetic message, or duplicate read_context-only status derivation.
+
+### Regression Tests
+
+- Add a describe-layer test that seeds a `goal_batch_notification` artifact and asserts `describeTask(...)` plus `renderTaskDescription(...)` surface run id, fingerprint, and goal_run statuses.
+- Add/modify `orchestrator/tools.test.ts` coverage so `read_context scope=goals` preserves redispatch intent from a superseded terminal tip and owner-orphan state from `GoalDesc`.
+- Update the existing read_context runtime-id test to assert the shared renderer exposes `run=<goal_run_id>` and `session=<child_session_id>`.
+
+### Verification
+
+- The terminal batch describe regression failed before the implementation because `desc.recent_terminal_goal_batches` was `undefined` after `EngineRuntime.syncRun(...)` wrote a `goal_batch_notification` artifact.
+- The read_context regressions failed before the implementation because `scope=goals` still rendered raw `latest_goal_run_*` rows and did not contain `NEEDS_REDISPATCH(...)` or `ORPHANED(...)`.
+- Implemented on 2026-06-18: `describeTask(...)` projects recent `goal_batch_notification` artifacts into `TaskDesc`, `renderTaskDescription(...)` renders them, and `read_context scope=goals/all` reuses the describe-layer goal and terminal-batch renderers.
+- `bun test packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts --timeout 30000` passed with 9 tests.
+- `bun test packages/opencorvus/test/orchestrator/tools.test.ts -t "read_context surfaces terminal goal batch wake facts|read_context preserves describe-layer redispatch and orphan facts|read_context surfaces latest goal_run" --timeout 30000` passed with 3 tests.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- Broader check `bun test packages/opencorvus/test/orchestrator/tools.test.ts --timeout 30000` was attempted and did not pass: 56 passed, 14 failed, 1 error. Sample isolated failures were outside the BH-031/BH-032 read_context path (`MissingModelConfigError` in `propose_task`, missing real tool execution identity in an integrity artifact-missing test, and a freshContext worktree marker precondition). These residual failures are not hidden as success and need separate triage if they are not already covered by later bug-hunt entries.
+- Independent agent Descartes confirmed BH-031/BH-032 existed on HEAD, identified the double-source read_context goal rendering as the root cause, and recommended the shared describe-layer renderer plus terminal batch read path used here.
+
+## Batch P1-AE: BH-033 terminal operator wake must requeue through cwd serialization
+
+### Findings
+
+- BH-033 targets `packages/opencorvus/src/task-api/index.ts::appendAndWakeTaskOperatorMessage(...)` and `packages/opencorvus/src/engine/queue.ts::dispatchTaskLoop(...)`.
+- The older 2026-06-05 terminal wake note required terminal `/message` and `/inject` calls to record visible messages without waking. Later specs supersede that contract for user-authored follow-up messages:
+  - `specs/new-arch/2026-06-09-operator-message-add-goal-dispatch.md` requires completed-task follow-up messages to wake the orchestrator so it can add concrete goals in the same task conversation.
+  - `specs/2026-06-10-cancelled-task-message-input.md` requires cancelled-task messages to clear cancelled metadata, clear the error, requeue, append the user message, and dispatch.
+  - `specs/new-arch/2026-06-14-model-resume-progress-root-cause-fix.md` reaffirms cancelled task messages should reopen naturally with a fresh valid orchestrator execution owner.
+- The real BH-033 root cause is narrower: completed-task operator messages were reopening the task as `active`, which clears `time_completed` and lets `dispatchTaskLoop(...)` take the active-task re-entry path instead of the queued `advanceQueue(...) -> claimNextForCwd(...)` path.
+- Queue terminal guards are not the right fix point because task-api has already hidden the terminal fact by changing the task to active. Adding an active same-cwd gate in queue would blur legal active-task wake behavior and duplicate cwd queue ownership logic.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/task-api/index.ts::handleTaskMessage(...)` is the `/task/:taskID/message` service entry and returns `should_resume`.
+- `packages/opencorvus/src/task-api/index.ts::injectMessage(...)` is the `/task/:taskID/inject` service entry and returns `orchestratorWoken`.
+- `packages/opencorvus/src/task-api/index.ts::appendAndWakeTaskOperatorMessage(...)` is the shared writer/wake path for `/message` and `/inject`.
+- `packages/opencorvus/src/task-api/index.ts::reopenCompletedTaskFromOperatorMessage(...)` is the bad reopen point; it must requeue completed tasks, not activate them.
+- `packages/opencorvus/src/task-api/index.ts::reopenFailedTaskFromOperatorMessage(...)` and `reopenCancelledTaskFromOperatorMessage(...)` already requeue and remain the matching terminal-follow-up behavior.
+- `packages/opencorvus/src/engine/queue.ts::dispatchTaskLoop(...)` already sends queued tasks through `advanceQueue(...)`; same-cwd serialization lives in `claimNextForCwd(...)`.
+- `packages/opencorvus/test/server/task-message-routes.test.ts` owns route-level `/message` and `/inject` coverage.
+- `packages/opencorvus/test/engine/queue.test.ts` already proves direct queue dispatch against a still-terminal task is ignored.
+
+### Fix Shape
+
+- Change completed-task follow-up reopen from `active` to `queued`.
+- Keep `should_resume: true` and `orchestratorWoken: true` for terminal follow-up messages because the scheduler has been notified; do not reinterpret those fields as proof that a loop already started.
+- Do not change failed/cancelled requeue behavior.
+- Do not add queue-level fallback/gate logic. Queued tasks must continue through the existing cwd claim path.
+
+### Regression Tests
+
+- Update the completed `/message` route regression to assert the task becomes `queued`, `time_started` is cleared, `time_completed` is cleared, metadata is preserved, and scheduler dispatch receives the operator message.
+- Add active-A plus completed-B same-cwd `/message` coverage: posting to B must requeue B, not launch a second loop while A is active.
+- Add matching active-A plus completed-B same-cwd `/inject` coverage because inject uses the same shared task-api wake path.
+- Keep existing failed and cancelled `/message` and failed `/inject` requeue/wake tests as the current contract.
+
+### Verification
+
+- Before the implementation, the focused completed-message same-cwd regression failed because the completed task was reopened as `active` and `runTaskLoop` started while another same-cwd task was already active.
+- Implemented on 2026-06-18: `reopenCompletedTaskFromOperatorMessage(...)` now reopens completed follow-up tasks as `queued`, matching failed/cancelled terminal follow-up behavior and forcing dispatch through `advanceQueue(...) -> claimNextForCwd(...)`.
+- Added same-cwd `/message` and `/inject` route regressions proving completed task B is queued behind active task A and no second loop starts.
+- Focused terminal/same-cwd route tests passed: `bun test packages/opencorvus/test/server/task-message-routes.test.ts -t "completed task|completed same-cwd|reopens failed terminal|cancelled task" --timeout 30000`.
+- Full route suite passed: `bun test packages/opencorvus/test/server/task-message-routes.test.ts --timeout 30000`.
+- Queue suite passed: `bun test packages/opencorvus/test/engine/queue.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Mendel initially flagged the older 2026-06-05 no-wake terminal contract, then re-reviewed against the later 2026-06-09, 2026-06-10, and 2026-06-14 specs.
+- Final independent conclusion: terminal follow-up messages currently requeue/wake, but completed tasks must requeue rather than become active. The root fix belongs in task-api's completed reopen path, not in queue fallback logic.
+
+## Batch P1-AF: BH-034 live browser preview commands must be serial inside a sidecar session
+
+### Findings
+
+- BH-034 targets `packages/opencorvus/src/browser-preview/live.ts`, specifically the embedded `BROWSER_PREVIEW_LIVE_SCRIPT` stdin loop.
+- `browserPreviewLiveSession(...)` already creates one `BrowserPreviewLiveSidecar` per `taskID:targetID:viewportID`; that sidecar is the single live-session owner for mutable Playwright state.
+- Host-side `BrowserPreviewLiveSidecar.command(...)` tracks pending command IDs and timeouts, but it writes JSON lines immediately. It does not serialize command execution.
+- The sidecar script reads all complete stdin lines from a chunk and calls `handle(message).catch(...)` without awaiting the previous command. Concurrent `ensurePage(...)`, `applyInput(...)`, and `capture(...)` calls share mutable globals: `browser`, `context`, `page`, `currentUrl`, and `currentViewport`.
+- The root bug is not route validation or target lookup. It is the sidecar session execution loop allowing same-session commands to run concurrently.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/browser-preview/live.ts::captureBrowserPreviewLiveSnapshot(...)` sends snapshot commands to the live sidecar.
+- `packages/opencorvus/src/browser-preview/live.ts::interactBrowserPreviewLive(...)` sends input commands to the same live sidecar.
+- `packages/opencorvus/src/browser-preview/live.ts::browserPreviewLiveSession(...)` defines the live session key and sidecar reuse boundary.
+- `packages/opencorvus/src/browser-preview/live.ts::BrowserPreviewLiveSidecar.command(...)` owns host pending response matching and command timeout handling.
+- `packages/opencorvus/src/browser-preview/live.ts::BROWSER_PREVIEW_LIVE_SCRIPT` owns the child process stdin loop, `ensurePage(...)`, `capture(...)`, `applyInput(...)`, and `handle(...)`.
+- `packages/opencorvus/src/server/routes/browser-preview.ts` is only the HTTP route surface and should not add a route-level queue.
+- `packages/opencorvus/test/browser-preview/live-lifecycle.test.ts` already uses source-level lifecycle guards for the embedded sidecar script.
+- `packages/opencorvus/test/server/browser-preview-routes.test.ts` owns route-level live snapshot/input coverage.
+
+### Fix Shape
+
+- Add a sidecar-local promise chain and enqueue each parsed command through it.
+- Each command in the chain must settle to a stdout response before the next command starts, preserving stdin order for a single live session.
+- A failed command must write the same structured `{ id, ok:false, error }` response and must not poison the chain for later commands.
+- Do not add a host route queue, alternate browser context source, fallback screenshot path, or duplicate target/session store.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/browser-preview/live-lifecycle.test.ts` to assert the embedded sidecar script contains a serial command chain and no longer directly starts `handle(message)` from the stdin parser.
+- Add route-level concurrent live input coverage in `packages/opencorvus/test/server/browser-preview-routes.test.ts`: warm the same live session, fire two concurrent inputs, and use page-colour evidence to prove the second command observes the first command's completed state instead of racing ahead.
+
+### Verification
+
+- New lifecycle guard failed before the implementation because `BROWSER_PREVIEW_LIVE_SCRIPT` did not contain `commandChain` or `enqueueCommand(...)` and still called `handle(message).catch(...)` directly from the stdin parser.
+- Implemented on 2026-06-18: the embedded sidecar script now enqueues parsed commands through a sidecar-local `commandChain`; each command writes a structured success or failure response before the next command starts.
+- Added a route-level concurrent live-input regression whose page paints red after the first command completes, paints blue only if the second command sees that completed state, and paints a persistent race colour if the second command runs too early. The second response and final snapshot must both be blue.
+- Focused regression passed: `bun test packages/opencorvus/test/browser-preview/live-lifecycle.test.ts packages/opencorvus/test/server/browser-preview-routes.test.ts -t "serializes commands|serializes concurrent same-session" --timeout 60000`.
+- Full lifecycle suite passed: `bun test packages/opencorvus/test/browser-preview/live-lifecycle.test.ts --timeout 30000`.
+- Full browser-preview route suite passed: `bun test packages/opencorvus/test/server/browser-preview-routes.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Lagrange confirmed the live session key `taskID:targetID:viewportID` is the correct serialization boundary because the embedded sidecar owns the mutable Playwright `browser/context/page` state.
+- Lagrange recommended strengthening the route test from simple red/blue clicks into an ordered/race visual assertion. The final route regression uses that shape.
+
+## Batch P1-AG: BH-035 provider fetch must clear inactivity timer on pre-response failures
+
+### Findings
+
+- BH-035 targets `packages/opencorvus/src/provider/provider.ts::getSDK(...)`, specifically the `options["fetch"]` wrapper installed for provider SDKs.
+- The wrapper creates an inactivity `AbortController`, starts a timer before calling `fetchFn(...)`, and clears the timer only on HTTP-error handling, stream flush, or non-streaming success.
+- If the custom or global `fetchFn` throws before returning a `Response`, the wrapper rethrows while leaving the timer live. The later timer callback aborts a signal for a request that has already failed, producing delayed side effects and noisy timeout logs.
+- The same leak can happen for other synchronous failures after `resetInactivityTimer?.()` and before the wrapper returns a response.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/provider/provider.ts::resolveFetchInactivityMs(...)` chooses the timeout duration; `alibaba-coding-plan-cn` can use a short configured timeout and is useful for deterministic coverage.
+- `packages/opencorvus/src/provider/provider.ts::providerFetchInit(...)` forwards the composed `AbortSignal` into the SDK fetch call.
+- `packages/opencorvus/src/provider/provider.ts::getSDK(...)` installs the wrapped fetch into provider options for bundled and dynamically loaded providers.
+- `packages/opencorvus/src/provider/provider.ts::getLanguage(...)` obtains the SDK-backed language model and is the public path that triggers the wrapped fetch.
+- `packages/opencorvus/test/provider/provider.test.ts` already covers provider timeout policy and provider config merging.
+
+### Fix Shape
+
+- Add a local `clearInactivityTimer()` beside `resetInactivityTimer()`.
+- Wrap the post-timer provider fetch body in `try/catch`.
+- On any throw before a streaming response is returned, clear the inactivity timer before rethrowing the original error.
+- Keep the existing streaming response behavior: while a stream is returned, activity resets the timer on chunks and clears it on stream flush.
+- Do not add fallback retries, suppress the original provider error, or convert it into a host-side timeout.
+
+### Regression Tests
+
+- Add `provider fetch clears inactivity timer when fetch throws before response` in `packages/opencorvus/test/provider/provider.test.ts`.
+- Use an in-memory custom provider config whose `fetch` captures the supplied `AbortSignal` and throws immediately.
+- Set a short `alibaba-coding-plan-cn` provider timeout, assert the provider error is still surfaced, wait beyond the inactivity window, and assert the captured signal was not aborted later.
+
+### Verification
+
+- New regression failed before the implementation: after `fetch` threw, the timer fired 20ms later and `observedSignal.aborted` became `true`.
+- Implemented on 2026-06-18: the provider fetch wrapper now uses a local `clearInactivityTimer()` helper and clears the timer in a catch path before rethrowing the original provider error.
+- Strengthened the regression to prove the 20ms inactivity timer was actually set and cleared, then waited beyond the inactivity window and asserted the captured `AbortSignal` was still not aborted.
+- Focused regression passed: `bun test packages/opencorvus/test/provider/provider.test.ts -t "provider fetch clears inactivity timer" --timeout 30000`.
+- Full provider suite passed: `bun test packages/opencorvus/test/provider/provider.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Hume confirmed the root cause was the timer started before `fetchFn(...)` and the missing cleanup path when `fetchFn` throws before returning a `Response`.
+- Hume confirmed the final fix preserves the original provider error, adds no retry/fallback/gate, and recommended the set/clear timer assertion added to the regression test.
+
+## Batch P1-AH: BH-036 SDK server startup timeout must terminate the child process
+
+### Findings
+
+- BH-036 targets `packages/sdk/js/src/server.ts::createOpenCorvusServer(...)`.
+- The SDK spawns `opencorvus serve ...`, waits for stdout to contain `server listening`, and rejects on startup timeout.
+- The timeout path only rejects the promise. It does not terminate the child process, so a slow or wedged server binary can remain alive after the caller sees a failed startup.
+- The startup lifecycle owner is the SDK helper itself: callers only receive a `close()` handle after startup succeeds, so they have no handle to clean up a child that times out before URL discovery.
+
+### Call-point Inventory
+
+- `packages/sdk/js/src/server.ts::resolveCommand()` resolves the executable used by `createOpenCorvusServer(...)`.
+- `packages/sdk/js/src/server.ts::createOpenCorvusServer(...)` owns process spawn, stdout URL discovery, startup timeout, abort handling, and the returned `close()` method.
+- `packages/sdk/js/src/index.ts` re-exports `createOpenCorvusServer(...)` and calls it from `createOpenCorvus(...)`.
+- `packages/sdk/js/example/example.ts` calls `createOpenCorvusServer(...)` directly.
+- `packages/channel-runtime/test/subscribe-events-global.test.ts`, `packages/channel-runtime/test/start-idempotency.test.ts`, and `packages/channel-runtime/test/sdk-mock.ts` use mock SDK server helpers only; they are not affected by child-process lifecycle changes.
+- `packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts` has source-level SDK contract coverage, but no real child-process timeout regression.
+
+### Fix Shape
+
+- On startup timeout, terminate the spawned process before rejecting.
+- The timeout rejection must preserve the current timeout error message so callers still receive the same startup failure contract.
+- Reuse the same direct process termination primitive for pre-start abort cleanup where applicable; do not add retries, fallback binaries, gates, or compatibility command wrappers.
+- Keep successful startup behavior unchanged: after URL discovery, callers still receive `{ url, close() }`, and `close()` terminates the spawned server.
+
+### Regression Tests
+
+- Add `packages/sdk/js/test/server.test.ts`.
+- Use `OPENCORVUS_BIN_PATH=node` and a temporary extensionless `serve` script in the current working directory. Node executes that script as the first CLI argument, which works on Windows without a `.cmd` wrapper.
+- The fake `serve` script writes its PID to a file and then stays alive without printing `server listening`.
+- Call `createOpenCorvusServer(...)` with a short startup timeout, assert it rejects with the timeout message, then assert the recorded PID exits within a bounded window.
+- The test's `finally` block kills any surviving PID so the red test does not leak a process.
+- Add an SDK package `test` script so the regression has a package-local entry point.
+
+### Verification
+
+- New regression failed before implementation: `createOpenCorvusServer(...)` rejected with the expected timeout message, but the fake server PID was still alive after the bounded wait.
+- Implemented on 2026-06-18: `createOpenCorvusServer(...)` now owns a local `stopProcess()` helper, calls it before timeout rejection, calls it on pre-start abort, and reuses it for the returned `close()` method.
+- SDK `tsconfig.json` now explicitly loads only Node ambient types. This fixed the package typecheck toolchain issue where `tsc --noEmit` auto-loaded unrelated root `@types` packages with missing transitive type definitions.
+- Package test entry passed: `bun run --cwd packages/sdk/js test --timeout 30000`.
+- SDK package typecheck passed: `bun run --cwd packages/sdk/js typecheck`.
+- Existing SDK source contract suite passed: `bun test packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts --timeout 30000`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Parfit confirmed BH-036 was still present before the fix: the startup timeout callback only rejected, while `close()` was unreachable because the server handle is returned only after successful URL discovery.
+- Parfit agreed the root fix belongs in `createOpenCorvusServer(...)`'s startup lifecycle owner and does not require fallback binaries, gates, command parsing rewrites, or a supervisor.
+- Parfit recommended adding explicit timeout-path process-kill coverage. The final regression uses a real long-running fake server process and asserts the PID exits after timeout.
+
+## Batch P1-AI: BH-037 sidecar handshake tests must timeout on stdout inactivity
+
+### Findings
+
+- BH-037 targets `packages/opencorvus/test/cli/sidecar-smoke.test.ts`, where the handshake loop computes `deadline = Date.now() + 30_000` but then awaits `reader.read()` directly.
+- If the sidecar child keeps stdout open and silent, the pending `reader.read()` never resolves, so the loop never reaches the `Date.now() < deadline` check again.
+- The same raw handshake loop shape exists in `packages/opencorvus/test/cli/sidecar-chaos.test.ts` and `packages/opencorvus/test/cli/sidecar-contention.test.ts`.
+- This is a test-harness timeout bug, not a sidecar production behavior bug: the sidecar command already has a real stdout handshake contract, and the harness must fail with diagnostics when that contract stays silent.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/cli/cmd/sidecar.ts` writes the canonical handshake line `OPENCORVUS_LISTEN=127.0.0.1:<port>` after the server starts and the lock is acquired.
+- `packages/opencorvus/test/cli/sidecar-smoke.test.ts` reads that handshake before health, shutdown, and lock cleanup assertions.
+- `packages/opencorvus/test/cli/sidecar-chaos.test.ts::spawnSidecar(...)` optionally waits for the same handshake before lock-contention and parent-watchdog checks.
+- `packages/opencorvus/test/cli/sidecar-contention.test.ts` waits for the first sidecar's handshake before launching the contending sidecar.
+- `packages/opencorvus/test/cli/sidecar-chaos.test.ts` also drains stderr for diagnostics, but that drain is intentionally process-lifetime and does not define the stdout handshake timeout.
+
+### Fix Shape
+
+- Add one test-local `readSidecarHandshake(...)` helper under `packages/opencorvus/test/cli`.
+- The helper must parse the canonical handshake line from stdout and return `{ port, stdout }`.
+- The helper must wrap each `reader.read()` in an inactivity timeout. Any stdout chunk resets the timeout; a silent open stream rejects with a diagnostic that includes the configured label and stdout tail.
+- Replace the raw Date-deadline handshake loops in smoke, chaos, and contention tests with the helper.
+- Do not add production sidecar gates, alternate handshake formats, or fallback parsing.
+
+### Regression Tests
+
+- Add a silent open `ReadableStream<Uint8Array>` fixture and assert `readSidecarHandshake(...)` rejects after stdout inactivity with diagnostics.
+- Add a delayed-chunk fixture that emits non-handshake progress before the inactivity window and later emits the real handshake, proving the timeout is activity-based rather than a total wall-clock deadline.
+- Add a source guard that fails if sidecar CLI tests reintroduce a raw `while (Date.now() < deadline) { await reader.read() }` handshake loop.
+
+### Verification
+
+- New source guard failed before replacing the existing loops because `sidecar-smoke.test.ts`, `sidecar-chaos.test.ts`, and `sidecar-contention.test.ts` did not import or call `readSidecarHandshake(...)` and still contained the raw deadline-reader shape.
+- Implemented on 2026-06-18: added `packages/opencorvus/test/cli/sidecar-test-utils.ts::readSidecarHandshake(...)` and replaced the three sidecar handshake loops with that helper.
+- New harness regression passed: `bun test packages/opencorvus/test/cli/sidecar-handshake-timeout.test.ts --timeout 30000`.
+- Affected sidecar integration tests passed: `bun test packages/opencorvus/test/cli/sidecar-smoke.test.ts packages/opencorvus/test/cli/sidecar-chaos.test.ts packages/opencorvus/test/cli/sidecar-contention.test.ts --timeout 120000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Lorentz independently confirmed the original `sidecar-smoke.test.ts` loop could park forever on a silent open stdout stream because the Date deadline was checked only before awaiting `reader.read()`.
+- Lorentz confirmed this is a test-harness bug, not a production sidecar change: `sidecar.ts` emits the canonical handshake, and the VS Code production startup manager already has a stdout inactivity watchdog.
+- Lorentz also found the same raw handshake pattern in `sidecar-chaos.test.ts` and `sidecar-contention.test.ts`, matching the final shared-helper fix.
+
+## Batch P1-AJ: BH-038 supervised LSP stdio handles must satisfy the LSP client process contract
+
+### Findings
+
+- BH-038 targets `packages/opencorvus/src/lsp/server.ts::spawnSupervisedStdio(...)` and `packages/opencorvus/src/lsp/client.ts::processExited(...)` / `rejectOnServerExit(...)`.
+- TypeScript LSP is spawned through `ProcessSupervisor.spawnShell(...)`, then `spawnSupervisedStdio(...)` returns a plain object cast as `ChildProcessWithoutNullStreams`.
+- That object only contains `pid`, `stdin`, `stdout`, `stderr`, and `kill`. It does not expose `exitCode`, `signalCode`, `once(...)`, or `off(...)`.
+- `LSPClient.create(...)` treats `undefined !== null` as already exited in `processExited(...)`, so supervised TypeScript LSP can fail before initialize. If that pre-check is bypassed, `rejectOnServerExit(...)` still expects `process.once/off`.
+- The root issue is a bad boundary adapter: the supervised handle must be normalized to the process contract the LSP client consumes.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/lsp/server.ts::spawnStdio(...)` returns normal Node child processes for most language servers.
+- `packages/opencorvus/src/lsp/server.ts::spawnSupervisedStdio(...)` is used by `LSPServer.Typescript.spawn(...)` and returns the incomplete process-shaped object.
+- `packages/opencorvus/src/lsp/client.ts::create(...)` constructs JSON-RPC stream reader/writer from `server.process.stdout/stdin`, sends `initialize`, reads `server.process.pid`, checks `exitCode/signalCode`, and registers `once/off` exit listeners during initialization.
+- `packages/opencorvus/src/lsp/index.ts` owns LSP spawn/dispose orchestration and calls `LSPClient.create(...)`.
+- `packages/opencorvus/src/shell/process-supervisor.ts::ProcessSupervisor.Handle` already exposes `exited`, `terminate()`, and `dispose()`, but not ChildProcess event methods.
+- `packages/opencorvus/test/lsp/client.test.ts` already covers fake LSP interop and LSP disposal races, but not the TypeScript supervised spawn adapter.
+
+### Fix Shape
+
+- Normalize the `ProcessSupervisor.Handle` inside `spawnSupervisedStdio(...)` into a ChildProcess-compatible process object for LSP client use.
+- The adapter must expose `exitCode` and `signalCode` as `null` while running and update them when `supervisor.exited` settles.
+- The adapter must expose `once/off/on/removeListener/emit` for `"exit"` and `"error"` so `rejectOnServerExit(...)` observes early server exit without special-casing TypeScript LSP in the client.
+- Keep `dispose()` delegated to the supervisor; keep `kill()` as a direct supervisor termination request.
+- Do not add fallback language servers, retries, gates, or alternate TypeScript LSP startup paths.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/lsp/client.test.ts`.
+- Use `ProcessSupervisor.setFactoryForTest(...)` so `LSPServer.Typescript.spawn(...)` follows the production supervised path while the factory supplies a fake JSON-RPC LSP server over stdio.
+- Assert `LSPClient.create({ serverID: "typescript", server: supervisedHandle, ... })` initializes successfully and `client.shutdown()` disposes the supervised handle.
+
+### Verification
+
+- New regression failed before implementation with `LSP server exited before initialize completed`, caused by the supervised process object's missing `exitCode` / `signalCode` fields making `processExited(...)` return true before initialize.
+- Implemented on 2026-06-18: `spawnSupervisedStdio(...)` now wraps `ProcessSupervisor.Handle` with a ChildProcess-compatible adapter that exposes stdio streams, PID, `kill()`, running exit fields, and EventEmitter-style exit/error listener methods wired from `supervisor.exited`.
+- Strengthened the regression to assert `client.shutdown()` calls the supervisor disposal path once.
+- Focused regression passed: `bun test packages/opencorvus/test/lsp/client.test.ts -t "typescript client initializes when the server uses a supervised stdio handle" --timeout 30000`.
+- Full LSP client suite passed: `bun test packages/opencorvus/test/lsp/client.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Ptolemy independently confirmed the supervised TypeScript LSP handle was cast to `ChildProcessWithoutNullStreams` while missing `exitCode`, `signalCode`, `once(...)`, and `off(...)`.
+- Ptolemy identified the first observable failure as `undefined !== null` in `processExited(...)`, and warned that patching only that pre-check would leave the missing event-listener contract.
+- Ptolemy confirmed TypeScript is the built-in affected LSP because it goes through `spawnSupervisedStdio(...)`; most other LSPs use `spawnStdio(...)` and return real child processes.
+- Ptolemy recommended boundary normalization plus a regression that asserts shutdown disposes the supervised handle; the final implementation and test use that shape.
+
+## Batch P1-AK: BH-039 Bus dispatch must isolate synchronous subscriber failures
+
+### Findings
+
+- BH-039 targets `packages/opencorvus/src/bus/index.ts::dispatch(...)`.
+- `dispatch(...)` already wraps returned promises with timeout and `.catch(...)`, so asynchronous subscriber rejection and timeout are observable through the bus warning log without rejecting `Bus.publish(...)`.
+- The synchronous call `const result = sub(payload)` happens before that wrapper is installed. A subscriber that throws synchronously aborts the dispatch loop, skips later subscribers for the same event, and makes `Bus.publish(...)` reject.
+- This violates the bus fan-out contract: one subscriber failure must not prevent remaining subscribers from seeing the event.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/bus/index.ts::publish(...)` builds the payload, starts `dispatch(payload)`, emits the global bridge event, and returns the dispatch promise.
+- `packages/opencorvus/src/bus/index.ts::dispatch(...)` fans out to exact-type subscribers and wildcard subscribers.
+- `packages/opencorvus/src/bus/index.ts::withTimeout(...)` owns async subscriber timeout handling.
+- `packages/opencorvus/src/bus/index.ts::raw(...)` registers exact and wildcard callbacks.
+- `packages/opencorvus/test/bus/bus.test.ts` covers subscribe/unsubscribe, wildcard subscribers, payload validation, notification metadata, and once semantics, but not synchronous subscriber failure isolation.
+- Bus subscribers are broad: session status, message bridge, scheduler, executor event streams, MCP browser notifications, PTY lifecycle, and route tests all depend on a single process-global fan-out path.
+
+### Fix Shape
+
+- Move subscriber invocation into the same isolated promise path used for async failures.
+- A synchronous throw should become a rejected promise that the existing catch logs as `subscriber timed out or failed`.
+- Continue dispatching all remaining exact and wildcard subscribers.
+- Keep `Bus.publish(...)` resolving with `Promise.allSettled(...)`; do not add retry, fallback subscriber paths, or a global gate.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/bus/bus.test.ts`.
+- Register a first subscriber that throws synchronously and a second subscriber that records the event.
+- Assert `Bus.publish(...)` resolves and the second subscriber receives the event.
+
+### Verification
+
+- Before the BH-039 fix, the new regression failed because `Bus.publish(TestEvent, ...)` rejected when the first subscriber threw synchronously.
+- While running the full bus suite, `packages/opencorvus/test/bus/bus.test.ts` exposed an existing test-chain break: `packages/opencorvus/src/server/event.ts` no longer exported `Heartbeat`, `payload(...)`, or `globalEnvelope(...)`, and `Bus.publish(...)` no longer parsed payloads before dispatch. This was restored as part of keeping the bus contract test meaningful.
+- Implemented on 2026-06-18: `dispatch(...)` now catches synchronous subscriber throws and routes them through the existing timed subscriber warning path, then continues dispatching remaining subscribers.
+- Focused regression passed: `bun test packages/opencorvus/test/bus/bus.test.ts -t "synchronous subscriber failure" --timeout 30000`.
+- Full bus suite passed: `bun test packages/opencorvus/test/bus/bus.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Bohr confirmed the root cause: the old `dispatch(...)` invoked `sub(payload)` before the timeout/error wrapper was installed, so synchronous throws escaped fan-out.
+- Bohr confirmed the current fix is the minimal no-fallback shape: wrap the subscriber call in `try/catch`, convert sync throws to `Promise.reject(...)`, and reuse the existing `withTimeout(...).catch(...)` warning path.
+- Bohr confirmed the regression covers the required behavior: first subscriber throws, second subscriber records the event, and `Bus.publish(...)` resolves.
+
+## Batch P1-AL: BH-040 tool failures must not be hidden by a host circuit breaker
+
+### Findings
+
+- BH-040 targets `packages/opencorvus/src/util/tool-guard.ts::withCircuitBreaker(...)` and the orchestrator tool setup in `packages/opencorvus/src/orchestrator/agent.ts`.
+- `toolGuard(...)` wraps every tool `execute(...)` with a per-tool consecutive failure counter. After 30 failures, it stops calling the real tool and throws a host-generated `circuit-open` message.
+- That host-side circuit breaker is a gate: it replaces the next real tool result/error with guidance invented by the host, so the model and logs lose the actual failure evidence needed for root-cause repair.
+- This violates the project rule that LLM tool-route problems must be solved through prompts or root-cause fixes, not host preflight gates or bypasses.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/orchestrator/agent.ts` imports `toolGuard`, wraps the tools returned by `createOrchestratorTools(...)`, builds the `enableMap` from `guard.tools`, and passes `guard.tools` into `SessionPrompt.setSessionRuntimeContract(...)`.
+- Before this batch, `packages/opencorvus/src/util/tool-guard.ts` was the only implementation of `toolGuard(...)` and `withCircuitBreaker(...)`.
+- Before this batch, full-repo TypeScript search found no tests covering `toolGuard(...)` and no other call sites for `withCircuitBreaker(...)`.
+
+### Fix Shape
+
+- Remove the circuit-breaker behavior from `toolGuard(...)`. It must preserve the orchestrator tool map without intercepting repeated failures.
+- Remove the `withCircuitBreaker(...)` export, failure counters, `Log` dependency, and `maxFailures` option so there is no dormant gate path to reuse.
+- Keep the orchestrator runtime-contract shape intact: `toolGuard(tools).tools` remains the same tool table, but tool execution is never short-circuited.
+- Do not add fallback tools, retries, host guidance, alternate tool selection, or a new threshold.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/util/tool-guard.test.ts`.
+- Build a failing tool whose `execute(...)` increments a counter and throws `original failure <n>`.
+- Invoke it more than the former threshold and assert every call reaches the real tool and the observed errors remain the original failures, with no `circuit-open` replacement.
+
+### Verification
+
+- New regression failed before implementation: the real tool was called only 30 times and subsequent calls were replaced by the host-side circuit breaker.
+- Implemented on 2026-06-18: removed `withCircuitBreaker(...)`, the failure counter, `maxFailures`, `Log` usage, and the generated circuit-open error. `toolGuard(...)` now preserves the tool-map boundary without intercepting execution.
+- Focused regression passed: `bun test packages/opencorvus/test/util/tool-guard.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+- Broader optional check `bun test packages/opencorvus/test/orchestrator/tools.test.ts --timeout 120000` is not counted as this batch's BH-040 verification: it currently fails on unrelated missing-model-config, task ownership, and worktree marker assertions, while the focused BH-040 behavior regression passes.
+
+### Independent Review Feedback
+
+- Popper independently confirmed the old wrapper affected every orchestrator tool because `agent.ts` passed `guard.tools` into the runtime contract.
+- Popper confirmed the final fix removes the dormant threshold path and preserves real tool errors across more than the former 30-failure threshold.
+- Popper noted that the identity `toolGuard(...)` name could invite future gate logic; this batch keeps it only as a tested no-interception boundary so the behavior regression can invoke the production export directly.
