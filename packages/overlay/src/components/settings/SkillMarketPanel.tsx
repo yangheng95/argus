@@ -21,12 +21,13 @@ import {
   loadInstalledSkills,
   loadMcpStatus,
   loadSkillMarket,
+  deleteAllSkills,
   importSkillArchive,
   importSkillFile,
   importSkillPackage,
   type SkillImportPackageFile,
 } from "../../services/extensions"
-import { addMcpServer } from "../../services/mcp"
+import { addMcpServer, deleteAllMcp } from "../../services/mcp"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
 import { Icon, type IconName } from "../Icon"
@@ -239,6 +240,21 @@ function isRemoteUrl(value: string): boolean {
   return /^https?:\/\//i.test(value)
 }
 
+function errorDetail(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function requireManagedSkillDirectory(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("skill/directories returned a non-object payload")
+  }
+  const managedSkills = (value as Record<string, unknown>).managed_skills
+  if (typeof managedSkills !== "string" || !managedSkills.trim()) {
+    throw new Error("skill/directories returned no managed_skills path")
+  }
+  return managedSkills.trim()
+}
+
 // ── Extension Settings Panels ──
 
 type ExtensionPanelMode = "skill" | "mcp" | "skill-market"
@@ -396,9 +412,10 @@ function ExtensionSettingsPanel(props: {
   async function handleOpenSkill(location: string) {
     if (isRemoteUrl(location) ? !canOpenRemoteUrl() : !canOpenLocalPath()) return
     try {
-      await nativeOpen(location)
-    } catch {
-      // ignore
+      const opened = await nativeOpen(location)
+      if (!opened) throw new Error("native open returned false")
+    } catch (e) {
+      setPanelNotice(t("skill.open_failed", { error: errorDetail(e) }))
     }
   }
 
@@ -414,14 +431,8 @@ function ExtensionSettingsPanel(props: {
           })
     if (!(await nativeConfirm(message))) return
     try {
-      for (const item of list) {
-        await apiJson("skill/remove", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source: item.source, kind: skillRemoveKind(item) }),
-        })
-      }
-      await reloadAll()
+      await deleteAllSkills()
+      await Promise.all([refreshMcpStatus(), loadSkillMarket()])
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     }
@@ -432,8 +443,7 @@ function ExtensionSettingsPanel(props: {
     if (names.length === 0) return
     if (!(await nativeConfirm(t("mcp.delete_all_confirm", { count: names.length })))) return
     try {
-      await Promise.all(names.map((name) => apiJson(`mcp/${encodeURIComponent(name)}/disconnect`, { method: "POST" })))
-      await Promise.all(names.map((name) => apiJson(`mcp/${encodeURIComponent(name)}/auth`, { method: "DELETE" })))
+      await deleteAllMcp()
       await updateConfig((current: any) => {
         delete current.mcp
       })
@@ -464,7 +474,12 @@ function ExtensionSettingsPanel(props: {
   async function handleOpenHomepage(url: string | undefined) {
     if (!url) return
     if (!canOpenRemoteUrl()) return
-    await nativeOpen(url)
+    try {
+      const opened = await nativeOpen(url)
+      if (!opened) throw new Error("native open returned false")
+    } catch (e) {
+      setPanelNotice(t("skill.open_failed", { error: errorDetail(e) }))
+    }
   }
 
   // ── Add Skill inline form ──
@@ -535,9 +550,8 @@ function ExtensionSettingsPanel(props: {
       if (selected) {
         setSkillForm("value", selected)
       }
-    } catch {
-      // Host has no directory picker (vite preview). User can paste
-      // the path manually into the field.
+    } catch (e) {
+      setPanelNotice(t("skill.pick_folder_failed", { error: errorDetail(e) }))
     }
   }
 
@@ -555,15 +569,17 @@ function ExtensionSettingsPanel(props: {
       return
     }
     if (loadedMarketDirectory() === directory) return
-    setLoadedMarketDirectory(directory)
     setNotice("")
-    loadSkillMarket().catch((e) => {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
-    })
+    loadSkillMarket()
+      .then(() => setLoadedMarketDirectory(directory))
+      .catch((e) => {
+        setPanelNotice(e instanceof Error ? e.message : String(e))
+      })
   })
 
   createEffect(() => {
     if (!props.compact) return
+    if (props.active !== true) return
     const directory = currentDirectory()
     if (!directory) return
 
@@ -623,11 +639,11 @@ function ExtensionSettingsPanel(props: {
     if (!canOpenLocalPath()) return
     try {
       const dirs = await apiJson("skill/directories")
-      const target = (dirs as any)?.global_config || (dirs as any)?.managed_skills
-      if (!target) return
-      await nativeOpen(target)
-    } catch {
-      // ignore
+      const target = requireManagedSkillDirectory(dirs)
+      const opened = await nativeOpen(target)
+      if (!opened) throw new Error("native open returned false")
+    } catch (e) {
+      setPanelNotice(t("skill.open_dir_failed", { error: errorDetail(e) }))
     }
   }
 
@@ -668,7 +684,7 @@ function ExtensionSettingsPanel(props: {
 
       <Show when={notice()}>
         <div class="config-status-box" data-status={noticeStatus()}>
-          {notice()}
+          <span class="config-status-box__text">{notice()}</span>
           <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={() => setNotice("")}>
             {t("common.dismiss")}
           </Button>

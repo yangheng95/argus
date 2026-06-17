@@ -581,6 +581,23 @@ test(
         },
       ]
     }
+    const promptProfileCatalog = {
+      active: "general",
+      project_active: "general",
+      session_active: null,
+      default: "general",
+      targets: [],
+      profiles: [
+        {
+          id: "general",
+          label: "General",
+          description: "Default prompt profile",
+          built_in: true,
+          editable: false,
+          agents: {},
+        },
+      ],
+    }
     const requests: string[] = []
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
@@ -595,6 +612,8 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/projects/discover")
+        return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
       if (path === "/tasks") {
         return send({
           ...data.tasks,
@@ -602,6 +621,7 @@ test(
         })
       }
       if (path === "/global/tasks") return send(data.tasks)
+      if (path === "/mission") return send([])
       if (path === "/executor") return send(data.executors)
       if (path === "/terminal/profiles") return send({ profiles: [] })
       if (path === "/coding/cli/profiles") return send({ profiles: [] })
@@ -625,6 +645,7 @@ test(
         return send({ ok: true, message: "Provider connected" })
       }
       if (path === "/config/prompt") return send(prompts())
+      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
       if (path === "/config" && req.method === "GET") return send(data.config)
       if (path === "/config" && req.method === "PATCH") {
         data.config = await req.json()
@@ -632,7 +653,12 @@ test(
       }
       if (path === "/channel") return send(data.channels)
       if (path === "/skill/installed" || path === "/skill") return send(data.skills)
-      if (path === "/skill/directories") return send(["D:/skills"])
+      if (path === "/skill/directories")
+        return send({
+          global_config: "D:/skills/config",
+          managed_skills: "D:/skills/config/skills-market",
+          remote_cache: "D:/skills/cache",
+        })
       if (path === "/skill/market") return send(data.skillMarket)
       if (path === "/skill/install") {
         const body = await req.json()
@@ -1115,6 +1141,10 @@ test(
           )}`,
         )
       }
+      await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]', {
+        visible: true,
+      })
+      await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
       await page.waitForSelector(".task-row-main[data-task-id='task-1']")
       await page.click(".task-row-main[data-task-id='task-1']")
       await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')

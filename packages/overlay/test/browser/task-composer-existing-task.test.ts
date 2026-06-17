@@ -48,6 +48,24 @@ function boardForTask(item: any): any {
   }
 }
 
+const PROMPT_PROFILE_CATALOG = {
+  active: "general",
+  project_active: "general",
+  session_active: null,
+  default: "general",
+  targets: [],
+  profiles: [
+    {
+      id: "general",
+      label: "General",
+      description: "Default prompt profile",
+      built_in: true,
+      editable: false,
+      agents: {},
+    },
+  ],
+}
+
 async function waitForCurrentTask(page: any, taskID: string) {
   const selector = `.task-row-main[data-task-id="${taskID}"]`
   const deadline = Date.now() + 5_000
@@ -74,7 +92,9 @@ test("selected cancelled task keeps the main composer focusable and editable", a
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "task-composer-existing-test" })
+    if (path === "/global/projects/discover") return send([])
     if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
+    if (path === "/mission") return send([])
     if (path === "/executor") return send([])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/project/current/worktrees") return send([])
@@ -93,7 +113,7 @@ test("selected cancelled task keeps the main composer focusable and editable", a
         directory: "D:/composer-existing/workspace",
       })
     }
-    if (path === "/config/prompt") return send({})
+    if (path === "/config/prompt" || path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
     if (path === "/channel") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
     if (path === "/gateway/stats") return send({ active: 0, queued: 0, completed: 0, failed: 0 })
@@ -103,8 +123,13 @@ test("selected cancelled task keeps the main composer focusable and editable", a
       })
     }
     if (path === "/skill/installed" || path === "/skill") return send([])
-    if (path === "/skill/directories") return send([])
-    if (path === "/skill/market") return send({ items: [] })
+    if (path === "/skill/directories")
+      return send({
+        global_config: "D:/existing-task/config",
+        managed_skills: "D:/existing-task/config/skills-market",
+        remote_cache: "D:/existing-task/cache",
+      })
+    if (path === "/skill/market") return send([])
     if (path === "/mcp") return send({})
     if (path === "/agent") return send([])
     if (path === "/panel/knowledge/memory") return send([])
@@ -165,6 +190,10 @@ test("selected cancelled task keeps the main composer focusable and editable", a
       localStorage.setItem("oc_theme", "light")
     }, server.origin)
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]', {
+      visible: true,
+    })
+    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
     await page.waitForSelector('.task-row-main[data-task-id="task-cancelled-compose"]')
     await page.click('.task-row-main[data-task-id="task-cancelled-compose"]')
     await waitForCurrentTask(page, "task-cancelled-compose")

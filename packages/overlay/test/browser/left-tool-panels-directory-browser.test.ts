@@ -163,11 +163,16 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded", timeout: 60_000 })
     await page.waitForSelector("#solidLeftActivityToolbar")
     await page.waitForFunction(() => (window as any).__overlayInitSettled === true)
+    requestLog.length = 0
+    assert.equal(requestLog.some((item) => item.path === "/skill/installed"), false)
+    assert.equal(requestLog.some((item) => item.path === "/mcp"), false)
 
-    await page.$eval('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]', (node) =>
-      (node as HTMLButtonElement).click(),
-    )
+    const skillButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]'
+    await page.waitForSelector(skillButton, { visible: true })
+    await page.click(skillButton)
     await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-row")
+    assert.equal(requestLog.some((item) => item.path === "/skill/installed"), true)
+    assert.equal(requestLog.some((item) => item.path === "/mcp"), false)
     const skillName = await page.$eval(
       "#leftPanelSkills .extension-row .extension-row-main > strong",
       (node) => node.textContent || "",
@@ -180,10 +185,11 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     assert.ok(skillListMetrics.height > 24)
     assert.match(skillListMetrics.text, /project-review/)
 
-    await page.$eval('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]', (node) =>
-      (node as HTMLButtonElement).click(),
-    )
+    const mcpButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]'
+    await page.waitForSelector(mcpButton, { visible: true })
+    await page.click(mcpButton)
     await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-row")
+    assert.equal(requestLog.some((item) => item.path === "/mcp"), true)
     const mcpName = await page.$eval(
       "#leftPanelMcp .extension-row .extension-row-main > strong",
       (node) => node.textContent || "",
@@ -196,9 +202,9 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     assert.ok(mcpListMetrics.height > 24)
     assert.match(mcpListMetrics.text, /docs/)
 
-    await page.$eval('[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]', (node) =>
-      (node as HTMLButtonElement).click(),
-    )
+    const memoryButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]'
+    await page.waitForSelector(memoryButton, { visible: true })
+    await page.click(memoryButton)
     await page.waitForSelector("#leftPanelMemory[data-active='true'] .knowledge-item")
     const memoryName = await page.$eval("#leftPanelMemory .knowledge-item-title", (node) => node.textContent || "")
     assert.equal(memoryName, "Left panel memory loaded from selected task")

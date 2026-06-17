@@ -96,6 +96,12 @@ describe("task-row action buttons hover-only contract", () => {
     expect(body!).toContain("pointer-events: auto")
   })
 
+  test("hover/focus reveal lets the action rail receive pointer events", () => {
+    const body = extractRule(css, ".task-row-mini:hover .task-row-actions")
+    expect(body).not.toBeNull()
+    expect(body!).toContain("pointer-events: auto")
+  })
+
   test("hover/focus action slot expands the right grid track", () => {
     const body = extractRule(css, ".task-row-mini:has(.task-row-actions):hover")
     expect(body).not.toBeNull()
@@ -106,6 +112,7 @@ describe("task-row action buttons hover-only contract", () => {
     const body = extractRule(css, ".task-row-mini:has(.task-row-actions):hover .task-row-stamp")
     expect(body).not.toBeNull()
     expect(body!).toContain("opacity: 0")
+    expect(body!).toContain("pointer-events: none")
   })
 
   test("reveal selector group covers all five button kinds across hover/focus states", () => {

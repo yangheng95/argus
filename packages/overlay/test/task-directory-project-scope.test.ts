@@ -42,6 +42,35 @@ function fakeTransport(requests: TransportRequest[]): HostTransport {
   } satisfies HostTransport
 }
 
+function fakeTransportFailing(requests: TransportRequest[], failingPath: string, message: string): HostTransport {
+  const base = fakeTransport(requests)
+  return {
+    ...base,
+    async request(req) {
+      if (req.path === failingPath) {
+        requests.push(req)
+        return { status: 503, ok: false, headers: {}, body: { error: message } }
+      }
+      return base.request(req)
+    },
+  } satisfies HostTransport
+}
+
+function selectTaskDirectory(): void {
+  configure({ directory: "" })
+  setSettingsStore("directory", "")
+  setBoardStore("board", {
+    snapshotVersion: "snapshot-task-dir",
+    task: {
+      id: "task_1",
+      directory: "D:/repo/from-task",
+      time: { created: 1, updated: 1 },
+    },
+    goalWorkflows: [],
+    interactions: [],
+  })
+}
+
 describe("task directory project-scope reload", () => {
   afterEach(() => {
     __setHostTransportForTest(undefined)
@@ -71,6 +100,7 @@ describe("task directory project-scope reload", () => {
       executors: [],
       providerCatalog: null,
       providerAuth: null,
+      configLoadErrors: {},
       channels: [],
       skills: [],
       mcp: {},
@@ -82,18 +112,7 @@ describe("task directory project-scope reload", () => {
   test("reloadProjectScope uses selected task directory when settings directory is empty", async () => {
     const requests: TransportRequest[] = []
     __setHostTransportForTest(fakeTransport(requests))
-    configure({ directory: "" })
-    setSettingsStore("directory", "")
-    setBoardStore("board", {
-      snapshotVersion: "snapshot-task-dir",
-      task: {
-        id: "task_1",
-        directory: "D:/repo/from-task",
-        time: { created: 1, updated: 1 },
-      },
-      goalWorkflows: [],
-      interactions: [],
-    })
+    selectTaskDirectory()
 
     await reloadProjectScope({ restoreWorkspace: false })
 
@@ -103,22 +122,50 @@ describe("task directory project-scope reload", () => {
     expect(scoped.length).toBeGreaterThan(0)
     expect(scoped.every((req) => req.query?.directory === "D:/repo/from-task")).toBe(true)
     expect(appStore.skills).toEqual([{ name: "task-skill", builtin: false }])
-    expect(appStore.mcp).toEqual({ docs: { status: "connected" } })
+    expect(appStore.mcp.docs).toEqual({ status: "connected" })
   })
 
-  test("syncActiveDirectoryApiContext retargets direct panel requests to the task directory", () => {
-    configure({ directory: "" })
-    setSettingsStore("directory", "")
-    setBoardStore("board", {
-      snapshotVersion: "snapshot-task-dir",
-      task: {
-        id: "task_1",
-        directory: "D:/repo/from-task",
-        time: { created: 1, updated: 1 },
-      },
-      goalWorkflows: [],
-      interactions: [],
+  test("reloadProjectScope rejects extension reload failures instead of preserving stale projections silently", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(fakeTransportFailing(requests, "skill/installed", "skill inventory unavailable"))
+    selectTaskDirectory()
+    setAppStore("skills", [{ name: "stale-skill", builtin: false }])
+
+    await expect(reloadProjectScope({ restoreWorkspace: false })).rejects.toThrow("skill inventory unavailable")
+
+    expect(appStore.skills).toEqual([{ name: "stale-skill", builtin: false }])
+  })
+
+  for (const failingPath of ["config", "channel", "path", "vcs", "executor"] as const) {
+    test(`reloadProjectScope rejects ${failingPath} reload failures instead of rewriting stale projections`, async () => {
+      const requests: TransportRequest[] = []
+      __setHostTransportForTest(fakeTransportFailing(requests, failingPath, `${failingPath} unavailable`))
+      selectTaskDirectory()
+      setAppStore({
+        config: { model: "stale-model" },
+        channels: [{ id: "stale-channel" }],
+        executors: [{ id: "stale-executor" }],
+      })
+      setBoardStore({
+        path: { directory: "D:/repo/stale" },
+        vcs: { branch: "stale" },
+      })
+
+      await expect(reloadProjectScope({ restoreWorkspace: false })).rejects.toThrow(`${failingPath} unavailable`)
+
+      if (failingPath === "config") {
+        expect(appStore.config?.model).toBe("stale-model")
+        expect(appStore.configLoadErrors.config).toContain("config unavailable")
+      }
+      if (failingPath === "channel") expect(appStore.channels).toEqual([{ id: "stale-channel" }])
+      if (failingPath === "path") expect(boardStore.path).toEqual({ directory: "D:/repo/stale" })
+      if (failingPath === "vcs") expect(boardStore.vcs).toEqual({ branch: "stale" })
+      if (failingPath === "executor") expect(appStore.executors).toEqual([{ id: "stale-executor" }])
     })
+  }
+
+  test("syncActiveDirectoryApiContext retargets direct panel requests to the task directory", () => {
+    selectTaskDirectory()
 
     expect(syncActiveDirectoryApiContext()).toBe("D:/repo/from-task")
     expect(new URL(apiUrl("panel/knowledge/memory?taskID=task_1")).searchParams.get("directory")).toBe(

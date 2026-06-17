@@ -42,6 +42,10 @@ export function skillRemovable(item: SkillDescriptor): boolean {
   return !item?.builtin && !!item?.source && !!skillRemoveKind(item)
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 // ── Loaders ──
 
 /**
@@ -176,8 +180,28 @@ export async function deleteAllSkills(): Promise<void> {
   const custom = skills.filter((item) => !item.builtin)
   const list = custom.filter(skillRemovable)
   if (list.length === 0) return
-  await list.reduce(
-    (promise, item) => promise.then(() => removeSkillSource(item.source!, skillRemoveKind(item))),
-    Promise.resolve(),
-  )
+  let removalError: unknown
+  for (const item of list) {
+    try {
+      await removeSkillSource(item.source!, skillRemoveKind(item))
+    } catch (error) {
+      removalError = error
+      break
+    }
+  }
+
+  try {
+    await loadInstalledSkills()
+  } catch (refreshError) {
+    if (removalError) {
+      throw new Error(
+        `Failed to delete all skills: ${errorMessage(removalError)}; failed to refresh installed skills: ${errorMessage(
+          refreshError,
+        )}`,
+      )
+    }
+    throw refreshError
+  }
+
+  if (removalError) throw removalError
 }

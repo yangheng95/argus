@@ -55,6 +55,17 @@ describe("task row right column stays anchored to the row edge", () => {
     expect(body).toMatch(/justify-content:\s*flex-end\s*;/)
     expect(body).toMatch(/width:\s*100%\s*;/)
     expect(body).toMatch(/position:\s*relative\s*;/)
+    expect(body).toMatch(/pointer-events:\s*none\s*;/)
+  })
+
+  test(".task-row-right timestamp never intercepts action button clicks", () => {
+    const body = selectorRuleBody(".task-row-right .task-row-stamp")
+    expect(body).toMatch(/pointer-events:\s*none\s*;/)
+  })
+
+  test(".task-row-right keeps the tree child toggle clickable", () => {
+    const body = soloRuleBody(".task-row-children-toggle")
+    expect(body).toMatch(/pointer-events:\s*auto\s*;/)
   })
 
   test(".task-row-actions overlays only the dedicated action slot", () => {

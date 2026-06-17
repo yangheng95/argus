@@ -253,6 +253,13 @@ test(
               directory: "D:/overlay/workspace/app",
               metadata: { codingAssistant: { surface: "right-sidebar" } },
             },
+            {
+              id: "ses_right_sidebar_delete",
+              kind: "assistant",
+              title: "Coding assistant delete target",
+              directory: "D:/overlay/workspace/app",
+              metadata: { codingAssistant: { surface: "right-sidebar" } },
+            },
           ],
         })
       }
@@ -271,6 +278,7 @@ test(
         )
       }
       if (path === "/coding/session/ses_right_sidebar_assistant") {
+        if (req.method === "DELETE") return send({ ok: true })
         return send({
           session: {
             id: "ses_right_sidebar_assistant",
@@ -281,6 +289,19 @@ test(
           },
         })
       }
+      if (path === "/coding/session/ses_right_sidebar_delete") {
+        if (req.method === "DELETE") return send({ ok: true })
+        return send({
+          session: {
+            id: "ses_right_sidebar_delete",
+            kind: "assistant",
+            title: "Coding assistant delete target",
+            directory: "D:/overlay/workspace/app",
+            metadata: { codingAssistant: { surface: "right-sidebar" } },
+          },
+        })
+      }
+      if (path === "/coding/session/ses_right_sidebar_assistant/abort") return send({ ok: true })
       if (path === "/session/ses_right_sidebar_assistant/conversation") {
         return send({
           board: {
@@ -412,8 +433,15 @@ test(
       await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
 
       const clickButton = async (selector: string) => {
-        await page.$eval(selector, (node) => (node as HTMLButtonElement).click())
+        await page.waitForSelector(selector, { visible: true })
+        await page.click(selector)
       }
+      const hitTestDataUi = async (selector: string) =>
+        await page.$eval(selector, (node) => {
+          const rect = (node as HTMLElement).getBoundingClientRect()
+          const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+          return target instanceof Element ? target.closest<HTMLElement>("[data-ui]")?.dataset.ui ?? "" : ""
+        })
 
       const activeState = async () =>
         await page.evaluate(() => {
@@ -527,8 +555,6 @@ test(
             openPanelWidths: Array.from(
               document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']"),
             ).map((node) => Math.round(node.getBoundingClientRect().width)),
-            workflowResizableNext:
-              document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")?.dataset.resizableNext ?? "",
             workflowSeparator: (() => {
               const separator = document.querySelector<HTMLElement>("#centerWorkbenchSeparatorWorkflow")
               return {
@@ -561,13 +587,13 @@ test(
         throw new Error(`${label}: ${JSON.stringify(state)} requests=${JSON.stringify(requestLog.slice(-20))}`)
       }
       assertMatchObject(await activeState(), {
-        leftTasks: "true",
-        leftMission: "false",
+        leftTasks: "false",
+        leftMission: "true",
         leftAssistant: "false",
-        leftHeaderTitle: "Recent Tasks",
-        leftHeaderAriaLabel: "Recent Tasks",
-        leftHeaderI18nKey: "task.ledger.title",
-        leftHeaderActionScope: "tasks",
+        leftHeaderTitle: "Mission",
+        leftHeaderAriaLabel: "Mission",
+        leftHeaderI18nKey: "mission.title",
+        leftHeaderActionScope: "mission",
         leftHeaderActionsActive: "true",
         rightInspector: "false",
         centerOpen: "true",
@@ -579,8 +605,8 @@ test(
         centerPreview: "false",
         leftToolbarExists: true,
         leftActivityButtons: 6,
-        leftTasksButton: "true",
-        leftMissionButton: "false",
+        leftTasksButton: "false",
+        leftMissionButton: "true",
         leftAssistantButton: "false",
         leftSkillButton: "false",
         leftMcpButton: "false",
@@ -600,19 +626,12 @@ test(
         notificationPanelExists: true,
         taskStatusInWorkflowHeader: true,
         centerWorkbenchHeaderExists: false,
-        chatTitle: "Task",
-        selectedSourceKind: "task",
-        selectedSourceID: "tsk_side_activity",
+        chatTitle: "Mission",
         rightTitle: "Inspector",
         notificationTitle: "Notifications",
         workbenchStartsAtWorkspace: true,
       })
 
-      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
-      await waitForState(
-        "mission activity should become active before narrow layout check",
-        (state) => state.leftMission === "true" && state.leftHeaderTitle === "Mission",
-      )
       await page.setViewport({ width: 960, height: 720 })
       await page.waitForFunction(
         () => getComputedStyle(document.querySelector<HTMLElement>("#panelBody")!).flexDirection === "column",
@@ -699,7 +718,7 @@ test(
         leftMission: "true",
         centerOpen: "true",
         centerWorkflow: "true",
-        rightWorkflowButton: "false",
+        rightWorkflowButton: "true",
         chatTitle: "Mission",
       })
       const missionCreatePlacement = await page.evaluate(() => {
@@ -720,8 +739,11 @@ test(
         false,
       )
 
-      await clickButton('.mission-ledger [data-ui="task-row-cancel"]')
-      await clickButton('.mission-ledger [data-ui="task-row-cancel"][data-confirm="true"]')
+      const missionRowSelector = '.mission-ledger [data-ui="mission-row"][data-session-id="ses_mission_side_activity"]'
+      await page.hover(missionRowSelector)
+      await clickButton(`${missionRowSelector} [data-ui="task-row-cancel"]`)
+      await page.hover(missionRowSelector)
+      await clickButton(`${missionRowSelector} [data-ui="task-row-cancel"][data-confirm="true"]`)
       await waitForState(
         "mission abort button should disappear after accepted abort",
         (state) => state.missionAbortButtons === 0,
@@ -731,17 +753,18 @@ test(
       )
 
       await page.click('[data-ui="mission-row"][data-session-id="ses_mission_side_activity"]')
-      await waitForState("mission row should select its session", (state) => state.selectedSourceID === "ses_mission_side_activity")
+      await waitForState(
+        "mission row should select its session",
+        (state) => state.selectedSourceID === "ses_mission_side_activity",
+      )
       assertMatchObject(await activeState(), {
         selectedSourceKind: "session",
         selectedSourceID: "ses_mission_side_activity",
       })
-      await waitForState(
-        "mission row should request its session conversation",
-        () =>
-          requestLog.some(
-            (entry) => entry.method === "GET" && entry.path === "/session/ses_mission_side_activity/conversation",
-          ),
+      await waitForState("mission row should request its session conversation", () =>
+        requestLog.some(
+          (entry) => entry.method === "GET" && entry.path === "/session/ses_mission_side_activity/conversation",
+        ),
       )
 
       await page.$eval("#chatTextarea", (node) => {
@@ -802,7 +825,10 @@ test(
         )
       })
       await clickButton("#chatSend")
-      await waitForState("mission wake should select new session", (state) => state.selectedSourceID === "ses_mission_new")
+      await waitForState(
+        "mission wake should select new session",
+        (state) => state.selectedSourceID === "ses_mission_new",
+      )
       assert.ok(requestLog.some((entry) => entry.method === "POST" && entry.path === "/mission/wake"))
       assert.ok(
         requestLog.some((entry) => entry.method === "GET" && entry.path === "/session/ses_mission_new/conversation"),
@@ -996,7 +1022,6 @@ test(
         centerWorkflow: "true",
         centerInspector: "true",
         rightInspectorButton: "true",
-        workflowResizableNext: "true",
         appDialogOpen: false,
       })
       assert.deepEqual(twoPanelState.openPanels, ["task", "inspector"])
@@ -1134,7 +1159,7 @@ test(
         inspectorOpenState.openPanelWidths.every((width) => width > 0),
         true,
       )
-      assert.equal(inspectorOpenState.workflowResizableNext, "true")
+      assert.equal((inspectorOpenState.workflowSeparator as { hidden: boolean }).hidden, false)
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
       await page.waitForFunction(
@@ -1174,6 +1199,32 @@ test(
         }
       })
       assert.deepEqual(assistantCreatePlacement, { inHeader: true, hidden: false, listButtons: 0 })
+      const assistantRowSelector = '[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]'
+      const assistantStopSelector = `${assistantRowSelector} [data-ui="task-row-cancel"]`
+      await page.hover(assistantRowSelector)
+      await page.waitForSelector(assistantStopSelector, { visible: true })
+      assert.equal(await hitTestDataUi(assistantStopSelector), "task-row-cancel")
+      await clickButton(assistantStopSelector)
+      await page.hover(assistantRowSelector)
+      await clickButton(`${assistantStopSelector}[data-confirm="true"]`)
+      await waitForState("assistant stop button should call session abort", () =>
+        requestLog.some(
+          (entry) => entry.method === "POST" && entry.path === "/coding/session/ses_right_sidebar_assistant/abort",
+        ),
+      )
+      const assistantDeleteRowSelector = '[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_delete"]'
+      const assistantDeleteSelector = `${assistantDeleteRowSelector} [data-ui="task-row-delete"]`
+      await page.hover(assistantDeleteRowSelector)
+      await page.waitForSelector(assistantDeleteSelector, { visible: true })
+      assert.equal(await hitTestDataUi(assistantDeleteSelector), "task-row-delete")
+      await clickButton(assistantDeleteSelector)
+      await page.hover(assistantDeleteRowSelector)
+      await clickButton(`${assistantDeleteSelector}[data-confirm="true"]`)
+      await waitForState("assistant delete button should call session delete", () =>
+        requestLog.some(
+          (entry) => entry.method === "DELETE" && entry.path === "/coding/session/ses_right_sidebar_delete",
+        ),
+      )
       await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
       await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
       assertMatchObject(await activeState(), {
@@ -1192,7 +1243,7 @@ test(
         centerWorkflow: "true",
         leftAssistant: "true",
         leftAssistantButton: "true",
-        rightWorkflowButton: "false",
+        rightWorkflowButton: "true",
         chatTitle: "Chat",
       })
 
@@ -1201,10 +1252,7 @@ test(
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
       await waitForState(
         "mission activity should clear assistant session",
-        (state) =>
-          state.leftMission === "true" &&
-          state.chatTitle === "Mission" &&
-          state.selectedSourceKind === "",
+        (state) => state.leftMission === "true" && state.chatTitle === "Mission" && state.selectedSourceKind === "",
       )
       assertMatchObject(await activeState(), {
         leftMission: "true",

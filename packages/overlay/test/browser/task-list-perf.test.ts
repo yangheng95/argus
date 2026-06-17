@@ -84,6 +84,24 @@ function missionForTask(item: any): any {
   }
 }
 
+const PROMPT_PROFILE_CATALOG = {
+  active: "general",
+  project_active: "general",
+  session_active: null,
+  default: "general",
+  targets: [],
+  profiles: [
+    {
+      id: "general",
+      label: "General",
+      description: "Default prompt profile",
+      built_in: true,
+      editable: false,
+      agents: {},
+    },
+  ],
+}
+
 function pageByCursor<T>(
   items: T[],
   limit: number,
@@ -155,7 +173,7 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
         directory: "D:/perf/workspace",
       })
     }
-    if (path === "/config/prompt") return send({})
+    if (path === "/config/prompt" || path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
     if (/^\/session\/[^/]+\/config$/.test(path)) return send({ config: {} })
     if (path === "/channel") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
@@ -186,8 +204,13 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
       })
     }
     if (path === "/skill/installed" || path === "/skill") return send([])
-    if (path === "/skill/directories") return send([])
-    if (path === "/skill/market") return send({ items: [] })
+    if (path === "/skill/directories")
+      return send({
+        global_config: "D:/task-list-perf/config",
+        managed_skills: "D:/task-list-perf/config/skills-market",
+        remote_cache: "D:/task-list-perf/cache",
+      })
+    if (path === "/skill/market") return send([])
     if (path === "/mcp") return send({})
     if (path === "/agent") return send([])
     if (path === "/file") return send([])
@@ -299,6 +322,10 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
     }, app)
     await page.goto(`${app}/ui/index.html`, { waitUntil: "load" })
     await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]', {
+      visible: true,
+    })
+    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
 
     await page.evaluate(async (count) => {
       const start = performance.now()
@@ -341,10 +368,13 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
       return performance.now() - start
     }, PAGE_SIZE)
 
-    const hiddenMissionRows = await page.evaluate(
-      () => document.querySelectorAll('.mission-ledger [data-ui="mission-row"]').length,
+    const visibleMissionRows = await page.evaluate(
+      () =>
+        Array.from(document.querySelectorAll<HTMLElement>('.mission-ledger [data-ui="mission-row"]')).filter(
+          (node) => node.getClientRects().length > 0,
+        ).length,
     )
-    assert.equal(hiddenMissionRows, 0)
+    assert.equal(visibleMissionRows, 0)
 
     const selectLastMs = await page.evaluate(async () => {
       const rows = Array.from(document.querySelectorAll<HTMLButtonElement>(".task-row-main[data-task-id]"))
