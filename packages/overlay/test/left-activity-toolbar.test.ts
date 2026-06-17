@@ -117,7 +117,7 @@ test("skill panel imports dropped files, directories, and zip archives through t
   expect(panel).toContain("webkitGetAsEntry")
   expect(panel).toContain("readEntryFiles")
   expect(panel).toContain("fileToBase64")
-  expect(panel).toContain('confirm(t("skill.drop_confirm"')
+  expect(panel).toContain('nativeConfirm(t("skill.drop_confirm"')
   expect(panel).toContain("await importSkillArchive(payload.archive.name")
   expect(panel).toContain("await importSkillPackage(payload.sourceName, payload.files, skillForm.policy)")
   expect(panel).toContain("await importSkillFile(payload.file.name")

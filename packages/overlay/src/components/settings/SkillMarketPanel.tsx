@@ -16,7 +16,7 @@ import { pickDirectory, syncActiveDirectoryApiContext } from "../../services/wor
 import { appStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
 import { getHostTransport } from "../../services/host-transport"
-import { nativeOpen } from "../../utils/native"
+import { nativeConfirm, nativeOpen } from "../../utils/native"
 import { createVisibilityInterval } from "../../utils/visibility-interval"
 import {
   loadInstalledSkills,
@@ -360,8 +360,6 @@ function ExtensionSettingsPanel(props: {
   const [loading, setLoading] = createSignal(false)
   const [loadedMarketDirectory, setLoadedMarketDirectory] = createSignal("")
   const [skillDragActive, setSkillDragActive] = createSignal(false)
-  const [panelSkills, setPanelSkills] = createSignal<SkillItem[] | null>(null)
-  const [panelMcp, setPanelMcp] = createSignal<Record<string, McpItem> | null>(null)
 
   function setPanelNotice(message: string, status: "active" | "error" | "warn" = "error") {
     setNotice(message)
@@ -384,24 +382,9 @@ function ExtensionSettingsPanel(props: {
     return false
   }
 
-  // Each mounted panel keeps the response it just loaded while still falling
-  // back to global store data populated by the shared extension loaders.
-  const skills = createMemo((): SkillItem[] => {
-    const local = panelSkills()
-    if (local) return local
-    const raw = appStore.skills
-    return Array.isArray(raw) ? (raw as SkillItem[]) : []
-  })
-  const mcp = createMemo((): Record<string, McpItem> => {
-    const local = panelMcp()
-    if (local) return local
-    const raw = appStore.mcp
-    return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, McpItem>) : {}
-  })
-  const market = createMemo((): MarketItem[] => {
-    const raw = appStore.skillMarket
-    return Array.isArray(raw) ? (raw as MarketItem[]) : []
-  })
+  const skills = createMemo((): SkillItem[] => [...(appStore.skills as SkillItem[])])
+  const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp as Record<string, McpItem>) }))
+  const market = createMemo((): MarketItem[] => [...(appStore.skillMarket as MarketItem[])])
 
   const customSkills = createMemo(() => skills().filter((item) => !item.builtin))
   const removableSkills = createMemo(() => customSkills().filter(skillRemovable))
@@ -409,15 +392,11 @@ function ExtensionSettingsPanel(props: {
   const mcpEntries = createMemo(() => Object.entries(mcp()))
 
   async function refreshInstalledSkills() {
-    const items = await loadInstalledSkills()
-    setPanelSkills(items as SkillItem[])
-    return items
+    return (await loadInstalledSkills()) as SkillItem[]
   }
 
   async function refreshMcpStatus() {
-    const status = await loadMcpStatus()
-    setPanelMcp(status as Record<string, McpItem>)
-    return status
+    return (await loadMcpStatus()) as Record<string, McpItem>
   }
 
   async function reloadAll() {
@@ -434,7 +413,7 @@ function ExtensionSettingsPanel(props: {
   }
 
   async function handleRemoveSkill(source: string, kind: string, name: string) {
-    if (!confirm(t("skill.delete_confirm", { name }))) return
+    if (!(await nativeConfirm(t("skill.delete_confirm", { name })))) return
     try {
       await apiJson("skill/remove", {
         method: "POST",
@@ -466,7 +445,7 @@ function ExtensionSettingsPanel(props: {
             removable: list.length,
             blocked: customSkills().length - list.length,
           })
-    if (!confirm(message)) return
+    if (!(await nativeConfirm(message))) return
     try {
       for (const item of list) {
         await apiJson("skill/remove", {
@@ -484,16 +463,10 @@ function ExtensionSettingsPanel(props: {
   async function handleDeleteAllMcp() {
     const names = mcpEntries().map(([name]) => name)
     if (names.length === 0) return
-    if (!confirm(t("mcp.delete_all_confirm", { count: names.length }))) return
+    if (!(await nativeConfirm(t("mcp.delete_all_confirm", { count: names.length })))) return
     try {
-      await Promise.all(
-        names.map((name) =>
-          apiJson(`mcp/${encodeURIComponent(name)}/disconnect`, { method: "POST" }).catch(() => void 0),
-        ),
-      )
-      await Promise.all(
-        names.map((name) => apiJson(`mcp/${encodeURIComponent(name)}/auth`, { method: "DELETE" }).catch(() => void 0)),
-      )
+      await Promise.all(names.map((name) => apiJson(`mcp/${encodeURIComponent(name)}/disconnect`, { method: "POST" })))
+      await Promise.all(names.map((name) => apiJson(`mcp/${encodeURIComponent(name)}/auth`, { method: "DELETE" })))
       await updateConfig((current: any) => {
         delete current.mcp
       })
@@ -566,7 +539,7 @@ function ExtensionSettingsPanel(props: {
     try {
       const payload = await droppedSkillPayload(event)
       if (!payload) return
-      if (!confirm(t("skill.drop_confirm", { name: payload.sourceName }))) return
+      if (!(await nativeConfirm(t("skill.drop_confirm", { name: payload.sourceName })))) return
       setLoading(true)
       setNotice("")
       const imported = payload.archive
