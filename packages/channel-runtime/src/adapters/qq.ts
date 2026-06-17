@@ -1,4 +1,4 @@
-import { generateKeyPairSync, sign, verify, type KeyObject } from "node:crypto"
+import { createPrivateKey, createPublicKey, sign, verify, type KeyObject } from "node:crypto"
 import type { ChannelAdapter, IncomingMessage, MessageHandler } from "../adapter"
 import { adapt, path, type Serve, type Server } from "./http"
 
@@ -53,9 +53,22 @@ type Routed = IncomingMessage & {
 
 function seed(secret: string) {
   if (!secret) throw new Error("QQ app secret is required")
-  let text = secret
-  while (Buffer.byteLength(text) < 32) text += text
-  return Buffer.from(text.slice(0, 32))
+  const source = Buffer.from(secret)
+  const result = Buffer.alloc(32)
+  for (let i = 0; i < result.length; i++) result[i] = source[i % source.length]!
+  return result
+}
+
+function keyPair(secret: string) {
+  const privateKey = createPrivateKey({
+    key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed(secret)]),
+    format: "der",
+    type: "pkcs8",
+  })
+  return {
+    privateKey,
+    publicKey: createPublicKey(privateKey),
+  }
 }
 
 function hex(value: string) {
@@ -108,7 +121,7 @@ export class QQAdapter implements ChannelAdapter {
     sandbox?: boolean
     serve?: Serve
   }) {
-    const keys = generateKeyPairSync("ed25519", { seed: seed(opts.appSecret) })
+    const pair = keyPair(opts.appSecret)
     this.appId = opts.appId
     this.appSecret = opts.appSecret
     this.host = opts.host ?? "0.0.0.0"
@@ -116,8 +129,8 @@ export class QQAdapter implements ChannelAdapter {
     this.hook = path(opts.path, "/qqbot")
     this.api = opts.sandbox ? "https://sandbox.api.sgroup.qq.com" : "https://api.sgroup.qq.com"
     this.serve = adapt(opts.serve)
-    this.publicKey = keys.publicKey
-    this.privateKey = keys.privateKey
+    this.publicKey = pair.publicKey
+    this.privateKey = pair.privateKey
   }
 
   onMessage(handler: MessageHandler): void {

@@ -1328,3 +1328,51 @@ LINE:
 - McClintock rejected an adapter-only bounded-buffer fix because it would still keep the eager `AudioAttachment.data` contract and would not prevent downloads when STT is disabled.
 - McClintock required the STT pipeline to become the single audio acquisition boundary: metadata size check, response `Content-Length` check, stream chunk accounting, and provider invocation must all happen behind one bounded source reader.
 - McClintock also flagged the existing dirty STT provider fallback work as a separate risk. The final patch makes that behavior explicit: one configured provider, no `STT_PROVIDERS` fallback chain, and no managed-runtime global env read.
+
+## Batch P1-O: BH-093 QQ Ed25519 webhook key derivation
+
+### Findings
+
+- BH-093 is a P1 QQ webhook authentication bug: `QQAdapter` calls `generateKeyPairSync("ed25519", { seed })`, but Node/Bun do not use that `seed` option for Ed25519 key generation. Each adapter instance receives a fresh random keypair.
+- Existing tests hide the defect by reading the adapter's private key and signing inbound requests with that private key, so the tests prove self-consistency rather than the QQ platform contract.
+- QQ's documented webhook contract derives an Ed25519 key from the app secret repeated/truncated to 32 bytes. The signature input is `timestamp + rawBody` for inbound events and `event_ts + plain_token` for validation responses.
+
+### Call-point Inventory
+
+- `packages/channel-runtime/src/adapters/qq.ts` owns QQ webhook signature verification, validation response signing, access token fetch, and outbound replies.
+- `packages/channel-runtime/test/mainstream-adapters.test.ts` owns QQ validation, inbound C2C, channel at-message, and outbound reply coverage. The current `qqSigned(adapter, ...)` helper reads `adapter.privateKey`.
+- `packages/channel-config/src/index.ts` defines the QQ app ID/app secret env contract and registry-required fields.
+- `packages/channel-runtime/src/registry.ts` passes `QQ_BOT_APP_ID`, `QQ_BOT_APP_SECRET`, sandbox, host, port, and path into `QQAdapter`.
+- `packages/web/src/content/docs/channels/qq.mdx` and `packages/web/src/content/docs/zh-cn/channels/qq.mdx` document the QQ setup surface but do not participate in signing.
+
+### Fix Shape
+
+- Replace random Ed25519 key generation with deterministic PKCS#8 Ed25519 private-key import from the 32-byte repeated app-secret seed, then derive the public key with `createPublicKey()`.
+- Keep a single key derivation implementation in `QQAdapter`; do not add signature fallback modes, dual-key verification, app-secret HMAC gates, or adapter-private-key testing shortcuts.
+- Keep the existing signature input `timestamp + rawBody` and validation response input `event_ts + plain_token`.
+- Update tests so platform-style fixtures derive their own key from the app secret and never read adapter private fields.
+
+### Regression Tests
+
+- Update QQ signing helper to accept `appSecret` and sign with an independently derived Ed25519 private key.
+- Assert a known app secret derives the documented raw public key bytes, so the fixture itself is pinned to the platform algorithm.
+- Assert validation challenge response signature exactly for a fixed app secret, plain token, and event timestamp.
+- Existing QQ validation and inbound tests should pass with independently signed requests and fail on wrong signatures.
+- Add a deterministic same-secret assertion: two adapters with the same app secret return the same validation signature for the same challenge.
+
+### Verification
+
+- Focused test command: `bun test packages/channel-runtime/test/mainstream-adapters.test.ts -t "qq"`
+- Typecheck command: `bun run --cwd packages/channel-runtime typecheck`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused QQ tests passed: `bun test packages/channel-runtime/test/mainstream-adapters.test.ts -t "qq"`.
+- Package typecheck passed: `bun run --cwd packages/channel-runtime typecheck`.
+
+### Independent Review Feedback
+
+- Hubble confirmed the vulnerable boundary is deterministic Ed25519 key derivation, not route parsing or registry wiring.
+- Hubble confirmed tests must stop reading adapter private fields and should use an independent app-secret fixture.
+- Hubble recommended exact fixed-fixture coverage. The final tests pin the documented raw public key value and pin a deterministic validation-response signature for fixed `plain_token` / `event_ts`.
