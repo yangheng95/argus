@@ -110,3 +110,38 @@ LINE:
 - Implemented on 2026-06-17.
 - Focused tests passed: `bun test packages/opencorvus/test/file/ripgrep.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+
+## Batch P0-C: auth well-known command execution
+
+### Findings
+
+- BH-001: `packages/opencorvus/src/cli/cmd/auth.ts` fetches `${url}/.well-known/opencorvus` and executes remote `wellknown.auth.command` locally through `Process.spawn`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/cli/cmd/auth.ts` is the only caller that executes `wellknown.auth.command`.
+- `packages/opencorvus/src/auth/index.ts` defines the stored `wellknown` auth record shape used later by config loading.
+- `packages/opencorvus/src/config/config.ts` reads stored well-known credentials to fetch remote organization config; it does not execute commands.
+- `packages/web/src/content/docs/cli.mdx` and `packages/web/src/content/docs/reference/cli.mdx` mention `opencorvus auth login [url]`.
+- `packages/opencorvus/test/cli/auth-models-refresh-source.test.ts` is the only existing auth CLI test and is source-level only.
+
+### Fix Shape
+
+- Remove command execution from URL-based auth login. If the remote well-known document asks for `auth.command`, reject visibly before spawning or saving credentials.
+- Do not add command allowlists, prompts, or fallback command paths; remote JSON is not a trusted local executable source.
+- Keep non-URL `opencorvus auth login` unchanged.
+
+### Regression Tests
+
+- Add a CLI auth test that stubs `fetch` to return an `auth.command`, spies on `Process.spawn` and `Auth.set`, calls `AuthLoginCommand.handler`, and asserts the handler rejects before either side effect.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/cli/auth-wellknown.test.ts packages/opencorvus/test/cli/auth-models-refresh-source.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/opencorvus/test/cli/auth-wellknown.test.ts packages/opencorvus/test/cli/auth-models-refresh-source.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
