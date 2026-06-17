@@ -618,6 +618,40 @@ test(
       }))
       assert.equal(altOpenState.expanded, "true")
       assert.ok(altOpenState.focusedMenuText.includes("Language"))
+      const themeRadioState = await page.$eval('[data-testid="titlebar-menu-view"]', (node) => {
+        const items = Array.from(node.querySelectorAll<HTMLElement>(".titlebar-theme-option"))
+        return {
+          count: items.length,
+          roles: items.map((item) => item.getAttribute("role")),
+          checked: items.map((item) => ({
+            testid: item.dataset.testid || "",
+            ariaChecked: item.getAttribute("aria-checked"),
+            active: item.dataset.active || "",
+          })),
+          legacyRadioCount: node.querySelectorAll('[role="radio"]').length,
+        }
+      })
+      assert.ok(themeRadioState.count >= 3)
+      assert.deepEqual(
+        [...new Set(themeRadioState.roles)],
+        ["menuitemradio"],
+      )
+      assert.equal(themeRadioState.legacyRadioCount, 0)
+      assert.deepEqual(
+        themeRadioState.checked.find((item) => item.testid === "titlebar-theme-vscode-dark"),
+        {
+          testid: "titlebar-theme-vscode-dark",
+          ariaChecked: "true",
+          active: "true",
+        },
+      )
+      await page.click('[data-testid="titlebar-theme-light"]')
+      await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
+      await page.waitForSelector('[data-testid="titlebar-theme-light"][aria-checked="true"]', { visible: true })
+      assert.equal(
+        await page.$eval('[data-testid="titlebar-theme-light"]', (node) => (node as HTMLElement).dataset.active),
+        "true",
+      )
 
       await page.close()
     } finally {

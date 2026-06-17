@@ -168,6 +168,7 @@ Evidence scan:
 | `MenuItem` / `RecentDirectoryMenuItem`                                            | Raw `button role="menuitem"` elements.                                                                                                     | Replace with `Menubar.Item as="button"` while preserving class, `data-testid`, title, disabled state, and click side effects.               |
 | `MenuGroup`                                                                       | Raw `div role="group"` and title div.                                                                                                      | Replace with `Menubar.Group` / `Menubar.GroupLabel` while preserving CSS classes.                                                           |
 | `titlebar-menubar.test.ts`, `pane-collapse-layout.test.ts`, titlebar source tests | Verify trigger classes, recent rows, settings/test ids, and menu layout.                                                                   | Add a primitive guard and run targeted titlebar tests after migration.                                                                      |
+| View menu theme selector                                                          | Current menu shell uses `@kobalte/core/menubar`, but the theme selector still renders a local `div role="radiogroup"` with `button role="radio"`. | Replace with `Menubar.RadioGroup` / `Menubar.RadioItem` so menu radio semantics stay owned by the same primitive.                          |
 
 Constraints:
 
@@ -178,8 +179,14 @@ Constraints:
 Checklist:
 
 - [x] Grep titlebar menubar callsites and tests.
-- [ ] Replace root/menu/trigger/content/item/group with Kobalte Menubar primitives.
-  - Blocked and reverted. `@kobalte/core/menubar` 0.13.11 has the same declaration-file defect as Dialog: its `dist/index-9e11b9e4.d.ts` exports type-only names (`MenubarContextValue`, `MenubarMenuOptions`, `MenubarRootProps`, etc.) as values, causing `tsc --noEmit` `TS2693`. Do not bypass with `skipLibCheck`; revisit after upgrading/patching Kobalte or choosing a menubar primitive whose declarations pass strict typecheck.
-- [ ] Add primitive guard rejecting the previous document pointer listener.
-- [ ] Run targeted titlebar tests, overlay typecheck, i18n, browser smoke.
+- [x] Replace root/menu/trigger/content/item/group with Kobalte Menubar primitives.
+  - Historical note superseded by the current implementation: an earlier attempt hit `@kobalte/core/menubar` declaration-file failures, but the current `TitlebarMenubar.tsx` imports `@kobalte/core/menubar` and `bun run --cwd packages\overlay typecheck` passes without `skipLibCheck`.
+- [x] Replace View menu theme selector with Kobalte Menubar radio primitives.
+- [x] Add primitive guard rejecting the previous document pointer listener and hand-written theme radio roles.
+- [x] Run targeted titlebar tests, overlay typecheck, browser smoke, and a visual screenshot review of the View theme menu.
+  - `bun test packages\overlay\test\titlebar-menubar-primitive.test.ts` passed.
+  - `bun run --cwd packages\overlay typecheck` passed.
+  - `node --test --test-concurrency=1 --test-name-pattern "titlebar menubar uses theme-adaptive text color" packages\overlay\test\browser\titlebar-menubar.test.ts` passed with `OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER=1`.
+  - Visual review passed for `.scratch/titlebar-view-theme-radio-menu.png`: View menu theme options are readable, current checked state and keyboard-highlighted state are visible, and option text does not overlap.
+  - Full `titlebar-menubar.test.ts` still exposes unrelated failures: first responsive fixture timeout on `[data-menu-trigger="workspace"]`, no-directory workflow activity not active, and executor chip spacing over budget. Treat these as next-iteration candidates, not accepted variance.
 - [ ] Commit and push only this phase's files.
