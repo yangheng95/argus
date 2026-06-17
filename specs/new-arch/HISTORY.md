@@ -19,6 +19,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-command-palette-activedescendant.md](2026-06-18-command-palette-activedescendant.md) | Command Palette Active Descendant |
 | [2026-06-18-command-palette-config-sections-single-source.md](2026-06-18-command-palette-config-sections-single-source.md) | Command Palette Config Sections Single Source |
 | [2026-06-18-select-popup-readability-impact-review.md](2026-06-18-select-popup-readability-impact-review.md) | Select Popup Readability Impact Review |
+| [2026-06-18-settings-segmented-aria-label-forwarding.md](2026-06-18-settings-segmented-aria-label-forwarding.md) | Settings Segmented Aria Label Forwarding |
 
 ## 2026-06-17
 

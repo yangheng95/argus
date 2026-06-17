@@ -237,7 +237,7 @@ export interface SettingsSegmentedProps<T extends string> {
   options: SettingsSegmentedOption<T>[]
   value: T
   onChange: (next: T) => void
-  ariaLabel?: string
+  ariaLabel: string
 }
 
 export function SettingsSegmented<T extends string>(props: SettingsSegmentedProps<T>): JSX.Element {
@@ -248,7 +248,7 @@ export function SettingsSegmented<T extends string>(props: SettingsSegmentedProp
       options={props.options}
       value={props.value}
       onChange={props.onChange}
-      aria-label={props.ariaLabel}
+      ariaLabel={props.ariaLabel}
     />
   )
 }

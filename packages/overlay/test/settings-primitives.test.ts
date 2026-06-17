@@ -145,6 +145,17 @@ describe("settings primitives — Solid exports", () => {
     expect(PRIMITIVES_SRC).not.toContain("aria-pressed")
   })
 
+  test("Segmented forwards the accessible label through the shared component API", () => {
+    const start = PRIMITIVES_SRC.indexOf("export function SettingsSegmented")
+    expect(start).toBeGreaterThan(-1)
+    expect(PRIMITIVES_SRC).toContain("ariaLabel: string")
+    expect(PRIMITIVES_SRC).not.toContain("ariaLabel?: string")
+    const segmentedBlock = PRIMITIVES_SRC.slice(start)
+    expect(segmentedBlock).toContain("ariaLabel={props.ariaLabel}")
+    expect(segmentedBlock).not.toContain("aria-label={props.ariaLabel}")
+    expect(SEGMENTED_SRC).toContain("aria-label={props.ariaLabel}")
+  })
+
   test("Select delegates combobox semantics to Kobalte with one accessible label source", () => {
     expect(PRIMITIVES_SRC).toContain('import * as Select from "@kobalte/core/select"')
     expect(PRIMITIVES_SRC).toContain("export interface SettingsSelectOption")
