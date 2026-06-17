@@ -2140,3 +2140,56 @@ LINE:
 - `bun run --cwd packages/opencorvus typecheck` passed.
 - Broader check `bun test packages/opencorvus/test/orchestrator/tools.test.ts --timeout 30000` was attempted and did not pass: 56 passed, 14 failed, 1 error. Sample isolated failures were outside the BH-031/BH-032 read_context path (`MissingModelConfigError` in `propose_task`, missing real tool execution identity in an integrity artifact-missing test, and a freshContext worktree marker precondition). These residual failures are not hidden as success and need separate triage if they are not already covered by later bug-hunt entries.
 - Independent agent Descartes confirmed BH-031/BH-032 existed on HEAD, identified the double-source read_context goal rendering as the root cause, and recommended the shared describe-layer renderer plus terminal batch read path used here.
+
+## Batch P1-AE: BH-033 terminal operator wake must requeue through cwd serialization
+
+### Findings
+
+- BH-033 targets `packages/opencorvus/src/task-api/index.ts::appendAndWakeTaskOperatorMessage(...)` and `packages/opencorvus/src/engine/queue.ts::dispatchTaskLoop(...)`.
+- The older 2026-06-05 terminal wake note required terminal `/message` and `/inject` calls to record visible messages without waking. Later specs supersede that contract for user-authored follow-up messages:
+  - `specs/new-arch/2026-06-09-operator-message-add-goal-dispatch.md` requires completed-task follow-up messages to wake the orchestrator so it can add concrete goals in the same task conversation.
+  - `specs/2026-06-10-cancelled-task-message-input.md` requires cancelled-task messages to clear cancelled metadata, clear the error, requeue, append the user message, and dispatch.
+  - `specs/new-arch/2026-06-14-model-resume-progress-root-cause-fix.md` reaffirms cancelled task messages should reopen naturally with a fresh valid orchestrator execution owner.
+- The real BH-033 root cause is narrower: completed-task operator messages were reopening the task as `active`, which clears `time_completed` and lets `dispatchTaskLoop(...)` take the active-task re-entry path instead of the queued `advanceQueue(...) -> claimNextForCwd(...)` path.
+- Queue terminal guards are not the right fix point because task-api has already hidden the terminal fact by changing the task to active. Adding an active same-cwd gate in queue would blur legal active-task wake behavior and duplicate cwd queue ownership logic.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/task-api/index.ts::handleTaskMessage(...)` is the `/task/:taskID/message` service entry and returns `should_resume`.
+- `packages/opencorvus/src/task-api/index.ts::injectMessage(...)` is the `/task/:taskID/inject` service entry and returns `orchestratorWoken`.
+- `packages/opencorvus/src/task-api/index.ts::appendAndWakeTaskOperatorMessage(...)` is the shared writer/wake path for `/message` and `/inject`.
+- `packages/opencorvus/src/task-api/index.ts::reopenCompletedTaskFromOperatorMessage(...)` is the bad reopen point; it must requeue completed tasks, not activate them.
+- `packages/opencorvus/src/task-api/index.ts::reopenFailedTaskFromOperatorMessage(...)` and `reopenCancelledTaskFromOperatorMessage(...)` already requeue and remain the matching terminal-follow-up behavior.
+- `packages/opencorvus/src/engine/queue.ts::dispatchTaskLoop(...)` already sends queued tasks through `advanceQueue(...)`; same-cwd serialization lives in `claimNextForCwd(...)`.
+- `packages/opencorvus/test/server/task-message-routes.test.ts` owns route-level `/message` and `/inject` coverage.
+- `packages/opencorvus/test/engine/queue.test.ts` already proves direct queue dispatch against a still-terminal task is ignored.
+
+### Fix Shape
+
+- Change completed-task follow-up reopen from `active` to `queued`.
+- Keep `should_resume: true` and `orchestratorWoken: true` for terminal follow-up messages because the scheduler has been notified; do not reinterpret those fields as proof that a loop already started.
+- Do not change failed/cancelled requeue behavior.
+- Do not add queue-level fallback/gate logic. Queued tasks must continue through the existing cwd claim path.
+
+### Regression Tests
+
+- Update the completed `/message` route regression to assert the task becomes `queued`, `time_started` is cleared, `time_completed` is cleared, metadata is preserved, and scheduler dispatch receives the operator message.
+- Add active-A plus completed-B same-cwd `/message` coverage: posting to B must requeue B, not launch a second loop while A is active.
+- Add matching active-A plus completed-B same-cwd `/inject` coverage because inject uses the same shared task-api wake path.
+- Keep existing failed and cancelled `/message` and failed `/inject` requeue/wake tests as the current contract.
+
+### Verification
+
+- Before the implementation, the focused completed-message same-cwd regression failed because the completed task was reopened as `active` and `runTaskLoop` started while another same-cwd task was already active.
+- Implemented on 2026-06-18: `reopenCompletedTaskFromOperatorMessage(...)` now reopens completed follow-up tasks as `queued`, matching failed/cancelled terminal follow-up behavior and forcing dispatch through `advanceQueue(...) -> claimNextForCwd(...)`.
+- Added same-cwd `/message` and `/inject` route regressions proving completed task B is queued behind active task A and no second loop starts.
+- Focused terminal/same-cwd route tests passed: `bun test packages/opencorvus/test/server/task-message-routes.test.ts -t "completed task|completed same-cwd|reopens failed terminal|cancelled task" --timeout 30000`.
+- Full route suite passed: `bun test packages/opencorvus/test/server/task-message-routes.test.ts --timeout 30000`.
+- Queue suite passed: `bun test packages/opencorvus/test/engine/queue.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Mendel initially flagged the older 2026-06-05 no-wake terminal contract, then re-reviewed against the later 2026-06-09, 2026-06-10, and 2026-06-14 specs.
+- Final independent conclusion: terminal follow-up messages currently requeue/wake, but completed tasks must requeue rather than become active. The root fix belongs in task-api's completed reopen path, not in queue fallback logic.
