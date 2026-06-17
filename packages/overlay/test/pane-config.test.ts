@@ -11,10 +11,37 @@ test("PANEL_PANE_CONFIG targets the default panel's elements and variables", () 
   expect(PANEL_PANE_CONFIG).toEqual({
     bodyId: "panelBody",
     leftHandleId: "leftPaneResizer",
+    leftControls: ["sidebar", "workspaceMain"],
     rightHandleId: null,
+    rightControls: null,
     sidebarVar: "--ui-sidebar-width",
     sectionsVar: "--ui-sections-width",
   } satisfies PaneConfig)
+})
+
+test("default pane resizer exposes separator semantics through the pane service", () => {
+  const html = readSrc("index.html")
+  const main = readSrc("main.tsx")
+  const pane = readSrc("services/pane.ts")
+  const css = readSrc("styles/surfaces/workspace.css")
+  expect(html).toContain('id="leftPaneResizer"')
+  expect(html).toContain('aria-label="Resize left panel"')
+  expect(html).toContain('aria-controls="sidebar workspaceMain"')
+  expect(html).toContain('aria-valuenow="0"')
+  expect(html).toContain('tabindex="0"')
+  expect(pane).toContain("function renderPaneHandleSemantics")
+  expect(pane).toContain("function resizePaneByKeyboard")
+  expect(pane).toContain('side: "left" | "right"')
+  expect(pane).toContain('side === "left" ? sidebarWidth : null')
+  expect(pane).toContain('side === "right" ? sectionsWidth : null')
+  expect(pane).toContain("aria-valuemin")
+  expect(pane).toContain("aria-valuemax")
+  expect(pane).toContain("aria-valuenow")
+  expect(pane).toContain("tabIndex = enabled ? 0 : -1")
+  expect(pane).toContain('addEventListener("keydown"')
+  expect(css).toContain(".pane-resizer:focus-visible")
+  expect(css).toContain("outline: var(--oc-border-width) solid var(--accent)")
+  expect(main).not.toContain("leftResizer.dataset.disabled")
 })
 
 test("Mission no longer owns an independent pane layout or persisted widths", () => {
@@ -35,7 +62,8 @@ test("Mission no longer owns an independent pane layout or persisted widths", ()
 test("right pane drag measures from the whole pane body, not the center column edge", () => {
   const pane = readSrc("services/pane.ts")
   expect(pane).toContain("const panelBody = document.getElementById(config.bodyId)")
-  expect(pane).toContain("clampNumber(rect.right - clientX, railMin, max)")
+  expect(pane).toContain("function paneResizeBounds")
+  expect(pane).toContain("bounds.bodyRect.right - clientX")
   expect(pane).toContain("export function defaultSectionsWidth")
   expect(pane).toContain("state.sectionsWidth ?? defaultSectionsWidth(config)")
   expect(pane).not.toContain("document.getElementById(config.centerId)")

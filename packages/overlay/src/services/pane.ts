@@ -35,8 +35,12 @@ export interface PaneConfig {
   bodyId: string
   /** Left (sidebar) resize handle element id. */
   leftHandleId: string
+  /** Element ids controlled by the left resize handle. */
+  leftControls: readonly string[]
   /** Right (sections) resize handle element id, absent in layouts without a right pane. */
   rightHandleId: string | null
+  /** Element ids controlled by the right resize handle. */
+  rightControls: readonly string[] | null
   /** CSS custom property that carries the left column width (px). */
   sidebarVar: string
   /** CSS custom property that carries the right column width (px). */
@@ -47,7 +51,9 @@ export interface PaneConfig {
 export const PANEL_PANE_CONFIG: PaneConfig = {
   bodyId: "panelBody",
   leftHandleId: "leftPaneResizer",
+  leftControls: ["sidebar", "workspaceMain"],
   rightHandleId: null,
+  rightControls: null,
   sidebarVar: "--ui-sidebar-width",
   sectionsVar: "--ui-sections-width",
 }
@@ -78,6 +84,13 @@ interface PaneDrag {
 }
 
 let paneDrag: PaneDrag | null = null
+
+interface PaneResizeBounds {
+  bodyRect: DOMRect
+  min: number
+  max: number
+  now: number
+}
 
 // ── Helpers ──
 
@@ -111,6 +124,24 @@ function paneBodyWidth(config: PaneConfig): number {
 function paneHandleElement(config: PaneConfig, side: "left" | "right"): HTMLElement | null {
   const id = side === "left" ? config.leftHandleId : config.rightHandleId
   return id ? document.getElementById(id) : null
+}
+
+function paneHandleControls(config: PaneConfig, side: "left" | "right"): readonly string[] | null {
+  return side === "left" ? config.leftControls : config.rightControls
+}
+
+function paneHandleCollapsed(state: PaneState, side: "left" | "right"): boolean {
+  return side === "left" ? state.sidebarCollapsed : state.rightPanelCollapsed
+}
+
+function paneHandleEnabled(state: PaneState, config: PaneConfig, side: "left" | "right"): boolean {
+  const handle = paneHandleElement(config, side)
+  return !paneHandleCollapsed(state, side) && paneHandleWidth(handle) > 0
+}
+
+function paneResolvedWidthForSide(state: PaneState, config: PaneConfig, side: "left" | "right"): number {
+  const widths = resolvedPaneWidths(state, config)
+  return side === "left" ? widths.sidebar : widths.sections
 }
 
 /**
@@ -215,6 +246,75 @@ export function resolvedPaneWidths(
   return { sidebar: Math.round(sidebar), sections: Math.round(sections) }
 }
 
+function paneResizeBounds(state: PaneState, config: PaneConfig, side: "left" | "right"): PaneResizeBounds | null {
+  const panelBody = document.getElementById(config.bodyId)
+  const bodyRect = panelBody?.getBoundingClientRect()
+  if (!bodyRect) return null
+
+  const scale = currentUIScale()
+  const railMin = 120 * scale
+  const now = paneResolvedWidthForSide(state, config, side)
+  let max = bodyRect.width
+  for (let index = 0; index < 6; index += 1) {
+    const next = paneResolvedWidthForSide(
+      {
+        ...state,
+        ...(side === "left" ? { sidebarWidth: max } : { sectionsWidth: max }),
+      },
+      config,
+      side,
+    )
+    if (Math.abs(next - max) <= 1) {
+      max = next
+      break
+    }
+    max = next
+  }
+  max = Math.min(
+    max,
+    paneResolvedWidthForSide(
+      {
+        ...state,
+        ...(side === "left" ? { sidebarWidth: max } : { sectionsWidth: max }),
+      },
+      config,
+      side,
+    ),
+  )
+  max = Math.max(railMin, max)
+  return {
+    bodyRect,
+    min: Math.round(railMin),
+    max: Math.round(max),
+    now: Math.round(clampNumber(now, railMin, max)),
+  }
+}
+
+function renderPaneHandleSemantics(state: PaneState, config: PaneConfig): void {
+  for (const side of ["left", "right"] as const) {
+    const handle = paneHandleElement(config, side)
+    if (!handle) continue
+    const collapsed = paneHandleCollapsed(state, side)
+    const enabled = paneHandleEnabled(state, config, side)
+    const controls = paneHandleControls(config, side)
+    handle.hidden = collapsed
+    handle.dataset.disabled = String(!enabled)
+    handle.tabIndex = enabled ? 0 : -1
+    if (controls?.length) handle.setAttribute("aria-controls", controls.join(" "))
+    else handle.removeAttribute("aria-controls")
+    const bounds = enabled ? paneResizeBounds(state, config, side) : null
+    if (!bounds) {
+      handle.removeAttribute("aria-valuemin")
+      handle.removeAttribute("aria-valuemax")
+      handle.removeAttribute("aria-valuenow")
+      continue
+    }
+    handle.setAttribute("aria-valuemin", String(bounds.min))
+    handle.setAttribute("aria-valuemax", String(bounds.max))
+    handle.setAttribute("aria-valuenow", String(bounds.now))
+  }
+}
+
 /**
  * Apply the resolved pane widths as CSS custom properties on
  * the pane-width style scope (document.body).
@@ -224,6 +324,7 @@ export function renderPaneLayout(state: PaneState, config: PaneConfig): void {
   const widths = resolvedPaneWidths(state, config)
   setPaneWidthProperty(config.sidebarVar, widths.sidebar)
   setPaneWidthProperty(config.sectionsVar, widths.sections)
+  renderPaneHandleSemantics(state, config)
 }
 
 /**
@@ -256,33 +357,17 @@ export function applyPaneWidths(
  * responsible for updating their store in onWidthsChanged.
  */
 function resizePane(side: "left" | "right", clientX: number, callbacks: PaneCallbacks, config: PaneConfig): void {
-  const scale = currentUIScale()
-  const railMin = 120 * scale
-  const chatMin = 300 * scale
   const state = callbacks.getState()
+  const bounds = paneResizeBounds(state, config, side)
+  if (!bounds) return
 
   if (side === "left") {
-    const panelBody = document.getElementById(config.bodyId)
-    const rect = panelBody?.getBoundingClientRect()
-    if (!rect) return
-    const { sections } = resolvedPaneWidths(state, config)
-    const leftHandle = paneHandleWidth(paneHandleElement(config, "left"))
-    const rightHandle = paneHandleWidth(paneHandleElement(config, "right"))
-    const max = Math.max(railMin, rect.width - sections - leftHandle - rightHandle - chatMin)
-    const newSidebarWidth = Math.round(clampNumber(clientX - rect.left, railMin, max))
+    const newSidebarWidth = Math.round(clampNumber(clientX - bounds.bodyRect.left, bounds.min, bounds.max))
     renderPaneLayout({ ...state, sidebarWidth: newSidebarWidth }, config)
     return
   }
 
-  // side === "right"
-  const panelBody = document.getElementById(config.bodyId)
-  const rect = panelBody?.getBoundingClientRect()
-  if (!rect) return
-  const { sidebar } = resolvedPaneWidths(state, config)
-  const leftHandle = paneHandleWidth(paneHandleElement(config, "left"))
-  const rightHandle = paneHandleWidth(paneHandleElement(config, "right"))
-  const max = Math.max(railMin, rect.width - sidebar - leftHandle - rightHandle - chatMin)
-  const newSectionsWidth = Math.round(clampNumber(rect.right - clientX, railMin, max))
+  const newSectionsWidth = Math.round(clampNumber(bounds.bodyRect.right - clientX, bounds.min, bounds.max))
   renderPaneLayout({ ...state, sectionsWidth: newSectionsWidth }, config)
 }
 
@@ -291,22 +376,31 @@ function onPaneResizeMove(event: PointerEvent, callbacks: PaneCallbacks): void {
   resizePane(paneDrag.side, event.clientX, callbacks, paneDrag.config)
 }
 
+async function persistRenderedPaneWidths(
+  callbacks: PaneCallbacks,
+  config: PaneConfig,
+  side: "left" | "right",
+): Promise<void> {
+  const sidebarPx = readPaneWidthProperty(config.sidebarVar)
+  const sectionsPx = readPaneWidthProperty(config.sectionsVar)
+  const sidebarWidth = Number.isFinite(sidebarPx) ? Math.round(sidebarPx) : null
+  const sectionsWidth = Number.isFinite(sectionsPx) ? Math.round(sectionsPx) : null
+
+  await callbacks.onWidthsChanged(
+    side === "left" ? sidebarWidth : null,
+    side === "right" ? sectionsWidth : null,
+  )
+}
+
 async function stopPaneResize(callbacks: PaneCallbacks): Promise<void> {
   if (!paneDrag) return
   const config = paneDrag.config
   const handle = paneHandleElement(config, paneDrag.side)
   if (handle) delete (handle as HTMLElement).dataset.active
+  const side = paneDrag.side
   paneDrag = null
   delete document.body.dataset.resizing
-
-  // Compute the final persisted values from the current CSS
-  const sidebarPx = readPaneWidthProperty(config.sidebarVar)
-  const sectionsPx = readPaneWidthProperty(config.sectionsVar)
-
-  await callbacks.onWidthsChanged(
-    Number.isFinite(sidebarPx) ? Math.round(sidebarPx) : null,
-    Number.isFinite(sectionsPx) ? Math.round(sectionsPx) : null,
-  )
+  await persistRenderedPaneWidths(callbacks, config, side)
 }
 
 function startPaneResize(
@@ -317,12 +411,7 @@ function startPaneResize(
 ): void {
   if (event.button != null && event.button !== 0) return
   const state = callbacks.getState()
-  if (side === "left" && (state.sidebarCollapsed || paneHandleWidth(paneHandleElement(config, "left")) === 0)) {
-    return
-  }
-  if (side === "right" && (state.rightPanelCollapsed || paneHandleWidth(paneHandleElement(config, "right")) === 0)) {
-    return
-  }
+  if (!paneHandleEnabled(state, config, side)) return
   paneDrag = { side, config }
   const handle = paneHandleElement(config, side)
   if (handle) (handle as HTMLElement).dataset.active = "true"
@@ -346,6 +435,41 @@ function startPaneResize(
   event.preventDefault()
 }
 
+function resizePaneByKeyboard(
+  side: "left" | "right",
+  event: KeyboardEvent,
+  callbacks: PaneCallbacks,
+  config: PaneConfig,
+): void {
+  const state = callbacks.getState()
+  if (!paneHandleEnabled(state, config, side)) return
+  const bounds = paneResizeBounds(state, config, side)
+  if (!bounds) return
+  const step = Math.round(24 * currentUIScale())
+  let next = bounds.now
+  if (event.key === "ArrowLeft") {
+    next += side === "left" ? -step : step
+  } else if (event.key === "ArrowRight") {
+    next += side === "left" ? step : -step
+  } else if (event.key === "Home") {
+    next = bounds.min
+  } else if (event.key === "End") {
+    next = bounds.max
+  } else {
+    return
+  }
+  event.preventDefault()
+  const width = Math.round(clampNumber(next, bounds.min, bounds.max))
+  renderPaneLayout(
+    {
+      ...state,
+      ...(side === "left" ? { sidebarWidth: width } : { sectionsWidth: width }),
+    },
+    config,
+  )
+  void persistRenderedPaneWidths(callbacks, config, side)
+}
+
 // ── Public API ──
 
 /**
@@ -363,9 +487,17 @@ export function initPaneResizers(callbacks: PaneCallbacks, config: PaneConfig): 
   function onRightDown(ev: Event) {
     startPaneResize("right", ev as PointerEvent, callbacks, config)
   }
+  function onLeftKeyDown(ev: Event) {
+    resizePaneByKeyboard("left", ev as KeyboardEvent, callbacks, config)
+  }
+  function onRightKeyDown(ev: Event) {
+    resizePaneByKeyboard("right", ev as KeyboardEvent, callbacks, config)
+  }
 
   leftHandle?.addEventListener("pointerdown", onLeftDown)
   rightHandle?.addEventListener("pointerdown", onRightDown)
+  leftHandle?.addEventListener("keydown", onLeftKeyDown)
+  rightHandle?.addEventListener("keydown", onRightKeyDown)
 
   // Render layout immediately so the initial widths are applied
   renderPaneLayout(callbacks.getState(), config)
@@ -373,6 +505,8 @@ export function initPaneResizers(callbacks: PaneCallbacks, config: PaneConfig): 
   return () => {
     leftHandle?.removeEventListener("pointerdown", onLeftDown)
     rightHandle?.removeEventListener("pointerdown", onRightDown)
+    leftHandle?.removeEventListener("keydown", onLeftKeyDown)
+    rightHandle?.removeEventListener("keydown", onRightKeyDown)
   }
 }
 
