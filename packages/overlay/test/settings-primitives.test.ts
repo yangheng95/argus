@@ -16,6 +16,7 @@ import { join } from "node:path"
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"), "utf8")
 const PRIMITIVES_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/primitives.tsx"), "utf8")
+const SEGMENTED_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/ui/SegmentedControl.tsx"), "utf8")
 const AGENT_MODELS_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/AgentModelsPanel.tsx"), "utf8")
 const SKILL_MARKET_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/SkillMarketPanel.tsx"), "utf8")
 
@@ -113,7 +114,7 @@ describe("settings primitives — Solid exports", () => {
   test("Pill tone type is exported alongside the component", () => {
     expect(PRIMITIVES_SRC).toContain("export type SettingsPillTone")
     for (const tone of ["ok", "warn", "bad", "accent", "muted", "neutral"]) {
-      expect(PRIMITIVES_SRC).toContain(`"${tone}"`)
+      expect(SEGMENTED_SRC).toContain(`"${tone}"`)
     }
   })
 
@@ -127,15 +128,19 @@ describe("settings primitives — Solid exports", () => {
     // Important: PermissionsPanel.patchConfig hits the network on every
     // setPermission call. The primitive must early-return when the
     // clicked option is already active.
-    expect(PRIMITIVES_SRC).toMatch(/if\s*\(\s*next\s*&&\s*next\s*!==\s*props\.value\s*\)\s*props\.onChange/)
+    expect(SEGMENTED_SRC).toMatch(/if\s*\(\s*next\s*&&\s*next\s*!==\s*props\.value\s*\)\s*props\.onChange/)
   })
 
-  test("Segmented delegates toggle semantics to Kobalte", () => {
-    expect(PRIMITIVES_SRC).toContain(
+  test("Segmented delegates toggle semantics to the shared Kobalte primitive", () => {
+    expect(PRIMITIVES_SRC).toContain('import { SegmentedControl')
+    expect(PRIMITIVES_SRC).toContain("<SegmentedControl")
+    expect(PRIMITIVES_SRC).not.toContain("@kobalte/core/toggle-group")
+    expect(SEGMENTED_SRC).toContain(
       'import { Item as KobalteToggleGroupItem, Root as KobalteToggleGroupRoot } from "@kobalte/core/toggle-group"',
     )
-    expect(PRIMITIVES_SRC).toContain("<KobalteToggleGroupRoot")
-    expect(PRIMITIVES_SRC).toContain("<KobalteToggleGroupItem")
+    expect(SEGMENTED_SRC).toContain("<KobalteToggleGroupRoot")
+    expect(SEGMENTED_SRC).toContain("<KobalteToggleGroupItem")
+    expect(SEGMENTED_SRC).toContain("onClick={() => props.onActivate?.(option.value)}")
     expect(PRIMITIVES_SRC).not.toContain('role="group"')
     expect(PRIMITIVES_SRC).not.toContain("aria-pressed")
   })

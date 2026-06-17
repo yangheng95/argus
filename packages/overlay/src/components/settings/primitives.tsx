@@ -10,13 +10,13 @@
  * settings-surface-hover wash. See
  * specs/overlay-settings-primitives-2026-05-26.md.
  */
-import { For, Show, mergeProps, splitProps } from "solid-js"
+import { Show, mergeProps, splitProps } from "solid-js"
 import * as Select from "@kobalte/core/select"
-import { Item as KobalteToggleGroupItem, Root as KobalteToggleGroupRoot } from "@kobalte/core/toggle-group"
 import type { JSX } from "solid-js"
 import { Icon } from "../Icon"
+import { SegmentedControl, type SegmentedControlOption, type SegmentedControlTone } from "../ui/SegmentedControl"
 
-export type SettingsPillTone = "ok" | "warn" | "bad" | "accent" | "muted" | "neutral"
+export type SettingsPillTone = SegmentedControlTone
 
 export interface SettingsPanelProps {
   children: JSX.Element
@@ -229,14 +229,7 @@ export function SettingsSelect<T extends SettingsSelectOption>(props: SettingsSe
   )
 }
 
-export interface SettingsSegmentedOption<T extends string> {
-  value: T
-  label: JSX.Element
-  /** Tone applied to the active state — defaults to "neutral". */
-  tone?: SettingsPillTone
-  title?: string
-  disabled?: boolean
-}
+export interface SettingsSegmentedOption<T extends string> extends SegmentedControlOption<T> {}
 
 export interface SettingsSegmentedProps<T extends string> {
   options: SettingsSegmentedOption<T>[]
@@ -246,32 +239,14 @@ export interface SettingsSegmentedProps<T extends string> {
 }
 
 export function SettingsSegmented<T extends string>(props: SettingsSegmentedProps<T>): JSX.Element {
-  function handleChange(next: string | null) {
-    if (next && next !== props.value) props.onChange(next as T)
-  }
-
   return (
-    <KobalteToggleGroupRoot
+    <SegmentedControl
       class="s-segmented"
+      itemClass="s-segmented-btn"
+      options={props.options}
       value={props.value}
-      onChange={handleChange}
+      onChange={props.onChange}
       aria-label={props.ariaLabel}
-    >
-      <For each={props.options}>
-        {(opt) => (
-          <KobalteToggleGroupItem
-            class="s-segmented-btn"
-            value={opt.value}
-            data-active={props.value === opt.value ? "true" : undefined}
-            data-tone={opt.tone ?? "neutral"}
-            data-value={opt.value}
-            title={opt.title}
-            disabled={opt.disabled}
-          >
-            {opt.label}
-          </KobalteToggleGroupItem>
-        )}
-      </For>
-    </KobalteToggleGroupRoot>
+    />
   )
 }
