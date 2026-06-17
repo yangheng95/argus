@@ -1,6 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { tool, type ToolSet } from "ai"
+import type { ToolSet } from "ai"
 import { runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { filterAgentTools } from "@/agent/filter-tools"
@@ -13,6 +13,7 @@ import { Session } from "@/session"
 import { SessionStatus } from "@/session/status"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
+import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
 import { SkillTool } from "@/tool/skill"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
@@ -224,30 +225,12 @@ async function createResearchTool(
     initCtx?: Tool.InitContext
   },
 ) {
-  const initialized = await info.init(input.initCtx)
-  return tool({
-    description: initialized.description,
-    inputSchema: initialized.parameters,
-    execute: async (args, options) => {
-      const meta = (
-        options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined
-      )?.opencorvus
-      const abort =
-        (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ??
-        input.signal ??
-        new AbortController().signal
-      return initialized.execute(args as never, {
-        sessionID: meta?.sessionID ?? "",
-        messageID: meta?.messageID ?? "",
-        callID: meta?.toolCallID,
-        agent: input.agentName,
-        abort,
-        messages: [],
-        extra: { taskID: input.taskID },
-        metadata: () => {},
-        ask: async () => {},
-      })
-    },
+  return createAiSdkToolFromInfo({
+    info,
+    agent: input.agentName,
+    taskID: input.taskID,
+    signal: input.signal,
+    initCtx: input.initCtx,
   })
 }
 
