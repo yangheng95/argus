@@ -2242,3 +2242,49 @@ LINE:
 
 - Lagrange confirmed the live session key `taskID:targetID:viewportID` is the correct serialization boundary because the embedded sidecar owns the mutable Playwright `browser/context/page` state.
 - Lagrange recommended strengthening the route test from simple red/blue clicks into an ordered/race visual assertion. The final route regression uses that shape.
+
+## Batch P1-AG: BH-035 provider fetch must clear inactivity timer on pre-response failures
+
+### Findings
+
+- BH-035 targets `packages/opencorvus/src/provider/provider.ts::getSDK(...)`, specifically the `options["fetch"]` wrapper installed for provider SDKs.
+- The wrapper creates an inactivity `AbortController`, starts a timer before calling `fetchFn(...)`, and clears the timer only on HTTP-error handling, stream flush, or non-streaming success.
+- If the custom or global `fetchFn` throws before returning a `Response`, the wrapper rethrows while leaving the timer live. The later timer callback aborts a signal for a request that has already failed, producing delayed side effects and noisy timeout logs.
+- The same leak can happen for other synchronous failures after `resetInactivityTimer?.()` and before the wrapper returns a response.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/provider/provider.ts::resolveFetchInactivityMs(...)` chooses the timeout duration; `alibaba-coding-plan-cn` can use a short configured timeout and is useful for deterministic coverage.
+- `packages/opencorvus/src/provider/provider.ts::providerFetchInit(...)` forwards the composed `AbortSignal` into the SDK fetch call.
+- `packages/opencorvus/src/provider/provider.ts::getSDK(...)` installs the wrapped fetch into provider options for bundled and dynamically loaded providers.
+- `packages/opencorvus/src/provider/provider.ts::getLanguage(...)` obtains the SDK-backed language model and is the public path that triggers the wrapped fetch.
+- `packages/opencorvus/test/provider/provider.test.ts` already covers provider timeout policy and provider config merging.
+
+### Fix Shape
+
+- Add a local `clearInactivityTimer()` beside `resetInactivityTimer()`.
+- Wrap the post-timer provider fetch body in `try/catch`.
+- On any throw before a streaming response is returned, clear the inactivity timer before rethrowing the original error.
+- Keep the existing streaming response behavior: while a stream is returned, activity resets the timer on chunks and clears it on stream flush.
+- Do not add fallback retries, suppress the original provider error, or convert it into a host-side timeout.
+
+### Regression Tests
+
+- Add `provider fetch clears inactivity timer when fetch throws before response` in `packages/opencorvus/test/provider/provider.test.ts`.
+- Use an in-memory custom provider config whose `fetch` captures the supplied `AbortSignal` and throws immediately.
+- Set a short `alibaba-coding-plan-cn` provider timeout, assert the provider error is still surfaced, wait beyond the inactivity window, and assert the captured signal was not aborted later.
+
+### Verification
+
+- New regression failed before the implementation: after `fetch` threw, the timer fired 20ms later and `observedSignal.aborted` became `true`.
+- Implemented on 2026-06-18: the provider fetch wrapper now uses a local `clearInactivityTimer()` helper and clears the timer in a catch path before rethrowing the original provider error.
+- Strengthened the regression to prove the 20ms inactivity timer was actually set and cleared, then waited beyond the inactivity window and asserted the captured `AbortSignal` was still not aborted.
+- Focused regression passed: `bun test packages/opencorvus/test/provider/provider.test.ts -t "provider fetch clears inactivity timer" --timeout 30000`.
+- Full provider suite passed: `bun test packages/opencorvus/test/provider/provider.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Hume confirmed the root cause was the timer started before `fetchFn(...)` and the missing cleanup path when `fetchFn` throws before returning a `Response`.
+- Hume confirmed the final fix preserves the original provider error, adds no retry/fallback/gate, and recommended the set/clear timer assertion added to the regression test.
