@@ -21,6 +21,7 @@ import { DEFAULT_SERVER_PORT } from "./defaults"
 import { requestID, serverErrorResponse } from "./error-handler"
 import { configureCorsOrigins, isAllowedCorsOrigin, isAllowedRequestOrigin } from "./cors"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
+import { decodeProjectDirectory } from "./directory"
 
 muteAISdkWarnings()
 
@@ -166,14 +167,6 @@ export namespace Server {
     return spec
   }
 
-  function decodeDirectory(raw: string) {
-    try {
-      return decodeURIComponent(raw)
-    } catch {
-      return raw
-    }
-  }
-
   const app = new Hono()
   export const App: () => Hono = lazy(
     () =>
@@ -263,7 +256,7 @@ export namespace Server {
               message: `Project-scoped route ${c.req.path} requires ?directory= query parameter or x-opencorvus-directory header`,
             })
           }
-          const directory = decodeDirectory(raw)
+          const directory = decodeProjectDirectory(raw)
           return Instance.provide({
             directory,
             init: InstanceBootstrap,

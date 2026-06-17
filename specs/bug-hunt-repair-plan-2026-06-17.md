@@ -841,3 +841,46 @@ LINE:
 - Focused tests passed: `bun test packages/opencorvus/test/server/session-artifact-routes.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
 - Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
+
+## Batch P1-L: PTY route project ownership regression
+
+### Findings
+
+- BH-019 records a risk that `/pty` routes use raw PTY IDs for list/get/update/remove/connect.
+- Current code already stores PTY host sessions in `lazyInstanceState`, which delegates to `Instance.state(() => Instance.directory, ...)`; this makes `PtyHost.list/get/rename/resize/remove/preparePtyConnect` operate on the active project directory's state map.
+- `PtyRoutes` is mounted under `AppRoutes` at `/pty`, and `Server.App()` project middleware binds `Instance.provide` from `?directory=` or `x-opencorvus-directory` before route execution.
+- Existing PTY tests mostly call `PtyRoutes()` inside a manual `Instance.provide`, so they do not prove the real `Server.App()` middleware boundary for cross-project requests.
+
+### Call-point Inventory
+
+- `Pty.list/get/update/remove/connect` are called only by `packages/opencorvus/src/server/routes/pty.ts` in production route code.
+- `Pty.create` enforces `cwd === Instance.directory` through `projectCwd`.
+- `PtyHost.startPrepared/list/get/rename/resizePty/remove/preparePtyConnect` all read the same `state()` instance-scoped map.
+- SDK/OpenAPI expose the existing `/pty` route contracts with optional project directory injection; no request contract change is required.
+
+### Fix Shape
+
+- Do not add a second ownership source or duplicate PTY project fields unless the route-level regression proves the existing instance-scoped state leaks.
+- Add a `Server.App()` regression test that creates a PTY under project A, then sends list/get/update/remove/connect requests under project B and asserts B cannot observe or mutate A's PTY.
+- Preserve the existing success behavior for project A.
+
+### Regression Tests
+
+- Create A/B git-backed temp projects. Under A, `POST /pty` starts a long-lived PTY.
+- Under B, `GET /pty` returns an empty list, `GET /pty/:id`, `PUT /pty/:id`, `DELETE /pty/:id`, and `/pty/:id/connect` return 404 before websocket upgrade.
+- Under A, the PTY remains readable after B's rejected update/delete attempts and can be removed normally.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/pty-routes.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Independent agent review confirmed regular PTY HTTP operations are already instance-scoped, and identified websocket connect as the context-lifetime risk.
+- Added pre-upgrade project-scoped PTY visibility validation so foreign project connect requests return 404 before websocket upgrade.
+- Wrapped websocket lifecycle callbacks in the request directory's `Instance.provide` context, using the same project directory decoding helper as server middleware.
+- Focused tests passed: `bun test packages/opencorvus/test/server/pty-routes.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+- Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
