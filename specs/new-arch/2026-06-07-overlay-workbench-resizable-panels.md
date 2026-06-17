@@ -2,11 +2,12 @@
 
 ## Evidence
 
-Full-repo grep before implementation:
+Full-repo grep before implementation, revised on 2026-06-17 after the separator accessibility follow-up:
 
-- `packages/overlay/src/main.tsx` owns `RIGHT_ACTIVITIES`, `centerWorkbenchPanels`, `centerWorkbenchResizer`, and the DOM mapping for `centerWorkbenchWorkflow`, `centerWorkbenchExplorer`, `centerWorkbenchDiff`, `centerWorkbenchBrowser`, `centerWorkbenchInspector`, `centerWorkbenchNotifications`, and `centerWorkbenchFile`.
-- `packages/overlay/src/styles/surfaces/workspace.css` owns `.center-workbench-body`, `.center-workbench-view`, and the hidden legacy outer `.center-workbench-resizer`.
-- `packages/overlay/src/store/settings.ts` and `packages/overlay/src/services/overlay-settings-storage.ts` are the existing settings source for persisted pane dimensions.
+- `packages/overlay/src/main.tsx` owns `RIGHT_ACTIVITIES`, `centerWorkbenchPanels`, and the DOM mapping for `centerWorkbenchWorkflow`, `centerWorkbenchExplorer`, `centerWorkbenchDiff`, `centerWorkbenchBrowser`, `centerWorkbenchInspector`, `centerWorkbenchNotifications`, and `centerWorkbenchFile`.
+- `packages/overlay/src/index.html` owns real `centerWorkbenchSeparator*` elements between adjacent workbench peers. The hidden legacy outer center workbench resizer was removed; panel separators are the only draggable boundary source.
+- `packages/overlay/src/styles/surfaces/workspace.css` owns `.center-workbench-body`, `.center-workbench-view`, and `.center-workbench-panel-separator`.
+- `packages/overlay/src/store/settings.ts` and `packages/overlay/src/services/overlay-settings-storage.ts` keep `centerWorkbenchPanelWeights` as the only persisted center workbench panel dimension source.
 - `packages/overlay/src/components/Icon.tsx` is the single overlay icon registry. Toolbar callers should not import icons directly or use unrelated glyphs as substitutes.
 - `packages/overlay/test/acceptance-panel-mount.test.ts`, `packages/overlay/test/side-activity-toolbar-browser.test.ts`, and `packages/overlay/test/pane-config.test.ts` pin the workbench panel contract.
 

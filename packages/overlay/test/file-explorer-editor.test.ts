@@ -141,7 +141,7 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(workspaceCss).toContain(".center-workbench")
   expect(workspaceCss).not.toContain(".center-workbench-tabs")
   expect(workspaceCss).toContain('.center-workbench-view[data-open="true"]')
-  expect(workspaceCss).toContain(".center-workbench-resizer")
+  expect(workspaceCss).toContain(".center-workbench-panel-separator")
   expect(workspaceCss).toContain(".chat-file-editor-activity")
   expect(workspaceCss).not.toContain(".chat-diff-activity.workspace-mount")
   expect(workspaceCss).toContain(".file-editor-mount")

@@ -34,7 +34,6 @@ export interface OverlaySettings {
   rightPanelCollapsed: boolean
   sidebarWidth: number | null
   sectionsWidth: number | null
-  centerWorkbenchWidth: number | null
   centerWorkbenchPanelWeights: Record<string, number> | null
   opacity: number
   zoom: number
@@ -152,7 +151,6 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   rightPanelCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
-  centerWorkbenchWidth: null,
   centerWorkbenchPanelWeights: null,
   opacity: 0.99,
   zoom: 1,
@@ -212,7 +210,6 @@ export function applySettings(input: Partial<OverlaySettings>): void {
         : DEFAULT_SETTINGS.rightPanelCollapsed,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
-    centerWorkbenchWidth: sanitizePaneWidth(input?.centerWorkbenchWidth),
     centerWorkbenchPanelWeights: sanitizePanelWeights(input?.centerWorkbenchPanelWeights),
     opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
@@ -290,7 +287,6 @@ export function bootstrapOverlaySettings(input: Partial<OverlaySettings> = setti
   directory?: string
   sidebarWidth?: number
   sectionsWidth?: number
-  centerWorkbenchWidth?: number
   centerWorkbenchPanelWeights?: Record<string, number>
   preferredProjectEditor?: ProjectEditorID
   workspaceTaskID?: string
@@ -310,7 +306,6 @@ export function bootstrapOverlaySettings(input: Partial<OverlaySettings> = setti
     rightPanelCollapsed: input.rightPanelCollapsed ?? DEFAULT_SETTINGS.rightPanelCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
     sectionsWidth: input.sectionsWidth || undefined,
-    centerWorkbenchWidth: input.centerWorkbenchWidth || undefined,
     centerWorkbenchPanelWeights: input.centerWorkbenchPanelWeights || undefined,
     opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
     zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,

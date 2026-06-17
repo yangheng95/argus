@@ -85,7 +85,6 @@ export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
     rightPanelCollapsed: rightPanelCollapsedRaw === null ? undefined : rightPanelCollapsedRaw === "true",
     sidebarWidth: read("oc_sidebar_width") || undefined,
     sectionsWidth: read("oc_sections_width") || undefined,
-    centerWorkbenchWidth: read("oc_center_workbench_width") || undefined,
     centerWorkbenchPanelWeights: readJSON("oc_center_workbench_panel_weights"),
     opacity: read("oc_opacity") || undefined,
     zoom: read("oc_zoom") || undefined,
@@ -110,7 +109,6 @@ export function saveBrowserOverlaySettings(input: BrowserOverlaySettings): boole
   write("oc_right_panel_collapsed", input.rightPanelCollapsed === true)
   writeOptional("oc_sidebar_width", input.sidebarWidth)
   writeOptional("oc_sections_width", input.sectionsWidth)
-  writeOptional("oc_center_workbench_width", input.centerWorkbenchWidth)
   writeOptionalJSON("oc_center_workbench_panel_weights", input.centerWorkbenchPanelWeights)
   write("oc_opacity", input.opacity ?? 0.99)
   write("oc_zoom", input.zoom ?? 1)
