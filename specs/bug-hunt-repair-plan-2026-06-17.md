@@ -2098,3 +2098,45 @@ LINE:
 - `bun test packages/opencorvus/test/engine/describe-stream-error.test.ts -t "describeTask.open_tool_calls_without_current_owner" --timeout 30000` passed with 3 tests.
 - `bun run --cwd packages/opencorvus typecheck` passed.
 - Independent agent Dirac reviewed the dirty worktree, confirmed BH-030 is fixed by moving the cap after current-process filtering, and recommended the `retry` negative coverage that was added before final verification.
+
+## Batch P1-AD: BH-031/BH-032 read_context must preserve describe-layer facts
+
+### Findings
+
+- BH-031 targets the terminal goal batch wake fact written by `packages/opencorvus/src/engine/runtime.ts::recordGoalBatchNotification(...)`.
+- The fact is persisted as `engine_artifact.kind = "goal_batch_notification"` after `dispatchTaskLoop(...)` starts, but no describe/read_context projection reads that artifact back.
+- BH-032 targets `packages/opencorvus/src/orchestrator/tools.ts::read_context`. The tool calls `describeTask(...)` for collaboration closure, then rebuilds the goal list from `listGoals(...)`, `goalStatusByID(...)`, and `findLatestTipGoalRun(...)`.
+- Rebuilding from raw goals loses describe-layer facts already present in `GoalDesc`: `needs_redispatch`, `latest_attempt.superseded_reason`, `is_orphaned`, and full attempt timeline details.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/runtime.ts` owns `terminalGoalBatchFingerprint(...)`, `hasGoalBatchNotification(...)`, and `recordGoalBatchNotification(...)`.
+- `packages/opencorvus/src/engine/store.ts` owns artifact list/read helpers used by describe-layer projections.
+- `packages/opencorvus/src/engine/describe.ts` owns `describeTask(...)`, `GoalDesc`, `TaskDesc`, and `renderTaskDescription(...)`; it is the correct single model-visible task fact source.
+- `packages/opencorvus/src/orchestrator/tools.ts` owns `read_context`; the `scope=goals` branch must render `desc.goals`, not rebuild raw goal rows.
+- Existing coverage lives in `packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts`, `packages/opencorvus/test/engine/goal-run-owner-orphan.test.ts`, and `packages/opencorvus/test/orchestrator/tools.test.ts`.
+
+### Fix Shape
+
+- Add a store helper for recent `goal_batch_notification` artifacts, then project them into `TaskDesc` through `describeTask(...)`.
+- Render terminal goal batch wake facts in `renderTaskDescription(...)` and in `read_context scope=goals/all`.
+- Export and reuse the describe-layer goal renderer from `read_context` so `needs_redispatch`, superseded reason, orphan state, and attempt details have one text source.
+- Include `session_id` in rendered attempts so `read_context` keeps its live child-session steering fact while moving to `GoalDesc`.
+- Do not add a scheduler gate, retry state machine, synthetic message, or duplicate read_context-only status derivation.
+
+### Regression Tests
+
+- Add a describe-layer test that seeds a `goal_batch_notification` artifact and asserts `describeTask(...)` plus `renderTaskDescription(...)` surface run id, fingerprint, and goal_run statuses.
+- Add/modify `orchestrator/tools.test.ts` coverage so `read_context scope=goals` preserves redispatch intent from a superseded terminal tip and owner-orphan state from `GoalDesc`.
+- Update the existing read_context runtime-id test to assert the shared renderer exposes `run=<goal_run_id>` and `session=<child_session_id>`.
+
+### Verification
+
+- The terminal batch describe regression failed before the implementation because `desc.recent_terminal_goal_batches` was `undefined` after `EngineRuntime.syncRun(...)` wrote a `goal_batch_notification` artifact.
+- The read_context regressions failed before the implementation because `scope=goals` still rendered raw `latest_goal_run_*` rows and did not contain `NEEDS_REDISPATCH(...)` or `ORPHANED(...)`.
+- Implemented on 2026-06-18: `describeTask(...)` projects recent `goal_batch_notification` artifacts into `TaskDesc`, `renderTaskDescription(...)` renders them, and `read_context scope=goals/all` reuses the describe-layer goal and terminal-batch renderers.
+- `bun test packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts --timeout 30000` passed with 9 tests.
+- `bun test packages/opencorvus/test/orchestrator/tools.test.ts -t "read_context surfaces terminal goal batch wake facts|read_context preserves describe-layer redispatch and orphan facts|read_context surfaces latest goal_run" --timeout 30000` passed with 3 tests.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- Broader check `bun test packages/opencorvus/test/orchestrator/tools.test.ts --timeout 30000` was attempted and did not pass: 56 passed, 14 failed, 1 error. Sample isolated failures were outside the BH-031/BH-032 read_context path (`MissingModelConfigError` in `propose_task`, missing real tool execution identity in an integrity artifact-missing test, and a freshContext worktree marker precondition). These residual failures are not hidden as success and need separate triage if they are not already covered by later bug-hunt entries.
+- Independent agent Descartes confirmed BH-031/BH-032 existed on HEAD, identified the double-source read_context goal rendering as the root cause, and recommended the shared describe-layer renderer plus terminal batch read path used here.
