@@ -529,6 +529,21 @@ test(
             ).map((node) => Math.round(node.getBoundingClientRect().width)),
             workflowResizableNext:
               document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")?.dataset.resizableNext ?? "",
+            workflowSeparator: (() => {
+              const separator = document.querySelector<HTMLElement>("#centerWorkbenchSeparatorWorkflow")
+              return {
+                hidden: separator?.hidden ?? true,
+                disabled: separator?.dataset.disabled ?? "",
+                role: separator?.getAttribute("role") ?? "",
+                orientation: separator?.getAttribute("aria-orientation") ?? "",
+                controls: separator?.getAttribute("aria-controls") ?? "",
+                tabIndex: separator?.tabIndex ?? -1,
+                min: Number(separator?.getAttribute("aria-valuemin")),
+                max: Number(separator?.getAttribute("aria-valuemax")),
+                now: Number(separator?.getAttribute("aria-valuenow")),
+                focused: document.activeElement === separator,
+              }
+            })(),
           }
         })
 
@@ -546,13 +561,13 @@ test(
         throw new Error(`${label}: ${JSON.stringify(state)} requests=${JSON.stringify(requestLog.slice(-20))}`)
       }
       assertMatchObject(await activeState(), {
-        leftTasks: "false",
-        leftMission: "true",
+        leftTasks: "true",
+        leftMission: "false",
         leftAssistant: "false",
-        leftHeaderTitle: "Mission",
-        leftHeaderAriaLabel: "Mission",
-        leftHeaderI18nKey: "mission.title",
-        leftHeaderActionScope: "mission",
+        leftHeaderTitle: "Recent Tasks",
+        leftHeaderAriaLabel: "Recent Tasks",
+        leftHeaderI18nKey: "task.ledger.title",
+        leftHeaderActionScope: "tasks",
         leftHeaderActionsActive: "true",
         rightInspector: "false",
         centerOpen: "true",
@@ -564,8 +579,8 @@ test(
         centerPreview: "false",
         leftToolbarExists: true,
         leftActivityButtons: 6,
-        leftTasksButton: "false",
-        leftMissionButton: "true",
+        leftTasksButton: "true",
+        leftMissionButton: "false",
         leftAssistantButton: "false",
         leftSkillButton: "false",
         leftMcpButton: "false",
@@ -574,7 +589,7 @@ test(
         centerResizerHidden: true,
         rightActivityButtons: 7,
         rightTuiButtonExists: false,
-        rightWorkflowButton: "false",
+        rightWorkflowButton: "true",
         rightExplorerButton: "false",
         rightDiffButton: "false",
         rightAssistantButtonExists: false,
@@ -585,12 +600,19 @@ test(
         notificationPanelExists: true,
         taskStatusInWorkflowHeader: true,
         centerWorkbenchHeaderExists: false,
-        chatTitle: "Mission",
+        chatTitle: "Task",
+        selectedSourceKind: "task",
+        selectedSourceID: "tsk_side_activity",
         rightTitle: "Inspector",
         notificationTitle: "Notifications",
         workbenchStartsAtWorkspace: true,
       })
 
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      await waitForState(
+        "mission activity should become active before narrow layout check",
+        (state) => state.leftMission === "true" && state.leftHeaderTitle === "Mission",
+      )
       await page.setViewport({ width: 960, height: 720 })
       await page.waitForFunction(
         () => getComputedStyle(document.querySelector<HTMLElement>("#panelBody")!).flexDirection === "column",
@@ -979,10 +1001,30 @@ test(
       })
       assert.deepEqual(twoPanelState.openPanels, ["task", "inspector"])
       assert.ok(Math.abs(twoPanelState.openPanelWidths[0]! - twoPanelState.openPanelWidths[1]!) <= 2)
+      const separatorSemantics = twoPanelState.workflowSeparator as {
+        hidden: boolean
+        disabled: string
+        role: string
+        orientation: string
+        controls: string
+        tabIndex: number
+        min: number
+        max: number
+        now: number
+      }
+      assert.equal(separatorSemantics.hidden, false)
+      assert.equal(separatorSemantics.disabled, "false")
+      assert.equal(separatorSemantics.role, "separator")
+      assert.equal(separatorSemantics.orientation, "vertical")
+      assert.equal(separatorSemantics.controls, "centerWorkbenchWorkflow centerWorkbenchInspector")
+      assert.equal(separatorSemantics.tabIndex, 0)
+      assert.ok(separatorSemantics.min < separatorSemantics.max)
+      assert.ok(separatorSemantics.now >= separatorSemantics.min)
+      assert.ok(separatorSemantics.now <= separatorSemantics.max)
 
       const workflowEdge = await page.evaluate(() => {
-        const rect = document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")!.getBoundingClientRect()
-        return { x: rect.right - 2, y: rect.top + rect.height / 2 }
+        const rect = document.querySelector<HTMLElement>("#centerWorkbenchSeparatorWorkflow")!.getBoundingClientRect()
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
       })
       await page.mouse.move(workflowEdge.x, workflowEdge.y)
       await page.mouse.down()
@@ -991,6 +1033,15 @@ test(
       const resizedTwoPanelState = await activeState()
       assert.deepEqual(resizedTwoPanelState.openPanels, ["task", "inspector"])
       assert.ok(resizedTwoPanelState.openPanelWidths[0]! - resizedTwoPanelState.openPanelWidths[1]! > 80)
+      const keyboardWidthBefore = resizedTwoPanelState.openPanelWidths[0]!
+      await page.focus("#centerWorkbenchSeparatorWorkflow")
+      await page.keyboard.press("ArrowLeft")
+      const keyboardResizedState = await waitForState(
+        "separator keyboard resize should shrink the left panel",
+        (state) => (state.openPanelWidths as number[])[0]! < keyboardWidthBefore - 10,
+      )
+      assert.equal((keyboardResizedState.workflowSeparator as { focused: boolean }).focused, true)
+      assert.ok(keyboardResizedState.openPanelWidths[0]! < keyboardWidthBefore)
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
       assertMatchObject(await activeState(), {
@@ -1029,8 +1080,8 @@ test(
         )
       const previewLeftEdge = async () =>
         await page.evaluate(() => {
-          const rect = document.querySelector<HTMLElement>("#centerWorkbenchBrowser")!.getBoundingClientRect()
-          return { x: rect.left + 2, y: rect.top + rect.height / 2 }
+          const rect = document.querySelector<HTMLElement>("#centerWorkbenchSeparatorDiff")!.getBoundingClientRect()
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
         })
       const previewWidthBeforeDrag = await previewWidth()
       let previewEdge = await previewLeftEdge()
