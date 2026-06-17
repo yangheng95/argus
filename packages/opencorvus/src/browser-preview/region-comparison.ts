@@ -206,18 +206,31 @@ export async function compareBrowserPreviewRegions(
         })
         continue
       }
-      regions.push(
-        await materializeRegionComparison({
-          outDir,
-          binding,
-          sourceImagePath: source.path,
-          sourceBox: source.bbox,
-          implementationImagePath: region.screenshotPath,
-          implementationBox: region.bbox,
-          includeSideBySide: input.includeSideBySide !== false,
-          includeDiff: input.includeDiff === true,
-        }),
-      )
+      try {
+        regions.push(
+          await materializeRegionComparison({
+            outDir,
+            binding,
+            sourceImagePath: source.path,
+            sourceBox: source.bbox,
+            implementationImagePath: region.screenshotPath,
+            implementationBox: region.bbox,
+            includeSideBySide: input.includeSideBySide !== false,
+            includeDiff: input.includeDiff === true,
+          }),
+        )
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        regions.push({
+          region_id: binding.region_id,
+          viewport_id: binding.viewport_id,
+          status: "failed",
+          reason,
+          source_bbox: binding.source.bbox,
+          implementation_bbox: region.bbox,
+          diagnostics: [reason],
+        })
+      }
     }
   }
 
@@ -304,8 +317,8 @@ async function materializeRegionComparison(input: {
   await fs.mkdir(dir, { recursive: true })
   const sourceCrop = path.join(dir, "source.png")
   const implementationCrop = path.join(dir, "implementation.png")
-  await cropPng(input.sourceImagePath, sourceCrop, input.sourceBox)
-  await cropPng(input.implementationImagePath, implementationCrop, input.implementationBox)
+  await cropPng(input.sourceImagePath, sourceCrop, input.sourceBox, "source")
+  await cropPng(input.implementationImagePath, implementationCrop, input.implementationBox, "implementation")
   const sideBySide = path.join(dir, "side-by-side.png")
   await makeSideBySide({
     leftPath: sourceCrop,
@@ -334,14 +347,57 @@ async function materializeRegionComparison(input: {
   }
 }
 
-async function cropPng(inputPath: string, outputPath: string, box: BrowserPreviewRegionBox): Promise<void> {
+async function cropPng(
+  inputPath: string,
+  outputPath: string,
+  box: BrowserPreviewRegionBox,
+  boxRole: "source" | "implementation",
+): Promise<void> {
   const metadata = await sharp(inputPath).metadata()
   if (!metadata.width || !metadata.height) throw new Error(`Cannot read PNG dimensions: ${inputPath}`)
-  const left = clamp(Math.floor(box.x), 0, metadata.width - 1)
-  const top = clamp(Math.floor(box.y), 0, metadata.height - 1)
-  const width = clamp(Math.ceil(box.width), 1, metadata.width - left)
-  const height = clamp(Math.ceil(box.height), 1, metadata.height - top)
+  const left = Math.floor(box.x)
+  const top = Math.floor(box.y)
+  const width = Math.ceil(box.width)
+  const height = Math.ceil(box.height)
+  assertCropBoxInsideImage({
+    inputPath,
+    box,
+    boxRole,
+    left,
+    top,
+    width,
+    height,
+    imageWidth: metadata.width,
+    imageHeight: metadata.height,
+  })
   await sharp(inputPath).extract({ left, top, width, height }).png().toFile(outputPath)
+}
+
+function assertCropBoxInsideImage(input: {
+  inputPath: string
+  box: BrowserPreviewRegionBox
+  boxRole: "source" | "implementation"
+  left: number
+  top: number
+  width: number
+  height: number
+  imageWidth: number
+  imageHeight: number
+}): void {
+  if (
+    input.left < 0 ||
+    input.top < 0 ||
+    input.width < 1 ||
+    input.height < 1 ||
+    input.left + input.width > input.imageWidth ||
+    input.top + input.height > input.imageHeight
+  ) {
+    throw new Error(
+      `Browser preview ${input.boxRole} bbox exceeds ${input.boxRole} image bounds: ` +
+        `box=${input.box.x},${input.box.y},${input.box.width},${input.box.height} ` +
+        `image=${input.imageWidth}x${input.imageHeight} path=${input.inputPath}`,
+    )
+  }
 }
 
 async function makeSideBySide(input: {
