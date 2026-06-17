@@ -197,6 +197,15 @@ function assertActiveHistory(source: BoardSource, epoch: number, signal: AbortSi
   }
 }
 
+function assertActiveSessionHistory(taskID: string, epoch: number, signal: AbortSignal): void {
+  if (signal.aborted) throw signal.reason ?? new DOMException("Conversation history aborted", "AbortError")
+  if (epoch !== historyEpoch) throw new DOMException("Conversation history superseded", "AbortError")
+  if (activeTaskID() !== taskID) throw new DOMException("Conversation history source changed", "AbortError")
+  if (historySource && !sourceMatches(historySource, { kind: "task", id: taskID })) {
+    throw new DOMException("Conversation history source changed", "AbortError")
+  }
+}
+
 function assertActiveTailMerge(taskID: string, epoch: number, signal: AbortSignal): void {
   if (signal.aborted) throw signal.reason ?? new DOMException("Conversation tail merge aborted", "AbortError")
   if (epoch !== tailMergeEpoch) throw new DOMException("Conversation tail merge superseded", "AbortError")
@@ -524,8 +533,10 @@ export async function loadOlderConversationHistory(
     historyState = nextHistory
     return true
   } finally {
-    if (historyAbort === controller) historyAbort = null
-    historyLoading = false
+    if (historyAbort === controller) {
+      historyAbort = null
+      historyLoading = false
+    }
   }
 }
 
@@ -533,19 +544,37 @@ export async function loadConversationSessionHistory(sessionID: string, taskID =
   const selectedTaskID = String(taskID || "")
   const targetSessionID = String(sessionID || "")
   if (!selectedTaskID || !targetSessionID) return false
-  const page = await apiJson(
-    `task/${encodeURIComponent(selectedTaskID)}/conversation/session/${encodeURIComponent(targetSessionID)}`,
-  )
-  const transcript = requireArray(page?.transcript, "transcript")
-  const timeline = requireArray(page?.timeline, "timeline")
-  const events = requireArray(page?.events, "events")
-  const view = requireObject(page?.view, "view")
-  if (transcript.length === 0 && timeline.length === 0 && events.length === 0) return false
-  hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
-  for (const event of events) {
-    replayTaskEventToTree(event)
+  historyLoading = true
+  historyAbort?.abort(new DOMException("Conversation history superseded", "AbortError"))
+  const controller = new AbortController()
+  historyAbort = controller
+  const epoch = ++historyEpoch
+  const signal = controller.signal
+  try {
+    assertActiveSessionHistory(selectedTaskID, epoch, signal)
+    const page = await apiJson(
+      `task/${encodeURIComponent(selectedTaskID)}/conversation/session/${encodeURIComponent(targetSessionID)}`,
+      { signal },
+    )
+    assertActiveSessionHistory(selectedTaskID, epoch, signal)
+    const transcript = requireArray(page?.transcript, "transcript")
+    const timeline = requireArray(page?.timeline, "timeline")
+    const events = requireArray(page?.events, "events")
+    const view = requireObject(page?.view, "view")
+    if (transcript.length === 0 && timeline.length === 0 && events.length === 0) return false
+    hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    for (const event of events) {
+      assertActiveSessionHistory(selectedTaskID, epoch, signal)
+      replayTaskEventToTree(event)
+    }
+    assertActiveSessionHistory(selectedTaskID, epoch, signal)
+    return true
+  } finally {
+    if (historyAbort === controller) {
+      historyAbort = null
+      historyLoading = false
+    }
   }
-  return true
 }
 
 export async function loadConversationHistoryUntilCard(

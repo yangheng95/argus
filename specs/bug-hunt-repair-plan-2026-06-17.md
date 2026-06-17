@@ -2682,3 +2682,50 @@ LINE:
 - Selected-task recovery and event routing tests passed: `bun test packages/overlay/test/selected-task-recovery.test.ts packages/overlay/test/events-refresh.test.ts --timeout 60000`.
 - Bernoulli independently confirmed the current implementation no longer contains the `clearPruneCursor` production bug and identified the current recovery path from `events.ts` through `selected-task-recovery.ts`, `conversation.ts`, and `tree-writer.ts`.
 - Bernoulli also confirmed the backend close loop: `clearRewindCursor(...)` emits `task.rewound` with `cursorTime: 0`, and the conversation route no longer filters the transcript when the task rewind cursor is null.
+
+## Batch P1-AP: BH-051 session-history hydration must not write after task switch
+
+### Findings
+
+- BH-051 targets `packages/overlay/src/services/conversation.ts::loadConversationSessionHistory(...)`.
+- Current `hydrateConversation(...)`, `continueConversationReplay(...)`, `mergeLatestConversationTail(...)`, and `loadOlderConversationHistory(...)` already use active source and epoch checks before writing to `cardTreeStore`.
+- `loadConversationSessionHistory(...)` is still outside that guard discipline: it captures a task ID, awaits `task/:taskID/conversation/session/:sessionID`, and then calls `hydrateConversationView(...)` plus `replayTaskEventToTree(...)` without confirming the selected task is still the same.
+- The runtime callers are build/phase card expansion and conversation agent rail history loading. Both can initiate an async session-history request while the user switches tasks.
+
+### Call-point Inventory
+
+- `packages/overlay/src/components/Card.tsx` calls `loadConversationSessionHistory(sessionID, taskID)` when an expanded phase card needs older build-session history.
+- `packages/overlay/src/services/conversation.ts::loadConversationHistoryUntilCard(...)` calls `loadConversationSessionHistory(...)` for task conversation cards that represent a session whose message is not yet loaded.
+- `packages/overlay/src/components/ConversationAgentRail.tsx` calls `loadConversationHistoryUntilCard(...)` when focusing an agent record.
+- `packages/overlay/test/conversation-hydrate-replay.test.ts` owns hydration/replay/history regression tests for these code paths.
+
+### Fix Shape
+
+- Treat session-history hydration as a history load owned by the selected task source.
+- Capture a history epoch and abort controller when `loadConversationSessionHistory(...)` starts.
+- Pass the abort signal into `apiJson(...)`.
+- Before the request, after the request, before each replayed event, and before returning success, assert the history epoch is current and `activeTaskID()` still equals the captured task ID.
+- On superseded/foreign task completion, reject with `AbortError` before mutating the card tree.
+- Do not add caller-side gates, fallback refreshes, delayed retries, or compatibility hydration paths.
+
+### Regression Tests
+
+- Extend `packages/overlay/test/conversation-hydrate-replay.test.ts`.
+- Start `loadConversationSessionHistory(...)` for task A and delay the fake transport response.
+- Switch `boardStore.selectedSource` to task B before resolving task A's response.
+- Assert the stale request rejects with `AbortError` and no task A message/card appears in the current card tree.
+
+### Verification
+
+- New regression failed before implementation: the stale task A session-history request resolved after switching to task B.
+- Implemented on 2026-06-18: `loadConversationSessionHistory(...)` now owns a history epoch and abort controller, passes its signal into `apiJson(...)`, and asserts active task/source before request, after request, before replaying each event, and before returning success.
+- Focused regression passed: `bun test packages/overlay/test/conversation-hydrate-replay.test.ts -t "stale session-history response" --timeout 30000`.
+- Conversation hydration suites passed: `bun test packages/overlay/test/conversation-hydrate-replay.test.ts packages/overlay/test/selected-task-recovery.test.ts --timeout 60000`.
+- Overlay typecheck passed: `bun run --cwd packages/overlay typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Volta reviewed the repaired working tree and confirmed `assertActiveSessionHistory(...)` checks the history epoch, abort signal, active task, and history source.
+- Volta confirmed the fix is in the service-level async write boundary used by both direct build-phase card expansion and agent-rail history loading, rather than a caller-side UI gate.
+- Volta confirmed the new regression covers the delayed old-task response after task switch and proves old task messages do not enter the current card tree.
