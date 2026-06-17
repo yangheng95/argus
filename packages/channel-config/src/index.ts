@@ -403,9 +403,10 @@ export const ChannelCatalog = [
         key: "secret",
         label: "Channel Secret",
         type: "secret",
-        description: "Optional LINE channel secret for webhook verification",
-        placeholder: "Optional",
+        description: "LINE channel secret for webhook verification",
+        placeholder: "Channel secret",
         env: "LINE_CHANNEL_SECRET",
+        required: true,
       },
       {
         key: "webhookHost",

@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto"
+import { createHmac, timingSafeEqual } from "node:crypto"
 import type { ChannelAdapter, MessageHandler } from "../adapter"
 import { adapt, path, type Serve, type Server } from "./http"
 
@@ -18,6 +18,12 @@ type Body = {
       text?: string
     }
   }>
+}
+
+function safeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left)
+  const rightBuffer = Buffer.from(right)
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer)
 }
 
 export class LineAdapter implements ChannelAdapter {
@@ -117,11 +123,11 @@ export class LineAdapter implements ChannelAdapter {
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 })
 
     const raw = await req.text()
-    if (this.secret) {
-      const digest = createHmac("sha256", this.secret).update(raw).digest("base64")
-      const sig = req.headers.get("x-line-signature")
-      if (!sig || sig !== digest) return Response.json({ error: "invalid signature" }, { status: 401 })
-    }
+    if (!this.secret) return Response.json({ error: "missing channel secret" }, { status: 401 })
+
+    const digest = createHmac("sha256", this.secret).update(raw).digest("base64")
+    const sig = req.headers.get("x-line-signature")
+    if (!sig || !safeEqual(sig, digest)) return Response.json({ error: "invalid signature" }, { status: 401 })
 
     let body: Body
     try {

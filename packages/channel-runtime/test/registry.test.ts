@@ -80,6 +80,44 @@ describe("channel registry", () => {
     expect(app.list).toHaveLength(0)
   })
 
+  test("requires line channel secret before registering LINE", () => {
+    const partial = runtime()
+    const partialResult = registerAdapters(
+      partial,
+      {
+        LINE_CHANNEL_ACCESS_TOKEN: "line_token",
+      },
+      factory(),
+    )
+
+    expect(partialResult.names).toEqual([])
+    expect(partialResult.warns).toEqual([
+      "Skip line channel: missing required env. Need: LINE_CHANNEL_ACCESS_TOKEN, LINE_CHANNEL_SECRET.",
+    ])
+    expect(partial.list).toHaveLength(0)
+
+    const complete = runtime()
+    const completeResult = registerAdapters(
+      complete,
+      {
+        LINE_CHANNEL_ACCESS_TOKEN: "line_token",
+        LINE_CHANNEL_SECRET: "line_secret",
+      },
+      factory(),
+    )
+
+    expect(completeResult.warns).toEqual([])
+    expect(completeResult.names).toEqual(["line"])
+    expect(complete.list.map((item) => item.platform)).toEqual(["line"])
+    expect((complete.list[0] as Fake).options).toEqual({
+      token: "line_token",
+      host: undefined,
+      port: undefined,
+      path: undefined,
+      secret: "line_secret",
+    })
+  })
+
   test("registers dingtalk from env keys", () => {
     const app = runtime()
     const result = registerAdapters(
