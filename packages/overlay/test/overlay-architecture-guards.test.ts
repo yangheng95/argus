@@ -910,9 +910,10 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(/\.executor-chip-value\[data-empty="true"\]/)
   })
 
-  test("workspace panel and diff preview are owned by surfaces/workspace.css", () => {
+  test("retired workspace panel shell stays out of surfaces/workspace.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const workspaceSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css"))
+    const activitySurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/activity.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
     for (const className of [
@@ -926,6 +927,12 @@ describe("overlay architecture guards", () => {
       "workspace-close",
       "workspace-body",
       "workspace-view",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(workspaceSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|[\\[{:#.>+~,])`))
+    }
+
+    for (const className of [
       "diff-preview-panel",
       // diff-preview-head replaced by .oc-panel__header override in Step 9.E
       "diff-preview-copy",
@@ -960,14 +967,10 @@ describe("overlay architecture guards", () => {
 
     expect(html).not.toContain("btnWorkspaceToggle")
     expect(workspaceSurface).not.toContain(".workspace-toggle")
-    expect(workspaceSurface).not.toMatch(/\.workspace-mount\[hidden\]\s*\{/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace::before\s*\{/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer:hover::before/)
-    expect(workspaceSurface).toMatch(/\.workspace-tab:hover\s*\{/)
-    expect(workspaceSurface).toMatch(/\.workspace-tab\[data-active="true"\]\s*\{/)
-    expect(workspaceSurface).toMatch(/\.workspace-close:hover\s*\{/)
-    expect(workspaceSurface).toMatch(/\.workspace-view\[data-active="false"\]\s*\{/)
+    expect(activitySurface).toMatch(/\.file-changes-diff-header \.oc-button\[data-ui="file-changes-diff-close"\]\s*\{/)
     expect(workspaceSurface).toMatch(/code \.file-link:hover\s*\{/)
   })
 
@@ -2669,13 +2672,13 @@ describe("overlay architecture guards", () => {
         const selector = match[1] ?? ""
         const body = match[2] ?? ""
         const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
-        if (!isThemeSelector || !/\.(?:chat-goals-strip|workspace-mount)\b/.test(selector)) continue
+        if (!isThemeSelector || !/\.chat-goals-strip\b/.test(selector)) continue
 
         expect(body).not.toMatch(/\b(?:background|border(?:-[a-z]+)?|box-shadow)\s*:/)
       }
     }
 
-    expect(soloRuleBody(workspaceSurface, ".workspace-mount")).toContain("background: var(--surface-inset)")
+    expect(workspaceSurface).not.toMatch(/(^|\n)\.workspace-mount(?:\s|[{\[:#.>+~,])/)
   })
 
   test("chat task-switch progress overlays the header instead of creating a hidden gap", () => {

@@ -25,6 +25,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-prompt-profile-textarea-accessible-names.md](2026-06-18-prompt-profile-textarea-accessible-names.md) | Prompt Profile Textarea Accessible Names |
 | [2026-06-18-retire-prompt-editor-css-residue.md](2026-06-18-retire-prompt-editor-css-residue.md) | Retire Prompt Editor CSS Residue |
 | [2026-06-18-retire-settings-config-shell-residue.md](2026-06-18-retire-settings-config-shell-residue.md) | Retire Settings Config Shell Residue |
+| [2026-06-18-retire-workspace-panel-residue.md](2026-06-18-retire-workspace-panel-residue.md) | Retire Workspace Panel Residue |
 | [2026-06-18-retire-criteria-dom-css-residue.md](2026-06-18-retire-criteria-dom-css-residue.md) | Retire Criteria DOM CSS Residue |
 | [2026-06-18-retire-eval-shell-residue.md](2026-06-18-retire-eval-shell-residue.md) | Retire Eval Shell Residue |
 | [2026-06-18-retire-composer-selector-residue.md](2026-06-18-retire-composer-selector-residue.md) | Retire Composer Selector Residue |
