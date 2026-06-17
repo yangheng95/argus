@@ -154,6 +154,8 @@ describe("settings primitives — Solid exports", () => {
     expect(PRIMITIVES_SRC).toContain("<Select.HiddenSelect aria-label={props.ariaLabel}")
     expect(PRIMITIVES_SRC).toContain("aria-label={props.ariaLabel}")
     expect(PRIMITIVES_SRC).toContain("props.optionData?.(option())")
+    expect(PRIMITIVES_SRC).toContain('props.optionTextClass ? `oc-select-option-copy ${props.optionTextClass}`')
+    expect(PRIMITIVES_SRC).toContain("class={optionTextClass()}")
     expect(PRIMITIVES_SRC).toContain(
       "const selectedOption = () => props.options.find((option) => option.value === props.value) ?? null",
     )

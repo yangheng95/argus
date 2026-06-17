@@ -177,6 +177,8 @@ export function SettingsSelect<T extends SettingsSelectOption>(props: SettingsSe
     props.optionClass ? `oc-select-option ${props.optionClass}` : "oc-select-option settings-select-option"
   const indicatorClass = () =>
     props.indicatorClass ? `oc-select-indicator ${props.indicatorClass}` : "oc-select-indicator"
+  const optionTextClass = () =>
+    props.optionTextClass ? `oc-select-option-copy ${props.optionTextClass}` : "oc-select-option-copy"
 
   function SettingsSelectOptionItem(itemProps: Select.SelectRootItemComponentProps<T>): JSX.Element {
     const option = () => itemProps.item.rawValue
@@ -190,7 +192,7 @@ export function SettingsSelect<T extends SettingsSelectOption>(props: SettingsSe
     return (
       <Select.Item item={itemProps.item} class={optionClass()} {...optionData()}>
         <Show when={props.optionTextClass || option().description} fallback={optionCopy()}>
-          <span class={props.optionTextClass}>{optionCopy()}</span>
+          <span class={optionTextClass()}>{optionCopy()}</span>
         </Show>
         <Select.ItemIndicator class={indicatorClass()}>
           <Icon name="status-completed" size={12} />
