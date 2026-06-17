@@ -971,11 +971,26 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string; message: string; should_resume: boolean }
+        const body = (await response.json()) as {
+          kind: string
+          message: string
+          should_resume: boolean
+          user_message: {
+            info: { id: string; sessionID: string }
+            parts: Array<{ type: string; mime?: string; filename?: string; url?: string }>
+          }
+        }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
+        expect(body.user_message.info.sessionID).toBe(root.id)
+        expect(body.user_message.parts).toHaveLength(2)
+        expect(body.user_message.parts[1]).toMatchObject({
+          type: "file",
+          mime: "text/plain",
+          filename: "spec.txt",
+        })
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
         // V35: trigger schema replaced with `event.operatorMessage`.
         const event = (
@@ -994,6 +1009,29 @@ describe("task message routes", () => {
         expect(event.operatorMessage.attachmentSummary).toContain("spec.txt")
         expect(event.operatorMessage.attachmentSummary).toContain("text/plain")
         expect((dispatchTaskLoop.mock.calls[0]?.[0] as { interrupt?: boolean }).interrupt).toBe(true)
+        const task = Database.use((db) =>
+          db
+            .select({ attachments: EngineTaskTable.attachments })
+            .from(EngineTaskTable)
+            .where(eq(EngineTaskTable.id, taskID))
+            .get(),
+        )
+        expect(task?.attachments).toEqual([
+          expect.objectContaining({
+            mime: "text/plain",
+            filename: "spec.txt",
+            intent: "spec_artifact",
+            source: "user-upload",
+          }),
+        ])
+        const messages = await Session.messages({ sessionID: root.id })
+        const latest = messages.at(-1)
+        expect(latest?.info.id).toBe(body.user_message.info.id)
+        expect(latest?.parts[1]).toMatchObject({
+          type: "file",
+          mime: "text/plain",
+          filename: "spec.txt",
+        })
       },
     })
   })
