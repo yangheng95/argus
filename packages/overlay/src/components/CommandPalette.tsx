@@ -7,7 +7,7 @@
 //
 // Command sources:
 //   * Active project tasks (boardStore.tasks → selectTask)
-//   * Settings tabs (openConfigDialog + switchConfigTab)
+//   * Settings sections (CONFIG_SECTIONS -> openConfigDialog)
 //   * Theme switcher (settingsStore.theme + applyTheme)
 //   * Locale switcher
 //   * New Task (focus composer)
@@ -24,7 +24,8 @@ import { syncAgentPromptLocale } from "../services/config"
 import { applyTheme } from "../services/theme"
 import { themeOptionsForCurrentHost } from "../services/theme-registry"
 import { selectTask } from "../services/task"
-import { openConfigDialog, switchConfigTab } from "../services/dialog"
+import { openConfigDialog } from "../services/dialog"
+import { CONFIG_SECTIONS } from "../store/dialog"
 import { setLocale } from "../utils/i18n"
 import { t } from "../utils/i18n"
 import { useDisclosure } from "../solid/disclosure"
@@ -46,18 +47,6 @@ const COMMAND_PALETTE_LISTBOX_ID = "commandPaletteListbox"
 function commandOptionID(command: Command, index: number): string {
   return `commandPaletteOption-${index}-${command.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
 }
-
-const SETTINGS_TABS: Array<{ tab: string; labelKey: string; group: string }> = [
-  { tab: "general", labelKey: "settings.title", group: "settings" },
-  { tab: "permissions", labelKey: "permissions.title", group: "settings" },
-  { tab: "prompt", labelKey: "prompt.title", group: "settings" },
-  { tab: "channel", labelKey: "channel.title", group: "settings" },
-  { tab: "memory", labelKey: "memory.title", group: "settings" },
-  { tab: "network", labelKey: "network.title", group: "settings" },
-  { tab: "providers", labelKey: "common.cancel", group: "settings" }, // providers has no i18n title; fall back below
-  { tab: "agent-models", labelKey: "common.cancel", group: "settings" }, // same
-  { tab: "about", labelKey: "about.title", group: "settings" },
-]
 
 // `id` is the canonical theme value (matches `data-theme` and
 // settings.theme); `slug` is the underscore-safe i18n key suffix so
@@ -112,21 +101,14 @@ export function CommandPalette() {
       })
     }
 
-    for (const tab of SETTINGS_TABS) {
-      // Some tabs ship without an i18n title (Providers / Agent Models in
-      // index.html). Fall back to a sensible English label so the command
-      // is searchable. Localising those titles is a separate concern.
-      let label = t(tab.labelKey)
-      if (tab.tab === "providers") label = t("cmdk.settings.providers")
-      if (tab.tab === "agent-models") label = t("cmdk.settings.agent_models")
+    for (const section of CONFIG_SECTIONS) {
       cmds.push({
-        id: `settings:${tab.tab}`,
-        label: `${t("config.title")}: ${label}`,
+        id: `settings:${section.id}`,
+        label: `${t("config.title")}: ${t(section.labelKey)}`,
         group: t("cmdk.group.settings"),
-        keywords: `settings config ${tab.tab}`,
+        keywords: `settings config ${section.id} ${section.id.replace(/-/g, " ")}`,
         run: () => {
-          openConfigDialog()
-          switchConfigTab(tab.tab)
+          openConfigDialog(section.id)
         },
       })
     }

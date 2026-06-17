@@ -50,6 +50,37 @@ const promptProfileCatalog = {
   ],
 }
 
+const installedSkills = [
+  {
+    name: "alpha-skill",
+    description: "Initial test skill",
+    location: "D:/skills/alpha",
+    source_type: "config_path",
+    source: "D:/skills/alpha",
+  },
+]
+
+const skillMarket = [
+  {
+    id: "market-install",
+    name: "market-install",
+    provider: "OpenCorvus",
+    trust: "curated",
+    install_kind: "git",
+    source: "https://market.example.com/.well-known/skills/",
+    description: "Installable skill entry",
+    recommended_policy: "trusted",
+  },
+]
+
+const mcpStatus = {
+  docs: {
+    status: "connected",
+    type: "remote",
+    url: "https://mcp.example.com",
+  },
+}
+
 test("command palette uses the shared Dialog primitive while preserving hotkey focus flow", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
@@ -97,8 +128,15 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
     if (path === "/executor") return send([])
     if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
-    if (path === "/skill/installed" || path === "/skill") return send([])
-    if (path === "/mcp") return send({})
+    if (path === "/skill/installed" || path === "/skill") return send(installedSkills)
+    if (path === "/skill/directories")
+      return send({
+        global_config: "D:/skills/config",
+        managed_skills: "D:/skills/config/skills-market",
+        remote_cache: "D:/skills/cache",
+      })
+    if (path === "/skill/market") return send(skillMarket)
+    if (path === "/mcp") return send(mcpStatus)
     if (path === "/panel/knowledge/memory") return send([])
     if (path === "/panel/knowledge/preference") return send([])
     if (path === "/log" && req.method === "POST") return send({ ok: true })
@@ -108,6 +146,42 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
   const browser = await launchBrowser()
   try {
     const page = await browser.newPage()
+    async function openCommandPaletteFromKeyboard() {
+      await page.keyboard.down("Control")
+      await page.keyboard.press("k")
+      await page.keyboard.up("Control")
+      await page.waitForSelector(".cmdk-panel")
+    }
+    async function runConfigCommand(query: string, panelID: string, expectedText: string, screenshotPath?: string) {
+      await openCommandPaletteFromKeyboard()
+      await page.click(".cmdk-input")
+      await page.keyboard.type(query)
+      await page.waitForFunction(
+        (targetPanelID) => {
+          const activeID = document.querySelector<HTMLInputElement>(".cmdk-input")?.getAttribute("aria-activedescendant")
+          const active = activeID ? document.getElementById(activeID) : null
+          return active?.id.includes(`settings-${targetPanelID}`) === true
+        },
+        {},
+        panelID,
+      )
+      await page.keyboard.press("Enter")
+      await page.waitForFunction(
+        (targetPanelID) =>
+          document.querySelector("#configDialog") !== null &&
+          document.querySelector(`[data-config-panel="${targetPanelID}"]`)?.classList.contains("active") === true,
+        {},
+        panelID,
+      )
+      await page.waitForFunction((text) => document.body.textContent?.includes(text), {}, expectedText)
+      if (screenshotPath) {
+        const screenshot = await page.screenshot({ fullPage: false })
+        assert.ok(screenshot.length > 0)
+        writeFileSync(screenshotPath, screenshot)
+      }
+      await page.click("#btnCloseConfigDialog")
+      await page.waitForFunction(() => document.querySelector("#configDialog") === null)
+    }
     page.on("pageerror", (error) => {
       errors.push(`pageerror: ${error.message}`)
     })
@@ -129,10 +203,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
     await page.waitForSelector('[data-menu-trigger="help"]')
     await page.focus('[data-menu-trigger="help"]')
 
-    await page.keyboard.down("Control")
-    await page.keyboard.press("k")
-    await page.keyboard.up("Control")
-    await page.waitForSelector(".cmdk-panel")
+    await openCommandPaletteFromKeyboard()
 
     const openState = await page.evaluate(() => {
       const dialog = document.querySelector<HTMLElement>(".cmdk-dialog")
@@ -233,6 +304,13 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
       () => (document.activeElement as HTMLElement | null)?.dataset.menuTrigger || "",
     )
     assert.equal(restored, "help")
+    await runConfigCommand("MCP", "mcp", "docs")
+    await runConfigCommand(
+      "skill market",
+      "skill-market",
+      "market-install",
+      resolve(".scratch/command-palette-skill-market-command.png"),
+    )
     assert.deepEqual(errors, [])
   } finally {
     await browser.close()

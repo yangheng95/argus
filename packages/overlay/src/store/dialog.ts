@@ -24,8 +24,9 @@ export interface ConfigSection {
 // order. Consumed by:
 //   • ConfigDialogHost — renders the sidebar nav (adds per-section icons),
 //   • services/dialog.ts — the valid-tab guard set,
-//   • TitlebarMenubar — the top-level Settings menu.
-// Add a section here once and it surfaces in all three (rule 8 — single source).
+//   • TitlebarMenubar — the top-level Settings menu,
+//   • CommandPalette — the Cmd/Ctrl+K Settings commands.
+// Add a section here once and it surfaces in every settings entrypoint.
 export const CONFIG_SECTIONS: readonly ConfigSection[] = [
   { id: "general", labelKey: "settings.title" },
   { id: "permissions", labelKey: "permissions.title" },

@@ -39,3 +39,11 @@ test("CommandPalette links the focused search input to the active listbox option
   expect(SOURCE).toContain('role="option"')
   expect(SOURCE).toContain("id={commandOptionID(cmd, i())}")
 })
+
+test("CommandPalette derives settings commands from CONFIG_SECTIONS", () => {
+  expect(SOURCE).toContain('import { CONFIG_SECTIONS } from "../store/dialog"')
+  expect(SOURCE).toContain("for (const section of CONFIG_SECTIONS)")
+  expect(SOURCE).toContain("openConfigDialog(section.id)")
+  expect(SOURCE).not.toContain("SETTINGS_TABS")
+  expect(SOURCE).not.toContain("switchConfigTab")
+})
