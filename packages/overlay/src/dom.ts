@@ -46,7 +46,6 @@ export interface DomRefs {
   planSection: HTMLElement | null
   goalsSection: HTMLElement | null
   executorSection: HTMLElement | null
-  criteriaSection: HTMLElement | null
   acceptanceSection: HTMLElement | null
   acceptanceBadge: HTMLElement | null
   acceptanceBody: HTMLElement | null
@@ -75,9 +74,7 @@ export interface DomRefs {
   goalsBadge: HTMLElement | null
   goalsBody: HTMLElement | null
 
-  // Criteria / eval
-  criteriaBadge: HTMLElement | null
-  criteriaList: HTMLElement | null
+  // Evaluation
   evalBody: HTMLElement | null
 
   // Changes
@@ -179,7 +176,6 @@ export function getDomRefs(): DomRefs {
     planSection: $<HTMLElement>("#planSection"),
     goalsSection: $<HTMLElement>("#goalsSection"),
     executorSection: $<HTMLElement>("#executorSection"),
-    criteriaSection: $<HTMLElement>("#criteriaSection"),
     acceptanceSection: $<HTMLElement>("#acceptanceSection"),
     acceptanceBadge: $<HTMLElement>("#acceptanceBadge"),
     acceptanceBody: $<HTMLElement>("#acceptanceBody"),
@@ -209,9 +205,7 @@ export function getDomRefs(): DomRefs {
     goalsBadge: $<HTMLElement>("#goalsBadge"),
     goalsBody: $<HTMLElement>("#goalsBody"),
 
-    // Criteria / eval
-    criteriaBadge: $<HTMLElement>("#criteriaBadge"),
-    criteriaList: $<HTMLElement>("#criteriaList"),
+    // Evaluation
     evalBody: $<HTMLElement>("#evalBody"),
 
     // Changes
