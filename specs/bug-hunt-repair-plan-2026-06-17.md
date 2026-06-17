@@ -1667,3 +1667,68 @@ LINE:
 - Hypatia identified `bash` multi-command requests and `apply_patch` multi-file edit requests as the highest-risk call shapes.
 - Hypatia recommended a central `PermissionNext.ask(...)` fix with no tool-layer branches, matching the implemented fix shape.
 - Hypatia also recommended the edit-shaped regression; the final test suite includes it.
+
+## Batch P1-V: BH-066 apply_patch Add File must not overwrite existing files
+
+### Findings
+
+- BH-066 is a P1 file-destruction bug in `packages/opencorvus/src/tool/apply_patch.ts`.
+- The tool `add` hunk branch treated every `*** Add File` as creation from empty content, built permission metadata with `before: ""`, then wrote with `fs.writeFile(...)`.
+- If the target path already existed, the tool silently overwrote it after showing the permission UI an add-from-empty diff instead of the true replacement.
+- The lower-level `Patch.applyPatch(...)` and `Patch.maybeParseApplyPatchVerified(...)` had the same Add File existence gap, so leaving them unchanged would preserve a second Add File overwrite semantic.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/tool/apply_patch.ts` owns the user-facing `apply_patch` tool execution, permission metadata, file writes, file watcher events, and LSP touches.
+- `packages/opencorvus/src/patch/index.ts` owns `parsePatch(...)`, `applyHunksToFiles(...)`, `applyPatch(...)`, `maybeParseApplyPatch(...)`, and `maybeParseApplyPatchVerified(...)`.
+- `rg -n "Patch\\.applyPatch\\(|applyHunksToFiles\\(|maybeParseApplyPatchVerified\\(|maybeParseApplyPatch\\(" packages/opencorvus/src packages/opencorvus/test` showed direct `Patch.applyPatch(...)` usage only in patch tests; tool execution uses `Patch.parsePatch(...)` and then applies its own permission-aware write path.
+- `packages/opencorvus/test/tool/apply_patch.test.ts` already contained a test named `adds file overwriting existing file`; that test encoded the buggy behavior and was replaced with the correct rejection contract.
+- `packages/opencorvus/test/patch/patch.test.ts` covers the lower-level patch helper and now also covers Add File existing-target rejection.
+
+### Fix Shape
+
+- Add one shared `Patch.assertAddFileTargetDoesNotExist(filePath)` helper.
+- Use `lstat` so any existing filesystem entry, including directories and symlinks, rejects Add File before permission metadata is built.
+- Call it from the tool `add` branch before building add-from-empty metadata or asking permission.
+- Call it from lower-level `Patch.applyHunksToFiles(...)` before any hunk writes so a later existing Add File target cannot leave earlier add/update side effects.
+- Write Add File content with `flag: "wx"` in both write paths so a race between validation and creation cannot overwrite an existing target.
+- Call it from `Patch.maybeParseApplyPatchVerified(...)` and preserve that function's existing `CorrectnessError` return contract.
+- Do not reinterpret `Add File` as update, do not show replacement metadata as a create diff, and do not add a compatibility path for overwriting existing files.
+
+### Regression Tests
+
+- Update `packages/opencorvus/test/tool/apply_patch.test.ts`.
+- Replace `adds file overwriting existing file` with `rejects add file when target already exists before asking permission`.
+- Assert the tool rejects with `apply_patch verification failed: Add File target already exists`, does not call `ctx.ask(...)`, and preserves original file content.
+- Add a mixed-patch test where an earlier Add File and Update File are valid but a later Add File target already exists; assert no permission prompt, no new file, no update write, and original duplicate content preserved.
+- Extend `packages/opencorvus/test/patch/patch.test.ts`.
+- Assert `Patch.applyPatch(...)` rejects an Add File existing target and preserves content.
+- Assert `Patch.applyPatch(...)` rejects a mixed patch before writing earlier valid changes.
+- Assert `Patch.maybeParseApplyPatchVerified(...)` returns `MaybeApplyPatchVerified.CorrectnessError` for the same existing-target shape.
+
+### Verification
+
+- Red tool regression before fix: `bun test packages/opencorvus/test/tool/apply_patch.test.ts -t "rejects add file when target already exists" --timeout 20000` failed because the promise resolved and overwrote the file.
+- Red patch regression before fix: `bun test packages/opencorvus/test/patch/patch.test.ts -t "should reject add when target file already exists" --timeout 20000` failed because `Patch.applyPatch(...)` resolved and overwrote the file.
+- Focused regressions after fix passed:
+  - `bun test packages/opencorvus/test/tool/apply_patch.test.ts -t "rejects add file when target already exists" --timeout 20000`
+  - `bun test packages/opencorvus/test/patch/patch.test.ts -t "should reject add when target file already exists" --timeout 20000`
+- Mixed-patch no-side-effect regressions passed:
+  - `bun test packages/opencorvus/test/tool/apply_patch.test.ts -t "existing add" --timeout 30000`
+  - `bun test packages/opencorvus/test/patch/patch.test.ts -t "existing add" --timeout 30000`
+- Full patch suites passed:
+  - `bun test packages/opencorvus/test/tool/apply_patch.test.ts --timeout 60000`
+  - `bun test packages/opencorvus/test/patch/patch.test.ts --timeout 60000`
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Implemented on 2026-06-18.
+- `*** Add File` now only creates missing files.
+- Existing targets fail before permission prompts, metadata creation, filesystem writes, watcher events, or LSP touches.
+
+### Independent Review Feedback
+
+- Carver independently confirmed BH-066 was still present before this batch and that the parser was not the root cause.
+- Carver identified the user-facing tool and lower-level `Patch.applyHunksToFiles(...)` as same-semantic write paths that must not diverge.
+- Carver recommended rejecting existing targets before `ctx.ask(...)`, preserving original content, replacing the old overwrite test, adding a mixed-patch no-side-effect regression, and using exclusive create writes to avoid validation/write races.
