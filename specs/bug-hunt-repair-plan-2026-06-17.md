@@ -477,3 +477,37 @@ LINE:
 - Focused OpenAPI directory assertion passed: `bun test packages/opencorvus/test/server/app-routes.test.ts -t "directory query"`.
 - Full `app-routes.test.ts` currently exposes a separate pre-existing browser-preview request-body schema failure (`schema.properties.url.type` is undefined); that failure is outside this channel attachment batch and was not masked.
 - Typecheck passed: `bunx turbo run typecheck --filter=@opencorvus-ai/channel-runtime --filter=opencorvus`.
+
+## Batch P0-H: preserve provider credential and Hexin budget secrecy under local edits
+
+### Findings
+
+- Current working-tree edits to `packages/opencorvus/src/server/routes/provider.ts` removed three already-required protections from prior batches: saved provider credentials were no longer bound to that provider's configured API URL, Hexin budget upstream error bodies were returned to the overlay, and `HexinBudgetResponse` again allowed `{ ok: true }` without `budget` or `{ ok: false }` without `error`.
+- Current working-tree edits to `packages/opencorvus/test/server/provider-hexin-budget.test.ts` removed the regression test that catches reflected `Authorization` leakage.
+- This is not a compatibility path or fallback; the single route contracts remain the strict contracts from the earlier P0/P1 fixes.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/provider.ts` owns `/provider/discover-models`, `/provider/hexin/budget`, `HexinBudgetResponse`, and the shared provider URL normalization helper.
+- `packages/opencorvus/src/provider/provider.ts` owns `Provider.resolveHexinApiKey()` and `Provider.getProvider()` used by these routes.
+- `packages/opencorvus/test/server/provider-hexin-budget.test.ts` covers Hexin budget success, missing key, malformed upstream JSON, and reflected upstream authorization redaction.
+- `packages/opencorvus/test/server/provider-discover-models.test.ts` covers saved-key exfiltration prevention for discovery.
+- `packages/overlay/src/services/config.ts` exposes `getHexinBudget()` as the overlay consumer contract.
+
+### Fix Shape
+
+- Keep saved provider credentials usable only when the requested discovery base URL normalizes to one of that provider's configured model API base URLs.
+- Keep Hexin budget non-2xx responses body-blind: status and status text are returned, never the upstream response body.
+- Keep Hexin budget thrown errors redacted against the active API key before returning them.
+- Restore the discriminated `HexinBudgetResponse` schema and the reflected-authorization redaction test.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/provider-hexin-budget.test.ts packages/opencorvus/test/server/provider-discover-models.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/opencorvus/test/server/provider-hexin-budget.test.ts packages/opencorvus/test/server/provider-discover-models.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
