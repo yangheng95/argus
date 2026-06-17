@@ -36,4 +36,22 @@ describe("file.ripgrep", () => {
     expect(hasVisible).toBe(true)
     expect(hasHidden).toBe(false)
   })
+
+  test("passes shell metacharacters to ripgrep as one pattern argument", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "source.txt"), "needle; echo pwned > injected.txt\n")
+      },
+    })
+
+    const matches = await Ripgrep.search({
+      cwd: tmp.path,
+      pattern: "needle; echo pwned > injected.txt",
+    })
+
+    expect(matches).toHaveLength(1)
+    expect(matches[0]?.path.text).toBe("source.txt")
+    expect(matches[0]?.lines.text).toBe("needle; echo pwned > injected.txt\n")
+    await expect(fs.stat(path.join(tmp.path, "injected.txt"))).rejects.toThrow()
+  })
 })
