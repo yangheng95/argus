@@ -231,7 +231,7 @@ function HexinBudgetInline(props: {
   })
   return (
     <span
-      class="executor-budget-row"
+      class="executor-budget-inline"
       data-ui="executor-hexin-budget"
       data-loading={props.loading ? "true" : "false"}
       data-over-budget={budget()?.overBudget ? "true" : "false"}
