@@ -147,6 +147,72 @@ describe("browser preview region comparison", () => {
     { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
   )
 
+  test(
+    "fails region comparison for hidden or zero-size implementation locators",
+    async () => {
+      for (const mode of ["hidden", "zero-size"] as const) {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        await writeReferenceScreenshot(paths.sourcePackageAbsolute)
+        const server = await startPreviewServer(mode)
+        try {
+          const target = await Instance.provide({
+            directory: tmp.path,
+            fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          })
+          const binding: BrowserPreviewRegionBinding = {
+            region_id: `economy-${mode}`,
+            viewport_id: "desktop",
+            state_id: "default",
+            region_scope: "page-section",
+            source: {
+              reference_artifact_id: "reference.png",
+              bbox: { x: 40, y: 60, width: 320, height: 140 },
+              semantic_role: "economy section",
+              text_anchors: ["Economy", "Inflation"],
+              source_refs: ["source screenshot"],
+            },
+            implementation: {
+              route: "/economy",
+              locator: { kind: "data-oc-region", value: "economy" },
+              component_files: ["src/Economy.tsx"],
+            },
+            acceptance_refs: ["economy parity"],
+          }
+
+          const result = await compareBrowserPreviewRegions({
+            projectRoot: tmp.path,
+            taskID,
+            targetID: target.id,
+            viewportIDs: ["desktop"],
+            bindings: [binding],
+            includeDiff: true,
+          })
+
+          expect(result.status).toBe("failed")
+          expect(result.regions).toHaveLength(1)
+          expect(result.regions[0].status).toBe("failed")
+          expect(result.regions[0].implementation_bbox).toBeUndefined()
+          expect(result.regions[0].artifacts).toBeUndefined()
+          expect(result.regions[0].reason).toBe("Implementation locator did not match any visible element.")
+          const evidenceID = result.evidenceIDs[`desktop:economy-${mode}`]
+          expect(evidenceID).toBeTruthy()
+          const evidence = await Instance.provide({
+            directory: tmp.path,
+            fn: () => findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID }),
+          })
+          expect(evidence?.operationKind).toBe("reference-comparison")
+          expect(evidence?.status).toBe("failed")
+          expect(evidence?.artifactPaths).toBeUndefined()
+        } finally {
+          await server.close()
+        }
+      }
+    },
+    { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
+  )
+
   test("delegates runtime capture to browser evidence runner instead of owning a sidecar", async () => {
     const source = await fs.readFile(
       path.resolve(import.meta.dir, "../../src/browser-preview/region-comparison.ts"),
@@ -235,9 +301,44 @@ async function seedTask(directory: string) {
   return taskID
 }
 
-async function startPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+async function writeReferenceScreenshot(sourcePackageAbsolute: string): Promise<void> {
+  await fs.mkdir(sourcePackageAbsolute, { recursive: true })
+  await sharp({
+    create: {
+      width: 800,
+      height: 600,
+      channels: 4,
+      background: "#ffffff",
+    },
+  })
+    .composite([
+      {
+        input: Buffer.from(
+          `<svg width="320" height="140" xmlns="http://www.w3.org/2000/svg">
+            <rect width="320" height="140" fill="#e7f5ee"/>
+            <text x="24" y="52" font-family="Arial" font-size="30" fill="#123326">Economy</text>
+            <text x="24" y="92" font-family="Arial" font-size="18" fill="#315a45">Inflation and growth map</text>
+          </svg>`,
+        ),
+        left: 40,
+        top: 60,
+      },
+    ])
+    .png()
+    .toFile(path.join(sourcePackageAbsolute, "reference.png"))
+}
+
+type PreviewRegionMode = "visible" | "hidden" | "zero-size"
+
+async function startPreviewServer(mode: PreviewRegionMode = "visible"): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
   server = createServer((req, res) => {
+    const regionRule =
+      mode === "hidden"
+        ? 'display: none; width: 320px; height: 140px; background: #e7f5ee; color: #123326; padding: 24px; box-sizing: border-box;'
+        : mode === "zero-size"
+          ? 'width: 0; height: 0; overflow: hidden; padding: 0; background: #e7f5ee; color: #123326;'
+          : 'width: 320px; height: 140px; background: #e7f5ee; color: #123326; padding: 24px; box-sizing: border-box;'
     const body = `<!doctype html>
       <html>
         <head>
@@ -246,12 +347,7 @@ async function startPreviewServer(): Promise<{ url: string; close: () => Promise
             body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
             main { padding: 60px 40px; }
             [data-oc-region="economy"] {
-              width: 320px;
-              height: 140px;
-              background: #e7f5ee;
-              color: #123326;
-              padding: 24px;
-              box-sizing: border-box;
+              ${regionRule}
             }
             h1 { margin: 0 0 18px; font-size: 30px; line-height: 1; }
             p { margin: 0; font-size: 18px; color: #315a45; }

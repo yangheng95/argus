@@ -632,24 +632,16 @@ function routeUrl(base, route) {
 }
 
 async function locate(page, locator) {
-  if (locator.kind === "role") {
-    const box = await page.getByRole(locator.role, { name: locator.name }).first().boundingBox().catch(() => null);
-    return box ? toBox(box) : null;
-  }
-  const selector = selectorFor(locator);
-  return page.evaluate((input) => {
-    const node = document.querySelector(input.selector);
-    if (!node) return null;
-    return toBox(node.getBoundingClientRect());
-    function toBox(rect) {
-      return {
-        x: Math.max(0, Math.round(rect.x)),
-        y: Math.max(0, Math.round(rect.y)),
-        width: Math.max(1, Math.round(rect.width)),
-        height: Math.max(1, Math.round(rect.height)),
-      };
-    }
-  }, { selector });
+  const target = locatorFor(page, locator);
+  const visible = await target.isVisible().catch(() => false);
+  if (!visible) return null;
+  const box = await target.boundingBox().catch(() => null);
+  return box ? toBox(box) : null;
+}
+
+function locatorFor(page, locator) {
+  if (locator.kind === "role") return page.getByRole(locator.role, { name: locator.name }).first();
+  return page.locator(selectorFor(locator)).first();
 }
 
 function selectorFor(locator) {
@@ -660,11 +652,12 @@ function selectorFor(locator) {
 }
 
 function toBox(rect) {
+  if (rect.width <= 0 || rect.height <= 0) return null;
   return {
     x: Math.max(0, Math.round(rect.x)),
     y: Math.max(0, Math.round(rect.y)),
-    width: Math.max(1, Math.round(rect.width)),
-    height: Math.max(1, Math.round(rect.height)),
+    width: Math.ceil(rect.width),
+    height: Math.ceil(rect.height),
   };
 }
 
