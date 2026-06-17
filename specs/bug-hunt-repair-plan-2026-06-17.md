@@ -1518,3 +1518,49 @@ LINE:
 - Lovelace confirmed both original child-process runners used fixed wall-clock timers and did not refresh on stdout/stderr activity.
 - Lovelace confirmed the correct boundary is a shared acceptance-local helper used by both project checks and runtime install checks, without changing timeout constants or adding retries/fallbacks.
 - Lovelace flagged the first draft of the regression test as insufficient because the active command exited before the inactivity window. The final test now runs longer than the timeout window while emitting output more frequently than the window.
+
+## Batch P1-S: BH-085 right-sidebar coding task selection must be directory-bound
+
+### Findings
+
+- BH-085 is a P1 project-directory isolation bug in `PATCH /coding/session/:sessionID/selection`.
+- The route already validates that the right-sidebar coding assistant session belongs to the active project and `Instance.directory`, but selected task validation only checks `task.projectID`.
+- Tasks in the same project can still resolve to a different working directory through their root `SessionTable.directory`; persisting that task ID into the right-sidebar session metadata binds the sidebar to the wrong directory.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/coding.ts` owns right-sidebar coding assistant session create/list/get/update/delete/abort/selection routes.
+- `packages/opencorvus/src/coding-assistant/session.ts` owns `setRightSidebarCodingAssistantSelectedTask(...)` and session metadata shape.
+- `packages/opencorvus/src/task-api/index.ts` owns `EngineService.getTask(...)`, which returns `viewTask(...)` with a resolved `directory`.
+- `packages/opencorvus/src/engine/queue.ts` owns `taskCwd(taskID)`: task root session directory wins, falling back to project worktree.
+- `packages/opencorvus/test/server/coding-routes.test.ts` already covers selected task persistence and cross-project rejection.
+
+### Fix Shape
+
+- In the selection route, require the selected task to match both the active project and the active `Instance.directory`.
+- Use the task directory returned by `EngineService.getTask(taskID)` so the route shares the existing task directory source of truth.
+- Reject mismatched-directory tasks with the same 404 response used for foreign-project tasks, and do not call metadata merge.
+- Do not add alternate task lookup paths, route-local fallback to project worktree, or compatibility behavior for cross-directory selection.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/server/coding-routes.test.ts`.
+- Create a right-sidebar session in directory A, a task in the same project whose root session directory is directory B, then attempt selection from directory A.
+- Assert 404 and assert the coding assistant session metadata remains unchanged.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/coding-routes.test.ts -t "persists selected task metadata" --timeout 20000`
+- Typecheck command: `bun run --cwd packages/opencorvus typecheck`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused right-sidebar selection regression passed: `bun test packages/opencorvus/test/server/coding-routes.test.ts -t "persists selected task metadata" --timeout 20000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Independent Review Feedback
+
+- Kierkegaard confirmed the bug is specific to the selection route: the route already validates the coding session by current project and directory, but the selected task check only used project ownership.
+- Kierkegaard confirmed task directory is projected from `EngineTaskTable.session_id -> SessionTable.directory`, falling back to `ProjectTable.worktree`; the route must use the projected task directory instead of inventing another source.
+- Kierkegaard recommended expressing the invariant as selected task `projectID/directory` matching the validated session `projectID/directory`; the final route uses the session fields directly.
