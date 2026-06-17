@@ -13,19 +13,15 @@
 // POST /task/:taskID/session/:sessionID/reply via replyToAgentSession().
 // Build cards use POST /task/:taskID/message via sendTaskOperatorMessage().
 //
-// Error handling: the backend returns structured NamedError objects
-// (see orchestrator/direct-reply.ts) that the API layer surfaces as
-// ApiError with `body.name`. We read that name to decide between a
-// transient retry banner (generic failures) and a permanent disabled
-// state (SessionRuntimeContractMissingError 410 — the session is
-// structurally unable to accept further messages until a re-dispatch).
-// Pre-fix every failure mode collapsed onto HTTP 500 and showed the
-// same generic banner, so the user could not tell when retrying was
-// pointless.
+// Error handling: errors are visible diagnostics only. They must not turn the
+// reply box into a terminal UI state; the backend routes non-directable session
+// replies through the task-root operator message path.
 
 import { createSignal, Show } from "solid-js"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
+import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
+import { Button } from "./ui/Button"
 
 /** Backend NamedError names the reply route may surface. Mirrored from
  *  packages/opencorvus/src/orchestrator/direct-reply.ts — kept here as a
@@ -103,22 +99,6 @@ function messageForError(info: ReplyErrorInfo, fallback: string): string {
   }
 }
 
-/** Names that are permanent for the current session — retrying will hit
- *  the same wall until either the session is re-dispatched or the server
- *  state shifts. The reply box switches to a disabled "session inactive"
- *  affordance so the user does not bang on Steer pointlessly. */
-function isTerminalError(name: ReplyErrorName | undefined): boolean {
-  switch (name) {
-    case "SessionRuntimeContractMissingError":
-    case "InvalidReplyTargetKindError":
-    case "BuildSessionDirectReplyError":
-      return true
-    case "ReplyTargetEnvelopeMissingError":
-    case undefined:
-      return false
-  }
-}
-
 export interface AgentSessionReplyBoxProps {
   /** Send the message to the agent session. Resolves when the API
    *  request settles; throws on failure (caller can decide to surface). */
@@ -129,9 +109,8 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
   const [text, setText] = createSignal("")
   const [sending, setSending] = createSignal(false)
   const [error, setError] = createSignal<string>("")
-  const [terminalError, setTerminalError] = createSignal<ReplyErrorName | undefined>(undefined)
 
-  const canSend = () => !sending() && !terminalError() && text().trim().length > 0
+  const canSend = () => !sending() && text().trim().length > 0
 
   const submit = async (event: SubmitEvent | KeyboardEvent) => {
     event.preventDefault()
@@ -148,7 +127,6 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
       const info = pickErrorInfo(e)
       const fallback = e instanceof Error ? e.message : String(e)
       setError(messageForError(info, fallback))
-      if (isTerminalError(info.name)) setTerminalError(info.name)
     } finally {
       setSending(false)
     }
@@ -157,17 +135,17 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
   return (
     <form
       class="card__agent-reply"
-      classList={{ "card__agent-reply--disabled": !!terminalError() }}
       onSubmit={submit}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <textarea
+      <AutoGrowTextarea
         class="card__agent-reply-input"
         value={text()}
         rows={2}
+        maxLines={2}
         placeholder={t("card.agent_reply_placeholder")}
-        disabled={sending() || !!terminalError()}
+        disabled={sending()}
         onInput={(event) => setText(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) {
@@ -176,9 +154,12 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
           }
         }}
       />
-      <button
+      <Button
         type="submit"
-        class="card__agent-reply-send"
+        variant="solid"
+        size="sm"
+        tone="accent"
+        data-ui="agent-reply-send"
         disabled={!canSend()}
         aria-label={sending() ? t("card.agent_reply_sending") : t("card.agent_reply_send")}
         title={sending() ? t("card.agent_reply_sending") : t("card.agent_reply_send")}
@@ -189,25 +170,23 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
             {t("card.agent_reply_send")}
           </Show>
         </span>
-      </button>
+      </Button>
       <Show when={error()}>
-        <div
-          class="card__agent-reply-error"
-          classList={{ "card__agent-reply-error--terminal": !!terminalError() }}
-          role="alert"
-        >
+        <div class="card__agent-reply-error" role="alert">
           <span class="card__agent-reply-error-msg">{error()}</span>
-          <Show when={!terminalError()}>
-            <button
-              type="button"
-              class="card__agent-reply-error-dismiss"
-              onClick={() => setError("")}
-              aria-label={t("common.clear")}
-              title={t("common.clear")}
-            >
-              <Icon name="close" />
-            </button>
-          </Show>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            tone="danger"
+            data-ui="agent-reply-error-dismiss"
+            data-chrome="icon-action"
+            onClick={() => setError("")}
+            aria-label={t("common.clear")}
+            title={t("common.clear")}
+          >
+            <Icon name="close" />
+          </Button>
         </div>
       </Show>
     </form>

@@ -1,20 +1,8 @@
 // AgentSessionReplyBox structured-error UX test.
 //
-// Pre-fix every refusal returned by POST /task/.../session/.../reply
-// surfaced as HTTP 500 and the reply box showed a single generic banner
-// for all of them. After the backend NamedError taxonomy (see
-// orchestrator/direct-reply.ts) and the server.ts onError mapping, the
-// box must:
-//
-//   1. Distinguish four named error cases via err.body.name
-//   2. Show distinct i18n messages per case (zh-CN + en-US both populated)
-//   3. Permanently disable itself on terminal cases (kind-not-allowed,
-//      contract-gone) so the user does not pointlessly retry, while
-//      keeping the envelope-missing case retryable (the agent might
-//      issue its first turn at any moment)
-//   4. Keep the reply box visible on every non-root agent session card.
-//      Direct-reply validity remains the backend's job, and the box
-//      renders structured 4xx/410 errors without losing the draft.
+// Direct reply errors are visible diagnostics only. They must not permanently
+// disable the reply box; the backend routes non-directable replies through the
+// task-root operator message path.
 //
 // Source-pattern checks mirror the rest of the overlay test suite's
 // idiom (see dialog-service-single-source.test.ts) — running solid-js
@@ -55,30 +43,13 @@ describe("AgentSessionReplyBox structured errors", () => {
     expect(replyBox).toMatch(/body[^.]*\.name|\(body as[^)]*\)\.name/)
   })
 
-  test("treats SessionRuntimeContractMissingError as terminal (disables retry)", () => {
-    // The runtime contract is process-local — once the server restarts
-    // or the terminal collector is satisfied, no amount of retry from
-    // the overlay restores it (see session/loop.ts:122 + spec §6 not
-    // implemented). The reply box must disable itself rather than bait
-    // a retry loop.
+  test("does not turn structured errors into terminal disabled UI state", () => {
     expect(replyBox).toContain("SessionRuntimeContractMissingError")
-    expect(replyBox).toContain("isTerminalError")
-    expect(replyBox).toContain("terminalError")
-    expect(replyBox).toContain("card__agent-reply--disabled")
-  })
-
-  test("keeps ReplyTargetEnvelopeMissingError retryable", () => {
-    // The envelope appears the moment the agent issues its first user
-    // turn; that can happen at any time, so a retry is meaningful. The
-    // box must distinguish this from the terminal cases.
-    const terminalArm = replyBox.match(/function isTerminalError[\s\S]*?\n\}/)
-    expect(terminalArm).toBeTruthy()
-    const arm = terminalArm![0]
-    expect(arm).toContain("SessionRuntimeContractMissingError")
-    expect(arm).toContain("InvalidReplyTargetKindError")
-    expect(arm).toContain("BuildSessionDirectReplyError")
-    // ReplyTargetEnvelopeMissingError must NOT be in the terminal list
-    expect(arm).not.toMatch(/case "ReplyTargetEnvelopeMissingError":\s*\n\s*return true/)
+    expect(replyBox).not.toContain("isTerminalError")
+    expect(replyBox).not.toContain("terminalError")
+    expect(replyBox).not.toContain("card__agent-reply--disabled")
+    expect(replyBox).not.toContain("card__agent-reply-error--terminal")
+    expect(replyBox).toContain("const canSend = () => !sending() && text().trim().length > 0")
   })
 
   test("i18n keys for the new error paths exist in both locales", () => {

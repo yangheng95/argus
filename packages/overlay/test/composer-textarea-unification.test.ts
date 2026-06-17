@@ -33,7 +33,7 @@ describe("autoGrowHeight cap logic", () => {
   })
 })
 
-describe("goal / mission / chat reuse the AutoGrowTextarea primitive", () => {
+describe("goal / mission / chat / agent reply reuse the AutoGrowTextarea primitive", () => {
   test("goal dialog migrated both fields off the fixed field-input textarea", () => {
     const goal = read("components/GoalDialogHost.tsx")
     expect(goal).toContain("AutoGrowTextarea")
@@ -62,6 +62,15 @@ describe("goal / mission / chat reuse the AutoGrowTextarea primitive", () => {
     expect(chat).not.toMatch(/<textarea\b/)
     // The line cap is single-sourced in the primitive now.
     expect(chat).not.toContain("MAX_VISIBLE_LINES")
+  })
+
+  test("agent session reply box uses the shared primitive with the compact two-row cap", () => {
+    const reply = read("components/AgentSessionReplyBox.tsx")
+    expect(reply).toContain('import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"')
+    expect(reply).toContain("<AutoGrowTextarea")
+    expect(reply).toContain("rows={2}")
+    expect(reply).toContain("maxLines={2}")
+    expect(reply).not.toMatch(/<textarea\b/)
   })
 })
 
