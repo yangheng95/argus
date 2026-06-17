@@ -134,6 +134,10 @@ describe("protocol interaction resolution", () => {
             .get(),
         )
         expect(row?.status).toBe("answered")
+
+        const run = findRun(runID)
+        expect(run?.status).toBe("running")
+        expect(run?.blocking_reason).toBeNull()
       },
     })
   })
@@ -224,7 +228,7 @@ const adapter: ExecutorAdapter = {
   async status(queueTaskID) {
     return {
       queueTaskID,
-      status: "blocked",
+      status: "running",
       error: null,
     }
   },
