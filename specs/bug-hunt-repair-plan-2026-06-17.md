@@ -74,3 +74,39 @@ LINE:
 - BH-088 MS Teams activity authentication and `serviceUrl` trust requires a platform-auth implementation or a mature Bot Framework verification path; it must not be patched with a synthetic local gate.
 - BH-090 DingTalk, WhatsApp, Google Chat, Mattermost, and WeCom inbound auth require per-platform verification contracts and signed fixtures.
 - BH-092, BH-093, BH-095, and BH-108 remain P1 repair targets after the P0-A batch is verified and committed.
+
+## Batch P0-B: ripgrep command execution
+
+### Findings
+
+- BH-002: `packages/opencorvus/src/file/ripgrep.ts` builds a raw shell command for `Ripgrep.search`; `/find` forwards user-controlled `pattern` from `packages/opencorvus/src/server/routes/file.ts`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/file.ts` uses `Ripgrep.search` for `GET /find`.
+- `packages/opencorvus/src/cli/cmd/debug/ripgrep.ts` uses `Ripgrep.search` for debug search.
+- `packages/opencorvus/src/engine/codebase-tools.ts` uses codebase search tooling backed by ripgrep behavior.
+- `packages/opencorvus/src/tool/grep.ts`, `glob.ts`, `ls.ts`, and `skill.ts` use other `Ripgrep` helpers, which already use argv-style process spawning and are not the vulnerable raw-shell path.
+- `packages/opencorvus/test/file/ripgrep.test.ts` currently covers hidden-file defaults but not shell metacharacters.
+
+### Fix Shape
+
+- Replace the Bun raw-shell execution in `Ripgrep.search` with `Process.run(args, { cwd, nothrow: true })`, matching the argv-based pattern already used by `Ripgrep.files`.
+- Preserve ripgrep's regex semantics and `--` pattern separator; do not add shell-metacharacter filters or fallback paths.
+- Keep nonzero ripgrep exits returning `[]`, matching existing search behavior for no matches and invalid regex.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/file/ripgrep.test.ts` with a pattern containing shell metacharacters (`;`, `>`) that also exists literally in a file.
+- Assert `Ripgrep.search` returns the literal match and no injected side-effect file is created.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/file/ripgrep.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/opencorvus/test/file/ripgrep.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
