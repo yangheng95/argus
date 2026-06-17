@@ -787,7 +787,7 @@ describe("browser preview routes", () => {
   )
 
   test(
-    "POST /task/:taskID/browser-preview/capture does not replace an unknown targetID with the latest target",
+    "POST /task/:taskID/browser-preview/capture rejects unknown target IDs before verification",
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
@@ -803,23 +803,8 @@ describe("browser preview routes", () => {
         body: JSON.stringify({ targetID: "art_previewtarget_missing", viewportIDs: ["desktop"] }),
       })
 
-      expect(response.status).toBe(200)
-      const body = (await response.json()) as {
-        status: string
-        captures?: Record<string, unknown>
-        evidenceIDs?: Record<string, string>
-        target?: { status: string; url?: string; diagnostics?: string[] }
-        diagnostics?: string[]
-      }
-      expect(body.status).toBe("failed")
-      expect(body.captures).toEqual({})
-      expect(body.evidenceIDs).toEqual({})
-      expect(body.target?.status).toBe("failed")
-      expect(body.target?.url).toBeUndefined()
-      expect(body.target?.diagnostics?.join("\n")).toContain(
-        "Browser preview target not found: art_previewtarget_missing",
-      )
-      expect(body.diagnostics?.join("\n")).toContain("requires a resolved http(s) URL")
+      expect(response.status).toBe(404)
+      expect(JSON.stringify(await response.json())).toContain("art_previewtarget_missing")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
