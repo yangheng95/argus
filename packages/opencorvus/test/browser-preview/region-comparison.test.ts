@@ -12,7 +12,11 @@ import {
   resolveSourceReferencePath,
   type BrowserPreviewRegionBinding,
 } from "../../src/browser-preview/region-comparison"
-import { findReadableBrowserPreviewEvidenceByID, resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
+import {
+  findReadableBrowserPreviewEvidenceByID,
+  persistBrowserPreviewTarget,
+  resolveRuntimeRelativePath,
+} from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -78,6 +82,10 @@ describe("browser preview region comparison", () => {
         .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
       const server = await startPreviewServer()
       try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
         const binding: BrowserPreviewRegionBinding = {
           region_id: "economy",
           viewport_id: "desktop",
@@ -101,8 +109,7 @@ describe("browser preview region comparison", () => {
         const result = await compareBrowserPreviewRegions({
           projectRoot: tmp.path,
           taskID,
-          targetID: "art_regioncomparison_target",
-          url: server.url,
+          targetID: target.id,
           viewportIDs: ["desktop"],
           bindings: [binding],
           includeDiff: true,
@@ -138,6 +145,22 @@ describe("browser preview region comparison", () => {
     },
     { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
   )
+
+  test("delegates runtime capture to browser evidence runner instead of owning a sidecar", async () => {
+    const source = await fs.readFile(
+      path.resolve(import.meta.dir, "../../src/browser-preview/region-comparison.ts"),
+      "utf8",
+    )
+    const inputType = source.match(/type BrowserPreviewRegionComparisonInput = \{[\s\S]*?\n\}/)?.[0] ?? ""
+
+    expect(inputType).not.toContain("url:")
+    expect(source).toContain('import { runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"')
+    expect(source).toContain("runBrowserPreviewRegionComparisonCapture({")
+    expect(source).not.toContain("runBrowserNodeSidecar")
+    expect(source).not.toContain("resolveBrowserNodeSidecarRuntime")
+    expect(source).not.toContain("REGION_COMPARISON_SCRIPT")
+    expect(source).not.toContain("runImplementationCapture")
+  })
 })
 
 async function seedTask(directory: string) {
