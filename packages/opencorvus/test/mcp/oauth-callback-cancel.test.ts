@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { McpOAuthCallback } from "../../src/mcp/oauth-callback"
+import { OAUTH_CALLBACK_PATH, OAUTH_CALLBACK_PORT } from "../../src/mcp/oauth-provider"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
@@ -100,5 +101,51 @@ describe("McpOAuthCallback.cancelPending (audit W2-V21)", () => {
     McpOAuthCallback.waitForCallback("s1", "m1").catch(() => {})
     await McpOAuthCallback.stop()
     expect(() => McpOAuthCallback.cancelPending("m1")).not.toThrow()
+  })
+
+  test("oauth provider errors are escaped before rendering callback HTML", async () => {
+    await McpOAuthCallback.stop()
+    await McpOAuthCallback.ensureRunning()
+
+    const oauthState = "html-error-state"
+    const pending = McpOAuthCallback.waitForCallback(oauthState, "html-error-mcp").catch((error) => error)
+    const url = new URL(`http://127.0.0.1:${OAUTH_CALLBACK_PORT}${OAUTH_CALLBACK_PATH}`)
+    url.searchParams.set("state", oauthState)
+    url.searchParams.set("error", `<img src=x onerror="alert('x')">`)
+    url.searchParams.set("error_description", `<script>alert("owned")</script> & 'quote'`)
+
+    const response = await fetch(url)
+    const html = await response.text()
+    const rejected = await pending
+
+    expect(response.status).toBe(200)
+    expect(rejected).toBeInstanceOf(Error)
+    expect(rejected.message).toBe(`<script>alert("owned")</script> & 'quote'`)
+    expect(html).toContain("&lt;script&gt;alert(&quot;owned&quot;)&lt;/script&gt; &amp; &#39;quote&#39;")
+    expect(html).not.toContain(`<script>`)
+    expect(html).not.toContain(`<img`)
+    expect(html).not.toContain(`onerror=`)
+  })
+
+  test("oauth provider error code is escaped when description is absent", async () => {
+    await McpOAuthCallback.stop()
+    await McpOAuthCallback.ensureRunning()
+
+    const oauthState = "html-error-code-state"
+    const pending = McpOAuthCallback.waitForCallback(oauthState, "html-error-code-mcp").catch((error) => error)
+    const url = new URL(`http://127.0.0.1:${OAUTH_CALLBACK_PORT}${OAUTH_CALLBACK_PATH}`)
+    url.searchParams.set("state", oauthState)
+    url.searchParams.set("error", `<img src=x onerror="alert('x')">`)
+
+    const response = await fetch(url)
+    const html = await response.text()
+    const rejected = await pending
+
+    expect(response.status).toBe(200)
+    expect(rejected).toBeInstanceOf(Error)
+    expect(rejected.message).toBe(`<img src=x onerror="alert('x')">`)
+    expect(html).toContain("&lt;img src=x onerror=&quot;alert(&#39;x&#39;)&quot;&gt;")
+    expect(html).not.toContain(`<img`)
+    expect(html).not.toContain(`onerror="`)
   })
 })
