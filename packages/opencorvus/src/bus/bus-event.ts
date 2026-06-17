@@ -39,9 +39,18 @@ export namespace BusEvent {
 
   export function resolveNotify(type: string, payload: Record<string, unknown>): NotifyDescriptor | undefined {
     const def = registry.get(type)
-    if (!def?.notify) return undefined
-    const descriptor = typeof def.notify === "function" ? def.notify(def.properties.parse(payload)) : def.notify
+    if (!def) return undefined
+    const parsed = def.properties.parse(payload)
+    if (!def.notify) return undefined
+    const descriptor = typeof def.notify === "function" ? def.notify(parsed) : def.notify
     return descriptor ? NotifyDescriptorSchema.parse(descriptor) : undefined
+  }
+
+  export function parseProperties<Properties extends ZodType>(
+    def: Definition<string, Properties>,
+    properties: unknown,
+  ): z.output<Properties> {
+    return def.properties.parse(properties)
   }
 
   export function payloads() {

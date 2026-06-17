@@ -1172,3 +1172,52 @@ LINE:
 - Channel registry UI status now evaluates project channel config without reading global channel env.
 - Focused tests passed: `bun test packages/opencorvus/test/channel/supervisor-env.test.ts packages/opencorvus/test/channel/registry.test.ts packages/channel-runtime/test/registry.test.ts`.
 - Package typecheck passed: `bunx turbo run typecheck --filter=opencorvus --filter=@opencorvus-ai/channel-runtime`.
+
+## Batch P1-L: bus notification payload validation and session.error contract
+
+### Findings
+
+- The current working tree introduced stricter notification validation in `BusEvent.resolveNotify()`, but its first implementation had a generic return type that failed `opencorvus` typecheck.
+- After the type issue was repaired, the focused bus test exposed a deeper contract bug: `SessionEvents.Error` reused `Message.Assistant.shape.error`, which is optional because regular assistant messages may not be errors. As a result, `BusEvent.resolveNotify(SessionEvents.Error.type, {})` returned the static tier-1 descriptor instead of rejecting an invalid `session.error` payload.
+- A notification-layer special case would only hide the schema mismatch. The event definition itself must state that a `session.error` payload includes an actual error.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/bus/bus-event.ts` owns event definitions, notification descriptors, payload schema generation, and `resolveNotify()`.
+- `packages/opencorvus/src/session/events.ts` owns `SessionEvents.Error`.
+- `packages/opencorvus/src/session/message.ts` defines `Message.Assistant.shape.error` as optional for regular assistant messages.
+- `packages/opencorvus/src/session/llm.ts` publishes `Bus.publish(SessionEvents.Error, { sessionID, error })` with a concrete `Message.fromError()` result.
+- `packages/opencorvus/src/session/loop.ts` publishes predictive budget errors through `Session.Event.Error`; its helper accepted the optional assistant error type even though all call sites pass concrete errors.
+- `packages/opencorvus/src/orchestrator/protocol/message-bridge.ts` subscribes to `SessionEvents.Error` and bridges already-validated properties.
+- Raw executor/protocol events with `type: "session.error"` are separate stream payloads and are not the `BusEvent.define()` source.
+
+### Fix Shape
+
+- `BusEvent.resolveNotify()` parses the registered event payload before resolving descriptors, including static descriptors and omitted notification descriptors.
+- `BusEvent.parseProperties()` returns a correctly inferred `z.output<Properties>` from the event's schema.
+- `SessionEvents.Error` unwraps `Message.Assistant.shape.error` so the event requires `error` while regular assistant messages can still omit it.
+- `stopTurnWithPredictiveBudgetError()` now accepts `NonNullable<Message.Assistant["error"]>`, matching the required event contract.
+- No fallback payload, no notification-specific bypass, and no schema gate was added.
+
+### Regression Tests
+
+- `packages/opencorvus/test/bus/bus.test.ts` validates static descriptors, resolver descriptors, and omitted notification definitions all parse payloads.
+- The same test asserts `SessionEvents.Error` accepts a real error payload and rejects `{}`.
+- `Bus.publish()` is covered to ensure invalid event payloads do not reach subscribers.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/bus/bus.test.ts`
+- Typecheck command: `bun run --cwd packages/opencorvus typecheck`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused bus tests passed: `bun test packages/opencorvus/test/bus/bus.test.ts`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Independent Review Feedback
+
+- Helmholtz confirmed the runtime root cause was schema reuse: `Message.Assistant.shape.error` is optional for normal assistant messages, while `session.error` must require structured `error`.
+- Helmholtz confirmed `sessionID` should remain optional because some global error publishers do not have a session, and raw executor `type: "session.error"` stream payloads are separate from this BusEvent schema.
+- Helmholtz also warned not to mix unrelated current `bus.test.ts` churn into this batch; duplicate event registration coverage must remain intact.

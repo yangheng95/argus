@@ -8,6 +8,7 @@ import { Event } from "../../src/engine/model"
 import { Instance } from "../../src/project/instance"
 import { Message } from "../../src/session/message"
 import { SessionEvents } from "../../src/session/events"
+import { Event as ServerEvent, globalEnvelope, payload as serverEventPayload } from "../../src/server/event"
 import { Workspace } from "../../src/workspace/workspace"
 import { tmpdir } from "../fixture/fixture"
 
@@ -162,6 +163,38 @@ describe("BusEvent notification registry", () => {
     expect(BusEvent.resolveNotify(NotifyOmittedEvent.type, { value: "x" })).toBeUndefined()
   })
 
+  test("resolveNotify validates payloads for static descriptors, resolvers, and NOOP definitions", () => {
+    expect(() => BusEvent.resolveNotify(NotifyDescriptorEvent.type, {})).toThrow()
+    expect(() => BusEvent.resolveNotify(NotifyResolverEvent.type, { verdict: "maybe" })).toThrow()
+    expect(() => BusEvent.resolveNotify(NotifyOmittedEvent.type, {})).toThrow()
+  })
+
+  test("server connected and heartbeat events match the advertised SSE payload schema", () => {
+    const payloadSchema = BusEvent.payloads()
+    expect(payloadSchema.parse(serverEventPayload(ServerEvent.Connected, {}))).toEqual({
+      type: "server.connected",
+      properties: {},
+    })
+    expect(payloadSchema.parse(serverEventPayload(ServerEvent.Heartbeat, {}))).toEqual({
+      type: "server.heartbeat",
+      properties: {},
+    })
+    expect(
+      z
+        .object({
+          directory: z.string(),
+          payload: payloadSchema,
+        })
+        .parse(globalEnvelope("global", ServerEvent.Heartbeat, {})),
+    ).toEqual({
+      directory: "global",
+      payload: {
+        type: "server.heartbeat",
+        properties: {},
+      },
+    })
+  })
+
   test("actual event annotations keep bridged tiers and global NOOPs explicit", () => {
     expect(
       BusEvent.resolveNotify(Event.InteractionResolved.type, {
@@ -180,7 +213,15 @@ describe("BusEvent notification registry", () => {
         delta: "hello",
       }),
     ).toEqual({ tier: 3 })
-    expect(BusEvent.resolveNotify(SessionEvents.Error.type, {})).toEqual({ tier: 1 })
+    expect(
+      BusEvent.resolveNotify(SessionEvents.Error.type, {
+        error: {
+          name: "UnknownError",
+          data: { message: "session failed" },
+        },
+      }),
+    ).toEqual({ tier: 1 })
+    expect(() => BusEvent.resolveNotify(SessionEvents.Error.type, {})).toThrow()
     expect(BusEvent.resolveNotify(Workspace.Event.Failed.type, { message: "workspace failed" })).toBeUndefined()
   })
 })
@@ -216,6 +257,25 @@ describe("Bus.subscribeAll", () => {
 
         expect(types).toContain("test.event")
         expect(types).toContain("test.counter")
+      },
+    })
+  })
+
+  test("publish validates event payloads before dispatch", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const received: unknown[] = []
+        const unsub = Bus.subscribe(TestEvent, (evt) => {
+          received.push(evt)
+        })
+        try {
+          await expect(Bus.publish(TestEvent as any, { value: 123 })).rejects.toThrow()
+          expect(received).toEqual([])
+        } finally {
+          unsub()
+        }
       },
     })
   })
