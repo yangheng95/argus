@@ -53,6 +53,29 @@ function hexinBudgetURL(): string {
   return url.toString()
 }
 
+function normalizeApiBaseURL(raw: string): string | undefined {
+  try {
+    const url = new URL(raw.trim())
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined
+    url.hash = ""
+    url.search = ""
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/"
+    return url.toString()
+  } catch {
+    return undefined
+  }
+}
+
+function providerAllowsSavedKey(provider: Provider.Info | undefined, requestedApi: string): boolean {
+  if (!provider) return false
+  const allowed = new Set<string>()
+  for (const model of Object.values(provider.models)) {
+    const normalized = normalizeApiBaseURL(model.api.url)
+    if (normalized) allowed.add(normalized)
+  }
+  return allowed.has(requestedApi)
+}
+
 export const ProviderRoutes = lazy(() =>
   new Hono()
     .get(
@@ -349,10 +372,36 @@ export const ProviderRoutes = lazy(() =>
           )
         }
 
-        const modelsURL = `${body.api.trim().replace(/\/+$/, "")}/models`
         const explicitKey = body.apiKey?.trim()
         const savedAuth = body.providerID ? await Auth.get(body.providerID).catch(() => undefined) : undefined
         const savedKey = savedAuth?.type === "api" ? savedAuth.key.trim() : ""
+        const requestedApi = normalizeApiBaseURL(body.api)
+        if (!requestedApi) {
+          return c.json(
+            {
+              ok: false,
+              models: [],
+              count: 0,
+              error: "API URL must be an absolute http:// or https:// URL.",
+            },
+            400,
+          )
+        }
+        if (!explicitKey && savedKey) {
+          const provider = body.providerID ? await Provider.getProvider(body.providerID).catch(() => undefined) : undefined
+          if (!providerAllowsSavedKey(provider, requestedApi)) {
+            return c.json(
+              {
+                ok: false,
+                models: [],
+                count: 0,
+                error: "Saved provider credentials can only be used with that provider's configured API URL.",
+              },
+              400,
+            )
+          }
+        }
+        const modelsURL = `${requestedApi.replace(/\/+$/, "")}/models`
         const apiKey = explicitKey || savedKey
 
         try {
