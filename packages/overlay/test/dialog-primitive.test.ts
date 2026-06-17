@@ -90,9 +90,14 @@ describe("Dialog primitive", () => {
     expect(source).toContain('titleAs?: "div" | "h1" | "h2" | "span"')
     expect(source).toContain("backdropClose?: boolean")
     expect(source).toContain("modal?: boolean")
+    expect(source).toContain("overlayClass?: string")
+    expect(source).toContain("onOpenAutoFocus?: (event: Event) => void")
+    expect(source).toContain("onCloseAutoFocus?: (event: Event) => void")
     expect(source).toContain("modal: true")
     expect(source).toContain("modal={local.modal}")
+    expect(source).toContain('aria-modal={local.modal ? "true" : undefined}')
     expect(source).toContain('data-dialog-modal={local.modal ? "true" : "false"}')
+    expect(source).toContain('class={["dialog-overlay", local.overlayClass].filter(Boolean).join(" ")}')
     expect(source).toContain('local.modal ? undefined : { "pointer-events": "none" }')
     expect(source).toContain("style={dialogContentStyle()}")
     expect(source).toContain("style={dialogOverlayStyle()}")
@@ -134,6 +139,7 @@ describe("Dialog primitive adoption", () => {
     const users = componentSources().filter(({ text }) => /<Dialog\b/.test(text))
     expect(users.map(({ rel }) => rel).sort()).toEqual([
       "src/components/AppDialogHost.tsx",
+      "src/components/CommandPalette.tsx",
       "src/components/ConfigDialogHost.tsx",
       "src/components/GoalDialogHost.tsx",
       "src/components/ImagePreview.tsx",
@@ -145,6 +151,12 @@ describe("Dialog primitive adoption", () => {
     ])
     for (const { text } of users) {
       expect(text).toContain("primitives/Dialog")
+    }
+  })
+
+  test("feature components do not import Kobalte dialog directly", () => {
+    for (const { rel, text } of componentSources()) {
+      expect(text, rel).not.toContain('@kobalte/core/dialog"')
     }
   })
 
