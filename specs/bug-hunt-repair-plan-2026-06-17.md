@@ -2481,3 +2481,46 @@ LINE:
 - Bohr confirmed the root cause: the old `dispatch(...)` invoked `sub(payload)` before the timeout/error wrapper was installed, so synchronous throws escaped fan-out.
 - Bohr confirmed the current fix is the minimal no-fallback shape: wrap the subscriber call in `try/catch`, convert sync throws to `Promise.reject(...)`, and reuse the existing `withTimeout(...).catch(...)` warning path.
 - Bohr confirmed the regression covers the required behavior: first subscriber throws, second subscriber records the event, and `Bus.publish(...)` resolves.
+
+## Batch P1-AL: BH-040 tool failures must not be hidden by a host circuit breaker
+
+### Findings
+
+- BH-040 targets `packages/opencorvus/src/util/tool-guard.ts::withCircuitBreaker(...)` and the orchestrator tool setup in `packages/opencorvus/src/orchestrator/agent.ts`.
+- `toolGuard(...)` wraps every tool `execute(...)` with a per-tool consecutive failure counter. After 30 failures, it stops calling the real tool and throws a host-generated `circuit-open` message.
+- That host-side circuit breaker is a gate: it replaces the next real tool result/error with guidance invented by the host, so the model and logs lose the actual failure evidence needed for root-cause repair.
+- This violates the project rule that LLM tool-route problems must be solved through prompts or root-cause fixes, not host preflight gates or bypasses.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/orchestrator/agent.ts` imports `toolGuard`, wraps the tools returned by `createOrchestratorTools(...)`, builds the `enableMap` from `guard.tools`, and passes `guard.tools` into `SessionPrompt.setSessionRuntimeContract(...)`.
+- Before this batch, `packages/opencorvus/src/util/tool-guard.ts` was the only implementation of `toolGuard(...)` and `withCircuitBreaker(...)`.
+- Before this batch, full-repo TypeScript search found no tests covering `toolGuard(...)` and no other call sites for `withCircuitBreaker(...)`.
+
+### Fix Shape
+
+- Remove the circuit-breaker behavior from `toolGuard(...)`. It must preserve the orchestrator tool map without intercepting repeated failures.
+- Remove the `withCircuitBreaker(...)` export, failure counters, `Log` dependency, and `maxFailures` option so there is no dormant gate path to reuse.
+- Keep the orchestrator runtime-contract shape intact: `toolGuard(tools).tools` remains the same tool table, but tool execution is never short-circuited.
+- Do not add fallback tools, retries, host guidance, alternate tool selection, or a new threshold.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/util/tool-guard.test.ts`.
+- Build a failing tool whose `execute(...)` increments a counter and throws `original failure <n>`.
+- Invoke it more than the former threshold and assert every call reaches the real tool and the observed errors remain the original failures, with no `circuit-open` replacement.
+
+### Verification
+
+- New regression failed before implementation: the real tool was called only 30 times and subsequent calls were replaced by the host-side circuit breaker.
+- Implemented on 2026-06-18: removed `withCircuitBreaker(...)`, the failure counter, `maxFailures`, `Log` usage, and the generated circuit-open error. `toolGuard(...)` now preserves the tool-map boundary without intercepting execution.
+- Focused regression passed: `bun test packages/opencorvus/test/util/tool-guard.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+- Broader optional check `bun test packages/opencorvus/test/orchestrator/tools.test.ts --timeout 120000` is not counted as this batch's BH-040 verification: it currently fails on unrelated missing-model-config, task ownership, and worktree marker assertions, while the focused BH-040 behavior regression passes.
+
+### Independent Review Feedback
+
+- Popper independently confirmed the old wrapper affected every orchestrator tool because `agent.ts` passed `guard.tools` into the runtime contract.
+- Popper confirmed the final fix removes the dormant threshold path and preserves real tool errors across more than the former 30-failure threshold.
+- Popper noted that the identity `toolGuard(...)` name could invite future gate logic; this batch keeps it only as a tested no-interception boundary so the behavior regression can invoke the production export directly.
