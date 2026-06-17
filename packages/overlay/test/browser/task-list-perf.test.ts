@@ -446,7 +446,9 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
         if (performance.now() - start > 10_000) throw new Error("Mission rows did not render")
         await new Promise((resolve) => setTimeout(resolve, 16))
       }
-      const firstMission = document.querySelector<HTMLButtonElement>('.mission-ledger [data-ui="mission-row"]')
+      const firstMission = document.querySelector<HTMLButtonElement>(
+        '.mission-ledger [data-ui="mission-row"] .mission-row-main',
+      )
       if (!firstMission) throw new Error("missing first Mission row")
       firstMission.click()
       return performance.now() - start
@@ -467,6 +469,10 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
       if (!firstSessionID || !secondSessionID) throw new Error("missing Mission rows for scoped composer draft test")
       const missionRow = (sessionID: string) =>
         document.querySelector<HTMLElement>(`.mission-ledger [data-ui="mission-row"][data-session-id="${sessionID}"]`)
+      const missionMain = (sessionID: string) =>
+        document.querySelector<HTMLButtonElement>(
+          `.mission-ledger [data-ui="mission-row"][data-session-id="${sessionID}"] .mission-row-main`,
+        )
       const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
       const waitMissionSelected = async (sessionID: string) => {
         const start = performance.now()
@@ -478,7 +484,7 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { 
       const clickMissionAndWait = async (sessionID: string) => {
         const start = performance.now()
         while (missionRow(sessionID)?.dataset.active !== "true") {
-          missionRow(sessionID)?.click()
+          missionMain(sessionID)?.click()
           if (performance.now() - start > 10_000)
             throw new Error(`Mission session ${sessionID} did not accept selection`)
           await sleep(100)

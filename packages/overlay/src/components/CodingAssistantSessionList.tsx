@@ -186,23 +186,11 @@ function CodingAssistantSessionRow(props: {
 
   return (
     <div
-      role="button"
-      tabindex={0}
       class="task-row-mini global-task-row coding-assistant-row"
       data-ui="coding-assistant-row"
       data-session-id={props.session.id}
       data-active={props.selected ? "true" : undefined}
       title={sessionRowTip(props.session)}
-      onClick={() => {
-        if (editing() || props.busy) return
-        props.onSelectSession(props.session)
-      }}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return
-        if (event.key !== "Enter" && event.key !== " ") return
-        event.preventDefault()
-        if (!editing() && !props.busy) props.onSelectSession(props.session)
-      }}
       onDblClick={(event) => {
         event.stopPropagation()
         event.preventDefault()

@@ -752,7 +752,7 @@ test(
         requestLog.some((entry) => entry.method === "POST" && entry.path === "/mission/mis_side_activity/abort"),
       )
 
-      await page.click('[data-ui="mission-row"][data-session-id="ses_mission_side_activity"]')
+      await page.click('[data-ui="mission-row"][data-session-id="ses_mission_side_activity"] .mission-row-main')
       await waitForState(
         "mission row should select its session",
         (state) => state.selectedSourceID === "ses_mission_side_activity",
@@ -1225,7 +1225,7 @@ test(
           (entry) => entry.method === "DELETE" && entry.path === "/coding/session/ses_right_sidebar_delete",
         ),
       )
-      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
+      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main')
       await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
       assertMatchObject(await activeState(), {
         centerPreview: "false",
@@ -1268,7 +1268,7 @@ test(
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
       await page.waitForSelector('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
-      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
+      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main')
       await waitForState(
         "assistant row should reselect assistant session",
         (state) => state.selectedSourceID === "ses_right_sidebar_assistant",
@@ -1346,7 +1346,7 @@ test(
           )?.dataset.active === "true",
       )
       await page.waitForSelector('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
-      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
+      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main')
       await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
       await page.waitForFunction(
