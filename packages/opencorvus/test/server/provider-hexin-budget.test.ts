@@ -3,7 +3,7 @@ import { Hono } from "hono"
 import { Auth } from "../../src/auth"
 import { Env } from "../../src/env"
 import { Instance } from "../../src/project/instance"
-import { ProviderRoutes } from "../../src/server/routes/provider"
+import { HexinBudgetResponse, ProviderRoutes } from "../../src/server/routes/provider"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
@@ -18,6 +18,23 @@ function app() {
 afterEach(async () => {
   globalThis.fetch = originalFetch
   await Instance.disposeAll().catch(() => undefined)
+})
+
+test("HexinBudgetResponse requires discriminated success and failure payloads", () => {
+  expect(HexinBudgetResponse.safeParse({ ok: true }).success).toBe(false)
+  expect(HexinBudgetResponse.safeParse({ ok: false }).success).toBe(false)
+  expect(
+    HexinBudgetResponse.safeParse({
+      ok: true,
+      budget: {
+        maxBudget: 100,
+        spend: 25,
+        remaining: 75,
+        overBudget: false,
+      },
+    }).success,
+  ).toBe(true)
+  expect(HexinBudgetResponse.safeParse({ ok: false, error: "HEXIN_API_KEY unset" }).success).toBe(true)
 })
 
 test("GET /provider/hexin/budget sends configured Hexin bearer key and maps LiteLLM budget fields", async () => {

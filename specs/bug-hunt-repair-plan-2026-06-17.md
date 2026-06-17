@@ -2729,3 +2729,38 @@ LINE:
 - Volta reviewed the repaired working tree and confirmed `assertActiveSessionHistory(...)` checks the history epoch, abort signal, active task, and history source.
 - Volta confirmed the fix is in the service-level async write boundary used by both direct build-phase card expansion and agent-rail history loading, rather than a caller-side UI gate.
 - Volta confirmed the new regression covers the delayed old-task response after task switch and proves old task messages do not enter the current card tree.
+
+## Batch P1-AQ: BH-059 Hexin budget response schema is discriminated
+
+### Findings
+
+- BH-059 targets `packages/opencorvus/src/server/routes/provider.ts::HexinBudgetResponse`.
+- Current HEAD already contains the strict implementation restored by Batch P0-H: `HexinBudgetResponse` is a `z.discriminatedUnion("ok", ...)` with `{ ok: true, budget }` and `{ ok: false, error }`.
+- The repair plan did not name `BH-059`, so the bug-hunt tracker still showed the issue as uncovered even though the production schema no longer permitted `{ ok: true }` without `budget` or `{ ok: false }` without `error`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/provider.ts` owns `HexinBudgetResponse` and wires it to the `/provider/hexin/budget` OpenAPI response schema.
+- `packages/opencorvus/test/server/provider-hexin-budget.test.ts` owns the Hexin budget route regression suite.
+- `packages/overlay/src/services/config.ts` owns the overlay-side TypeScript contract `HexinBudgetResponse = { ok: true; budget } | { ok: false; error }`.
+
+### Fix Shape
+
+- Keep the existing discriminated schema; no route behavior change is required.
+- Export `HexinBudgetResponse` so the route contract can be tested directly instead of relying on indirect response samples.
+- Add schema assertions for both invalid shapes and both valid shapes.
+- Do not add compatibility responses, caller-side checks, or fallback parsing.
+
+### Verification
+
+- Added regression coverage in `packages/opencorvus/test/server/provider-hexin-budget.test.ts`: `{ ok: true }` and `{ ok: false }` are rejected, while complete success and failure payloads are accepted.
+- Removed stale overlay browser test fixtures that still returned invalid `{ ok: true }` for `/provider/hexin/budget`; those tests now use the valid failure shape `{ ok: false, error }`.
+- Focused provider test passed: `bun test packages/opencorvus/test/server/provider-hexin-budget.test.ts --timeout 60000`.
+- Typechecks passed: `bun run --cwd packages/opencorvus typecheck` and `bun run --cwd packages/overlay typecheck`.
+- Static fixture check passed: `rg -n 'provider/hexin/budget.*ok: true|provider/hexin/budget"\).*\\{ ok: true \\}' packages/overlay/test packages/opencorvus/test -g '*.ts'` returned no matches.
+- The affected overlay browser tests were run with the required Node runner: `node test/browser-runner.mjs test/browser/command-palette.test.ts test/browser/rewind-visual-stress.test.ts`. They did not reach a provider budget schema failure; they currently fail on BH-059-external issues: `command-palette.test.ts` reports missing i18n key `titlebar.menu.tools`, and `rewind-visual-stress.test.ts` reports the composer remaining disabled before the resume branch.
+
+### Independent Review Feedback
+
+- Herschel confirmed BH-059 is not present in current production code: `HexinBudgetResponse` is a `z.discriminatedUnion("ok", ...)`, `/provider/hexin/budget` binds it through `resolver(...)`, and the route only returns complete success or failure payloads.
+- Herschel identified the remaining risk as test-fixture contract drift in `command-palette.test.ts` and `rewind-visual-stress.test.ts`, not a production fallback or route bug.
