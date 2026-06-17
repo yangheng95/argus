@@ -99,6 +99,7 @@ describe("app/session dialog single source", () => {
     expect(appHost).toContain('import * as Select from "@kobalte/core/select"')
     expect(appHost).toContain("<Select.Root<AppDialogSelectOption>")
     expect(appHost).toContain("<Select.Trigger")
+    expect(appHost).toContain('class="field-input oc-select-trigger app-dialog-input app-dialog-select-trigger"')
     expect(appHost).toContain("<Select.HiddenSelect")
     expect(appHost).toContain("function AppDialogSelectOptionItem")
     expect(appDialogService).toContain("dialogStore.app.selectValue || null")
@@ -106,6 +107,7 @@ describe("app/session dialog single source", () => {
     expect(appDialogService).not.toContain("HTMLSelectElement")
     expect(appHost).not.toContain("<select")
     expect(appHost).not.toContain("<option")
+    expect(appHost).not.toContain('class="field-input app-dialog-input custom-select app-dialog-select-trigger"')
   })
 
   test("config dialog mounts only the active settings tab body", () => {
