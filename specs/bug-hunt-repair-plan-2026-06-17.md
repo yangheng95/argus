@@ -1376,3 +1376,51 @@ LINE:
 - Hubble confirmed the vulnerable boundary is deterministic Ed25519 key derivation, not route parsing or registry wiring.
 - Hubble confirmed tests must stop reading adapter private fields and should use an independent app-secret fixture.
 - Hubble recommended exact fixed-fixture coverage. The final tests pin the documented raw public key value and pin a deterministic validation-response signature for fixed `plain_token` / `event_ts`.
+
+## Batch P1-P: BH-109 experimental workspace delete project ownership
+
+### Findings
+
+- BH-109 is a P1 cross-project deletion bug: `DELETE /experimental/workspace/:id` was bound to the active project by `Server.App()` directory middleware, but the handler called `Workspace.remove(id)` with only the global workspace ID.
+- `Workspace.remove(id)` looked up `WorkspaceTable` by `id` only, then called `Worktree.remove({ directory: info.config.directory })`.
+- `Worktree.remove()` may physically remove an existing directory even when the directory is not a registered current-project git worktree. A project A request that knows project B's workspace ID can therefore delete B's workspace row and invoke physical deletion for B's directory.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/experimental.ts` owns `POST /experimental/workspace/:id`, `GET /experimental/workspace`, and `DELETE /experimental/workspace/:id`.
+- `packages/opencorvus/src/workspace/workspace.ts` owns `Workspace.create`, `list`, `get`, and `remove`.
+- `packages/opencorvus/src/workspace/workspace.sql.ts` stores `project_id`, which is the ownership column that delete must use.
+- `packages/opencorvus/src/worktree/index.ts` owns physical directory removal; this batch must prevent foreign workspace rows from reaching it.
+- `rg -n -F 'Workspace.remove(' packages/opencorvus/src packages/opencorvus/test` shows the experimental route as the only call site after this batch.
+
+### Fix Shape
+
+- Make `Workspace.remove()` the single canonical delete API with input `{ id, projectID }`; remove the global ID-only delete entrypoint.
+- Query workspace rows by both `id` and `project_id`; if no row matches, throw `NotFoundError` before calling `Worktree.remove()`.
+- Delete the row by the same `(id, project_id)` predicate after physical removal.
+- Update the experimental route to pass `Instance.project.id` and change the 200 schema from optional workspace to required workspace. Missing or foreign workspace IDs now surface as 404.
+- Do not modify `Worktree.remove()` in this batch and do not add route-only prechecks, fallback global deletion, or compatibility branches.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/server/experimental-workspace-routes.test.ts`.
+- Seed project A and project B workspace rows with sentinel directories. Delete B's workspace while scoped to project A and assert 404, B row remains, and B sentinel remains.
+- Delete a nonexistent workspace while scoped to project A and assert 404.
+- Delete A's workspace while scoped to project A and assert 200, A row removed, A directory removed, and B row/sentinel still intact.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/experimental-workspace-routes.test.ts`
+- Typecheck command: `bun run --cwd packages/opencorvus typecheck`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused workspace route test passed: `bun test packages/opencorvus/test/server/experimental-workspace-routes.test.ts`.
+- Package typecheck passed after rerun against the current worktree: `bun run --cwd packages/opencorvus typecheck`.
+
+### Independent Review Feedback
+
+- Herschel confirmed the root cause is the global workspace ID delete crossing the active-project route boundary and reaching `Worktree.remove()` before ownership validation.
+- Herschel required the workspace service API to be project-scoped, not just the route, and flagged the old global `Workspace.remove(id)` as a second unsafe delete source.
+- Herschel also recommended the 200 response schema be non-optional and missing workspace IDs return 404; both are reflected in the final route contract.
