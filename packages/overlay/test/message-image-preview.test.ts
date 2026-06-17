@@ -87,6 +87,7 @@ describe("message image preview", () => {
     const body = block(css, ".image-preview-dialog__body")
     const stage = block(css, ".image-preview-dialog__stage")
     const image = block(css, ".image-preview-dialog__image")
+    const copyStatus = block(css, ".image-preview-dialog__copy-status")
 
     expect(component).toContain("event.stopPropagation()")
     const scaleHelper = read("src/utils/image-preview-scale.ts")
@@ -115,19 +116,23 @@ describe("message image preview", () => {
     expect(image).toContain("height: var(--image-preview-rendered-height, auto);")
     expect(image).toContain("max-width: none;")
     expect(image).not.toContain("transform: scale")
+    expect(copyStatus).toContain("overflow-wrap: anywhere;")
+    expect(copyStatus).toContain("max-width: min(calc(240px * var(--ui-scale)), 52vw);")
   })
 
-  test("modal preview copies fetched image bytes instead of the image url", () => {
+  test("modal preview copies fetched PNG bytes without canvas fallback", () => {
     const component = read("src/components/ImagePreview.tsx")
 
     expect(component).toContain("navigator.clipboard?.write")
     expect(component).not.toContain("navigator.clipboard?.writeText")
     expect(component).toContain("fetchPreviewImageBlob")
     expect(component).toContain("fetch(src)")
-    expect(component).toContain("canvasPreviewImageBlob")
-    expect(component).toContain("canvas.toBlob")
+    expect(component).not.toContain("canvasPreviewImageBlob")
+    expect(component).not.toContain("canvas.toBlob")
+    expect(component).not.toContain("catch(() => undefined)")
     expect(component).toContain('"image/png"')
     expect(component).toContain("new ClipboardItem")
+    expect(component).toContain('role={feedback().tone === "error" ? "alert" : "status"}')
     expect(component).toContain("onClick={() => void copyPreviewImage()}")
   })
 

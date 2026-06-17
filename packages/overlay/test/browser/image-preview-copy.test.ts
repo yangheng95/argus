@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -33,6 +35,24 @@ function eventStream() {
       "cache-control": "no-cache",
     },
   })
+}
+
+const promptProfileCatalog = {
+  active: "default",
+  project_active: "default",
+  session_active: null,
+  default: "default",
+  targets: [{ id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false }],
+  profiles: [
+    {
+      id: "default",
+      label: "Default",
+      description: "Default implementation profile.",
+      built_in: true,
+      editable: false,
+      agents: {},
+    },
+  ],
 }
 
 test(
@@ -125,6 +145,9 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/projects/discover") {
+        return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
+      }
       if (path === "/project/current/worktrees") return send([])
       if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
       if (path === `/task/${taskID}/operator-model-context`) return send({ selected: null, candidates: [] })
@@ -138,8 +161,10 @@ test(
         return eventStream()
       }
       if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+      if (path === "/mission") return send([])
       if (path === "/session") return send([])
       if (path === "/config/prompt") return send([])
+      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
       if (path === `/task/${taskID}/board`) return send(board)
       if (path === `/task/${taskID}/conversation`) {
         return send({
@@ -221,7 +246,15 @@ test(
       })
       await page.evaluateOnNewDocument((serverUrl) => {
         ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
-        const state = { writes: [] as string[][], fetches: [] as string[] }
+        const state = {
+          writes: [] as string[][],
+          fetches: [] as string[],
+          copyFetches: [] as string[],
+          writeAttempts: 0,
+          fetchMode: "ok" as "ok" | "fail" | "non-png",
+          fetchTarget: "" as string,
+          writeMode: "ok" as "ok" | "reject",
+        }
         Object.defineProperty(window, "__imageCopyTest", {
           configurable: true,
           value: state,
@@ -231,7 +264,16 @@ test(
           configurable: true,
           value: async (input: RequestInfo | URL, init?: RequestInit) => {
             const value = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
-            if (value.includes("/attachment/project/tiny.png")) state.fetches.push(value)
+            state.fetches.push(value)
+            if (state.fetchTarget && value === state.fetchTarget) {
+              state.copyFetches.push(value)
+              if (state.fetchMode === "fail") return new Response("missing", { status: 404 })
+              if (state.fetchMode === "non-png") {
+                return new Response("plain image payload", {
+                  headers: { "content-type": "text/plain; charset=utf-8" },
+                })
+              }
+            }
             return realFetch(input, init)
           },
         })
@@ -239,6 +281,8 @@ test(
           configurable: true,
           value: {
             write: async (items: ClipboardItem[]) => {
+              state.writeAttempts += 1
+              if (state.writeMode === "reject") throw new DOMException("blocked", "NotAllowedError")
               state.writes.push(items.flatMap((item) => item.types))
             },
           },
@@ -279,7 +323,9 @@ test(
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
       await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
-      await page.waitForSelector(`.task-row-main[data-task-id='${taskID}']`)
+      await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
+      await page.waitForFunction(() => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true")
+      await page.waitForSelector(`.task-row-main[data-task-id='${taskID}']`, { visible: true })
       await page.click(`.task-row-main[data-task-id='${taskID}']`)
       try {
         await page.waitForSelector('.card[data-kind="tool"] > .card__head')
@@ -329,23 +375,193 @@ test(
         dialogMetrics.viewportHeight - dialogMetrics.height >= 72,
         `expected vertical backdrop close area, got ${JSON.stringify(dialogMetrics)}`,
       )
+
+      const previewSrc = await page.evaluate(() => {
+        const image = document.querySelector<HTMLImageElement>(".image-preview-dialog__image")
+        return image?.src || ""
+      })
+      assert.ok(previewSrc, "expected image preview src")
+      assert.ok(previewSrc.startsWith("blob:"), `expected protected screenshot to render from object URL, got ${previewSrc}`)
+      const initialFetches = await page.evaluate(() => {
+        const state = (
+          window as typeof window & {
+            __imageCopyTest: {
+              fetches: string[]
+            }
+          }
+        ).__imageCopyTest
+        return state.fetches
+      })
+      assert.ok(
+        initialFetches.some((value) => value.includes("/attachment/project/tiny.png")),
+        `expected fixture to load protected screenshot bytes, got ${JSON.stringify(initialFetches)}`,
+      )
+
+      async function configureCopy(
+        fetchMode: "ok" | "fail" | "non-png",
+        writeMode: "ok" | "reject" = "ok",
+        clipboardAvailable = true,
+      ): Promise<void> {
+        await page.evaluate(
+          ({ clipboardAvailable, fetchMode, previewSrc, writeMode }) => {
+            const state = (
+              window as typeof window & {
+                __imageCopyTest: {
+                  writes: string[][]
+                  copyFetches: string[]
+                  writeAttempts: number
+                  fetchMode: "ok" | "fail" | "non-png"
+                  fetchTarget: string
+                  writeMode: "ok" | "reject"
+                }
+              }
+            ).__imageCopyTest
+            state.writes = []
+            state.copyFetches = []
+            state.writeAttempts = 0
+            state.fetchMode = fetchMode
+            state.fetchTarget = previewSrc
+            state.writeMode = writeMode
+            Object.defineProperty(navigator, "clipboard", {
+              configurable: true,
+              value: clipboardAvailable
+                ? {
+                    write: async (items: ClipboardItem[]) => {
+                      const current = (
+                        window as typeof window & {
+                          __imageCopyTest: {
+                            writes: string[][]
+                            writeAttempts: number
+                            writeMode: "ok" | "reject"
+                          }
+                        }
+                      ).__imageCopyTest
+                      current.writeAttempts += 1
+                      if (current.writeMode === "reject") throw new DOMException("blocked", "NotAllowedError")
+                      current.writes.push(items.flatMap((item) => item.types))
+                    },
+                  }
+                : undefined,
+            })
+          },
+          { clipboardAvailable, fetchMode, previewSrc, writeMode },
+        )
+      }
+
+      async function waitForCopyStatus(message: string, status: "success" | "error") {
+        await page.waitForFunction(
+          ({ message, status }) => {
+            const element = document.querySelector<HTMLElement>(".image-preview-dialog__copy-status")
+            return element?.textContent?.trim() === message && element.dataset.status === status
+          },
+          {},
+          { message, status },
+        )
+        return await page.evaluate(() => {
+          const element = document.querySelector<HTMLElement>(".image-preview-dialog__copy-status")
+          if (!element) throw new Error("copy status missing")
+          return {
+            text: element.textContent?.trim() || "",
+            status: element.dataset.status || "",
+            role: element.getAttribute("role") || "",
+            live: element.getAttribute("aria-live") || "",
+          }
+        })
+      }
+
+      async function readCopyState() {
+        return await page.evaluate(() => {
+          const state = (
+            window as typeof window & {
+              __imageCopyTest: {
+                writes: string[][]
+                copyFetches: string[]
+                writeAttempts: number
+              }
+            }
+          ).__imageCopyTest
+          return {
+            writes: state.writes,
+            copyFetches: state.copyFetches,
+            writeAttempts: state.writeAttempts,
+          }
+        })
+      }
+
+      await configureCopy("ok")
       await page.click('button[aria-label="Copy image"]')
-      await page.waitForFunction(() => {
-        const state = (window as typeof window & { __imageCopyTest?: { writes: string[][]; fetches: string[] } })
-          .__imageCopyTest
-        return (state?.writes.length ?? 0) > 0
+      assert.deepEqual(await waitForCopyStatus("Copied", "success"), {
+        text: "Copied",
+        status: "success",
+        role: "status",
+        live: "polite",
+      })
+      assert.deepEqual(await readCopyState(), {
+        writes: [["image/png"]],
+        copyFetches: [previewSrc],
+        writeAttempts: 1,
       })
 
-      const writes = await page.evaluate(() => {
-        const state = (window as typeof window & { __imageCopyTest: { writes: string[][]; fetches: string[] } })
-          .__imageCopyTest
-        return { writes: state.writes, fetches: state.fetches }
+      await configureCopy("fail")
+      await page.click('button[aria-label="Copy image"]')
+      assert.deepEqual(await waitForCopyStatus("Copy failed: source bytes unavailable", "error"), {
+        text: "Copy failed: source bytes unavailable",
+        status: "error",
+        role: "alert",
+        live: "assertive",
       })
-      assert.deepEqual(writes.writes, [["image/png"]])
-      assert.ok(
-        writes.fetches.some((value) => value.includes("/attachment/project/tiny.png")),
-        `expected copy to fetch screenshot bytes, got ${JSON.stringify(writes.fetches)}`,
-      )
+      assert.deepEqual(await readCopyState(), {
+        writes: [],
+        copyFetches: [previewSrc],
+        writeAttempts: 0,
+      })
+
+      await configureCopy("non-png")
+      await page.click('button[aria-label="Copy image"]')
+      assert.deepEqual(await waitForCopyStatus("Copy failed: PNG source required", "error"), {
+        text: "Copy failed: PNG source required",
+        status: "error",
+        role: "alert",
+        live: "assertive",
+      })
+      assert.deepEqual(await readCopyState(), {
+        writes: [],
+        copyFetches: [previewSrc],
+        writeAttempts: 0,
+      })
+
+      await configureCopy("ok", "reject")
+      await page.click('button[aria-label="Copy image"]')
+      assert.deepEqual(await waitForCopyStatus("Copy failed: clipboard blocked", "error"), {
+        text: "Copy failed: clipboard blocked",
+        status: "error",
+        role: "alert",
+        live: "assertive",
+      })
+      assert.deepEqual(await readCopyState(), {
+        writes: [],
+        copyFetches: [previewSrc],
+        writeAttempts: 1,
+      })
+
+      await configureCopy("ok", "ok", false)
+      await page.click('button[aria-label="Copy image"]')
+      assert.deepEqual(await waitForCopyStatus("Copy failed: clipboard unavailable", "error"), {
+        text: "Copy failed: clipboard unavailable",
+        status: "error",
+        role: "alert",
+        live: "assertive",
+      })
+      const screenshotPath = resolve(".scratch/image-preview-copy-status.png")
+      mkdirSync(resolve(".scratch"), { recursive: true })
+      const screenshot = await page.screenshot({ fullPage: false })
+      assert.ok(screenshot.length > 0)
+      writeFileSync(screenshotPath, screenshot)
+      assert.deepEqual(await readCopyState(), {
+        writes: [],
+        copyFetches: [],
+        writeAttempts: 0,
+      })
       assert.deepEqual(errors, [])
     } finally {
       await browser.close().catch(() => undefined)
