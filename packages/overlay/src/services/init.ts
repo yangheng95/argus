@@ -227,8 +227,8 @@ function settledProviderInfo(
   errors: Record<string, string>,
 ): { catalog: unknown; auth: unknown } {
   return {
-    catalog: settledValue("provider", catalogResult, appStore.providerCatalog ?? null, errors),
-    auth: settledValue("provider/auth", authResult, appStore.providerAuth ?? null, errors),
+    catalog: settledValue("provider", catalogResult, null, errors),
+    auth: settledValue("provider/auth", authResult, null, errors),
   }
 }
 
@@ -268,12 +268,7 @@ export async function loadConfigInfo(
     ? settledProviderInfo(settingsResults[0], settingsResults[1], errors)
     : { catalog: appStore.providerCatalog, auth: appStore.providerAuth }
   const prompts = includeSettingsData
-    ? settledValue(
-        "config/prompt",
-        settingsResults[2],
-        Array.isArray(appStore.promptEntries) ? appStore.promptEntries : [],
-        errors,
-      )
+    ? settledValue("config/prompt", settingsResults[2], [], errors)
     : appStore.promptEntries
   if (Object.keys(errors).length > 0) {
     console.warn("[init] loadConfigInfo partial failure", errors)
