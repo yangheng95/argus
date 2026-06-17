@@ -2384,3 +2384,53 @@ LINE:
 - Lorentz independently confirmed the original `sidecar-smoke.test.ts` loop could park forever on a silent open stdout stream because the Date deadline was checked only before awaiting `reader.read()`.
 - Lorentz confirmed this is a test-harness bug, not a production sidecar change: `sidecar.ts` emits the canonical handshake, and the VS Code production startup manager already has a stdout inactivity watchdog.
 - Lorentz also found the same raw handshake pattern in `sidecar-chaos.test.ts` and `sidecar-contention.test.ts`, matching the final shared-helper fix.
+
+## Batch P1-AJ: BH-038 supervised LSP stdio handles must satisfy the LSP client process contract
+
+### Findings
+
+- BH-038 targets `packages/opencorvus/src/lsp/server.ts::spawnSupervisedStdio(...)` and `packages/opencorvus/src/lsp/client.ts::processExited(...)` / `rejectOnServerExit(...)`.
+- TypeScript LSP is spawned through `ProcessSupervisor.spawnShell(...)`, then `spawnSupervisedStdio(...)` returns a plain object cast as `ChildProcessWithoutNullStreams`.
+- That object only contains `pid`, `stdin`, `stdout`, `stderr`, and `kill`. It does not expose `exitCode`, `signalCode`, `once(...)`, or `off(...)`.
+- `LSPClient.create(...)` treats `undefined !== null` as already exited in `processExited(...)`, so supervised TypeScript LSP can fail before initialize. If that pre-check is bypassed, `rejectOnServerExit(...)` still expects `process.once/off`.
+- The root issue is a bad boundary adapter: the supervised handle must be normalized to the process contract the LSP client consumes.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/lsp/server.ts::spawnStdio(...)` returns normal Node child processes for most language servers.
+- `packages/opencorvus/src/lsp/server.ts::spawnSupervisedStdio(...)` is used by `LSPServer.Typescript.spawn(...)` and returns the incomplete process-shaped object.
+- `packages/opencorvus/src/lsp/client.ts::create(...)` constructs JSON-RPC stream reader/writer from `server.process.stdout/stdin`, sends `initialize`, reads `server.process.pid`, checks `exitCode/signalCode`, and registers `once/off` exit listeners during initialization.
+- `packages/opencorvus/src/lsp/index.ts` owns LSP spawn/dispose orchestration and calls `LSPClient.create(...)`.
+- `packages/opencorvus/src/shell/process-supervisor.ts::ProcessSupervisor.Handle` already exposes `exited`, `terminate()`, and `dispose()`, but not ChildProcess event methods.
+- `packages/opencorvus/test/lsp/client.test.ts` already covers fake LSP interop and LSP disposal races, but not the TypeScript supervised spawn adapter.
+
+### Fix Shape
+
+- Normalize the `ProcessSupervisor.Handle` inside `spawnSupervisedStdio(...)` into a ChildProcess-compatible process object for LSP client use.
+- The adapter must expose `exitCode` and `signalCode` as `null` while running and update them when `supervisor.exited` settles.
+- The adapter must expose `once/off/on/removeListener/emit` for `"exit"` and `"error"` so `rejectOnServerExit(...)` observes early server exit without special-casing TypeScript LSP in the client.
+- Keep `dispose()` delegated to the supervisor; keep `kill()` as a direct supervisor termination request.
+- Do not add fallback language servers, retries, gates, or alternate TypeScript LSP startup paths.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/lsp/client.test.ts`.
+- Use `ProcessSupervisor.setFactoryForTest(...)` so `LSPServer.Typescript.spawn(...)` follows the production supervised path while the factory supplies a fake JSON-RPC LSP server over stdio.
+- Assert `LSPClient.create({ serverID: "typescript", server: supervisedHandle, ... })` initializes successfully and `client.shutdown()` disposes the supervised handle.
+
+### Verification
+
+- New regression failed before implementation with `LSP server exited before initialize completed`, caused by the supervised process object's missing `exitCode` / `signalCode` fields making `processExited(...)` return true before initialize.
+- Implemented on 2026-06-18: `spawnSupervisedStdio(...)` now wraps `ProcessSupervisor.Handle` with a ChildProcess-compatible adapter that exposes stdio streams, PID, `kill()`, running exit fields, and EventEmitter-style exit/error listener methods wired from `supervisor.exited`.
+- Strengthened the regression to assert `client.shutdown()` calls the supervisor disposal path once.
+- Focused regression passed: `bun test packages/opencorvus/test/lsp/client.test.ts -t "typescript client initializes when the server uses a supervised stdio handle" --timeout 30000`.
+- Full LSP client suite passed: `bun test packages/opencorvus/test/lsp/client.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Ptolemy independently confirmed the supervised TypeScript LSP handle was cast to `ChildProcessWithoutNullStreams` while missing `exitCode`, `signalCode`, `once(...)`, and `off(...)`.
+- Ptolemy identified the first observable failure as `undefined !== null` in `processExited(...)`, and warned that patching only that pre-check would leave the missing event-listener contract.
+- Ptolemy confirmed TypeScript is the built-in affected LSP because it goes through `spawnSupervisedStdio(...)`; most other LSPs use `spawnStdio(...)` and return real child processes.
+- Ptolemy recommended boundary normalization plus a regression that asserts shutdown disposes the supervised handle; the final implementation and test use that shape.
