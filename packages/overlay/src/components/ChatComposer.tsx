@@ -100,7 +100,7 @@ function PromptProfileSelectOptionItem(props: Select.SelectRootItemComponentProp
       data-profile-id={option().id}
       title={option().description ?? option().label}
     >
-      <span class="prompt-profile-select-option-copy">
+      <span class="oc-select-option-copy prompt-profile-select-option-copy">
         <Select.ItemLabel>{option().label}</Select.ItemLabel>
         <Show when={option().description}>{(description) => <small>{description()}</small>}</Show>
       </span>

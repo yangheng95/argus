@@ -94,10 +94,10 @@ test("shared Select popup consumers keep readable options on a light popup surfa
               <div class="oc-select-content prompt-profile-select-content" data-expanded="">
                 <ul class="oc-select-listbox prompt-profile-select-listbox" role="listbox">
                   <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="false">
-                    <span class="prompt-profile-select-option-copy"><span>General</span><small>Baseline prompt set.</small></span>
+                    <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>General</span><small>Baseline prompt set.</small></span>
                   </li>
                   <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="true" data-highlighted="">
-                    <span class="prompt-profile-select-option-copy"><span>Frontend</span><small>Visual UI verification squad.</small></span>
+                    <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>Frontend</span><small>Visual UI verification squad.</small></span>
                     <span class="oc-select-indicator">✓</span>
                   </li>
                 </ul>

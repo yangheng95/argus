@@ -109,6 +109,16 @@ describe("overlay theme palette intent", () => {
 
     expect(violations).toEqual([])
   })
+
+  test("light popup foreground tokens keep secondary and warning text readable", () => {
+    const popupBackground = toRgba(resolveThemeValue(light, themeToken(light, "--menu-panel-bg")))
+    const warnDim = composite(toRgba(resolveThemeValue(light, themeToken(light, "--warn-dim"))), popupBackground)
+
+    expect(contrastRatio(toRgba(themeToken(light, "--text-soft")), popupBackground)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(toRgba(themeToken(light, "--text-muted")), popupBackground)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(toRgba(themeToken(light, "--warn")), popupBackground)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(toRgba(themeToken(light, "--warn")), warnDim)).toBeGreaterThanOrEqual(4.5)
+  })
 })
 
 function resolveThemeValue(css: string, value: string, seen = new Set<string>()): string {
@@ -139,4 +149,60 @@ function isTransparentCapable(value: string): boolean {
 
 function isOpaqueColor(value: string): boolean {
   return /\brgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/i.test(value) || /#[0-9a-f]{6}\b/i.test(value)
+}
+
+interface Rgba {
+  r: number
+  g: number
+  b: number
+  a: number
+}
+
+function toRgba(value: string): Rgba {
+  const normalized = value.trim().toLowerCase()
+  const hex = normalized.match(/^#([0-9a-f]{6})$/)
+  if (hex) {
+    const raw = hex[1]!
+    return {
+      r: Number.parseInt(raw.slice(0, 2), 16),
+      g: Number.parseInt(raw.slice(2, 4), 16),
+      b: Number.parseInt(raw.slice(4, 6), 16),
+      a: 1,
+    }
+  }
+  const rgb = normalized.match(/^rgba?\(([^)]+)\)$/)
+  if (rgb) {
+    const parts = rgb[1]!.split(",").map((part) => Number.parseFloat(part.trim()))
+    const [r, g, b] = parts
+    const a = parts.length >= 4 ? parts[3] : 1
+    if (![r, g, b, a].every(Number.isFinite)) throw new Error(`Invalid color ${value}`)
+    return { r, g, b, a: a! }
+  }
+  throw new Error(`Unsupported color ${value}`)
+}
+
+function composite(foreground: Rgba, background: Rgba): Rgba {
+  const alpha = foreground.a + background.a * (1 - foreground.a)
+  if (alpha === 0) return { r: 0, g: 0, b: 0, a: 0 }
+  return {
+    r: (foreground.r * foreground.a + background.r * background.a * (1 - foreground.a)) / alpha,
+    g: (foreground.g * foreground.a + background.g * background.a * (1 - foreground.a)) / alpha,
+    b: (foreground.b * foreground.a + background.b * background.a * (1 - foreground.a)) / alpha,
+    a: alpha,
+  }
+}
+
+function colorChannel(value: number): number {
+  const scaled = value / 255
+  return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4
+}
+
+function relativeLuminance(color: Rgba): number {
+  return 0.2126 * colorChannel(color.r) + 0.7152 * colorChannel(color.g) + 0.0722 * colorChannel(color.b)
+}
+
+function contrastRatio(foreground: Rgba, background: Rgba): number {
+  const lighter = Math.max(relativeLuminance(foreground), relativeLuminance(background))
+  const darker = Math.min(relativeLuminance(foreground), relativeLuminance(background))
+  return (lighter + 0.05) / (darker + 0.05)
 }

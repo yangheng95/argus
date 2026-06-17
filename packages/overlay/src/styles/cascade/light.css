@@ -45,8 +45,8 @@ body[data-theme="light"] {
   --border-strong: rgba(84, 103, 165, 0.22);
   --text: #35405c;
   --text-strong: #101527;
-  --text-soft: #66708e;
-  --text-muted: #8a94b2;
+  --text-soft: #5f6b87;
+  --text-muted: #66708e;
   --accent: #5b5ff0;
   --accent-dim: color-mix(in srgb, var(--accent) 11%, transparent);
   --accent-hover: #474add;
@@ -69,8 +69,8 @@ body[data-theme="light"] {
   --info-dim: rgba(47, 128, 237, 0.1);
   --good: #28a66a;
   --good-dim: rgba(40, 166, 106, 0.12);
-  --warn: #c98924;
-  --warn-dim: rgba(201, 137, 36, 0.12);
+  --warn: #8f570c;
+  --warn-dim: rgba(143, 87, 12, 0.12);
   --bad: #d85666;
   --bad-dim: rgba(216, 86, 102, 0.12);
   --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
