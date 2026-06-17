@@ -7,18 +7,17 @@ export const StructuredOutputToolAdapter: ToolAdapter = {
   kind: "structured_output",
   aliases: names,
   supports(input) {
-    return input.capabilities.structured_output
+    return input.capabilities.structured_output && Boolean(input.settings?.structured_output_schema)
   },
-  declare() {
+  declare(input) {
+    const schema = input.settings?.structured_output_schema
+    if (!schema) return undefined
+
     return [
       {
         name: "structured_output",
         description: "Return the final response as structured JSON matching the requested schema.",
-        inputSchema: {
-          type: "object",
-          properties: {},
-          additionalProperties: true,
-        },
+        inputSchema: schema,
         metadata: {
           tool_kind: "structured_output",
         },

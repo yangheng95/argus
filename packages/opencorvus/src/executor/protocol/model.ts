@@ -63,6 +63,7 @@ export const ProtocolSettings = z.object({
   cwd: z.string().optional(),
   system: z.string().optional(),
   max_turns: z.number().int().positive().optional(),
+  structured_output_schema: z.record(z.string(), z.unknown()).optional(),
   profile: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 })

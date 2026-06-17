@@ -5,190 +5,176 @@ import DESCRIPTION from "./batch.txt"
 const DISALLOWED = new Set(["batch"])
 const FILTERED_FROM_SUGGESTIONS = new Set(["patch", ...DISALLOWED])
 
-export const BatchTool = Tool.define("batch", async () => {
-  return {
-    description: DESCRIPTION,
-    parameters: z.object({
-      tool_calls: z
-        .array(
-          z.object({
-            tool: z.string().describe("The name of the tool to execute"),
-            parameters: z.object({}).loose().describe("Parameters for the tool"),
-          }),
-        )
-        .min(1, "Provide at least one tool call")
-        .describe("Array of tool calls to execute in parallel"),
+type InitializedTool = Awaited<ReturnType<Tool.Info["init"]>> & { id: string }
+
+function createToolCallSchema(tools: InitializedTool[]) {
+  const schemas = tools.map((tool) =>
+    z.object({
+      tool: z.literal(tool.id).describe(`Execute the ${tool.id} tool in this batched call.`),
+      parameters: tool.parameters.describe(`Arguments for the ${tool.id} tool. Must match that tool's schema.`),
     }),
-    formatValidationError(error) {
-      const formattedErrors = error.issues
-        .map((issue) => {
-          const path = issue.path.length > 0 ? issue.path.join(".") : "root"
-          return `  - ${path}: ${issue.message}`
-        })
-        .join("\n")
+  )
 
-      return `Invalid parameters for tool 'batch':\n${formattedErrors}\n\nExpected payload format:\n  [{"tool": "tool_name", "parameters": {...}}, {...}]`
-    },
-    async execute(params, ctx) {
-      const { Session } = await import("../session")
-      const { Identifier } = await import("../id/id")
-      const { toolFailureCauseFromUnknown } = await import("../session/tool-failure-cause")
+  if (schemas.length === 0) throw new Error("batch tool cannot initialize without at least one target tool")
+  if (schemas.length === 1) return schemas[0]
 
-      const toolCalls = params.tool_calls.slice(0, 25)
-      const discardedCalls = params.tool_calls.slice(25)
+  return z.discriminatedUnion(
+    "tool",
+    schemas as [
+      z.ZodObject<{ tool: z.ZodLiteral<string>; parameters: z.ZodType }>,
+      z.ZodObject<{ tool: z.ZodLiteral<string>; parameters: z.ZodType }>,
+      ...z.ZodObject<{ tool: z.ZodLiteral<string>; parameters: z.ZodType }>[],
+    ],
+  )
+}
 
-      const { ToolRegistry } = await import("./registry")
-      const availableTools = await ToolRegistry.tools({ modelID: "", providerID: "" })
-      const toolMap = new Map(availableTools.map((t) => [t.id, t]))
+export function createBatchTool(visibleTools: InitializedTool[]): Tool.Info {
+  return Tool.define("batch", async () => {
+    const availableTools = visibleTools.filter((tool) => !DISALLOWED.has(tool.id))
+    const toolMap = new Map(availableTools.map((tool) => [tool.id, tool]))
 
-      const executeCall = async (call: (typeof toolCalls)[0]) => {
-        const callStartTime = Date.now()
-        const partID = Identifier.ascending("part")
+    return {
+      description: DESCRIPTION,
+      parameters: z.object({
+        tool_calls: z
+          .array(createToolCallSchema(availableTools))
+          .min(1, "Provide at least one tool call")
+          .max(25, "Provide at most 25 tool calls")
+          .describe("One to twenty-five independent tool calls to execute concurrently."),
+      }),
+      formatValidationError(error) {
+        const formattedErrors = error.issues
+          .map((issue) => {
+            const path = issue.path.length > 0 ? issue.path.join(".") : "root"
+            return `  - ${path}: ${issue.message}`
+          })
+          .join("\n")
 
-        try {
-          if (DISALLOWED.has(call.tool)) {
-            throw new Error(
-              `Tool '${call.tool}' is not allowed in batch. Disallowed tools: ${Array.from(DISALLOWED).join(", ")}`,
-            )
+        return `Invalid parameters for tool 'batch':\n${formattedErrors}\n\nExpected payload format:\n  {"tool_calls":[{"tool":"tool_name","parameters":{...}},...]}`
+      },
+      async execute(params, ctx) {
+        const { Session } = await import("../session")
+        const { Identifier } = await import("../id/id")
+        const { toolFailureCauseFromUnknown } = await import("../session/tool-failure-cause")
+
+        const executeCall = async (call: (typeof params.tool_calls)[number]) => {
+          const callStartTime = Date.now()
+          const partID = Identifier.ascending("part")
+
+          try {
+            if (DISALLOWED.has(call.tool)) {
+              throw new Error(
+                `Tool '${call.tool}' is not allowed in batch. Disallowed tools: ${Array.from(DISALLOWED).join(", ")}`,
+              )
+            }
+
+            const tool = toolMap.get(call.tool)
+            if (!tool) {
+              const availableToolsList = Array.from(toolMap.keys()).filter((name) => !FILTERED_FROM_SUGGESTIONS.has(name))
+              throw new Error(
+                `Tool '${call.tool}' not in registry. External tools (MCP, environment) cannot be batched - call them directly. Available tools: ${availableToolsList.join(", ")}`,
+              )
+            }
+            const validatedParams = tool.parameters.parse(call.parameters)
+
+            await Session.updatePart({
+              id: partID,
+              messageID: ctx.messageID,
+              sessionID: ctx.sessionID,
+              type: "tool",
+              tool: call.tool,
+              callID: partID,
+              state: {
+                status: "running",
+                input: validatedParams,
+                time: {
+                  start: callStartTime,
+                },
+              },
+            })
+
+            const result = await tool.execute(validatedParams, { ...ctx, callID: partID })
+            const attachments = result.attachments?.map((attachment) => ({
+              ...attachment,
+              id: Identifier.ascending("part"),
+              sessionID: ctx.sessionID,
+              messageID: ctx.messageID,
+            }))
+
+            await Session.updatePart({
+              id: partID,
+              messageID: ctx.messageID,
+              sessionID: ctx.sessionID,
+              type: "tool",
+              tool: call.tool,
+              callID: partID,
+              state: {
+                status: "completed",
+                input: validatedParams,
+                output: result.output,
+                title: result.title,
+                metadata: result.metadata,
+                attachments,
+                time: {
+                  start: callStartTime,
+                  end: Date.now(),
+                },
+              },
+            })
+
+            return { success: true as const, tool: call.tool, result }
+          } catch (error) {
+            await Session.updatePart({
+              id: partID,
+              messageID: ctx.messageID,
+              sessionID: ctx.sessionID,
+              type: "tool",
+              tool: call.tool,
+              callID: partID,
+              state: {
+                status: "error",
+                input: call.parameters,
+                failure: toolFailureCauseFromUnknown({
+                  error,
+                  originSite: "tool.batch.execute",
+                  classification: "tool-execution",
+                  kind: "tool-execute-error",
+                  data: { toolName: call.tool, callID: partID },
+                }),
+                time: {
+                  start: callStartTime,
+                  end: Date.now(),
+                },
+              },
+            })
+
+            return { success: false as const, tool: call.tool, error }
           }
-
-          const tool = toolMap.get(call.tool)
-          if (!tool) {
-            const availableToolsList = Array.from(toolMap.keys()).filter((name) => !FILTERED_FROM_SUGGESTIONS.has(name))
-            throw new Error(
-              `Tool '${call.tool}' not in registry. External tools (MCP, environment) cannot be batched - call them directly. Available tools: ${availableToolsList.join(", ")}`,
-            )
-          }
-          const validatedParams = tool.parameters.parse(call.parameters)
-
-          await Session.updatePart({
-            id: partID,
-            messageID: ctx.messageID,
-            sessionID: ctx.sessionID,
-            type: "tool",
-            tool: call.tool,
-            callID: partID,
-            state: {
-              status: "running",
-              input: call.parameters,
-              time: {
-                start: callStartTime,
-              },
-            },
-          })
-
-          const result = await tool.execute(validatedParams, { ...ctx, callID: partID })
-          const attachments = result.attachments?.map((attachment) => ({
-            ...attachment,
-            id: Identifier.ascending("part"),
-            sessionID: ctx.sessionID,
-            messageID: ctx.messageID,
-          }))
-
-          await Session.updatePart({
-            id: partID,
-            messageID: ctx.messageID,
-            sessionID: ctx.sessionID,
-            type: "tool",
-            tool: call.tool,
-            callID: partID,
-            state: {
-              status: "completed",
-              input: call.parameters,
-              output: result.output,
-              title: result.title,
-              metadata: result.metadata,
-              attachments,
-              time: {
-                start: callStartTime,
-                end: Date.now(),
-              },
-            },
-          })
-
-          return { success: true as const, tool: call.tool, result }
-        } catch (error) {
-          await Session.updatePart({
-            id: partID,
-            messageID: ctx.messageID,
-            sessionID: ctx.sessionID,
-            type: "tool",
-            tool: call.tool,
-            callID: partID,
-            state: {
-              status: "error",
-              input: call.parameters,
-              failure: toolFailureCauseFromUnknown({
-                error,
-                originSite: "tool.batch.execute",
-                classification: "tool-execution",
-                kind: "tool-execute-error",
-                data: { toolName: call.tool, callID: partID },
-              }),
-              time: {
-                start: callStartTime,
-                end: Date.now(),
-              },
-            },
-          })
-
-          return { success: false as const, tool: call.tool, error }
         }
-      }
 
-      const results = await Promise.all(toolCalls.map((call) => executeCall(call)))
+        const results = await Promise.all(params.tool_calls.map((call) => executeCall(call)))
 
-      // Add discarded calls as errors
-      const now = Date.now()
-      for (const call of discardedCalls) {
-        const partID = Identifier.ascending("part")
-        await Session.updatePart({
-          id: partID,
-          messageID: ctx.messageID,
-          sessionID: ctx.sessionID,
-          type: "tool",
-          tool: call.tool,
-          callID: partID,
-          state: {
-            status: "error",
-            input: call.parameters,
-            failure: toolFailureCauseFromUnknown({
-              error: "Maximum of 25 tools allowed in batch",
-              originSite: "tool.batch.discarded-call",
-              classification: "tool-execution",
-              kind: "tool-execute-error",
-              data: { toolName: call.tool, callID: partID },
-            }),
-            time: { start: now, end: now },
+        const successfulCalls = results.filter((result) => result.success).length
+        const failedCalls = results.length - successfulCalls
+
+        const outputMessage =
+          failedCalls > 0
+            ? `Executed ${successfulCalls}/${results.length} tools successfully. ${failedCalls} failed.`
+            : `All ${successfulCalls} tools executed successfully.\n\nKeep using the batch tool for optimal performance in your next response!`
+
+        return {
+          title: `Batch execution (${successfulCalls}/${results.length} successful)`,
+          output: outputMessage,
+          attachments: results.filter((result) => result.success).flatMap((result) => result.result.attachments ?? []),
+          metadata: {
+            totalCalls: results.length,
+            successful: successfulCalls,
+            failed: failedCalls,
+            tools: params.tool_calls.map((call) => call.tool),
+            details: results.map((result) => ({ tool: result.tool, success: result.success })),
           },
-        })
-        results.push({
-          success: false as const,
-          tool: call.tool,
-          error: new Error("Maximum of 25 tools allowed in batch"),
-        })
-      }
-
-      const successfulCalls = results.filter((r) => r.success).length
-      const failedCalls = results.length - successfulCalls
-
-      const outputMessage =
-        failedCalls > 0
-          ? `Executed ${successfulCalls}/${results.length} tools successfully. ${failedCalls} failed.`
-          : `All ${successfulCalls} tools executed successfully.\n\nKeep using the batch tool for optimal performance in your next response!`
-
-      return {
-        title: `Batch execution (${successfulCalls}/${results.length} successful)`,
-        output: outputMessage,
-        attachments: results.filter((result) => result.success).flatMap((r) => r.result.attachments ?? []),
-        metadata: {
-          totalCalls: results.length,
-          successful: successfulCalls,
-          failed: failedCalls,
-          tools: params.tool_calls.map((c) => c.tool),
-          details: results.map((r) => ({ tool: r.tool, success: r.success })),
-        },
-      }
-    },
-  }
-})
+        }
+      },
+    }
+  })
+}

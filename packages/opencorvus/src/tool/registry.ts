@@ -5,7 +5,7 @@ import { BrowserPreviewTool } from "./browser-preview"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
 import { SearchCodeTool } from "./grep"
-import { BatchTool } from "./batch"
+import { createBatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TodoReadTool, TodoWriteTool } from "./todo"
@@ -122,9 +122,8 @@ export namespace ToolRegistry {
     custom.push(tool)
   }
 
-  async function all(config?: Config.Info): Promise<Tool.Info[]> {
+  async function all(): Promise<Tool.Info[]> {
     const custom = await state().then((x) => x.custom)
-    const cfg = config ?? (await Config.get())
     const question = ["app", "cli", "desktop"].includes(Flag.OPENCORVUS_CLIENT) || Flag.OPENCORVUS_ENABLE_QUESTION_TOOL
 
     return [
@@ -166,7 +165,6 @@ export namespace ToolRegistry {
       WebpageTextDiffTool,
       WebpageVisionJudgeTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
-      ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
     ]
   }
@@ -183,7 +181,8 @@ export namespace ToolRegistry {
     agent?: Agent.Info,
     config?: Config.Info,
   ) {
-    let items = await all(config)
+    const cfg = config ?? (await Config.get())
+    let items = await all()
 
     // Agent tool adapter: filter by agent's declared tool set.
     // frontend_design owns webpage evidence acquisition. Other agents consume
@@ -203,33 +202,35 @@ export namespace ToolRegistry {
       items = items.filter((t) => !set.has(t.id))
     }
 
-    const result = await Promise.all(
-      items
-        .filter((t) => {
-          // use apply tool in same format as codex
-          const usePatch =
-            model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
-          if (t.id === "apply_patch") return usePatch
-          if (t.id === "edit" || t.id === "write") return !usePatch
+    items = items.filter((t) => {
+      // use apply tool in same format as codex
+      const usePatch = model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
+      if (t.id === "apply_patch") return usePatch
+      if (t.id === "edit" || t.id === "write") return !usePatch
 
-          return true
-        })
-        .map(async (t) => {
-          using _ = log.time(t.id)
-          const tool = await t.init({ agent, config })
-          const output = {
-            description: tool.description,
-            parameters: tool.parameters,
-          }
-          await Plugin.trigger("tool.definition", { toolID: t.id }, output)
-          return {
-            id: t.id,
-            ...tool,
-            description: output.description,
-            parameters: output.parameters,
-          }
-        }),
-    )
+      return true
+    })
+
+    const initTool = async (t: Tool.Info) => {
+      using _ = log.time(t.id)
+      const tool = await t.init({ agent, config: cfg })
+      const output = {
+        description: tool.description,
+        parameters: tool.parameters,
+      }
+      await Plugin.trigger("tool.definition", { toolID: t.id }, output)
+      return {
+        id: t.id,
+        ...tool,
+        description: output.description,
+        parameters: output.parameters,
+      }
+    }
+
+    const result = await Promise.all(items.map(initTool))
+    if (cfg.experimental?.batch_tool === true) {
+      result.push(await initTool(createBatchTool(result)))
+    }
     return result
   }
 }

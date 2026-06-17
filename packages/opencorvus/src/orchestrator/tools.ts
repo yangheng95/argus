@@ -563,12 +563,16 @@ function acceptanceSpecsToPromptLines(raw: unknown): string[] {
 
 const ModifyGoalInputSchema = z.object({
   goalID: z.string().min(1).describe("The goal ID to modify."),
-  updates: GoalContractUpdateSchema,
+  updates: GoalContractUpdateSchema.describe(
+    "Partial goal contract replacement. Include only fields that must change; every included field fully replaces the prior value.",
+  ),
   reason: z.string().min(1).describe("Why you decided to modify this goal."),
 })
 
 const AddGoalInputSchema = z.object({
-  goal: GoalContractFieldsSchema.omit({ id: true }),
+  goal: GoalContractFieldsSchema.omit({ id: true }).describe(
+    "Complete goal contract to append, without id. Must include title, objective, owned_paths, requirement_ids, acceptance_specs, dependency fields, priority, and kind from the latest task evidence.",
+  ),
   reason: z
     .string()
     .min(1)
@@ -5667,14 +5671,20 @@ export function createOrchestratorTools(input: {
           .describe(
             "Evidence-backed reason this should inherit from the current task as separate follow-up work instead of changing the current task.",
           ),
-        priority: z.enum(["critical", "high", "normal", "low"]).default("normal"),
+        priority: z
+          .enum(["critical", "high", "normal", "low"])
+          .describe("Priority for the proposed follow-up task. Defaults to normal when no urgency evidence exists.")
+          .default("normal"),
         queue: z
           .boolean()
           .default(false)
           .describe(
             "Set true when this follow-up task should wait in the directory queue; set false when it should start immediately and bypass the directory queue.",
           ),
-        kind: z.enum(["workflow", "build"]).default("workflow"),
+        kind: z
+          .enum(["workflow", "build"])
+          .describe("Task engine kind for the follow-up: workflow for planned multi-stage work, build for direct execution.")
+          .default("workflow"),
       }),
       execute: async ({ title, request, reason, priority, queue, kind }) => {
         const task = requireTask(taskID)

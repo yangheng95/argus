@@ -31,10 +31,13 @@ export const MemoryTool = Tool.define("memory", {
     z.object({
       action: z.literal("search"),
       query: z.string().describe("Search query — keywords, phrases, or a question about past knowledge"),
-      scope: z.enum(["all", "global", "session"]).optional().describe("Which memory scope to search"),
+      scope: z
+        .enum(["all", "global", "session"])
+        .describe("Memory scope to search: all project memories, global long-term memories, or this session only.")
+        .optional(),
       maxResults: z
         .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().int().min(1).max(50).optional())
-        .describe("Max results"),
+        .describe("Maximum number of ranked memory search results to return."),
       minScore: z
         .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(0).max(1).optional())
         .describe("Min relevance score 0-1"),
@@ -61,7 +64,10 @@ export const MemoryTool = Tool.define("memory", {
     }),
     z.object({
       action: z.literal("list"),
-      scope: z.enum(["all", "global", "session"]).optional().describe("Which memory scope to list"),
+      scope: z
+        .enum(["all", "global", "session"])
+        .describe("Memory scope to list: all project memories, global long-term memories, or this session only.")
+        .optional(),
     }),
     z.object({
       action: z.literal("delete"),

@@ -12,7 +12,7 @@
 import z from "zod"
 
 export const AcceptanceSeverity = z.enum(["essential", "important", "optional", "pitfall"])
-export const AcceptanceTrigger = z.enum(["on_goal", "on_integrity", "on_acceptance"])
+export const AcceptanceTrigger = z.enum(["on_goal", "on_integrity"])
 export const LlmJudgeInputKind = z.enum(["acceptance_summary", "changed_files", "requirement_text", "visual_evidence"])
 
 const GherkinScenarioSchema = z
@@ -89,6 +89,34 @@ const PREBUILT_SCORER_NAMES = [
   "visual-evidence-bundle",
 ] as const
 
+const PrebuiltScorerConfigSchema = z
+  .object({
+    expected_text: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against."),
+    min_length: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe("For length_within: inclusive minimum character count."),
+    max_length: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe("For length_within: inclusive maximum character count."),
+    json_schema: z
+      .string()
+      .min(2)
+      .optional()
+      .describe("For json_schema: JSON.stringify of the expected JSON Schema object."),
+  })
+  .strict()
+  .describe("Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.")
+
 const PrebuiltScorerSchema = z.object({
   type: z
     .literal("prebuilt")
@@ -96,7 +124,7 @@ const PrebuiltScorerSchema = z.object({
       "prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.",
     ),
   name: z.enum(PREBUILT_SCORER_NAMES),
-  config: z.record(z.string(), z.unknown()).default({}),
+  config: PrebuiltScorerConfigSchema.default({}),
   spec: z
     .object({
       kind: z.literal("visual_evidence_bundle"),
@@ -147,7 +175,7 @@ export const AcceptanceSpecSchema = z.object({
   scorers: z.array(ScorerSchema).min(1).describe("At least one scorer — a spec without a scorer is untestable."),
   severity: AcceptanceSeverity,
   trigger: AcceptanceTrigger.optional().describe(
-    "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.",
+    "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.",
   ),
 })
 
@@ -165,7 +193,7 @@ export type RubricLevel = z.infer<typeof RubricLevelSchema>
  */
 export function resolveTrigger(spec: AcceptanceSpec, scorer: AcceptanceScorer): "on_goal" | "on_integrity" {
   if (spec.trigger === "on_goal") return "on_goal"
-  if (spec.trigger === "on_integrity" || spec.trigger === "on_acceptance") return "on_integrity"
+  if (spec.trigger === "on_integrity") return "on_integrity"
   if (scorer.type === "heuristic" || scorer.type === "prebuilt" || scorer.type === "contract_audit") return "on_goal"
   // llm_judge: essential runs per-goal so failures fail fast; others batch at integrity acceptance.
   return spec.severity === "essential" ? "on_goal" : "on_integrity"

@@ -34,6 +34,7 @@ describe("executor routes", () => {
           protocol: string
           protocolVersion: string
           transport: string
+          features: { structured_output?: boolean }
           tools: Array<{ name: string }>
         }>
         expect(body.find((item) => item.id === "codex")?.protocol).toBe("codex-app-server")
@@ -41,9 +42,10 @@ describe("executor routes", () => {
         expect(body.find((item) => item.id === "claude-code")?.protocol).toBe("claude-agent-sdk")
         expect(body.find((item) => item.id === "claude-code")?.transport).toBe("inproc")
         expect(body.find((item) => item.id === "codex")?.tools.some((item) => item.name === "shell_command")).toBe(true)
+        expect(body.find((item) => item.id === "claude-code")?.features.structured_output).toBe(true)
         expect(
           body.find((item) => item.id === "claude-code")?.tools.some((item) => item.name === "structured_output"),
-        ).toBe(true)
+        ).toBe(false)
       },
     })
   })
