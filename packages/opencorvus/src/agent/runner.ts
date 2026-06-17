@@ -550,24 +550,14 @@ async function recordAgentErrorForOrchestrator(input: {
     lines.push("stream_errors:")
     lines.push(...streamLines)
   }
-  try {
-    const { createDecisionLog } = await import("@/decision-log")
-    createDecisionLog(input.taskID).append({
-      phase: "agent_error",
-      goalID: input.goalID,
-      key: `${input.agentName}_session_error`,
-      value: lines.join("\n"),
-      reason: `model-visible agent failure; session=${input.sessionID}; ` + `kind=${input.kind}`,
-    })
-  } catch (logErr) {
-    log.warn("agent error decision_log append failed (non-fatal)", {
-      taskID: input.taskID,
-      goalID: input.goalID,
-      agentName: input.agentName,
-      sessionID: input.sessionID,
-      error: logErr instanceof Error ? logErr.message : String(logErr),
-    })
-  }
+  const { createDecisionLog } = await import("@/decision-log")
+  createDecisionLog(input.taskID).append({
+    phase: "agent_error",
+    goalID: input.goalID,
+    key: `${input.agentName}_session_error`,
+    value: lines.join("\n"),
+    reason: `model-visible agent failure; session=${input.sessionID}; ` + `kind=${input.kind}`,
+  })
 }
 
 // ---------------------------------------------------------------------------

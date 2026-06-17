@@ -2524,3 +2524,49 @@ LINE:
 - Popper independently confirmed the old wrapper affected every orchestrator tool because `agent.ts` passed `guard.tools` into the runtime contract.
 - Popper confirmed the final fix removes the dormant threshold path and preserves real tool errors across more than the former 30-failure threshold.
 - Popper noted that the identity `toolGuard(...)` name could invite future gate logic; this batch keeps it only as a tested no-interception boundary so the behavior regression can invoke the production export directly.
+
+## Batch P1-AM: BH-041 decision-log append failures must be visible
+
+### Findings
+
+- BH-041 targets `packages/opencorvus/src/decision-log/index.ts::createDecisionLog(...).append(...)`.
+- `append(...)` wraps the entire `decision_log` insert in `try/catch`, then logs `decision log append failed (non-fatal)` and returns normally on any database failure.
+- Decision-log entries carry cross-agent requirements, review findings, integrity feedback, and build reports. Silently losing them removes the durable context later agents rely on.
+- The root issue is not caller-specific: every `createDecisionLog(taskID).append(...)` call shares this writer.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/decision-log/index.ts` owns the shared writer and all read projections.
+- `packages/opencorvus/src/agent/runner.ts`, `engine/persist.ts`, `engine/workflow.ts`, `task-api/index.ts`, `tool/wait.ts`, `requirements/output-tools.ts`, and many `orchestrator/tools.ts` paths append durable decisions through this writer.
+- `packages/opencorvus/src/decision-log/bundle.ts` and terminal state code read the same table to materialize task-scoped `decision-log.md`.
+- Existing coverage in `packages/opencorvus/test/pipeline/decision-log.test.ts` validates normal append/read behavior and prompt rendering, but not insert failure visibility.
+- Independent review also found caller-level catch blocks around decision-log appends in `agent/runner.ts`, `tool/wait.ts`, and several `orchestrator/tools.ts` paths; those would keep losing durable decisions even after fixing the shared writer.
+
+### Fix Shape
+
+- Remove the catch-and-warn behavior from `append(...)` so database insert failures propagate to the caller.
+- Remove caller-level catch-and-warn wrappers around decision-log writes. The rule is shared: a failed durable decision write is visible to the current tool/agent instead of being treated as best effort.
+- Keep successful logging after the insert succeeds.
+- Do not add retry, fallback storage, alternate in-memory queues, or non-fatal swallowing at this shared writer.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/pipeline/decision-log.test.ts`.
+- Use the real `decision_log` schema and pass a runtime-invalid `null` value through a type assertion to trigger SQLite's `NOT NULL` constraint.
+- Assert `append(...)` throws and no row is visible via `readByKey(...)`.
+- Add a source guard scanning `packages/opencorvus/src` so production code cannot reintroduce `decision_log` append/write failure as non-fatal.
+
+### Verification
+
+- New regression failed before implementation: SQLite raised `NOT NULL constraint failed: decision_log.value`, but `append(...)` returned normally after logging `decision log append failed (non-fatal)`.
+- Implemented on 2026-06-18: removed the shared writer catch, removed caller-level decision-log append catches in `agent/runner.ts`, `tool/wait.ts`, and `orchestrator/tools.ts`, and added a production source guard against reintroducing decision-log non-fatal swallowing.
+- Decision-log suites passed: `bun test packages/opencorvus/test/pipeline/decision-log.test.ts packages/opencorvus/test/pipeline/decision-log-bundle.test.ts packages/opencorvus/test/engine/terminal-decision-log-bundle.test.ts --timeout 60000`.
+- Affected tool/agent suites passed: `bun test packages/opencorvus/test/orchestrator/wait-tool.test.ts --timeout 60000`, `bun test packages/opencorvus/test/fact-check/orchestrator-tool.test.ts --timeout 60000`, `bun test packages/opencorvus/test/agent/runner-tool-scope.test.ts --timeout 60000`, and `bun test packages/opencorvus/test/visual-qa/output-tools.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Bacon confirmed the shared-writer root cause and recommended the same minimal fix: remove the `append(...)` catch and do not add retry, fallback storage, memory queues, or alternate stores.
+- Bacon confirmed the real SQLite `NOT NULL` regression is stronger than mocking `Database.use(...)` because it covers the actual Drizzle/SQLite insert path.
+- Bacon identified caller-level decision-log catch blocks as an extra risk. This batch removes the production caller-level decision-log swallowing found by follow-up search.

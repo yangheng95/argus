@@ -1310,17 +1310,13 @@ export function createOrchestratorTools(input: {
       `Publish gate blocked acceptance ${input.acceptanceID}: ${input.summary}. ` +
       `This is an artifact/export failure, not a acceptance verdict. Task lifecycle is unchanged; ` +
       `integrity is the workflow completion authority.`
-    try {
-      const { createDecisionLog } = await import("@/decision-log")
-      createDecisionLog(taskID).append({
-        phase: "acceptance",
-        key: `publish_gate_rework_${Date.now()}`,
-        value: detail,
-        reason: input.source,
-      })
-    } catch {
-      /* best effort */
-    }
+    const { createDecisionLog } = await import("@/decision-log")
+    createDecisionLog(taskID).append({
+      phase: "acceptance",
+      key: `publish_gate_rework_${Date.now()}`,
+      value: detail,
+      reason: input.source,
+    })
     return SubAgentProtocol.yieldResult({
       headline: `Publish gate blocked acceptance artifact export. Task lifecycle is unchanged.`,
       fields: [
@@ -2502,21 +2498,14 @@ export function createOrchestratorTools(input: {
           // requirements failed instead of silently inheriting an empty
           // requirements set. Without this the abort surfaces only as a
           // thrown tool result the orchestrator may swallow during recovery.
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            const reason = err instanceof Error ? err.message : String(err)
-            createDecisionLog(taskID).append({
-              phase: "requirements",
-              key: "abort_requirements_failed",
-              value: `Requirements stage aborted: ${reason.slice(0, 400)}`,
-              reason: "requirements_threw",
-            })
-          } catch (logErr) {
-            log.warn("requirements: decision_log write failed (non-fatal)", {
-              taskID,
-              error: logErr instanceof Error ? logErr.message : String(logErr),
-            })
-          }
+          const { createDecisionLog } = await import("@/decision-log")
+          const reason = err instanceof Error ? err.message : String(err)
+          createDecisionLog(taskID).append({
+            phase: "requirements",
+            key: "abort_requirements_failed",
+            value: `Requirements stage aborted: ${reason.slice(0, 400)}`,
+            reason: "requirements_threw",
+          })
           throw err
         } finally {
           // No caller-level guard: the pre-migration runtime enforces progress/absolute timeouts.
@@ -2578,21 +2567,14 @@ export function createOrchestratorTools(input: {
           // and upstream-context.ts. Without this, the abort surfaces only
           // as a stderr WARN and design_specs stays undefined with no
           // explanation in any prompt (audit §11.3 / L3).
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            createDecisionLog(taskID).append({
-              phase: "frontend_design",
-              key: "abort_no_visual_input",
-              value:
-                "frontend_design aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
-              reason: "no_visual_input_provided",
-            })
-          } catch (logErr) {
-            log.warn("frontend_design: decision_log write failed (non-fatal)", {
-              taskID,
-              error: logErr instanceof Error ? logErr.message : String(logErr),
-            })
-          }
+          const { createDecisionLog } = await import("@/decision-log")
+          createDecisionLog(taskID).append({
+            phase: "frontend_design",
+            key: "abort_no_visual_input",
+            value:
+              "frontend_design aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
+            reason: "no_visual_input_provided",
+          })
           throw new Error(
             "frontend_design requires at least one real visual reference: image attachment, URL, Figma URL, or local material path.",
           )
@@ -2833,41 +2815,27 @@ export function createOrchestratorTools(input: {
               artifacts: preparedWebpageEvidenceArtifacts.length,
             })
             if (evidence.status !== "skipped") {
-              try {
-                const { createDecisionLog } = await import("@/decision-log")
-                createDecisionLog(taskID).append({
-                  phase: "frontend_design",
-                  key: "webpage_evidence",
-                  value:
-                    `Host-prepared live webpage evidence for ${evidence.url} (${evidence.status}).\n` +
-                    preparedWebpageEvidenceArtifacts.map((item) => `- ${item}`).join("\n"),
-                  reason:
-                    "Live webpage clone evidence is prepared deterministically before frontend template synthesis so downstream agents consume source skeleton/IR instead of relying on screenshot-only prose.",
-                })
-              } catch (logErr) {
-                log.warn("frontend_design: decision_log write failed (non-fatal)", {
-                  taskID,
-                  error: logErr instanceof Error ? logErr.message : String(logErr),
-                })
-              }
-            }
-          } catch (evidenceErr) {
-            const error = evidenceErr instanceof Error ? evidenceErr.message : String(evidenceErr)
-            try {
               const { createDecisionLog } = await import("@/decision-log")
               createDecisionLog(taskID).append({
                 phase: "frontend_design",
-                key: "abort_webpage_evidence_failed",
-                value: `Live webpage evidence generation failed before frontend template synthesis: ${error}`,
+                key: "webpage_evidence",
+                value:
+                  `Host-prepared live webpage evidence for ${evidence.url} (${evidence.status}).\n` +
+                  preparedWebpageEvidenceArtifacts.map((item) => `- ${item}`).join("\n"),
                 reason:
-                  "A live webpage clone task cannot be grounded by prose alone; extraction/compile/analyze must succeed or surface the real acquisition failure.",
-              })
-            } catch (logErr) {
-              log.warn("frontend_design: decision_log write failed (non-fatal)", {
-                taskID,
-                error: logErr instanceof Error ? logErr.message : String(logErr),
+                  "Live webpage clone evidence is prepared deterministically before frontend template synthesis so downstream agents consume source skeleton/IR instead of relying on screenshot-only prose.",
               })
             }
+          } catch (evidenceErr) {
+            const error = evidenceErr instanceof Error ? evidenceErr.message : String(evidenceErr)
+            const { createDecisionLog } = await import("@/decision-log")
+            createDecisionLog(taskID).append({
+              phase: "frontend_design",
+              key: "abort_webpage_evidence_failed",
+              value: `Live webpage evidence generation failed before frontend template synthesis: ${error}`,
+              reason:
+                "A live webpage clone task cannot be grounded by prose alone; extraction/compile/analyze must succeed or surface the real acquisition failure.",
+            })
             await closeFrontendDesignStep(true)
             throw evidenceErr instanceof Error ? evidenceErr : new Error(error)
           }
@@ -2917,23 +2885,16 @@ export function createOrchestratorTools(input: {
           // was attempted but produced no visual context" rather than
           // running blind on designSpecs=undefined (audit §11.3 / L3, bench
           // tsk_dde13a67c001sbz6y2Qe0at8Fc:1729).
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            createDecisionLog(taskID).append({
-              phase: "frontend_design",
-              key: "abort_materialization_failed",
-              value:
-                `frontend_design aborted before agent call: all ${providedCount} provided visual ` +
-                `source(s) (live=${liveUrls.length}, figma=${figmaUrls.length}, materials=${materialPaths.length}) ` +
-                `failed to materialize.${failureDetail}`,
-              reason: "materialization_failed_all_sources",
-            })
-          } catch (logErr) {
-            log.warn("frontend_design: decision_log write failed (non-fatal)", {
-              taskID,
-              error: logErr instanceof Error ? logErr.message : String(logErr),
-            })
-          }
+          const { createDecisionLog } = await import("@/decision-log")
+          createDecisionLog(taskID).append({
+            phase: "frontend_design",
+            key: "abort_materialization_failed",
+            value:
+              `frontend_design aborted before agent call: all ${providedCount} provided visual ` +
+              `source(s) (live=${liveUrls.length}, figma=${figmaUrls.length}, materials=${materialPaths.length}) ` +
+              `failed to materialize.${failureDetail}`,
+            reason: "materialization_failed_all_sources",
+          })
           await closeFrontendDesignStep(true)
           throw new Error(message)
         }
@@ -3552,21 +3513,14 @@ export function createOrchestratorTools(input: {
               error: trackErr instanceof Error ? trackErr.message : String(trackErr),
             })
           }
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            const reason = err instanceof Error ? err.message : String(err)
-            createDecisionLog(taskID).append({
-              phase: "architect",
-              key: "abort_architect_failed",
-              value: `Architect stage aborted: ${reason.slice(0, 400)}`,
-              reason: "architect_threw",
-            })
-          } catch (logErr) {
-            log.warn("architect: decision_log write failed (non-fatal)", {
-              taskID,
-              error: logErr instanceof Error ? logErr.message : String(logErr),
-            })
-          }
+          const { createDecisionLog } = await import("@/decision-log")
+          const reason = err instanceof Error ? err.message : String(err)
+          createDecisionLog(taskID).append({
+            phase: "architect",
+            key: "abort_architect_failed",
+            value: `Architect stage aborted: ${reason.slice(0, 400)}`,
+            reason: "architect_threw",
+          })
           throw err
         }
       },
@@ -3743,21 +3697,14 @@ export function createOrchestratorTools(input: {
               error: trackErr instanceof Error ? trackErr.message : String(trackErr),
             })
           }
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            const reason = err instanceof Error ? err.message : String(err)
-            createDecisionLog(taskID).append({
-              phase: "architect",
-              key: "abort_workload_analysis_failed",
-              value: `Workload analysis stage aborted: ${reason.slice(0, 400)}`,
-              reason: "workload_analysis_threw",
-            })
-          } catch (logErr) {
-            log.warn("workload_analysis: decision_log write failed (non-fatal)", {
-              taskID,
-              error: logErr instanceof Error ? logErr.message : String(logErr),
-            })
-          }
+          const { createDecisionLog } = await import("@/decision-log")
+          const reason = err instanceof Error ? err.message : String(err)
+          createDecisionLog(taskID).append({
+            phase: "architect",
+            key: "abort_workload_analysis_failed",
+            value: `Workload analysis stage aborted: ${reason.slice(0, 400)}`,
+            reason: "workload_analysis_threw",
+          })
           throw err
         }
       },
@@ -3872,19 +3819,12 @@ export function createOrchestratorTools(input: {
           await close(true)
           const msg = err instanceof Error ? err.message : String(err)
           log.error("visual_qa: failed", { taskID, error: msg })
-          try {
-            decisionLog.append({
-              phase: "visual_qa",
-              key: "abort_visual_qa_failed",
-              value: `Visual QA stage aborted: ${msg.slice(0, 400)}`,
-              reason: "visual_qa_threw",
-            })
-          } catch (logErr) {
-            log.warn("visual_qa: decision_log write failed (non-fatal)", {
-              taskID,
-              error: logErr instanceof Error ? logErr.message : String(logErr),
-            })
-          }
+          decisionLog.append({
+            phase: "visual_qa",
+            key: "abort_visual_qa_failed",
+            value: `Visual QA stage aborted: ${msg.slice(0, 400)}`,
+            reason: "visual_qa_threw",
+          })
           throw err instanceof Error ? err : new Error(msg)
         }
       },
@@ -4118,24 +4058,17 @@ export function createOrchestratorTools(input: {
           // Surface a one-line summary in decision_log so integrity replay
           // and read_context can mention "fact-check verdict was X" without
           // having to parse the full artifact (spec §6.1.2 step 7).
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            createDecisionLog(task.id).append({
-              phase: "fact_check",
-              key: `fact_check:${args.target_session_id}:${snap.messageID}`,
-              value:
-                `verdict=${result.report.overall_verdict} ` +
-                `verified=${result.report.verified.length} ` +
-                `corrected=${result.report.corrected.length} ` +
-                `unresolved=${result.report.unresolved.length}`,
-              reason: `fact-check on ${args.target_agent} (${args.reason.slice(0, 200)})`,
-            })
-          } catch (logErr) {
-            log.warn("fact_check: decision_log write failed (non-fatal)", {
-              taskID: task.id,
-              error: logErr instanceof Error ? logErr.message : String(logErr),
-            })
-          }
+          const { createDecisionLog } = await import("@/decision-log")
+          createDecisionLog(task.id).append({
+            phase: "fact_check",
+            key: `fact_check:${args.target_session_id}:${snap.messageID}`,
+            value:
+              `verdict=${result.report.overall_verdict} ` +
+              `verified=${result.report.verified.length} ` +
+              `corrected=${result.report.corrected.length} ` +
+              `unresolved=${result.report.unresolved.length}`,
+            reason: `fact-check on ${args.target_agent} (${args.reason.slice(0, 200)})`,
+          })
           return (
             `fact_check completed — verdict=\`${result.report.overall_verdict}\`\n\n` +
             renderFactCheckReport(result.report)
@@ -4240,21 +4173,14 @@ export function createOrchestratorTools(input: {
           // attempted but failed" instead of silently inheriting an empty
           // intent classification. The success path already writes (lines
           // 1722-1763 below); this commit closes the abort gap.
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            const reason = err instanceof Error ? err.message : String(err)
-            createDecisionLog(taskID).append({
-              phase: "intent_analysis",
-              key: "abort_intent_analysis_failed",
-              value: `Intent analysis aborted: ${reason.slice(0, 400)}`,
-              reason: "intent_analysis_threw",
-            })
-          } catch (logErr) {
-            log.warn("analyze_intent: decision_log write failed (non-fatal)", {
-              taskID,
-              error: logErr instanceof Error ? logErr.message : String(logErr),
-            })
-          }
+          const { createDecisionLog } = await import("@/decision-log")
+          const reason = err instanceof Error ? err.message : String(err)
+          createDecisionLog(taskID).append({
+            phase: "intent_analysis",
+            key: "abort_intent_analysis_failed",
+            value: `Intent analysis aborted: ${reason.slice(0, 400)}`,
+            reason: "intent_analysis_threw",
+          })
           throw err
         }
         const r = out.result
@@ -6636,22 +6562,14 @@ export function createOrchestratorTools(input: {
               // reason carries the audit metadata.
               // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
               if (attachedGoalID) {
-                try {
-                  const { createDecisionLog } = await import("@/decision-log")
-                  createDecisionLog(taskID).append({
-                    phase: "retry",
-                    goalID: attachedGoalID,
-                    key: "build_agent_contract_violation",
-                    value: runErr.message,
-                    reason: `build_agent_contract_violation: code=${runErr.code}; sessionID=${runErr.diagnostics.sessionID ?? "?"}`,
-                  })
-                } catch (logErr) {
-                  log.warn("build: failed to record contract-violation decision_log entry (non-fatal)", {
-                    taskID,
-                    goalID: attachedGoalID,
-                    error: logErr instanceof Error ? logErr.message : String(logErr),
-                  })
-                }
+                const { createDecisionLog } = await import("@/decision-log")
+                createDecisionLog(taskID).append({
+                  phase: "retry",
+                  goalID: attachedGoalID,
+                  key: "build_agent_contract_violation",
+                  value: runErr.message,
+                  reason: `build_agent_contract_violation: code=${runErr.code}; sessionID=${runErr.diagnostics.sessionID ?? "?"}`,
+                })
               }
             } else {
               buildOutcome = { kind: "throw", error: runErr }
@@ -6836,22 +6754,14 @@ export function createOrchestratorTools(input: {
               commit_ref: result.commit_ref,
               repair_report: result.repair_report,
             }
-            try {
-              const decisionLog = createDecisionLog(taskID)
-              decisionLog.append({
-                phase: "build",
-                goalID: attachedGoalID,
-                key: "build_report_for_architecture_review",
-                value: JSON.stringify(buildReportForReview),
-                reason: "post_build_architecture_review_input",
-              })
-            } catch (logErr) {
-              log.warn("build: build report decision_log append failed (non-fatal)", {
-                taskID,
-                goalID: attachedGoalID,
-                error: logErr instanceof Error ? logErr.message : String(logErr),
-              })
-            }
+            const decisionLog = createDecisionLog(taskID)
+            decisionLog.append({
+              phase: "build",
+              goalID: attachedGoalID,
+              key: "build_report_for_architecture_review",
+              value: JSON.stringify(buildReportForReview),
+              reason: "post_build_architecture_review_input",
+            })
           }
 
           if (isTaskLevelBuild) await trackStepComplete("build")
