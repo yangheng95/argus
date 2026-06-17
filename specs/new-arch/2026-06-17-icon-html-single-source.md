@@ -36,23 +36,31 @@ rg -n "iconHtml|data-oc-icon|REGISTERED_ICONS|ICON_PATHS" packages/overlay/src p
 
 ## Fix
 
-1. Import `render` from `solid-js/web` and render `<Icon />` into a detached DOM
-   container.
-2. Validate `name` against `REGISTERED_ICONS` before rendering.
-3. Throw on unknown icon names instead of drawing a fallback glyph.
-4. Preserve caller-facing `iconHtml(name, size, className)` and
+1. Keep `utils/icon-html.tsx` as a pure utility entry that does not import
+   `Icon.tsx`, `lucide-solid`, or any TSX module. Pure utility tests import
+   `markdown.ts` and `dom-utils.ts`; those imports must not pull browser-only
+   Solid rendering code into Bun's server-side test runtime.
+2. Install the real renderer from `main.tsx`, where `Icon`, `REGISTERED_ICONS`,
+   and browser DOM `render()` are already valid runtime dependencies.
+3. Validate `name` against `REGISTERED_ICONS` before rendering.
+4. Throw on unknown icon names instead of drawing a fallback glyph.
+5. Preserve caller-facing `iconHtml(name, size, className)` and
    `hydrateIconPlaceholders(root)` contracts.
-5. Extend `flat-redesign-icon-coverage.test.ts` to reject `ICON_PATHS` and
-   require unknown-icon failure coverage.
+6. Extend `flat-redesign-icon-coverage.test.ts` to reject `ICON_PATHS`, reject
+   direct `Icon` imports from `icon-html`, and require `main.tsx` to install the
+   renderer through the Icon owner.
 
 ## Acceptance
 
 - `iconHtml` contains no local SVG path registry.
-- `iconHtml` uses browser-safe Solid `render()` and does not use
-  `renderToString`.
+- `iconHtml` stays importable by pure tests without loading `Icon.tsx` or
+  `lucide-solid`.
+- The browser renderer uses Solid `render()` and does not use `renderToString`.
 - Unknown icon names throw an explicit error.
 - `hydrateIconPlaceholders` still fills static `data-oc-icon` placeholders.
 - `bun test packages/overlay/test/flat-redesign-icon-coverage.test.ts` passes.
+- `bun test packages/overlay/test/markdown-safety.test.ts` passes.
+- `bun test packages/overlay/test/workspace-editor.test.ts` passes.
 - Overlay typecheck and i18n checks pass.
 - Browser visual smoke confirms static sidebar placeholder icons and markdown
   copy icons render from the updated HTML path.

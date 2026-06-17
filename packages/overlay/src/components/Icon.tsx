@@ -812,7 +812,11 @@ export function Icon(props: IconProps): JSX.Element {
   const size = () => props.size ?? 16
   const decorative = () => props.decorative !== false
   const lucideRecord = () => LUCIDE_ICON_MAP[props.name]
-  const customRecord = () => CUSTOM_ICON_PATHS[props.name]
+  const customRecord = () => {
+    const record = CUSTOM_ICON_PATHS[props.name]
+    if (!record && !lucideRecord()) throw new Error(`Unknown icon "${String(props.name)}"`)
+    return record
+  }
   const customStrokeWidth = () => props.strokeWidth ?? customRecord()?.strokeWidth ?? 1.4
   const lucideStrokeWidth = () => props.strokeWidth ?? lucideRecord()?.strokeWidth ?? 2
 
