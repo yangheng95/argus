@@ -169,6 +169,51 @@ describe("browser preview routes", () => {
   )
 
   test(
+    "GET /task/:taskID/browser-preview does not replace the selected target with an older reachable candidate",
+    async () => {
+      await using tmp = await tmpdir()
+      const preview = servePreview()
+      const taskID = await seedTask(tmp.path)
+      const app = Server.App()
+      try {
+        const reachable = await persistBrowserPreviewTarget({ taskID, url: preview.url.href, now: 100 })
+        const unreachable = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead", now: 200 })
+
+        const response = await app.request(`/task/${taskID}/browser-preview`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          id?: string
+          status: string
+          url?: string
+          source: string
+          candidates?: { id: string; url: string; selected: boolean }[]
+          diagnostics?: string[]
+        }
+        expect(body.id).toBe(unreachable.id)
+        expect(body.status).toBe("failed")
+        expect(body.url).toBe(unreachable.url)
+        expect(body.source).toBe("task-artifact")
+        expect(
+          body.candidates?.map((candidate) => ({ id: candidate.id, url: candidate.url, selected: candidate.selected })),
+        ).toEqual([
+          { id: unreachable.id, url: unreachable.url, selected: true },
+          { id: reachable.id, url: reachable.url, selected: false },
+        ])
+        expect(body.diagnostics?.join("\n")).toContain(unreachable.url)
+        expect(body.diagnostics?.join("\n")).not.toContain(reachable.url)
+      } finally {
+        preview.stop(true)
+      }
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "GET /task/:taskID/browser-preview does not use package metadata as a target source",
     async () => {
       await using tmp = await tmpdir()

@@ -50,34 +50,33 @@ export async function resolveBrowserPreviewTarget(input: {
   const persistedTargets = findRecentBrowserPreviewTargets(taskID)
   if (persistedTargets.length === 0) return missingBrowserPreviewTarget({ projectRoot, taskID })
   const assessed = await assessBrowserPreviewTargets(persistedTargets, input.isVisible)
-  const reachableTargets = assessed.filter((item) => item.visible).map((item) => item.target)
-  const persisted = reachableTargets[0]
+  const selected = persistedTargets[0]!
+  const selectedAssessment = assessed.find((item) => item.target.id === selected.id)
   const unreachableDiagnostics = assessed
     .filter((item) => !item.visible)
     .map((item) => `Saved browser preview target is unreachable: ${item.target.url}`)
-  if (!persisted) {
-    const latest = persistedTargets[0]
+  if (!selectedAssessment?.visible) {
     return failedBrowserPreviewTarget({
       projectRoot,
       taskID,
-      id: latest.id,
-      url: latest.url,
-      source: latest.source,
+      id: selected.id,
+      url: selected.url,
+      source: selected.source,
       diagnostics:
         unreachableDiagnostics.length > 0
           ? unreachableDiagnostics
           : ["Saved browser preview targets are not reachable."],
-      candidates: browserPreviewCandidates(persistedTargets, latest.id),
+      candidates: browserPreviewCandidates(persistedTargets, selected.id),
     })
   }
   return taskBrowserPreviewTarget({
     projectRoot,
     taskID,
-    id: persisted.id,
-    url: persisted.url,
-    candidates: browserPreviewCandidates(persistedTargets, persisted.id),
-    diagnostics: [`Using task browser preview target ${persisted.id}.`, ...unreachableDiagnostics],
-    latestEvidenceIDs: latestBrowserPreviewEvidenceIDs({ taskID, targetID: persisted.id }),
+    id: selected.id,
+    url: selected.url,
+    candidates: browserPreviewCandidates(persistedTargets, selected.id),
+    diagnostics: [`Using task browser preview target ${selected.id}.`, ...unreachableDiagnostics],
+    latestEvidenceIDs: latestBrowserPreviewEvidenceIDs({ taskID, targetID: selected.id }),
   })
 }
 
