@@ -3,32 +3,43 @@ import { $ } from "bun"
 import pkg from "../package.json"
 import { Script } from "@opencorvus-ai/script"
 import { fileURLToPath } from "url"
+import { isPublishedCliBinaryPackageName } from "./published-package-bin.mjs"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
 
 const binaries: Record<string, string> = {}
 for (const filepath of new Bun.Glob("*/package.json").scanSync({ cwd: "./dist" })) {
-  const pkg = await Bun.file(`./dist/${filepath}`).json()
-  binaries[pkg.name] = pkg.version
+  const binaryPkg = await Bun.file(`./dist/${filepath}`).json()
+  if (!isPublishedCliBinaryPackageName(binaryPkg.name)) continue
+  binaries[binaryPkg.name] = binaryPkg.version
 }
 console.log("binaries", binaries)
+if (Object.keys(binaries).length === 0) {
+  throw new Error("No CLI binary packages found in ./dist")
+}
+if (new Set(Object.values(binaries)).size !== 1) {
+  throw new Error("CLI binary package versions must match before publishing")
+}
 const version = Object.values(binaries)[0]
 
 await $`mkdir -p ./dist/${pkg.name}`
 await $`cp -r ./bin ./dist/${pkg.name}/bin`
-await $`cp ./script/postinstall.mjs ./dist/${pkg.name}/postinstall.mjs`
+await $`mkdir -p ./dist/${pkg.name}/script`
+await $`cp ./script/postinstall.mjs ./dist/${pkg.name}/script/postinstall.mjs`
+await $`cp ./script/published-package-bin.mjs ./dist/${pkg.name}/script/published-package-bin.mjs`
 await Bun.file(`./dist/${pkg.name}/LICENSE`).write(await Bun.file("../../LICENSE").text())
 
 await Bun.file(`./dist/${pkg.name}/package.json`).write(
   JSON.stringify(
     {
       name: pkg.name + "-ai",
+      type: "module",
       bin: {
         [pkg.name]: `./bin/${pkg.name}`,
       },
       scripts: {
-        postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
+        postinstall: "node ./script/postinstall.mjs",
       },
       version: version,
       license: pkg.license,
