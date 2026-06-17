@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -270,6 +272,47 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       return title?.textContent?.trim() === "Custom Squad"
     })
     await page.waitForFunction(() => document.querySelectorAll(".prompt-profile-textarea").length === 2)
+    const selectedProfileListItem = await page.evaluate(() => {
+      const selected = document.querySelector('[data-ui="prompt-profile-list"] .prompt-profile-list-item[data-active="true"]')
+      return selected?.querySelector("strong")?.textContent?.trim() || ""
+    })
+    assert.equal(selectedProfileListItem, "Custom Squad")
+
+    const textareaLabels = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLTextAreaElement>(".prompt-profile-textarea")).map((textarea) => {
+        const target = textarea.closest<HTMLElement>(".prompt-profile-target")
+        const label = target?.querySelector<HTMLElement>(".prompt-profile-target-copy strong")
+        const labelledBy = textarea.getAttribute("aria-labelledby") || ""
+        const labelledElement = labelledBy ? document.getElementById(labelledBy) : null
+        return {
+          labelID: label?.id || "",
+          visibleLabel: label?.textContent?.trim() || "",
+          labelledBy,
+          accessibleNameSource: labelledElement?.textContent?.trim() || "",
+          hiddenLabel: textarea.getAttribute("aria-label") || "",
+        }
+      }),
+    )
+    assert.deepEqual(textareaLabels, [
+      {
+        labelID: "promptProfileTargetLabel-requirements",
+        visibleLabel: "Requirements",
+        labelledBy: "promptProfileTargetLabel-requirements",
+        accessibleNameSource: "Requirements",
+        hiddenLabel: "",
+      },
+      {
+        labelID: "promptProfileTargetLabel-build",
+        visibleLabel: "Build",
+        labelledBy: "promptProfileTargetLabel-build",
+        accessibleNameSource: "Build",
+        hiddenLabel: "",
+      },
+    ])
+    mkdirSync(resolve(".scratch"), { recursive: true })
+    const screenshot = await page.screenshot({ fullPage: false })
+    assert.ok(screenshot.length > 0)
+    writeFileSync(resolve(".scratch/prompt-profile-textarea-labels.png"), screenshot)
 
     await page.evaluate(() => {
       const input = document.querySelector(
