@@ -255,10 +255,18 @@ describe("executor settings", () => {
     expect(body.metadata?.promptProfile).toBeUndefined()
   })
 
-  test("prompt profile selector preserves the active value when catalog options load", () => {
+  test("prompt profile selector delegates option rendering to Kobalte Select", () => {
     expect(CHAT_COMPOSER_SOURCE).toContain('data-ui="prompt-profile-selector"')
-    expect(CHAT_COMPOSER_SOURCE).toContain("let promptProfileSelectRef!: HTMLSelectElement")
-    expect(CHAT_COMPOSER_SOURCE).toContain("promptProfileSelectRef.value = props.promptProfileID")
+    expect(CHAT_COMPOSER_SOURCE).toContain('import * as Select from "@kobalte/core/select"')
+    expect(CHAT_COMPOSER_SOURCE).toContain("<Select.Root<PromptProfileOption>")
+    expect(CHAT_COMPOSER_SOURCE).toContain("<Select.HiddenSelect")
+    expect(CHAT_COMPOSER_SOURCE).toContain("function PromptProfileSelectOptionItem")
+    expect(CHAT_COMPOSER_SOURCE).toContain("selectedPromptProfile()?.label ?? props.promptProfileID")
+    expect(CHAT_COMPOSER_SOURCE).not.toContain("<select")
+    expect(CHAT_COMPOSER_SOURCE).not.toContain("<option")
+    expect(CHAT_COMPOSER_SOURCE).not.toContain("HTMLSelectElement")
+    expect(COMPOSER_CSS_SOURCE).not.toContain("color: transparent")
+    expect(COMPOSER_CSS_SOURCE).not.toContain("opacity: 0")
   })
 
   test("external executor tab browsing only changes local popover focus until a model is picked", () => {
