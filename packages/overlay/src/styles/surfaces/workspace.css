@@ -583,6 +583,17 @@ body[data-center-workbench-panel-resizing="true"] .center-workbench-panel-separa
   cursor: col-resize;
 }
 
+.pane-resizer:hover,
+.pane-resizer:focus-visible,
+.pane-resizer[data-active="true"] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.pane-resizer:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
+}
+
 .pane-resizer[data-disabled="true"]::after {
   cursor: default;
 }

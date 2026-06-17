@@ -1718,7 +1718,6 @@ disposers.push(
 
       const sidebar = document.getElementById("sidebar")
       const sections = document.getElementById("sections")
-      const leftResizer = document.getElementById("leftPaneResizer") as HTMLElement | null
 
       if (sidebar) {
         sidebar.dataset.collapsed = String(sidebarCollapsed)
@@ -1727,10 +1726,6 @@ disposers.push(
       if (sections) {
         sections.dataset.collapsed = "false"
         sections.hidden = false
-      }
-      if (leftResizer) {
-        leftResizer.hidden = sidebarCollapsed
-        leftResizer.dataset.disabled = String(sidebarCollapsed)
       }
 
       renderPaneLayout(
@@ -1915,6 +1910,7 @@ window.addEventListener(
 )
 const onResize = () => {
   applyZoom(settingsStore.zoom)
+  renderPaneLayout(paneCallbacks.getState(), PANEL_PANE_CONFIG)
   renderCenterWorkbenchPanelSeparators()
 }
 window.addEventListener("resize", onResize, listenerOpts)
