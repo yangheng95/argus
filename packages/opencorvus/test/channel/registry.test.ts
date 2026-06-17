@@ -39,4 +39,31 @@ describe("channel.registry", () => {
       },
     })
   })
+
+  test("does not mark project channel configured from global process env", async () => {
+    const previousBotToken = process.env.SLACK_BOT_TOKEN
+    const previousAppToken = process.env.SLACK_APP_TOKEN
+    process.env.SLACK_BOT_TOKEN = "xoxb-global"
+    process.env.SLACK_APP_TOKEN = "xapp-global"
+
+    try {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const items = await ChannelRegistry.list()
+          const slack = items.find((item) => item.id === "slack")
+
+          expect(slack?.status).toBe("missing")
+          expect(slack?.runtime_status).toBe("disabled")
+        },
+      })
+    } finally {
+      if (previousBotToken === undefined) delete process.env.SLACK_BOT_TOKEN
+      else process.env.SLACK_BOT_TOKEN = previousBotToken
+      if (previousAppToken === undefined) delete process.env.SLACK_APP_TOKEN
+      else process.env.SLACK_APP_TOKEN = previousAppToken
+    }
+  })
 })

@@ -1122,3 +1122,53 @@ LINE:
 - Added direct `jose` dependency to `@opencorvus-ai/channel-runtime`.
 - Focused tests passed: `bun test packages/channel-runtime/test/mainstream-adapters.test.ts`.
 - Typecheck passed: `bun run --cwd packages/channel-runtime typecheck`.
+
+## Batch P1-K: BH-095 managed channel runtime env isolation
+
+### Findings
+
+- BH-095 remains a P1 project-isolation and credential-residue bug: `ChannelSupervisor.desired()` read adapter credentials from global `process.env`, `startInProcess()` wrote project config credentials back into global `process.env`, and adapter registration then resolved from that same global env.
+- The old chain let Slack config A survive after the project channel config was deleted or emptied. Updating Slack A to Slack B could also keep registering A because the old `if (!process.env[key])` write refused to overwrite the stale global value.
+- `registerAdapters()` already accepted an explicit env object, so the root fix is to make managed channel runtime pass a scoped project env and to stop treating global env as a project channel config source.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/channel/supervisor.ts` owns managed runtime config resolution, runtime startup, and adapter registration.
+- `packages/channel-runtime/src/registry.ts` owns adapter env resolution through `resolveChannel()`.
+- `packages/channel-runtime/src/main.ts` is the standalone runtime entry and already passes `process.env` explicitly.
+- `packages/opencorvus/src/channel/registry.ts` owns the UI channel status list and was also using `channelState()` with the default `process.env`.
+- `packages/channel-config/src/index.ts` owns `resolveChannel()`, `channelState()`, and `channelEnv()`; those helpers remain generic, but managed callers must pass their selected source explicitly.
+
+### Fix Shape
+
+- Managed supervisor `desired()` resolves channel adapter env from `config.channel` only by calling `channelEnv(..., {})`.
+- Managed supervisor `startInProcess()` no longer writes project channel credentials into global `process.env`.
+- Managed supervisor adapter registration calls `registerAdapters(runtime, env, factories)` with the scoped config env.
+- `registerAdapters()` no longer defaults to `process.env`; every caller must choose an env source explicitly. The standalone runtime remains the explicit `process.env` caller.
+- `ChannelRegistry.list()` renders project channel status from config-only env so global Slack tokens do not make an empty project look configured.
+- No stop-time env cleanup, overwrite-on-start patch, compatibility fallback, or hidden gate is added.
+
+### Regression Tests
+
+- `packages/opencorvus/test/channel/supervisor-env.test.ts` covers global Slack env ignored by managed sync, Slack A -> empty config becoming disabled with no env residue, and Slack A -> Slack B registering B.
+- `packages/opencorvus/test/channel/registry.test.ts` covers global Slack env not marking an empty project channel as configured.
+- `packages/channel-runtime/test/registry.test.ts` covers explicit empty env not consulting `process.env`.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/channel/supervisor-env.test.ts packages/opencorvus/test/channel/registry.test.ts packages/channel-runtime/test/registry.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus --filter=@opencorvus-ai/channel-runtime`
+
+### Independent Review Feedback
+
+- Ramanujan confirmed that removing only the global env write would be insufficient because `desired()` and `ChannelRegistry.list()` also used default global env sources.
+- Ramanujan specifically rejected stop-time cleanup, overwrite patches, and gates, and recommended config-only managed env plus explicit standalone env selection.
+
+### Result
+
+- Implemented on 2026-06-17.
+- Managed channel supervisor now resolves channel adapter env from project config only, never writes project channel credentials into global `process.env`, and registers adapters from the scoped env object.
+- `registerAdapters()` now requires an explicit env parameter; standalone runtime remains the explicit `process.env` caller.
+- Channel registry UI status now evaluates project channel config without reading global channel env.
+- Focused tests passed: `bun test packages/opencorvus/test/channel/supervisor-env.test.ts packages/opencorvus/test/channel/registry.test.ts packages/channel-runtime/test/registry.test.ts`.
+- Package typecheck passed: `bunx turbo run typecheck --filter=opencorvus --filter=@opencorvus-ai/channel-runtime`.

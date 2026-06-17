@@ -45,6 +45,26 @@ function factory() {
 }
 
 describe("channel registry", () => {
+  test("does not read process env when caller supplies an empty env", () => {
+    const previousBotToken = process.env.SLACK_BOT_TOKEN
+    const previousAppToken = process.env.SLACK_APP_TOKEN
+    process.env.SLACK_BOT_TOKEN = "xoxb-global"
+    process.env.SLACK_APP_TOKEN = "xapp-global"
+    try {
+      const app = runtime()
+      const result = registerAdapters(app, {}, factory())
+
+      expect(result.names).toEqual([])
+      expect(result.warns).toEqual([])
+      expect(app.list).toHaveLength(0)
+    } finally {
+      if (previousBotToken === undefined) delete process.env.SLACK_BOT_TOKEN
+      else process.env.SLACK_BOT_TOKEN = previousBotToken
+      if (previousAppToken === undefined) delete process.env.SLACK_APP_TOKEN
+      else process.env.SLACK_APP_TOKEN = previousAppToken
+    }
+  })
+
   test("registers slack, telegram, discord and feishu from standard env keys", () => {
     const app = runtime()
     const result = registerAdapters(

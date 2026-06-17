@@ -96,7 +96,7 @@ function desired(config?: Record<string, unknown>) {
   const channels: string[] = []
 
   for (const item of ChannelCatalog) {
-    const next = channelEnv(item.id, channel[item.id], process.env)
+    const next = channelEnv(item.id, channel[item.id], {})
     if (!next) continue
     Object.assign(env, next)
     channels.push(item.id)
@@ -160,11 +160,6 @@ async function stop(current: State) {
 }
 
 async function startInProcess(env: Record<string, string>, current: State): Promise<InProcessRuntime> {
-  // Apply channel env vars to current process (don't overwrite existing)
-  for (const [key, value] of Object.entries(env)) {
-    if (!process.env[key]) process.env[key] = value
-  }
-
   // Dynamic import to avoid loading channel-runtime when not needed
   const { ChannelRuntime } = await import("../../../channel-runtime/src/core")
   const { registerAdapters, ADAPTER_HINT } = await import("../../../channel-runtime/src/registry")
@@ -224,7 +219,7 @@ async function startInProcess(env: Record<string, string>, current: State): Prom
   }
 
   // Register adapters
-  const adapters = registerAdapters(runtime, process.env, {
+  const adapters = registerAdapters(runtime, env, {
     slack: (opts: any) => new SlackAdapter(opts),
     telegram: (opts: any) => new TelegramAdapter(opts),
     discord: (opts: any) => new DiscordAdapter(opts),
