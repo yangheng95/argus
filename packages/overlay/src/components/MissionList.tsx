@@ -210,8 +210,6 @@ function MissionRow(props: {
   return (
     <div class="mission-row-shell" data-ui="mission-row-shell" data-mission-id={props.mission.missionID}>
       <div
-        role="button"
-        tabindex={0}
         class="task-row-mini global-task-row mission-row"
         data-ui="mission-row"
         data-mission-id={props.mission.missionID}
@@ -219,16 +217,6 @@ function MissionRow(props: {
         data-active={props.selected ? "true" : undefined}
         data-copied={debugCopied() ? "true" : undefined}
         title={debugCopied() ? t("common.copied") : missionRowTip(props.mission)}
-        onClick={() => {
-          if (editing()) return
-          props.onSelectMission(props.mission)
-        }}
-        onKeyDown={(event) => {
-          if (event.target !== event.currentTarget) return
-          if (event.key !== "Enter" && event.key !== " ") return
-          event.preventDefault()
-          if (!editing()) props.onSelectMission(props.mission)
-        }}
         onDblClick={(event) => {
           event.stopPropagation()
           event.preventDefault()
