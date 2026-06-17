@@ -64,6 +64,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
       switch (hunk.type) {
         case "add": {
+          await Patch.assertAddFileTargetDoesNotExist(filePath)
+
           const oldContent = ""
           const newContent =
             hunk.contents.length === 0 || hunk.contents.endsWith("\n") ? hunk.contents : `${hunk.contents}\n`
@@ -195,7 +197,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         case "add":
           // Create parent directories (recursive: true is safe on existing/root dirs)
           await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-          await fs.writeFile(change.filePath, change.newContent, "utf-8")
+          await fs.writeFile(change.filePath, change.newContent, { encoding: "utf-8", flag: "wx" })
           updates.push({ file: change.filePath, event: "add" })
           break
 
