@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
 import { closeImagePreview, imagePreviewState, openImagePreview } from "../services/image-preview"
 import {
   calculateImagePreviewFitScale,
@@ -12,6 +12,19 @@ import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
 
 const SCALE_STEP = 0.25
+const IMAGE_COPY_SUCCESS_MESSAGE = "Copied"
+const IMAGE_COPY_LOADING_MESSAGE = "Copy failed: image loading"
+const IMAGE_COPY_CLIPBOARD_UNAVAILABLE_MESSAGE = "Copy failed: clipboard unavailable"
+const IMAGE_COPY_SOURCE_MESSAGE = "Copy failed: source bytes unavailable"
+const IMAGE_COPY_FORMAT_MESSAGE = "Copy failed: PNG source required"
+const IMAGE_COPY_BLOCKED_MESSAGE = "Copy failed: clipboard blocked"
+
+type CopyFeedback = {
+  tone: "success" | "error"
+  message: string
+}
+
+class ImageCopyError extends Error {}
 
 export function PreviewableImage(props: { src: string; alt?: string; triggerClass?: string; imageClass?: string }) {
   const alt = () => props.alt || ""
@@ -40,6 +53,7 @@ export function ImagePreviewHost() {
   const [scale, setScale] = createSignal(1)
   const [imageSize, setImageSize] = createSignal<ImagePreviewSize>({ width: 0, height: 0 })
   const [copyInFlight, setCopyInFlight] = createSignal(false)
+  const [copyFeedback, setCopyFeedback] = createSignal<CopyFeedback | null>(null)
   const [panStart, setPanStart] = createSignal<{
     pointerID: number
     x: number
@@ -57,6 +71,7 @@ export function ImagePreviewHost() {
     setScale(1)
     setImageSize({ width: 0, height: 0 })
     setCopyInFlight(false)
+    setCopyFeedback(null)
     setPanStart(null)
     queueMicrotask(() => {
       if (imageRef?.complete) measureLoadedImage(imageRef)
@@ -177,45 +192,47 @@ export function ImagePreviewHost() {
     applyScale(scale() + delta)
   }
 
-  async function fetchPreviewImageBlob(): Promise<Blob | undefined> {
+  async function fetchPreviewImageBlob(): Promise<Blob> {
     const src = imagePreviewState().src
-    if (!src) return undefined
-    const response = await fetch(src)
-    if (!response.ok) throw new Error(`Image copy failed: fetch returned ${response.status}`)
-    const blob = await response.blob()
-    if (blob.type === "image/png") return blob
-    return undefined
+    if (!src) throw new ImageCopyError(IMAGE_COPY_SOURCE_MESSAGE)
+    let response: Response
+    try {
+      response = await fetch(src)
+    } catch {
+      throw new ImageCopyError(IMAGE_COPY_SOURCE_MESSAGE)
+    }
+    if (!response.ok) throw new ImageCopyError(IMAGE_COPY_SOURCE_MESSAGE)
+    const blob = await response.blob().catch(() => {
+      throw new ImageCopyError(IMAGE_COPY_SOURCE_MESSAGE)
+    })
+    if (blob.type.toLowerCase() !== "image/png") throw new ImageCopyError(IMAGE_COPY_FORMAT_MESSAGE)
+    return blob
   }
 
-  async function canvasPreviewImageBlob(image: HTMLImageElement): Promise<Blob> {
-    const canvas = document.createElement("canvas")
-    canvas.width = image.naturalWidth || image.width
-    canvas.height = image.naturalHeight || image.height
-    const context = canvas.getContext("2d")
-    if (!context) throw new Error("Image copy failed: canvas context unavailable")
-    context.drawImage(image, 0, 0)
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((nextBlob) => {
-        if (!nextBlob) {
-          reject(new Error("Image copy failed: canvas blob unavailable"))
-          return
-        }
-        resolve(nextBlob)
-      }, "image/png")
-    })
+  function copyErrorMessage(error: unknown): string {
+    return error instanceof ImageCopyError ? error.message : IMAGE_COPY_BLOCKED_MESSAGE
   }
 
   async function copyPreviewImage(): Promise<void> {
     const image = imageRef
     const clipboardWrite = navigator.clipboard?.write
-    if (!image || !image.complete || imageSize().width <= 0 || imageSize().height <= 0 || !clipboardWrite) return
+    setCopyFeedback(null)
+    if (!image || !image.complete || imageSize().width <= 0 || imageSize().height <= 0) {
+      setCopyFeedback({ tone: "error", message: IMAGE_COPY_LOADING_MESSAGE })
+      return
+    }
+    if (!clipboardWrite || typeof ClipboardItem === "undefined") {
+      setCopyFeedback({ tone: "error", message: IMAGE_COPY_CLIPBOARD_UNAVAILABLE_MESSAGE })
+      return
+    }
 
     setCopyInFlight(true)
     try {
-      const blob = (await fetchPreviewImageBlob().catch(() => undefined)) ?? (await canvasPreviewImageBlob(image))
+      const blob = await fetchPreviewImageBlob()
       await clipboardWrite.call(navigator.clipboard, [new ClipboardItem({ "image/png": blob })])
+      setCopyFeedback({ tone: "success", message: IMAGE_COPY_SUCCESS_MESSAGE })
     } catch (error) {
-      console.error("[image-preview] copy image failed", error)
+      setCopyFeedback({ tone: "error", message: copyErrorMessage(error) })
     } finally {
       setCopyInFlight(false)
     }
@@ -349,6 +366,18 @@ export function ImagePreviewHost() {
           >
             <Icon name="copy" size={13} />
           </Button>
+          <Show when={copyFeedback()}>
+            {(feedback) => (
+              <span
+                class="image-preview-dialog__copy-status"
+                data-status={feedback().tone}
+                role={feedback().tone === "error" ? "alert" : "status"}
+                aria-live={feedback().tone === "error" ? "assertive" : "polite"}
+              >
+                {feedback().message}
+              </span>
+            )}
+          </Show>
           <Button
             type="button"
             variant="ghost"
