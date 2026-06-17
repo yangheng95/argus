@@ -917,60 +917,6 @@
     color-mix(in srgb, var(--surface) 92%, var(--surface-inset) 8%);
 }
 
-/* Eval error card — semantic error chrome that surfaces evaluator
-   failures inside the right panel. Background routes through
-   color-mix on var(--bad) (was raw rgba on a slightly different red;
-   the design language wants --bad consistently). */
-.eval-error {
-  margin-top: calc(4px * var(--ui-scale));
-  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border: 0;
-  border-radius: var(--oc-radius-soft);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bad) 16%, transparent),
-    color-mix(in srgb, var(--bad) 8%, transparent)
-  );
-  box-shadow: none;
-}
-
-.eval-error-name {
-  font-size: var(--ui-font-title);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--bad);
-}
-
-.eval-error-meta {
-  margin-top: calc(1px * var(--ui-scale));
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-}
-
-.eval-error-detail {
-  margin-top: calc(2px * var(--ui-scale));
-  font-size: var(--ui-font-body);
-  color: var(--text);
-  font-family: var(--mono);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: calc(60px * var(--ui-scale));
-  overflow: auto;
-  line-height: 1.4;
-}
-
-.eval-error + .eval-error {
-  margin-top: calc(3px * var(--ui-scale));
-}
-
-.eval-summary {
-  font-size: var(--ui-font-title);
-  color: var(--text);
-  margin-top: calc(4px * var(--ui-scale));
-  line-height: 1.4;
-}
-
 /* Acceptance panel — verdict card with a left-rail accent stripe.
    Tone is driven by the data-verdict attribute (`accepted` →
    --good, `rejected` → --bad, `inflight` → --accent, `empty` →
@@ -3016,8 +2962,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 /* Inspector ("sections" container) bounds the height of the
  * narrative blocks the operator scrolls through (plan summary,
- * overview, overview-next-step, goal desc, change-path,
- * eval summary + error-detail). Each card scrolls vertically
+ * overview, overview-next-step, goal desc, change-path). Each card scrolls vertically
  * inside the rail without pushing the rail itself off-screen. The
  * 112px ceiling is a density choice for the rail-vs-content split
  * — same value pre-extraction, just owned by the inspector
@@ -3026,9 +2971,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .sections .overview-summary,
 .sections .overview-next-step,
 .sections .goal-desc,
-.sections .change-path,
-.sections .eval-summary,
-.sections .eval-error-detail {
+.sections .change-path {
   max-height: calc(112px * var(--ui-scale));
   overflow: auto;
   overscroll-behavior: contain;

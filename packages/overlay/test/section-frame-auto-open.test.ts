@@ -48,7 +48,7 @@ test("SectionFrame uses createEffect to re-open on phaseState transitions", asyn
   // The effect must read props.phaseState (so Solid tracks it) AND only
   // open — never close. The bug-class regression is "effect force-closes
   // when phase moves on, hiding the section the user is actively reading".
-  const effectMatch = board.match(/createEffect\(\(\) => \{[\s\S]*?\}\);/)
+  const effectMatch = board.match(/createEffect\(\(\) => \{[\s\S]*?\n\s*\}\)/)
   expect(effectMatch, "createEffect block must exist in SectionFrame").toBeTruthy()
   const effect = effectMatch?.[0] ?? ""
   expect(effect).toContain('props.phaseState === "active"')

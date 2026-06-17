@@ -11,12 +11,10 @@
 // vs OBJECTIVE/ACCEPTANCE CRITERIA in caps inside the same card.
 //
 // This test pins the tier-2 contract:
-//   - .gwg-objective-label, .gwg-done-definition-label, .criteria-family-head
-//     are tier-2 SECTION SUBTITLES — they MUST NOT carry text-transform:
-//     uppercase. They share the typography of "Goals" / "Files" so the
-//     reader sees a single hierarchy.
-//   - The EvaluationCriteriaPanel family label must be returned in
-//     Title Case from the panel itself, not relying on CSS to fake it.
+//   - .gwg-objective-label and .gwg-done-definition-label are tier-2 SECTION
+//     SUBTITLES — they MUST NOT carry text-transform: uppercase. They share
+//     the typography of "Goals" / "Files" so the reader sees a single
+//     hierarchy.
 //
 // If a future change reintroduces uppercase on these classes, this test
 // fails immediately so the regression is caught before the visual review.
@@ -24,8 +22,6 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
-
-import { familyLabel as __familyLabelForTest } from "../src/utils/criteria"
 
 const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
 
@@ -70,35 +66,11 @@ describe("right panel tier-2 section subtitles avoid tier-3 pill styling", () =>
     const body = blockFor(".gwg-done-definition-label")
     expect(body).not.toContain("text-transform: uppercase")
   })
-
-  test(".criteria-family-head is rendered as a section subtitle, not a pill", () => {
-    const body = blockFor(".criteria-family-head")
-    expect(body).not.toContain("text-transform: uppercase")
-  })
 })
 
 describe("tier-3 status pills keep their pill styling (negative control)", () => {
   test(".verdict-pill remains uppercase (verdict EMPTY/ACCEPTED/REJECTED)", () => {
     const body = blockFor(".verdict-pill")
     expect(body).toContain("text-transform: uppercase")
-  })
-})
-
-describe("EvaluationCriteriaPanel family label is Title Case in the panel itself", () => {
-  test("known families use friendly Title Case labels", () => {
-    expect(__familyLabelForTest("command")).toBe("Command")
-    expect(__familyLabelForTest("runtime")).toBe("Runtime")
-    expect(__familyLabelForTest("artifact")).toBe("Artifact")
-    expect(__familyLabelForTest("review")).toBe("Review")
-    expect(__familyLabelForTest("acceptance")).toBe("Acceptance")
-    expect(__familyLabelForTest("custom")).toBe("Custom")
-    expect(__familyLabelForTest("other")).toBe("Other")
-  })
-
-  test("unknown family is title-cased letter-by-letter (not relying on CSS)", () => {
-    expect(__familyLabelForTest("ad-hoc")).toBe("Ad-hoc")
-    expect(__familyLabelForTest("DATABASE")).toBe("Database")
-    expect(__familyLabelForTest("")).toBe("Other")
-    expect(__familyLabelForTest(undefined)).toBe("Other")
   })
 })

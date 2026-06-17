@@ -92,13 +92,7 @@ function relatePhase(kind: string, related: string[], board: any, goals: any[], 
     if (changesCount > 0) related.push("files")
     return
   }
-  if (kind === "evaluation") {
-    if (goals.length > 0) related.push("goals")
-    if (changesCount > 0) related.push("files")
-    return
-  }
   if (kind === "files") {
-    if (board?.evaluation) related.push("evaluation")
     if (goals.length > 0) related.push("goals")
     return
   }
@@ -158,11 +152,7 @@ export function syncSectionPhases(board: any, changesCount = 0): void {
 
   // New "active" status: infer the best section from available board data
   if (board?.task && active.length === 0 && taskStatus === "active") {
-    if (board.evaluation) {
-      active.push("evaluation")
-      if (goals.length > 0) related.push("goals")
-      if (changesCount > 0) related.push("files")
-    } else if (board.acceptance) {
+    if (board.acceptance) {
       active.push("acceptance")
       if (changesCount > 0) related.push("files")
       if (goals.length > 0) related.push("goals")
@@ -180,14 +170,14 @@ export function syncSectionPhases(board: any, changesCount = 0): void {
   }
 
   if (board?.task && active.length === 0 && board.task.status === "completed") {
-    active.push(board.acceptance ? "acceptance" : changesCount > 0 ? "files" : "evaluation")
+    if (board.acceptance) active.push("acceptance")
+    else if (changesCount > 0) active.push("files")
     if (board.acceptance && changesCount > 0) related.push("files")
-    if (board.evaluation) related.push("evaluation")
     if (goals.length > 0) related.push("goals")
   }
 
   if (board?.task && active.length === 0 && board.task.status === "failed") {
-    active.push(board.evaluation ? "evaluation" : board.plan ? "plan" : "spec")
+    active.push(board.plan ? "plan" : "spec")
     if (board.plan) related.push("plan")
     if (goals.length > 0) related.push("goals")
   }

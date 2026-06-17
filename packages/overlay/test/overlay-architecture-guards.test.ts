@@ -1661,8 +1661,11 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const domSource = readText(join(OVERLAY_ROOT, "src/dom.ts"))
     const sectionSource = readText(join(OVERLAY_ROOT, "src/utils/section.ts"))
+    const boardSource = readText(join(OVERLAY_ROOT, "src/components/Board.tsx"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const messagesSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/messages.css"))
+    const fieldSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/field.css"))
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
 
     for (const className of [
       "criteria-group",
@@ -1671,6 +1674,7 @@ describe("overlay architecture guards", () => {
       "criteria-group-title",
       "criteria-group-count",
       "criteria-group-list",
+      "criteria-list",
       "criteria-grid",
       "criteria-check",
       "criteria-result",
@@ -1689,6 +1693,13 @@ describe("overlay architecture guards", () => {
     expect(domSource).not.toContain("#criteriaBadge")
     expect(domSource).not.toContain("#criteriaList")
     expect(sectionSource).not.toContain("evaluation: dom.criteriaSection")
+    expect(fieldSurface).not.toContain(".criteria-list")
+    expect(conversationSurface).not.toContain(".criteria-list")
+    expect(boardSource).not.toContain("EvaluationCriteriaPanel")
+    expect(boardSource).not.toContain("criteriaResults")
+    expect(boardSource).not.toContain("evaluationCriteriaSection")
+    expect(existsSync(join(OVERLAY_ROOT, "src/components/EvaluationCriteriaPanel.tsx"))).toBe(false)
+    expect(existsSync(join(OVERLAY_ROOT, "src/utils/criteria.ts"))).toBe(false)
   })
 
   test("acceptance panel chrome is owned by surfaces/inspector.css", () => {
@@ -1709,18 +1720,30 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/#63a2ff/)
   })
 
-  test("eval error + summary chrome is owned by surfaces/inspector.css", () => {
+  test("retired eval shell DOM and CSS selectors stay removed", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
+    const domSource = readText(join(OVERLAY_ROOT, "src/dom.ts"))
+    const sectionSource = readText(join(OVERLAY_ROOT, "src/utils/section.ts"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+    const messagesSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/messages.css"))
+    const fieldSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/field.css"))
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
 
     for (const className of ["eval-error", "eval-error-name", "eval-error-meta", "eval-error-detail", "eval-summary"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,)`))
+      expect(messagesSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,)`))
     }
 
-    expect(inspectorSurface).toMatch(/\.eval-error \+ \.eval-error\s*\{/)
-    expect(inspectorSurface).not.toMatch(/rgba\(224,\s*106,\s*99/)
-    expect(inspectorSurface).toContain("color-mix(in srgb, var(--bad)")
+    expect(domSource).not.toContain("evalBody")
+    expect(domSource).not.toContain("#evalBody")
+    expect(fieldSurface).not.toContain("#evalBody")
+    expect(conversationSurface).not.toContain("#evalBody")
+    expect(sectionSource).not.toContain('kind === "evaluation"')
+    expect(sectionSource).not.toContain('active.push("evaluation")')
+    expect(sectionSource).not.toContain('related.push("evaluation")')
+    expect(inspectorSurface).toMatch(/\.gwg-eval-summary\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg-eval-summary \.msg-text/)
   })
 
   test("section phase-state variants are owned by surfaces/inspector.css", () => {
@@ -2140,7 +2163,7 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/\.acceptance-panel\s*\{[^}]*border-left\s*:/)
   })
 
-  test("evaluation errors keep semantic error chrome outside theme resets", () => {
+  test("retired evaluation error chrome stays removed from theme resets", () => {
     const styles = readLegacyStylesCss("src/styles.css")
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
@@ -2152,11 +2175,8 @@ describe("overlay architecture guards", () => {
       expect(selector).not.toMatch(/eval-error/)
     }
 
-    const evalErrorBody = inspectorSurface.match(/\.eval-error\s*\{([^}]*)\}/)?.[1] ?? ""
-    expect(evalErrorBody).toContain("background:")
-    expect(evalErrorBody).toContain("linear-gradient")
-    expect(evalErrorBody).toContain("color-mix(in srgb, var(--bad)")
-    expect(evalErrorBody).toContain("border: 0")
+    expect(inspectorSurface).not.toMatch(/\.eval-error(?:\s|\.|:|\{|,)/)
+    expect(inspectorSurface).toMatch(/\.gwg-eval-summary\s*\{/)
   })
 
   test("settings document/detail cards do not rely on theme chrome resets", () => {
