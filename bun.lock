@@ -46,6 +46,7 @@
         "@slack/bolt": "4.6.0",
         "discord.js": "14.23.2",
         "grammy": "1.40.1",
+        "jose": "6.2.2",
       },
       "devDependencies": {
         "@types/bun": "catalog:",

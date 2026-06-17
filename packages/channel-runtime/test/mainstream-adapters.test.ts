@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { createHmac, generateKeyPairSync, sign, type KeyObject } from "node:crypto"
+import { createHmac, generateKeyPairSync, sign, type JsonWebKey, type KeyObject } from "node:crypto"
 import { WhatsappAdapter } from "../src/adapters/whatsapp"
 import { GoogleChatAdapter } from "../src/adapters/googlechat"
 import { MSTeamsAdapter } from "../src/adapters/msteams"
@@ -78,6 +78,79 @@ function whatsappSignedRequest(body: unknown, appSecret: string, signature?: str
     },
     body: raw,
   })
+}
+
+function b64url(raw: Buffer | string) {
+  const source: Buffer = typeof raw === "string" ? Buffer.from(raw) : raw
+  return source.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
+}
+
+function jwtSegment(raw: unknown) {
+  return b64url(JSON.stringify(raw))
+}
+
+function msTeamsAuthFixture(appId: string, serviceUrl = "https://smba.trafficmanager.net/emea") {
+  const pair = generateKeyPairSync("rsa", { modulusLength: 2048 })
+  const kid = "ms-key-1"
+  const publicJwk = pair.publicKey.export({ format: "jwk" }) as JsonWebKey & {
+    kid?: string
+    use?: string
+    alg?: string
+    endorsements?: string[]
+  }
+  publicJwk.kid = kid
+  publicJwk.use = "sig"
+  publicJwk.alg = "RS256"
+  publicJwk.endorsements = ["msteams"]
+
+  const auth = (
+    overrides: { audience?: string; serviceUrl?: string; issuer?: string; expiresIn?: number; privateKey?: KeyObject } = {},
+  ) => {
+    const now = Math.floor(Date.now() / 1000)
+    const header = jwtSegment({ alg: "RS256", typ: "JWT", kid })
+    const payload = jwtSegment({
+      iss: overrides.issuer ?? "https://api.botframework.com",
+      aud: overrides.audience ?? appId,
+      iat: now,
+      nbf: now - 60,
+      exp: now + (overrides.expiresIn ?? 3600),
+      serviceUrl: overrides.serviceUrl ?? serviceUrl,
+    })
+    const input = `${header}.${payload}`
+    const signature = sign("RSA-SHA256", Buffer.from(input), overrides.privateKey ?? pair.privateKey)
+    return `Bearer ${input}.${b64url(signature)}`
+  }
+
+  return {
+    publicJwk,
+    auth,
+  }
+}
+
+function withoutEndorsements(jwk: JsonWebKey) {
+  const clone = { ...(jwk as Record<string, unknown>) }
+  delete clone.endorsements
+  return clone as JsonWebKey
+}
+
+function msTeamsFetch(publicJwk: JsonWebKey, calls: string[]) {
+  return (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    calls.push(url)
+    if (url.includes(".well-known/openidconfiguration")) {
+      return Response.json({
+        issuer: "https://api.botframework.com",
+        jwks_uri: "https://login.botframework.com/keys",
+      })
+    }
+    if (url === "https://login.botframework.com/keys") {
+      return Response.json({ keys: [publicJwk] })
+    }
+    if (url.includes("oauth2/v2.0/token")) {
+      return Response.json({ access_token: "ms_token", expires_in: 3600 })
+    }
+    return Response.json({ id: "reply-1" })
+  }) as typeof globalThis.fetch
 }
 
 let oldFetch: typeof globalThis.fetch
@@ -309,6 +382,9 @@ describe("mainstream adapters", () => {
 
   test("msteams maps inbound and can reply", async () => {
     const s = stub()
+    const fixture = msTeamsAuthFixture("bot-app")
+    const calls: string[] = []
+    globalThis.fetch = msTeamsFetch(fixture.publicJwk, calls)
     const adapter = new MSTeamsAdapter({
       appId: "bot-app",
       appSecret: "bot-secret",
@@ -322,9 +398,13 @@ describe("mainstream adapters", () => {
     await s.route()(
       new Request("http://127.0.0.1:19999/msteams", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: fixture.auth(),
+        },
         body: JSON.stringify({
           type: "message",
+          channelId: "msteams",
           id: "m-1",
           text: "hello",
           serviceUrl: "https://smba.trafficmanager.net/emea",
@@ -342,18 +422,149 @@ describe("mainstream adapters", () => {
       text: "hello",
     })
 
-    const calls: string[] = []
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
-      const url = String(input)
-      calls.push(url)
-      if (url.includes("oauth2/v2.0/token")) {
-        return Response.json({ access_token: "ms_token", expires_in: 3600 })
-      }
-      return Response.json({ id: "reply-1" })
-    }) as typeof globalThis.fetch
     await adapter.sendMessage("conv-1", "m-1", "done")
+    expect(calls.some((item) => item.includes(".well-known/openidconfiguration"))).toBe(true)
+    expect(calls.some((item) => item.includes("login.botframework.com/keys"))).toBe(true)
     expect(calls.some((item) => item.includes("oauth2/v2.0/token"))).toBe(true)
     expect(calls.some((item) => item.includes("/v3/conversations/conv-1/activities"))).toBe(true)
+  })
+
+  test("msteams rejects unauthenticated or mismatched activities before session persistence", async () => {
+    const s = stub()
+    const fixture = msTeamsAuthFixture("bot-app")
+    const other = msTeamsAuthFixture("bot-app")
+    const calls: string[] = []
+    globalThis.fetch = msTeamsFetch(fixture.publicJwk, calls)
+    const adapter = new MSTeamsAdapter({
+      appId: "bot-app",
+      appSecret: "bot-secret",
+      serve: s.serve,
+    })
+    const seen: Array<any> = []
+    adapter.onMessage(async (msg) => {
+      seen.push(msg)
+    })
+    await adapter.start()
+
+    const body = {
+      type: "message",
+      channelId: "msteams",
+      id: "m-1",
+      text: "hello",
+      serviceUrl: "https://smba.trafficmanager.net/emea",
+      conversation: { id: "conv-1" },
+      from: { id: "user-1" },
+    }
+    const unsigned = await s.route()(
+      new Request("http://127.0.0.1:19999/msteams", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    )
+    const wrongSignature = await s.route()(
+      new Request("http://127.0.0.1:19999/msteams", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: other.auth(),
+        },
+        body: JSON.stringify(body),
+      }),
+    )
+    const wrongAudience = await s.route()(
+      new Request("http://127.0.0.1:19999/msteams", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: fixture.auth({ audience: "other-app" }),
+        },
+        body: JSON.stringify(body),
+      }),
+    )
+    const wrongIssuer = await s.route()(
+      new Request("http://127.0.0.1:19999/msteams", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: fixture.auth({ issuer: "https://evil.example" }),
+        },
+        body: JSON.stringify(body),
+      }),
+    )
+    const expired = await s.route()(
+      new Request("http://127.0.0.1:19999/msteams", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: fixture.auth({ expiresIn: -900 }),
+        },
+        body: JSON.stringify(body),
+      }),
+    )
+    const mismatchedService = await s.route()(
+      new Request("http://127.0.0.1:19999/msteams", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: fixture.auth({ serviceUrl: "https://smba.trafficmanager.net/emea" }),
+        },
+        body: JSON.stringify({
+          ...body,
+          serviceUrl: "https://attacker.example",
+        }),
+      }),
+    )
+    const wrongChannel = await s.route()(
+      new Request("http://127.0.0.1:19999/msteams", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: fixture.auth(),
+        },
+        body: JSON.stringify({
+          ...body,
+          channelId: "webchat",
+        }),
+      }),
+    )
+
+    expect(unsigned.status).toBe(401)
+    expect(wrongSignature.status).toBe(401)
+    expect(wrongAudience.status).toBe(401)
+    expect(wrongIssuer.status).toBe(401)
+    expect(expired.status).toBe(401)
+    expect(mismatchedService.status).toBe(401)
+    expect(wrongChannel.status).toBe(401)
+    expect(seen).toHaveLength(0)
+    await expect(adapter.sendMessage("conv-1", "m-1", "done")).rejects.toThrow(
+      "MS Teams channel not initialized: conv-1",
+    )
+
+    const unendorsed = msTeamsAuthFixture("bot-app")
+    const unendorsedStub = stub()
+    globalThis.fetch = msTeamsFetch(withoutEndorsements(unendorsed.publicJwk), calls)
+    const unendorsedAdapter = new MSTeamsAdapter({
+      appId: "bot-app",
+      appSecret: "bot-secret",
+      serve: unendorsedStub.serve,
+    })
+    unendorsedAdapter.onMessage(async (msg) => {
+      seen.push(msg)
+    })
+    await unendorsedAdapter.start()
+    const missingEndorsement = await unendorsedStub.route()(
+      new Request("http://127.0.0.1:19999/msteams", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: unendorsed.auth(),
+        },
+        body: JSON.stringify(body),
+      }),
+    )
+    expect(missingEndorsement.status).toBe(401)
+    expect(seen).toHaveLength(0)
   })
 
   test("msteams sends screenshot hero cards from a public image URL", async () => {

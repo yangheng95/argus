@@ -1071,3 +1071,54 @@ LINE:
 - Focused tests passed: `bun test packages/channel-runtime/test/mainstream-adapters.test.ts packages/channel-runtime/test/registry.test.ts`.
 - Package typechecks passed: `bun run --cwd packages/channel-runtime typecheck`, `bun run --cwd packages/channel-config typecheck`, and `bunx turbo run typecheck --filter=@opencorvus-ai/channel-runtime --filter=@opencorvus-ai/channel-config`.
 - Docs check passed: `bun run docs:check`.
+
+## Batch P0-J: BH-088 MS Teams Bot Connector activity authentication
+
+### Findings
+
+- BH-088 remains the highest-risk channel P0: `MSTeamsAdapter.route()` accepts unsigned POST activities, trusts the caller-supplied `serviceUrl`, stores it in `this.session`, and later sends the bot's Connector bearer token to that URL.
+- Microsoft Bot Connector authentication requires incoming Connector requests to carry `Authorization: Bearer <JWT>` and requires the bot to verify issuer, audience, validity window, OpenID signing key, and the JWT `serviceUrl` claim against the root activity `serviceUrl`.
+- A domain allowlist, shared local token, or optional auth bypass would not prove the Connector signed the activity and would still leave the bearer-token exfiltration path open.
+
+### Call-point Inventory
+
+- `packages/channel-runtime/src/adapters/msteams.ts` owns inbound activity parsing, session `serviceUrl` persistence, outbound replies, and token acquisition for Connector sends.
+- `packages/channel-runtime/test/mainstream-adapters.test.ts` owns current MS Teams inbound and outbound adapter coverage.
+- `packages/channel-runtime/package.json` had no direct JWT or Bot Framework dependency before this batch; the fix adds `jose` as a direct channel-runtime dependency instead of borrowing the existing transitive lock entry.
+- Official protocol source: Microsoft Learn "Authentication with the Bot Connector API", sections "Authenticate requests from the Bot Connector service to your bot" and "Verify the JWT token".
+
+### Fix Shape
+
+- Add a focused MS Teams auth helper that verifies Connector-to-bot JWTs with `jose` before route dispatch or session persistence.
+- Verification requirements: Bearer scheme, valid three-part JWT, `alg` `RS256`, issuer `https://api.botframework.com`, audience equal to configured `appId`, `nbf`/`exp` with five-minute clock skew, valid signature against `https://login.botframework.com/v1/.well-known/openidconfiguration` JWKS, and `payload.serviceUrl === activity.serviceUrl`.
+- Cache OpenID metadata/JWKS for at most 24 hours, matching Microsoft guidance that keys are stable but can be added.
+- In `MSTeamsAdapter.route()`, parse JSON first for a 400 malformed-body response, then authenticate every POST activity before checking `type`, invoking the handler, or writing `this.session`.
+- Do not add fallback unauthenticated mode, serviceUrl allowlist shortcuts, or client-configurable auth disable flags.
+
+### Regression Tests
+
+- Missing `Authorization` returns 401, does not call the handler, does not persist a session, and a later `sendMessage()` for that channel still throws "not initialized".
+- Wrong signature, wrong issuer, wrong audience, expired token, wrong `channelId`, missing `msteams` key endorsement, and `serviceUrl` claim mismatch return 401 with the same no-handler/no-session behavior.
+- A valid RS256 fixture backed by a local JWKS dispatches, writes the session, and outbound `sendMessage()` posts to the authenticated `serviceUrl`.
+- Existing screenshot hero-card send behavior remains covered through a pre-seeded authenticated session.
+
+### Verification
+
+- Focused test command: `bun test packages/channel-runtime/test/mainstream-adapters.test.ts`
+- Typecheck command: `bun run --cwd packages/channel-runtime typecheck`
+
+### Independent Review Feedback
+
+- Planck confirmed that the correct minimal repair is Bot Connector Bearer JWT/JWKS verification before any `serviceUrl` persistence.
+- Planck specifically recommended a direct `jose` dependency rather than hand-written RSA verification or transitive dependency borrowing.
+- Planck also required rejecting unauthenticated dev/emulator fallback paths, domain allowlists, decoded-but-unverified JWTs, and HMAC schemes that do not match Bot Connector inbound authentication.
+
+### Result
+
+- Implemented on 2026-06-17.
+- Added `packages/channel-runtime/src/adapters/msteams-auth.ts` using `jose` to verify Bot Connector JWTs against the official OpenID metadata and JWKS.
+- `MSTeamsAdapter.route()` now parses JSON, verifies every POST activity, and only then applies message filtering, invokes handlers, or writes `this.session`.
+- Verification enforces Bearer auth, RS256, issuer `https://api.botframework.com`, audience equal to the bot app ID, token validity, `msteams` channel ID and key endorsement, and exact JWT/activity `serviceUrl` match.
+- Added direct `jose` dependency to `@opencorvus-ai/channel-runtime`.
+- Focused tests passed: `bun test packages/channel-runtime/test/mainstream-adapters.test.ts`.
+- Typecheck passed: `bun run --cwd packages/channel-runtime typecheck`.
