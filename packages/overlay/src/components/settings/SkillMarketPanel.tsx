@@ -6,7 +6,6 @@
 // • Skill market catalog with install / open-site actions
 // All CRUD operations are self-contained — no dependency on static HTML dialogs.
 
-import * as Select from "@kobalte/core/select"
 import { createEffect, createSignal, createMemo, For, onCleanup, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -31,6 +30,7 @@ import { addMcpServer } from "../../services/mcp"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
 import { Icon, type IconName } from "../Icon"
+import { SettingsSelect, type SettingsSelectOption } from "./primitives"
 
 // ── Types ──
 
@@ -244,10 +244,7 @@ function isRemoteUrl(value: string): boolean {
 type ExtensionPanelMode = "skill" | "mcp" | "skill-market"
 const MCP_STATUS_REFRESH_INTERVAL_MS = 1_000
 
-interface FormSelectOption {
-  value: string
-  label: string
-}
+interface FormSelectOption extends SettingsSelectOption {}
 
 function PanelActionButton(props: {
   icon: IconName
@@ -277,55 +274,25 @@ function PanelActionButton(props: {
   )
 }
 
-function FormSelectOptionItem(props: Select.SelectRootItemComponentProps<FormSelectOption>): JSX.Element {
-  const option = () => props.item.rawValue
-  return (
-    <Select.Item item={props.item} class="oc-select-option settings-form-select-option" data-value={option().value}>
-      <Select.ItemLabel>{option().label}</Select.ItemLabel>
-      <Select.ItemIndicator class="oc-select-indicator">
-        <Icon name="status-completed" size={12} />
-      </Select.ItemIndicator>
-    </Select.Item>
-  )
-}
-
 function FormSelect(props: {
   value: string
   options: FormSelectOption[]
   ariaLabel: string
   onChange: (value: string) => void
 }): JSX.Element {
-  const selectedOption = () => props.options.find((option) => option.value === props.value) ?? props.options[0] ?? null
-  const setSelectedOption = (option: FormSelectOption | null) => {
-    if (!option || option.value === props.value) return
-    props.onChange(option.value)
-  }
   return (
-    <Select.Root<FormSelectOption>
+    <SettingsSelect<FormSelectOption>
       class="settings-form-select"
+      value={props.value}
       options={props.options}
-      optionValue="value"
-      optionTextValue="label"
-      value={selectedOption()}
-      onChange={setSelectedOption}
-      itemComponent={FormSelectOptionItem}
-      disallowEmptySelection
-      gutter={4}
-      sameWidth
-    >
-      <Select.Trigger class="field-input oc-select-trigger settings-form-select-trigger" aria-label={props.ariaLabel}>
-        <Select.Value<FormSelectOption>>{(state) => <span>{state.selectedOption()?.label ?? ""}</span>}</Select.Value>
-        <Select.Icon>
-          <Icon name="caret-down" size={12} />
-        </Select.Icon>
-      </Select.Trigger>
-      <Select.HiddenSelect aria-label={props.ariaLabel} />
-      <Select.Portal>
-        <Select.Content class="oc-select-content settings-form-select-content">
-          <Select.Listbox class="oc-select-listbox settings-form-select-listbox" />
-        </Select.Content>
-      </Select.Portal>
-    </Select.Root>
+      ariaLabel={props.ariaLabel}
+      onChange={props.onChange}
+      triggerClass="settings-form-select-trigger"
+      contentClass="settings-form-select-content"
+      listboxClass="settings-form-select-listbox"
+      optionClass="settings-form-select-option"
+      optionData={(option) => ({ "data-value": option.value })}
+    />
   )
 }
 

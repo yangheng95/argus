@@ -17,6 +17,8 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File | Title |
 | --- | --- |
 | [2026-06-17-prompt-profile-schema-pressure-benchmark.md](2026-06-17-prompt-profile-schema-pressure-benchmark.md) | Prompt Profile Schema Pressure Benchmark |
+| [2026-06-17-select-popup-opaque-surface.md](2026-06-17-select-popup-opaque-surface.md) | Select Popup Opaque Surface |
+| [2026-06-17-settings-select-primitive-single-source.md](2026-06-17-settings-select-primitive-single-source.md) | Settings Select Primitive Single Source |
 
 ## 2026-06-15
 

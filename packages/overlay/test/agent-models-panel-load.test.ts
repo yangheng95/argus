@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { loadAgentModelsData, requireAgentModelsDirectory } from "../src/components/settings/agent-models-data"
+import { configure as configureApi } from "../src/services/api"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import { applySettings, DEFAULT_SETTINGS, setSettingsStore } from "../src/store/settings"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
@@ -34,18 +35,24 @@ function fakeTransport(
 
 afterEach(() => {
   __setHostTransportForTest(undefined)
+  configureApi({ directory: "" })
   applySettings({ ...DEFAULT_SETTINGS })
 })
 
 describe("agent model panel data loading", () => {
-  test("model picker delegates listbox semantics to Kobalte Select", () => {
+  test("model picker delegates listbox semantics to the settings Select primitive", () => {
     const source = readText("src/components/settings/AgentModelsPanel.tsx")
 
-    expect(source).toContain('import * as Select from "@kobalte/core/select"')
-    expect(source).toContain("<Select.Root<ModelSelectOption>")
-    expect(source).toContain("<Select.Trigger")
-    expect(source).toContain("<Select.HiddenSelect")
-    expect(source).toContain("function ModelSelectOptionItem")
+    expect(source).toContain('import { SettingsSelect, type SettingsSelectOption } from "./primitives"')
+    expect(source).toContain("<SettingsSelect<ModelSelectOption>")
+    expect(source).toContain("ariaLabel={")
+    expect(source).toContain('optionClass="agent-model-select-option"')
+    expect(source).toContain('optionData={(option) => ({ "data-model-value": option.value })}')
+    expect(source).not.toContain('import * as Select from "@kobalte/core/select"')
+    expect(source).not.toContain("<Select.Root")
+    expect(source).not.toContain("<Select.Trigger")
+    expect(source).not.toContain("<Select.HiddenSelect")
+    expect(source).not.toContain("function ModelSelectOptionItem")
     expect(source).not.toContain("<select")
     expect(source).not.toContain("<option")
     expect(source).not.toContain("<optgroup")
@@ -67,6 +74,7 @@ describe("agent model panel data loading", () => {
 
   test("times out stalled provider load with the failing route preserved", async () => {
     setSettingsStore("directory", "D:/overlay/workspace/app")
+    configureApi({ directory: "D:/overlay/workspace/app" })
     __setHostTransportForTest(
       fakeTransport((req) => {
         if (req.path === "agent") {

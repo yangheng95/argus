@@ -258,6 +258,9 @@ test("prompt profile selector options remain readable on the light popup surface
       const content = document.querySelector(".prompt-profile-select-content") as HTMLElement | null
       if (!content) throw new Error("Missing prompt profile select content")
       const contentBackground = getComputedStyle(content).backgroundColor
+      const contentBackgroundParts = contentBackground.match(/rgba?\(([^)]+)\)/)?.[1].split(",") ?? []
+      const contentBackgroundAlpha =
+        contentBackgroundParts.length >= 4 ? Number.parseFloat(contentBackgroundParts[3].trim()) : 1
       const options = Array.from(document.querySelectorAll(".prompt-profile-select-option")).map((node) => {
         const option = node as HTMLElement
         const style = getComputedStyle(option)
@@ -287,11 +290,13 @@ test("prompt profile selector options remain readable on the light popup surface
           textParts,
         }
       })
-      return { rootTheme, bodyTheme, options }
+      return { rootTheme, bodyTheme, contentBackground, contentBackgroundAlpha, options }
     })
 
     assert.equal(result.rootTheme, "light")
     assert.equal(result.bodyTheme, "light")
+    assert.match(result.contentBackground, /^rgb\(/)
+    assert.equal(result.contentBackgroundAlpha, 1)
     assert.deepEqual(
       result.options.map((option) => option.label),
       [
