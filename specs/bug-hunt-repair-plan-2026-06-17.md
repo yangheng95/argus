@@ -2007,3 +2007,56 @@ LINE:
 - Epicurus confirmed the no-queue permission ask/reply path is covered by the first regression, but identified a remaining per-goal early return before interaction projection.
 - Epicurus recommended keeping all run blocking writes inside runtime/interaction/state rather than adding route, panel, or channel callers.
 - Epicurus also flagged the executor `blocked` status contract as adjacent debt: current production executors do not produce it (`ManagedCodingExecutor` excludes it and `TaskQueueStatus` has no `blocked` value). The final fix removes the unsupported executor status instead of inventing a default executor blocking reason.
+
+## Batch P1-AB: BH-029 dead-owner active tasks must not hold cwd queue ownership forever
+
+### Findings
+
+- BH-029 targets the directory queue: `claimNextForCwd(...)` treats any task with `time_started IS NOT NULL` and `time_completed IS NULL` in the same cwd as active ownership.
+- Dead-owner execution convergence exists in `engine/writer.ts::convergeDeadOwnerLiveExecution(...)`, but it only runs on server startup. A queued same-cwd task can remain blocked if queue advancement happens while an orphaned active task is still present.
+- The existing orphan model already defines the physical fact: a live goal_run with a foreign dead owner means the old owner process died and the mid-stream goal cannot resume.
+- The queue must not invent a synthetic wake or route-level bypass. The correct central fix is to converge dead-owner active tasks for that cwd before claiming the next queued task.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/queue.ts` owns cwd serialization: `claimNextForCwd(...)`, `advanceQueue(...)`, `dispatchTaskLoop(...)`, `startQueuedTaskInCwd(...)`, and `listActiveForCwd(...)`.
+- `packages/opencorvus/src/engine/writer.ts` owns live-execution terminalization for shutdown/startup: `convergeDeadOwnerLiveExecution(...)`, `abortCurrentProcessLiveExecution(...)`, `terminateTaskOwnedSessionsAndFail(...)`, `abortGoalRunsForRows(...)`, and `abortRunsForRows(...)`.
+- `packages/opencorvus/src/engine/orphan.ts` owns the owner-stamp orphan predicate used to distinguish dead-owner live goal_runs from still-live foreign owners.
+- `packages/opencorvus/src/task-api/index.ts` calls `dispatchTaskLoop(...)` after task creation, retry, operator messages, and `startQueuedTaskNow(...)`.
+- `packages/opencorvus/src/engine/runtime.ts` calls `dispatchTaskLoop(...)` when terminal goal batches settle.
+- `packages/opencorvus/src/cli/cmd/serve.ts` runs project-wide dead-owner convergence on server startup; BH-029 adds a queue-time convergence path for the same physical fact, not a second lifecycle rule.
+
+### Fix Shape
+
+- Add a writer helper that converges a caller-provided set of active tasks using the same dead-owner logic as startup convergence.
+- `advanceQueue(cwd)` should call that helper for `listActiveForCwd(cwd)` before `claimNextForCwd(cwd)`.
+- If an active task has a live owner or no dead-owner live execution facts, the helper must not mutate it and the queued sibling must remain queued.
+- If the active task is terminalized by dead-owner convergence, `advanceQueue(cwd)` can claim and start the next queued task through the existing queue path.
+- Do not make queued tasks bypass `claimNextForCwd(...)`, do not synthesize operator messages, and do not add route-specific cleanup.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/engine/queue.test.ts`.
+- Seed an active task with a live run and a dead-owner live goal_run, plus a queued same-cwd task; `advanceQueue(cwd)` must abort the dead-owner execution, mark the old task failed, and start the queued task.
+- Keep existing tests proving a live active task still blocks queued siblings.
+- Add a queue-level negative case where the active task's goal_run is owned by the current process; `advanceQueue(cwd)` must not terminalize it and the queued sibling must stay queued.
+
+### Verification
+
+- New dead-owner queue regression failed before the fix with `Expected: "failed"; Received: "active"`.
+- Queue suite passed after the fix: `bun test packages/opencorvus/test/engine/queue.test.ts --timeout 30000`.
+- Owner-orphan and shutdown convergence suites passed: `bun test packages/opencorvus/test/engine/goal-run-owner-orphan.test.ts packages/opencorvus/test/engine/shutdown-active-task-sessions.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Implemented on 2026-06-18.
+- `advanceQueue(cwd)` now first converges dead-owner active tasks in that cwd, then uses the existing `claimNextForCwd(...)` path to start queued work.
+- Startup convergence now delegates to the same task-scoped dead-owner helper, preserving a single terminalization implementation.
+- Current-process live owners are not terminalized by queue advancement, and their same-cwd queued siblings remain queued.
+
+### Independent Review Feedback
+
+- Confucius confirmed BH-029 is fixed in the dirty worktree by the queue-time convergence path.
+- Confucius identified all automatic queue advancement callers as affected and confirmed `queue=false` and `/task/:taskID/start-now` are explicit bypass/override semantics, not this bug's fix path.
+- Confucius recommended the current-process/live-owner negative regression, which was added before final verification.
