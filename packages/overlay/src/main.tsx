@@ -1579,11 +1579,13 @@ disposers.push(
         resizer.hidden = true
         resizer.dataset.disabled = "true"
       }
+      const selectedPanel = selectedRightActivity() ?? panels[panels.length - 1]
       for (const [panel, body] of Object.entries(views)) {
         const open = panels.includes(panel as CenterWorkbenchPanel)
         if (body) {
           body.dataset.open = String(open)
           body.dataset.active = String(open)
+          body.dataset.selected = String(open && panel === selectedPanel)
         }
       }
       renderCenterWorkbenchPanelWeights()
@@ -1841,6 +1843,12 @@ window.addEventListener(
 const onResize = () => {
   applyZoom(settingsStore.zoom)
   renderCenterWorkbenchWidth()
+  const panel = selectedRightActivity()
+  if (panel) {
+    requestAnimationFrame(() => {
+      getCenterWorkbenchViews()[panel]?.scrollIntoView({ block: "nearest", inline: "nearest" })
+    })
+  }
 }
 window.addEventListener("resize", onResize, listenerOpts)
 if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize, listenerOpts)

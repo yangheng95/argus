@@ -16,7 +16,7 @@ Build a repeatable visual stress benchmark for the overlay Browser Preview panel
 The benchmark must exercise the real overlay page, the task-scoped backend preview
 routes, live screenshot frames, persisted evidence, target selection, failure
 states, and input routing. If it starts an HTTP server, it must bind
-`127.0.0.1:7678`; no alternate port is allowed.
+`127.0.0.1:7778`; no alternate port is allowed.
 
 ## Input And Output
 
@@ -36,7 +36,7 @@ Output:
 - PNG screenshots under `packages/overlay/.scratch/browser-preview-visual-stress/`.
 - Request logs proving calls use `task/:taskID/browser-preview...` routes and
   target IDs instead of direct URL bodies.
-- A deterministic failure if port `7678` is unavailable.
+- A deterministic failure if port `7778` is unavailable.
 
 ## Timeout Strategy
 
@@ -51,7 +51,7 @@ startup. Node's outer test timeout remains a last-resort process guard.
 Command:
 
 ```powershell
-rg -n "latestEvidenceIDs|liveImageUrl|liveError|browser-preview-url-form|BrowserPreviewPanel|loadTaskBrowserPreviewTarget|captureTaskBrowserPreviewEvidence|loadTaskBrowserPreviewLiveSnapshotObjectUrl|sendTaskBrowserPreviewLiveInputObjectUrl|selectTaskBrowserPreviewTarget|startBrowserFixture|browser-runner|7678|OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER" packages/overlay packages/opencorvus specs -g "*.ts" -g "*.tsx" -g "*.md" -g "*.mjs"
+rg -n "latestEvidenceIDs|liveImageUrl|liveError|browser-preview-url-form|BrowserPreviewPanel|loadTaskBrowserPreviewTarget|captureTaskBrowserPreviewEvidence|loadTaskBrowserPreviewLiveSnapshotObjectUrl|sendTaskBrowserPreviewLiveInputObjectUrl|selectTaskBrowserPreviewTarget|startBrowserFixture|browser-runner|7778|OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER" packages/overlay packages/opencorvus specs -g "*.ts" -g "*.tsx" -g "*.md" -g "*.mjs"
 ```
 
 | Surface | Evidence | Decision |
@@ -63,7 +63,7 @@ rg -n "latestEvidenceIDs|liveImageUrl|liveError|browser-preview-url-form|Browser
 | Live sidecar | `packages/opencorvus/src/browser-preview/live.ts` owns Playwright live PNG frames. | Keep Node sidecar ownership; overlay only displays returned PNG object URLs. |
 | Evidence runner | `packages/opencorvus/src/browser-preview/evidence-runner.ts` owns Playwright evidence capture. | Do not create another runner in the benchmark. |
 | Browser runner | `packages/overlay/test/browser-runner.mjs` starts Node browser tests with `OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER=1`. | New benchmark must run through this Node path, not Bun Playwright. |
-| HTTP fixture | `packages/overlay/test/browser/http-fixture.ts` currently binds a random port. | Add an explicit port option and use `7678` for this benchmark only. No fallback port. |
+| HTTP fixture | `packages/overlay/test/browser/http-fixture.ts` currently binds a random port. | Add an explicit port option and use `7778` for this benchmark only. No fallback port. |
 | Existing E2E tests | `packages/overlay/test/browser/browser-preview-evidence.test.ts` covers target switch, persisted viewport evidence, live click and wheel. | Keep those tests and add broader stress coverage for visual screenshots, failure states, long text, narrow layout, key input, and stale live frame scope. |
 | Obsolete CSS | `packages/overlay/src/styles/surfaces/inspector.css` still contains `.browser-preview-url-form` and `.browser-preview-url-input`. | Record as deprecated manual URL UI residue. Delete only with explicit approval or if the current fix must touch the same contract. |
 
@@ -98,7 +98,7 @@ rg -n "latestEvidenceIDs|liveImageUrl|liveError|browser-preview-url-form|Browser
 - `node test/browser-runner.mjs test/browser/browser-preview-visual-stress.test.ts`
   passes and writes screenshots for every visual scenario.
 - Targeted source/unit tests pass for preview panel and backend route changes.
-- The benchmark uses port `7678` with no fallback.
+- The benchmark uses port `7778` with no fallback.
 - The overlay never renders iframe, manual URL entry, query override, or local
   preview source behavior for this benchmark.
 - Live screenshots are scoped to the current task, target, and viewport.
