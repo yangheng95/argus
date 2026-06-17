@@ -218,7 +218,7 @@ export function AppDialogHost() {
         >
           <Select.Trigger
             id="appDialogSelect"
-            class="field-input app-dialog-input custom-select app-dialog-select-trigger"
+            class="field-input oc-select-trigger app-dialog-input app-dialog-select-trigger"
             aria-labelledby="appDialogSelectLabel"
             ref={(el) => {
               selectRef = el

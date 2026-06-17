@@ -82,6 +82,7 @@ describe("shared Kobalte select popup colors", () => {
     "utf8",
   )
   const logViewer = readFileSync(join(import.meta.dir, "..", "src", "components", "LogViewer.tsx"), "utf8")
+  const appDialogHost = readFileSync(join(import.meta.dir, "..", "src", "components", "AppDialogHost.tsx"), "utf8")
 
   test(".oc-select content and options use readable foreground tokens", () => {
     const contentBlock = fieldCss.match(/\.oc-select-content\s*{[^}]*}/)?.[0] ?? ""
@@ -122,6 +123,11 @@ describe("shared Kobalte select popup colors", () => {
 
     expect(settingsCss).not.toContain(".log-level-select {")
     expect(settingsCss).not.toContain(".log-level-select:focus")
+  })
+
+  test("app dialog select trigger uses the shared Select trigger chrome", () => {
+    expect(appDialogHost).toContain('class="field-input oc-select-trigger app-dialog-input app-dialog-select-trigger"')
+    expect(appDialogHost).not.toContain('class="field-input app-dialog-input custom-select app-dialog-select-trigger"')
   })
 })
 
