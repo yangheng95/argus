@@ -1614,3 +1614,56 @@ LINE:
 - James confirmed the mismatch check is a fail-fast route invariant, not a compatibility path or gate.
 - James noted the first overlap regression only asserted pathname; the final test now also asserts method, query, header, and JSON body preservation for the overlapping service ID.
 - James noted URL-encoded service IDs are not explicitly covered. Current plugin service IDs are route path parameters and existing registration tests use plain IDs; encoded-ID policy should be handled as a separate contract decision rather than silently expanding this batch.
+
+## Batch P1-U: BH-067 permission deny wins before prompting
+
+### Findings
+
+- BH-067 is a P1 permission ordering bug in `packages/opencorvus/src/permission/next.ts`.
+- `PermissionNext.ask(...)` evaluated request patterns in order and returned a pending prompt as soon as one pattern resolved to `ask`.
+- For a single tool request with multiple patterns, a harmless first pattern could create a pending permission prompt before a later pattern resolved to `deny`.
+- The red regression reproduced this behavior with `patterns: ["echo hello", "rm -rf /"]`, rules `* => ask` and `rm * => deny`; the buggy implementation timed out the pending prompt with `RejectedError` instead of throwing `DeniedError`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/permission/next.ts` owns `PermissionNext.ask(...)`, pending prompt creation, `PermissionNext.list(...)`, and `PermissionNext.reply(...)`.
+- `packages/opencorvus/src/tool/bash.ts` sends multi-pattern bash permission requests from parsed shell commands and external-directory globs.
+- `packages/opencorvus/src/tool/apply_patch.ts` sends multi-file edit permission requests through the same `ctx.ask(...)` path.
+- Other tool `ctx.ask(...)` callers found by `rg -n "ctx\\.ask\\(" packages/opencorvus/src/tool` use single-pattern requests or wildcard-only tool permissions; they benefit from the central evaluator change without local edits.
+- Permission UI/API consumers (`engine/interaction.ts`, `protocol/session-mirror.ts`, `server/routes/permission.ts`, `acp/agent.ts`, `cli/cmd/run.ts`) consume pending events/lists and do not perform pattern evaluation.
+
+### Fix Shape
+
+- Keep `evaluate(...)` unchanged: it remains the single source for one `permission + pattern` decision with last-match-wins rules.
+- Change `PermissionNext.ask(...)` to evaluate every pattern in the request before creating a pending prompt.
+- If any evaluated pattern resolves to `deny`, throw `DeniedError` immediately and leave `pending` empty.
+- If no pattern denies but at least one pattern resolves to `ask`, create exactly one pending prompt for the original request.
+- Do not add tool-specific preflight rules, gates, fallback behavior, or duplicate evaluators in `bash` / `apply_patch`.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/permission/next.test.ts`.
+- Add `ask - denies later denied patterns before prompting earlier ask`.
+- The test asserts the multi-pattern request throws `PermissionNext.DeniedError` and `PermissionNext.list()` remains empty.
+- Add `ask - denies later edit file patterns before prompting earlier ask`.
+- The edit-shaped test covers multi-file permission requests such as `apply_patch`, where an earlier file can resolve to `ask` while a later file resolves to `deny`.
+
+### Verification
+
+- Red test before fix: `bun test packages/opencorvus/test/permission/next.test.ts -t "ask - denies later denied patterns before prompting earlier ask" --timeout 10000` failed with timeout-driven `RejectedError`, proving the prompt was created before the denied pattern was checked.
+- Focused regression after fix passed: `bun test packages/opencorvus/test/permission/next.test.ts -t "ask - denies later denied patterns before prompting earlier ask" --timeout 10000`.
+- Full permission test file passed: `bun test packages/opencorvus/test/permission/next.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Implemented on 2026-06-18.
+- `PermissionNext.ask(...)` now completes all pattern evaluation before creating a prompt.
+- Denied patterns in a multi-pattern request win over any earlier ask pattern and no stale pending permission prompt is emitted.
+
+### Independent Review Feedback
+
+- Hypatia independently confirmed the root cause is the early `return new Promise` inside the `request.patterns` loop, not `evaluate(...)`.
+- Hypatia identified `bash` multi-command requests and `apply_patch` multi-file edit requests as the highest-risk call shapes.
+- Hypatia recommended a central `PermissionNext.ask(...)` fix with no tool-layer branches, matching the implemented fix shape.
+- Hypatia also recommended the edit-shaped regression; the final test suite includes it.
