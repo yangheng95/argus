@@ -819,8 +819,7 @@ body[data-resizing="true"] .pane-resizer::after {
     max-height: var(--ui-collapsed-pane-width);
   }
 
-  .pane-resizer-left,
-  .pane-resizer-right {
+  .pane-resizer-left {
     display: none;
   }
 }
