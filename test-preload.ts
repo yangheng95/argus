@@ -4,6 +4,7 @@ import os from "os"
 import path from "path"
 
 const opencorvusTestRoot = path.join(os.tmpdir(), "opencorvus-root-test-data-" + process.pid)
+await fs.rm(opencorvusTestRoot, { recursive: true, force: true })
 await fs.mkdir(opencorvusTestRoot, { recursive: true })
 
 process.env["OPENCORVUS_HOME"] = path.join(opencorvusTestRoot, "portable")

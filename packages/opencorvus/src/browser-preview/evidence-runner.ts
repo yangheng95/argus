@@ -683,9 +683,11 @@ async function main() {
         await fs.mkdir(viewportDir, { recursive: true });
         const screenshotPath = path.join(viewportDir, "full.png");
         await page.screenshot({ path: screenshotPath, type: "png", fullPage: false });
+        let currentRoute = firstRoute;
         for (const binding of input.bindings.filter((item) => item.viewportID === viewportID)) {
-          if (binding.route !== firstRoute) {
+          if (binding.route !== currentRoute) {
             await page.goto(routeUrl(input.url, binding.route), { waitUntil: "networkidle", timeout: 30000 });
+            currentRoute = binding.route;
           }
           const regionScreenshotPath = path.join(viewportDir, sanitizeSegment(binding.regionID) + ".png");
           await page.screenshot({ path: regionScreenshotPath, type: "png", fullPage: false });
