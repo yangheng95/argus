@@ -322,6 +322,7 @@ describe("executor settings", () => {
     expect(CHAT_COMPOSER_SOURCE).toContain("<Select.Root<PromptProfileOption>")
     expect(CHAT_COMPOSER_SOURCE).toContain("<Select.HiddenSelect")
     expect(CHAT_COMPOSER_SOURCE).toContain("function PromptProfileSelectOptionItem")
+    expect(CHAT_COMPOSER_SOURCE).toContain('class="oc-select-option-copy prompt-profile-select-option-copy"')
     expect(CHAT_COMPOSER_SOURCE).toContain("selectedPromptProfile()?.label ?? props.promptProfileID")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<select")
     expect(CHAT_COMPOSER_SOURCE).not.toContain("<option")
