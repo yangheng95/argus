@@ -1,4 +1,4 @@
-import type { ToolSet } from "ai"
+import { tool, type ToolSet } from "ai"
 import { runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { createAgentContextTools } from "@/agent/context-tools"
@@ -6,11 +6,8 @@ import { filterAgentTools } from "@/agent/filter-tools"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { Log } from "@/util/log"
-import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
 import { BashTool } from "@/tool/bash"
-import { BrowserPreviewBindLocalModuleTool } from "@/tool/browser-preview-bind-local-module"
-import { BrowserPreviewCompareRegionsTool } from "@/tool/browser-preview-compare-regions"
 import { BrowserPreviewTool } from "@/tool/browser-preview"
 import { EditTool } from "@/tool/edit"
 import { WriteTool } from "@/tool/write"
@@ -178,8 +175,6 @@ async function createVisualQaContextTools(input: { taskID?: string; sessionID?: 
 async function createVisualQaImplementationTools(input: { taskID?: string; signal?: AbortSignal }): Promise<ToolSet> {
   const tools = {
     browser_preview: await createVisualQaTool(BrowserPreviewTool, input),
-    browser_preview_bind_local_module: await createVisualQaTool(BrowserPreviewBindLocalModuleTool, input),
-    browser_preview_compare_regions: await createVisualQaTool(BrowserPreviewCompareRegionsTool, input),
     bash: await createVisualQaTool(BashTool, input),
     edit: await createVisualQaTool(EditTool, input),
     write: await createVisualQaTool(WriteTool, input),
@@ -206,12 +201,30 @@ async function createVisualQaTool(
   input: { taskID?: string; signal?: AbortSignal },
   initCtx?: Tool.InitContext,
 ) {
-  return createAiSdkToolFromInfo({
-    info,
-    agent: "visual-qa",
-    taskID: input.taskID,
-    signal: input.signal,
-    initCtx,
+  const initialized = await info.init(initCtx)
+  return tool({
+    description: initialized.description,
+    inputSchema: initialized.parameters,
+    execute: async (args, options) => {
+      const meta = (
+        options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined
+      )?.opencorvus
+      const abort =
+        (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ??
+        input.signal ??
+        new AbortController().signal
+      return initialized.execute(args as never, {
+        sessionID: meta?.sessionID ?? "",
+        messageID: meta?.messageID ?? "",
+        callID: meta?.toolCallID,
+        agent: "visual-qa",
+        abort,
+        messages: [],
+        extra: { taskID: input.taskID },
+        metadata: () => {},
+        ask: async () => {},
+      })
+    },
   })
 }
 

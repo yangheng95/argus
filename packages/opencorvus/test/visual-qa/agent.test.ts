@@ -3,9 +3,6 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { VisualQaTestHooks } from "../../src/visual-qa"
 import { VISUAL_QA_SESSION_TOOL_IDS } from "../../src/visual-qa/static-tools"
-import { BrowserPreviewTool } from "../../src/tool/browser-preview"
-import { BrowserPreviewBindLocalModuleTool } from "../../src/tool/browser-preview-bind-local-module"
-import { BrowserPreviewCompareRegionsTool } from "../../src/tool/browser-preview-compare-regions"
 
 describe("visual-qa agent", () => {
   test("runtime tool surface matches the dedicated static contract", async () => {
@@ -26,17 +23,8 @@ describe("visual-qa agent", () => {
         expect(Object.keys(tools).sort()).toEqual([...VISUAL_QA_SESSION_TOOL_IDS].sort())
         expect(Object.keys(tools)).toContain("skill")
         expect(Object.keys(tools)).toContain("browser_preview")
-        expect(Object.keys(tools)).toContain("browser_preview_bind_local_module")
-        expect(Object.keys(tools)).toContain("browser_preview_compare_regions")
         expect(Object.keys(tools)).toContain("webpage_render")
         expect(Object.keys(tools)).not.toContain("webpage_extract")
-
-        for (const info of [BrowserPreviewTool, BrowserPreviewBindLocalModuleTool, BrowserPreviewCompareRegionsTool]) {
-          const initialized = await info.init()
-          const runtimeTool = tools[info.id] as unknown as { description?: string; inputSchema?: unknown }
-          expect(runtimeTool.description).toBe(initialized.description)
-          expect(runtimeTool.inputSchema).toBe(initialized.parameters)
-        }
       },
     })
   }, 30_000)

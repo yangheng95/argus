@@ -14,7 +14,6 @@ import {
 } from "../../src/frontend-design/tools/ids"
 import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "../../src/frontend-design/static-tools"
 import { VISUAL_QA_STATIC_TOOL_IDS } from "../../src/visual-qa/static-tools"
-import { INTEGRITY_PREVIEW_TOOL_IDS } from "../../src/integrity/static-tools"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
@@ -110,14 +109,10 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(evalPerm(visualQa, "webpage_render")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_vision_judge")).toBe("allow")
       expect(evalPerm(visualQa, "browser_preview")).toBe("allow")
-      expect(evalPerm(visualQa, "browser_preview_bind_local_module")).toBe("allow")
-      expect(evalPerm(visualQa, "browser_preview_compare_regions")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_extract")).toBe("deny")
       expect(visualQa?.tools?.include).toEqual([...VISUAL_QA_STATIC_TOOL_IDS])
       expect(visualQa?.tools?.include).not.toContain("webpage_extract")
       expect(visualQa?.tools?.include).toContain("browser_preview")
-      expect(visualQa?.tools?.include).toContain("browser_preview_bind_local_module")
-      expect(visualQa?.tools?.include).toContain("browser_preview_compare_regions")
       expect(visualQa?.tools?.include).toContain("webpage_render")
       expect(visualQa?.tools?.include).toContain("skill")
 
@@ -125,8 +120,6 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       const ids = new Set(tools.map((tool) => tool.id))
       for (const id of WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS) expect(ids.has(id)).toBe(true)
       for (const id of WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS) expect(ids.has(id)).toBe(false)
-      expect(ids.has("browser_preview_bind_local_module")).toBe(true)
-      expect(ids.has("browser_preview_compare_regions")).toBe(true)
     },
   })
 }, 30_000)
@@ -287,8 +280,6 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(orchestrator?.tools?.include).toContain("propose_task")
       expect(orchestrator?.tools?.include).toContain("add_goal")
       expect(orchestrator?.tools?.include).toContain("browser_preview")
-      expect(orchestrator?.tools?.include).not.toContain("browser_preview_bind_local_module")
-      expect(orchestrator?.tools?.include).not.toContain("browser_preview_compare_regions")
       expect(orchestrator?.tools?.include).toContain("wait")
       expect(orchestrator?.tools?.include).not.toContain("panel")
       expect(orchestrator?.tools?.include).not.toContain("task")
@@ -302,8 +293,6 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(tools.map((tool) => tool.id)).not.toContain("skill")
       expect(tools.map((tool) => tool.id)).not.toContain("task_report")
       expect(tools.map((tool) => tool.id)).not.toContain("memory")
-      expect(tools.map((tool) => tool.id)).not.toContain("browser_preview_bind_local_module")
-      expect(tools.map((tool) => tool.id)).not.toContain("browser_preview_compare_regions")
     },
   })
 })
@@ -495,8 +484,6 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(visualQa?.tools?.include).toEqual([...VISUAL_QA_STATIC_TOOL_IDS])
       expect(visualQa?.tools?.include).toContain("skill")
       expect(visualQa?.tools?.include).toContain("browser_preview")
-      expect(visualQa?.tools?.include).toContain("browser_preview_bind_local_module")
-      expect(visualQa?.tools?.include).toContain("browser_preview_compare_regions")
       expect(visualQa?.tools?.include).toContain("bash")
       expect(visualQa?.tools?.include).toContain("webpage_render")
       expect(visualQa?.tools?.include).toContain("webpage_evaluate")
@@ -550,7 +537,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
-      expect(integrity?.tools?.include).toEqual([...INTEGRITY_PREVIEW_TOOL_IDS])
+      expect(integrity?.tools?.include).toEqual(["browser_preview"])
       expect(await Agent.get("acceptance")).toBeUndefined()
     },
   })
@@ -667,8 +654,6 @@ test("orchestrator include list covers every self-built orchestrator tool", asyn
         agentSessionID: "ses_orchestrator_tool_surface_audit",
         signal: new AbortController().signal,
       })
-      expect(Object.keys(tools)).not.toContain("browser_preview_bind_local_module")
-      expect(Object.keys(tools)).not.toContain("browser_preview_compare_regions")
 
       for (const toolName of Object.keys(tools)) {
         expect(include.has(toolName), `${toolName} is implemented but hidden from the orchestrator agent`).toBe(true)
@@ -718,7 +703,7 @@ test("compaction agent exposes no tools while permissions default to allow", asy
   })
 })
 
-test("integrity agent exposes the shared preview repair registry tools", async () => {
+test("integrity agent exposes only the explicit browser preview registry tool", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -726,7 +711,7 @@ test("integrity agent exposes the shared preview repair registry tools", async (
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
       expect(integrity?.hidden).toBe(true)
-      expect(integrity?.tools).toEqual({ include: [...INTEGRITY_PREVIEW_TOOL_IDS] })
+      expect(integrity?.tools).toEqual({ include: ["browser_preview"] })
     },
   })
 })
