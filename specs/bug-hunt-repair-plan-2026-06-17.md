@@ -1787,3 +1787,61 @@ LINE:
 - Russell independently confirmed BH-064 was still present and that the parser was not the root cause.
 - Russell identified the two production entry points as configured `skills.urls` in `Skill.all()` and URL install in `SkillManager.install(...)`.
 - Russell recommended validating the whole index before downloading, reusing `Filesystem.contains(...)`, rejecting unsafe entries visibly, and avoiding sanitizing/slugging/skip-bad-entry compatibility behavior.
+
+## Batch P1-X: BH-065 managed git skill slugs must not resolve outside their own child directory
+
+### Findings
+
+- BH-065 is a P1 managed skill deletion bug in `packages/opencorvus/src/skill/manager.ts`.
+- `SkillManager.install({ kind: "git" })` normalized the source, derived `path.join(managedRoot(), slug(source))`, and then called `ensureManagedRepo(...)`.
+- `slug(...)` allowed `.` and could produce an empty string for inputs such as `---`, `.git`, `git://`, and `https://.git`.
+- Those values made install target the managed root itself or its parent before `git clone` failed.
+- `SkillManager.remove({ kind: "git" })` used the same slug path and `Filesystem.contains(managedRoot(), source)`. Because `Filesystem.contains(parent, parent)` is true, a root-resolving slug let remove delete the whole managed root.
+- The same remove branch also swallowed `rm(...)` errors even though `force: true` already handles missing paths; that hid real filesystem failures.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/skill/manager.ts` owns `SkillManager.install(...)`, `SkillManager.remove(...)`, `managedRoot()`, `slug(...)`, and `ensureManagedRepo(...)`.
+- `packages/opencorvus/src/server/routes/skill.ts` exposes the install/remove API routes and delegates directly to `SkillManager`.
+- `packages/overlay/src/services/extensions.ts` sends install/remove requests without adding a separate path boundary.
+- `packages/overlay/src/components/settings/SkillMarketPanel.tsx` maps `managed_git` entries back to `kind: "git"` for removal.
+- `packages/opencorvus/src/util/filesystem.ts` owns the existing containment semantics; the fix reuses that helper instead of introducing a parallel path rule.
+- Existing tests covered path install/remove and discovery flows but did not cover malformed git source slugs or sentinel preservation.
+
+### Fix Shape
+
+- Add a single `managedGitTarget(source)` constructor inside `SkillManager`.
+- Use it for both git install and git remove after `normalizeGit(...)`.
+- Reject empty slugs, `.`, `..`, non-single-segment names, absolute paths, Windows absolute paths, root equality, and paths outside `managedRoot()`.
+- Perform rejection before `ensureManagedRepo(...)`, `patchGlobal(...)`, `.keep` writes, `git clone/pull`, or `rm(...)`.
+- Remove the `rm(...).catch(() => undefined)` in the git remove path so real filesystem errors remain visible.
+- Remove swallowed `.keep` write/delete errors in `ensureManagedRepo(...)`; setup failures should stop before git operations rather than being hidden.
+- Do not hash, sanitize, rename, skip, allowlist, or fall back for malformed git sources.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/skill/manager.test.ts`.
+- For install, cover `.`, `..`, `---`, `.git`, `git://`, and `https://.git`.
+- For remove, cover the same malformed sources.
+- Each test sets `OPENCORVUS_HOME` to a temp portable home, creates sentinels in both `config/skills-market` and its parent config directory, and asserts both sentinels remain.
+- Install tests place a fake git binary earlier on `PATH` that writes a marker if invoked; every malformed source asserts the marker is absent, proving rejection happened before process execution.
+
+### Verification
+
+- Red regression before fix: `bun test packages/opencorvus/test/skill/manager.test.ts` failed because install/remove deleted the managed root sentinel or returned success for `..`.
+- Focused regression after fix passed: `bun test packages/opencorvus/test/skill/manager.test.ts`.
+- Adjacent skill and route suites passed: `bun test packages/opencorvus/test/skill/manager.test.ts packages/opencorvus/test/skill/skill.test.ts packages/opencorvus/test/server/skill-routes.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Implemented on 2026-06-18.
+- Managed git skill install/remove now share one validated target constructor.
+- Malformed git sources fail before any config mutation, filesystem deletion, git process launch, or managed directory write.
+
+### Independent Review Feedback
+
+- Huygens independently confirmed BH-065 was still present after the BH-064 URL discovery fix.
+- Huygens identified `install(git)`, `remove(git)`, and `slug(...)` as the root call chain, with API and overlay callers forwarding into that server boundary.
+- Huygens recommended a single shared `managedGitTarget(source)` function, strict child containment under `managedRoot()`, rejection before config or filesystem mutation, and tests for `.`, `..`, `.git`, `git://`, and `https://.git`.
+- Huygens also recommended removing the swallowed `rm(...)` error from git remove; the final implementation keeps real filesystem failures visible.
