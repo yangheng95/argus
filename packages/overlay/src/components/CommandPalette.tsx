@@ -17,7 +17,6 @@
 // command is highlighted via aria-selected for screen readers and via
 // the .cmdk-item--active class for the eye.
 
-import * as KobalteDialog from "@kobalte/core/dialog"
 import { For, Show, createMemo, createSignal, createEffect } from "solid-js"
 import { boardStore } from "../store/board"
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
@@ -30,6 +29,7 @@ import { setLocale } from "../utils/i18n"
 import { t } from "../utils/i18n"
 import { useDisclosure } from "../solid/disclosure"
 import { useHotkey } from "../solid/hotkey"
+import { Dialog } from "./primitives/Dialog"
 
 interface Command {
   id: string
@@ -259,7 +259,7 @@ export function CommandPalette() {
     cmdOrCtrl: true,
     target: "window",
     capture: true,
-    when: () => !document.querySelector(".dialog"),
+    when: () => palette.open() || !document.querySelector(".dialog"),
     run: (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -285,71 +285,64 @@ export function CommandPalette() {
   })
 
   return (
-    <KobalteDialog.Root
+    <Dialog
+      id="commandPaletteDialog"
       open={palette.open()}
-      onOpenChange={(open) => {
-        if (!open && palette.open()) close()
+      title={t("command_palette.label")}
+      titleAs="h2"
+      class="cmdk-dialog"
+      overlayClass="cmdk-backdrop"
+      formClass="cmdk-panel"
+      headerClass="cmdk-header"
+      onClose={() => {
+        if (palette.open()) close()
       }}
-      modal
+      onOpenAutoFocus={(event) => {
+        event.preventDefault()
+        inputRef?.focus()
+      }}
+      onCloseAutoFocus={(event) => event.preventDefault()}
     >
-      <Show when={palette.open()}>
-        <KobalteDialog.Portal>
-          <div class="cmdk-backdrop" role="presentation" onClick={close}>
-            <KobalteDialog.Content
-              class="cmdk-panel"
-              aria-modal="true"
-              aria-label={t("command_palette.label")}
-              onOpenAutoFocus={(event) => {
-                event.preventDefault()
-                inputRef?.focus()
-              }}
-              onCloseAutoFocus={(event) => event.preventDefault()}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <input
-                ref={inputRef}
-                type="search"
-                class="cmdk-input"
-                placeholder={t("cmdk.placeholder")}
-                value={query()}
-                onInput={(e) => setQuery(e.currentTarget.value)}
-                onKeyDown={handleKeyDown}
-                aria-label={t("cmdk.placeholder")}
-              />
-              <div class="cmdk-list" ref={listRef} role="listbox">
-                <Show when={filtered().length > 0} fallback={<div class="cmdk-empty">{t("cmdk.empty")}</div>}>
-                  <For each={filtered()}>
-                    {(cmd, i) => (
-                      <div
-                        class="cmdk-item"
-                        classList={{ "cmdk-item--active": i() === activeIndex() }}
-                        role="option"
-                        aria-selected={i() === activeIndex()}
-                        data-group={cmd.group}
-                        onMouseEnter={() => setActiveIndex(i())}
-                        onClick={() => {
-                          setActiveIndex(i())
-                          runActive()
-                        }}
-                      >
-                        <span class="cmdk-item-group">{cmd.group}</span>
-                        <span class="cmdk-item-label">{cmd.label}</span>
-                        <Show when={cmd.hint}>
-                          <span class="cmdk-item-hint">{cmd.hint}</span>
-                        </Show>
-                      </div>
-                    )}
-                  </For>
+      <input
+        ref={inputRef}
+        type="search"
+        class="cmdk-input"
+        placeholder={t("cmdk.placeholder")}
+        value={query()}
+        onInput={(e) => setQuery(e.currentTarget.value)}
+        onKeyDown={handleKeyDown}
+        aria-label={t("cmdk.placeholder")}
+      />
+      <div class="cmdk-list" ref={listRef} role="listbox">
+        <Show when={filtered().length > 0} fallback={<div class="cmdk-empty">{t("cmdk.empty")}</div>}>
+          <For each={filtered()}>
+            {(cmd, i) => (
+              <div
+                class="cmdk-item"
+                classList={{ "cmdk-item--active": i() === activeIndex() }}
+                role="option"
+                aria-selected={i() === activeIndex()}
+                data-group={cmd.group}
+                onMouseEnter={() => setActiveIndex(i())}
+                onClick={() => {
+                  setActiveIndex(i())
+                  runActive()
+                }}
+              >
+                <span class="cmdk-item-group">{cmd.group}</span>
+                <span class="cmdk-item-label">{cmd.label}</span>
+                <Show when={cmd.hint}>
+                  <span class="cmdk-item-hint">{cmd.hint}</span>
                 </Show>
               </div>
-              <div class="cmdk-foot">
-                <kbd>↑↓</kbd> {t("cmdk.foot.navigate")} · <kbd>↵</kbd> {t("cmdk.foot.run")} · <kbd>esc</kbd>{" "}
-                {t("cmdk.foot.close")}
-              </div>
-            </KobalteDialog.Content>
-          </div>
-        </KobalteDialog.Portal>
-      </Show>
-    </KobalteDialog.Root>
+            )}
+          </For>
+        </Show>
+      </div>
+      <div class="cmdk-foot">
+        <kbd>↑↓</kbd> {t("cmdk.foot.navigate")} · <kbd>↵</kbd> {t("cmdk.foot.run")} · <kbd>esc</kbd>{" "}
+        {t("cmdk.foot.close")}
+      </div>
+    </Dialog>
   )
 }
