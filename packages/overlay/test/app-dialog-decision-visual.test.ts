@@ -30,13 +30,17 @@ describe("app dialog decision visual treatment", () => {
   test("decision choices stay flat and avoid decorative gradients", () => {
     const css = readText("src/styles/surfaces/dialog.css")
     const decisionBlock = block(css, ".app-dialog-decision")
-    const choiceBlock = block(css, ".app-dialog-decision__choice")
+    const choiceBlock = block(css, ".app-dialog-decision__choice {")
     const hoverBlock = block(css, ".app-dialog-decision__choice:hover")
 
     expect(decisionBlock).not.toContain("radial-gradient")
     expect(decisionBlock).not.toContain("linear-gradient")
     expect(choiceBlock).not.toContain("linear-gradient")
     expect(choiceBlock).not.toContain("overflow: hidden")
+    expect(choiceBlock).toContain("appearance: none")
+    expect(choiceBlock).toContain("font: inherit")
     expect(hoverBlock).not.toContain("translateY")
+    expect(css).toContain('.app-dialog-decision__choice[data-active="true"]')
+    expect(css).not.toContain("data-selected")
   })
 })

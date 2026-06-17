@@ -1,15 +1,17 @@
 import * as Select from "@kobalte/core/select"
-import { createEffect, createSignal, For, onCleanup, Show } from "solid-js"
+import { createEffect, createSignal, onCleanup, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { dialogStore, setDialogStore } from "../store/dialog"
 import { dismissAppDialog, settleAppDialog } from "../services/app-dialog"
 import { t } from "../utils/i18n"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
+import { SegmentedControl, type SegmentedControlOption } from "./ui/SegmentedControl"
 import { Icon } from "./Icon"
 
 const TASK_DECISION_COUNTDOWN_TICK_MS = 250
 type AppDialogSelectOption = { value: string; label?: string }
+type AppDialogDecisionOption = SegmentedControlOption<string>
 
 function AppDialogSelectOptionItem(props: Select.SelectRootItemComponentProps<AppDialogSelectOption>): JSX.Element {
   const option = () => props.item.rawValue
@@ -50,6 +52,12 @@ export function AppDialogHost() {
     if (!option) return
     setDialogStore("app", "selectValue", option.value)
   }
+  const decisionOptions = (): AppDialogDecisionOption[] =>
+    (dialogStore.app.selectOptions || []).map((option) => ({
+      value: option.value,
+      label: option.label || option.value,
+      title: option.label || option.value,
+    }))
 
   createEffect(() => {
     if (!dialogStore.app.open || !hasTaskDecisionCountdown()) return
@@ -133,31 +141,28 @@ export function AppDialogHost() {
             <span class="app-dialog-decision__eyebrow">{decisionEyebrow()}</span>
             <p>{dialogStore.app.message || ""}</p>
           </div>
-          <div class="app-dialog-decision__choices" role="group" aria-label={dialogStore.app.selectLabel || ""}>
-            <For each={dialogStore.app.selectOptions || []}>
-              {(option) => {
-                const selected = () => dialogStore.app.selectValue === option.value
-                const recommended = () => dialogStore.app.recommendedValue === option.value
-                return (
-                  <button
-                    type="button"
-                    class="app-dialog-decision__choice"
-                    data-selected={selected() ? "true" : "false"}
-                    data-recommended={recommended() ? "true" : "false"}
-                    onClick={() => chooseTaskDecision(option.value)}
-                  >
-                    <span class="app-dialog-decision__choice-top">
-                      <span>{option.label || option.value}</span>
-                      <Show when={recommended()}>
-                        <span class="app-dialog-decision__badge">{t("task.queue_decision.recommended")}</span>
-                      </Show>
-                    </span>
-                    <span class="app-dialog-decision__choice-body">{decisionDescription(option.value)}</span>
-                  </button>
-                )
-              }}
-            </For>
-          </div>
+          <SegmentedControl
+            class="app-dialog-decision__choices"
+            itemClass="app-dialog-decision__choice"
+            options={decisionOptions()}
+            value={dialogStore.app.selectValue || ""}
+            ariaLabel={dialogStore.app.selectLabel || ""}
+            onActivate={chooseTaskDecision}
+            itemAttributes={(option) => ({
+              "data-recommended": dialogStore.app.recommendedValue === option.value ? "true" : "false",
+            })}
+            renderOption={(option) => (
+              <>
+                <span class="app-dialog-decision__choice-top">
+                  <span>{option.label}</span>
+                  <Show when={dialogStore.app.recommendedValue === option.value}>
+                    <span class="app-dialog-decision__badge">{t("task.queue_decision.recommended")}</span>
+                  </Show>
+                </span>
+                <span class="app-dialog-decision__choice-body">{decisionDescription(option.value)}</span>
+              </>
+            )}
+          />
           <Show when={hasTaskDecisionCountdown()}>
             <div class="app-dialog-decision__timer" aria-live="polite">
               <span>{decisionCountdownText()}</span>
