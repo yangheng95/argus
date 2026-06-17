@@ -74,6 +74,7 @@ describe(".field-input strips UA widget chrome", () => {
 
 describe("shared Kobalte select popup colors", () => {
   const fieldCss = stripComments(readCss(join("surfaces", "field.css")))
+  const composerCss = stripComments(readCss(join("surfaces", "composer.css")))
 
   test(".oc-select content and options use readable foreground tokens", () => {
     const contentBlock = fieldCss.match(/\.oc-select-content\s*{[^}]*}/)?.[0] ?? ""
@@ -85,6 +86,13 @@ describe("shared Kobalte select popup colors", () => {
     expect(optionBlock).toMatch(/color\s*:\s*var\(--text-strong\)/)
     expect(secondaryBlock).toMatch(/color\s*:\s*var\(--text-soft\)/)
     expect(secondaryBlock).not.toMatch(/var\(--text-muted\)/)
+  })
+
+  test("prompt profile option descriptions inherit the shared popup foreground", () => {
+    const promptProfileDescriptionBlock =
+      composerCss.match(/\.prompt-profile-select-option-copy\s+small\s*{[^}]*}/)?.[0] ?? ""
+
+    expect(promptProfileDescriptionBlock).not.toMatch(/color\s*:/)
   })
 })
 
