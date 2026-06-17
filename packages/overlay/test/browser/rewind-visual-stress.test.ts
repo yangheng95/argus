@@ -656,7 +656,7 @@ test(
         })
       }
       if (path === "/provider/auth") return json({ openai: { ok: true, authenticated: true } })
-      if (path === "/provider/hexin/budget") return json({ ok: true })
+      if (path === "/provider/hexin/budget") return json({ ok: false, error: "HEXIN_API_KEY unset" })
       if (path === "/config/providers") return json({ providers: [], default: {} })
       if (path === "/config/prompt-profile") return json(promptProfileCatalog)
       if (path === "/config" && req.method === "PATCH") return json(await req.json())
