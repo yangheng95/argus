@@ -105,6 +105,30 @@ describe("Bus.subscribe / Bus.publish", () => {
     })
   })
 
+  test("synchronous subscriber failure does not stop later subscribers", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const received: string[] = []
+        const unsub1 = Bus.subscribe(TestEvent, () => {
+          throw new Error("first subscriber failed")
+        })
+        const unsub2 = Bus.subscribe(TestEvent, (evt) => {
+          received.push(evt.properties.value)
+        })
+
+        try {
+          await expect(Bus.publish(TestEvent, { value: "survived" })).resolves.toBeDefined()
+          expect(received).toEqual(["survived"])
+        } finally {
+          unsub1()
+          unsub2()
+        }
+      },
+    })
+  })
+
   test("duplicate subscribe call is ignored (same callback)", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

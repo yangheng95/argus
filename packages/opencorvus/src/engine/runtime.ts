@@ -99,11 +99,10 @@ export namespace EngineRuntime {
    * no longer tries to reconcile previous-process state here.
    */
   async function syncGoalRuns(runID: string, hooks: RuntimeHooks) {
-    const run = findRun(runID)
+    let run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
     const goalRuns = listGoalRunsForRun(runID)
     if (goalRuns.length === 0) return
-    if (goalRuns.some((goalRun) => isLiveGoalRunStatus(goalRun.status))) return
 
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
@@ -112,6 +111,12 @@ export namespace EngineRuntime {
       }
       return
     }
+
+    if (run.status === "blocked" && isInteractionBlockingReason(run.blocking_reason)) {
+      run = await hooks.updateRun(run, { status: "running", blocking_reason: null, error: null }, "Run resumed")
+    }
+
+    if (goalRuns.some((goalRun) => isLiveGoalRunStatus(goalRun.status))) return
 
     const fingerprint = terminalGoalBatchFingerprint(goalRuns)
     if (hasGoalBatchNotification({ taskID: run.task_id, runID: run.id, fingerprint })) return

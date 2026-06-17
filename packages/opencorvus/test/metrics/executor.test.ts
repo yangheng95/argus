@@ -577,6 +577,174 @@ describe("executeMetrics — aggregator evaluator", () => {
     expect(agg!.evidence_fresh).toBe(true)
   })
 
+  test("aggregator with a missing configured input yields evidence_fresh=false", async () => {
+    const a = registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "partial_a",
+      description: "a",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0,
+      weight: 1,
+      gate_class: "diagnostic",
+      evaluator_kind: "query",
+      evaluator_config: { sql: "SELECT 1 AS value" },
+      source_requirement_ids: [],
+    })
+    const b = registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "partial_b",
+      description: "b",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0,
+      weight: 1,
+      gate_class: "diagnostic",
+      evaluator_kind: "query",
+      evaluator_config: { sql: "SELECT 1 AS value" },
+      source_requirement_ids: [],
+    })
+    writeMetricResult({
+      metric_spec_id: a.id,
+      task_id: taskID,
+      iteration: 0,
+      goal_run_id: null,
+      raw_value: 0.8,
+      normalized_value: 0.8,
+      met_target: false,
+      met_floor: true,
+      evidence_ref: "seed",
+      evidence_fresh: true,
+    })
+    const agg = registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "agg_partial",
+      description: "requires a and b",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0,
+      weight: 1,
+      gate_class: "diagnostic",
+      evaluator_kind: "aggregator",
+      evaluator_config: { of: [a.id, b.id], op: "mean", iteration_offset: -1 },
+      source_requirement_ids: [],
+    })
+
+    const outcome = await executeMetrics({ task_id: taskID, iteration: 1 })
+    const aggResult = outcome.results.find((r) => r.metric_spec_id === agg.id)
+
+    expect(aggResult).toBeDefined()
+    expect(aggResult!.raw_value).toBe(0)
+    expect(aggResult!.normalized_value).toBe(0)
+    expect(aggResult!.evidence_fresh).toBe(false)
+    expect(aggResult!.evidence_ref).toContain("incomplete_inputs")
+    expect(aggResult!.evidence_ref).toContain(b.id)
+    expect(outcome.skipped).toContainEqual(
+      expect.objectContaining({
+        spec_id: agg.id,
+      }),
+    )
+  })
+
+  test("aggregator with a stale configured input yields evidence_fresh=false", async () => {
+    const a = registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "stale_a",
+      description: "a",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0,
+      weight: 1,
+      gate_class: "diagnostic",
+      evaluator_kind: "query",
+      evaluator_config: { sql: "SELECT 1 AS value" },
+      source_requirement_ids: [],
+    })
+    const b = registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "stale_b",
+      description: "b",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0,
+      weight: 1,
+      gate_class: "diagnostic",
+      evaluator_kind: "query",
+      evaluator_config: { sql: "SELECT 1 AS value" },
+      source_requirement_ids: [],
+    })
+    writeMetricResult({
+      metric_spec_id: a.id,
+      task_id: taskID,
+      iteration: 0,
+      goal_run_id: null,
+      raw_value: 0.8,
+      normalized_value: 0.8,
+      met_target: false,
+      met_floor: true,
+      evidence_ref: "seed:fresh",
+      evidence_fresh: true,
+    })
+    writeMetricResult({
+      metric_spec_id: b.id,
+      task_id: taskID,
+      iteration: 0,
+      goal_run_id: null,
+      raw_value: 0,
+      normalized_value: 0,
+      met_target: false,
+      met_floor: false,
+      evidence_ref: "seed:stale",
+      evidence_fresh: false,
+    })
+    const agg = registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "agg_stale",
+      description: "requires fresh a and b",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0,
+      weight: 1,
+      gate_class: "diagnostic",
+      evaluator_kind: "aggregator",
+      evaluator_config: { of: [a.id, b.id], op: "mean", iteration_offset: -1 },
+      source_requirement_ids: [],
+    })
+
+    const outcome = await executeMetrics({ task_id: taskID, iteration: 1 })
+    const aggResult = outcome.results.find((r) => r.metric_spec_id === agg.id)
+
+    expect(aggResult).toBeDefined()
+    expect(aggResult!.raw_value).toBe(0)
+    expect(aggResult!.normalized_value).toBe(0)
+    expect(aggResult!.evidence_fresh).toBe(false)
+    expect(aggResult!.evidence_ref).toContain("incomplete_inputs")
+    expect(aggResult!.evidence_ref).toContain(`stale=${b.id}`)
+    expect(outcome.skipped).toContainEqual(
+      expect.objectContaining({
+        spec_id: agg.id,
+      }),
+    )
+  })
+
   test("aggregator with no fresh inputs yields evidence_fresh=false", async () => {
     registerBaselineSpec({
       task_id: taskID,

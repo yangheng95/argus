@@ -40,7 +40,7 @@ function requireExternalSessionID(state: State, operation: string): string {
   throw new Error(`managed executor ${operation} requires a provider-native session id for ${state.sessionID}`)
 }
 
-type Status = Exclude<ExecutorStatusInfo, "blocked">
+type Status = ExecutorStatusInfo
 type Notify = {
   type: string
   summary?: string
