@@ -11,8 +11,6 @@ import { Global } from "../../global"
 import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
 import type { Hooks } from "@opencorvus-ai/plugin"
-import { Process } from "../../util/process"
-import { text } from "node:stream/consumers"
 import { entries } from "@/util/object"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
@@ -265,29 +263,10 @@ export const AuthLoginCommand = cmd({
         prompts.intro("Add credential")
         if (args.url) {
           const wellknown = await fetch(`${args.url}/.well-known/opencorvus`).then((x) => x.json() as any)
-          prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
-          const proc = Process.spawn(wellknown.auth.command, {
-            stdout: "pipe",
-          })
-          if (!proc.stdout) {
-            prompts.log.error("Failed")
-            prompts.outro("Done")
-            return
+          if (wellknown?.auth?.command) {
+            throw new Error("Remote well-known auth commands are disabled; configure provider credentials locally.")
           }
-          const [exit, token] = await Promise.all([proc.exited, text(proc.stdout)])
-          if (exit !== 0) {
-            prompts.log.error("Failed")
-            prompts.outro("Done")
-            return
-          }
-          await Auth.set(args.url, {
-            type: "wellknown",
-            key: wellknown.auth.env,
-            token: token.trim(),
-          })
-          prompts.log.success("Logged into " + args.url)
-          prompts.outro("Done")
-          return
+          throw new Error("Remote well-known auth is unsupported; configure provider credentials locally.")
         }
         const config = await Config.get()
 
