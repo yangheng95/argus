@@ -11,6 +11,7 @@ import { TaskPlan } from "../../memory/task-plan"
 import { Scratchpad } from "../../memory/scratchpad"
 import { CronService } from "../../scheduler/cron-service"
 import { EventService } from "../../scheduler/event-service"
+import { Session } from "../../session"
 import { zodToJsonSchema } from "zod-to-json-schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
@@ -468,6 +469,7 @@ export const ExperimentalRoutes = lazy(() =>
       validator("query", z.object({ sessionId: z.string() })),
       async (c) => {
         const { sessionId } = c.req.valid("query")
+        await Session.getInProject({ sessionID: sessionId, projectID: Instance.project.id })
         return c.json(TaskPlan.list(sessionId))
       },
     )
@@ -486,6 +488,7 @@ export const ExperimentalRoutes = lazy(() =>
       validator("query", z.object({ sessionId: z.string() })),
       async (c) => {
         const { sessionId } = c.req.valid("query")
+        await Session.getInProject({ sessionID: sessionId, projectID: Instance.project.id })
         return c.json({ content: Scratchpad.get(sessionId) })
       },
     )

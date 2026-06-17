@@ -537,6 +537,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
+        await Session.getInProject({ sessionID, projectID: Instance.project.id })
         return c.json(await Todo.get(sessionID))
       },
     )
