@@ -47,9 +47,11 @@ describe("config panel sizing", () => {
     expect(CONFIG_DIALOG_TSX).toContain("aria-valuenow")
     expect(CONFIG_DIALOG_TSX).toContain("tabIndex={0}")
     expect(CONFIG_DIALOG_TSX).toContain("onKeyDown={handleResizeKeyDown}")
-    expect(bodyOf(".config-resizer:hover::before,\n.config-resizer:focus-visible::before,\n.config-resizer[data-active=\"true\"]::before")).toMatch(
-      /background:\s*var\(--accent\)/,
-    )
+    expect(
+      bodyOf(
+        '.config-resizer:hover::before,\n.config-resizer:focus-visible::before,\n.config-resizer[data-active="true"]::before',
+      ),
+    ).toMatch(/background:\s*var\(--accent\)/)
   })
 
   test("config sidebar keyboard resize clamps to the same bounds", () => {
@@ -85,8 +87,6 @@ describe("config panel sizing", () => {
       ".channel-doc-card",
       ".market-card",
       ".detail-card",
-      ".config-section",
-      ".config-subsection",
       ".agent-model-table",
       ".llm-summary-row",
     ]) {
@@ -112,8 +112,9 @@ describe("config panel sizing", () => {
     expect(bodyOf(".knowledge-toolbar")).toMatch(/background:\s*transparent/)
     expect(bodyOf(".config-sidebar")).toMatch(/background:\s*transparent/)
     expect(bodyOf(".knowledge-toolbar")).toMatch(/border:\s*0 solid transparent/)
-    expect(bodyOf(".config-section-head")).toMatch(/background:\s*transparent/)
     expect(bodyOf(".config-section-body")).toMatch(/border:\s*0 solid transparent/)
+    expect(SETTINGS_CSS).not.toMatch(/(^|[\n,{])\s*\.config-section(?!-body)(?:\s|[,>{:+~.#\[]|$)/m)
+    expect(SETTINGS_CSS).not.toMatch(/(^|[\n,{])\s*\.config-subsection(?:\s|[,>{:+~.#\[]|$)/m)
     expect(bodyOfSource(HEADER_CSS, '.oc-surface-header[data-surface="settings-group"]')).toMatch(
       /background:\s*transparent/,
     )
