@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { EngineArtifactTable, EngineInteractionRequestTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { EngineInteraction } from "../../src/engine/interaction"
+import { hooks } from "../../src/engine/state"
+import { findRun } from "../../src/engine/store"
 import { EngineService } from "@/task-api"
 import { Identifier } from "../../src/id/id"
 import { PermissionNext } from "../../src/permission/next"
@@ -23,14 +25,7 @@ describe("engine permission interactions", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        EngineInteraction.subscribe({
-          async updateTask(row) {
-            return row
-          },
-          async updateRun(row) {
-            return row
-          },
-        })
+        EngineInteraction.subscribe(hooks())
 
         const root = await Session.create({ kind: "root", title: "task root" })
         const orchestrator = await Session.create({ kind: "orchestrator", parentID: root.id, title: "orchestrator" })
@@ -118,6 +113,14 @@ describe("engine permission interactions", () => {
           status: "pending",
         })
 
+        let blockedRun = findRun(runID)
+        for (let i = 0; i < 50 && blockedRun?.status !== "blocked"; i += 1) {
+          await Bun.sleep(20)
+          blockedRun = findRun(runID)
+        }
+        expect(blockedRun?.status).toBe("blocked")
+        expect(blockedRun?.blocking_reason).toBe("permission")
+
         await EngineService.replyInteraction(interaction!.id, {
           reply: "once",
           autoReply: false,
@@ -132,6 +135,14 @@ describe("engine permission interactions", () => {
             .get(),
         )
         expect(resolved?.status).toBe("answered")
+
+        let resumedRun = findRun(runID)
+        for (let i = 0; i < 50 && resumedRun?.blocking_reason !== null; i += 1) {
+          await Bun.sleep(20)
+          resumedRun = findRun(runID)
+        }
+        expect(resumedRun?.status).toBe("running")
+        expect(resumedRun?.blocking_reason).toBeNull()
 
         const rejectedPermissionID = Identifier.ascending("permission")
         const rejectedAsk = PermissionNext.ask({

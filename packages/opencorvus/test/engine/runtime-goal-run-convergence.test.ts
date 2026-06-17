@@ -89,6 +89,69 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
+  test("live goal runs still project interaction blockers on the parent run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_live_interaction_${Date.now()}`
+        const runID = `run_goal_live_interaction_${Date.now()}`
+        const interactionID = `int_goal_live_interaction_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+        seedGoalRun(taskID, runID, "grun_live_interaction", "running", now + 1)
+        Database.use((db) =>
+          db
+            .insert(EngineInteractionRequestTable)
+            .values({
+              id: interactionID,
+              task_id: taskID,
+              run_id: runID,
+              session_id: null,
+              external_id: `ext_goal_live_interaction_${now}`,
+              request_type: "permission",
+              status: "pending",
+              title: "Need permission",
+              body: "Need permission",
+              payload: {},
+              time_created: now + 2,
+              time_updated: now + 2,
+            } as any)
+            .run(),
+        )
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const blockedRun = findRun(runID)
+        expect(blockedRun?.status).toBe("blocked")
+        expect(blockedRun?.blocking_reason).toBe("permission")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+
+        Database.use((db) =>
+          db
+            .update(EngineInteractionRequestTable)
+            .set({ status: "answered", response: { reply: "once" }, time_resolved: now + 3, time_updated: now + 3 })
+            .where(eq(EngineInteractionRequestTable.id, interactionID))
+            .run(),
+        )
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const resumedRun = findRun(runID)
+        expect(resumedRun?.status).toBe("running")
+        expect(resumedRun?.blocking_reason).toBeNull()
+        expect(runTaskLoop).not.toHaveBeenCalled()
+      },
+    })
+  })
+
   test("a later terminal goal batch under the same parent run wakes again", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

@@ -1897,3 +1897,113 @@ LINE:
 
 - Galileo confirmed the dedicated direct-reply route currently has no catch-and-wake fallback: it returns 202 only on success and otherwise lets NamedError statuses surface.
 - Galileo also identified the adjacent `/task/:taskID/message` `target` field. After reviewing the 2026-06-10 and 2026-06-13 build guidance specs, this field is retained as structured task-root guidance metadata rather than treated as a direct-reply bug.
+
+## Batch P1-Z: BH-027 direct-reply attachment failures must not degrade into summary-only task-root messages
+
+### Findings
+
+- BH-027 was recorded against a historical failure path where direct-reply failure became a task-root wake and only forwarded an attachment summary.
+- Current HEAD does not route direct-reply failure through task-root wake.
+- `POST /task/:taskID/session/:sessionID/reply` rejects invalid targets before persistence; even when the request includes `attachments`, the root and child sessions receive no message.
+- Explicit task-root messages still carry attachments structurally: `TaskMessageInput.attachments` are written through `AttachmentStore.write(...)`, appended to `task.attachments`, and persisted as `Message.FilePart` rows by `appendTaskSessionMessage(...)`.
+- `dispatchTaskLoop.event.operatorMessage.attachmentSummary` remains only a scheduler prompt summary and is not the durable attachment source.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/model.ts` owns `TaskMessageInput`, `TaskAttachmentInput`, and `AgentSessionReplyInput`.
+- `packages/opencorvus/src/server/routes/orchestrator.ts` owns `/task/:taskID/message` and `/task/:taskID/session/:sessionID/reply`.
+- `packages/opencorvus/src/task-api/index.ts` owns `appendDirectAgentSessionReply(...)`, `handleTaskMessage(...)`, `appendAndWakeTaskOperatorMessage(...)`, `appendTaskSessionMessage(...)`, and `appendTaskAttachment(...)`.
+- `packages/overlay/src/services/task.ts` owns overlay callers for non-build direct reply and build task-root guidance.
+- `packages/opencorvus/src/tool/panel.ts` and `packages/opencorvus/src/orchestrator/tools.ts` call task-message or direct-reply services through the same central APIs.
+
+### Fix Shape
+
+- No production code change was required in current HEAD.
+- Add regression coverage to keep the existing contract from regressing:
+  - direct-reply failure with attachments must reject structurally and must not persist a task-root fallback message;
+  - explicit task-root messages with attachments must persist file parts and append the same attachment reference to `task.attachments`.
+- Do not convert `AgentSessionReplyInput.attachments` into task-root attachments on failure.
+- Do not add a catch/retry path that re-sends failed direct replies through `/task/:taskID/message`.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/server/reply-error-taxonomy.test.ts`.
+- Add `invalid direct reply with attachments rejects without task-root fallback`; it posts a URL attachment to an invalid direct-reply target, expects `400 InvalidReplyTargetKindError`, and asserts both root and child sessions have no messages.
+- Extend `packages/opencorvus/test/server/task-message-routes.test.ts`.
+- Strengthen the attachment-summary test so the HTTP response and persisted root message include a `file` part, and the task row's `attachments` include the same user-upload/spec-artifact reference.
+
+### Verification
+
+- Direct-reply attachment fallback regression passed: `bun test packages/opencorvus/test/server/reply-error-taxonomy.test.ts --timeout 30000`.
+- Task-root attachment persistence regression passed: `bun test packages/opencorvus/test/server/task-message-routes.test.ts --timeout 30000`.
+- Task API attachment persistence suite passed: `bun test packages/opencorvus/test/task-api/handle-task-message-attachment-persistence.test.ts --timeout 30000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Verified on 2026-06-18.
+- Direct-reply failure with attachments remains a structured error and writes no fallback task-root message.
+- Explicit task-root message attachments remain structured persisted file parts and task attachment references; the scheduler summary is only an auxiliary prompt summary.
+
+### Independent Review Feedback
+
+- Hegel confirmed BH-027 is not present in current source: direct reply and task-root message are separate paths, and task-root attachments are persisted as file parts plus task attachment refs.
+- Hegel recommended preserving the current split rather than adding fallback conversion, and recommended the two regression additions implemented in this batch.
+
+## Batch P1-AA: BH-028 interaction ask/resolve must update run blocking state
+
+### Findings
+
+- BH-028 was recorded against a runtime ownership regression: `EngineInteraction` creates and resolves durable interaction rows, then asks `EngineRuntime.syncRun(...)` or `syncTask(...)` to update the run blocker.
+- `EngineRuntime.syncRun(...)` is no longer a pipeline advancement mechanism. Its remaining responsibility for this surface is run-state convergence: pending interactions set the active run to `blocked`, and resolved interaction blockers are cleared.
+- Existing tests covered durable interaction rows and a pre-blocked run clearing path, but did not exercise the real ask/resolve path that starts with a `running` run.
+- Independent review found the remaining production hole in per-goal mode: `syncGoalRuns(...)` returned immediately while any goal_run was live, before projecting pending interactions or clearing a resolved interaction blocker on the parent run.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/engine/interaction.ts` owns `EngineInteraction.subscribe(...)`, permission/question ask upserts, and `resolveInteraction(...)`; it is the single event-to-engine bridge for `PermissionNext` and `Question` prompts.
+- `packages/opencorvus/src/engine/runtime.ts` owns `EngineRuntime.syncRun(...)` and `syncTask(...)`; the relevant branches are pending-interaction blocking and no-queue interaction-blocker clearing.
+- `packages/opencorvus/src/engine/state.ts` owns `hooks().updateRun(...)`, which appends artifact-backed run rows and is the durable persistence path for `status` and `blocking_reason`.
+- `packages/opencorvus/src/task-api/index.ts` owns `EngineService.replyInteraction(...)` and `rejectInteraction(...)`; server routes, channel ingress, panel tools, and TUI callers converge here before emitting `PermissionNext` / `Question` replies.
+- `packages/opencorvus/src/channel/ingress.ts`, `packages/opencorvus/src/tool/panel.ts`, and `packages/opencorvus/src/server/routes/orchestrator.ts` are callers only; they must not add local blocking-state fixes.
+- `packages/opencorvus/src/session/processor.ts` and `packages/opencorvus/src/session/loop.ts` are ask producers through `PermissionNext.ask(...)`.
+- `packages/opencorvus/src/executor/contract.ts` and `packages/opencorvus/src/executor/managed.ts` own executor queue status typing; production executors use queued/retrying/running/completed/failed and do not provide a separate executor `blocked` status.
+
+### Fix Shape
+
+- Add a focused regression test that subscribes `EngineInteraction` with real `hooks()`, creates a live run with no queue ref, emits a permission ask from a child session, and asserts the persisted run becomes `blocked` with `blocking_reason = "permission"`.
+- Resolve the same interaction through `EngineService.replyInteraction(...)` and assert the persisted run returns to `running` with `blocking_reason = null`.
+- Add per-goal runtime coverage for a live goal_run with a pending interaction: `syncRun(...)` must persist the parent run as `blocked`, then clear it after the interaction resolves, without waking the terminal goal batch path.
+- Fix the central runtime path only. Do not add route-level updates, caller-specific gates, or a fallback wake path.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/engine/interaction-permission.test.ts`.
+- Cover both ask-side persistence and resolve-side clearing with `findRun(...)`, not only in-memory hook calls or interaction row status.
+- Extend `packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts`.
+- Cover live goal_run interaction blocking and resolved-blocker clearing before the live goal_run early return.
+- Extend `packages/opencorvus/test/engine/protocol-interaction.test.ts`.
+- Cover protocol reply clearing the persisted run blocker when the executor is still running.
+
+### Verification
+
+- Focused interaction regression passed before the per-goal fix: `bun test packages/opencorvus/test/engine/interaction-permission.test.ts --timeout 30000`.
+- New live goal_run regression failed before the runtime fix with `Expected: "blocked"; Received: "running"`.
+- Combined runtime/interaction/protocol regression passed after the fix: `bun test packages/opencorvus/test/engine/runtime-goal-run-convergence.test.ts packages/opencorvus/test/engine/interaction-permission.test.ts packages/opencorvus/test/engine/protocol-interaction.test.ts --timeout 30000`.
+- Package typecheck passed after the executor status contract cleanup: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Verified on 2026-06-18.
+- Implemented on 2026-06-18.
+- `syncGoalRuns(...)` now projects pending interactions and clears resolved interaction blockers before returning for live goal_run work.
+- Permission ask from a child build session persists the active run as `blocked` with `blocking_reason = "permission"`.
+- Replying through `EngineService.replyInteraction(...)` persists the run back to `running` with `blocking_reason = null`.
+- Protocol interaction replies now assert persisted run blocker clearing while the executor remains `running`.
+- Unsupported executor status `blocked` was removed from `ExecutorStatusInfo`; run-level `blocked` remains the durable engine state.
+
+### Independent Review Feedback
+
+- Epicurus confirmed the no-queue permission ask/reply path is covered by the first regression, but identified a remaining per-goal early return before interaction projection.
+- Epicurus recommended keeping all run blocking writes inside runtime/interaction/state rather than adding route, panel, or channel callers.
+- Epicurus also flagged the executor `blocked` status contract as adjacent debt: current production executors do not produce it (`ManagedCodingExecutor` excludes it and `TaskQueueStatus` has no `blocked` value). The final fix removes the unsupported executor status instead of inventing a default executor blocking reason.

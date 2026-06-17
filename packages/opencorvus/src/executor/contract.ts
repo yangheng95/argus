@@ -21,7 +21,7 @@ export const CodingTool = z.discriminatedUnion("type", [
   }),
 ])
 export type CodingToolInfo = z.infer<typeof CodingTool>
-export type ExecutorStatusInfo = "queued" | "retrying" | "running" | "blocked" | "completed" | "failed"
+export type ExecutorStatusInfo = "queued" | "retrying" | "running" | "completed" | "failed"
 
 export const ToolMode = z.enum(["default", "none"])
 export type ToolModeInfo = z.infer<typeof ToolMode>
