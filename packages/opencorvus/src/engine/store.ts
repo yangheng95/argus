@@ -38,6 +38,7 @@ import {
   type EngineBudget,
   type EngineAcceptanceStatus,
   type EngineExecutorRef,
+  type EngineArtifactKind,
   type EngineEvaluationCheck,
   type EngineEvaluationScope,
   type EngineEvaluationStatus,
@@ -976,6 +977,23 @@ export function listToolExecuteErrorArtifacts(taskID: string, sinceMs: number, l
         ),
       )
       .orderBy(desc(EngineArtifactTable.time_created))
+      .limit(limit)
+      .all(),
+  )
+}
+
+export function listGoalBatchNotificationArtifacts(taskID: string, limit: number) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "goal_batch_notification" as EngineArtifactKind),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .limit(limit)
       .all(),
   )
