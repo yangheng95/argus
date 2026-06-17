@@ -181,46 +181,48 @@ export namespace PermissionNext {
     async (input) => {
       const s = await state()
       const { ruleset, timeoutMs, ...request } = input
+      let shouldAsk = false
       for (const pattern of request.patterns ?? []) {
         const rule = evaluate(request.permission, pattern, ruleset, s.approved)
         log.info("evaluated", { permission: request.permission, pattern, action: rule })
         if (rule.action === "deny")
           throw new DeniedError(ruleset.filter((r) => Wildcard.match(request.permission, r.permission)))
-        if (rule.action === "ask") {
-          const id = input.id ?? Identifier.ascending("permission")
-          const timeout = Math.max(timeoutMs ?? PERMISSION_REJECT_TIMEOUT_MS, PERMISSION_MIN_TIMEOUT_MS)
-          return new Promise<void>((resolve, reject) => {
-            const info: Request = {
-              id,
-              ...request,
-            }
-            const timer = setTimeout(() => {
-              if (!s.pending[id]) return
-              log.info("permission timeout rejected", {
-                id,
-                permission: request.permission,
-                patterns: request.patterns,
-              })
-              delete s.pending[id]
-              Bus.publish(Event.Replied, {
-                sessionID: request.sessionID,
-                requestID: id,
-                reply: "reject",
-                autoReply: true,
-              })
-              reject(new RejectedError())
-            }, timeout)
-            s.pending[id] = {
-              info,
-              resolve,
-              reject,
-              timer,
-            }
-            Bus.publish(Event.Asked, info)
-          })
-        }
+        if (rule.action === "ask") shouldAsk = true
         if (rule.action === "allow") continue
       }
+      if (!shouldAsk) return
+
+      const id = input.id ?? Identifier.ascending("permission")
+      const timeout = Math.max(timeoutMs ?? PERMISSION_REJECT_TIMEOUT_MS, PERMISSION_MIN_TIMEOUT_MS)
+      return new Promise<void>((resolve, reject) => {
+        const info: Request = {
+          id,
+          ...request,
+        }
+        const timer = setTimeout(() => {
+          if (!s.pending[id]) return
+          log.info("permission timeout rejected", {
+            id,
+            permission: request.permission,
+            patterns: request.patterns,
+          })
+          delete s.pending[id]
+          Bus.publish(Event.Replied, {
+            sessionID: request.sessionID,
+            requestID: id,
+            reply: "reject",
+            autoReply: true,
+          })
+          reject(new RejectedError())
+        }, timeout)
+        s.pending[id] = {
+          info,
+          resolve,
+          reject,
+          timer,
+        }
+        Bus.publish(Event.Asked, info)
+      })
     },
   )
 
