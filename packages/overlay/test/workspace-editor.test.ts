@@ -1,5 +1,5 @@
 import { afterAll, afterEach, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { __setHostTransportForTest, type HostTransport, type NativeCommand } from "../src/services/host-transport"
 import { installIconHtmlRenderer } from "../src/utils/icon-html"
@@ -90,12 +90,13 @@ test("editorTargetPath refuses unresolved relative file links without an active 
 
 test("markdown file links no longer open the built-in workspace file preview", () => {
   const main = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
-  const panel = readFileSync(join(import.meta.dir, "../src/components/WorkspacePanel.tsx"), "utf8")
+  const filesPanel = readFileSync(join(import.meta.dir, "../src/components/FileChangesPanel.tsx"), "utf8")
 
   expect(main).toContain("openPathInSelectedEditor(path)")
   expect(main).not.toContain("openWorkspaceFile")
-  expect(panel).not.toContain('kind: "file"')
-  expect(panel).not.toContain("FileViewPanel")
+  expect(existsSync(join(import.meta.dir, "../src/components/WorkspacePanel.tsx"))).toBe(false)
+  expect(filesPanel).not.toContain('kind: "file"')
+  expect(filesPanel).not.toContain("FileViewPanel")
 })
 
 test("cwd breadcrumb keeps editor launchers out of the directory control", () => {

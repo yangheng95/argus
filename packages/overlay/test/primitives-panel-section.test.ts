@@ -285,7 +285,8 @@ describe("DiffPreviewPanel.tsx — Panel primitive adoption", () => {
 describe("FileViewPanel.tsx retirement", () => {
   test("built-in file preview component is deleted", () => {
     expect(existsSync(join(OVERLAY_ROOT, "src/components/FileViewPanel.tsx"))).toBe(false)
-    expect(readText(join(OVERLAY_ROOT, "src/components/WorkspacePanel.tsx"))).not.toContain("FileViewPanel")
+    expect(existsSync(join(OVERLAY_ROOT, "src/components/WorkspacePanel.tsx"))).toBe(false)
+    expect(readText(join(OVERLAY_ROOT, "src/components/FileChangesPanel.tsx"))).not.toContain("FileViewPanel")
   })
 })
 
@@ -334,7 +335,7 @@ describe("CSS class rename guards — no stale .section-* selectors", () => {
   })
 
   test("typography.css uses .oc-section__title not .section-title", () => {
-    expect(typographyCss).toContain(".oc-section__title,")
+    expect(typographyCss).toMatch(/\.oc-section__title\s*\{/)
     expect(typographyCss).not.toContain(".section-title")
   })
 
@@ -344,8 +345,8 @@ describe("CSS class rename guards — no stale .section-* selectors", () => {
   })
 
   test("workspace.css uses .oc-section__head not .section-head", () => {
-    expect(workspaceCss).toContain(".oc-section[open] > .oc-section__head,")
-    expect(workspaceCss).not.toContain(".section-head,")
+    expect(workspaceCss).toMatch(/\.oc-section\[open\]\s*>\s*\.oc-section__head\s*\{/)
+    expect(workspaceCss).not.toMatch(/\.section-head\s*[,{:]/)
   })
 })
 
