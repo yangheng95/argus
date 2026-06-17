@@ -760,3 +760,43 @@ LINE:
 - Focused tests passed: `bun test packages/opencorvus/test/server/session-config-routes.test.ts packages/opencorvus/test/server/session-routes.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
 - Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
+
+## Batch P1-J: export session route project ownership
+
+### Findings
+
+- BH-017: `packages/opencorvus/src/server/routes/export.ts` handles `GET /export/session/:sessionID` under the project-scoped app, but reads the target with global `Session.get(sessionID)`.
+- After the global read, it calls `Session.messages({ sessionID })` and returns session metadata plus the transcript, so a request under project A can export a project B session.
+
+### Call-point Inventory
+
+- Route mount: `packages/opencorvus/src/server/routes/app.ts` mounts `ExportRoutes()` at `/export` inside the project-scoped route tree.
+- Route implementation: `packages/opencorvus/src/server/routes/export.ts` contains the only `export.session` HTTP operation.
+- Existing tests only cover retired task export/import routes in `packages/opencorvus/test/server/task-export-retired.test.ts`; there is no active session export ownership coverage.
+- SDK/OpenAPI expose the route with `sessionID` path and optional project `directory` query; no request contract change is required.
+
+### Fix Shape
+
+- Replace the global route read with `Session.getInProject({ sessionID, projectID: Instance.project.id })`.
+- Keep `Session.messages({ sessionID })` after ownership is proven; do not add a second export path, compatibility fallback, or client-side gate.
+- Return the same success payload for owned sessions and 404 for missing or foreign sessions.
+
+### Regression Tests
+
+- Add a `Server.App()` route test with projects A and B. Exporting project B's session under project A must return 404 and the response must not include B's title or message content.
+- Exporting project A's own session under project A must return 200 with the same session metadata shape and messages array.
+- Keep the retired task export/import route test unchanged.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/export-routes.test.ts packages/opencorvus/test/server/task-export-retired.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Independent agent review confirmed `/export/session/:sessionID` is project-scoped by middleware but previously used global `Session.get(sessionID)` before transcript export.
+- Added project ownership enforcement via `Session.getInProject({ sessionID, projectID: Instance.project.id })` before reading messages.
+- Focused tests passed: `bun test packages/opencorvus/test/server/export-routes.test.ts packages/opencorvus/test/server/task-export-retired.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+- Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
