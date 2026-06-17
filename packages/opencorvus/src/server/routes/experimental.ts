@@ -85,9 +85,9 @@ const WorkspaceRoutes = lazy(() =>
         responses: {
           200: {
             description: "Workspace removed",
-            content: { "application/json": { schema: resolver(Workspace.Info.optional()) } },
+            content: { "application/json": { schema: resolver(Workspace.Info) } },
           },
-          ...errors(400),
+          ...errors(400, 404),
         },
       }),
       validator(
@@ -98,7 +98,7 @@ const WorkspaceRoutes = lazy(() =>
       ),
       async (c) => {
         const { id } = c.req.valid("param")
-        return c.json(await Workspace.remove(id))
+        return c.json(await Workspace.remove({ id, projectID: Instance.project.id }))
       },
     ),
 )

@@ -1,7 +1,7 @@
 import z from "zod"
 import { Identifier } from "@/id/id"
 import { fn } from "@/util/fn"
-import { Database, eq } from "@/storage/db"
+import { Database, NotFoundError, and, eq } from "@/storage/db"
 import { Project } from "@/project/project"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
@@ -104,12 +104,29 @@ export namespace Workspace {
     return fromRow(row)
   })
 
-  export const remove = fn(Identifier.schema("workspace"), async (id) => {
-    const row = Database.use((db) => db.select().from(WorkspaceTable).where(eq(WorkspaceTable.id, id)).get())
-    if (!row) return
-    const info = fromRow(row)
-    await Worktree.remove({ directory: info.config.directory })
-    Database.use((db) => db.delete(WorkspaceTable).where(eq(WorkspaceTable.id, id)).run())
-    return info
-  })
+  export const remove = fn(
+    z.object({
+      id: Identifier.schema("workspace"),
+      projectID: Info.shape.projectID,
+    }),
+    async (input) => {
+      const row = Database.use((db) =>
+        db
+          .select()
+          .from(WorkspaceTable)
+          .where(and(eq(WorkspaceTable.id, input.id), eq(WorkspaceTable.project_id, input.projectID)))
+          .get(),
+      )
+      if (!row) throw new NotFoundError({ message: `Workspace not found: ${input.id}` })
+      const info = fromRow(row)
+      await Worktree.remove({ directory: info.config.directory })
+      Database.use((db) =>
+        db
+          .delete(WorkspaceTable)
+          .where(and(eq(WorkspaceTable.id, input.id), eq(WorkspaceTable.project_id, input.projectID)))
+          .run(),
+      )
+      return info
+    },
+  )
 }
