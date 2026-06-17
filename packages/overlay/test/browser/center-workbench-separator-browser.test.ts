@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdir, writeFile } from "node:fs/promises"
+import { resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser, type OverlayPage } from "../launch.ts"
@@ -39,6 +41,15 @@ const PROMPT_PROFILE_CATALOG = {
   ],
 }
 
+function colorAlpha(value: string): number {
+  const slashAlpha = value.match(/\/\s*([0-9.]+)/)
+  if (slashAlpha) return Number(slashAlpha[1])
+  const commaAlpha = value.match(/rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\)/)
+  if (commaAlpha) return Number(commaAlpha[1])
+  if (value === "transparent" || value === "rgba(0, 0, 0, 0)") return 0
+  return 1
+}
+
 async function separatorState(page: OverlayPage) {
   return await page.$eval("#centerWorkbenchSeparatorWorkflow", (node) => {
     const separator = node as HTMLElement
@@ -47,6 +58,12 @@ async function separatorState(page: OverlayPage) {
     const min = separator.getAttribute("aria-valuemin")
     const max = separator.getAttribute("aria-valuemax")
     const now = separator.getAttribute("aria-valuenow")
+    const style = getComputedStyle(separator)
+    const accentProbe = document.createElement("span")
+    accentProbe.style.color = "var(--accent)"
+    document.body.appendChild(accentProbe)
+    const accentColor = getComputedStyle(accentProbe).color
+    accentProbe.remove()
     return {
       hidden: separator.hidden,
       disabled: separator.dataset.disabled ?? "",
@@ -61,6 +78,13 @@ async function separatorState(page: OverlayPage) {
       maxValue: max === null ? null : Number(max),
       nowValue: now === null ? null : Number(now),
       focused: document.activeElement === separator,
+      focusVisible: separator.matches(":focus-visible"),
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      outlineColor: style.outlineColor,
+      outlineOffset: style.outlineOffset,
+      backgroundColor: style.backgroundColor,
+      accentColor,
       workflowWidth: Math.round(workflow.getBoundingClientRect().width),
       inspectorWidth: Math.round(inspector.getBoundingClientRect().width),
     }
@@ -127,7 +151,7 @@ test(
                   serverUrl: location.origin,
                   autoServer: false,
                   locale: "en-US",
-                  theme: "dark",
+                  theme: "light",
                   directory: "D:/overlay/workspace/app",
                 }
               }
@@ -187,6 +211,7 @@ test(
       const pointerResized = await separatorState(page)
       assert.ok(pointerResized.workflowWidth - pointerResized.inspectorWidth > 80)
 
+      await page.mouse.move(20, 20)
       await page.focus("#centerWorkbenchSeparatorWorkflow")
       await page.keyboard.press("ArrowLeft")
       await page.waitForFunction(
@@ -198,7 +223,17 @@ test(
       )
       const keyboardResized = await separatorState(page)
       assert.equal(keyboardResized.focused, true)
+      assert.equal(keyboardResized.focusVisible, true)
+      assert.equal(keyboardResized.outlineStyle, "solid")
+      assert.equal(keyboardResized.outlineWidth, "1px")
+      assert.equal(keyboardResized.outlineColor, keyboardResized.accentColor)
+      assert.ok(Number.parseFloat(keyboardResized.outlineOffset) > 0)
+      assert.ok(colorAlpha(keyboardResized.backgroundColor) > 0.18)
+      assert.ok(colorAlpha(keyboardResized.backgroundColor) < 0.26)
       assert.ok(keyboardResized.workflowWidth < pointerResized.workflowWidth)
+
+      await mkdir(resolve(".scratch"), { recursive: true })
+      await writeFile(resolve(".scratch", "center-workbench-separator-focus.png"), await page.screenshot({ fullPage: true }))
 
       await page.keyboard.press("Home")
       await page.waitForFunction(() => {
