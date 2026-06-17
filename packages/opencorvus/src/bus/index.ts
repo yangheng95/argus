@@ -49,8 +49,13 @@ export namespace Bus {
             source: source.get(sub),
           })
         }
-        const result = sub(payload)
         const label = `${payload.type}/${source.get(sub) ?? "unknown"}`
+        let result: unknown
+        try {
+          result = sub(payload)
+        } catch (err) {
+          result = Promise.reject(err)
+        }
         pending.push(
           withTimeout(result, SUBSCRIBER_TIMEOUT_MS, label).catch((err) => {
             log.warn("subscriber timed out or failed", { type: payload.type, label, error: String(err) })
@@ -85,7 +90,7 @@ export namespace Bus {
   ) {
     const payload = {
       type: def.type,
-      properties,
+      properties: BusEvent.parseProperties(def, properties),
     }
     log.debug("publishing", {
       type: def.type,
