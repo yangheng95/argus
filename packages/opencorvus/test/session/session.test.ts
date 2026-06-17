@@ -170,6 +170,7 @@ describe("Session.fork", () => {
             input: 0,
             output: 0,
             reasoning: 0,
+            total: 0,
             cache: { read: 0, write: 0 },
           },
           finish: "stop",
@@ -204,6 +205,7 @@ describe("Session.fork", () => {
             input: 0,
             output: 0,
             reasoning: 0,
+            total: 0,
             cache: { read: 0, write: 0 },
           },
           finish: "stop",
@@ -261,6 +263,7 @@ describe("Session.updateMessage", () => {
             input: 0,
             output: 0,
             reasoning: 0,
+            total: 0,
             cache: { read: 0, write: 0 },
           },
         })
@@ -279,6 +282,7 @@ describe("Session.updateMessage", () => {
             input: 0,
             output: 1,
             reasoning: 0,
+            total: 1,
             cache: { read: 0, write: 0 },
           },
         })

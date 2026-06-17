@@ -1068,11 +1068,28 @@ export namespace Session {
     const publishAfterCommit = Database.hasActiveContext()
     let wrotePart = false
     Database.use((db) => {
+      const message = db
+        .select({ id: MessageTable.id })
+        .from(MessageTable)
+        .where(and(eq(MessageTable.id, messageID), eq(MessageTable.session_id, sessionID)))
+        .get()
+      if (!message) throw new NotFoundError({ message: `Message not found: ${messageID}` })
+      const existingPart = db
+        .select({
+          data: PartTable.data,
+          sessionID: PartTable.session_id,
+          messageID: PartTable.message_id,
+        })
+        .from(PartTable)
+        .where(eq(PartTable.id, id))
+        .get()
+      if (existingPart && (existingPart.sessionID !== sessionID || existingPart.messageID !== messageID)) {
+        throw new NotFoundError({ message: `Part not found: ${id}` })
+      }
       // Tool status monotonicity: never regress a tool part's status
       if (part.type === "tool" && part.state?.status) {
-        const existing = db.select({ data: PartTable.data }).from(PartTable).where(eq(PartTable.id, id)).get()
-        if (existing?.data) {
-          const prev = existing.data as any
+        if (existingPart?.data) {
+          const prev = existingPart.data as any
           if (prev.type === "tool" && prev.state?.status) {
             const oldRank = TOOL_STATUS_RANK[prev.state.status] ?? 0
             const newRank = TOOL_STATUS_RANK[part.state.status] ?? 0

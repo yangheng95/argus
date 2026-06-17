@@ -884,3 +884,54 @@ LINE:
 - Focused tests passed: `bun test packages/opencorvus/test/server/pty-routes.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
 - Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
+
+## Batch P1-M: session message and part route ownership
+
+### Findings
+
+- BH-020: `GET /session/:sessionID/message/:messageID` carries both IDs in the route, but `Message.get({ sessionID, messageID })` currently queries `MessageTable` only by `messageID` and loads parts only by `messageID`.
+- The adjacent `GET /session/:sessionID/message` list route is the same HTTP trust boundary: under project A, a caller can supply a project B `sessionID` unless the route proves active-project ownership before reading transcript rows.
+- BH-021: `PATCH /session/:sessionID/message/:messageID/part/:partID` validates that the request body IDs match the route IDs, then calls `Session.updatePart(body)`. `Session.updatePart` upserts by global `partID`, so a foreign existing part with the same ID can be overwritten if the caller supplies its route/body IDs.
+- `removeMessage` and `removePart` already constrain deletes by session ID, but BH-022 tracks their missing affected-row checks separately.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/session.ts` owns the HTTP list messages, GET message, DELETE message, DELETE part, and PATCH part routes.
+- `packages/opencorvus/src/session/message.ts` owns `Message.get` and `Message.parts`; other callers use `Message.get` after they already have a session-local message ID, so the scoped service query is the single safe boundary.
+- `packages/opencorvus/src/session/index.ts` owns `Session.updatePart`; it is used by live session processing, shell/command execution, compaction, control messages, tools, and tests as both create and update primitive.
+- Because `Session.updatePart` is also the create primitive, the fix must allow inserting a new part only when `(sessionID, messageID)` exists, and must reject updating an existing `partID` whose stored `session_id` or `message_id` differs.
+
+### Fix Shape
+
+- At every message/part HTTP route that accepts `:sessionID`, prove `Session.getInProject({ sessionID, projectID: Instance.project.id })` before reading, deleting, or patching message state.
+- Change `Message.get` to query `MessageTable` by both `messageID` and `sessionID`; missing or wrong-session messages return the same not-found path.
+- In `Session.updatePart`, before the upsert, assert that the owning message row exists for `(sessionID, messageID)`. Then read any existing part by `partID`; if it exists under another session or message, reject as not found before `onConflictDoUpdate`.
+- Reuse the same existing part row for tool-status monotonicity; do not add route-level prechecks, compatibility fallback reads, or global override paths.
+
+### Regression Tests
+
+- Add a `Server.App()` route test with projects A and B. Seed B with a session, message, and text part.
+- Under project A, request `/session/<B-session>/message` and `/session/<A-session>/message/<B-message>` and assert 404 with no B text leaked.
+- Under project A, patch `/session/<A-session>/message/<A-message>/part/<B-part>` with a route/body-consistent A payload and assert 404; then verify B can still read its original part text unchanged.
+- Assert A can still read its own message and patch its own part successfully.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/session-message-routes.test.ts packages/opencorvus/test/session/prompt.test.ts packages/opencorvus/test/session/part-delta.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Independent Review Feedback
+
+- Hume confirmed the current patch closes BH-020 and BH-021 as written: `Message.get` is scoped by `(sessionID, messageID)`, routes prove active-project session ownership, and `Session.updatePart` rejects existing foreign `partID` rows before upsert.
+- Hume also identified adjacent isolation surfaces not covered by the original BH-020/BH-021 statement: `/:sessionID/conversation`, `/:sessionID/summarize`, and `Session.removePart`'s missing `messageID` predicate. These should be handled as a follow-up review item instead of silently expanding this batch.
+
+### Result
+
+- Implemented on 2026-06-17.
+- Added project ownership checks before message list/get/delete and part delete/patch route handlers read or mutate `:sessionID` resources.
+- Changed `Message.get` to resolve a message by both session ID and message ID.
+- Hardened `Session.updatePart` so existing part rows cannot be overwritten through a foreign global part ID, and new parts require their owning message row to exist in the same session.
+- Focused tests passed: `bun test packages/opencorvus/test/server/session-message-routes.test.ts`.
+- Adjacent session tests passed after aligning stale token fixtures with the current `Message.TokenUsage` schema: `bun test packages/opencorvus/test/session/part-delta.test.ts packages/opencorvus/test/session/session.test.ts packages/opencorvus/test/session/prompt.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+- Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.

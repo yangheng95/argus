@@ -138,6 +138,10 @@ async function sessionConfig(input: {
   }
 }
 
+async function assertActiveProjectSession(sessionID: string) {
+  await Session.getInProject({ sessionID, projectID: Instance.project.id })
+}
+
 export const SessionRoutes = lazy(() =>
   new Hono()
     // === query: list ===
@@ -852,8 +856,10 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
+        const sessionID = c.req.valid("param").sessionID
+        await assertActiveProjectSession(sessionID)
         const messages = await Session.messages({
-          sessionID: c.req.valid("param").sessionID,
+          sessionID,
           limit: query.limit,
         })
         return c.json(messages)
@@ -891,6 +897,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const params = c.req.valid("param")
+        await assertActiveProjectSession(params.sessionID)
         return c.json(await Message.get({ sessionID: params.sessionID, messageID: params.messageID }))
       },
     )
@@ -918,6 +925,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const params = c.req.valid("param")
+        await assertActiveProjectSession(params.sessionID)
         SessionPrompt.assertNotBusy(params.sessionID)
         await Session.removeMessage({ sessionID: params.sessionID, messageID: params.messageID })
         return c.json(true)
@@ -946,6 +954,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const params = c.req.valid("param")
+        await assertActiveProjectSession(params.sessionID)
         await Session.removePart({
           sessionID: params.sessionID,
           messageID: params.messageID,
@@ -984,6 +993,7 @@ export const SessionRoutes = lazy(() =>
             `Part mismatch: body.id='${body.id}' vs partID='${params.partID}', body.messageID='${body.messageID}' vs messageID='${params.messageID}', body.sessionID='${body.sessionID}' vs sessionID='${params.sessionID}'`,
           )
         }
+        await assertActiveProjectSession(params.sessionID)
         const part = await Session.updatePart(body)
         return c.json(part)
       },
