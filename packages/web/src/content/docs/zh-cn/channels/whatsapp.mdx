@@ -12,6 +12,7 @@ WhatsApp 适配器走 **WhatsApp Business Cloud API**（Meta 官方）webhook �
 3. 获取：
    - **Phone Number ID**
    - **Permanent Access Token**（建议用 System User token）
+   - **App Secret**（用于校验 webhook payload 签名）
    - **Verify Token**（自定义字符串，回调验证用）
 4. 配置 Webhook：`https://<你的公网>/whatsapp`，订阅 `messages` 字段。
 
@@ -20,6 +21,7 @@ WhatsApp 适配器走 **WhatsApp Business Cloud API**（Meta 官方）webhook �
 ```bash
 export WHATSAPP_ACCESS_TOKEN=...
 export WHATSAPP_PHONE_NUMBER_ID=...
+export WHATSAPP_APP_SECRET=...
 export WHATSAPP_VERIFY_TOKEN=...
 export WHATSAPP_WEBHOOK_HOST=0.0.0.0
 export WHATSAPP_WEBHOOK_PORT=16667

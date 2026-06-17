@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto"
 import type { ChannelAdapter, MessageHandler } from "../adapter"
 import { adapt, path, type Serve, type Server } from "./http"
 
@@ -30,15 +31,22 @@ type SendResult = {
   }>
 }
 
+function safeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left)
+  const rightBuffer = Buffer.from(right)
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer)
+}
+
 export class WhatsappAdapter implements ChannelAdapter {
   readonly platform = "whatsapp"
   private handler?: MessageHandler
   private token: string
   private numberId: string
+  private appSecret: string
   private host: string
   private port: number
   private hook: string
-  private verifyToken?: string
+  private verifyToken: string
   private api: string
   private serve: Serve
   private server?: Server
@@ -46,19 +54,23 @@ export class WhatsappAdapter implements ChannelAdapter {
   constructor(opts: {
     token: string
     numberId: string
+    appSecret: string
     host?: string
     port?: number
     path?: string
-    verifyToken?: string
+    verifyToken: string
     graphVersion?: string
     serve?: Serve
   }) {
     this.token = opts.token
     this.numberId = opts.numberId
+    this.appSecret = opts.appSecret
+    this.verifyToken = opts.verifyToken
+    if (!this.appSecret.trim()) throw new Error("WhatsApp app secret is required")
+    if (!this.verifyToken.trim()) throw new Error("WhatsApp verify token is required")
     this.host = opts.host ?? "0.0.0.0"
     this.port = opts.port ?? 16667
     this.hook = path(opts.path, "/whatsapp")
-    this.verifyToken = opts.verifyToken
     this.api = `https://graph.facebook.com/${opts.graphVersion ?? "v21.0"}`
     this.serve = adapt(opts.serve)
   }
@@ -167,8 +179,15 @@ export class WhatsappAdapter implements ChannelAdapter {
     if (req.method === "GET") return this.challenge(url)
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 })
 
-    // Malformed JSON → 400 below
-    const body = (await req.json().catch(() => undefined)) as Body | undefined
+    const raw = await req.text()
+    if (!this.valid(req, raw)) return Response.json({ error: "invalid signature" }, { status: 401 })
+
+    let body: Body
+    try {
+      body = JSON.parse(raw) as Body
+    } catch {
+      return Response.json({ error: "invalid body" }, { status: 400 })
+    }
     if (!body) return Response.json({ error: "invalid body" }, { status: 400 })
     if (!this.handler) return Response.json({ ok: true })
 
@@ -200,7 +219,14 @@ export class WhatsappAdapter implements ChannelAdapter {
     const token = url.searchParams.get("hub.verify_token")
     const challenge = url.searchParams.get("hub.challenge")
     if (mode !== "subscribe" || !challenge) return new Response("ok")
-    if (this.verifyToken && token !== this.verifyToken) return new Response("forbidden", { status: 403 })
+    if (token !== this.verifyToken) return new Response("forbidden", { status: 401 })
     return new Response(challenge)
+  }
+
+  private valid(req: Request, raw: string) {
+    const signature = req.headers.get("x-hub-signature-256")
+    if (!signature) return false
+    const expected = `sha256=${createHmac("sha256", this.appSecret).update(raw).digest("hex")}`
+    return safeEqual(signature.toLowerCase(), expected)
   }
 }

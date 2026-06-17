@@ -134,6 +134,89 @@ describe("channel registry", () => {
     expect(app.list.map((item) => item.platform)).toEqual(["dingtalk"])
   })
 
+  test("requires whatsapp verification token and app secret before registering", () => {
+    const partial = runtime()
+    const partialResult = registerAdapters(
+      partial,
+      {
+        WHATSAPP_ACCESS_TOKEN: "wa_token",
+        WHATSAPP_PHONE_NUMBER_ID: "wa_number",
+        WHATSAPP_VERIFY_TOKEN: "wa_verify",
+      },
+      factory(),
+    )
+
+    expect(partialResult.names).toEqual([])
+    expect(partialResult.warns).toEqual([
+      "Skip whatsapp channel: missing required env. Need: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN.",
+    ])
+    expect(partial.list).toHaveLength(0)
+
+    const complete = runtime()
+    const completeResult = registerAdapters(
+      complete,
+      {
+        WHATSAPP_ACCESS_TOKEN: "wa_token",
+        WHATSAPP_PHONE_NUMBER_ID: "wa_number",
+        WHATSAPP_APP_SECRET: "wa_secret",
+        WHATSAPP_VERIFY_TOKEN: "wa_verify",
+      },
+      factory(),
+    )
+
+    expect(completeResult.warns).toEqual([])
+    expect(completeResult.names).toEqual(["whatsapp"])
+    expect((complete.list[0] as Fake).options).toEqual({
+      token: "wa_token",
+      numberId: "wa_number",
+      appSecret: "wa_secret",
+      verifyToken: "wa_verify",
+      host: undefined,
+      port: undefined,
+      path: undefined,
+    })
+  })
+
+  test("requires mattermost outgoing webhook token before registering", () => {
+    const partial = runtime()
+    const partialResult = registerAdapters(
+      partial,
+      {
+        MATTERMOST_SERVER_URL: "https://mm.example.com",
+        MATTERMOST_BOT_TOKEN: "mm_token",
+      },
+      factory(),
+    )
+
+    expect(partialResult.names).toEqual([])
+    expect(partialResult.warns).toEqual([
+      "Skip mattermost channel: missing required env. Need: MATTERMOST_SERVER_URL, MATTERMOST_BOT_TOKEN, MATTERMOST_WEBHOOK_TOKEN.",
+    ])
+    expect(partial.list).toHaveLength(0)
+
+    const complete = runtime()
+    const completeResult = registerAdapters(
+      complete,
+      {
+        MATTERMOST_SERVER_URL: "https://mm.example.com",
+        MATTERMOST_BOT_TOKEN: "mm_token",
+        MATTERMOST_WEBHOOK_TOKEN: "hook_token",
+      },
+      factory(),
+    )
+
+    expect(completeResult.warns).toEqual([])
+    expect(completeResult.names).toEqual(["mattermost"])
+    expect((complete.list[0] as Fake).options).toEqual({
+      url: "https://mm.example.com",
+      token: "mm_token",
+      webhookToken: "hook_token",
+      host: undefined,
+      port: undefined,
+      path: undefined,
+    })
+  })
+
   test("registers qq from env keys", () => {
     const app = runtime()
     const result = registerAdapters(

@@ -1019,3 +1019,55 @@ LINE:
 - Combined focused tests passed: `bun test packages/opencorvus/test/server/session-ownership-routes.test.ts packages/opencorvus/test/server/session-message-routes.test.ts packages/opencorvus/test/server/session-prompt-async.test.ts packages/opencorvus/test/session/part-delta.test.ts packages/opencorvus/test/session/session.test.ts packages/opencorvus/test/session/prompt.test.ts`.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
 - Contract checks passed: `bun run api:routes-check` and `bun run docs:check`.
+
+## Batch P0-I: BH-090 WhatsApp and Mattermost inbound authentication
+
+### Findings
+
+- BH-090 covers several unauthenticated inbound channel adapters, but the correct fix is platform-specific verification, not a shared local gate.
+- `packages/channel-runtime/src/adapters/whatsapp.ts` only optionally checks the GET challenge token and accepts unsigned POST delivery. WhatsApp webhooks provide a verify token for subscription and `x-hub-signature-256` payload signatures based on the Meta app secret.
+- `packages/channel-runtime/src/adapters/mattermost.ts` accepts JSON or form POSTs without checking the Mattermost outgoing-webhook token.
+- MS Teams, DingTalk, Google Chat, and WeCom remain in the deferred channel set for this batch because the real fixes require Bot Framework activity JWT verification, DingTalk callback crypto, Google Chat request JWT verification, and WeCom callback token/AES verification plus message decryption. A synthetic shared token or a custom-robot outbound signature would hide the actual protocol work.
+
+### Call-point Inventory
+
+- `packages/channel-config/src/index.ts` owns channel env fields and required-field status used by UI/config/schema and runtime env resolution.
+- `packages/channel-runtime/src/registry.ts` maps resolved env fields into adapter constructor options and owns skip warnings for incomplete channel config.
+- `packages/channel-runtime/src/adapters/whatsapp.ts` owns WhatsApp GET challenge handling, POST parsing, message dispatch, and outbound Cloud API calls.
+- `packages/channel-runtime/src/adapters/mattermost.ts` owns Mattermost outgoing-webhook JSON/form parsing, message dispatch, and outbound REST replies.
+- `packages/channel-runtime/test/mainstream-adapters.test.ts` covers direct adapter behavior for the affected adapters.
+- `packages/channel-runtime/test/registry.test.ts` covers required env registration and constructor option forwarding.
+- `packages/web/src/content/docs/channels/{whatsapp,mattermost}.mdx` and `packages/web/src/content/docs/zh-cn/channels/{whatsapp,mattermost}.mdx` document the required env contract for operators.
+
+### Fix Shape
+
+- WhatsApp: require both `verifyToken` and `appSecret`; reject subscription challenges with a missing/wrong verify token; verify every POST using `x-hub-signature-256: sha256=<hex HMAC>` over the raw request body before JSON parsing or dispatch.
+- Mattermost: add required `webhookToken` config/env, require the inbound JSON/form `token` to match before handler dispatch, and reject missing/wrong token with no message delivery.
+- Do not add compatibility fallback paths, alternate unauthenticated modes, or shared channel-auth gates.
+
+### Regression Tests
+
+- WhatsApp token-only env is incomplete; GET challenge with a wrong token returns 401; POST with missing/wrong `x-hub-signature-256` returns 401 with no handler call; valid signed POST dispatches.
+- Mattermost URL + bot token without webhook token is incomplete; missing/wrong inbound token returns 401 with no handler call; valid JSON and form webhook tokens dispatch.
+- Existing outbound send paths for both adapters remain covered by the mainstream adapter tests.
+
+### Verification
+
+- Focused test command: `bun test packages/channel-runtime/test/mainstream-adapters.test.ts packages/channel-runtime/test/registry.test.ts`
+- Typecheck command: `bun run --cwd packages/channel-runtime typecheck`
+
+### Independent Review Feedback
+
+- Socrates confirmed MS Teams remains the highest-risk unresolved P0 because it must verify Bot Framework activity JWTs before trusting `serviceUrl`.
+- Socrates also flagged DingTalk as requiring DingTalk callback crypto rather than a custom-robot outbound signing shortcut. This batch deliberately excludes DingTalk to avoid a synthetic or wrong-protocol patch.
+
+### Result
+
+- Implemented on 2026-06-17.
+- WhatsApp now requires `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN`; subscription challenge requests with a wrong token return 401, and POST delivery requires a valid `x-hub-signature-256` HMAC before JSON parsing or handler dispatch.
+- Mattermost now requires `MATTERMOST_WEBHOOK_TOKEN`; inbound JSON and form outgoing-webhook requests must carry the matching token before handler dispatch.
+- Registry required-field tests now skip incomplete WhatsApp and Mattermost configuration instead of registering unauthenticated inbound endpoints.
+- Operator docs now list the new required WhatsApp app secret and Mattermost outgoing webhook token.
+- Focused tests passed: `bun test packages/channel-runtime/test/mainstream-adapters.test.ts packages/channel-runtime/test/registry.test.ts`.
+- Package typechecks passed: `bun run --cwd packages/channel-runtime typecheck`, `bun run --cwd packages/channel-config typecheck`, and `bunx turbo run typecheck --filter=@opencorvus-ai/channel-runtime --filter=@opencorvus-ai/channel-config`.
+- Docs check passed: `bun run docs:check`.
