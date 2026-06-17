@@ -88,6 +88,7 @@ describe("shared Kobalte select popup colors", () => {
     const contentBlock = fieldCss.match(/\.oc-select-content\s*{[^}]*}/)?.[0] ?? ""
     const optionBlock = fieldCss.match(/\.oc-select-option\s*{[^}]*}/)?.[0] ?? ""
     const secondaryBlock = fieldCss.match(/\.oc-select-option\s+small\s*{[^}]*}/)?.[0] ?? ""
+    const optionCopyBlock = fieldCss.match(/\.oc-select-option-copy\s*{[^}]*}/)?.[0] ?? ""
 
     expect(contentBlock).toMatch(/background\s*:\s*var\(--menu-panel-bg\)/)
     expect(contentBlock).not.toMatch(/background\s*:\s*var\(--surface\)/)
@@ -95,6 +96,8 @@ describe("shared Kobalte select popup colors", () => {
     expect(optionBlock).toMatch(/color\s*:\s*var\(--text-strong\)/)
     expect(secondaryBlock).toMatch(/color\s*:\s*var\(--text-soft\)/)
     expect(secondaryBlock).not.toMatch(/var\(--text-muted\)/)
+    expect(optionCopyBlock).toMatch(/flex-direction\s*:\s*column/)
+    expect(optionCopyBlock).not.toMatch(/color\s*:/)
   })
 
   test("prompt profile option descriptions inherit the shared popup foreground", () => {

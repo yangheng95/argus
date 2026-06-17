@@ -112,6 +112,21 @@
   color: var(--text-soft);
 }
 
+.oc-select-option-copy {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+  min-width: 0;
+}
+
+.oc-select-option-copy > span,
+.oc-select-option-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .oc-select-option[data-highlighted],
 .oc-select-option:hover {
   background: var(--surface-hover);
