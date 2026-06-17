@@ -325,8 +325,8 @@ body[data-center-workbench-panel-resizing="true"] .center-workbench-panel-separa
 }
 
 .center-workbench-panel-separator:focus-visible {
-  outline: var(--oc-focus-ring-width) solid var(--focus);
-  outline-offset: calc(-1 * var(--oc-focus-ring-width));
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
 }
 
 .center-workbench-activity {
