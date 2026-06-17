@@ -76,7 +76,7 @@ export async function resolveBrowserPreviewTarget(input: {
     url: selected.url,
     candidates: browserPreviewCandidates(persistedTargets, selected.id),
     diagnostics: [`Using task browser preview target ${selected.id}.`, ...unreachableDiagnostics],
-    latestEvidenceIDs: latestBrowserPreviewEvidenceIDs({ taskID, targetID: selected.id }),
+    latestEvidenceIDs: await latestBrowserPreviewEvidenceIDs({ projectRoot, taskID, targetID: selected.id }),
   })
 }
 

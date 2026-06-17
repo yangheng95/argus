@@ -302,6 +302,64 @@ describe("browser preview routes", () => {
   )
 
   test(
+    "GET /task/:taskID/browser-preview skips unreadable latest evidence IDs",
+    async () => {
+      await using tmp = await tmpdir()
+      const preview = servePreview()
+      const taskID = await seedTask(tmp.path)
+      try {
+        const target = await persistBrowserPreviewTarget({ taskID, url: preview.url.href })
+        const readablePath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop-readable.png")
+        const corruptPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop-corrupt.png")
+        await fs.writeFile(readablePath, "desktop-readable")
+        await fs.writeFile(corruptPath, "desktop-corrupt")
+        const readableEvidenceID = persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportID: "desktop",
+          status: "passed",
+          summary: "older readable desktop evidence",
+          capture: { captured: true, passed: true, path: readablePath, sha: sha16("desktop-readable") },
+          diagnostics: ["older readable desktop evidence"],
+          now: 1000,
+        })
+        const corruptEvidenceID = persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportID: "desktop",
+          status: "passed",
+          summary: "newer corrupt desktop evidence",
+          capture: { captured: true, passed: true, path: corruptPath, sha: "wrongsha" },
+          diagnostics: ["newer corrupt desktop evidence"],
+          now: 2000,
+        })
+        expect(
+          (await latestBrowserPreviewEvidenceIDs({ projectRoot: tmp.path, taskID, targetID: target.id })).desktop,
+        ).toBe(readableEvidenceID)
+
+        const app = Server.App()
+        const response = await app.request(`/task/${taskID}/browser-preview`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          latestEvidenceIDs?: { desktop?: string }
+        }
+        expect(body.latestEvidenceIDs?.desktop).toBe(readableEvidenceID)
+        expect(body.latestEvidenceIDs?.desktop).not.toBe(corruptEvidenceID)
+      } finally {
+        preview.stop(true)
+      }
+    },
+    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "PUT /task/:taskID/browser-preview/target selects an existing saved target",
     async () => {
       await using tmp = await tmpdir()
@@ -800,7 +858,9 @@ describe("browser preview routes", () => {
         now: 2000,
       })
 
-      expect(latestBrowserPreviewEvidenceIDs({ taskID, targetID: target.id }).desktop).toBe(captureID)
+      expect((await latestBrowserPreviewEvidenceIDs({ projectRoot: tmp.path, taskID, targetID: target.id })).desktop).toBe(
+        captureID,
+      )
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
@@ -872,7 +932,9 @@ describe("browser preview routes", () => {
         }
       })
 
-      expect(latestBrowserPreviewEvidenceIDs({ taskID, targetID: target.id }).desktop).toBe(captureID)
+      expect((await latestBrowserPreviewEvidenceIDs({ projectRoot: tmp.path, taskID, targetID: target.id })).desktop).toBe(
+        captureID,
+      )
 
       const app = Server.App()
       for (const item of badEvidence) {

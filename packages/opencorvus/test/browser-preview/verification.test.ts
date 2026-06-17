@@ -245,6 +245,7 @@ describe("browser preview verification", () => {
     expect(artifact?.payload?.target_id).toBe(persisted.id)
     expect(artifact?.payload?.status).toBe("failed")
     const evidence = await findReadableBrowserPreviewEvidenceByID({
+      projectRoot: tmp.path,
       taskID,
       evidenceID: result.target.latestEvidenceIDs!.desktop!,
     })

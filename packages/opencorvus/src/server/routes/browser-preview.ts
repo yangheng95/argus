@@ -136,7 +136,11 @@ export const BrowserPreviewRoutes = lazy(() =>
       async (c) => {
         const { taskID, evidenceID } = c.req.valid("param")
         requireTask(taskID)
-        const evidence = await findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID })
+        const evidence = await findReadableBrowserPreviewEvidenceByID({
+          projectRoot: Instance.directory,
+          taskID,
+          evidenceID,
+        })
         if (!evidence) return c.json({ message: `Browser preview evidence not found: ${evidenceID}` }, 404)
         return c.json(stripRuntimePathRefs(evidence) as PersistedBrowserPreviewEvidence)
       },
@@ -162,7 +166,11 @@ export const BrowserPreviewRoutes = lazy(() =>
       async (c) => {
         const { taskID, evidenceID } = c.req.valid("param")
         requireTask(taskID)
-        const capturePath = await findReadableBrowserPreviewEvidenceCapturePath({ taskID, evidenceID })
+        const capturePath = await findReadableBrowserPreviewEvidenceCapturePath({
+          projectRoot: Instance.directory,
+          taskID,
+          evidenceID,
+        })
         if (!capturePath) return c.json({ message: `Browser preview evidence capture not found: ${evidenceID}` }, 404)
         const bytes = await fs.readFile(resolveRuntimeRelativePath(Instance.directory, capturePath))
         return new Response(bytes, {
@@ -201,7 +209,12 @@ export const BrowserPreviewRoutes = lazy(() =>
       async (c) => {
         const { taskID, evidenceID, artifactName } = c.req.valid("param")
         requireTask(taskID)
-        const artifactPath = await findReadableBrowserPreviewEvidenceArtifactPath({ taskID, evidenceID, artifactName })
+        const artifactPath = await findReadableBrowserPreviewEvidenceArtifactPath({
+          projectRoot: Instance.directory,
+          taskID,
+          evidenceID,
+          artifactName,
+        })
         if (!artifactPath)
           return c.json({ message: `Browser preview evidence artifact not found: ${evidenceID}/${artifactName}` }, 404)
         const bytes = await fs.readFile(resolveRuntimeRelativePath(Instance.directory, artifactPath))

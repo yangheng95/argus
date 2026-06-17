@@ -279,8 +279,25 @@ function findBrowserPreviewEvidenceByID(input: {
       .limit(1)
       .get(),
   )
-  if (!row || !row.payload || typeof row.payload !== "object") return undefined
-  const payload = row.payload as Record<string, unknown>
+  if (!row) return undefined
+  return browserPreviewEvidenceFromRow({
+    id: row.id,
+    taskID: row.task_id,
+    payload: row.payload,
+    timeCreated: row.time_created,
+    timeUpdated: row.time_updated,
+  })
+}
+
+function browserPreviewEvidenceFromRow(input: {
+  id: string
+  taskID: string
+  payload: unknown
+  timeCreated: number
+  timeUpdated: number
+}): PersistedBrowserPreviewEvidence | undefined {
+  if (!input.payload || typeof input.payload !== "object") return undefined
+  const payload = input.payload as Record<string, unknown>
   const targetID = typeof payload.target_id === "string" ? payload.target_id : undefined
   const viewportID = typeof payload.viewport_id === "string" ? payload.viewport_id : undefined
   const operationKind = parseBrowserPreviewEvidenceOperationKind(payload.operation_kind)
@@ -299,11 +316,11 @@ function findBrowserPreviewEvidenceByID(input: {
   const diagnostics = Array.isArray(payload.diagnostics)
     ? payload.diagnostics.filter((item): item is string => typeof item === "string")
     : []
-  const timeCompleted = typeof payload.time_completed === "number" ? payload.time_completed : row.time_updated
+  const timeCompleted = typeof payload.time_completed === "number" ? payload.time_completed : input.timeUpdated
   if (!targetID || !viewportID || !operationKind || !status || !summary) return undefined
   return {
-    id: row.id,
-    taskID: row.task_id,
+    id: input.id,
+    taskID: input.taskID,
     targetID,
     viewportID,
     operationKind,
@@ -315,21 +332,23 @@ function findBrowserPreviewEvidenceByID(input: {
     capture: payload.capture === null ? undefined : payload.capture,
     diagnostics,
     timeCompleted,
-    timeCreated: row.time_created,
+    timeCreated: input.timeCreated,
   }
 }
 
 export async function findReadableBrowserPreviewEvidenceByID(input: {
+  projectRoot: string
   taskID: string
   evidenceID: string
 }): Promise<PersistedBrowserPreviewEvidence | undefined> {
   const evidence = findBrowserPreviewEvidenceByID(input)
   if (!evidence) return undefined
-  if (!(await browserPreviewEvidenceArtifactsReadable(evidence))) return undefined
+  if (!(await browserPreviewEvidenceArtifactsReadable(evidence, input.projectRoot))) return undefined
   return evidence
 }
 
 export async function findReadableBrowserPreviewEvidenceCapturePath(input: {
+  projectRoot: string
   taskID: string
   evidenceID: string
 }): Promise<string | undefined> {
@@ -339,6 +358,7 @@ export async function findReadableBrowserPreviewEvidenceCapturePath(input: {
 }
 
 export async function findReadableBrowserPreviewEvidenceArtifactPath(input: {
+  projectRoot: string
   taskID: string
   evidenceID: string
   artifactName: "source" | "implementation" | "side-by-side" | "diff"
@@ -411,14 +431,17 @@ export function persistBrowserPreviewEvidence(input: {
   return id
 }
 
-async function browserPreviewEvidenceArtifactsReadable(evidence: PersistedBrowserPreviewEvidence): Promise<boolean> {
+async function browserPreviewEvidenceArtifactsReadable(
+  evidence: PersistedBrowserPreviewEvidence,
+  projectRoot: string,
+): Promise<boolean> {
   const artifacts: Array<{ path: string; sha?: string }> = [
     ...browserPreviewCaptureArtifacts(evidence.capture),
     ...Object.values(evidence.artifactPaths ?? {}).map((artifactPath) => ({ path: artifactPath })),
   ]
   if (evidence.status === "passed" && artifacts.length === 0) return false
   for (const artifact of artifacts) {
-    const filePath = resolveRuntimeRelativePath(Instance.directory, artifact.path)
+    const filePath = resolveRuntimeRelativePath(projectRoot, artifact.path)
     let bytes: Buffer
     try {
       bytes = await fs.readFile(filePath)
@@ -528,13 +551,20 @@ function isPathRefKey(key: string): boolean {
   )
 }
 
-export function latestBrowserPreviewEvidenceIDs(input: {
+export async function latestBrowserPreviewEvidenceIDs(input: {
+  projectRoot: string
   taskID: string
   targetID: string
-}): Partial<Record<string, string>> {
+}): Promise<Partial<Record<string, string>>> {
   const rows = Database.use((db) =>
     db
-      .select({ id: EngineArtifactTable.id, payload: EngineArtifactTable.payload })
+      .select({
+        id: EngineArtifactTable.id,
+        taskID: EngineArtifactTable.task_id,
+        payload: EngineArtifactTable.payload,
+        timeCreated: EngineArtifactTable.time_created,
+        timeUpdated: EngineArtifactTable.time_updated,
+      })
       .from(EngineArtifactTable)
       .where(
         and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_EVIDENCE_KIND)),
@@ -546,7 +576,11 @@ export function latestBrowserPreviewEvidenceIDs(input: {
   for (const row of rows) {
     const meta = sqlEvidenceMeta(row.payload)
     if (meta?.targetID !== input.targetID) continue
-    latest[meta.viewportID] ??= row.id
+    if (latest[meta.viewportID]) continue
+    const evidence = browserPreviewEvidenceFromRow(row)
+    if (!evidence) continue
+    if (!(await browserPreviewEvidenceArtifactsReadable(evidence, input.projectRoot))) continue
+    latest[meta.viewportID] = row.id
   }
   return latest
 }
