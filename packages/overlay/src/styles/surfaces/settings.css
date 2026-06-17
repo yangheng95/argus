@@ -859,24 +859,6 @@
 
 /* ── LogViewer.tsx (Diagnostics tab) ─────────────────────── */
 
-/* Log level selector — small monospace dropdown above the viewer
-   that filters lines by severity. */
-.log-level-select {
-  background: var(--surface-inset);
-  color: var(--text);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  font-size: var(--ui-font-control);
-  font-family: var(--mono);
-  cursor: pointer;
-  outline: none;
-}
-
-.log-level-select:focus {
-  border-color: var(--accent);
-}
-
 /* Log viewer container — scrollable mono-font region that holds
    the log lines. The 520px max-height was already calc-wrapped
    in styles.css; everything else converted here. */

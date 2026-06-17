@@ -76,10 +76,12 @@ describe("shared Kobalte select popup colors", () => {
   const fieldCss = stripComments(readCss(join("surfaces", "field.css")))
   const composerCss = stripComments(readCss(join("surfaces", "composer.css")))
   const inspectorCss = stripComments(readCss(join("surfaces", "inspector.css")))
+  const settingsCss = stripComments(readCss(join("surfaces", "settings.css")))
   const browserPreviewPanel = readFileSync(
     join(import.meta.dir, "..", "src", "components", "BrowserPreviewPanel.tsx"),
     "utf8",
   )
+  const logViewer = readFileSync(join(import.meta.dir, "..", "src", "components", "LogViewer.tsx"), "utf8")
 
   test(".oc-select content and options use readable foreground tokens", () => {
     const contentBlock = fieldCss.match(/\.oc-select-content\s*{[^}]*}/)?.[0] ?? ""
@@ -113,6 +115,13 @@ describe("shared Kobalte select popup colors", () => {
     expect(candidateContentBlock).not.toMatch(/color\s*:/)
     expect(candidateOptionBlock).not.toMatch(/color\s*:/)
     expect(candidateOptionBlock).not.toMatch(/background\s*:/)
+  })
+
+  test("log viewer level dropdown uses the shared Select trigger chrome", () => {
+    expect(logViewer).toContain('class="field-input oc-select-trigger log-level-select-trigger"')
+
+    expect(settingsCss).not.toContain(".log-level-select {")
+    expect(settingsCss).not.toContain(".log-level-select:focus")
   })
 })
 

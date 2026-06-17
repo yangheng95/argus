@@ -309,7 +309,7 @@ export function LogViewer(props: LogViewerProps) {
             gutter={4}
             sameWidth
           >
-            <Select.Trigger class="field-input log-level-select-trigger" aria-label={t("log.filter_level")}>
+            <Select.Trigger class="field-input oc-select-trigger log-level-select-trigger" aria-label={t("log.filter_level")}>
               <Select.Value<LogLevel>>
                 {(state) => <span>{(state.selectedOption() ?? "debug").toUpperCase()}</span>}
               </Select.Value>
