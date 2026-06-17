@@ -106,12 +106,9 @@ describe("flat-redesign Icon primitive registry", () => {
 })
 
 describe("flat-redesign character-icon callsites are gone", () => {
-  // Excluded files: in-text status indicators (✓ ✗ ⧉) that aren't
-  // icons in the structural sense — they're inline glyphs in copy.
-  const EXCLUDED = new Set([
-    join(COMPONENTS_ROOT, "TracePanel.tsx"),
-    join(COMPONENTS_ROOT, "EvaluationCriteriaPanel.tsx"),
-  ])
+  // No component exclusions: migrated panels must stay covered by the
+  // character-icon guard.
+  const EXCLUDED = new Set<string>()
 
   // Patterns we forbid across .tsx components and main.tsx. Each
   // entry is `[label, regex]`. Regex must match a JSX literal or an
