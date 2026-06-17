@@ -338,8 +338,7 @@ export namespace SkillManager {
     }
 
     const source = normalizeGit(input.value)
-    const root = managedRoot()
-    const target = path.join(root, slug(source))
+    const target = managedGitTarget(source)
     await ensureManagedRepo(source, target)
     await ensureSkillDir(target)
     await Filesystem.writeJson(path.join(target, MANIFEST), {
@@ -411,7 +410,7 @@ export namespace SkillManager {
     const input = RemoveInput.parse(raw)
     const source =
       input.kind === "git"
-        ? path.join(managedRoot(), slug(input.source))
+        ? managedGitTarget(normalizeGit(input.source))
         : input.kind === "url"
           ? input.source
           : resolveSource(input.source)
@@ -423,7 +422,7 @@ export namespace SkillManager {
     })
 
     if (Filesystem.contains(managedRoot(), source)) {
-      await rm(source, { recursive: true, force: true }).catch(() => undefined)
+      await rm(source, { recursive: true, force: true })
     }
 
     await Config.state.reset()
@@ -479,11 +478,31 @@ function slug(value: string) {
     .toLowerCase()
 }
 
+function managedGitTarget(source: string) {
+  const root = SkillManager.managedRoot()
+  const name = slug(source)
+  if (
+    !name ||
+    name === "." ||
+    name === ".." ||
+    path.basename(name) !== name ||
+    path.isAbsolute(name) ||
+    path.win32.isAbsolute(name)
+  ) {
+    throw new Error(`Invalid git skill source slug: ${source}`)
+  }
+  const target = path.resolve(root, name)
+  if (target === path.resolve(root) || !Filesystem.contains(root, target)) {
+    throw new Error(`Invalid git skill source slug: ${source}`)
+  }
+  return target
+}
+
 async function ensureManagedRepo(source: string, dest: string) {
   const git = which("git")
   if (!git) throw new Error("git is required to install skills from repositories")
-  await Filesystem.write(path.join(dest, ".keep"), "").catch(() => undefined)
-  await rm(path.join(dest, ".keep"), { force: true }).catch(() => undefined)
+  await Filesystem.write(path.join(dest, ".keep"), "")
+  await rm(path.join(dest, ".keep"), { force: true })
 
   if (await Filesystem.isDir(path.join(dest, ".git"))) {
     await Process.run([git, "-C", dest, "pull", "--ff-only"])
