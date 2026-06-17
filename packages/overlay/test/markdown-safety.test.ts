@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test"
+import { afterAll, expect, test } from "bun:test"
+import { installIconHtmlRenderer } from "../src/utils/icon-html"
 import {
   CODE_BLOCK_RENDER_LINE_LIMIT,
   MARKDOWN_DATA_IMAGE_CHAR_LIMIT,
@@ -6,6 +7,15 @@ import {
   renderCodeBlock,
   renderMarkdown,
 } from "../src/utils/markdown"
+
+const disposeIconHtmlRenderer = installIconHtmlRenderer(({ name, size }) => {
+  if (name !== "copy") throw new Error(`Unknown test icon "${name}"`)
+  return `<svg data-test-icon="${name}" width="${size}" height="${size}" aria-hidden="true"></svg>`
+})
+
+afterAll(() => {
+  disposeIconHtmlRenderer()
+})
 
 test("renderMarkdown escapes raw html instead of injecting it", () => {
   const html = renderMarkdown("<script>alert(1)</script>\n<img src=x onerror=alert(1)>")

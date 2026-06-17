@@ -6,6 +6,7 @@
 import { render } from "solid-js/web"
 import { createEffect, createRoot, createSignal, untrack } from "solid-js"
 import { App } from "./components/App"
+import { Icon, LUCIDE_ICON_NAMES, REGISTERED_ICONS, type IconName } from "./components/Icon"
 import { Conversation } from "./components/Conversation"
 import { TaskList } from "./components/TaskList"
 import { CodingAssistantSessionList } from "./components/CodingAssistantSessionList"
@@ -59,7 +60,7 @@ import { teardownApp } from "./services/init"
 import { stopTimers } from "./services/sync"
 import { nativeOpen } from "./utils/native"
 import { getHostTransport } from "./services/host-transport"
-import { hydrateIconPlaceholders } from "./utils/icon-html"
+import { hydrateIconPlaceholders, installIconHtmlRenderer } from "./utils/icon-html"
 import { installNativeContextMenuSuppression } from "./utils/context-menu"
 import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
 import { applyDirectory, activeDirectory, openPathInSelectedEditor } from "./services/workspace"
@@ -104,6 +105,34 @@ if ((import.meta as any).hot) {
   ;(import.meta as any).hot.dispose(runModuleTeardown)
 }
 const listenerOpts = { signal: moduleTeardown.signal } as const
+const REGISTERED_ICON_NAMES = new Set<string>(REGISTERED_ICONS)
+const LUCIDE_ICON_NAME_SET = new Set<string>(LUCIDE_ICON_NAMES)
+
+function iconHtmlName(name: string): IconName {
+  if (!REGISTERED_ICON_NAMES.has(name)) throw new Error(`Unknown icon "${name}"`)
+  return name as IconName
+}
+
+function iconHtmlClassName(name: string, className?: string): string {
+  if (LUCIDE_ICON_NAME_SET.has(name)) return className ?? ""
+  return ["lucide", `lucide-${name}`, className].filter(Boolean).join(" ")
+}
+
+disposers.push(
+  installIconHtmlRenderer(({ name, size, className }) => {
+    const resolvedName = iconHtmlName(name)
+    const root = document.createElement("span")
+    const dispose = render(
+      () => Icon({ name: resolvedName, size, class: iconHtmlClassName(resolvedName, className) }),
+      root,
+    )
+    try {
+      return root.innerHTML
+    } finally {
+      dispose()
+    }
+  }),
+)
 installNativeContextMenuSuppression(document, moduleTeardown.signal)
 hydrateIconPlaceholders(document)
 

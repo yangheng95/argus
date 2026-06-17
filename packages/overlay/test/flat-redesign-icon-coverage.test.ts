@@ -28,6 +28,7 @@ import { join } from "node:path"
 const COMPONENTS_ROOT = join(import.meta.dir, "..", "src", "components")
 const ICON_TSX = readFileSync(join(COMPONENTS_ROOT, "Icon.tsx"), "utf8")
 const ICON_HTML_TSX = readFileSync(join(import.meta.dir, "..", "src", "utils", "icon-html.tsx"), "utf8")
+const MAIN_TSX = readFileSync(join(import.meta.dir, "..", "src", "main.tsx"), "utf8")
 
 function registeredIconsFromSource(): string[] {
   // Carve out the union body between `export type IconName =` and the
@@ -90,13 +91,17 @@ describe("flat-redesign Icon primitive registry", () => {
     expect(ICON_TSX).toContain('fill="none"')
   })
 
-  test("iconHtml uses browser-safe Solid rendering", () => {
-    expect(ICON_HTML_TSX).toContain('from "solid-js/web"')
-    expect(ICON_HTML_TSX).toContain("render(")
-    expect(ICON_HTML_TSX).toContain("REGISTERED_ICONS")
-    expect(ICON_HTML_TSX).toContain('throw new Error(`Unknown icon "${name}"`)')
+  test("iconHtml is a pure utility entry installed by the Icon primitive owner", () => {
+    expect(ICON_HTML_TSX).toContain("installIconHtmlRenderer")
+    expect(ICON_HTML_TSX).toContain('"iconHtml renderer has not been installed"')
+    expect(ICON_HTML_TSX).not.toContain("../components/Icon")
     expect(ICON_HTML_TSX).not.toContain("ICON_PATHS")
     expect(ICON_HTML_TSX).not.toContain("renderToString")
+    expect(MAIN_TSX).toContain("installIconHtmlRenderer")
+    expect(MAIN_TSX).toContain("REGISTERED_ICONS")
+    expect(MAIN_TSX).toContain("LUCIDE_ICON_NAMES")
+    expect(MAIN_TSX).toContain("render(")
+    expect(MAIN_TSX).not.toContain("renderToString")
   })
 })
 
@@ -145,9 +150,8 @@ describe("flat-redesign character-icon callsites are gone", () => {
         throw new Error(
           `${label} regressed in:\n  ${violations.join("\n  ")}\n` +
             `Use <Icon name="..." /> from components/Icon.tsx, or — for ` +
-            `innerHTML template flows — an inline SVG matching the Icon ` +
-            `primitive contract (viewBox 16, stroke=currentColor, stroke-` +
-            `width 1.4, line-cap/join round).`,
+            `innerHTML template flows — iconHtml() installed by the Icon ` +
+            `primitive owner.`,
         )
       }
     })

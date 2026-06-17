@@ -1,13 +1,23 @@
-import { afterEach, expect, test } from "bun:test"
+import { afterAll, afterEach, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { __setHostTransportForTest, type HostTransport, type NativeCommand } from "../src/services/host-transport"
+import { installIconHtmlRenderer } from "../src/utils/icon-html"
 import { setLocaleData } from "../src/utils/i18n"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 const { editorTargetPath, openDirectoryInEditor, openPathInSelectedEditor } = await import("../src/services/workspace")
 const { applySettings, DEFAULT_SETTINGS } = await import("../src/store/settings")
 const { pathBreadcrumb } = await import("../src/utils/dom-utils")
+
+const disposeIconHtmlRenderer = installIconHtmlRenderer(({ name, size }) => {
+  if (name !== "folder" && name !== "close") throw new Error(`Unknown test icon "${name}"`)
+  return `<svg data-test-icon="${name}" width="${size}" height="${size}" aria-hidden="true"></svg>`
+})
+
+afterAll(() => {
+  disposeIconHtmlRenderer()
+})
 
 afterEach(() => {
   __setHostTransportForTest(undefined)
