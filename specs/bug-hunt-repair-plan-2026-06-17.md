@@ -1271,3 +1271,60 @@ LINE:
 - Kant confirmed that only `ENOENT` may mean "shared session not initialized"; corrupt JSON, invalid shape, empty `session_id`, and non-`ENOENT` read errors must fail closed.
 - Kant required write failure to remain non-binding and non-prompting, with no warning-only use of an unpersisted session.
 - Kant also flagged `start()` preloading as a side-effect risk; shared-session validation now runs before server/event/adapter startup so corrupt files reject without half-started runtime state.
+
+## Batch P1-N: BH-092 audio downloads must enforce STT size before buffering
+
+### Findings
+
+- BH-092 is a P1 channel-runtime memory and availability bug: Slack and Telegram adapters fetch full audio payloads into memory with `arrayBuffer()` before STT size validation runs in `STTPipeline.transcribe()`.
+- Slack exposes audio file `size` metadata in the message event, but the adapter ignored it and downloaded `url_private` first.
+- Telegram exposes `file_size` metadata on voice/audio messages and on `getFile()` results, but the adapter ignored it and downloaded the file URL first.
+- A response without usable metadata can still exceed the STT limit while streaming. The runtime must stop reading as soon as the accumulated bytes cross the limit instead of buffering the whole body and rejecting later.
+
+### Call-point Inventory
+
+- `packages/channel-runtime/src/adapters/slack.ts` owns Slack `file_share` audio detection, bearer-authenticated `url_private` download, and `AudioAttachment` construction.
+- `packages/channel-runtime/src/adapters/telegram.ts` owns voice/audio message handling, `bot.api.getFile()`, Telegram file URL construction, and `AudioAttachment` construction.
+- `packages/channel-runtime/src/stt/pipeline.ts` owns final transcription-time audio size enforcement through `STTConfig.maxFileSizeBytes`.
+- `packages/channel-runtime/src/stt/types.ts` documents the STT max size config contract.
+- `packages/channel-runtime/src/core.ts` receives adapter `AudioAttachment` objects and sends them to STT; it should not own platform download limits.
+- Existing tests cover STT pipeline behavior, but there are no Slack/Telegram audio predownload regression tests.
+
+### Fix Shape
+
+- Add a single STT default audio size constant and shared assertion helper under `packages/channel-runtime/src/stt/limits.ts`.
+- Replace the old eager `AudioAttachment { data: Buffer }` contract with lazy `AudioSource { read(maxFileSizeBytes) }`. Adapters only describe the audio source; the STT pipeline owns bounded reading.
+- Add `downloadAudioBuffer()` / `createHttpAudioSource()` in `packages/channel-runtime/src/adapters/audio-download.ts`. The downloader checks platform metadata size before fetch, checks HTTP `Content-Length` before reading the body, and streams chunks while enforcing the same max byte limit.
+- Slack passes `url_private`, bearer headers, `mimetype`, `name`, `size`, and `duration_ms` into a lazy HTTP audio source without downloading during adapter dispatch.
+- Telegram passes message `file_size` into a lazy source without calling `getFile()` during adapter dispatch. `getFile().file_size` is checked inside `read()` before the file URL body is fetched.
+- `STTPipeline.transcribe()` now accepts `AudioSource`, checks metadata before opening it, calls `read(maxFileSizeBytes)`, rechecks the resulting `AudioBuffer`, and only then invokes the provider.
+- STT provider fallback is removed as part of this boundary cleanup: `STT_PROVIDER` names exactly one provider, `STT_PROVIDERS` is rejected, and managed channel runtime passes the scoped runtime env into `createConfiguredSTT()` instead of reading global `process.env`.
+- `ChannelRuntime.handleMessage()` treats STT failure as a visible voice-processing failure and returns before normal text prompt submission, so audio failures are not silently converted into text-only prompts.
+- No fallback path keeps the old `arrayBuffer()`-first behavior for normal streamed responses, no provider fallback is retained, and no adapter-local size constant is introduced.
+
+### Regression Tests
+
+- Add `packages/channel-runtime/test/audio-download.test.ts` to assert metadata rejects before `fetch`, oversized `Content-Length` rejects before body consumption, and streamed oversized responses cancel before all chunks are buffered.
+- Add `packages/channel-runtime/test/slack-adapter.test.ts` to assert Slack emits lazy audio metadata without calling `fetch`; oversized metadata rejects from the source before fetch.
+- Add `packages/channel-runtime/test/telegram-adapter.test.ts` to assert Telegram emits lazy audio metadata without calling `getFile()` or `fetch`; oversized message metadata rejects before either call.
+- Extend `packages/channel-runtime/test/stt-pipeline.test.ts` so oversized source metadata rejects before `read()` and before provider invocation.
+- Add `packages/channel-runtime/test/core-stt.test.ts` so disabled STT never reads audio, and STT failure does not submit a text-only fallback prompt.
+
+### Verification
+
+- Focused test command: `bun test packages/channel-runtime/test/audio-download.test.ts packages/channel-runtime/test/slack-adapter.test.ts packages/channel-runtime/test/telegram-adapter.test.ts packages/channel-runtime/test/stt-pipeline.test.ts packages/channel-runtime/test/core-stt.test.ts`
+- Typecheck command: `bun run --cwd packages/channel-runtime typecheck`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Focused tests passed: `bun test packages/channel-runtime/test/audio-download.test.ts packages/channel-runtime/test/slack-adapter.test.ts packages/channel-runtime/test/telegram-adapter.test.ts packages/channel-runtime/test/stt-pipeline.test.ts packages/channel-runtime/test/core-stt.test.ts`.
+- Package typecheck passed: `bun run --cwd packages/channel-runtime typecheck`.
+- Managed runtime env isolation regression passed with explicit runner timeout for this Windows workspace: `bun test packages/opencorvus/test/channel/supervisor-env.test.ts --timeout 20000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Independent Review Feedback
+
+- McClintock rejected an adapter-only bounded-buffer fix because it would still keep the eager `AudioAttachment.data` contract and would not prevent downloads when STT is disabled.
+- McClintock required the STT pipeline to become the single audio acquisition boundary: metadata size check, response `Content-Length` check, stream chunk accounting, and provider invocation must all happen behind one bounded source reader.
+- McClintock also flagged the existing dirty STT provider fallback work as a separate risk. The final patch makes that behavior explicit: one configured provider, no `STT_PROVIDERS` fallback chain, and no managed-runtime global env read.
