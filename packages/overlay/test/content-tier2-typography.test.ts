@@ -59,7 +59,7 @@ describe(".dialog-subtitle renders Title Case", () => {
 })
 
 describe("legitimate tier-3 pills keep uppercase (negative control)", () => {
-  for (const sel of [".verdict-pill", ".req-status", ".gwg-step-status", ".reasoning-label"]) {
+  for (const sel of [".verdict-pill", ".req-status", ".gwg-verdict", ".reasoning-label"]) {
     test(`${sel} stays uppercase`, () => {
       expect(ruleBody(sel)).toContain("text-transform: uppercase")
     })
