@@ -1732,3 +1732,58 @@ LINE:
 - Carver independently confirmed BH-066 was still present before this batch and that the parser was not the root cause.
 - Carver identified the user-facing tool and lower-level `Patch.applyHunksToFiles(...)` as same-semantic write paths that must not diverge.
 - Carver recommended rejecting existing targets before `ctx.ask(...)`, preserving original content, replacing the old overwrite test, adding a mixed-patch no-side-effect regression, and using exclusive create writes to avoid validation/write races.
+
+## Batch P1-W: BH-064 URL skill discovery must reject traversal paths
+
+### Findings
+
+- BH-064 is a P1 filesystem write bug in `packages/opencorvus/src/skill/discovery.ts`.
+- `Discovery.pull(...)` trusted remote `index.json` values and used `skill.name` directly in `path.join(cache, skill.name)`.
+- It also used each remote `file` directly in `path.join(root, file)` and in `new URL(file, ...)`.
+- A malicious registry could use `../` or URL-like path strings to write outside `Discovery.dir()` or request unintended file URLs.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/skill/discovery.ts` owns URL registry index fetch, download path construction, cache writes, and returned skill directories.
+- `packages/opencorvus/src/skill/skill.ts` calls `Discovery.pull(...)` for configured `skills.urls` during skill discovery.
+- `packages/opencorvus/src/skill/manager.ts` calls `Discovery.pull(...)` for `SkillManager.install({ kind: "url" })` and then persists URL source metadata for returned roots.
+- `packages/opencorvus/src/util/filesystem.ts` already provides `Filesystem.contains(...)`; the fix reuses it instead of creating a parallel containment rule.
+- `packages/opencorvus/test/skill/discovery.test.ts` already covers normal URL discovery, trailing-slash handling, invalid indexes, reference files, and cache reuse.
+
+### Fix Shape
+
+- Build and validate the full download plan before any `mkdir(...)` or file download.
+- Validate remote `skill.name` as a single safe relative path segment.
+- Validate each remote file as a POSIX relative path segment sequence.
+- Reject empty values, trimmed-different values, `.` / `..` / empty segments, backslashes, absolute paths, Windows drive paths, URL-like `:`, query `?`, and fragment `#`.
+- Resolve local targets from validated path segments and assert skill roots remain under `Discovery.dir()` and file targets remain under their skill root.
+- Build download URLs from the validated encoded path segments, not from raw remote strings.
+- Fail closed on unsafe entries; do not slug, sanitize, skip bad entries, fall back to empty result, add host allowlists, or move validation to UI/config gates.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/skill/discovery.test.ts`.
+- Add a fixture registry with `name: "../escaped-skill"` and another entry with `files: ["SKILL.md", "../escape.txt"]`; assert `Discovery.pull(...)` rejects and nothing is written outside or inside partial safe roots.
+- Add a safe-name malicious-file fixture with `files: ["SKILL.md", "../file-escape.txt"]`; assert rejection and no partial `SKILL.md`.
+- Add URL-like file path fixture `https://attacker.invalid/SKILL.md`; assert only `index.json` is requested and no partial skill file is written.
+- Add Windows backslash traversal fixture `..\\escape.txt`; assert only `index.json` is requested and no partial skill file is written.
+
+### Verification
+
+- Red traversal regression before fix: `bun test packages/opencorvus/test/skill/discovery.test.ts -t "rejects traversal entries" --timeout 20000` failed because `Discovery.pull(...)` resolved instead of rejecting.
+- Focused regressions after fix passed:
+  - `bun test packages/opencorvus/test/skill/discovery.test.ts -t "rejects" --timeout 30000`
+- Full discovery suite passed: `bun test packages/opencorvus/test/skill/discovery.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+
+### Result
+
+- Implemented on 2026-06-18.
+- URL skill discovery now validates the whole remote file plan before any file write.
+- Remote path traversal, Windows-style traversal, absolute paths, and URL-like file paths fail before download or cache writes.
+
+### Independent Review Feedback
+
+- Russell independently confirmed BH-064 was still present and that the parser was not the root cause.
+- Russell identified the two production entry points as configured `skills.urls` in `Skill.all()` and URL install in `SkillManager.install(...)`.
+- Russell recommended validating the whole index before downloading, reusing `Filesystem.contains(...)`, rejecting unsafe entries visibly, and avoiding sanitizing/slugging/skip-bad-entry compatibility behavior.
