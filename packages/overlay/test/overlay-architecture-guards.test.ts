@@ -1046,9 +1046,14 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).not.toMatch(/rgba\(196,\s*215,\s*252/)
   })
 
-  test("prompt catalog is owned by surfaces/settings.css", () => {
+  test("prompt catalog profile preview is owned by surfaces/settings.css without retired editor chrome", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    for (const className of ["prompt-preview-card", "prompt-preview-body"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
 
     for (const className of [
       "prompt-grid",
@@ -1058,19 +1063,17 @@ describe("overlay architecture guards", () => {
       "prompt-editor-head",
       "prompt-editor-actions",
       "prompt-textarea",
-      "prompt-preview-card",
-      "prompt-preview-body",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(settingsSurface).toMatch(/\.prompt-card-head\s*\{/)
-    expect(settingsSurface).toMatch(/\.prompt-card-copy span,\s*\.prompt-card-copy small\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.prompt-card-head\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.prompt-card-copy span,\s*\.prompt-card-copy small\s*\{/)
     expect(settingsSurface).not.toMatch(/\.prompt-preview-head\s*\{/)
-    expect(settingsSurface).toMatch(/\.oc-tabs\[data-ui="prompt-view-tabs"\]\s*\{/)
-    expect(settingsSurface).toMatch(/\.oc-tab\[data-ui="prompt-view-tab"\]\s*\{/)
-    expect(settingsSurface).toMatch(/\.oc-tab\[data-ui="prompt-view-tab"\]\[data-active="true"\]\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.oc-tabs\[data-ui="prompt-view-tabs"\]\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.oc-tab\[data-ui="prompt-view-tab"\]\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.oc-tab\[data-ui="prompt-view-tab"\]\[data-active="true"\]\s*\{/)
     expect(settingsSurface).not.toMatch(/\.prompt-diff-details\s*\{/)
     expect(settingsSurface).not.toMatch(/\.prompt-diff-summary\s*\{/)
     expect(settingsSurface).not.toMatch(/\.prompt-preview-card--default\s*\{/)

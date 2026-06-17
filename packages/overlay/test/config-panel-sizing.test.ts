@@ -79,7 +79,6 @@ describe("config panel sizing", () => {
       ".about-author-card",
       ".about-info-grid",
       ".about-shortcut-grid",
-      ".prompt-card",
       ".prompt-preview-card",
       ".extension-head",
       ".extension-row",
@@ -145,23 +144,25 @@ describe("config panel sizing", () => {
     expect(bodyOf(".knowledge-list::-webkit-scrollbar")).toContain("width: var(--session-scrollbar-size)")
   })
 
-  test("prompt editor switches markdown code and preview in one tab surface", () => {
-    expect(PROMPT_CATALOG_TSX).toContain("<Tabs")
-    expect(PROMPT_CATALOG_TSX).toContain("<Tab")
-    expect(PROMPT_CATALOG_TSX).toContain('data-ui="prompt-view-tabs"')
-    expect(PROMPT_CATALOG_TSX).toContain('data-ui="prompt-view-tab"')
+  test("prompt profile editor has no retired per-agent prompt editor surface", () => {
+    expect(PROMPT_CATALOG_TSX).not.toContain("<Tabs")
+    expect(PROMPT_CATALOG_TSX).not.toContain("<Tab")
+    expect(PROMPT_CATALOG_TSX).not.toContain('data-ui="prompt-view-tabs"')
+    expect(PROMPT_CATALOG_TSX).not.toContain('data-ui="prompt-view-tab"')
     expect(PROMPT_CATALOG_TSX).not.toContain('role="tablist"')
     expect(PROMPT_CATALOG_TSX).not.toContain('role="tab"')
-    expect(PROMPT_CATALOG_TSX).toContain('type PromptViewMode = "code" | "preview" | "default"')
-    expect(PROMPT_CATALOG_TSX).toContain('when={viewMode(entryID) !== "code"}')
-    expect(PROMPT_CATALOG_TSX).toContain('class="field-input prompt-textarea"')
+    expect(PROMPT_CATALOG_TSX).not.toContain('type PromptViewMode = "code" | "preview" | "default"')
+    expect(PROMPT_CATALOG_TSX).not.toContain('when={viewMode(entryID) !== "code"}')
+    expect(PROMPT_CATALOG_TSX).not.toContain('class="field-input prompt-textarea"')
+    expect(PROMPT_CATALOG_TSX).toContain('class="field-input prompt-profile-textarea"')
     expect(PROMPT_CATALOG_TSX).toContain('class="prompt-preview-card prompt-preview-card--attached"')
     expect(PROMPT_CATALOG_TSX).not.toContain('class="prompt-toolbar"')
     expect(PROMPT_CATALOG_TSX).not.toContain('<details class="prompt-diff-details">')
     expect(PROMPT_CATALOG_TSX).not.toContain('{t("prompt.show_default")}')
-    expect(bodyOf('.oc-tabs[data-ui="prompt-view-tabs"]')).toMatch(/--oc-tabs-gap\s*:/)
-    expect(bodyOf(".prompt-editor-actions")).toMatch(/display:\s*inline-flex/)
-    expect(bodyOf('.oc-tab[data-ui="prompt-view-tab"][data-active="true"]')).toMatch(/--oc-tab-bg:\s*var\(--surface\)/)
+    expect(SETTINGS_CSS).not.toContain('data-ui="prompt-view-tabs"')
+    expect(SETTINGS_CSS).not.toContain('data-ui="prompt-view-tab"')
+    expect(SETTINGS_CSS).not.toContain(".prompt-textarea")
+    expect(SETTINGS_CSS).not.toContain(".prompt-editor-actions")
     expect(bodyOf(".prompt-preview-card--attached")).toMatch(/min-height:\s*calc\(160px \* var\(--ui-scale\)\)/)
   })
 })
