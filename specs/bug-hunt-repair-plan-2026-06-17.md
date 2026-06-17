@@ -2193,3 +2193,52 @@ LINE:
 
 - Mendel initially flagged the older 2026-06-05 no-wake terminal contract, then re-reviewed against the later 2026-06-09, 2026-06-10, and 2026-06-14 specs.
 - Final independent conclusion: terminal follow-up messages currently requeue/wake, but completed tasks must requeue rather than become active. The root fix belongs in task-api's completed reopen path, not in queue fallback logic.
+
+## Batch P1-AF: BH-034 live browser preview commands must be serial inside a sidecar session
+
+### Findings
+
+- BH-034 targets `packages/opencorvus/src/browser-preview/live.ts`, specifically the embedded `BROWSER_PREVIEW_LIVE_SCRIPT` stdin loop.
+- `browserPreviewLiveSession(...)` already creates one `BrowserPreviewLiveSidecar` per `taskID:targetID:viewportID`; that sidecar is the single live-session owner for mutable Playwright state.
+- Host-side `BrowserPreviewLiveSidecar.command(...)` tracks pending command IDs and timeouts, but it writes JSON lines immediately. It does not serialize command execution.
+- The sidecar script reads all complete stdin lines from a chunk and calls `handle(message).catch(...)` without awaiting the previous command. Concurrent `ensurePage(...)`, `applyInput(...)`, and `capture(...)` calls share mutable globals: `browser`, `context`, `page`, `currentUrl`, and `currentViewport`.
+- The root bug is not route validation or target lookup. It is the sidecar session execution loop allowing same-session commands to run concurrently.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/browser-preview/live.ts::captureBrowserPreviewLiveSnapshot(...)` sends snapshot commands to the live sidecar.
+- `packages/opencorvus/src/browser-preview/live.ts::interactBrowserPreviewLive(...)` sends input commands to the same live sidecar.
+- `packages/opencorvus/src/browser-preview/live.ts::browserPreviewLiveSession(...)` defines the live session key and sidecar reuse boundary.
+- `packages/opencorvus/src/browser-preview/live.ts::BrowserPreviewLiveSidecar.command(...)` owns host pending response matching and command timeout handling.
+- `packages/opencorvus/src/browser-preview/live.ts::BROWSER_PREVIEW_LIVE_SCRIPT` owns the child process stdin loop, `ensurePage(...)`, `capture(...)`, `applyInput(...)`, and `handle(...)`.
+- `packages/opencorvus/src/server/routes/browser-preview.ts` is only the HTTP route surface and should not add a route-level queue.
+- `packages/opencorvus/test/browser-preview/live-lifecycle.test.ts` already uses source-level lifecycle guards for the embedded sidecar script.
+- `packages/opencorvus/test/server/browser-preview-routes.test.ts` owns route-level live snapshot/input coverage.
+
+### Fix Shape
+
+- Add a sidecar-local promise chain and enqueue each parsed command through it.
+- Each command in the chain must settle to a stdout response before the next command starts, preserving stdin order for a single live session.
+- A failed command must write the same structured `{ id, ok:false, error }` response and must not poison the chain for later commands.
+- Do not add a host route queue, alternate browser context source, fallback screenshot path, or duplicate target/session store.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/browser-preview/live-lifecycle.test.ts` to assert the embedded sidecar script contains a serial command chain and no longer directly starts `handle(message)` from the stdin parser.
+- Add route-level concurrent live input coverage in `packages/opencorvus/test/server/browser-preview-routes.test.ts`: warm the same live session, fire two concurrent inputs, and use page-colour evidence to prove the second command observes the first command's completed state instead of racing ahead.
+
+### Verification
+
+- New lifecycle guard failed before the implementation because `BROWSER_PREVIEW_LIVE_SCRIPT` did not contain `commandChain` or `enqueueCommand(...)` and still called `handle(message).catch(...)` directly from the stdin parser.
+- Implemented on 2026-06-18: the embedded sidecar script now enqueues parsed commands through a sidecar-local `commandChain`; each command writes a structured success or failure response before the next command starts.
+- Added a route-level concurrent live-input regression whose page paints red after the first command completes, paints blue only if the second command sees that completed state, and paints a persistent race colour if the second command runs too early. The second response and final snapshot must both be blue.
+- Focused regression passed: `bun test packages/opencorvus/test/browser-preview/live-lifecycle.test.ts packages/opencorvus/test/server/browser-preview-routes.test.ts -t "serializes commands|serializes concurrent same-session" --timeout 60000`.
+- Full lifecycle suite passed: `bun test packages/opencorvus/test/browser-preview/live-lifecycle.test.ts --timeout 30000`.
+- Full browser-preview route suite passed: `bun test packages/opencorvus/test/server/browser-preview-routes.test.ts --timeout 60000`.
+- Package typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Lagrange confirmed the live session key `taskID:targetID:viewportID` is the correct serialization boundary because the embedded sidecar owns the mutable Playwright `browser/context/page` state.
+- Lagrange recommended strengthening the route test from simple red/blue clicks into an ordered/race visual assertion. The final route regression uses that shape.
