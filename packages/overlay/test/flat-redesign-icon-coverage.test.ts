@@ -93,6 +93,9 @@ describe("flat-redesign Icon primitive registry", () => {
   test("iconHtml uses browser-safe Solid rendering", () => {
     expect(ICON_HTML_TSX).toContain('from "solid-js/web"')
     expect(ICON_HTML_TSX).toContain("render(")
+    expect(ICON_HTML_TSX).toContain("REGISTERED_ICONS")
+    expect(ICON_HTML_TSX).toContain('throw new Error(`Unknown icon "${name}"`)')
+    expect(ICON_HTML_TSX).not.toContain("ICON_PATHS")
     expect(ICON_HTML_TSX).not.toContain("renderToString")
   })
 })
