@@ -30,20 +30,26 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(main).toContain("function leftActivityDefinition(activity: LeftActivity)")
   expect(main).not.toContain("LEFT_ACTIVITY_TITLE_KEYS")
   expect(main).toContain("const titleKey = activityDefinition.labelKey")
-  expect(main).toContain('taskActions.dataset.i18nAriaLabel = titleKey')
+  expect(main).toContain("taskActions.dataset.i18nAriaLabel = titleKey")
   expect(main).toContain('taskActions.setAttribute("aria-label", titleText)')
   expect(main).toContain("selectLeftActivity")
   expect(main).toContain('setSelectedLeftActivity("assistant")')
   expect(main).toContain("isLeftActivityOpen")
   expect(main.indexOf('id: "mission", icon: "mission"')).toBeLessThan(main.indexOf('id: "tasks", icon: "tasks"'))
-  expect(main).toContain('const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")')
+  expect(main).toContain(
+    'const [selectedLeftActivity, setSelectedLeftActivity] = createSignal<LeftActivity>("mission")',
+  )
   expect(main).toContain(
     'const [selectedLeftPanelActivity, setSelectedLeftPanelActivity] = createSignal<LeftActivity>("mission")',
   )
-  expect(main).toContain('const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")')
+  expect(main).toContain(
+    'const [primaryCenterPanel, setPrimaryCenterPanel] = createSignal<PrimaryCenterPanel>("mission")',
+  )
   expect(html).toContain('id="leftPanelTasks" data-side-activity="tasks" data-active="false"')
   expect(html).toContain('id="leftPanelMissions" data-side-activity="mission" data-active="true"')
-  expect(main).toContain('id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks"')
+  expect(main).toContain(
+    'id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks"',
+  )
   expect(main).toContain(
     'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
   )
@@ -80,6 +86,7 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   )
   expect(activityCss).toContain(".sidebar-tool-panel .tool-panel-toolbar")
   expect(activityCss).toContain('.sidebar-tool-panel .oc-button[data-ui="tool-panel-action"]')
+  expect(activityCss).toContain(".sidebar-tool-panel .config-status-box")
   expect(activityCss).toContain('.sidebar-tool-panel .memory-panel[data-compact="true"] .knowledge-toolbar')
   expect(activityCss).toContain(".sidebar-tool-panel .extension-row")
   expect(activityCss).toContain(".sidebar-tool-panel .extension-row-main > span")

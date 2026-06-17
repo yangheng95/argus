@@ -226,6 +226,23 @@
   gap: calc(6px * var(--ui-scale));
 }
 
+.sidebar-tool-panel .config-status-box {
+  align-items: flex-start;
+  margin: calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale)) 0;
+  padding: calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-left-width: calc(2px * var(--ui-scale));
+  border-radius: calc(6px * var(--ui-scale));
+  background: var(--surface-inset);
+  line-height: 1.35;
+  min-height: 0;
+}
+
+.sidebar-tool-panel .config-status-box .oc-button {
+  flex: 0 0 auto;
+  margin-top: calc(-2px * var(--ui-scale));
+}
+
 .sidebar-tool-panel .extension-list,
 .sidebar-tool-panel .knowledge-list {
   flex: 1 1 0;

@@ -3,7 +3,7 @@ import { boardStore, setBoardStore } from "../src/store/board"
 import { setSettingsStore } from "../src/store/settings"
 import { appStore, setAppStore } from "../src/store/app"
 import { apiUrl } from "../src/services/api"
-import { activeDirectory, closeProject } from "../src/services/workspace"
+import { activeDirectory, closeProject, pickDirectory, pickFiles } from "../src/services/workspace"
 import { startTaskListSSE, stopTaskListSSE } from "../src/services/sse"
 import { __setHostTransportForTest, HOST_CAPABILITIES, type HostTransport } from "../src/services/host-transport"
 import { activeTaskID } from "../src/store/board"
@@ -169,5 +169,24 @@ describe("workspace active directory", () => {
     closeProject()
 
     expect(closeCalls).toBe(1)
+  })
+
+  test("native pickers preserve cancel but reject malformed host payloads", async () => {
+    const nativeResponses: unknown[] = [null, "D:/picked", undefined, ["D:/a", "D:/b"], { path: "D:/bad" }, ["D:/ok", 123]]
+    __setHostTransportForTest({
+      kind: "browser",
+      capabilities: HOST_CAPABILITIES.browser,
+      request: async () => ({ status: 200, ok: true, headers: {}, body: null }),
+      openStream: () => ({ close: () => undefined }),
+      native: async () => nativeResponses.shift(),
+      subscribeUiCommand: () => ({ unsubscribe: () => undefined }),
+    } satisfies HostTransport)
+
+    await expect(pickDirectory()).resolves.toBe("")
+    await expect(pickDirectory()).resolves.toBe("D:/picked")
+    await expect(pickFiles()).resolves.toEqual([])
+    await expect(pickFiles()).resolves.toEqual(["D:/a", "D:/b"])
+    await expect(pickDirectory()).rejects.toThrow("workspace.pickDir returned a non-string payload")
+    await expect(pickFiles()).rejects.toThrow("workspace.pickFiles returned a non-string-array payload")
   })
 })

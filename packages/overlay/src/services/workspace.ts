@@ -404,7 +404,9 @@ function joinPath(base: string, value: string): string {
 /** Open a native directory picker. Returns the selected path, or an empty string when cancelled. */
 export async function pickDirectory(start?: string): Promise<string> {
   const selected = await getHostTransport().native({ kind: "workspace.pickDir", start })
-  return typeof selected === "string" ? selected : ""
+  if (selected === null || selected === undefined) return ""
+  if (typeof selected !== "string") throw new Error("workspace.pickDir returned a non-string payload")
+  return selected
 }
 
 /** Open a native multi-file picker. Returns the array of selected paths. */
@@ -414,7 +416,11 @@ export async function pickFiles(start?: string): Promise<string[]> {
     start,
     multiple: true,
   })
-  return Array.isArray(result) ? result : []
+  if (result === null || result === undefined) return []
+  if (!Array.isArray(result) || result.some((item) => typeof item !== "string")) {
+    throw new Error("workspace.pickFiles returned a non-string-array payload")
+  }
+  return result
 }
 
 // ── Directory helper functions ──

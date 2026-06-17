@@ -207,6 +207,13 @@ function settledValue<T>(key: string, result: PromiseSettledResult<T>, fallback:
   return fallback
 }
 
+function coreConfigLoadError(errors: Record<string, string>): Error | undefined {
+  for (const key of ["config", "channel"]) {
+    if (errors[key]) return new Error(`${key} load failed: ${errors[key]}`)
+  }
+  return undefined
+}
+
 function providerInfoRequests(timeoutMilliseconds: number) {
   return [
     apiJsonWithTimeout("provider", timeoutMilliseconds),
@@ -236,73 +243,73 @@ export async function loadConfigInfo(
 ): Promise<void> {
   const loadSequence = ++configInfoLoadSequence
   const includeSettingsData = options.includeSettingsData === true
-  try {
-    const configRequest = apiJsonWithTimeout("config", timeoutMilliseconds)
-    const channelsRequest = apiJsonWithTimeout("channel", timeoutMilliseconds)
-    const settingsRequests = includeSettingsData
-      ? ([
-          ...providerInfoRequests(timeoutMilliseconds),
-          apiJsonWithTimeout("config/prompt", timeoutMilliseconds),
-        ] as const)
-      : ([] as const)
-    const [configResult, channelsResult, ...settingsResults] = await Promise.allSettled([
-      configRequest,
-      channelsRequest,
-      ...settingsRequests,
-    ])
-    const errors: Record<string, string> = {}
-    const config = settledValue("config", configResult, appStore.config ?? null, errors)
-    const channels = settledValue(
-      "channel",
-      channelsResult,
-      Array.isArray(appStore.channels) ? appStore.channels : [],
-      errors,
-    )
-    const providerInfo = includeSettingsData
-      ? settledProviderInfo(settingsResults[0], settingsResults[1], errors)
-      : { catalog: appStore.providerCatalog, auth: appStore.providerAuth }
-    const prompts = includeSettingsData
-      ? settledValue(
-          "config/prompt",
-          settingsResults[2],
-          Array.isArray(appStore.promptEntries) ? appStore.promptEntries : [],
-          errors,
-        )
-      : appStore.promptEntries
-    if (Object.keys(errors).length > 0) {
-      console.warn("[init] loadConfigInfo partial failure", errors)
+  const configRequest = apiJsonWithTimeout("config", timeoutMilliseconds)
+  const channelsRequest = apiJsonWithTimeout("channel", timeoutMilliseconds)
+  const settingsRequests = includeSettingsData
+    ? ([
+        ...providerInfoRequests(timeoutMilliseconds),
+        apiJsonWithTimeout("config/prompt", timeoutMilliseconds),
+      ] as const)
+    : ([] as const)
+  const [configResult, channelsResult, ...settingsResults] = await Promise.allSettled([
+    configRequest,
+    channelsRequest,
+    ...settingsRequests,
+  ])
+  const errors: Record<string, string> = {}
+  const config = settledValue("config", configResult, appStore.config ?? null, errors)
+  const channels = settledValue(
+    "channel",
+    channelsResult,
+    Array.isArray(appStore.channels) ? appStore.channels : [],
+    errors,
+  )
+  const providerInfo = includeSettingsData
+    ? settledProviderInfo(settingsResults[0], settingsResults[1], errors)
+    : { catalog: appStore.providerCatalog, auth: appStore.providerAuth }
+  const prompts = includeSettingsData
+    ? settledValue(
+        "config/prompt",
+        settingsResults[2],
+        Array.isArray(appStore.promptEntries) ? appStore.promptEntries : [],
+        errors,
+      )
+    : appStore.promptEntries
+  if (Object.keys(errors).length > 0) {
+    console.warn("[init] loadConfigInfo partial failure", errors)
+  }
+
+  if (loadSequence !== configInfoLoadSequence) return
+
+  const coreError = coreConfigLoadError(errors)
+  if (coreError) {
+    setAppStore("configLoadErrors", errors)
+    throw coreError
+  }
+
+  // Push into appStore
+  setAppStore({
+    config: config ?? null,
+    providerCatalog: providerInfo.catalog ?? null,
+    providerAuth: providerInfo.auth ?? null,
+    configLoadErrors: errors,
+    channels: Array.isArray(channels) ? channels : [],
+    promptEntries: Array.isArray(prompts) ? prompts : [],
+  })
+
+  // Sync tool_permissions from server config into settingsStore.
+  const remoteTP = (config as any)?.tool_permissions
+  if (remoteTP && typeof remoteTP === "object") {
+    const def = DEFAULT_SETTINGS.toolPermissions
+    const merged: ToolPermissions = {
+      websearch: remoteTP.websearch ?? def.websearch,
+      webfetch: remoteTP.webfetch ?? def.webfetch,
+      skill: remoteTP.skill ?? def.skill,
+      external_directory: remoteTP.external_directory ?? def.external_directory,
+      task: remoteTP.task ?? def.task,
+      schedule: remoteTP.schedule ?? def.schedule,
     }
-
-    if (loadSequence !== configInfoLoadSequence) return
-
-    // Push into appStore
-    setAppStore({
-      config: config ?? null,
-      providerCatalog: providerInfo.catalog ?? null,
-      providerAuth: providerInfo.auth ?? null,
-      configLoadErrors: errors,
-      channels: Array.isArray(channels) ? channels : [],
-      promptEntries: Array.isArray(prompts) ? prompts : [],
-    })
-
-    // Sync tool_permissions from server config into settingsStore.
-    const remoteTP = (config as any)?.tool_permissions
-    if (remoteTP && typeof remoteTP === "object") {
-      const def = DEFAULT_SETTINGS.toolPermissions
-      const merged: ToolPermissions = {
-        websearch: remoteTP.websearch ?? def.websearch,
-        webfetch: remoteTP.webfetch ?? def.webfetch,
-        skill: remoteTP.skill ?? def.skill,
-        external_directory: remoteTP.external_directory ?? def.external_directory,
-        task: remoteTP.task ?? def.task,
-        schedule: remoteTP.schedule ?? def.schedule,
-      }
-      setSettingsStore("toolPermissions", merged)
-    }
-  } catch (e) {
-    if (loadSequence !== configInfoLoadSequence) return
-    console.warn("[init] loadConfigInfo failed", e)
-    setAppStore("configLoadErrors", { loadConfigInfo: loadErrorMessage(e) })
+    setSettingsStore("toolPermissions", merged)
   }
 }
 

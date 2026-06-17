@@ -50,6 +50,24 @@ function boardForTask(item: any): any {
   }
 }
 
+const PROMPT_PROFILE_CATALOG = {
+  active: "general",
+  project_active: "general",
+  session_active: null,
+  default: "general",
+  targets: [],
+  profiles: [
+    {
+      id: "general",
+      label: "General",
+      description: "Default prompt profile",
+      built_in: true,
+      editable: false,
+      agents: {},
+    },
+  ],
+}
+
 async function visibleTaskRows(page: any) {
   return page.evaluate(() =>
     Array.from(document.querySelectorAll<HTMLElement>(".task-row-main")).map((node) => ({
@@ -76,6 +94,7 @@ test("task tree parent selection does not leave later task-row clicks trapped in
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
+  const requestLog: Array<{ method: string; path: string }> = []
   const parent = taskItem("task-parent", "Parent with children", 1_776_000_000_003)
   const child = taskItem("task-child", "Nested child", 1_776_000_000_002, "task-parent")
   const sibling = taskItem("task-sibling", "Sibling task", 1_776_000_000_001)
@@ -85,12 +104,15 @@ test("task tree parent selection does not leave later task-row clicks trapped in
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
+    requestLog.push({ method: req.method, path })
     if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
     if (path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "task-tree-click-test" })
+    if (path === "/global/projects/discover") return send([])
     if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
+    if (path === "/mission") return send([])
     if (path === "/executor") return send([])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/project/current/worktrees") return send([])
@@ -109,7 +131,7 @@ test("task tree parent selection does not leave later task-row clicks trapped in
         directory: "D:/tree-click/workspace",
       })
     }
-    if (path === "/config/prompt") return send({})
+    if (path === "/config/prompt" || path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
     if (path === "/channel") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
     if (path === "/gateway/stats") return send({ active: 0, queued: 3, completed: 0, failed: 0 })
@@ -119,8 +141,13 @@ test("task tree parent selection does not leave later task-row clicks trapped in
       })
     }
     if (path === "/skill/installed" || path === "/skill") return send([])
-    if (path === "/skill/directories") return send([])
-    if (path === "/skill/market") return send({ items: [] })
+    if (path === "/skill/directories")
+      return send({
+        global_config: "D:/tree-click/config",
+        managed_skills: "D:/tree-click/config/skills-market",
+        remote_cache: "D:/tree-click/cache/skills",
+      })
+    if (path === "/skill/market") return send([])
     if (path === "/mcp") return send({})
     if (path === "/agent") return send([])
     if (path === "/panel/knowledge/memory") return send([])
@@ -151,6 +178,7 @@ test("task tree parent selection does not leave later task-row clicks trapped in
       })
     }
     if (/^\/task\/[^/]+\/followup$/.test(path)) return send({ followup: null })
+    if (/^\/task\/[^/]+\/cancel$/.test(path)) return send({ ok: true })
     const conversationMatch = /^\/task\/([^/]+)\/conversation$/.exec(path)
     if (conversationMatch) {
       const item = tasksByID.get(decodeURIComponent(conversationMatch[1])) ?? parent
@@ -190,6 +218,10 @@ test("task tree parent selection does not leave later task-row clicks trapped in
       localStorage.setItem("oc_theme", "light")
     }, server.origin)
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]', {
+      visible: true,
+    })
+    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
     await page.waitForSelector('.task-row-main[data-task-id="task-parent"]')
     await page.click('.task-row-main[data-task-id="task-parent"]')
     await waitForCurrentTask(page, "task-parent")
@@ -218,6 +250,28 @@ test("task tree parent selection does not leave later task-row clicks trapped in
         { cause: error },
       )
     }
+
+    const siblingCancelSelector = '.task-row-mini[data-task-row-id="task-sibling"] [data-ui="task-row-cancel"]'
+    await page.hover('.task-row-mini[data-task-row-id="task-sibling"]')
+    await page.waitForSelector(siblingCancelSelector, { visible: true })
+    const cancelHitTarget = await page.$eval(siblingCancelSelector, (button) => {
+      const rect = (button as HTMLElement).getBoundingClientRect()
+      const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+      return target instanceof Element ? target.closest<HTMLElement>("[data-ui]")?.dataset.ui ?? "" : ""
+    })
+    assert.equal(cancelHitTarget, "task-row-cancel")
+    await page.click(siblingCancelSelector)
+    await page.hover('.task-row-mini[data-task-row-id="task-sibling"]')
+    await page.waitForSelector(`${siblingCancelSelector}[data-confirm="true"]`, { visible: true })
+    await page.click(`${siblingCancelSelector}[data-confirm="true"]`)
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (requestLog.some((entry) => entry.method === "POST" && entry.path === "/task/task-sibling/cancel")) break
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    assert.equal(
+      requestLog.some((entry) => entry.method === "POST" && entry.path === "/task/task-sibling/cancel"),
+      true,
+    )
 
     assert.deepEqual(badResponses, [])
   } finally {

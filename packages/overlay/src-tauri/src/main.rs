@@ -394,92 +394,25 @@ fn overlay_pick_dir<R: Runtime>(
         app.dialog().file()
     };
 
-    let picked = dialog.blocking_pick_folder();
-    let result = picked.and_then(|item| {
-        // Try into_path first; fall back to display string for shell/virtual paths
-        match item.into_path() {
-            Ok(p) => Some(p.to_string_lossy().to_string()),
-            Err(item_back) => {
-                let s = item_back.to_string();
-                if s.is_empty() {
-                    None
-                } else {
-                    Some(s)
-                }
-            }
-        }
-    });
-
-    // Guard: if the dialog returned exactly the start directory, treat it as
-    // a cancelled/no-op pick — the user did not select anything new.
-    if let (Some(ref picked_path), Some(ref start_path)) = (&result, &start_clean) {
-        let norm = |s: &str| {
-            s.trim_end_matches(['/', '\\'])
-                .replace('\\', "/")
-                .to_lowercase()
-        };
-        if norm(picked_path) == norm(start_path) {
-            return Ok(None);
-        }
-    }
+    let result = match dialog.blocking_pick_folder() {
+        Some(item) => Some(
+            item.into_path()
+                .map_err(|_| "picked directory is not a filesystem path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        ),
+        None => None,
+    };
 
     Ok(result)
-}
-
-fn mime_from_ext(filename: &str) -> &'static str {
-    let ext = filename
-        .rsplit('.')
-        .next()
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    match ext.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "bmp" => "image/bmp",
-        "svg" => "image/svg+xml",
-        "ico" => "image/x-icon",
-        "pdf" => "application/pdf",
-        "json" => "application/json",
-        "xml" => "application/xml",
-        "csv" => "text/csv",
-        "txt" | "log" => "text/plain",
-        "md" => "text/markdown",
-        "html" | "htm" => "text/html",
-        "css" => "text/css",
-        "js" | "mjs" | "cjs" => "text/javascript",
-        "ts" | "tsx" => "text/typescript",
-        "py" => "text/x-python",
-        "go" => "text/x-go",
-        "rs" => "text/x-rust",
-        "c" | "h" => "text/x-c",
-        "cpp" | "cc" | "cxx" => "text/x-c++",
-        "java" => "text/x-java",
-        "rb" => "text/x-ruby",
-        "sh" | "bash" => "text/x-shellscript",
-        "bat" | "cmd" => "text/x-bat",
-        "ps1" => "text/x-powershell",
-        "sql" => "text/x-sql",
-        "toml" => "text/x-toml",
-        "yaml" | "yml" => "text/x-yaml",
-        _ => "application/octet-stream",
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PickedFile {
-    filename: String,
-    mime: String,
-    url: String,
 }
 
 #[tauri::command]
 fn overlay_pick_files<R: Runtime>(
     app: AppHandle<R>,
     start: Option<String>,
-) -> Result<Vec<PickedFile>, String> {
+    multiple: Option<bool>,
+) -> Result<Vec<String>, String> {
     let mut builder = app.dialog().file().add_filter(
         "Supported Files",
         &[
@@ -496,33 +429,24 @@ fn overlay_pick_files<R: Runtime>(
         builder = builder.set_directory(start);
     }
 
-    let paths = match builder.blocking_pick_files() {
-        Some(paths) => paths,
-        None => return Ok(Vec::new()),
+    let paths = if multiple.unwrap_or(true) {
+        match builder.blocking_pick_files() {
+            Some(paths) => paths,
+            None => return Ok(Vec::new()),
+        }
+    } else {
+        match builder.blocking_pick_file() {
+            Some(path) => vec![path],
+            None => return Ok(Vec::new()),
+        }
     };
 
-    let max_size: u64 = 10 * 1024 * 1024;
     let mut results = Vec::new();
     for entry in paths {
-        if let Ok(path) = entry.into_path() {
-            let filename = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-            let meta = fs::metadata(&path).map_err(|e| e.to_string())?;
-            if meta.len() > max_size {
-                continue;
-            }
-            let data = fs::read(&path).map_err(|e| e.to_string())?;
-            let mime = mime_from_ext(&filename);
-            let b64 = STANDARD.encode(&data);
-            let url = format!("data:{};base64,{}", mime, b64);
-            results.push(PickedFile {
-                filename,
-                mime: mime.to_string(),
-                url,
-            });
-        }
+        let path = entry
+            .into_path()
+            .map_err(|_| "picked file is not a filesystem path".to_string())?;
+        results.push(path.to_string_lossy().to_string());
     }
 
     Ok(results)

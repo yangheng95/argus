@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { loadConfigInfo, loadSettingsInfo } from "../src/services/init"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import { appStore, setAppStore } from "../src/store/app"
+import { configure } from "../src/services/api"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
 function fakeTransport(
@@ -24,8 +25,13 @@ function fakeTransport(
   }
 }
 
+beforeEach(() => {
+  configure({ directory: "D:/repo/config-load-test" })
+})
+
 afterEach(() => {
   __setHostTransportForTest(undefined)
+  configure({ directory: "" })
   setAppStore({
     config: null,
     providerCatalog: null,

@@ -138,22 +138,21 @@ export function executorProcessKindTag(kind: string): string {
 
 /**
  * Fetches the executor list from the server and updates the app store.
- * If the currently active executor is no longer selectable, falls back to
- * the first selectable executor or the OpenCorvus default id ("opencorvus").
+ * Request and payload failures reject so project-scope reload does not
+ * silently present a stale or empty executor projection.
  * NOTE: `renderExecutor()` / `persistOverlaySettings()` calls are
  * omitted here because they belong to 's DOM world. Callers that need
  * to persist settings after loading should do so explicitly.
  */
 export async function loadExecutors(): Promise<void> {
-  try {
-    const data = await apiJson("executor")
-    setExecutors(Array.isArray(data) ? data : [])
-  } catch (e) {
-    AppLog.debug("executor", "loadExecutors failed, resetting to empty", {
-      error: String(e),
+  const data = await apiJson("executor")
+  if (!Array.isArray(data)) {
+    AppLog.debug("executor", "loadExecutors received non-array payload", {
+      payloadType: typeof data,
     })
-    setExecutors([])
+    throw new Error("executor returned a non-array payload")
   }
+  setExecutors(data)
 }
 
 // ── Model setter ──

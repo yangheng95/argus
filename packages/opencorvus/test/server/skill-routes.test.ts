@@ -473,10 +473,7 @@ describe("skill routes", () => {
     })
   }, 20000)
 
-  // After /skill/remove, /skill/installed still surfaces the skill — Config layer caches
-  // skills.paths even after Skill.state.reset()/Config.state.reset(). Pending a deeper
-  // cache invalidation fix in the manager.
-  test.skip("POST /skill/policy updates effective policy and /skill/remove removes the source", async () => {
+  test("POST /skill/policy updates effective policy and /skill/remove removes the source", async () => {
     await using tmp = await tmpdir({ git: true })
     const skillDir = path.join(tmp.path, "skill-two")
     await Filesystem.write(

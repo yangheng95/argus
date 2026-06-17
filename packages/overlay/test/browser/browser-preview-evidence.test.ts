@@ -27,14 +27,6 @@ function eventStream() {
   })
 }
 
-function projectDiscovery(projectRoot: string) {
-  return {
-    root: projectRoot,
-    defaultDirectory: projectRoot,
-    projects: [{ directory: projectRoot, name: "app", marker: `${projectRoot}/.opencorvus` }],
-  }
-}
-
 const promptProfileCatalog = {
   active: "default",
   project_active: "default",
@@ -110,20 +102,21 @@ async function waitForPageText(page: any, text: string, label: string) {
 }
 
 async function openBrowserPreviewFromTask(page: any, taskID: string, label: string, diagnostics?: () => unknown) {
-  await page.$eval(
-    '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
-    (node) => (node as HTMLButtonElement).click(),
-  )
+  const tasksButton = '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]'
+  await page.waitForSelector(tasksButton, { visible: true })
+  await page.click(tasksButton)
   await waitForPageState(
     page,
     () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
     `${label} task activity visible before preview selection`,
     diagnostics,
   )
-  await page.$eval(`.task-row-main[data-task-id="${taskID}"]`, (node) => (node as HTMLButtonElement).click())
-  await page.$eval('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]', (node) =>
-    (node as HTMLButtonElement).click(),
-  )
+  const taskRow = `.task-row-main[data-task-id="${taskID}"]`
+  const browserButton = '[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]'
+  await page.waitForSelector(taskRow, { visible: true })
+  await page.click(taskRow)
+  await page.waitForSelector(browserButton, { visible: true })
+  await page.click(browserButton)
 }
 
 test(
@@ -201,10 +194,7 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/global/projects/discover") return send(projectDiscovery(projectRoot))
-      if (path === "/project/current/worktrees") return send([])
       if (path === "/mission") return send([])
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
       if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
       if (path === "/path") return send({ directory: projectRoot })
       if (path === "/vcs") {
@@ -224,6 +214,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config" && req.method === "PATCH") return send({ model: "" })
       if (path === "/config") return send({ model: "" })
+      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/agent") return send([])
@@ -433,15 +424,13 @@ test(
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_right_panel_collapsed", "false")
-        localStorage.setItem("oc_workspace_task", "tsk_browserpreview_e2e")
-        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
         const settings = {
           serverUrl,
           autoServer: false,
           locale: "en-US",
           directory: "D:/overlay/workspace/app",
           directoryMode: "custom",
-          workspaceTaskId: "tsk_browserpreview_e2e",
+          workspaceTaskID: "tsk_browserpreview_e2e",
           workspaceDirectory: "D:/overlay/workspace/app",
         }
         window.__TAURI__ = {
@@ -470,7 +459,7 @@ test(
         }
       }, server.origin)
       page.on("pageerror", (error) => {
-        errors.push(`pageerror: ${error.stack || error.message}`)
+        errors.push(`pageerror: ${error.message}`)
       })
       page.on("requestfailed", (request) => {
         if (/\/task\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
@@ -494,8 +483,8 @@ test(
       await waitForPageState(
         page,
         () =>
-          document.querySelector<HTMLElement>(".task-row-main[data-task-id='tsk_browserpreview_e2e']")?.dataset.taskId ===
-          "tsk_browserpreview_e2e",
+          document.querySelector<HTMLElement>(".task-row-main[data-task-id='tsk_browserpreview_e2e']")?.dataset
+            .taskId === "tsk_browserpreview_e2e",
         "browser preview task row rendered",
         () => ({ errors, requestLog }),
       )
@@ -573,12 +562,16 @@ test(
       assert.match(preview.text, new RegExp(alternatePreviewTarget().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
       assert.deepEqual(selectedTargets, [{ targetID: alternateTargetID }])
       assert.ok(
-        captureBodies.some((body) => JSON.stringify(body) === JSON.stringify({ targetID, viewportIDs: ["desktop", "tablet", "mobile"] })),
+        captureBodies.some(
+          (body) => JSON.stringify(body) === JSON.stringify({ targetID, viewportIDs: ["desktop", "tablet", "mobile"] }),
+        ),
         "capture route should use the primary task browser preview target ID",
       )
       assert.ok(
         captureBodies.some(
-          (body) => JSON.stringify(body) === JSON.stringify({ targetID: alternateTargetID, viewportIDs: ["desktop", "tablet", "mobile"] }),
+          (body) =>
+            JSON.stringify(body) ===
+            JSON.stringify({ targetID: alternateTargetID, viewportIDs: ["desktop", "tablet", "mobile"] }),
         ),
         "capture route should use the selected alternate task browser preview target ID",
       )
@@ -701,7 +694,8 @@ test(
       const url = new URL(req.url)
       const path = route(url)
       requestLog.push(`${req.method} ${url.pathname}${url.search}`)
-      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
       if (path === "/preview-target")
         return new Response("<main>Persisted viewport preview target is live</main>", {
           headers: { "content-type": "text/html; charset=utf-8" },
@@ -709,10 +703,7 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/global/projects/discover") return send(projectDiscovery(projectRoot))
-      if (path === "/project/current/worktrees") return send([])
       if (path === "/mission") return send([])
-      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
       if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
       if (path === "/path") return send({ directory: projectRoot })
       if (path === "/vcs")
@@ -731,6 +722,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config" && req.method === "PATCH") return send({ model: "" })
       if (path === "/config") return send({ model: "" })
+      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/agent") return send([])
@@ -766,7 +758,15 @@ test(
       if (path === `/task/${taskID}/browser-preview`) return send(targetResponse())
       if (path === `/task/${taskID}/browser-preview/capture` && req.method === "POST") {
         captureBodies.push(await req.json())
-        return send({ status: "failed", projectRoot, target: targetResponse(), viewports, captures: {}, evidenceIDs: {}, diagnostics: [] })
+        return send({
+          status: "failed",
+          projectRoot,
+          target: targetResponse(),
+          viewports,
+          captures: {},
+          evidenceIDs: {},
+          diagnostics: [],
+        })
       }
       if (path === `/task/${taskID}/browser-preview/live/snapshot` && req.method === "POST") {
         return new Response(pngBytes, { headers: { "content-type": "image/png" } })
@@ -792,15 +792,13 @@ test(
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_right_panel_collapsed", "false")
-        localStorage.setItem("oc_workspace_task", "tsk_browserpreview_persisted_viewport")
-        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
         const settings = {
           serverUrl,
           autoServer: false,
           locale: "en-US",
           directory: "D:/overlay/workspace/app",
           directoryMode: "custom",
-          workspaceTaskId: "tsk_browserpreview_persisted_viewport",
+          workspaceTaskID: "tsk_browserpreview_persisted_viewport",
           workspaceDirectory: "D:/overlay/workspace/app",
         }
         window.__TAURI__ = {
@@ -828,7 +826,7 @@ test(
           },
         }
       }, server.origin)
-      page.on("pageerror", (error) => errors.push(`pageerror: ${error.stack || error.message}`))
+      page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`))
       page.on("response", (response) => {
         if (response.status() >= 400) errors.push(`response${response.status()}: ${response.url()}`)
       })
@@ -879,7 +877,9 @@ test(
         "desktop persisted evidence screenshot rendered in the stage",
         () => ({ errors, requestLog }),
       )
-      let text = await page.evaluate(() => document.querySelector(".browser-preview-evidence-status")?.textContent || "")
+      let text = await page.evaluate(
+        () => document.querySelector(".browser-preview-evidence-status")?.textContent || "",
+      )
       assert.match(text, /persisted desktop evidence passed/)
       assert.doesNotMatch(text, /persisted mobile evidence passed/)
 

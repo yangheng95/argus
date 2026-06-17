@@ -1533,6 +1533,7 @@
   min-height: var(--ui-input-min-height);
   display: flex;
   align-items: center;
+  gap: calc(8px * var(--ui-scale));
   white-space: normal;
   line-height: 1.45;
   background: transparent;
@@ -1540,6 +1541,11 @@
   border-radius: 0;
   padding: 0;
   box-shadow: none;
+}
+
+.config-status-box__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .config-status-box[data-status="active"] {

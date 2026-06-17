@@ -457,12 +457,14 @@
   padding: 0;
   position: relative;
   z-index: 1;
+  pointer-events: none;
 }
 .task-row-right .task-row-stamp {
   flex: 1 1 auto;
   min-width: 0;
   max-width: calc(54px * var(--ui-scale));
   margin: 0;
+  pointer-events: none;
 }
 
 /* Tree lineage children toggle — sits at the start of .task-row-right
@@ -484,6 +486,7 @@
   font-size: var(--ui-font-small);
   line-height: 1;
   cursor: pointer;
+  pointer-events: auto;
   transition:
     background 0.12s ease,
     color 0.12s ease,
@@ -605,6 +608,11 @@
   stroke-width: 1.85;
 }
 
+.task-row-mini:hover .task-row-actions,
+.task-row-mini:focus-within .task-row-actions {
+  pointer-events: auto;
+}
+
 .task-row-mini:hover .oc-button[data-ui="task-row-delete"],
 .task-row-mini:focus-within .oc-button[data-ui="task-row-delete"],
 .task-row-mini:hover .oc-button[data-ui="task-row-cancel"],
@@ -622,6 +630,7 @@
 .task-row-mini:has(.task-row-actions):hover .task-row-stamp,
 .task-row-mini:has(.task-row-actions):focus-within .task-row-stamp {
   opacity: 0;
+  pointer-events: none;
 }
 
 .task-row-actions .oc-button[data-ui="task-row-start-now"]:hover,

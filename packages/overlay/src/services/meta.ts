@@ -49,17 +49,11 @@ export async function loadMeta(): Promise<void> {
       _metaVcs: vcs ?? null,
     }))
   } catch (e) {
-    AppLog.debug("meta", "loadMeta failed, resetting path/vcs", {
+    AppLog.debug("meta", "loadMeta failed", {
       error: String(e),
     })
     if (epoch !== settingsStore.directoryEpoch) return
-    setPath(null)
-    setVcs(null)
-    setAppStore("config", (prev: any) => ({
-      ...(prev ?? {}),
-      _metaPath: null,
-      _metaVcs: null,
-    }))
+    throw e
   }
 }
 

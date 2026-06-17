@@ -426,6 +426,9 @@ export namespace SkillManager {
       await rm(source, { recursive: true, force: true }).catch(() => undefined)
     }
 
+    await Config.state.reset()
+    await Skill.state.reset()
+
     return true
   }
 
