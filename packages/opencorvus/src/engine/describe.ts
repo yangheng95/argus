@@ -21,6 +21,7 @@
  */
 
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
+import z from "zod"
 import { createDecisionLog } from "@/decision-log"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistory } from "@/metrics/store"
@@ -46,6 +47,7 @@ import {
   findLatestResearchBriefArtifact,
   findRuns,
   findTask,
+  listGoalBatchNotificationArtifacts,
   listGoalRunsByGoal,
   listGoals,
   listOrchestratorStreamErrorArtifacts,
@@ -64,6 +66,15 @@ const STREAM_FAILURE_PROMPT_CAP = 5
 const AGENT_FAILURE_PROMPT_CAP = 5
 const TOOL_EXECUTE_FAILURE_PROMPT_CAP = 5
 const OPEN_TOOL_CALL_PROMPT_CAP = 5
+const TERMINAL_GOAL_BATCH_PROMPT_CAP = 5
+
+const TerminalGoalBatchNotificationPayloadSchema = z.object({
+  task_id: z.string(),
+  run_id: z.string(),
+  fingerprint: z.string(),
+  goal_runs: z.array(z.object({ id: z.string(), status: z.string() })),
+  time_dispatched: z.number(),
+})
 
 const LIVE_STATES = new Set(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
 const TERMINAL_OK_STATES = new Set(["completed"])
@@ -173,6 +184,15 @@ export interface OpenToolCallDesc {
   status: string
 }
 
+export interface TerminalGoalBatchNotificationDesc {
+  artifact_id: string
+  run_id: string
+  time_created: number
+  time_dispatched: number
+  fingerprint: string
+  goal_runs: Array<{ id: string; status: string }>
+}
+
 export interface AcceptanceVerdictDesc {
   iteration: number
   verdict: string
@@ -241,6 +261,11 @@ export interface TaskDesc {
    *  pending/running while no current process owns the tool session. This is
    *  execution evidence for the orchestrator LLM, not a lifecycle transition. */
   open_tool_calls_without_current_owner?: OpenToolCallDesc[]
+  /** Durable facts that a terminal per-goal batch already woke the
+   *  orchestrator. Written after dispatchTaskLoop starts and read here so the
+   *  next model turn can distinguish "batch already surfaced" from "no batch
+   *  evidence." */
+  recent_terminal_goal_batches?: TerminalGoalBatchNotificationDesc[]
   /** Recent sub-agent session failures recorded in decision_log phase
    *  "agent_error". These are the model-visible counterpart to overlay red
    *  session cards: provider quota, network, schema, and terminal session
@@ -521,6 +546,25 @@ function describeVerdict(taskID: string): AcceptanceVerdictDesc | undefined {
   }
 }
 
+function describeTerminalGoalBatchNotifications(taskID: string): TerminalGoalBatchNotificationDesc[] {
+  return listGoalBatchNotificationArtifacts(taskID, TERMINAL_GOAL_BATCH_PROMPT_CAP).map((row) => {
+    const payload = TerminalGoalBatchNotificationPayloadSchema.parse(row.payload)
+    if (payload.task_id !== taskID) {
+      throw new Error(
+        `goal_batch_notification ${row.id} task_id mismatch: payload=${payload.task_id} query=${taskID}`,
+      )
+    }
+    return {
+      artifact_id: row.id,
+      run_id: payload.run_id,
+      time_created: row.time_created,
+      time_dispatched: payload.time_dispatched,
+      fingerprint: payload.fingerprint,
+      goal_runs: payload.goal_runs,
+    }
+  })
+}
+
 export async function describeTask(taskID: string): Promise<TaskDesc> {
   const task = findTask(taskID)
   if (!task) {
@@ -647,6 +691,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       goal_id: entry.goalID ?? undefined,
     }))
   const openToolCallsWithoutCurrentOwner = listOpenToolCallsWithoutCurrentOwner(task)
+  const recentTerminalGoalBatches = describeTerminalGoalBatchNotifications(task.id)
 
   // Bootstrap-first signal. Single source — derived from goal status and
   // surfaced as collaboration context. This is not a dispatch gate.
@@ -684,6 +729,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     recent_tool_execute_failures: recentToolExecuteFailures.length > 0 ? recentToolExecuteFailures : undefined,
     open_tool_calls_without_current_owner:
       openToolCallsWithoutCurrentOwner.length > 0 ? openToolCallsWithoutCurrentOwner : undefined,
+    recent_terminal_goal_batches: recentTerminalGoalBatches.length > 0 ? recentTerminalGoalBatches : undefined,
     recent_agent_failures: recentAgentFailures.length > 0 ? recentAgentFailures : undefined,
     iterations_count: history.length,
   }
@@ -705,7 +751,7 @@ function describeDerivedState(g: GoalDesc): string {
   return flags.length > 0 ? flags.join(", ") : "unknown"
 }
 
-function renderGoal(g: GoalDesc): string[] {
+export function renderGoal(g: GoalDesc): string[] {
   const lines: string[] = []
   const requirementIDs = g.requirement_ids ?? []
   lines.push(`### Goal ${g.id}: ${g.title} [${g.priority}, ${g.kind}]`)
@@ -721,6 +767,7 @@ function renderGoal(g: GoalDesc): string[] {
     for (const [i, a] of g.attempts.entries()) {
       const parts: string[] = [`#${i + 1} run=${a.goal_run_id} outcome=${a.outcome}`]
       if (a.duration_ms !== undefined) parts.push(`duration=${a.duration_ms}ms`)
+      if (a.session_id) parts.push(`session=${a.session_id}`)
       if (a.superseded_reason) parts.push(`superseded_reason=${a.superseded_reason}`)
       if (a.error) parts.push(`error=${truncate(a.error, 120)}`)
       if (a.blocking_reason) parts.push(`blocked=${truncate(a.blocking_reason, 80)}`)
@@ -732,6 +779,26 @@ function renderGoal(g: GoalDesc): string[] {
     lines.push(`Attempts: (none — goal has never dispatched)`)
   }
 
+  return lines
+}
+
+export function renderTerminalGoalBatchNotifications(
+  batches: TerminalGoalBatchNotificationDesc[] | undefined,
+): string[] {
+  if (!batches || batches.length === 0) return []
+  const lines: string[] = []
+  lines.push(`## Terminal goal batch wake facts (${batches.length})`)
+  for (const batch of batches) {
+    const ts = new Date(batch.time_dispatched).toISOString()
+    const goalRuns = batch.goal_runs.map((goalRun) => `${goalRun.id}:${goalRun.status}`).join(", ")
+    lines.push(
+      `- ${ts} run=${batch.run_id} fingerprint=${batch.fingerprint} goals=${goalRuns} artifact=${batch.artifact_id}`,
+    )
+  }
+  lines.push(
+    `Each entry means a terminal per-goal batch already started an orchestrator wake. ` +
+      `Use this as current execution evidence; do not infer that the terminal batch was invisible merely because the wake has not produced a later decision yet.`,
+  )
   return lines
 }
 
@@ -853,6 +920,12 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   if (closureLines.length > 0) {
     lines.push("")
     lines.push(...closureLines)
+  }
+
+  const terminalGoalBatchLines = renderTerminalGoalBatchNotifications(desc.recent_terminal_goal_batches)
+  if (terminalGoalBatchLines.length > 0) {
+    lines.push("")
+    lines.push(...terminalGoalBatchLines)
   }
 
   if (desc.clarifications) {
