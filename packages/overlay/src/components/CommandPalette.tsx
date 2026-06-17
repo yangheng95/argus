@@ -40,6 +40,13 @@ interface Command {
   run: () => void
 }
 
+const COMMAND_PALETTE_INPUT_ID = "commandPaletteInput"
+const COMMAND_PALETTE_LISTBOX_ID = "commandPaletteListbox"
+
+function commandOptionID(command: Command, index: number): string {
+  return `commandPaletteOption-${index}-${command.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
+}
+
 const SETTINGS_TABS: Array<{ tab: string; labelKey: string; group: string }> = [
   { tab: "general", labelKey: "settings.title", group: "settings" },
   { tab: "permissions", labelKey: "permissions.title", group: "settings" },
@@ -176,6 +183,11 @@ export function CommandPalette() {
     })
   })
 
+  const activeDescendantID = createMemo(() => {
+    const command = filtered()[activeIndex()]
+    return command ? commandOptionID(command, activeIndex()) : undefined
+  })
+
   // Reset selection whenever the visible command set changes — otherwise a
   // stale activeIndex points off the end of the filtered list and Enter
   // does nothing.
@@ -304,6 +316,7 @@ export function CommandPalette() {
       onCloseAutoFocus={(event) => event.preventDefault()}
     >
       <input
+        id={COMMAND_PALETTE_INPUT_ID}
         ref={inputRef}
         type="search"
         class="cmdk-input"
@@ -311,13 +324,19 @@ export function CommandPalette() {
         value={query()}
         onInput={(e) => setQuery(e.currentTarget.value)}
         onKeyDown={handleKeyDown}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={palette.open()}
+        aria-controls={COMMAND_PALETTE_LISTBOX_ID}
+        aria-activedescendant={activeDescendantID()}
         aria-label={t("cmdk.placeholder")}
       />
-      <div class="cmdk-list" ref={listRef} role="listbox">
+      <div id={COMMAND_PALETTE_LISTBOX_ID} class="cmdk-list" ref={listRef} role="listbox">
         <Show when={filtered().length > 0} fallback={<div class="cmdk-empty">{t("cmdk.empty")}</div>}>
           <For each={filtered()}>
             {(cmd, i) => (
               <div
+                id={commandOptionID(cmd, i())}
                 class="cmdk-item"
                 classList={{ "cmdk-item--active": i() === activeIndex() }}
                 role="option"

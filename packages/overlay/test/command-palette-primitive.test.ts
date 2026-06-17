@@ -28,3 +28,14 @@ test("CommandPalette keeps shared disclosure and hotkey ownership", () => {
   expect(SOURCE).toContain("inputRef?.focus()")
   expect(SOURCE).toContain("onCloseAutoFocus")
 })
+
+test("CommandPalette links the focused search input to the active listbox option", () => {
+  expect(SOURCE).toContain('role="combobox"')
+  expect(SOURCE).toContain('aria-autocomplete="list"')
+  expect(SOURCE).toContain("COMMAND_PALETTE_LISTBOX_ID")
+  expect(SOURCE).toContain("aria-controls={COMMAND_PALETTE_LISTBOX_ID}")
+  expect(SOURCE).toContain("aria-activedescendant={activeDescendantID()}")
+  expect(SOURCE).toContain('role="listbox"')
+  expect(SOURCE).toContain('role="option"')
+  expect(SOURCE).toContain("id={commandOptionID(cmd, i())}")
+})
