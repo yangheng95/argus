@@ -157,6 +157,8 @@
   "settings.desktop_notifications_hint": "Ring the OS shell for urgent task attention and important task results.",
   "settings.fail_on_information_missing_label": "Fail-fast on INFORMATION MISSING (debug)",
   "settings.fail_on_information_missing_hint": "When on, every agent prompt receives an INFORMATION MISSING diagnostic section and the host process exits the moment any agent emits the <INFORMATION MISSING> XML block. Use to surface upstream context drops; leave off in production.",
+  "settings.save_failed": "Settings could not be saved: {{error}}",
+  "settings.config_save_failed": "Config could not be saved: {{error}}",
   "network.title": "Network",
   "network.proxy.title": "Proxy",
   "network.proxy.llm_provider_label": "LLM Provider proxy",

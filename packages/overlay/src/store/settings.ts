@@ -228,26 +228,23 @@ export function applySettings(input: Partial<OverlaySettings>): void {
 
 // ── saveSettings ──
 
-export function saveSettings(): void {
+export async function saveSettings(): Promise<void> {
   const s = settingsStore
-  void getHostTransport()
-    .native({ kind: "settings.save", payload: bootstrapOverlaySettings(s) })
-    .catch(() => undefined)
+  const saved = await getHostTransport().native({ kind: "settings.save", payload: bootstrapOverlaySettings(s) })
+  if (saved !== true) throw new Error("settings.save did not confirm persistence")
 }
 
 // ── loadSettings ──
 
 export async function loadSettings(): Promise<void> {
-  let persisted: unknown
-  try {
-    persisted = await getHostTransport().native({ kind: "settings.load" })
-  } catch {
-    persisted = undefined
-  }
+  const persisted = await getHostTransport().native({ kind: "settings.load" })
   if (persisted && typeof persisted === "object" && !Array.isArray(persisted)) {
     applySettings(persisted as Partial<OverlaySettings>)
     setSavedDirectory(savedDirectoryValue((persisted as Partial<OverlaySettings>).directory))
     return
+  }
+  if (persisted !== null && persisted !== undefined) {
+    throw new Error("settings.load returned a non-object payload")
   }
   applySettings({ ...DEFAULT_SETTINGS })
   setSavedDirectory(DEFAULT_SETTINGS.savedDirectory)

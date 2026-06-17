@@ -11,8 +11,13 @@ import { SurfaceHeader } from "../ui/SurfaceHeader"
 
 export default function GeneralPanel() {
   const [saved, setSaved] = createSignal(false)
+  const [error, setError] = createSignal("")
 
   // ── Handlers ──
+
+  function describeError(e: unknown): string {
+    return e instanceof Error ? e.message : String(e)
+  }
 
   function handleServerUrlChange(e: Event) {
     setSettingsStore("serverUrl", (e.currentTarget as HTMLInputElement).value.trim())
@@ -31,7 +36,14 @@ export default function GeneralPanel() {
     const password = settingsStore.password
     const username = settingsStore.username
     configureApi({ serverUrl: url, password, username })
-    saveSettings()
+    try {
+      await saveSettings()
+    } catch (e) {
+      setSaved(false)
+      setError(t("settings.save_failed", { error: describeError(e) }))
+      return
+    }
+    setError("")
     setSaved(true)
     setTimeout(() => setSaved(false), 1800)
     try {
@@ -40,6 +52,39 @@ export default function GeneralPanel() {
     } catch {
       /* reconnect monitor will retry */
     }
+  }
+
+  async function handleDesktopNotificationsChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement
+    const enabled = input.checked
+    const previous = settingsStore.desktopNotifications
+    setSettingsStore("desktopNotifications", enabled)
+    try {
+      await saveSettings()
+    } catch (error) {
+      setSettingsStore("desktopNotifications", previous)
+      input.checked = previous
+      setError(t("settings.save_failed", { error: describeError(error) }))
+      return
+    }
+    setError("")
+    if (enabled) void ensureDesktopNotificationPermission()
+  }
+
+  async function handleInformationMissingChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement
+    const previous = Boolean((appStore.config as any)?.assistant?.debug?.fail_on_information_missing)
+    const enabled = input.checked
+    try {
+      await patchConfig({
+        assistant: { debug: { fail_on_information_missing: enabled } },
+      })
+    } catch (error) {
+      input.checked = previous
+      setError(t("settings.config_save_failed", { error: describeError(error) }))
+      return
+    }
+    setError("")
   }
 
   return (
@@ -74,6 +119,11 @@ export default function GeneralPanel() {
               {saved() ? t("common.saved") : t("common.save")}
             </Button>
           </div>
+          {error() ? (
+            <div class="config-status-box" data-status="error">
+              <span class="config-status-box__text">{error()}</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -90,13 +140,7 @@ export default function GeneralPanel() {
               <input
                 type="checkbox"
                 checked={settingsStore.desktopNotifications}
-                onChange={(e) => {
-                  const enabled = (e.currentTarget as HTMLInputElement).checked
-                  setSettingsStore("desktopNotifications", enabled)
-                  saveSettings()
-                  if (!enabled) return
-                  void ensureDesktopNotificationPermission()
-                }}
+                onChange={handleDesktopNotificationsChange}
               />
             </label>
 
@@ -108,12 +152,7 @@ export default function GeneralPanel() {
               <input
                 type="checkbox"
                 checked={Boolean((appStore.config as any)?.assistant?.debug?.fail_on_information_missing)}
-                onChange={(e) => {
-                  const enabled = (e.currentTarget as HTMLInputElement).checked
-                  void patchConfig({
-                    assistant: { debug: { fail_on_information_missing: enabled } },
-                  })
-                }}
+                onChange={handleInformationMissingChange}
               />
             </label>
           </div>

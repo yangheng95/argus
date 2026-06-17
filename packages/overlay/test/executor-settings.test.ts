@@ -144,8 +144,7 @@ describe("executor settings", () => {
       savedDirectory: "D:/browser-source",
       preferredProjectEditor: "pycharm",
     })
-    saveSettings()
-    await Promise.resolve()
+    await saveSettings()
 
     expect(localStorage.getItem("oc_theme")).toBe("light")
     expect(localStorage.getItem("oc_directory")).toBe("D:/browser-source")
@@ -175,8 +174,7 @@ describe("executor settings", () => {
       preferredProjectEditor: "cursor",
     })
 
-    saveSettings()
-    await Promise.resolve()
+    await saveSettings()
 
     expect(localStorage.getItem("oc_theme")).toBeNull()
     expect(saved).toMatchObject({
@@ -186,6 +184,69 @@ describe("executor settings", () => {
       desktopNotifications: false,
       preferredProjectEditor: "cursor",
     })
+  })
+
+  test("settings load propagates native failures instead of applying defaults", async () => {
+    __setHostTransportForTest(
+      fakeTransport(
+        () => {
+          throw new Error("request not used in settings load failure test")
+        },
+        (command) => {
+          expect(command.kind).toBe("settings.load")
+          throw new Error("settings file unreadable")
+        },
+      ),
+    )
+    setSettingsStore("theme", "dark")
+
+    await expect(loadSettings()).rejects.toThrow("settings file unreadable")
+
+    expect(settingsStore.theme).toBe("dark")
+  })
+
+  test("settings load rejects malformed native payloads", async () => {
+    __setHostTransportForTest(
+      fakeTransport(
+        () => {
+          throw new Error("request not used in settings malformed test")
+        },
+        (command) => {
+          expect(command.kind).toBe("settings.load")
+          return "not-settings"
+        },
+      ),
+    )
+
+    await expect(loadSettings()).rejects.toThrow("settings.load returned a non-object payload")
+  })
+
+  test("settings save rejects native failures and missing acknowledgements", async () => {
+    __setHostTransportForTest(
+      fakeTransport(
+        () => {
+          throw new Error("request not used in settings save failure test")
+        },
+        (command) => {
+          expect(command.kind).toBe("settings.save")
+          throw new Error("settings save denied")
+        },
+      ),
+    )
+    await expect(saveSettings()).rejects.toThrow("settings save denied")
+
+    __setHostTransportForTest(
+      fakeTransport(
+        () => {
+          throw new Error("request not used in settings save ack test")
+        },
+        (command) => {
+          expect(command.kind).toBe("settings.save")
+          return false
+        },
+      ),
+    )
+    await expect(saveSettings()).rejects.toThrow("settings.save did not confirm persistence")
   })
 
   test("task creation never sends a stale executor id", async () => {
