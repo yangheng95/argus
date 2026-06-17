@@ -164,6 +164,56 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
       openState.viewportWidth - openState.panelWidth >= 64,
       `expected command palette side breathing room: ${JSON.stringify(openState)}`,
     )
+    const activeRelation = await page.evaluate(() => {
+      const input = document.querySelector<HTMLInputElement>(".cmdk-input")
+      const list = document.querySelector<HTMLElement>(".cmdk-list")
+      const activeID = input?.getAttribute("aria-activedescendant") || ""
+      const active = activeID ? document.getElementById(activeID) : null
+      return {
+        inputRole: input?.getAttribute("role") || "",
+        autocomplete: input?.getAttribute("aria-autocomplete") || "",
+        expanded: input?.getAttribute("aria-expanded") || "",
+        controls: input?.getAttribute("aria-controls") || "",
+        listID: list?.id || "",
+        listRole: list?.getAttribute("role") || "",
+        activeID,
+        activeRole: active?.getAttribute("role") || "",
+        activeSelected: active?.getAttribute("aria-selected") || "",
+        activeClass: active?.className || "",
+      }
+    })
+    assert.deepEqual(activeRelation, {
+      inputRole: "combobox",
+      autocomplete: "list",
+      expanded: "true",
+      controls: "commandPaletteListbox",
+      listID: "commandPaletteListbox",
+      listRole: "listbox",
+      activeID: activeRelation.activeID,
+      activeRole: "option",
+      activeSelected: "true",
+      activeClass: activeRelation.activeClass,
+    })
+    assert.match(activeRelation.activeID, /^commandPaletteOption-/)
+    assert.match(activeRelation.activeClass, /cmdk-item--active/)
+
+    await page.keyboard.press("ArrowDown")
+    const afterArrow = await page.evaluate(() => {
+      const input = document.querySelector<HTMLInputElement>(".cmdk-input")
+      const activeID = input?.getAttribute("aria-activedescendant") || ""
+      const active = activeID ? document.getElementById(activeID) : null
+      return {
+        activeID,
+        activeRole: active?.getAttribute("role") || "",
+        activeSelected: active?.getAttribute("aria-selected") || "",
+        activeClass: active?.className || "",
+      }
+    })
+    assert.notEqual(afterArrow.activeID, activeRelation.activeID)
+    assert.match(afterArrow.activeID, /^commandPaletteOption-/)
+    assert.equal(afterArrow.activeRole, "option")
+    assert.equal(afterArrow.activeSelected, "true")
+    assert.match(afterArrow.activeClass, /cmdk-item--active/)
     const visibleErrors = await page.evaluate(() =>
       Array.from(document.querySelectorAll<HTMLElement>('.app-notification[data-tone="error"], .app-notification[data-tone="warning"]')).map(
         (item) => item.textContent?.replace(/\s+/g, " ").trim() || "",

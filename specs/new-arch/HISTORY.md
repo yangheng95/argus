@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File | Title |
 | --- | --- |
+| [2026-06-18-command-palette-activedescendant.md](2026-06-18-command-palette-activedescendant.md) | Command Palette Active Descendant |
 | [2026-06-18-select-popup-readability-impact-review.md](2026-06-18-select-popup-readability-impact-review.md) | Select Popup Readability Impact Review |
 
 ## 2026-06-17
