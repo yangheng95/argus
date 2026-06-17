@@ -4,6 +4,7 @@ import { t } from "../utils/i18n"
 import { ChangesPanel } from "./ChangesPanel"
 import { DiffPreviewPanel } from "./DiffPreviewPanel"
 import { Icon } from "./Icon"
+import { Button } from "./ui/Button"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
 import { Tab, Tabs } from "./ui/Tabs"
 
@@ -78,15 +79,18 @@ export function FileChangesPanel(props: FileChangesPanelProps) {
           >
             <header class="file-changes-diff-header">
               <span>{t("workspace.diff")}</span>
-              <button
+              <Button
                 type="button"
-                class="workspace-close"
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-ui="file-changes-diff-close"
                 title={t("workspace.close")}
                 aria-label={t("workspace.close")}
                 onClick={props.onCloseDiff}
               >
                 <Icon name="close" size={13} />
-              </button>
+              </Button>
             </header>
             <DiffPreviewPanel target={props.diffTarget} />
           </Show>

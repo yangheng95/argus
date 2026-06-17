@@ -1,12 +1,10 @@
 import { expect, test } from "bun:test"
-import { readFileSync, readdirSync, statSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 const TABS_SOURCE = join(import.meta.dir, "../src/components/ui/Tabs.tsx")
 const TABS_CSS = join(import.meta.dir, "../src/styles/primitives/tabs.css")
-const WORKSPACE_PANEL_SOURCE = join(import.meta.dir, "../src/components/WorkspacePanel.tsx")
 const EXECUTOR_SELECTOR_SOURCE = join(import.meta.dir, "../src/components/ExecutorSelector.tsx")
-const PROMPT_CATALOG_SOURCE = join(import.meta.dir, "../src/components/settings/PromptCatalog.tsx")
 const FILE_CHANGES_PANEL_SOURCE = join(import.meta.dir, "../src/components/FileChangesPanel.tsx")
 const BROWSER_PREVIEW_PANEL_SOURCE = join(import.meta.dir, "../src/components/BrowserPreviewPanel.tsx")
 // 2026-05-04: `src/styles.css` was decomposed into `src/styles/...`. The
@@ -68,22 +66,13 @@ test("Tabs primitive delegates tab semantics to Kobalte", () => {
   expect(source).not.toContain('role="tab"')
 })
 
-test("Workspace panel current view label does not claim tab behavior", () => {
-  const source = readFileSync(WORKSPACE_PANEL_SOURCE, "utf8")
-
-  expect(source).toContain('class="workspace-tabs"')
-  expect(source).toContain('class="workspace-tab"')
-  expect(source).toContain('data-ui="workspace-view-label"')
-  expect(source).toContain('data-active="true"')
-  expect(source).not.toContain('role="tablist"')
-  expect(source).not.toContain('role="tab"')
-  expect(source).not.toContain("aria-selected")
+test("retired WorkspacePanel does not keep a hand-written tab surface", () => {
+  expect(existsSync(join(import.meta.dir, "../src/components/WorkspacePanel.tsx"))).toBe(false)
 })
 
 test("Feature tab surfaces use the Tabs primitive instead of hand-written ARIA", () => {
   for (const sourcePath of [
     EXECUTOR_SELECTOR_SOURCE,
-    PROMPT_CATALOG_SOURCE,
     FILE_CHANGES_PANEL_SOURCE,
     BROWSER_PREVIEW_PANEL_SOURCE,
   ]) {

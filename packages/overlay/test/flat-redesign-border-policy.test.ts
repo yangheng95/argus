@@ -45,33 +45,25 @@ function ruleBody(text: string, selectorHead: string): string {
   throw new Error(`solo rule "${selectorHead}" not found`)
 }
 
+function selectorRule(className: string): RegExp {
+  return new RegExp(`(^|[\\n,{])\\s*\\.${className}(?:\\s|[,>{:+~.#\\[]|$)`, "m")
+}
+
 describe("flat-redesign Rule A — surface containers have no resting self-border", () => {
   const workspace = readSurface("workspace.css")
+  const activity = readSurface("activity.css")
   const inspector = readSurface("inspector.css")
   const composer = readSurface("composer.css")
 
-  test(".workspace shell carries no border", () => {
-    const body = ruleBody(workspace, ".workspace")
-    expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b/)
-    expect(body).not.toMatch(/border-radius\s*:/)
-    expect(body).not.toMatch(/box-shadow\s*:\s*var\(--shadow\)/)
+  test("retired workspace panel shell carries no chrome rules", () => {
+    for (const className of ["workspace", "workspace-header", "workspace-tab", "workspace-close"]) {
+      expect(workspace).not.toMatch(selectorRule(className))
+    }
   })
 
-  test(".workspace-header carries no bottom-border", () => {
-    const body = ruleBody(workspace, ".workspace-header")
-    expect(body).not.toMatch(/border-bottom\s*:\s*[^;]*\bsolid\b/)
-  })
-
-  test(".workspace-tab carries no border-right (vertical separator)", () => {
-    const body = ruleBody(workspace, ".workspace-tab")
-    expect(body).not.toMatch(/border-right\s*:\s*[^;]*\bsolid\b\s+var\(--border\)/)
-    // The active accent underline IS allowed and required.
-    expect(body).toMatch(/border-bottom\s*:\s*[^;]*\bsolid\s+transparent/)
-  })
-
-  test(".workspace-close has no resting border", () => {
-    const body = ruleBody(workspace, ".workspace-close")
-    expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b\s+(?:var\(--border\)|transparent)/)
+  test("file changes diff close uses Button primitive variables", () => {
+    const body = ruleBody(activity, '.file-changes-diff-header .oc-button[data-ui="file-changes-diff-close"]')
+    expect(body).toMatch(/--oc-button-color:\s*var\(--text-muted\)/)
   })
 
   test(".oc-section right-rail card has no self-border", () => {
@@ -122,7 +114,7 @@ describe("flat-redesign Rule B — only cross-context boundaries carry borders",
 describe("flat-redesign Rule C — state changes use bg/stripe, not border-color flip", () => {
   const titlebar = readSurface("titlebar.css")
   const inspector = readSurface("inspector.css")
-  const workspace = readSurface("workspace.css")
+  const activity = readSurface("activity.css")
   const composer = readSurface("composer.css")
 
   test(".titlebar-task-status[data-status] variants don't flip border-color", () => {
@@ -161,9 +153,12 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
     expect(body).toMatch(/--oc-button-bg\s*:/)
   })
 
-  test(".workspace-close:hover uses bg-tint, not border-color", () => {
-    const body = ruleBody(workspace, ".workspace-close:hover")
+  test("file changes diff close hover uses bg-tint, not border-color", () => {
+    const body = ruleBody(
+      activity,
+      '.file-changes-diff-header .oc-button[data-ui="file-changes-diff-close"]:hover,\n.file-changes-diff-header .oc-button[data-ui="file-changes-diff-close"]:focus-visible',
+    )
     expect(body).not.toMatch(/border-color\s*:/)
-    expect(body).toMatch(/background\s*:/)
+    expect(body).toMatch(/--oc-button-bg\s*:/)
   })
 })
