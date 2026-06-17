@@ -522,6 +522,56 @@ test("ask - throws RejectedError when action is deny", async () => {
   })
 })
 
+test("ask - denies later denied patterns before prompting earlier ask", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = PermissionNext.ask({
+        id: "permission_ask_before_deny",
+        sessionID: "session_test",
+        permission: "bash",
+        patterns: ["echo hello", "rm -rf /"],
+        metadata: {},
+        always: [],
+        ruleset: [
+          { permission: "bash", pattern: "*", action: "ask" },
+          { permission: "bash", pattern: "rm *", action: "deny" },
+        ],
+        timeoutMs: 1000,
+      })
+
+      await expect(askPromise).rejects.toBeInstanceOf(PermissionNext.DeniedError)
+      expect(await PermissionNext.list()).toHaveLength(0)
+    },
+  })
+})
+
+test("ask - denies later edit file patterns before prompting earlier ask", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = PermissionNext.ask({
+        id: "permission_edit_ask_before_deny",
+        sessionID: "session_test",
+        permission: "edit",
+        patterns: ["src/a.ts", "secret/key.ts"],
+        metadata: {},
+        always: [],
+        ruleset: [
+          { permission: "edit", pattern: "*", action: "ask" },
+          { permission: "edit", pattern: "secret/*", action: "deny" },
+        ],
+        timeoutMs: 1000,
+      })
+
+      await expect(askPromise).rejects.toBeInstanceOf(PermissionNext.DeniedError)
+      expect(await PermissionNext.list()).toHaveLength(0)
+    },
+  })
+})
+
 test("ask - returns pending promise when action is ask", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
