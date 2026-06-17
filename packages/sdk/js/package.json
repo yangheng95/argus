@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "bun test test",
     "build": "bun ./script/build.ts"
   },
   "exports": {
