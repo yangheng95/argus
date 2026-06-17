@@ -48,7 +48,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
   }
   const patches: Record<string, unknown>[] = []
 
-  const promptProfiles = {
+  const basePromptProfiles = {
     active: "frontend",
     project_active: "frontend",
     session_active: null,
@@ -111,6 +111,30 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     ],
   }
 
+  function promptProfiles() {
+    const promptProfileConfig = config.prompt_profile as
+      | { active?: string; profiles?: Record<string, { label: string; description?: string; agents?: Record<string, string> }> }
+      | undefined
+    const customProfiles = Object.entries(promptProfileConfig?.profiles ?? {}).map(([id, profile]) => ({
+      id,
+      label: profile.label,
+      description: profile.description,
+      built_in: false,
+      editable: true,
+      agents: profile.agents ?? {},
+    }))
+    const customIDs = new Set(customProfiles.map((profile) => profile.id))
+    return {
+      ...basePromptProfiles,
+      active: promptProfileConfig?.active ?? basePromptProfiles.active,
+      project_active: promptProfileConfig?.active ?? basePromptProfiles.project_active,
+      profiles: [
+        ...basePromptProfiles.profiles.filter((profile) => !customIDs.has(profile.id)),
+        ...customProfiles,
+      ],
+    }
+  }
+
   const promptEntries = [
     {
       key: "build",
@@ -161,7 +185,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send(promptEntries)
-    if (path === "/config/prompt-profile") return send(promptProfiles)
+    if (path === "/config/prompt-profile") return send(promptProfiles())
     if (path === "/config" && req.method === "GET") return send(config)
     if (path === "/config" && req.method === "PATCH") {
       const body = (await req.json()) as Record<string, unknown>
@@ -220,23 +244,25 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForSelector('[data-menu-trigger="tools"]')
-    await page.click('[data-menu-trigger="tools"]')
-    await page.waitForSelector("#titlebar-menu-tools")
-    await page.click('#titlebar-menu-tools .titlebar-menubar-item:nth-of-type(3)')
+    await page.waitForSelector('[data-menu-trigger="settings"]')
+    await page.click('[data-menu-trigger="settings"]')
+    await page.waitForSelector("#titlebar-menu-settings")
+    await page.click('[data-testid="titlebar-settings-prompt"]')
     await page.waitForSelector('[data-config-panel="prompt"] [data-ui="prompt-profile-panel"]')
 
     const builtInState = await page.evaluate(() => {
-      const list = Array.from(document.querySelectorAll('[data-ui="prompt-profile-list"] .prompt-profile-list-item')).map((node) =>
-        node.querySelector("strong")?.textContent?.trim() || "",
-      )
+      const list = Array.from(
+        document.querySelectorAll('[data-ui="prompt-profile-list"] .prompt-profile-list-item'),
+      ).map((node) => node.querySelector("strong")?.textContent?.trim() || "")
       const readonly = document.querySelector(".prompt-profile-readonly-note")?.textContent?.trim() || ""
       const editors = document.querySelectorAll(".prompt-profile-textarea").length
-      return { list, readonly, editors }
+      const promptCards = document.querySelectorAll("[data-prompt-entry]").length
+      return { list, readonly, editors, promptCards }
     })
     assert.deepEqual(builtInState.list, ["General", "Frontend", "Custom Squad"])
     assert.match(builtInState.readonly, /read-only/i)
     assert.equal(builtInState.editors, 0)
+    assert.equal(builtInState.promptCards, 0)
 
     await page.click('[data-ui="prompt-profile-list"] .prompt-profile-list-item:last-child')
     await page.waitForFunction(() => {
@@ -246,15 +272,17 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     await page.waitForFunction(() => document.querySelectorAll(".prompt-profile-textarea").length === 2)
 
     await page.evaluate(() => {
-      const input = document.querySelector('.prompt-profile-detail .prompt-profile-field input[type="text"]') as HTMLInputElement
+      const input = document.querySelector(
+        '.prompt-profile-detail .prompt-profile-field input[type="text"]',
+      ) as HTMLInputElement
       input.value = "Custom Squad Revised"
       input.dispatchEvent(new Event("input", { bubbles: true }))
     })
 
     await page.evaluate(() => {
       const targets = Array.from(document.querySelectorAll(".prompt-profile-target"))
-      const buildTarget = targets.find((node) =>
-        node.querySelector(".prompt-profile-target-copy span")?.textContent?.trim() === "build",
+      const buildTarget = targets.find(
+        (node) => node.querySelector(".prompt-profile-target-copy span")?.textContent?.trim() === "build",
       )
       const area = buildTarget?.querySelector("textarea") as HTMLTextAreaElement | null
       if (!area) throw new Error("Missing build prompt-profile textarea")
@@ -269,7 +297,10 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
 
     const profilePatches = patches.filter((patch) => "prompt_profile" in patch)
     assert.equal(profilePatches.length, 1)
-    assert.equal(profilePatches.every((patch) => !("agent" in patch)), true)
+    assert.equal(
+      profilePatches.every((patch) => !("agent" in patch)),
+      true,
+    )
     assert.deepEqual(profilePatches[0], {
       prompt_profile: {
         profiles: {
@@ -284,6 +315,60 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         },
       },
     })
+
+    await page.evaluate((content) => {
+      const input = document.querySelector('[data-ui="prompt-profile-import-input"]') as HTMLInputElement | null
+      if (!input) throw new Error("Missing prompt profile import input")
+      const data = new DataTransfer()
+      data.items.add(new File([content], "imported-squad.json", { type: "application/json" }))
+      input.files = data.files
+      input.dispatchEvent(new Event("change", { bubbles: true }))
+    }, JSON.stringify({
+          prompt_profile: {
+            active: "imported-squad",
+            profiles: {
+              "imported-squad": {
+                label: "Imported Squad",
+                description: "Imported expert overlays.",
+                agents: {
+                  requirements: "Imported requirements guidance.",
+                  build: "Imported build guidance.",
+                },
+              },
+            },
+          },
+        }))
+    await page.waitForSelector('[data-ui="prompt-profile-import-preview"]')
+    const importPreview = await page.evaluate(() => {
+      const preview = document.querySelector('[data-ui="prompt-profile-import-preview"]')
+      return preview?.textContent || ""
+    })
+    assert.match(importPreview, /Imported Squad/)
+    assert.match(importPreview, /requirements/)
+    assert.match(importPreview, /Build/)
+    await page.click('[data-ui="prompt-profile-import-preview"] .oc-button[data-variant="solid"]')
+    await page.waitForFunction(() =>
+      document.querySelector(".config-status-box")?.textContent?.toLowerCase().includes("imported"),
+    )
+
+    const importPatch = patches[patches.length - 1]
+    assert.deepEqual(importPatch, {
+      prompt_profile: {
+        active: "imported-squad",
+        profiles: {
+          "imported-squad": {
+            label: "Imported Squad",
+            description: "Imported expert overlays.",
+            agents: {
+              requirements: "Imported requirements guidance.",
+              build: "Imported build guidance.",
+            },
+          },
+        },
+      },
+    })
+    assert.equal("agent" in importPatch, false)
+    assert.equal("prompt" in importPatch, false)
   } finally {
     await browser.close()
     await server.close()

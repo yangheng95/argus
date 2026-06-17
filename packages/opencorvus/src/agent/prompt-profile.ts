@@ -2,9 +2,9 @@ import z from "zod"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 
 export const DEFAULT_PROMPT_PROFILE_ID = "frontend"
+export const PROMPT_PROFILE_ID_PATTERN = /^(?!.*--)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 
-const PROMPT_PROFILE_ID_PATTERN = /^(?!.*--)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
-const PromptProfileIDSchema = z
+export const PromptProfileIDSchema = z
   .string()
   .min(1, "prompt profile id cannot be empty.")
   .max(64, "prompt profile id must be at most 64 characters.")
@@ -41,7 +41,12 @@ export const PromptProfileDefinitionSchema = z
   .object({
     label: z.string().trim().min(1, "prompt profile label cannot be empty."),
     description: z.string().trim().min(1, "prompt profile description cannot be empty when provided.").optional(),
-    agents: z.record(z.string(), z.string()).default({}),
+    agents: z
+      .record(
+        z.string(),
+        z.string().trim().min(1, "prompt profile target overlay cannot be blank; omit the target when no overlay is needed."),
+      )
+      .default({}),
   })
   .strict()
 
@@ -59,9 +64,25 @@ export const PromptProfileOverlaySchema = z
   })
   .strict()
 
+export const PromptProfileImportSchema = z
+  .object({
+    prompt_profile: z
+      .object({
+        active: PromptProfileIDSchema.optional(),
+        profiles: z
+          .record(PromptProfileIDSchema, PromptProfileDefinitionSchema)
+          .refine((profiles) => Object.keys(profiles).length > 0, {
+            message: "prompt_profile.profiles must contain at least one custom profile.",
+          }),
+      })
+      .strict(),
+  })
+  .strict()
+
 export type PromptProfileDefinition = z.output<typeof PromptProfileDefinitionSchema>
 export type PromptProfileConfig = z.output<typeof PromptProfileConfigSchema>
 export type PromptProfileOverlay = z.output<typeof PromptProfileOverlaySchema>
+export type PromptProfileImport = z.output<typeof PromptProfileImportSchema>
 
 export const PromptProfileTargetCatalogEntrySchema = z
   .object({
@@ -156,8 +177,7 @@ export namespace PromptProfile {
           "Prioritize request and data contracts, state ownership, persistence boundaries, observability, and deterministic failure handling.",
         "coding-assistant":
           "Explain backend changes in terms of API shape, state ownership, persistence effects, and failure cases so the user can inspect what changed.",
-        general:
-          "Anchor backend work to contracts, state transitions, persistence, concurrency, and runtime evidence.",
+        general: "Anchor backend work to contracts, state transitions, persistence, concurrency, and runtime evidence.",
         explore:
           "Map routes, schemas, ownership boundaries, shared invariants, and failure paths from the source. Cite evidence.",
         mission:
@@ -187,11 +207,10 @@ export namespace PromptProfile {
         coding:
           "Prioritize precise problem framing, invariants, complexity, numerical behavior, and demonstrable correctness.",
         "coding-assistant":
-          "Explain algorithm changes with invariants, edge cases, complexity tradeoffs, and proof obligations that a reviewer can check against code or benchmarks.",
+          "Explain algorithm changes in terms of invariants, edge cases, complexity tradeoffs, and proof obligations reviewers can inspect.",
         general:
           "Anchor algorithm-heavy work to invariants, asymptotic cost, adversarial cases, reproducibility, and proof obligations.",
-        explore:
-          "Extract current behavior, data shapes, hot paths, and benchmark hooks from source evidence.",
+        explore: "Extract current behavior, data shapes, hot paths, and benchmark hooks from source evidence.",
         mission:
           "Keep algorithm work tied to correctness conditions, benchmark scope, adversarial cases, and the evidence needed to show the result is correct.",
         "intent-analysis":
@@ -216,19 +235,20 @@ export namespace PromptProfile {
     },
   }
 
-  export const targets: PromptProfileTargetCatalogEntry[] = [...USER_PROFILE_TARGETS, ...BUILT_IN_ONLY_PROFILE_TARGETS].map(
-    (targetID) => ({
-      id: targetID,
-      label: targetID,
-      description:
-        AgentRoleContract.all[targetID as AgentRoleID]?.description ??
-        (builtInOnlyTargetSet.has(targetID)
-          ? `Built-in runtime prompt target ${targetID}.`
-          : `Prompt profile target ${targetID}.`),
-      editable: userTargetSet.has(targetID) && !builtInOnlyTargetSet.has(targetID),
-      built_in_only: builtInOnlyTargetSet.has(targetID),
-    }),
-  )
+  export const targets: PromptProfileTargetCatalogEntry[] = [
+    ...USER_PROFILE_TARGETS,
+    ...BUILT_IN_ONLY_PROFILE_TARGETS,
+  ].map((targetID) => ({
+    id: targetID,
+    label: targetID,
+    description:
+      AgentRoleContract.all[targetID as AgentRoleID]?.description ??
+      (builtInOnlyTargetSet.has(targetID)
+        ? `Built-in runtime prompt target ${targetID}.`
+        : `Prompt profile target ${targetID}.`),
+    editable: userTargetSet.has(targetID) && !builtInOnlyTargetSet.has(targetID),
+    built_in_only: builtInOnlyTargetSet.has(targetID),
+  }))
 
   export function catalog(config: ConfigLike): Record<string, PromptProfileDefinition> {
     return {
@@ -341,14 +361,6 @@ export namespace PromptProfile {
             message: `prompt profile target ${target} is built-in-only and cannot be configured by project profiles.`,
           })
         }
-        const prompt = profile.agents[target]
-        if (typeof prompt === "string" && prompt.trim().length === 0) {
-          ctx.addIssue({
-            code: "custom",
-            path: [...path, "profiles", profileID, "agents", target],
-            message: `prompt profile target ${target} overlay cannot be blank; omit the target when no overlay is needed.`,
-          })
-        }
       }
     }
   }
@@ -357,5 +369,30 @@ export namespace PromptProfile {
     if (!allTargetSet.has(agentID)) {
       throw new Error(`Unknown prompt profile target ${JSON.stringify(agentID)}`)
     }
+  }
+
+  export function parseImportPayload(payload: unknown): PromptProfileImport {
+    const parsed = PromptProfileImportSchema.parse(payload)
+    const profileConfig = parsed.prompt_profile
+    for (const id of Object.keys(profileConfig.profiles)) {
+      if (Object.hasOwn(builtIns, id)) {
+        throw new Error(`prompt_profile.profiles.${id} cannot override a built-in prompt profile.`)
+      }
+    }
+    const knownProfiles = new Set([...Object.keys(builtIns), ...Object.keys(profileConfig.profiles)])
+    if (profileConfig.active && !knownProfiles.has(profileConfig.active)) {
+      throw new Error(`Unknown prompt profile ${JSON.stringify(profileConfig.active)}.`)
+    }
+    for (const [profileID, profile] of Object.entries(profileConfig.profiles)) {
+      for (const target of Object.keys(profile.agents ?? {})) {
+        if (!allTargetSet.has(target)) {
+          throw new Error(`Unknown prompt profile target ${JSON.stringify(target)}.`)
+        }
+        if (!userTargetSet.has(target) || builtInOnlyTargetSet.has(target)) {
+          throw new Error(`prompt profile target ${target} is built-in-only and cannot be configured by project profiles.`)
+        }
+      }
+    }
+    return parsed
   }
 }

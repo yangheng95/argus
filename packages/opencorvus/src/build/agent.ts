@@ -31,6 +31,7 @@ import { $ } from "bun"
 import { git as runGit } from "@/util/git"
 import { tool, type ToolSet } from "ai"
 import { Log } from "@/util/log"
+import { PromptProfile, type PromptProfileConfig } from "@/agent/prompt-profile"
 import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { EffectiveConfig } from "@/config/effective"
@@ -383,16 +384,25 @@ export namespace BuildAgent {
 
   export function composeExternalCodingSystem(input: {
     executor: Exclude<TaskRow["executor"], "opencorvus">
+    config: { prompt_profile?: PromptProfileConfig }
     baseSystem?: string
     userAppend?: string
   }) {
     const mcpPrompt = input.executor === "codex" ? MCPServe.codingExecutorPromptSection() : ""
-    const system = [
+    const base = [
       input.baseSystem ?? "",
       externalBuildSystemContract(input.executor),
-      input.userAppend ?? "",
-      mcpPrompt,
     ]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join("\n\n")
+    const profiledSystem = PromptProfile.composeAgentPrompt({
+      agentID: "build",
+      base,
+      userAppend: input.userAppend,
+      config: input.config,
+    })
+    const system = [profiledSystem, mcpPrompt]
       .map((s) => s.trim())
       .filter(Boolean)
       .join("\n\n")
@@ -1693,6 +1703,7 @@ async function runWithExternalProviderImpl(args: {
     .join("\n\n")
   const composedSystem = BuildAgent.composeExternalCodingSystem({
     executor: args.executor,
+    config,
     baseSystem: systemWithAutoIteration,
     userAppend,
   })
