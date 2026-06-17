@@ -147,6 +147,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     await page.setViewport({ width: 1280, height: 860 })
     await page.evaluateOnNewDocument((serverUrl) => {
       ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+      ;(window as any).__openedPaths = []
       localStorage.setItem("oc_locale", "en-US")
       localStorage.setItem("oc_theme", "light")
       localStorage.setItem("oc_server_url", serverUrl)
@@ -155,7 +156,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
       localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
       ;(window as any).__TAURI__ = {
         core: {
-          invoke: async (command: string) => {
+          invoke: async (command: string, args?: Record<string, unknown>) => {
             if (command === "overlay_settings_load") {
               return {
                 serverUrl,
@@ -168,6 +169,10 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
             }
             if (command === "overlay_settings_save") return true
             if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
+            if (command === "overlay_open_path") {
+              ;(window as any).__openedPaths.push(args?.path)
+              return true
+            }
             return null
           },
         },
@@ -187,6 +192,17 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
+    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
+    await page.waitForSelector("#leftPanelSkills[data-active='true']")
+    const openSkillDirButton = '#leftPanelSkills[data-active="true"] [data-ui="tool-panel-action"][aria-label="Open Dir"]'
+    await page.waitForSelector(openSkillDirButton, { visible: true })
+    await page.click(openSkillDirButton)
+    await page.waitForFunction(() => (window as any).__openedPaths?.length === 1)
+    assert.deepEqual(await page.evaluate(() => (window as any).__openedPaths), [
+      "D:/overlay/global/.opencorvus/skills-market",
+    ])
+
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
     await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
     await page.waitForSelector("#leftPanelMcp[data-active='true'] #mcpList")
