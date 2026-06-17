@@ -62,9 +62,7 @@ test("task and file search share the field primitive", () => {
 })
 
 test("inspector list rows keep a neutral inset base", () => {
-  expect(bodyOf(INSPECTOR_CSS, ".goal-item, .knowledge-item, .pref-item, .criteria-check")).toMatch(
-    /background:\s*transparent/,
-  )
+  expect(bodyOf(INSPECTOR_CSS, ".goal-item, .knowledge-item, .pref-item")).toMatch(/background:\s*transparent/)
   expect(bodyOf(INSPECTOR_CSS, ".req-spec-content")).toMatch(/background:\s*var\(--surface-inset\)/)
   expect(bodyOf(INSPECTOR_CSS, ".integrity__dimension")).toMatch(/background:\s*transparent/)
   expect(bodyOf(INSPECTOR_CSS, ".integrity__issue, .integrity__correction, .integrity__missing")).toMatch(
@@ -73,7 +71,8 @@ test("inspector list rows keep a neutral inset base", () => {
   expect(bodyOf(INSPECTOR_CSS, ".gwg-objective")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(INSPECTOR_CSS, ".gwg-done-definition")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(INSPECTOR_CSS, ".arch-decision")).toMatch(/border:\s*0 solid transparent/)
-  expect(bodyOf(INSPECTOR_CSS, ".criteria-check:hover")).toMatch(/background:\s*var\(--surface-hover\)/)
+  expect(INSPECTOR_CSS).not.toContain(".criteria-check")
+  expect(INSPECTOR_CSS).not.toContain(".criteria-group")
   expect(bodyOf(INSPECTOR_CSS, '.goal-status-icon[data-status="pending"]')).toMatch(
     /background:\s*var\(--surface-hover\)/,
   )

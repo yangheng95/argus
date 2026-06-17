@@ -1213,7 +1213,6 @@ test(
           ".section-head",
           ".section-body > .empty-hint",
           ".acceptance-panel",
-          ".criteria-group",
         ]
         const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const
         return selectors.flatMap((selector) => {
