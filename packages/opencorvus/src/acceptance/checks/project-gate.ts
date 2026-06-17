@@ -15,6 +15,7 @@ import { runBackendApiReview, runClientContractReview } from "../specialists/bac
 import { runSecurityDataReview } from "../specialists/security-data"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { ensureProjectReadyForRuntime } from "./runtime-readiness"
+import { runProcessWithInactivityTimeout } from "./inactivity-timeout-process"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -535,43 +536,17 @@ async function runShellCommand(input: {
 }): Promise<{ exitCode: number | undefined; stdout: string; stderr: string }> {
   const isWindows = process.platform === "win32"
   const [command, ...args] = isWindows ? ["cmd.exe", "/d", "/s", "/c", input.command] : ["sh", "-lc", input.command]
-  const proc = spawn(command, args, {
+  return runProcessWithInactivityTimeout({
+    executable: command,
+    args,
     cwd: input.cwd,
     env: {
       ...process.env,
       ...(input.taskID ? { OPENCORVUS_TASK_ID: input.taskID } : {}),
       OPENCORVUS_PROJECT_DIR: Instance.directory,
     },
-    windowsHide: true,
-    stdio: ["ignore", "pipe", "pipe"],
+    timeoutMs: input.timeoutMs,
   })
-  const stdoutChunks: Buffer[] = []
-  const stderrChunks: Buffer[] = []
-  proc.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)))
-  proc.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)))
-  let timedOut = false
-  const exitCode = await new Promise<number | undefined>((resolve) => {
-    const timer = setTimeout(() => {
-      timedOut = true
-      proc.kill()
-      resolve(undefined)
-    }, input.timeoutMs)
-    proc.once("error", () => {
-      clearTimeout(timer)
-      resolve(undefined)
-    })
-    proc.once("exit", (code) => {
-      clearTimeout(timer)
-      resolve(code ?? undefined)
-    })
-  })
-  const stdout = Buffer.concat(stdoutChunks).toString("utf8")
-  const stderr = Buffer.concat(stderrChunks).toString("utf8")
-  return {
-    exitCode,
-    stdout,
-    stderr: timedOut ? `${stderr}\nCommand timed out after ${input.timeoutMs}ms.` : stderr,
-  }
 }
 
 async function scriptBodyForCommand(cwd: string, command: string) {
