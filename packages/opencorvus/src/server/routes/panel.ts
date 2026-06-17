@@ -150,9 +150,9 @@ export function PanelRoutes() {
         }),
         async (c) => {
           const id = c.req.param("id")
-          const file = Memory.getFile(id)
+          const file = Memory.getFileInProject({ fileId: id, projectId: projectId() })
           if (!file) return c.json({ error: "not found" }, 404)
-          const chunks = Memory.getChunks(id)
+          const chunks = Memory.getChunksInProject({ fileId: id, projectId: projectId() })
           const content = chunks.map((ch) => ch.content).join("\n\n")
           return c.json({ file, content })
         },
@@ -219,7 +219,8 @@ export function PanelRoutes() {
         }),
         async (c) => {
           const id = c.req.param("id")
-          Memory.deleteFile(id)
+          const file = Memory.deleteFileInProject({ fileId: id, projectId: projectId() })
+          if (!file) return c.json({ error: "not found" }, 404)
           return c.json({ ok: true })
         },
       )

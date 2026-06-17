@@ -122,7 +122,7 @@ export const MemoryTool = Tool.define("memory", {
       }
 
       case "get": {
-        const file = Memory.getFile(params.fileId)
+        const file = Memory.getFileInProject({ fileId: params.fileId, projectId })
         if (!file) {
           return {
             title: "Not found",
@@ -130,7 +130,7 @@ export const MemoryTool = Tool.define("memory", {
             metadata: {},
           }
         }
-        const chunks = Memory.getChunks(params.fileId)
+        const chunks = Memory.getChunksInProject({ fileId: params.fileId, projectId })
         const text = chunks.map((c) => c.content).join("\n\n")
         return {
           title: file.title,
@@ -204,7 +204,7 @@ export const MemoryTool = Tool.define("memory", {
       }
 
       case "delete": {
-        const file = Memory.getFile(params.fileId)
+        const file = Memory.deleteFileInProject({ fileId: params.fileId, projectId })
         if (!file) {
           return {
             title: "Not found",
@@ -212,7 +212,6 @@ export const MemoryTool = Tool.define("memory", {
             metadata: {},
           }
         }
-        Memory.deleteFile(params.fileId)
         return {
           title: `Deleted: ${file.title}`,
           output: JSON.stringify({

@@ -125,22 +125,25 @@ export namespace Memory {
     )
   }
 
-  function ftsDelete(db: Database.TxOrDb, chunkId: string) {
-    db.run(sql`DELETE FROM memory_fts WHERE chunk_id = ${chunkId}`)
+  function ftsDeleteInProject(db: Database.TxOrDb, chunkId: string, projectId: string) {
+    db.run(sql`DELETE FROM memory_fts WHERE chunk_id = ${chunkId} AND project_id = ${projectId}`)
   }
 
-  function ftsDeleteByFile(db: Database.TxOrDb, fileId: string) {
+  function ftsDeleteByFileInProject(db: Database.TxOrDb, fileId: string, projectId: string) {
     try {
       const chunkIds = db
         .select({ id: MemoryChunkTable.id })
         .from(MemoryChunkTable)
-        .where(eq(MemoryChunkTable.file_id, fileId))
+        .where(and(eq(MemoryChunkTable.file_id, fileId), eq(MemoryChunkTable.project_id, projectId)))
         .all()
-      for (const { id } of chunkIds) ftsDelete(db, id)
+      for (const { id } of chunkIds) ftsDeleteInProject(db, id, projectId)
     } catch (err) {
-      throw new Error(`FTS delete by file failed for ${fileId}: ${err instanceof Error ? err.message : String(err)}`, {
-        cause: err,
-      })
+      throw new Error(
+        `FTS delete by file failed for ${fileId} in project ${projectId}: ${err instanceof Error ? err.message : String(err)}`,
+        {
+          cause: err,
+        },
+      )
     }
   }
 
@@ -369,6 +372,7 @@ export namespace Memory {
 
   function updateFile(input: {
     fileId: string
+    projectId: string
     title: string
     source: Source
     kind: Kind
@@ -389,10 +393,10 @@ export namespace Memory {
           confidence: clampMetric(input.confidence, DEFAULT_CONFIDENCE[input.kind]),
           time_updated: now,
         })
-        .where(eq(MemoryFileTable.id, input.fileId))
+        .where(and(eq(MemoryFileTable.id, input.fileId), eq(MemoryFileTable.project_id, input.projectId)))
         .run(),
     )
-    return getFile(input.fileId)
+    return getFileInProject({ fileId: input.fileId, projectId: input.projectId })
   }
 
   export function writeChunks(fileId: string, projectId: string, markdown: string) {
@@ -401,8 +405,10 @@ export namespace Memory {
     const now = Date.now()
 
     Database.transaction((db) => {
-      ftsDeleteByFile(db, fileId)
-      db.delete(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).run()
+      ftsDeleteByFileInProject(db, fileId, projectId)
+      db.delete(MemoryChunkTable)
+        .where(and(eq(MemoryChunkTable.file_id, fileId), eq(MemoryChunkTable.project_id, projectId)))
+        .run()
       for (const text of texts) {
         const id = Identifier.ascending("memchunk")
         const tokenCount = estimateTokens(text)
@@ -426,7 +432,10 @@ export namespace Memory {
         })
         ftsInsert(db, id, projectId, text)
       }
-      db.update(MemoryFileTable).set({ time_updated: now }).where(eq(MemoryFileTable.id, fileId)).run()
+      db.update(MemoryFileTable)
+        .set({ time_updated: now })
+        .where(and(eq(MemoryFileTable.id, fileId), eq(MemoryFileTable.project_id, projectId)))
+        .run()
     })
 
     log.info("wrote memory chunks", { fileId, count: chunks.length })
@@ -474,6 +483,7 @@ export namespace Memory {
       if (existing) {
         updateFile({
           fileId: existing.id,
+          projectId: input.projectId,
           title: input.title,
           source: input.source,
           kind,
@@ -483,7 +493,7 @@ export namespace Memory {
         })
       }
       writeChunks(file.id, input.projectId, input.content)
-      return getFile(file.id)!
+      return getFileInProject({ fileId: file.id, projectId: input.projectId })!
     })
   }
 
@@ -762,12 +772,24 @@ export namespace Memory {
     }))
   }
 
-  export function deleteFile(fileId: string) {
-    Database.transaction((db) => {
-      ftsDeleteByFile(db, fileId)
-      db.delete(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).run()
-      db.delete(MemoryFileTable).where(eq(MemoryFileTable.id, fileId)).run()
+  export function deleteFileInProject(input: { fileId: string; projectId: string }) {
+    const deletedFile = Database.transaction((db) => {
+      const file = db
+        .select()
+        .from(MemoryFileTable)
+        .where(and(eq(MemoryFileTable.id, input.fileId), eq(MemoryFileTable.project_id, input.projectId)))
+        .get()
+      if (!file) return null
+      ftsDeleteByFileInProject(db, input.fileId, input.projectId)
+      db.delete(MemoryChunkTable)
+        .where(and(eq(MemoryChunkTable.file_id, input.fileId), eq(MemoryChunkTable.project_id, input.projectId)))
+        .run()
+      db.delete(MemoryFileTable)
+        .where(and(eq(MemoryFileTable.id, input.fileId), eq(MemoryFileTable.project_id, input.projectId)))
+        .run()
+      return fromFile(file)
     })
-    log.info("deleted memory file", { fileId })
+    if (deletedFile) log.info("deleted memory file", { fileId: input.fileId, projectId: input.projectId })
+    return deletedFile
   }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
+import { Memory } from "../../src/memory"
 import { MemoryTool } from "../../src/tool/memory"
 
 function ctx(sessionID: string) {
@@ -145,4 +146,96 @@ describe("tool.memory", () => {
       },
     })
   })
+
+  test(
+    "get and delete cannot access memory files from another project",
+    async () => {
+      await using projectA = await tmpdir({ git: true })
+      await using projectB = await tmpdir({ git: true })
+      let projectAFileID = ""
+      let projectBFileID = ""
+
+      await Instance.provide({
+        directory: projectB.path,
+        fn: async () => {
+          projectBFileID = Memory.captureEpisode({
+            title: "Project B tool-private note",
+            content: "## Private\n- Project B memory must not appear in Project A tool output.",
+            source: "manual",
+            projectId: Instance.project.id,
+            scope: "global",
+          }).episode.id
+        },
+      })
+
+      await Instance.provide({
+        directory: projectA.path,
+        fn: async () => {
+          projectAFileID = Memory.captureEpisode({
+            title: "Project A tool-owned note",
+            content: "## Owned\n- Project A tool memory should be deletable from Project A.",
+            source: "manual",
+            projectId: Instance.project.id,
+            scope: "global",
+          }).episode.id
+
+          const memory = await MemoryTool.init()
+
+          const get = await memory.execute(
+            {
+              action: "get",
+              fileId: projectBFileID,
+            },
+            ctx("ses_test_memory_project_a"),
+          )
+          expect(get.title).toBe("Not found")
+          expect(get.output).toContain(`Memory file ${projectBFileID} not found`)
+
+          const del = await memory.execute(
+            {
+              action: "delete",
+              fileId: projectBFileID,
+            },
+            ctx("ses_test_memory_project_a"),
+          )
+          expect(del.title).toBe("Not found")
+          expect(del.output).toContain(`Memory file ${projectBFileID} not found`)
+
+          const ownDelete = await memory.execute(
+            {
+              action: "delete",
+              fileId: projectAFileID,
+            },
+            ctx("ses_test_memory_project_a"),
+          )
+          expect(ownDelete.title).toBe("Deleted: Project A tool-owned note")
+
+          const afterOwnDelete = Memory.search({
+            query: "project a tool memory deletable",
+            projectId: Instance.project.id,
+            limit: 5,
+          })
+          expect(afterOwnDelete.some((r) => r.fileId === projectAFileID)).toBe(false)
+        },
+      })
+
+      await Instance.provide({
+        directory: projectB.path,
+        fn: async () => {
+          const projectId = Instance.project.id
+          expect(Memory.getFileInProject({ fileId: projectBFileID, projectId })?.title).toBe(
+            "Project B tool-private note",
+          )
+          expect(Memory.getChunksInProject({ fileId: projectBFileID, projectId }).length).toBeGreaterThan(0)
+          const search = Memory.search({
+            query: "project b memory project a tool output",
+            projectId,
+            limit: 5,
+          })
+          expect(search.some((r) => r.fileId === projectBFileID)).toBe(true)
+        },
+      })
+    },
+    30_000,
+  )
 })

@@ -629,3 +629,45 @@ LINE:
 - Focused ownership test passed: `bun test packages/opencorvus/test/server/project-routes.test.ts -t "PATCH /project/:projectID"`.
 - Full `project-routes.test.ts` currently exposes a separate pre-existing cleanup-candidates failure: `GET /project/current/cleanup-candidates is read-only ownership inspection` returns no `processOrphans` for the seeded dead PID in this environment. That failure is outside BH-013 and was not masked.
 - Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
+
+## Batch P1-G: memory get/delete project ownership
+
+### Findings
+
+- BH-014: `packages/opencorvus/src/server/routes/panel.ts` lists and searches memory with `projectId: Instance.project.id`, but `GET /panel/knowledge/memory/:id` calls global `Memory.getFile(id)` / `Memory.getChunks(id)` and `DELETE /panel/knowledge/memory/:id` calls global `Memory.deleteFile(id)`.
+- `packages/opencorvus/src/tool/memory.ts` has the same split: search/list/write are project-scoped, while get/delete currently use global memory file IDs.
+- `Memory.getFileInProject()` and `Memory.getChunksInProject()` already exist and are used by agent context tools. The delete boundary is still global and must move into the memory API itself.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/memory/index.ts` owns global and project-scoped memory row access helpers.
+- `packages/opencorvus/src/server/routes/panel.ts` owns `/panel/knowledge/memory` list/get/search/delete routes under project directory middleware.
+- `packages/opencorvus/src/tool/memory.ts` owns the model-facing `memory` tool and derives the active project from `Instance.project.id`.
+- `packages/opencorvus/test/agent/context-tools.test.ts` already covers separate agent context memory_get project isolation, but not the MemoryTool wrapper or panel HTTP routes.
+
+### Fix Shape
+
+- Change panel get to resolve the file with `Memory.getFileInProject({ fileId, projectId: projectId() })`.
+- Change MemoryTool get to resolve the file with `Memory.getFileInProject({ fileId, projectId })`.
+- Use `Memory.getChunksInProject()` for content reads after the ownership check.
+- Replace the global exported delete primitive with `Memory.deleteFileInProject({ fileId, projectId })`. Its transaction must constrain FTS chunk deletion, `memory_chunk` deletion, and `memory_file` deletion by both file ID and project ID.
+- Panel delete and MemoryTool delete must call the scoped delete API directly and return 404 / "Not found" from its result, not from a separate precheck followed by global deletion.
+- Do not add fallback lookups, allowlists, or cross-project memory routes.
+
+### Regression Tests
+
+- Add a `Server.App()` panel route test that creates memory under projects A and B, asserts A can get/delete its own row, asserts A cannot get/delete B's row, and confirms B's file, chunks, and search results remain.
+- Extend `packages/opencorvus/test/tool/memory.test.ts` so MemoryTool get/delete against a project B file under project A return "Not found", leave B searchable, and the same tool can delete an A-owned row.
+- Extend `packages/opencorvus/test/memory/stages.test.ts` with direct `deleteFileInProject` API coverage for foreign delete returning false while preserving the foreign file, chunks, and FTS result.
+
+### Verification
+
+- Focused test command: `bun test packages/opencorvus/test/server/panel-memory-routes.test.ts packages/opencorvus/test/tool/memory.test.ts packages/opencorvus/test/memory/stages.test.ts`
+- Typecheck command: `bunx turbo run typecheck --filter=opencorvus`
+
+### Result
+
+- Implemented on 2026-06-17.
+- Independent agent review rejected the first caller-precheck/global-delete shape; the final implementation moves delete ownership into `Memory.deleteFileInProject({ fileId, projectId })`.
+- Focused tests passed: `bun test packages/opencorvus/test/server/panel-memory-routes.test.ts packages/opencorvus/test/tool/memory.test.ts packages/opencorvus/test/memory/stages.test.ts`.
+- Typecheck passed: `bunx turbo run typecheck --filter=opencorvus`.
