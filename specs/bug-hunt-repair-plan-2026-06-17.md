@@ -2288,3 +2288,53 @@ LINE:
 
 - Hume confirmed the root cause was the timer started before `fetchFn(...)` and the missing cleanup path when `fetchFn` throws before returning a `Response`.
 - Hume confirmed the final fix preserves the original provider error, adds no retry/fallback/gate, and recommended the set/clear timer assertion added to the regression test.
+
+## Batch P1-AH: BH-036 SDK server startup timeout must terminate the child process
+
+### Findings
+
+- BH-036 targets `packages/sdk/js/src/server.ts::createOpenCorvusServer(...)`.
+- The SDK spawns `opencorvus serve ...`, waits for stdout to contain `server listening`, and rejects on startup timeout.
+- The timeout path only rejects the promise. It does not terminate the child process, so a slow or wedged server binary can remain alive after the caller sees a failed startup.
+- The startup lifecycle owner is the SDK helper itself: callers only receive a `close()` handle after startup succeeds, so they have no handle to clean up a child that times out before URL discovery.
+
+### Call-point Inventory
+
+- `packages/sdk/js/src/server.ts::resolveCommand()` resolves the executable used by `createOpenCorvusServer(...)`.
+- `packages/sdk/js/src/server.ts::createOpenCorvusServer(...)` owns process spawn, stdout URL discovery, startup timeout, abort handling, and the returned `close()` method.
+- `packages/sdk/js/src/index.ts` re-exports `createOpenCorvusServer(...)` and calls it from `createOpenCorvus(...)`.
+- `packages/sdk/js/example/example.ts` calls `createOpenCorvusServer(...)` directly.
+- `packages/channel-runtime/test/subscribe-events-global.test.ts`, `packages/channel-runtime/test/start-idempotency.test.ts`, and `packages/channel-runtime/test/sdk-mock.ts` use mock SDK server helpers only; they are not affected by child-process lifecycle changes.
+- `packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts` has source-level SDK contract coverage, but no real child-process timeout regression.
+
+### Fix Shape
+
+- On startup timeout, terminate the spawned process before rejecting.
+- The timeout rejection must preserve the current timeout error message so callers still receive the same startup failure contract.
+- Reuse the same direct process termination primitive for pre-start abort cleanup where applicable; do not add retries, fallback binaries, gates, or compatibility command wrappers.
+- Keep successful startup behavior unchanged: after URL discovery, callers still receive `{ url, close() }`, and `close()` terminates the spawned server.
+
+### Regression Tests
+
+- Add `packages/sdk/js/test/server.test.ts`.
+- Use `OPENCORVUS_BIN_PATH=node` and a temporary extensionless `serve` script in the current working directory. Node executes that script as the first CLI argument, which works on Windows without a `.cmd` wrapper.
+- The fake `serve` script writes its PID to a file and then stays alive without printing `server listening`.
+- Call `createOpenCorvusServer(...)` with a short startup timeout, assert it rejects with the timeout message, then assert the recorded PID exits within a bounded window.
+- The test's `finally` block kills any surviving PID so the red test does not leak a process.
+- Add an SDK package `test` script so the regression has a package-local entry point.
+
+### Verification
+
+- New regression failed before implementation: `createOpenCorvusServer(...)` rejected with the expected timeout message, but the fake server PID was still alive after the bounded wait.
+- Implemented on 2026-06-18: `createOpenCorvusServer(...)` now owns a local `stopProcess()` helper, calls it before timeout rejection, calls it on pre-start abort, and reuses it for the returned `close()` method.
+- SDK `tsconfig.json` now explicitly loads only Node ambient types. This fixed the package typecheck toolchain issue where `tsc --noEmit` auto-loaded unrelated root `@types` packages with missing transitive type definitions.
+- Package test entry passed: `bun run --cwd packages/sdk/js test --timeout 30000`.
+- SDK package typecheck passed: `bun run --cwd packages/sdk/js typecheck`.
+- Existing SDK source contract suite passed: `bun test packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts --timeout 30000`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Parfit confirmed BH-036 was still present before the fix: the startup timeout callback only rejected, while `close()` was unreachable because the server handle is returned only after successful URL discovery.
+- Parfit agreed the root fix belongs in `createOpenCorvusServer(...)`'s startup lifecycle owner and does not require fallback binaries, gates, command parsing rewrites, or a supervisor.
+- Parfit recommended adding explicit timeout-path process-kill coverage. The final regression uses a real long-running fake server process and asserts the PID exits after timeout.
