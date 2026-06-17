@@ -32,7 +32,7 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(calc(-50% + var(--dialog-drag-x)), calc(-50% + var(--dialog-drag-y)));
   width: calc(100% - calc(32px * var(--ui-scale)));
   max-width: var(--ui-dialog-width);
   max-height: calc(100vh - calc(80px * var(--ui-scale)));
@@ -58,6 +58,15 @@
   flex-direction: column;
   gap: calc(12px * var(--ui-scale));
   pointer-events: auto;
+}
+
+.dialog-form[data-dialog-draggable="true"] > .dialog-header {
+  cursor: grab;
+}
+
+.dialog-form[data-dialog-dragging="true"] > .dialog-header {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .dialog-wide .dialog-form {

@@ -730,9 +730,7 @@ body[data-resizing="true"] .pane-resizer::after {
   padding: 0;
 }
 
-.oc-section[open] > .oc-section__head,
-.config-section[open] > summary,
-.config-subsection[open] > summary {
+.oc-section[open] > .oc-section__head {
   border-bottom: 0;
 }
 

@@ -10,15 +10,26 @@
  * See specs/overlay-settings-primitives-2026-05-26.md.
  */
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
+const SETTINGS_COMPONENT_ROOT = join(OVERLAY_ROOT, "src/components/settings")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"), "utf8")
 const PRIMITIVES_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/primitives.tsx"), "utf8")
 const SEGMENTED_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/ui/SegmentedControl.tsx"), "utf8")
 const AGENT_MODELS_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/AgentModelsPanel.tsx"), "utf8")
 const SKILL_MARKET_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/SkillMarketPanel.tsx"), "utf8")
+
+function walkSettingsComponents(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkSettingsComponents(full))
+    else if (entry.endsWith(".tsx")) out.push(full)
+  }
+  return out
+}
 
 describe("settings primitives — CSS contract", () => {
   test.each([
@@ -115,6 +126,15 @@ describe("settings primitives — Solid exports", () => {
     expect(PRIMITIVES_SRC).toContain("export type SettingsPillTone")
     for (const tone of ["ok", "warn", "bad", "accent", "muted", "neutral"]) {
       expect(SEGMENTED_SRC).toContain(`"${tone}"`)
+    }
+  })
+
+  test("settings panels do not hand-write primitive .s-* class output", () => {
+    for (const file of walkSettingsComponents(SETTINGS_COMPONENT_ROOT)) {
+      if (file.endsWith("primitives.tsx")) continue
+      const source = readFileSync(file, "utf8")
+      expect(source).not.toMatch(/class\s*=\s*["'][^"']*\bs-[A-Za-z0-9_-]+/)
+      expect(source).not.toMatch(/classList\s*=\s*\{[^}]*["']s-[A-Za-z0-9_-]+["']/s)
     }
   })
 

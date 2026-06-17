@@ -5,7 +5,29 @@ import {
   Root as KobalteDialogRoot,
   Title as KobalteDialogTitle,
 } from "@kobalte/core/dialog"
-import { mergeProps, Show, splitProps, type JSX } from "solid-js"
+import { createEffect, createSignal, mergeProps, onCleanup, Show, splitProps, type JSX } from "solid-js"
+
+const DIALOG_VIEWPORT_MARGIN = 8
+const DIALOG_DRAG_IGNORE_SELECTOR =
+  'button, input, textarea, select, a, label, summary, [contenteditable="true"], [data-dialog-no-drag="true"]'
+
+function isDialogDragIgnored(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest(DIALOG_DRAG_IGNORE_SELECTOR))
+}
+
+function clampOffset(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+function clampDialogOffset(form: HTMLElement, x: number, y: number): { x: number; y: number } {
+  const rect = form.getBoundingClientRect()
+  const availableX = Math.max(0, (window.innerWidth - rect.width) / 2 - DIALOG_VIEWPORT_MARGIN)
+  const availableY = Math.max(0, (window.innerHeight - rect.height) / 2 - DIALOG_VIEWPORT_MARGIN)
+  return {
+    x: clampOffset(x, -availableX, availableX),
+    y: clampOffset(y, -availableY, availableY),
+  }
+}
 
 export interface DialogProps {
   /** Controlled open state for the Kobalte dialog root. */
@@ -28,6 +50,8 @@ export interface DialogProps {
   backdropClose?: boolean
   /** Whether Kobalte traps focus and disables outside pointer events. */
   modal?: boolean
+  /** Whether the header bar can drag the dialog inside the viewport. */
+  draggable?: boolean
   /** Extra class names applied to the dialog content element. */
   class?: string
   /** Extra class names applied to the Kobalte overlay element. */
@@ -51,7 +75,7 @@ export interface DialogProps {
 
 export function Dialog(rawProps: DialogProps) {
   const merged = mergeProps(
-    { wide: false, wider: false, titleAs: "h2" as const, backdropClose: true, modal: true },
+    { wide: false, wider: false, titleAs: "h2" as const, backdropClose: true, modal: true, draggable: true },
     rawProps,
   )
   const [local, rest] = splitProps(merged, [
@@ -65,6 +89,7 @@ export function Dialog(rawProps: DialogProps) {
     "titleAs",
     "backdropClose",
     "modal",
+    "draggable",
     "class",
     "overlayClass",
     "formClass",
@@ -74,9 +99,56 @@ export function Dialog(rawProps: DialogProps) {
   ])
 
   let dialogRef: HTMLElement | undefined
+  let formRef: HTMLDivElement | undefined
+  let removeDragListeners: (() => void) | undefined
+  const [dialogOffset, setDialogOffset] = createSignal({ x: 0, y: 0 })
+  const [dragging, setDragging] = createSignal(false)
+
+  function stopDragging() {
+    setDragging(false)
+    removeDragListeners?.()
+    removeDragListeners = undefined
+  }
+
+  function startDialogDrag(event: PointerEvent) {
+    const form = formRef
+    if (!form || local.draggable === false || event.button !== 0 || event.isPrimary === false) return
+    if (isDialogDragIgnored(event.target)) return
+
+    event.preventDefault()
+    const origin = dialogOffset()
+    const startX = event.clientX
+    const startY = event.clientY
+
+    const moveDialog = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault()
+      setDialogOffset(
+        clampDialogOffset(form, origin.x + moveEvent.clientX - startX, origin.y + moveEvent.clientY - startY),
+      )
+    }
+
+    const finishDialogDrag = () => stopDragging()
+    stopDragging()
+    setDragging(true)
+    window.addEventListener("pointermove", moveDialog)
+    window.addEventListener("pointerup", finishDialogDrag, { once: true })
+    window.addEventListener("pointercancel", finishDialogDrag, { once: true })
+    removeDragListeners = () => {
+      window.removeEventListener("pointermove", moveDialog)
+      window.removeEventListener("pointerup", finishDialogDrag)
+      window.removeEventListener("pointercancel", finishDialogDrag)
+    }
+  }
+
+  const dialogFormStyle = (): JSX.CSSProperties =>
+    ({
+      "--dialog-drag-x": `${dialogOffset().x}px`,
+      "--dialog-drag-y": `${dialogOffset().y}px`,
+    }) as JSX.CSSProperties
 
   function closeFromKobalte(nextOpen: boolean) {
     if (nextOpen) return
+    stopDragging()
     if (dialogRef) local.onClose?.(dialogRef)
   }
 
@@ -89,6 +161,16 @@ export function Dialog(rawProps: DialogProps) {
 
   const dialogOverlayStyle = (): JSX.CSSProperties | undefined =>
     local.modal ? undefined : { "pointer-events": "none" }
+
+  createEffect(() => {
+    if (local.open) {
+      setDialogOffset({ x: 0, y: 0 })
+      return
+    }
+    stopDragging()
+  })
+
+  onCleanup(stopDragging)
 
   return (
     <KobalteDialogRoot open={local.open} onOpenChange={closeFromKobalte} modal={local.modal}>
@@ -111,8 +193,20 @@ export function Dialog(rawProps: DialogProps) {
           onInteractOutside={handleInteractOutside}
           style={dialogContentStyle()}
         >
-          <div class={["dialog-form", local.formClass].filter(Boolean).join(" ")}>
-            <div class={["dialog-header", local.headerClass].filter(Boolean).join(" ")}>
+          <div
+            class={["dialog-form", local.formClass].filter(Boolean).join(" ")}
+            data-dialog-draggable={local.draggable !== false ? "true" : undefined}
+            data-dialog-dragging={dragging() ? "true" : undefined}
+            ref={(el) => {
+              formRef = el
+            }}
+            style={dialogFormStyle()}
+          >
+            <div
+              class={["dialog-header", local.headerClass].filter(Boolean).join(" ")}
+              data-dialog-drag-handle={local.draggable !== false ? "true" : undefined}
+              onPointerDown={startDialogDrag}
+            >
               <KobalteDialogTitle as={local.titleAs} class="dialog-title">
                 {local.title}
               </KobalteDialogTitle>

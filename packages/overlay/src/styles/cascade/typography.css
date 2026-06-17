@@ -1,9 +1,9 @@
 /* ─────────────────────────────────────────────────────────────
    Cross-class typography canonicals (extracted from styles.css
-   2026-05-04). The dialog / section / config head + subhead +
-   inline-pill set share exact font-size + font-weight + letter-
-   spacing tuples; collapsing them into multi-class rules is
-   a single-source pattern (no per-surface duplication).
+   2026-05-04). The dialog / section / inline-pill set share
+   exact font-size + font-weight + letter-spacing tuples;
+   collapsing them into multi-class rules is a single-source
+   pattern (no per-surface duplication).
 
    Lives under styles/cascade/ — typography rules don't fit any
    one surface (dialog.css, settings.css, inspector.css would each
@@ -12,8 +12,7 @@
    ───────────────────────────────────────────────────────────── */
 
 .dialog-title,
-.oc-section__title,
-.config-section-head {
+.oc-section__title {
   color: var(--text-strong);
   font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-strong);
@@ -27,14 +26,6 @@
   font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.03em;
   margin-top: var(--ui-gap-xs);
-}
-
-.config-subsection-head {
-  color: var(--text-strong);
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
-  line-height: 1.2;
 }
 
 .extension-head .field-label {
@@ -67,8 +58,7 @@
   letter-spacing: 0.03em;
 }
 
-.oc-section__title,
-.config-section-head-text {
+.oc-section__title {
   font-weight: var(--ui-font-weight-medium);
   letter-spacing: 0;
 }

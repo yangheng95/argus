@@ -27,6 +27,7 @@ import {
 } from "../../services/config"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
+import { SettingsPill } from "./primitives"
 
 function promptPreviewHtml(value: string): string {
   if (!value.trim()) {
@@ -498,18 +499,18 @@ export default function PromptCatalog() {
                         </div>
                         <div class="prompt-profile-list-meta">
                           <Show when={projectActiveProfileID() === profile.id}>
-                            <span class="s-pill" data-tone="accent">
+                            <SettingsPill tone="accent">
                               {t("prompt_profile.project_active")}
-                            </span>
+                            </SettingsPill>
                           </Show>
                           <Show when={!!currentScopeSessionID() && sessionActiveProfileID() === profile.id}>
-                            <span class="s-pill" data-tone="ok">
+                            <SettingsPill tone="ok">
                               {t("prompt_profile.session_active")}
-                            </span>
+                            </SettingsPill>
                           </Show>
-                          <span class="s-pill" data-tone={profile.built_in ? "muted" : "ok"}>
+                          <SettingsPill tone={profile.built_in ? "muted" : "ok"}>
                             {profileTypeLabel(profile)}
-                          </span>
+                          </SettingsPill>
                         </div>
                       </button>
                     )}
@@ -616,9 +617,9 @@ export default function PromptCatalog() {
                                     <span>{target.id}</span>
                                   </div>
                                   <Show when={target.built_in_only}>
-                                    <span class="s-pill" data-tone="muted">
+                                    <SettingsPill tone="muted">
                                       {t("prompt_profile.built_in_only")}
-                                    </span>
+                                    </SettingsPill>
                                   </Show>
                                 </div>
                                 <Show when={target.description}>

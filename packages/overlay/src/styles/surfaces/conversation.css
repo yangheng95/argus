@@ -1857,7 +1857,6 @@
 .section-body > *,
 .goals-list > *,
 .config-section-body > *,
-.config-subsection-body > *,
 .sidebar-body > *,
 .chat-scroll > * {
   min-width: 0;
