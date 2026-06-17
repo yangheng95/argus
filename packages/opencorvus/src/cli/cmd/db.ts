@@ -72,7 +72,7 @@ const PathCommand = cmd({
  * Instance handles first so WAL flushes cleanly; otherwise reopening
  * would error on half-released file locks on Windows.
  */
-const ResetCommand = cmd({
+export const ResetCommand = cmd({
   command: "reset",
   describe:
     "atomically wipe the global opencorvus SQLite DB and project scratch (worktrees, ownership markers, snapshots). DESTRUCTIVE — there is no undo.",
@@ -93,7 +93,7 @@ const ResetCommand = cmd({
     // CLI is invoked from the project directory; capture cwd BEFORE disposing
     // any active Instance so reset() can locate the project's scratch dirs.
     const projectDir = process.cwd()
-    await Instance.disposeAll().catch(() => undefined)
+    await Instance.disposeAll()
     const results = await Database.reset(projectDir)
     for (const r of results) {
       console.log(`${r.ok ? "✓" : "✗"} ${r.label}: ${r.path}${r.ok ? "" : ` (${r.error})`}`)

@@ -361,7 +361,7 @@ export const GlobalRoutes = lazy(() =>
         if (hasActiveSessions()) {
           return c.json({ error: "Active executor sessions exist, refusing DB import" }, 409)
         }
-        await Instance.disposeAll().catch(() => undefined)
+        await Instance.disposeAll()
         const { snapshot } = c.req.valid("json")
         let result: MysqlTransferImportResult
         try {
