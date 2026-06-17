@@ -261,16 +261,30 @@ test("prompt profile selector options remain readable on the light popup surface
       const options = Array.from(document.querySelectorAll(".prompt-profile-select-option")).map((node) => {
         const option = node as HTMLElement
         const style = getComputedStyle(option)
-        const copy = option.querySelector(".prompt-profile-select-option-copy")
-        const label = Array.from(copy?.children ?? [])
-          .map((child) => child.textContent?.trim() ?? "")
+        const copy = option.querySelector(".prompt-profile-select-option-copy") as HTMLElement | null
+        const textParts = Array.from(copy?.children ?? [])
+          .map((child) => {
+            const element = child as HTMLElement
+            const color = getComputedStyle(element).color
+            return {
+              tag: element.tagName.toLowerCase(),
+              text: element.textContent?.trim() ?? "",
+              color,
+              contrast: contrastRatio(color, contentBackground),
+            }
+          })
+          .filter((part) => part.text)
+        const label = textParts
+          .map((part) => part.text)
           .filter(Boolean)
           .join(" ")
         return {
           label,
+          selected: option.hasAttribute("data-selected") || option.getAttribute("aria-selected") === "true",
           color: style.color,
           background: contentBackground,
           contrast: contrastRatio(style.color, contentBackground),
+          textParts,
         }
       })
       return { rootTheme, bodyTheme, options }
@@ -287,8 +301,16 @@ test("prompt profile selector options remain readable on the light popup surface
         "Algorithm Correctness and benchmark squad.",
       ],
     )
+    assert.equal(result.options.filter((option) => !option.selected).length >= 3, true)
     assert.equal(result.options.every((option) => option.color !== "rgba(0, 0, 0, 0)"), true)
     assert.equal(result.options.every((option) => option.contrast >= 4.5), true)
+    assert.equal(result.options.every((option) => option.textParts.length >= 2), true)
+    assert.equal(
+      result.options.every((option) =>
+        option.textParts.every((part) => part.color !== "rgba(0, 0, 0, 0)" && part.contrast >= 4.5),
+      ),
+      true,
+    )
     assert.deepEqual(badResponses, [])
   } finally {
     await browser.close()
