@@ -112,19 +112,14 @@ export function buildCheckConfigFromSpecs(task: any, selection: Record<string, b
  * Updates appStore.config with the server response.
  */
 export async function patchConfig(diff: Record<string, any>): Promise<any> {
-  if (!appStore.connected) return null
-  try {
-    const saved = await apiJson("config", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(diff),
-    })
-    setAppStore("config", saved)
-    return saved
-  } catch (e) {
-    console.error("[config] patchConfig failed", e)
-    return null
-  }
+  if (!appStore.connected) throw new Error("Cannot patch config while disconnected")
+  const saved = await apiJson("config", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(diff),
+  })
+  setAppStore("config", saved)
+  return saved
 }
 
 export interface SessionConfigResponse {
