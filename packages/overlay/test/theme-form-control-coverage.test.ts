@@ -75,6 +75,11 @@ describe(".field-input strips UA widget chrome", () => {
 describe("shared Kobalte select popup colors", () => {
   const fieldCss = stripComments(readCss(join("surfaces", "field.css")))
   const composerCss = stripComments(readCss(join("surfaces", "composer.css")))
+  const inspectorCss = stripComments(readCss(join("surfaces", "inspector.css")))
+  const browserPreviewPanel = readFileSync(
+    join(import.meta.dir, "..", "src", "components", "BrowserPreviewPanel.tsx"),
+    "utf8",
+  )
 
   test(".oc-select content and options use readable foreground tokens", () => {
     const contentBlock = fieldCss.match(/\.oc-select-content\s*{[^}]*}/)?.[0] ?? ""
@@ -93,6 +98,21 @@ describe("shared Kobalte select popup colors", () => {
       composerCss.match(/\.prompt-profile-select-option-copy\s+small\s*{[^}]*}/)?.[0] ?? ""
 
     expect(promptProfileDescriptionBlock).not.toMatch(/color\s*:/)
+  })
+
+  test("browser preview candidate dropdown uses the shared select popup colors", () => {
+    expect(browserPreviewPanel).toContain('class="oc-select-content browser-preview-candidate-content"')
+    expect(browserPreviewPanel).toContain('class="oc-select-listbox browser-preview-candidate-listbox"')
+    expect(browserPreviewPanel).toContain('class="oc-select-option browser-preview-candidate-option"')
+    expect(browserPreviewPanel).toContain('class="oc-select-indicator browser-preview-candidate-indicator"')
+
+    const candidateContentBlock = inspectorCss.match(/\.browser-preview-candidate-content\s*{[^}]*}/)?.[0] ?? ""
+    const candidateOptionBlock = inspectorCss.match(/\.browser-preview-candidate-option\s*{[^}]*}/)?.[0] ?? ""
+
+    expect(candidateContentBlock).not.toMatch(/background\s*:/)
+    expect(candidateContentBlock).not.toMatch(/color\s*:/)
+    expect(candidateOptionBlock).not.toMatch(/color\s*:/)
+    expect(candidateOptionBlock).not.toMatch(/background\s*:/)
   })
 })
 
