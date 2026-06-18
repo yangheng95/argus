@@ -278,6 +278,71 @@ describe("tool.browser_preview", () => {
   )
 
   test(
+    "does not return a stale task target when the current startup persists no target",
+    async () => {
+      const stalePreview = await startReachablePreviewServer()
+      const commandPreview = await startReachablePreviewServer()
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await persistBrowserPreviewTarget({ taskID, url: stalePreview.url })
+            const commandUrl = new URL(commandPreview.url)
+            const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+              pid: 9104,
+              stdin: null,
+              stdout: new PassThrough(),
+              stderr: new PassThrough(),
+              exited: new Promise<number>(() => {}),
+              terminate: async () => {},
+              dispose: async () => {},
+              unref: () => {},
+            }))
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: `npx vite --host 127.0.0.1 --port ${commandUrl.port}`,
+                  timeout: 20,
+                  leaseTimeout: 200,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.targetStatus).toBe("missing")
+              expect(result.metadata.targetUrl).toBeUndefined()
+              expect(payload.target.status).toBe("missing")
+              expect(payload.target.url).toBeUndefined()
+              expect(payload.startupTargets).toEqual([])
+              expect(payload.startupCandidates).toEqual([
+                {
+                  source: "command",
+                  url: commandPreview.url,
+                  reachable: true,
+                  skipReason: "command-derived URL is diagnostic only; pass url to persist it",
+                },
+              ])
+              expect(payload.diagnostics.join("\n")).toContain(
+                "No browser_preview_target was persisted for this service startup.",
+              )
+              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(stalePreview.url)
+            } finally {
+              restore()
+            }
+          },
+        })
+      } finally {
+        await stalePreview.close()
+        await commandPreview.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "rejects an invalid explicit URL before starting a background service",
     async () => {
       await using tmp = await tmpdir({ git: true })

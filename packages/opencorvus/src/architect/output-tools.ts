@@ -561,7 +561,7 @@ export function architectValidationFindings(
         goal.acceptance_specs.some(isEssentialVisualEvidenceAcceptanceSpec),
     )
     if (visualAcceptanceOwners.length === 0) {
-      concern(
+      blocker(
         "missing_final_visual_acceptance",
         [
           "Missing essential visual evidence acceptance: reference-driven tasks must include a verification/integration goal with an essential on_integrity acceptance spec that consumes a VisualEvidenceBundle.",
@@ -575,7 +575,7 @@ export function architectValidationFindings(
     } else {
       const missingRegionOwnership = visualAcceptanceRegionOwnershipFindings(collector, visualAcceptanceOwners)
       for (const missing of missingRegionOwnership) {
-        concern("missing_visual_region_acceptance_ownership", missing.message, { goal_ids: missing.goalIDs }, [
+        blocker("missing_visual_region_acceptance_ownership", missing.message, { goal_ids: missing.goalIDs }, [
           "register_goal",
           "modify_goal",
           "register_reference_coverage",
