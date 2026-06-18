@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "09b1da64c5980c2e"
+    "panel_revision": "3a4e55608c1110c8"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -52,7 +52,7 @@
   "brand.guide_usage_1": "Choose the workspace folder and recent task before sending anything.",
   "brand.guide_usage_2": "Send a concrete request with constraints and acceptance criteria.",
   "brand.guide_usage_3": "Watch the workspace while it runs: Spec checks understanding, Plan checks route, Goals and Evaluation catch drift, Files shows what changed.",
-  "brand.guide_usage_4": "Titlebar menus configure workspace, model, tools, view, acceptance channels, and diagnostics.",
+  "brand.guide_usage_4": "Titlebar menus configure workspace, providers, runs, view, settings, help, acceptance channels, and diagnostics.",
   "brand.guide_usage_title": "Fast Path",
   "brand.logo_alt": "OpenCorvus logo",
   "brand.workspace_label": "Workspace",
@@ -172,13 +172,6 @@
   "network.proxy.url_invalid": "Proxy URL must start with http:// or https:// and must not include credentials.",
   "network.proxy.username_required": "Username is required when password is set.",
   "network.proxy.save_failed": "Proxy settings could not be saved.",
-  "network.proxy.test_button": "Test Proxy",
-  "network.proxy.test_button_title": "Send one request through the edited proxy settings and report the HTTP status code.",
-  "network.proxy.test_testing": "Testing…",
-  "network.proxy.test_url_required": "Proxy URL is required to test the proxy.",
-  "network.proxy.test_success": "Proxy reachable (HTTP {{code}}, {{ms}} ms).",
-  "network.proxy.test_failed_with_code": "Proxy test failed (HTTP {{code}}, {{ms}} ms): {{reason}}",
-  "network.proxy.test_failed": "Proxy test failed: {{reason}}",
   "channel.public_url_invalid": "Public URL must start with http:// or https://",
   "task_overlay.back": "Workspace",
   "task_overlay.back_title": "Back to Workspace (Esc)",
@@ -482,7 +475,7 @@
   "evaluation.context.classification": "Classification: {{value}}",
   "evaluation.context.error": "Evaluator error: {{value}}",
   "evaluation.context.goal_assessments": "**Goal Assessments**",
-  "evaluation.context.goal_missing": "Missing goal #{{index}}",
+  "evaluation.context.goal_fallback": "Goal #{{index}}",
   "evaluation.context.replan": "**Replan Guidance**",
   "evaluation.context.root_cause": "- Root cause: {{value}}",
   "evaluation.context.strategy": "- Strategy: {{value}}",
