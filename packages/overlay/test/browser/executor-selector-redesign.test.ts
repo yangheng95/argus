@@ -401,7 +401,7 @@ test(
         inactiveActive: "false",
         inactiveAria: "",
       })
-      const visibleErrorNotifications = await page.$$eval(".app-notification[data-tone=\"error\"]", (nodes) =>
+      const visibleErrorNotifications = await page.$$eval('.app-notification[data-tone="error"]', (nodes) =>
         nodes.map((node) => (node as HTMLElement).innerText.trim()),
       )
       assert.deepEqual(visibleErrorNotifications, [])
@@ -423,11 +423,15 @@ test(
       // Clicking the external chip closes the mirror popover and opens its own.
       const externalChipSelector = '[data-ui="executor-chip-external"]'
       await page.waitForSelector(externalChipSelector, { visible: true })
-      const externalChipHitTest = await page.$eval(externalChipSelector, (node: HTMLElement, selector) => {
-        const rect = node.getBoundingClientRect()
-        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-        return hit?.closest(String(selector)) === node
-      }, externalChipSelector)
+      const externalChipHitTest = await page.$eval(
+        externalChipSelector,
+        (node: HTMLElement, selector) => {
+          const rect = node.getBoundingClientRect()
+          const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+          return hit?.closest(String(selector)) === node
+        },
+        externalChipSelector,
+      )
       assert.equal(externalChipHitTest, true)
       await page.click(externalChipSelector)
       await page.waitForSelector('[data-section="external"]')
@@ -461,6 +465,29 @@ test(
           { text: "Claude Code", role: "tab", active: "false", selected: "false" },
         ],
       )
+      const codexTabPanelState = await page.$eval(
+        '[data-section="external"] [data-ui="executor-popover-tab"][aria-selected="true"]',
+        (node) => {
+          const tab = node as HTMLElement
+          const controls = tab.getAttribute("aria-controls") ?? ""
+          const panel = controls ? document.getElementById(controls) : null
+          const box = panel?.getBoundingClientRect()
+          return {
+            text: tab.innerText.trim(),
+            controls,
+            tabID: tab.id,
+            panelRole: panel?.getAttribute("role") ?? "",
+            labelledby: panel?.getAttribute("aria-labelledby") ?? "",
+            panelVisible: Boolean(box && box.width > 0 && box.height > 0),
+          }
+        },
+      )
+      assert.equal(codexTabPanelState.text, "Codex")
+      assert.ok(codexTabPanelState.controls)
+      assert.equal(codexTabPanelState.panelRole, "tabpanel")
+      assert.equal(codexTabPanelState.labelledby, codexTabPanelState.tabID)
+      assert.equal(codexTabPanelState.panelVisible, true)
+      await saveScreenshot(page, "executor-selector-external-tabs-tabpanel.png")
       const externalModelState = await page.evaluate(() => {
         const current = document.querySelector(
           '[data-section="external"] .executor-popover-model[title="gpt-5.5-codex"]',
@@ -524,6 +551,28 @@ test(
           { text: "Claude Code", active: "true", selected: "true" },
         ],
       )
+      const claudeTabPanelState = await page.$eval(
+        '[data-section="external"] [data-ui="executor-popover-tab"][aria-selected="true"]',
+        (node) => {
+          const tab = node as HTMLElement
+          const controls = tab.getAttribute("aria-controls") ?? ""
+          const panel = controls ? document.getElementById(controls) : null
+          const box = panel?.getBoundingClientRect()
+          return {
+            text: tab.innerText.trim(),
+            controls,
+            tabID: tab.id,
+            panelRole: panel?.getAttribute("role") ?? "",
+            labelledby: panel?.getAttribute("aria-labelledby") ?? "",
+            panelVisible: Boolean(box && box.width > 0 && box.height > 0),
+          }
+        },
+      )
+      assert.equal(claudeTabPanelState.text, "Claude Code")
+      assert.ok(claudeTabPanelState.controls)
+      assert.equal(claudeTabPanelState.panelRole, "tabpanel")
+      assert.equal(claudeTabPanelState.labelledby, claudeTabPanelState.tabID)
+      assert.equal(claudeTabPanelState.panelVisible, true)
       const claudeBody = (
         await page.$eval('[data-section="external"]', (node) => (node as HTMLElement).innerText)
       ).toLowerCase()

@@ -170,11 +170,51 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       () => document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "diff",
     )
     await page.waitForSelector('.diff-preview-panel .diff-row[data-kind="add"]')
+    const diffTabPanelState = await page.$eval('[data-ui="file-changes-view-tab"][data-value="diff"]', (node) => {
+      const tab = node as HTMLElement
+      const controls = tab.getAttribute("aria-controls") ?? ""
+      const panel = controls ? document.getElementById(controls) : null
+      const box = panel?.getBoundingClientRect()
+      return {
+        role: tab.getAttribute("role") ?? "",
+        selected: tab.getAttribute("aria-selected") ?? "",
+        controls,
+        tabID: tab.id,
+        panelRole: panel?.getAttribute("role") ?? "",
+        labelledby: panel?.getAttribute("aria-labelledby") ?? "",
+        panelVisible: Boolean(box && box.width > 0 && box.height > 0),
+      }
+    })
+    assert.equal(diffTabPanelState.role, "tab")
+    assert.equal(diffTabPanelState.selected, "true")
+    assert.ok(diffTabPanelState.controls)
+    assert.equal(diffTabPanelState.panelRole, "tabpanel")
+    assert.equal(diffTabPanelState.labelledby, diffTabPanelState.tabID)
+    assert.equal(diffTabPanelState.panelVisible, true)
 
     await page.$eval('[data-ui="file-changes-view-tab"][data-value="changes"]', (node) =>
       (node as HTMLButtonElement).click(),
     )
     assert.equal(await page.$eval(".file-changes-panel", (node) => (node as HTMLElement).dataset.activeView), "changes")
+    const changesTabPanelState = await page.$eval('[data-ui="file-changes-view-tab"][data-value="changes"]', (node) => {
+      const tab = node as HTMLElement
+      const controls = tab.getAttribute("aria-controls") ?? ""
+      const panel = controls ? document.getElementById(controls) : null
+      const box = panel?.getBoundingClientRect()
+      return {
+        selected: tab.getAttribute("aria-selected") ?? "",
+        controls,
+        tabID: tab.id,
+        panelRole: panel?.getAttribute("role") ?? "",
+        labelledby: panel?.getAttribute("aria-labelledby") ?? "",
+        panelVisible: Boolean(box && box.width > 0 && box.height > 0),
+      }
+    })
+    assert.equal(changesTabPanelState.selected, "true")
+    assert.ok(changesTabPanelState.controls)
+    assert.equal(changesTabPanelState.panelRole, "tabpanel")
+    assert.equal(changesTabPanelState.labelledby, changesTabPanelState.tabID)
+    assert.equal(changesTabPanelState.panelVisible, true)
 
     await page.$eval('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]', (node) =>
       (node as HTMLButtonElement).click(),
@@ -221,7 +261,10 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       }
 
       return {
-        retiredWorkspaceNodes: oldSelectors.reduce((count, selector) => count + document.querySelectorAll(selector).length, 0),
+        retiredWorkspaceNodes: oldSelectors.reduce(
+          (count, selector) => count + document.querySelectorAll(selector).length,
+          0,
+        ),
         closeButtonTag: closeButton?.tagName ?? "",
         closeButtonBox: rect(closeButton),
         diffPanelBox: rect(diffPanel),
@@ -232,12 +275,18 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
           document.querySelectorAll<HTMLElement>('.app-notification[data-tone="error"] .app-notification__message'),
         ).map((node) => node.textContent?.trim() ?? ""),
         errorDetails: Array.from(
-          document.querySelectorAll<HTMLElement>('.app-notification[data-tone="error"] .app-notification__details-body'),
+          document.querySelectorAll<HTMLElement>(
+            '.app-notification[data-tone="error"] .app-notification__details-body',
+          ),
         ).map((node) => node.textContent?.trim() ?? ""),
       }
     })
     assert.deepEqual(visualState.retiredWorkspaceNodes, 0)
-    assert.deepEqual(visualState.errorNotifications, [], JSON.stringify({ visualState, pageErrors, consoleErrors, requestLog }, null, 2))
+    assert.deepEqual(
+      visualState.errorNotifications,
+      [],
+      JSON.stringify({ visualState, pageErrors, consoleErrors, requestLog }, null, 2),
+    )
     assert.equal(visualState.closeButtonTag, "BUTTON")
     assert.ok((visualState.closeButtonBox?.width ?? 0) > 20)
     assert.ok((visualState.closeButtonBox?.height ?? 0) > 20)
