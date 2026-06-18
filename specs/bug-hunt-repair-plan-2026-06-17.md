@@ -2802,3 +2802,37 @@ LINE:
 
 - Leibniz confirmed BH-060 was present in HEAD because the old test mounted `ProviderRoutes()` directly and manually wrapped `Instance.provide(...)`.
 - Leibniz confirmed the candidate repair uses the correct boundary: missing `x-opencorvus-directory` returns `DirectoryRequiredError`, and present header enters the provider handler through `Server.App()`.
+
+## Batch P1-AS: BH-069 package test entry must cover every test surface
+
+### Findings
+
+- BH-069 targets `packages/opencorvus/package.json::scripts.test`.
+- HEAD used a hand-maintained path allowlist: `bun test --timeout 60000 test/acp test/agent ...`.
+- That allowlist skipped entire direct test directories including `test/acceptance`, `test/architect`, `test/benchmark`, `test/browser-preview`, `test/channel`, `test/engine`, `test/executor`, `test/gateway`, `test/metrics`, `test/mission`, `test/orchestrator`, `test/pipeline`, `test/runtime`, `test/task-api`, `test/web-clone`, and `test/workbench`.
+- It also skipped top-level tests including `test/acceptance-plan-restart-closure.test.ts`, `test/agent-report-contract.test.ts`, `test/architect-fidelity.test.ts`, `test/architect-owned-paths-overlap.test.ts`, `test/build-dispatch-fidelity-order.test.ts`, `test/emitter.test.ts`, `test/engine-goal-contract-runtime-split.test.ts`, `test/engine-goal-retry-count-derived.test.ts`, `test/prompt-loading.test.ts`, and `test/shell.test.ts`.
+- The existing guard only asserted three release/script files were present, so it could not catch directory-level or top-level-file omissions.
+
+### Call-point Inventory
+
+- `packages/opencorvus/package.json` owns the default package test script used by package and turbo test runs.
+- `packages/opencorvus/test/script/package-test-entry.test.ts` owns the regression guard for the package test entry.
+- `packages/opencorvus/test/**` is the source of truth for discoverable test directories and top-level test files.
+
+### Fix Shape
+
+- Replace the hand-maintained allowlist with the single package test root: `bun test --timeout 60000 test`.
+- Update `package-test-entry.test.ts` to discover every direct `test/*` directory containing `*.test.ts`, `*.test.tsx`, `*.test.js`, or `*.test.mjs`, plus every top-level `test/*.test.*` file.
+- Assert the default package script has exactly one test entry, `test`, and that every discovered direct test entry is covered by that root.
+- Do not add skip/exclude gates or a second test source. Live/e2e bodies remain controlled by their existing explicit environment-variable gates.
+
+### Verification
+
+- Focused guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Socrates confirmed BH-069 was present in HEAD: the default package script was a handwritten allowlist and the guard only protected the three BH-068 release/script entries.
+- Socrates listed the skipped direct directories and top-level files and recommended a single real test entry plus a dynamic guard over `test/*` discoverable tests, without fallback or exclusion gates.
