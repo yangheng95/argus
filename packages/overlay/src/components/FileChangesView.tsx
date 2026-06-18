@@ -10,6 +10,8 @@ import { isKnownTextDiff, resolveDiff, type ChangeGroup, type DiffTarget } from 
 import { t, tc } from "../utils/i18n"
 import { changeStatusLabel, DiffView, type FileChange } from "./DiffView"
 import { Icon } from "./Icon"
+import { Button } from "./ui/Button"
+import { SegmentedControl, type SegmentedControlOption } from "./ui/SegmentedControl"
 
 export interface FileChangesViewProps {
   groups: ChangeGroup[]
@@ -318,6 +320,22 @@ export function FileChangesView(props: FileChangesViewProps) {
   const selectedKeys = createMemo(() => (selectedRowKey() ? [selectedRowKey()] : []))
   const statusFilterLabel = (status: ChangeStatusFilter): string =>
     status === "all" ? t("files.status.all") : changeStatusLabel(status)
+  const statusFilterOptions = createMemo<SegmentedControlOption<ChangeStatusFilter>[]>(() =>
+    CHANGE_STATUS_FILTERS.map((status) => ({
+      value: status,
+      label: (
+        <>
+          <span class="changes-status-option-label">{statusFilterLabel(status)}</span>
+          <span class="changes-status-option-count" aria-hidden="true">
+            {statusCounts()[status]}
+          </span>
+        </>
+      ),
+      tone:
+        status === "added" ? "ok" : status === "deleted" ? "bad" : status === "modified" ? "accent" : "neutral",
+      title: statusFilterLabel(status),
+    })),
+  )
 
   createEffect(() => {
     const rows = filteredRows()
@@ -417,9 +435,13 @@ export function FileChangesView(props: FileChangesViewProps) {
               />
             </label>
             <Show when={filterQuery().trim()}>
-              <button
+              <Button
                 type="button"
-                class="changes-filter-clear"
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-chrome="icon-action"
+                data-ui="file-changes-filter-clear"
                 aria-label={t("files.clear_filter")}
                 title={t("files.clear_filter")}
                 onClick={() => {
@@ -428,34 +450,27 @@ export function FileChangesView(props: FileChangesViewProps) {
                 }}
               >
                 <Icon name="close" size={12} />
-              </button>
+              </Button>
             </Show>
           </div>
         </Show>
 
         <Show when={allRows().length > 0}>
-          <div class="changes-status-strip" role="toolbar" aria-label={t("files.status_filter_label")}>
-            <For each={CHANGE_STATUS_FILTERS}>
-              {(status) => {
-                const active = () => statusFilter() === status
-                const count = () => statusCounts()[status]
-                return (
-                  <button
-                    type="button"
-                    class="changes-status-chip"
-                    data-status={status}
-                    data-active={active() ? "true" : "false"}
-                    aria-pressed={active()}
-                    onClick={() => setStatusFilter(status)}
-                  >
-                    <span class="changes-status-chip-label">{statusFilterLabel(status)}</span>
-                    <span class="changes-status-chip-count" aria-hidden="true">
-                      {count()}
-                    </span>
-                  </button>
-                )
-              }}
-            </For>
+          <div class="changes-status-strip">
+            <SegmentedControl<ChangeStatusFilter>
+              options={statusFilterOptions()}
+              value={statusFilter()}
+              onChange={setStatusFilter}
+              onActivate={setStatusFilter}
+              ariaLabel={t("files.status_filter_label")}
+              class="oc-tabs"
+              itemClass="oc-tab"
+              itemAttributes={(option) => ({
+                "data-ui": "file-changes-status-filter-option",
+                "data-status": option.value,
+                "data-size": "sm",
+              })}
+            />
             <label class="changes-non-text-filter">
               <input
                 type="checkbox"

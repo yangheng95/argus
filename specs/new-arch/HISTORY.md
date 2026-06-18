@@ -17,6 +17,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File                                                                                                                                       | Title                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
 | [2026-06-18-titlebar-brand-guide-popover-primitive.md](2026-06-18-titlebar-brand-guide-popover-primitive.md)                               | Titlebar Brand Guide Popover Primitive |
+| [2026-06-18-file-changes-filter-primitive-owner.md](2026-06-18-file-changes-filter-primitive-owner.md) | File Changes Filter Primitive Owner |
 | [2026-06-18-card-trace-action-button-owner.md](2026-06-18-card-trace-action-button-owner.md)                                               | Card Trace Action Button Owner |
 | [2026-06-18-goal-workflow-header-native-button.md](2026-06-18-goal-workflow-header-native-button.md)                                       | Goal Workflow Header Native Button |
 | [2026-06-18-extension-head-field-label-single-source.md](2026-06-18-extension-head-field-label-single-source.md)                           | Extension Head Field Label Single Source |
