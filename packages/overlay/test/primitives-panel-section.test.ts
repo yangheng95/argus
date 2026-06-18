@@ -171,6 +171,12 @@ describe("Section JSX primitive", () => {
     expect(tsx).toContain("oc-section__body")
   })
 
+  test("does not expose a phantom section header action button", () => {
+    expect(tsx).not.toContain("oc-section__icon-btn")
+    expect(tsx).not.toMatch(/^\s*actions\??:/m)
+    expect(tsx).not.toContain("local.actions")
+  })
+
   test("supports defaultOpen prop", () => {
     expect(tsx).toContain("defaultOpen")
   })

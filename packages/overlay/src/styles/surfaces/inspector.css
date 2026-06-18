@@ -625,38 +625,10 @@
   margin-top: calc(8px * var(--ui-scale));
 }
 
-/* Section icon-button: small 26x24 action button used inside section
-   heads. Reuses overlay control vocab: 1-unit border, accent-tinted
-   hover/focus chrome, opacity-only disabled. */
-.oc-section__icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(26px * var(--ui-scale));
-  height: calc(24px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface);
-  color: var(--text-soft);
-  cursor: pointer;
-}
-
-.oc-section__icon-btn:hover,
-.oc-section__icon-btn:focus-visible {
-  border-color: var(--hover-accent-border);
-  color: var(--accent);
-  outline: none;
-}
-
-.oc-section__icon-btn:disabled {
-  opacity: var(--ui-opacity-faint);
-  cursor: default;
-}
-
 /* Section content rails: icon (16x16, accent-on-open), title text
    (650 weight + slight tracking), badge chip (auto-width pill with
-   tone-driven dot + label), head-action overlay button, body padding,
-   and the disclosure caret pseudo. The richer `.section` shell + the
+   tone-driven dot + label), body padding, and the disclosure caret
+   pseudo. The richer `.section` shell + the
    per-phase-state hover/border/box-shadow chrome stay in styles.css
    until those raw rgba gradients are reworked through palette tokens. */
 .oc-section__icon {
