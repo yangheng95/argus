@@ -4983,3 +4983,42 @@ LINE:
 - `bun run --cwd packages/opencorvus typecheck` passed.
 - `git diff --check` passed for the P1-AF2 touched files.
 - Residual note: `ensurePage(command, options = {})` still has an unused `options.reload` branch. It is now dead code; deletion is intentionally deferred because project rule 17 requires explicit user approval before removing dead code.
+
+## Batch P2-BW2: TaskDirBar must surface workspace discovery failures
+
+### Findings
+
+- Parfit's independent residual scan found the adjacent BH-052 root pattern still present in `packages/overlay/src/components/TaskDirBar.tsx`.
+- `syncDiscoveredProjects()` caught every `loadDiscoveredProjects()` failure, cleared `discoveredRoot` and `discoveredProjects`, and only wrote a log entry.
+- The visible cwd popup therefore made API, server, or authentication failures indistinguishable from a valid empty discovery result.
+- The onboarding surface already uses an explicit discovery presentation state; this batch applies the same failure-surfacing rule to the shared cwd popup.
+
+### Call-point Inventory
+
+- `packages/overlay/src/components/TaskDirBar.tsx::TaskDirContent` owns the cwd dropdown, typed path editor, recent directory rows, and detected-project rows.
+- `TaskDirContent::syncPanelData()` is called when the Kobalte dropdown opens and refreshes recent directories plus project discovery.
+- `packages/overlay/src/services/workspace.ts::loadDiscoveredProjects()` remains the single API owner for `global/projects/discover` and must keep propagating failures.
+- `packages/overlay/src/services/workspace-onboarding-discovery.ts::loadWorkspaceOnboardingDiscovery()` already converts discovery success/failure into an explicit UI state without hiding the failed request.
+- `packages/overlay/test/browser/task-dirbar-keyboard.test.ts` already starts the real overlay bundle under Node and opens the cwd dropdown.
+- `packages/overlay/test/task-cwd-row-layout.test.ts` owns source-level cwd dropdown structure checks.
+
+### Fix Shape
+
+- Replace the component-local catch-and-clear branch with the existing explicit discovery UI state.
+- Add a visible cwd discovery error row in the recent-directory popup when discovery fails.
+- Clear stale detected-project rows only while rendering the explicit error message, so failure is not represented as a silent empty list.
+- Do not add retry, route allowlists, compatibility behavior, hidden fallback state, or service-level swallowing.
+
+### Regression Tests
+
+- Extend `packages/overlay/test/task-cwd-row-layout.test.ts` so the source contract requires the visible cwd discovery error row and rejects the old catch-and-clear implementation.
+- Extend `packages/overlay/test/browser/task-dirbar-keyboard.test.ts` with a real browser fixture returning 503 from `/global/projects/discover`; open the cwd popup, assert the visible error text, assert no detected-project rows render, assert the manual path input and recent rows remain available, and save `.scratch/task-dirbar-discovery-error.png` for visual review.
+
+### Verification
+
+- `bun test packages/overlay/test/task-cwd-row-layout.test.ts --timeout 60000` passed with 13 tests.
+- `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/task-dirbar-keyboard.test.ts` passed with 2 browser tests.
+- Visual review passed for `.scratch/task-dirbar-discovery-error.png`.
+- `bun run --cwd packages/overlay typecheck` passed.
+- `bun run --cwd packages/overlay check:i18n` passed.
+- `git diff --check` passed for the P2-BW2 touched files.

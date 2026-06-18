@@ -29,6 +29,66 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
+type TaskDirbarFixtureOptions = {
+  discovery: { body: unknown; status?: number }
+  projectDirectory?: string
+}
+
+async function taskDirbarFixtureResponse(req: Request, options: TaskDirbarFixtureOptions): Promise<Response> {
+  const url = new URL(req.url)
+  const path = route(url)
+  const projectDirectory = options.projectDirectory ?? PROJECT_DIRECTORY
+  const directory = url.searchParams.get("directory")
+  if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+  if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+  const staticResponse = await overlayStaticResponse(path)
+  if (staticResponse) return staticResponse
+  if (path === "/global/health") return send({ version: "1.2.3" })
+  if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+  if (path === "/session" || path === "/mission" || path === "/project/current/worktrees") return send([])
+  if (path === "/path") return send({ directory: directory ?? projectDirectory })
+  if (path === "/vcs") {
+    return send({
+      branch: "dev",
+      clean: true,
+      dirty: false,
+      staged: 0,
+      modified: 0,
+      untracked: 0,
+      conflicts: 0,
+      ahead: 0,
+      behind: 0,
+    })
+  }
+  if (path === "/global/projects/discover") {
+    return send(options.discovery.body, { status: options.discovery.status ?? 200 })
+  }
+  if (path === "/provider") return send({ all: [], connected: [], default: {} })
+  if (path === "/provider/auth") return send({})
+  if (path === "/config/providers") return send({ providers: [], default: {} })
+  if (path === "/config/prompt") return send([])
+  if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
+  if (path === "/config" && (req.method === "GET" || req.method === "PATCH")) return send({ model: "" })
+  if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
+  if (path === "/coding/cli/profiles") return send({ profiles: [] })
+  if (path === "/terminal/profiles") return send({ defaultProfileID: "", profiles: [] })
+  if (path === "/task/events") {
+    return new Response(":\n\n", {
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache",
+      },
+    })
+  }
+  if (path === "/agent" || path === "/channel" || path === "/executor") return send([])
+  if (path === "/skill/installed" || path === "/skill") return send([])
+  if (path === "/mcp") return send({})
+  if (path === "/panel/knowledge/memory") return send([])
+  if (path === "/panel/knowledge/preference") return send([])
+  if (path === "/log" && req.method === "POST") return send({ ok: true })
+  return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+}
+
 async function saveScreenshot(page: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
   const target = join(SCRATCH_ROOT, name)
   mkdirSync(dirname(target), { recursive: true })
@@ -36,73 +96,42 @@ async function saveScreenshot(page: { screenshot(options?: Record<string, unknow
   return target
 }
 
+async function saveElementScreenshot(
+  page: { $(selector: string): Promise<{ screenshot(options?: Record<string, unknown>): Promise<Buffer> } | null> },
+  selector: string,
+  name: string,
+) {
+  const target = join(SCRATCH_ROOT, name)
+  mkdirSync(dirname(target), { recursive: true })
+  const element = await page.$(selector)
+  assert.ok(element, `${selector} should exist before screenshot`)
+  const screenshot = await element.screenshot({})
+  assert.ok(screenshot.length > 0, `${name} screenshot should not be empty`)
+  await writeFile(target, screenshot)
+  return target
+}
+
 test("cwd breadcrumb buttons are outside the recent-directory menu trigger", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
-  const server = await startBrowserFixture(async (req) => {
-    const url = new URL(req.url)
-    const path = route(url)
-    const directory = url.searchParams.get("directory")
-    if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-    if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
-    const staticResponse = await overlayStaticResponse(path)
-    if (staticResponse) return staticResponse
-    if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
-    if (path === "/session" || path === "/mission" || path === "/project/current/worktrees") return send([])
-    if (path === "/path") return send({ directory: directory ?? PROJECT_DIRECTORY })
-    if (path === "/vcs") {
-      return send({
-        branch: "dev",
-        clean: true,
-        dirty: false,
-        staged: 0,
-        modified: 0,
-        untracked: 0,
-        conflicts: 0,
-        ahead: 0,
-        behind: 0,
-      })
-    }
-    if (path === "/global/projects/discover") {
-      return send({
-        root: "D:/overlay/workspace",
-        defaultDirectory: PROJECT_DIRECTORY,
-        projects: [
-          {
-            directory: PROJECT_DIRECTORY,
-            name: "app",
-            marker: "package.json",
-          },
-        ],
-      })
-    }
-    if (path === "/provider") return send({ all: [], connected: [], default: {} })
-    if (path === "/provider/auth") return send({})
-    if (path === "/config/providers") return send({ providers: [], default: {} })
-    if (path === "/config/prompt") return send([])
-    if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
-    if (path === "/config" && (req.method === "GET" || req.method === "PATCH")) return send({ model: "" })
-    if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
-    if (path === "/coding/cli/profiles") return send({ profiles: [] })
-    if (path === "/terminal/profiles") return send({ defaultProfileID: "", profiles: [] })
-    if (path === "/task/events") {
-      return new Response(":\n\n", {
-        headers: {
-          "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "no-cache",
+  const server = await startBrowserFixture((req) =>
+    taskDirbarFixtureResponse(req, {
+      discovery: {
+        body: {
+          root: "D:/overlay/workspace",
+          defaultDirectory: PROJECT_DIRECTORY,
+          projects: [
+            {
+              directory: PROJECT_DIRECTORY,
+              name: "app",
+              marker: "package.json",
+            },
+          ],
         },
-      })
-    }
-    if (path === "/agent" || path === "/channel" || path === "/executor") return send([])
-    if (path === "/skill/installed" || path === "/skill") return send([])
-    if (path === "/mcp") return send({})
-    if (path === "/panel/knowledge/memory") return send([])
-    if (path === "/panel/knowledge/preference") return send([])
-    if (path === "/log" && req.method === "POST") return send({ ok: true })
-    return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-  })
+      },
+    }),
+  )
 
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
@@ -234,6 +263,74 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     assert.deepEqual(badResponses, [])
 
     await saveScreenshot(page, "task-dirbar-recent-trigger-keyboard.png")
+  } finally {
+    await browser.close()
+    await server.close()
+  }
+}, { timeout: 60_000 })
+
+test("cwd popup surfaces project discovery failures instead of rendering an empty detected-project state", async () => {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
+  const server = await startBrowserFixture((req) =>
+    taskDirbarFixtureResponse(req, {
+      discovery: {
+        status: 503,
+        body: { error: "discovery unavailable" },
+      },
+    }),
+  )
+
+  const browser = await launchBrowser(["--disable-dev-shm-usage"])
+  try {
+    const page = await browser.newPage()
+    const unexpectedBadResponses: string[] = []
+    page.on("response", (response: any) => {
+      if (response.status() >= 400 && !response.url().endsWith("/global/projects/discover")) {
+        unexpectedBadResponses.push(`${response.status()} ${response.url()}`)
+      }
+    })
+    await page.setViewport({ width: 1280, height: 760 })
+    await page.evaluateOnNewDocument((input: { directory: string; serverUrl: string }) => {
+      localStorage.setItem("oc_directory", input.directory)
+      localStorage.setItem("oc_saved_directory", input.directory)
+      localStorage.setItem("oc_locale", "en-US")
+      localStorage.setItem("oc_server_url", input.serverUrl)
+      localStorage.setItem("oc_auto_server", "false")
+      localStorage.setItem(
+        "oc_recent_directories",
+        JSON.stringify([input.directory, "D:/overlay/workspace/tools", "D:/overlay/workspace/docs"]),
+      )
+    }, { directory: PROJECT_DIRECTORY, serverUrl: server.origin })
+
+    await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+    await page.waitForSelector(".task-cwd-dropdown", { visible: true })
+    await page.waitForSelector('[data-ui="cwd-recent-trigger"]', { visible: true })
+    await page.focus('[data-ui="cwd-recent-trigger"]')
+    await page.keyboard.press("Enter")
+    await page.waitForSelector('[data-testid="cwd-discovery-error"]', { visible: true })
+
+    const state = await page.evaluate(() => ({
+      text: document.querySelector('[data-testid="cwd-discovery-error"]')?.textContent || "",
+      role: document.querySelector('[data-testid="cwd-discovery-error"]')?.getAttribute("role") || "",
+      detectedRows: document.querySelectorAll(".recent-dir-section .recent-dir-row").length,
+      recentRows: document.querySelectorAll('.recent-dir-list[data-kind="recent"] .recent-dir-row').length,
+      hasManualPathInput: !!document.querySelector('[data-ui="cwd-path-input"]'),
+      panelVisible: !!document.querySelector(".recent-dir-panel"),
+    }))
+
+    assert.deepEqual(state, {
+      text: "Project discovery failed: API 503 global/projects/discover: discovery unavailable",
+      role: "status",
+      detectedRows: 0,
+      recentRows: 3,
+      hasManualPathInput: true,
+      panelVisible: true,
+    })
+    assert.deepEqual(unexpectedBadResponses, [])
+    const errorScreenshot = await saveElementScreenshot(page, ".recent-dir-panel", "task-dirbar-discovery-error.png")
+    assert.ok(errorScreenshot.endsWith("task-dirbar-discovery-error.png"))
   } finally {
     await browser.close()
     await server.close()

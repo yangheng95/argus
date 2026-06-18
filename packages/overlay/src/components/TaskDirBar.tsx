@@ -12,13 +12,13 @@ import { pathBreadcrumb } from "../utils/dom-utils"
 import {
   activeDirectory,
   browseDirectory,
-  loadDiscoveredProjects,
   loadRecentDirectories,
   openDirectory,
   removeRecentDirectory,
   setDirectory,
   type DiscoveredProject,
 } from "../services/workspace"
+import { loadWorkspaceOnboardingDiscovery } from "../services/workspace-onboarding-discovery"
 import { t } from "../utils/i18n"
 import { AppLog } from "../utils/log"
 import { canInitGit, initGitCurrent } from "../utils/git"
@@ -78,6 +78,7 @@ export function TaskDirContent() {
   const [recentDirs, setRecentDirs] = createSignal<string[]>([])
   const [discoveredRoot, setDiscoveredRoot] = createSignal("")
   const [discoveredProjects, setDiscoveredProjects] = createSignal<DiscoveredProject[]>([])
+  const [discoveryError, setDiscoveryError] = createSignal("")
   const [pathDraft, setPathDraft] = createSignal("")
 
   function syncRecentDirs(): void {
@@ -85,15 +86,18 @@ export function TaskDirContent() {
   }
 
   async function syncDiscoveredProjects(): Promise<void> {
-    try {
-      const discovery = await loadDiscoveredProjects()
+    const discovery = await loadWorkspaceOnboardingDiscovery()
+    if (discovery.status === "ready") {
       setDiscoveredRoot(discovery.root)
       setDiscoveredProjects(discovery.projects)
-    } catch (err) {
-      setDiscoveredRoot("")
-      setDiscoveredProjects([])
-      AppLog.warn("ui", "Failed to discover local OpenCorvus projects", { error: String(err) })
+      setDiscoveryError("")
+      return
     }
+
+    setDiscoveredRoot("")
+    setDiscoveredProjects([])
+    setDiscoveryError(discovery.message)
+    AppLog.warn("ui", "Failed to discover local OpenCorvus projects", { error: discovery.message })
   }
 
   function syncPanelData(): void {
@@ -232,6 +236,12 @@ export function TaskDirContent() {
                 <Icon name="folder-open" size={14} />
               </button>
             </form>
+            <Show when={discoveryError()}>
+              <div class="recent-dir-discovery-error" data-testid="cwd-discovery-error" role="status">
+                <Icon name="status-failed" size={14} />
+                <span>{discoveryError()}</span>
+              </div>
+            </Show>
             <Show when={discoveredProjects().length > 0}>
               <div class="recent-dir-section">
                 <div class="recent-dir-section-title" title={discoveredRoot()}>
