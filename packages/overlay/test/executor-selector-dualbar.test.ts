@@ -17,6 +17,8 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const SRC = readFileSync(path.resolve(import.meta.dir, "..", "src", "components", "ExecutorSelector.tsx"), "utf8")
+const APP_STORE_SRC = readFileSync(path.resolve(import.meta.dir, "..", "src", "store", "app.ts"), "utf8")
+const INIT_SRC = readFileSync(path.resolve(import.meta.dir, "..", "src", "services", "init.ts"), "utf8")
 const TITLEBAR_SRC = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "components", "titlebar", "TitlebarMenubar.tsx"),
   "utf8",
@@ -83,6 +85,9 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/const hexinBudgetKey = createMemo/)
     expect(SRC).toMatch(/parts\.provider !== "hexin" \|\| !parts\.name/)
     expect(SRC).toMatch(/directory: activeDirectory\(\)\.trim\(\)/)
+    expect(SRC).toMatch(/providerAuthRefresh: appStore\.providerAuthRefreshRevision/)
+    expect(APP_STORE_SRC).toMatch(/providerAuthRefreshRevision: number/)
+    expect(INIT_SRC).toMatch(/providerAuthRefreshRevision: appStore\.providerAuthRefreshRevision \+ 1/)
     expect(SRC).toMatch(/window\.setInterval\([\s\S]*?HEXIN_BUDGET_REFRESH_MS/)
     expect(SRC).toMatch(/setHexinBudgetRefreshTick\(\(value\) => value \+ 1\)/)
     expect(SRC).toMatch(/onCleanup\(\(\) => window\.clearInterval\(timer\)\)/)
@@ -90,6 +95,8 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/createResource\(hexinBudgetKey/)
     expect(SRC).toMatch(/data-ui="executor-hexin-budget"/)
     expect(SRC).toMatch(/data-low-budget=\{lowBudget\(\) \? "true" : "false"\}/)
+    expect(SRC).toMatch(/aria-label=\{title\(\)\}/)
+    expect(SRC).toMatch(/executor\.hexin_budget_retry_context/)
     expect(SRC).toMatch(/<Show when=\{hexinBudgetKey\(\)\}>/)
     expect(SRC).toMatch(/meta=\{[\s\S]*?<Show when=\{hexinBudgetKey\(\)\}>/)
     expect(SRC).toMatch(/executor\.hexin_budget_inline/)
@@ -208,6 +215,7 @@ describe("i18n keys for the dual bar exist in both locales", () => {
     "executor.hexin_budget_inline",
     "executor.hexin_budget_inline_loading",
     "executor.hexin_budget_inline_error",
+    "executor.hexin_budget_retry_context",
     "executor.hexin_budget_value",
     "sidebar.reset_db_missing_context",
     "executor.mirror_popover_title",

@@ -4323,3 +4323,63 @@ LINE:
 - Pasteur confirmed `loadDiscoveredProjects()` and `ensureDefaultDirectory()` already propagated rejection, so the repair belongs at the onboarding presentation layer instead of the shared workspace service.
 - Pasteur recommended a real browser onboarding regression in addition to source-level checks; the browser test now exercises the visible error row and screenshot evidence.
 - Pasteur identified `TaskDirBar` as an adjacent same-root UI swallow; it is recorded for a later batch because this batch is scoped to the BH-052 onboarding surface.
+
+## Batch P2-BX: BH-053/BH-054/BH-055/BH-056/BH-058 Hexin budget selector identity and visual coverage
+
+### Findings
+
+- BH-053 was only partially repaired in the previous Hexin selector batch. `ExecutorSelector.tsx` keyed the budget resource by active directory, model, task id, session-config refresh, and timer tick, but it still omitted a provider/auth refresh identity. Saving or rotating the Hexin API key through Settings could leave the same model and directory budget resource cached until the 10-minute timer.
+- BH-054 production code already formatted budget numbers with `localeTag()`, but the bug-hunt tracker had no batch proving that the app locale remained the source for selector budget formatting.
+- BH-055 was only partially repaired. The inline budget span used `role="status"` and `aria-live="polite"`, but an error rendered as generic `Hexin error` without a useful accessible retry context.
+- BH-056 was still under-covered because the browser redesign test used DOM and layout assertions plus unrelated full-page screenshots. It did not require a budget-specific screenshot or pixel evidence for the low-balance red state.
+- BH-058 was adjacent to the same route and policy surface: `provider/hexin/budget` was not explicitly enumerated in `api-directory-injection.test.ts`.
+
+### Call-point Inventory
+
+- `packages/overlay/src/components/ExecutorSelector.tsx` builds `hexinBudgetBaseKey`, creates the `createResource(hexinBudgetKey, ...)`, formats values with `localeTag()`, and renders `[data-ui="executor-hexin-budget"]` inside the OpenCorvus chip meta row.
+- `packages/overlay/src/services/config.ts::getHexinBudget()` calls `apiJson("provider/hexin/budget")`; directory query injection is owned by the shared transport policy.
+- `packages/overlay/src/services/init.ts::loadConfigInfo()` and `loadProviderInfo()` are the real provider catalog/auth reload points used by startup and Settings provider saves.
+- `packages/overlay/src/components/settings/ProvidersPanel.tsx::handleSaveApiKey()` is the real Hexin key rotation path: `PUT /auth/hexin`, `PATCH /config`, `POST /provider/hexin/refresh`, then `loadProviderInfo()`.
+- `packages/overlay/test/browser/executor-selector-redesign.test.ts` owns the browser fixture and the dual-chip visual acceptance for the selector surface.
+- `packages/overlay/test/api-directory-injection.test.ts` owns overlay-side route directory injection coverage and calls the shared `routeRequiresProjectDirectory(...)` policy.
+
+### Fix Shape
+
+- Add `appStore.providerAuthRefreshRevision`, a monotonic provider authentication refresh revision incremented when provider catalog/auth data is reloaded through `loadConfigInfo(..., { includeSettingsData: true })`, `loadProviderInfo()`, or the store helper setters.
+- Add `providerAuthRefresh: appStore.providerAuthRefreshRevision` to `hexinBudgetBaseKey` so the Solid resource refetches after real provider auth/key refreshes without adding polling or compatibility behavior beyond the existing 10-minute refresh.
+- Keep app-locale formatting single-sourced through `new Intl.NumberFormat(localeTag(), ...)`.
+- Add a localized `executor.hexin_budget_retry_context` string and expose it through the budget status `title` and `aria-label` when provider or transport errors occur.
+- Add the concrete `provider/hexin/budget` route to the injection test inventory.
+- Extend the browser selector test to capture `[data-ui="executor-hexin-budget"]` directly, analyze the PNG for nonblank content and red-dominant low-budget pixels, switch directory through `window.applyDirectory(...)`, and rotate Hexin auth through the real Settings provider save path.
+
+### Regression Tests
+
+- `packages/overlay/test/executor-selector-dualbar.test.ts` now rejects a Hexin budget key missing `providerAuthRefresh: appStore.providerAuthRefreshRevision`, rejects losing `aria-label={title()}`, and requires the retry-context i18n key in both locales.
+- `packages/overlay/test/api-directory-injection.test.ts` now explicitly expects `provider/hexin/budget` to inject project directory and to agree with `routeRequiresProjectDirectory(...)`.
+- `packages/overlay/test/browser/executor-selector-redesign.test.ts` now asserts:
+  - initial budget request carries `directory=D:/overlay/workspace/app`;
+  - the inline budget has `role="status"`, `aria-live="polite"`, and a value/title using app-locale formatting;
+  - `.scratch/executor-selector-hexin-budget-inline.png` exists, is nonblank, and includes red-dominant low-balance pixels;
+  - switching to `D:/overlay/workspace/next` with the same Hexin model triggers a new budget request with the new directory;
+  - saving a rotated Hexin API key through Settings triggers a fresh budget request without waiting for the 10-minute timer;
+  - switching OpenCorvus away from Hexin removes the budget and subsequent request logs remain project-scoped.
+
+### Verification
+
+- Focused selector and directory tests passed: `bun test packages/overlay/test/executor-selector-dualbar.test.ts packages/overlay/test/api-directory-injection.test.ts --timeout 60000`.
+- Real browser selector test passed: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/executor-selector-redesign.test.ts`.
+- Visual review passed for `.scratch/executor-selector-hexin-budget-inline.png`; the screenshot shows the compact inline Hexin budget in the low-balance red state.
+- Overlay typecheck passed: `bun run --cwd packages/overlay typecheck`.
+- Overlay internationalization check passed: `bun run --cwd packages/overlay check:i18n`.
+- API route inventory passed: `bun run api:routes-check`.
+- Docs check passed: `bun run docs:check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Volta confirmed BH-053 still existed because the key lacked auth/provider refresh identity even after directory/model/task/timer keying landed.
+- Volta confirmed BH-054 production code used `localeTag()` but lacked explicit tracker coverage.
+- Volta confirmed BH-055 still lacked meaningful retry context even though status semantics were present.
+- Volta confirmed BH-056 still lacked a budget-specific visual screenshot artifact and pixel-level assertion.
+- Volta recommended repairing BH-053 through BH-056 together because they share the same component resource, browser fixture, and selector visual surface; BH-058 was kept in the same batch only as route-policy test coverage for the same endpoint.

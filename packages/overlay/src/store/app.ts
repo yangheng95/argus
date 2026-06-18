@@ -75,6 +75,8 @@ export interface AppState {
   providerCatalog: any
   /** Current provider authentication status */
   providerAuth: any
+  /** Provider authentication refresh revision; increments after provider catalog/auth reloads. */
+  providerAuthRefreshRevision: number
   /** Route-keyed errors from the latest config/provider bootstrap load. */
   configLoadErrors: Record<string, string>
   /** Map of provider IDs whose auth prompt has been dismissed this session */
@@ -129,6 +131,7 @@ const DEFAULT_APP_STATE: AppState = {
   executors: [],
   providerCatalog: null,
   providerAuth: null,
+  providerAuthRefreshRevision: 0,
   configLoadErrors: {},
   providerAuthDismissed: {},
   providerTest: null,
@@ -227,11 +230,17 @@ export function setNdjsonStartMs(ms: number): void {
 // ── Provider helpers ──
 
 export function setProviderCatalog(catalog: any): void {
-  setAppStore("providerCatalog", catalog ?? null)
+  setAppStore({
+    providerCatalog: catalog ?? null,
+    providerAuthRefreshRevision: appStore.providerAuthRefreshRevision + 1,
+  })
 }
 
 export function setProviderAuth(auth: any): void {
-  setAppStore("providerAuth", auth ?? null)
+  setAppStore({
+    providerAuth: auth ?? null,
+    providerAuthRefreshRevision: appStore.providerAuthRefreshRevision + 1,
+  })
 }
 
 export function dismissProviderAuth(providerID: string): void {
