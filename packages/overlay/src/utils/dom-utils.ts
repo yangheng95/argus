@@ -338,7 +338,7 @@ export function pathBreadcrumb(value: string, capabilities: PathBreadcrumbCapabi
   const choose = t("cwd.choose_level")
   const nodes = items
     .map((item, index) => {
-      const current = index === items.length - 1 ? ' data-current="true"' : ""
+      const current = index === items.length - 1 ? ' data-current="true" aria-current="location"' : ""
       const step = index
         ? `<button type="button" class="task-dir-step" data-path-set=${jsonAttr(items[index - 1].path)} title="${escapeHtml(`${choose}: ${items[index - 1].path}`)}" aria-label="${escapeHtml(`${choose}: ${items[index - 1].path}`)}">/</button>`
         : ""

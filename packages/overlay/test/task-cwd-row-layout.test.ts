@@ -207,4 +207,10 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(DOM_UTILS).not.toMatch(/<span class="task-dir-shell"/)
     expect(DOM_UTILS).toMatch(/<span class="task-dir-path">/)
   })
+
+  test("path breadcrumb mirrors current location onto the current node", () => {
+    expect(DOM_UTILS).toContain('data-current="true" aria-current="location"')
+    expect(DOM_UTILS).not.toContain('aria-selected="')
+    expect(DOM_UTILS).not.toContain('aria-pressed="')
+  })
 })
