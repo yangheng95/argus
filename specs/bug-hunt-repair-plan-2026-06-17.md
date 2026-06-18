@@ -2836,3 +2836,40 @@ LINE:
 
 - Socrates confirmed BH-069 was present in HEAD: the default package script was a handwritten allowlist and the guard only protected the three BH-068 release/script entries.
 - Socrates listed the skipped direct directories and top-level files and recommended a single real test entry plus a dynamic guard over `test/*` discoverable tests, without fallback or exclusion gates.
+
+## Batch P1-AT: BH-071 package-local must fail when Docker Linux packaging is unavailable
+
+### Findings
+
+- BH-071 targets `script/package-local.ts`.
+- The default local packaging flow builds the opencorvus overlay-server binaries, builds the native overlay bundle, then attempts Linux overlay targets through Docker.
+- When `docker info` failed, HEAD only printed warnings and continued to the final `=== Package complete ===` summary.
+- That made a release-like local package run appear successful even though the required Linux overlay artifacts were absent.
+
+### Call-point Inventory
+
+- Root `package.json::scripts.package:local` invokes `bun run script/package-local.ts`.
+- `script/package-local.ts` owns `--skip-cli`, `--skip-linux`, `--skip-native`, and Linux Docker packaging dispatch.
+- `packages/opencorvus/test/script/package-local.test.ts` covers package-local process behavior.
+- `packages/opencorvus/test/script/package-test-entry.test.ts` ensures the new script test is included in the default package test suite through the `test` root entry.
+
+### Fix Shape
+
+- Keep `--skip-linux` as the only explicit way to skip Linux overlay packaging.
+- When Linux packaging is requested and `docker info` fails, throw an error before the final package-complete summary.
+- Do not add a fallback packaging path, hidden compatibility skip, or success-with-warning mode.
+
+### Verification
+
+- Added `packages/opencorvus/test/script/package-local.test.ts`.
+- The regression runs `script/package-local.ts --skip-cli --skip-native` in a child Bun process with `PATH` restricted to an empty temporary directory, so `docker info` cannot resolve Docker while unrelated build phases are skipped.
+- The test asserts a nonzero exit code, the Docker-required error text, and absence of the `=== Package complete ===` success summary.
+- Focused tests passed: `bun test packages/opencorvus/test/script/package-local.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Kuhn confirmed BH-071 was present in HEAD: `docker info` failure was handled with `console.warn(...)` and package-local still reached `=== Package complete ===`.
+- Kuhn confirmed the candidate repair is the minimal fail-closed boundary: throw when Docker is unavailable unless the operator explicitly passed `--skip-linux`.
+- Kuhn identified a separate adjacent package-linux-binary stale-output risk; that is not included in this BH-071 batch.
