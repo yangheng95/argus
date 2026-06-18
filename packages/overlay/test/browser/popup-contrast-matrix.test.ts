@@ -14,24 +14,17 @@ function readCss(rel: string): string {
   return readFileSync(join(OVERLAY_ROOT, "src/styles", rel), "utf8")
 }
 
+function overlayStyleHrefs(): string[] {
+  const html = readFileSync(join(OVERLAY_ROOT, "src/index.html"), "utf8")
+  const hrefs = Array.from(html.matchAll(/<link\s+rel="stylesheet"\s+href="styles\/([^"]+)"/g), (match) => match[1])
+  if (hrefs.length === 0) throw new Error("No overlay stylesheet links found in src/index.html")
+  return hrefs
+}
+
+const OVERLAY_STYLE_HREFS = overlayStyleHrefs()
+
 function overlayCss(): string {
-  return [
-    "tokens/design-language.css",
-    "cascade/base.css",
-    "cascade/dark.css",
-    "cascade/vscode-dark.css",
-    "cascade/light.css",
-    "primitives/button.css",
-    "primitives/tabs.css",
-    "surfaces/field.css",
-    "surfaces/dialog.css",
-    "surfaces/composer.css",
-    "surfaces/conversation.css",
-    "surfaces/titlebar.css",
-    "surfaces/cmdk.css",
-  ]
-    .map(readCss)
-    .join("\n")
+  return OVERLAY_STYLE_HREFS.map(readCss).join("\n")
 }
 
 async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
@@ -380,6 +373,16 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
         "titlebar-menu",
         "command-palette",
       ],
+    )
+    assert.equal(
+      OVERLAY_STYLE_HREFS.indexOf("surfaces/composer.css") < OVERLAY_STYLE_HREFS.indexOf("surfaces/field.css"),
+      true,
+      "Popup matrix must load CSS in the same order as src/index.html",
+    )
+    assert.equal(
+      OVERLAY_STYLE_HREFS.indexOf("surfaces/titlebar.css") < OVERLAY_STYLE_HREFS.indexOf("surfaces/cmdk.css"),
+      true,
+      "Popup matrix must preserve real titlebar/cmdk cascade order",
     )
 
     for (const sample of result) {
