@@ -131,9 +131,14 @@ test("Mission ledger renders mission-created task projections as task selectors"
   expect(MISSION_LIST_TSX).toContain("MissionTaskProjectionRow")
   expect(MISSION_LIST_TSX).toContain('data-ui="mission-task-projection"')
   expect(MISSION_LIST_TSX).toContain('data-ui="mission-task-projection-select"')
+  expect(MISSION_LIST_TSX).toContain('class="task-row-main mission-task-projection-select"')
+  expect(MISSION_LIST_TSX).not.toContain('class="mission-task-projection-button"')
   expect(MISSION_LIST_TSX).toContain("props.onSelectTask(props.task.id)")
   expect(MISSION_LIST_TSX).toContain("props.mission.tasks")
   expect(MISSION_LIST_TSX).toContain("mission.ledger.tasks_label")
+  expect(MISSION_CSS).toContain('.mission-task-projection-row .task-row-main[data-ui="mission-task-projection-select"]')
+  expect(MISSION_CSS).not.toContain(".mission-task-projection-button")
+  expect(MISSION_CSS).not.toContain("outline: none")
 })
 
 test("Mission ledger is embedded in the left task panel without its retired panel header", () => {
