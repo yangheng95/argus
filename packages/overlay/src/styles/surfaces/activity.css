@@ -696,3 +696,48 @@
   --oc-button-border: var(--oc-border-width) solid transparent;
   --oc-button-color: var(--bad);
 }
+
+@media (max-width: 1120px) {
+  /* breakpoint: --ui-breakpoint-xl */
+  #solidRightActivityToolbar.side-activity-toolbar-mount {
+    flex: 0 0 var(--ui-collapsed-pane-width);
+    width: 100%;
+    min-width: 0;
+    height: var(--ui-collapsed-pane-width);
+    min-height: var(--ui-collapsed-pane-width);
+    border-left: 0;
+    border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+  }
+
+  #solidRightActivityToolbar .side-activity-toolbar {
+    width: 100%;
+    height: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #solidRightActivityToolbar .side-activity-toolbar__items,
+  #solidRightActivityToolbar .side-activity-toolbar__trailing {
+    height: 100%;
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  #solidRightActivityToolbar .side-activity-toolbar__items {
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+
+  #solidRightActivityToolbar
+    .side-activity-toolbar
+    [data-side="right"][data-ui="side-activity-button"][data-active="true"]::before {
+    top: auto;
+    right: calc(6px * var(--ui-scale));
+    bottom: 0;
+    left: calc(6px * var(--ui-scale));
+    width: auto;
+    height: calc(2px * var(--ui-scale));
+  }
+}
