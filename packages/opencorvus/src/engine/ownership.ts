@@ -117,6 +117,14 @@ export namespace Ownership {
     return path.join(ownershipRoot(primaryWorktreeDir), PROCESS_DIR)
   }
 
+  function worktreeMarkerScanDirs(primaryWorktreeDir: string): string[] {
+    return [worktreeMarkerDir(primaryWorktreeDir), path.join(ownershipRoot(primaryWorktreeDir), "w")]
+  }
+
+  function processMarkerScanDirs(primaryWorktreeDir: string): string[] {
+    return [processMarkerDir(primaryWorktreeDir), path.join(ownershipRoot(primaryWorktreeDir), "p")]
+  }
+
   /**
    * Filesystem-safe filename for a directory path. `path.basename` alone
    * is not unique across project-root and child worktree names, so the
@@ -231,6 +239,19 @@ export namespace Ownership {
     return out
   }
 
+  async function listMarkersInDirs(dirs: string[]): Promise<Array<{ markerPath: string; marker: Marker | undefined }>> {
+    const out: Array<{ markerPath: string; marker: Marker | undefined }> = []
+    const seen = new Set<string>()
+    for (const dir of dirs) {
+      for (const entry of await listMarkers(dir)) {
+        if (seen.has(entry.markerPath)) continue
+        seen.add(entry.markerPath)
+        out.push(entry)
+      }
+    }
+    return out
+  }
+
   async function pathExists(target: string): Promise<boolean> {
     try {
       await fs.stat(target)
@@ -277,7 +298,7 @@ export namespace Ownership {
 
     export async function clear(input: { primaryWorktreeDir: string; worktreeDir: string }): Promise<void> {
       const filename = workerMarkerFilename(input.worktreeDir)
-      const markerPaths = (await listMarkers(worktreeMarkerDir(input.primaryWorktreeDir)))
+      const markerPaths = (await listMarkersInDirs(worktreeMarkerScanDirs(input.primaryWorktreeDir)))
         .map((entry) => entry.markerPath)
         .filter((markerPath) => path.basename(markerPath) === filename)
       if (markerPaths.length === 0) {
@@ -288,7 +309,7 @@ export namespace Ownership {
     }
 
     export async function list(primaryWorktreeDir: string): Promise<Array<{ markerPath: string; marker: Marker }>> {
-      const raw = await listMarkers(worktreeMarkerDir(primaryWorktreeDir))
+      const raw = await listMarkersInDirs(worktreeMarkerScanDirs(primaryWorktreeDir))
       return raw.filter((r): r is { markerPath: string; marker: Marker } => !!r.marker && r.marker.kind === "worktree")
     }
 
@@ -303,7 +324,7 @@ export namespace Ownership {
       isPidAlive?: (pid: number) => boolean
     }): Promise<OrphanEntry[]> {
       const aliveCheck = input.isPidAlive ?? isPidAlive
-      const raw = await listMarkers(worktreeMarkerDir(input.primaryWorktreeDir))
+      const raw = await listMarkersInDirs(worktreeMarkerScanDirs(input.primaryWorktreeDir))
       const out: OrphanEntry[] = []
       for (const { markerPath, marker } of raw) {
         if (!marker) {
@@ -374,7 +395,7 @@ export namespace Ownership {
 
     export async function clear(input: { primaryWorktreeDir: string; pid: number }): Promise<void> {
       const filename = processMarkerFilename(input.pid)
-      const markerPaths = (await listMarkers(processMarkerDir(input.primaryWorktreeDir)))
+      const markerPaths = (await listMarkersInDirs(processMarkerScanDirs(input.primaryWorktreeDir)))
         .map((entry) => entry.markerPath)
         .filter((markerPath) => path.basename(markerPath) === filename)
       if (markerPaths.length === 0) {
@@ -385,7 +406,7 @@ export namespace Ownership {
     }
 
     export async function list(primaryWorktreeDir: string): Promise<Array<{ markerPath: string; marker: Marker }>> {
-      const raw = await listMarkers(processMarkerDir(primaryWorktreeDir))
+      const raw = await listMarkersInDirs(processMarkerScanDirs(primaryWorktreeDir))
       return raw.filter((r): r is { markerPath: string; marker: Marker } => !!r.marker && r.marker.kind === "process")
     }
 
@@ -403,7 +424,7 @@ export namespace Ownership {
       isPidAlive?: (pid: number) => boolean
     }): Promise<OrphanEntry[]> {
       const aliveCheck = input.isPidAlive ?? isPidAlive
-      const raw = await listMarkers(processMarkerDir(input.primaryWorktreeDir))
+      const raw = await listMarkersInDirs(processMarkerScanDirs(input.primaryWorktreeDir))
       const out: OrphanEntry[] = []
       for (const { markerPath, marker } of raw) {
         if (!marker) {

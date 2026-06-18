@@ -3934,3 +3934,58 @@ LINE:
 - Darwin confirmed BH-110 was still present before the repair: HTTP `/replan` and panel `replan_task` both flowed into `retryTask(...)`.
 - Darwin required a first-class replan service or intent rather than string-only note differences, plus service, route, and panel tests that prove retry and replan are separate paths.
 - Darwin also called out stale active plans as the deep risk; the final repair supersedes active plans on replan and verifies the blocked retry reopen path is not invoked.
+
+## Batch P2-BQ: BH-023 public worktree delete routes must reject unregistered directories
+
+### Findings
+
+- BH-023 targets the public worktree delete routes in `packages/opencorvus/src/server/routes/project.ts` and `packages/opencorvus/src/server/routes/experimental.ts`.
+- Raw `Worktree.remove(...)` intentionally treats an existing directory that is absent from `git worktree list` as cleanup residue and recursively removes it. That behavior is still required by GC, reclaim, create cleanup, and registered zombie cleanup.
+- The route bug was exposing that low-level cleanup primitive directly to caller-supplied JSON. A caller could pass a sibling directory that was not a current-project worktree and have it removed.
+- The route-level sandbox cleanup also compared raw strings, so deleting a registered path returned by git could leave a sandbox pointer when the stored path contained `..` or a different but equivalent spelling.
+- While validating the project route file, `GET /project/current/cleanup-candidates` exposed an adjacent ownership visibility bug: `Ownership.*.record(...)` writes task-scoped markers under `.opencorvus/r/o/{w,p}/...`, but list/orphan/clear only scanned the legacy unscoped marker directories.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/project.ts::DELETE /project/current/worktrees` is the current project web/API delete surface.
+- `packages/opencorvus/src/server/routes/experimental.ts::DELETE /experimental/worktree` is the older delete surface with the same semantics and must not remain a raw delete backdoor.
+- `packages/opencorvus/src/worktree/index.ts::remove(...)` is the low-level canonical remover used by GC/reclaim/create cleanup and must retain zombie cleanup behavior.
+- `packages/opencorvus/src/worktree/index.ts::listProjectWorktrees(...)` is the current project visible worktree list and the right single source for route deletability.
+- `packages/opencorvus/src/project/project.ts::removeSandbox(...)` removes the project sandbox pointer after successful worktree removal.
+- Raw `Worktree.remove(...)` remains used by `packages/opencorvus/src/worktree/gc.ts`, `packages/opencorvus/src/workspace/workspace.ts`, `packages/opencorvus/src/engine/rewind.ts`, `packages/opencorvus/src/goal/runner.ts`, and internal worktree reclaim/create cleanup; those call sites derive directories from persisted project/runtime state rather than public JSON.
+- `packages/opencorvus/src/engine/ownership.ts` owns both marker writing and cleanup route enumeration for legacy and task-scoped ownership markers.
+
+### Fix Shape
+
+- Add `Worktree.removeProjectWorktree(...)` as the public-route service boundary: canonicalize the requested path, require a matching `removable` row from `listProjectWorktrees(...)`, and only then call raw `remove(...)` on the registered directory.
+- Make both delete routes call `removeProjectWorktree(...)` instead of raw `remove(...)`.
+- Return the registered worktree row from `removeProjectWorktree(...)` so route sandbox cleanup uses the same resolved directory that was actually deleted.
+- Make `Project.removeSandbox(...)` remove path-equivalent sandbox entries, not only byte-identical strings.
+- Update `/experimental/worktree` OpenAPI metadata to advertise 404 for unregistered directories.
+- Keep raw `Worktree.remove(...)` behavior unchanged for GC/reclaim/zombie cleanup; do not add a global registered-only gate or route fallback.
+- Update ownership marker scanning to read both legacy unscoped marker directories and current task-scoped `w` / `p` marker directories.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/server/project-routes.test.ts`:
+  - positive delete for `/project/current/worktrees` still removes a registered worktree;
+  - positive delete for `/experimental/worktree` removes a registered worktree;
+  - both routes reject an unregistered sibling directory with 404 and leave its sentinel file intact;
+  - cleanup-candidates sees task-scoped process and worktree ownership markers without mutating them.
+- Extend `packages/opencorvus/test/engine/ownership.test.ts` expectations to use valid task/session IDs and the current ownership root so scoped marker list/orphan/clear behavior is exercised.
+- Keep `packages/opencorvus/test/project/worktree-remove.test.ts` and `packages/opencorvus/test/project/worktree-gc.test.ts` passing to prove low-level registered/zombie removal is not broken.
+
+### Verification
+
+- Focused worktree/project/ownership tests passed: `bun test packages/opencorvus/test/engine/ownership.test.ts packages/opencorvus/test/project/worktree-remove.test.ts packages/opencorvus/test/project/worktree-gc.test.ts packages/opencorvus/test/server/project-routes.test.ts --timeout 90000`.
+- Package test-entry guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Heisenberg confirmed the repaired public route callpoints now use `Worktree.removeProjectWorktree(...)` and no other current HTTP route directly passes user-supplied directories to raw `Worktree.remove(...)`.
+- Heisenberg identified the remaining `/experimental/worktree` 404 contract gap; the route metadata and positive/negative route tests now cover that surface.
+- Heisenberg confirmed the raw low-level remover still has legitimate internal call sites for GC, stored workspace rows, rewind, goal runner cleanup, and worktree reclaim/create cleanup.
