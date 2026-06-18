@@ -966,6 +966,9 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace\s*\{/)
     expect(styles).not.toMatch(/(^|\n)code \.file-link\s*\{/)
     expect(workspaceSurface).toMatch(/code \.file-link\s*\{/)
+    expect(readText(join(OVERLAY_ROOT, "src/styles/surfaces/messages.css"))).not.toMatch(
+      /(^|\n)\.(?:path-box|path-link)(?:\s|:|\{)/,
+    )
 
     expect(workspaceSurface).toContain("var(--oc-border-width)")
     expect(workspaceSurface).not.toMatch(/border-radius:\s*999px/)

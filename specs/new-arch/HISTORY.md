@@ -20,6 +20,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-system-performance-high-confidence-pass.md](2026-06-19-system-performance-high-confidence-pass.md) | System Performance High Confidence Pass |
 | [2026-06-19-overlay-diff-poll-pressure.md](2026-06-19-overlay-diff-poll-pressure.md)                           | Overlay Diff Poll Pressure |
 | [2026-06-19-retire-about-author-link-residue.md](2026-06-19-retire-about-author-link-residue.md)               | Retire About Author Link Residue |
+| [2026-06-19-retire-message-path-link-residue.md](2026-06-19-retire-message-path-link-residue.md)               | Retire Message Path Link Residue |
 
 ## 2026-06-18
 

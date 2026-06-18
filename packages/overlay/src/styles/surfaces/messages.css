@@ -760,8 +760,8 @@
 
 /* ─────────────────────────────────────────────────────────────
    Extracted from styles.css 2026-05-04: chat-message accessory
-   chrome (reasoning panel, msg-patch chip, msg-tool-* chrome,
-   path-box / path-link rendering) + the cross-class min-width
+   chrome (reasoning panel, msg-patch chip, msg-tool-* chrome)
+   + the cross-class min-width
    reset that pinned overflow behavior across msg-* / acceptance-*.
    ───────────────────────────────────────────────────────────── */
 
@@ -842,30 +842,6 @@
   font-size: var(--ui-font-control);
   color: var(--good);
   font-family: var(--mono);
-}
-
-.path-box {
-  font-family: var(--mono);
-  font-size: var(--ui-font-control);
-  word-break: break-word;
-}
-.path-link {
-  width: 100%;
-  justify-content: flex-start;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color var(--ui-duration-fast),
-    background var(--ui-duration-fast),
-    color var(--ui-duration-fast);
-}
-.path-link:hover:not(:disabled) {
-  border-color: var(--border-hover);
-  background: var(--surface-hover);
-}
-.path-link:disabled {
-  cursor: default;
-  color: var(--text-muted);
 }
 
 .msg-tool-code {
