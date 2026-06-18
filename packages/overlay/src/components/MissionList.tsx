@@ -2,12 +2,12 @@ import { createMemo, createSignal, For, Show } from "solid-js"
 import type { MissionRecord, MissionTaskProjection, MissionTaskStatus } from "../services/mission"
 import { detailStamp, relativeTime } from "../utils/time"
 import { t } from "../utils/i18n"
-import { projectDirectoryKey, projectDirectoryLabel } from "../utils/project-directory"
 import { buildMissionDebugBlob, writeDebugClipboard } from "../utils/debug-info"
 import { useArmedConfirm } from "../solid/armed-confirm"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { LedgerList } from "./LedgerList"
+import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 
 export interface MissionListProps {
   missions: MissionRecord[]
@@ -32,10 +32,6 @@ type MissionGroup = {
   directory: string
   latest: number
   items: MissionRecord[]
-}
-
-function missionProjectTip(directory: string, count: number): string {
-  return [directory || t("task.project.unknown"), String(count)].filter(Boolean).join(" / ")
 }
 
 function missionRowTip(mission: MissionRecord): string {
@@ -315,7 +311,7 @@ function MissionRow(props: {
 }
 
 export function MissionList(props: MissionListProps) {
-  const [collapsedDirectories, setCollapsedDirectories] = createSignal<Record<string, boolean>>({})
+  const directoryCollapse = createProjectLedgerGroupCollapseState()
   const groupedMissions = createMemo<MissionGroup[]>(() => {
     const groups = new Map<string, MissionGroup>()
     for (const mission of props.missions) {
@@ -335,20 +331,6 @@ export function MissionList(props: MissionListProps) {
       }))
       .sort((a, b) => b.latest - a.latest)
   })
-
-  function isDirectoryCollapsed(directory: string): boolean {
-    return collapsedDirectories()[projectDirectoryKey(directory)] === true
-  }
-
-  function toggleDirectoryGroup(directory: string): void {
-    const key = projectDirectoryKey(directory)
-    setCollapsedDirectories((current) => {
-      const next = { ...current }
-      if (next[key]) delete next[key]
-      else next[key] = true
-      return next
-    })
-  }
 
   return (
     <div class="mission-ledger" data-ui="mission-ledger">
@@ -392,56 +374,30 @@ export function MissionList(props: MissionListProps) {
           onRetry={props.onRetry}
         >
           {(group) => {
-            const label = projectDirectoryLabel(group.directory, t("task.project.unknown"))
-            const collapsed = () => isDirectoryCollapsed(group.directory)
+            const collapsed = () => directoryCollapse.isCollapsed(group.directory)
             return (
-              <section
-                class="project-group mission-project-group"
-                data-ui="mission-project-group"
-                data-collapsed={collapsed() ? "true" : undefined}
+              <ProjectLedgerGroup
+                directory={group.directory}
+                count={group.items.length}
+                class="mission-project-group"
+                dataUi="mission-project-group"
+                collapsed={collapsed()}
+                onToggle={() => directoryCollapse.toggle(group.directory)}
               >
-                <button
-                  type="button"
-                  class="project-group-heading"
-                  title={missionProjectTip(group.directory, group.items.length)}
-                  aria-expanded={collapsed() ? "false" : "true"}
-                  aria-label={label.name}
-                  onClick={() => toggleDirectoryGroup(group.directory)}
-                >
-                  <span class="project-group-icon" aria-hidden="true">
-                    <Icon name={collapsed() ? "folder" : "folder-open"} size={15} />
-                  </span>
-                  <span class="project-group-copy">
-                    <span class="project-group-name">{label.name}</span>
-                    <Show when={label.parent}>
-                      <span class="project-group-parent">{label.parent}</span>
-                    </Show>
-                  </span>
-                  <span class="project-group-count" aria-label={String(group.items.length)}>
-                    {group.items.length}
-                  </span>
-                  <span class="project-group-chevron" aria-hidden="true">
-                    <Icon name={collapsed() ? "chevron" : "chevron-down"} size={12} />
-                  </span>
-                </button>
-                <Show when={!collapsed()}>
-                  <div class="project-group-body">
-                    <For each={group.items}>
-                      {(mission) => (
-                        <MissionRow
-                          mission={mission}
-                          selected={props.selectedSessionID === mission.sessionID}
-                          onSelectMission={props.onSelectMission}
-                          onSelectTask={props.onSelectTask}
-                          onAbortMission={props.onAbortMission}
-                          onDeleteMission={props.onDeleteMission}
-                          onRenameMission={props.onRenameMission}
-                        />
-                      )}
-                    </For>
-                  </div>
-                </Show>
-              </section>
+                <For each={group.items}>
+                  {(mission) => (
+                    <MissionRow
+                      mission={mission}
+                      selected={props.selectedSessionID === mission.sessionID}
+                      onSelectMission={props.onSelectMission}
+                      onSelectTask={props.onSelectTask}
+                      onAbortMission={props.onAbortMission}
+                      onDeleteMission={props.onDeleteMission}
+                      onRenameMission={props.onRenameMission}
+                    />
+                  )}
+                </For>
+              </ProjectLedgerGroup>
             )
           }}
         </LedgerList>

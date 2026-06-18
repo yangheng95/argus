@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const TASK_LIST_SOURCE = readFileSync(join(import.meta.dir, "../src/components/TaskList.tsx"), "utf8")
+const PROJECT_LEDGER_GROUP_SOURCE = readFileSync(
+  join(import.meta.dir, "../src/components/ProjectLedgerGroup.tsx"),
+  "utf8",
+)
 const SIDEBAR_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/sidebar.css"), "utf8")
 
 test("TaskList sidebar controls route through the Button primitive", () => {
@@ -45,12 +49,17 @@ test("TaskList marks tasks with unread notification facts", () => {
 
 test("TaskList task rows stay one-line while preserving detail in tooltips", () => {
   expect(TASK_LIST_SOURCE).toContain("taskListFullTip")
-  expect(TASK_LIST_SOURCE).toContain("projectGroupTip")
-  expect(TASK_LIST_SOURCE).toContain('class="project-group-count"')
-  expect(TASK_LIST_SOURCE).toContain("collapsedDirectories")
-  expect(TASK_LIST_SOURCE).toContain("toggleDirectoryGroup(group.directory)")
-  expect(TASK_LIST_SOURCE).toContain('aria-expanded={collapsed() ? "false" : "true"}')
-  expect(TASK_LIST_SOURCE).toContain('class="project-group-chevron"')
+  expect(TASK_LIST_SOURCE).toContain("ProjectLedgerGroup")
+  expect(TASK_LIST_SOURCE).toContain("createProjectLedgerGroupCollapseState")
+  expect(TASK_LIST_SOURCE).toContain("directoryCollapse.toggle(group.directory)")
+  expect(TASK_LIST_SOURCE).not.toContain("projectGroupTip")
+  expect(TASK_LIST_SOURCE).not.toContain("collapsedDirectories")
+  expect(TASK_LIST_SOURCE).not.toContain('class="project-group-heading"')
+  expect(TASK_LIST_SOURCE).not.toContain('class="project-group-count"')
+  expect(TASK_LIST_SOURCE).not.toContain('class="project-group-chevron"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('class="project-group-count"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('aria-expanded={props.collapsed ? "false" : "true"}')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('class="project-group-chevron"')
   expect(TASK_LIST_SOURCE).not.toContain('class="task-row-meta"')
   expect(SIDEBAR_CSS).toMatch(/\.task-row-mini\s*\{[^}]*display:\s*grid;/)
   expect(SIDEBAR_CSS).toMatch(

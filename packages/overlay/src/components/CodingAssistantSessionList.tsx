@@ -2,10 +2,10 @@ import { createMemo, createSignal, For, Show } from "solid-js"
 import type { CodingAssistantSessionInfo } from "../store/coding-assistant"
 import { useArmedConfirm } from "../solid/armed-confirm"
 import { t } from "../utils/i18n"
-import { projectDirectoryKey, projectDirectoryLabel } from "../utils/project-directory"
 import { detailStamp, relativeTime } from "../utils/time"
 import { Icon } from "./Icon"
 import { LedgerList } from "./LedgerList"
+import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 import { Button } from "./ui/Button"
 
 export interface CodingAssistantSessionListProps {
@@ -44,10 +44,6 @@ function sessionUpdated(session: CodingAssistantSessionInfo): number {
 
 function sessionProjectDirectory(session: CodingAssistantSessionInfo): string {
   return session.directory || ""
-}
-
-function sessionProjectTip(directory: string, count: number): string {
-  return [directory || t("task.project.unknown"), String(count)].filter(Boolean).join(" / ")
 }
 
 function sessionRowTip(session: CodingAssistantSessionInfo): string {
@@ -276,7 +272,7 @@ function CodingAssistantSessionRow(props: {
 }
 
 export function CodingAssistantSessionList(props: CodingAssistantSessionListProps) {
-  const [collapsedDirectories, setCollapsedDirectories] = createSignal<Record<string, boolean>>({})
+  const directoryCollapse = createProjectLedgerGroupCollapseState()
   const groupedSessions = createMemo<CodingAssistantGroup[]>(() => {
     const groups = new Map<string, CodingAssistantGroup>()
     for (const session of props.sessions) {
@@ -297,20 +293,6 @@ export function CodingAssistantSessionList(props: CodingAssistantSessionListProp
       }))
       .sort((a, b) => b.latest - a.latest)
   })
-
-  function isDirectoryCollapsed(directory: string): boolean {
-    return collapsedDirectories()[projectDirectoryKey(directory)] === true
-  }
-
-  function toggleDirectoryGroup(directory: string): void {
-    const key = projectDirectoryKey(directory)
-    setCollapsedDirectories((current) => {
-      const next = { ...current }
-      if (next[key]) delete next[key]
-      else next[key] = true
-      return next
-    })
-  }
 
   return (
     <aside class="coding-assistant-ledger" data-ui="coding-assistant-ledger">
@@ -355,56 +337,30 @@ export function CodingAssistantSessionList(props: CodingAssistantSessionListProp
           onRetry={props.onRetry}
         >
           {(group) => {
-            const label = projectDirectoryLabel(group.directory, t("task.project.unknown"))
-            const collapsed = () => isDirectoryCollapsed(group.directory)
+            const collapsed = () => directoryCollapse.isCollapsed(group.directory)
             return (
-              <section
-                class="project-group coding-assistant-project-group"
-                data-ui="coding-assistant-project-group"
-                data-collapsed={collapsed() ? "true" : undefined}
+              <ProjectLedgerGroup
+                directory={group.directory}
+                count={group.items.length}
+                class="coding-assistant-project-group"
+                dataUi="coding-assistant-project-group"
+                collapsed={collapsed()}
+                onToggle={() => directoryCollapse.toggle(group.directory)}
               >
-                <button
-                  type="button"
-                  class="project-group-heading"
-                  title={sessionProjectTip(group.directory, group.items.length)}
-                  aria-expanded={collapsed() ? "false" : "true"}
-                  aria-label={label.name}
-                  onClick={() => toggleDirectoryGroup(group.directory)}
-                >
-                  <span class="project-group-icon" aria-hidden="true">
-                    <Icon name={collapsed() ? "folder" : "folder-open"} size={15} />
-                  </span>
-                  <span class="project-group-copy">
-                    <span class="project-group-name">{label.name}</span>
-                    <Show when={label.parent}>
-                      <span class="project-group-parent">{label.parent}</span>
-                    </Show>
-                  </span>
-                  <span class="project-group-count" aria-label={String(group.items.length)}>
-                    {group.items.length}
-                  </span>
-                  <span class="project-group-chevron" aria-hidden="true">
-                    <Icon name={collapsed() ? "chevron" : "chevron-down"} size={12} />
-                  </span>
-                </button>
-                <Show when={!collapsed()}>
-                  <div class="project-group-body">
-                    <For each={group.items}>
-                      {(session) => (
-                        <CodingAssistantSessionRow
-                          session={session}
-                          selected={props.selectedSessionID === session.id}
-                          busy={props.actionBusyID === session.id}
-                          onSelectSession={props.onSelectSession}
-                          onStopSession={props.onStopSession}
-                          onDeleteSession={props.onDeleteSession}
-                          onRenameSession={props.onRenameSession}
-                        />
-                      )}
-                    </For>
-                  </div>
-                </Show>
-              </section>
+                <For each={group.items}>
+                  {(session) => (
+                    <CodingAssistantSessionRow
+                      session={session}
+                      selected={props.selectedSessionID === session.id}
+                      busy={props.actionBusyID === session.id}
+                      onSelectSession={props.onSelectSession}
+                      onStopSession={props.onStopSession}
+                      onDeleteSession={props.onDeleteSession}
+                      onRenameSession={props.onRenameSession}
+                    />
+                  )}
+                </For>
+              </ProjectLedgerGroup>
             )
           }}
         </LedgerList>
