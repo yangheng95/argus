@@ -430,9 +430,16 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
             fallback={
               <div class="empty-hint file-explorer-empty">
                 <p>{t("explorer.load_failed")}</p>
-                <button type="button" class="file-explorer-retry" onClick={() => void loadDirectory("")}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  tone="danger"
+                  data-ui="file-explorer-retry"
+                  onClick={() => void loadDirectory("")}
+                >
                   {t("common.retry")}
-                </button>
+                </Button>
               </div>
             }
           >
