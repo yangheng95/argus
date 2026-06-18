@@ -982,18 +982,20 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).toMatch(/code \.file-link:hover\s*\{/)
   })
 
-  test("conn-banner cross-surface notification primitive routes through palette tokens", () => {
+  test("conn-banner routes action controls through the shared Button primitive", () => {
     // Canonical extracted from styles.css into surfaces/conn-banner.css —
     // the banner is mounted globally via fixed positioning by App.tsx /
     // ConnectionBanner.tsx, so it owns its own surface file.
     const styles = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conn-banner.css"))
+    const source = readText(join(OVERLAY_ROOT, "src/components/ConnectionBanner.tsx"))
 
-    const block = styles.match(/\.conn-banner\s*\{[\s\S]*?\.conn-banner__action:focus-visible\s*\{[^}]*\}/)?.[0]
+    const block = styles.match(/\.conn-banner\s*\{[\s\S]*?\.conn-banner__text\s*\{[^}]*\}/)?.[0]
     expect(block).toBeTruthy()
     const body = block ?? ""
 
     expect(body).toContain("var(--oc-radius-pill)")
     expect(body).toContain("var(--oc-border-width)")
+    expect(body).toContain("pointer-events: auto;")
     expect(body).not.toMatch(/border-radius:\s*999px/)
     expect(body).not.toMatch(/border:\s*1px solid/)
     expect(body).not.toMatch(/rgba\(0,\s*0,\s*0/)
@@ -1002,6 +1004,13 @@ describe("overlay architecture guards", () => {
     expect(body).toMatch(/\.conn-banner\[data-status="connecting"\]\s*\{/)
     expect(body).toMatch(/\.conn-banner__dot\s*\{/)
     expect(body).not.toMatch(/@keyframes conn-banner-pulse\s*\{/)
+    expect(styles).not.toContain(".conn-banner__action")
+    expect(source).toContain('import { Button } from "./ui/Button"')
+    expect(source).toContain('data-ui="connection-banner-setup"')
+    expect(source).toContain('data-ui="connection-banner-reload"')
+    expect(source).toContain('variant="ghost"')
+    expect(source).toContain('size="sm"')
+    expect(source).not.toContain('class="conn-banner__action"')
   })
 
   test("shared .verdict-pill primitive routes verdict tones through palette tokens", () => {

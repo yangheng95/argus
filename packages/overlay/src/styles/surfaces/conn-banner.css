@@ -24,6 +24,7 @@
   border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 56%, transparent);
   box-shadow: 0 calc(18px * var(--ui-scale)) calc(40px * var(--ui-scale)) var(--ui-shadow-tone);
   font-size: var(--ui-font-control);
+  pointer-events: auto;
 }
 
 .conn-banner[data-status="connecting"] {
@@ -49,30 +50,6 @@
   max-width: 60vw;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.conn-banner__action {
-  appearance: none;
-  border: var(--oc-border-width) solid var(--border-strong);
-  background: var(--subtle-3);
-  color: var(--text-strong);
-  padding: calc(2px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  font-size: var(--ui-font-control);
-  cursor: pointer;
-  transition:
-    background var(--ui-duration-base),
-    border-color var(--ui-duration-base);
-}
-
-.conn-banner__action:hover {
-  background: var(--subtle-4);
-  border-color: var(--border-hover);
-}
-
-.conn-banner__action:focus-visible {
-  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 60%, transparent);
-  outline-offset: calc(2px * var(--ui-scale));
 }
 
 @media (prefers-reduced-motion: reduce) {
