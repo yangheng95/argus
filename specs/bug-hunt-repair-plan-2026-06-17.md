@@ -3780,3 +3780,51 @@ LINE:
 - Curie confirmed BH-097 was still present in HEAD `925222cb87803144e1966c42c30a9b5c2c237251`: the scanner selected paths from `.git/index` but read worktree bytes with `fs.readFileSync(...)`.
 - Curie identified that index-only scanning would still miss HEAD/local-ref secrets after a staged cleanup; the repair therefore scans both local-ref tree blobs and index blobs.
 - Curie required committed, staged, staged-cleanup, parser, and pre-push local-ref regressions; the final test suite covers all of those paths.
+
+## Batch P1-BN: BH-102 import command must fail on unreadable input
+
+### Findings
+
+- BH-102 targets `packages/opencorvus/src/cli/cmd/import.ts`.
+- `ImportCommand.handler(...)` wraps `Filesystem.readJson(...)` in `.catch(() => undefined)`, so missing files, invalid JSON, permission errors, and every other read failure collapse into the same `undefined` value.
+- The next branch prints `File not found: <file>` to stdout and returns normally; yargs/top-level CLI sees success.
+- A second `if (!exportData)` branch that prints `Failed to read session data` is unreachable because the first `if (!exportData)` already returns.
+- No current CLI test covers import failure behavior.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/cli/cmd/import.ts::ImportCommand` owns the `import <file>` CLI command.
+- `packages/opencorvus/src/index.ts` registers `ImportCommand` with yargs, so handler rejection is propagated to the top-level catch and exits nonzero.
+- `packages/opencorvus/src/util/filesystem.ts::Filesystem.readJson(...)` throws distinct filesystem and JSON parse errors; the import command currently erases them.
+- `packages/opencorvus/src/session/index.ts::Session.toRow(...)` maps imported session info to `SessionTable`.
+- `packages/opencorvus/src/session/session.sql.ts` defines `SessionTable`, `MessageTable`, and `PartTable`, the three tables import writes after a successful read.
+- `packages/opencorvus/test/cli` has no import regression test file.
+
+### Fix Shape
+
+- Add explicit import-file error classes for missing input and invalid JSON.
+- Replace `Filesystem.readJson(...).catch(() => undefined)` with a helper that reads text, maps `ENOENT` to the missing-file error, maps JSON parse failures to the invalid-JSON error, and lets other filesystem errors propagate.
+- Extract the DB insert body into `importSessionData(...)` so tests can exercise read failure boundaries without duplicating production writes.
+- Remove both stdout error branches and the unreachable second `if (!exportData)` branch.
+- Let handler rejection propagate; do not call `process.exit(...)`, do not add fallback parsing, and do not silently skip invalid input.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/cli/import.test.ts`.
+- Missing file: run `ImportCommand.handler(...)` in an isolated `OPENCORVUS_HOME` and project directory, assert rejection message names missing input, assert stdout is not used for error reporting, and assert `SessionTable`, `MessageTable`, and `PartTable` row counts remain zero.
+- Malformed JSON: same setup with invalid file contents, assert a distinct invalid-JSON message and zero rows in the three import target tables.
+- Process-level missing and malformed JSON fixtures: run the actual CLI source entrypoint and assert exit code is nonzero, stdout does not claim import success, and stderr carries the distinct error message.
+- Add a source-level guard that `import.ts` no longer contains `.catch(() => undefined)`, stdout `File not found`, or the unreachable `Failed to read session data` branch.
+
+### Verification
+
+- Focused import tests passed: `bun test packages/opencorvus/test/cli/import.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Einstein confirmed BH-102 was still present in HEAD `9a24dcb130382fb43cc3d9215d2661fad428fe06`: `Filesystem.readJson(...).catch(() => undefined)` collapsed all read/parse failures, stdout printed `File not found`, and handler returned normally.
+- Einstein identified the direct automation impact: `packages/opencorvus/src/cli/cmd/pr.ts` uses `.nothrow()` and only sees exit code, so import false-success hides a failed restore.
+- Einstein required process-level CLI coverage in addition to handler-level tests; the final suite includes missing and malformed JSON subprocess assertions.
