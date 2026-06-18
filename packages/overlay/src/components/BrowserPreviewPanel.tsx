@@ -53,6 +53,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
   const [lastAutoCapturedPreviewKey, setLastAutoCapturedPreviewKey] = createSignal("")
   const [pendingSelectedTargetID, setPendingSelectedTargetID] = createSignal("")
+  const [targetSelectionError, setTargetSelectionError] = createSignal("")
   const [liveImage, setLiveImage] = createSignal<BrowserPreviewLiveImage>()
   const [liveError, setLiveError] = createSignal("")
   const [liveLoading, setLiveLoading] = createSignal(false)
@@ -88,7 +89,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (pendingTargetID && resolved.id !== pendingTargetID) return undefined
     return resolved
   })
-  const targetTransitionPending = createMemo(() => Boolean(pendingSelectedTargetID() && !currentTarget()))
+  const currentTargetError = createMemo(() => {
+    if (!props.taskID() || !props.directory()) return undefined
+    return targetSelectionError() || target.error
+  })
+  const targetTransitionPending = createMemo(
+    () => Boolean(pendingSelectedTargetID() && !currentTarget() && !currentTargetError()),
+  )
   const [latestEvidence] = createResource(
     () => {
       const taskID = props.taskID()
@@ -99,7 +106,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     },
     (scope) => loadTaskBrowserPreviewEvidence(scope),
   )
-  const currentTargetError = createMemo(() => (props.taskID() && props.directory() ? target.error : undefined))
   const candidates = createMemo(() => currentTarget()?.candidates ?? [])
   const selectedCandidate = createMemo(
     () =>
@@ -211,6 +217,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   })
 
   createEffect(() => {
+    props.taskID()
+    props.directory()
+    setPendingSelectedTargetID("")
+    setTargetSelectionError("")
+  })
+
+  createEffect(() => {
     const taskID = props.taskID()
     const resolved = currentTarget()
     const ids = viewports().map((item) => item.id)
@@ -248,9 +261,16 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const taskID = props.taskID()
     if (!taskID || !candidate || candidate.selected) return
     setPendingSelectedTargetID(candidate.id)
+    setTargetSelectionError("")
     setVerificationRequest(undefined)
     clearLiveImageUrl()
-    void selectTaskBrowserPreviewTarget({ taskID, targetID: candidate.id }).then(() => setRefreshToken((value) => value + 1))
+    void selectTaskBrowserPreviewTarget({ taskID, targetID: candidate.id })
+      .then(() => setRefreshToken((value) => value + 1))
+      .catch((error) => {
+        if (pendingSelectedTargetID() !== candidate.id) return
+        setTargetSelectionError(browserPreviewErrorMessage(error))
+        setPendingSelectedTargetID("")
+      })
   }
 
   const captureEvidence = () => {
@@ -389,7 +409,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               title={t("browser_preview.refresh_title")}
               aria-label={t("browser_preview.refresh_title")}
               disabled={!props.taskID()}
-              onClick={() => setRefreshToken((value) => value + 1)}
+              onClick={() => {
+                setTargetSelectionError("")
+                setRefreshToken((value) => value + 1)
+              }}
             >
               <Icon name="refresh" size={13} />
             </Button>
@@ -399,7 +422,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         <div class="browser-preview-controls">
           <div
             class="browser-preview-status"
-            data-status={targetTransitionPending() ? "loading" : (currentTarget()?.status ?? "loading")}
+            data-status={currentTargetError() ? "failed" : targetTransitionPending() ? "loading" : (currentTarget()?.status ?? "loading")}
           >
             <Switch
               fallback={
@@ -575,6 +598,19 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               <p>{t("browser_preview.loading")}</p>
             </div>
           </Match>
+          <Match when={currentTargetError()}>
+            {(error) => (
+              <div class="browser-preview-empty" data-status="failed" data-ui="browser-preview-target-error">
+                <Icon name="status-failed" size={18} />
+                <p>
+                  {targetSelectionError()
+                    ? t("browser_preview.empty.selection_failed")
+                    : t("browser_preview.empty.failed")}
+                </p>
+                <code>{String(error())}</code>
+              </div>
+            )}
+          </Match>
           <Match when={renderedEvidence()}>
             {(evidence) => (
               <section
@@ -680,15 +716,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               <code>{targetUrl()}</code>
             </div>
           </Match>
-          <Match when={currentTargetError()}>
-            {(error) => (
-              <div class="browser-preview-empty" data-status="failed">
-                <Icon name="status-failed" size={18} />
-                <p>{t("browser_preview.empty.failed")}</p>
-                <code>{String(error())}</code>
-              </div>
-            )}
-          </Match>
           <Match when={currentTarget()}>
             {(resolved) => (
               <div class="browser-preview-empty" data-status={resolved().status}>
@@ -762,6 +789,10 @@ function emptyMessage(status: string): string {
     default:
       return t("browser_preview.empty.missing")
   }
+}
+
+function browserPreviewErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function evidenceFromVerification(

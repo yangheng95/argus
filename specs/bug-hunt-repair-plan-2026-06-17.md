@@ -3022,3 +3022,46 @@ LINE:
 - Pasteur confirmed BH-046 had no independent repair-plan batch before this entry.
 - Pasteur confirmed the root cause: the previous panel stored a capture image as a bare blob URL, so a new evidence summary could keep rendering an old screenshot while the new capture load was pending or failed.
 - Pasteur agreed with the fix boundary: bind the object URL to task ID, evidence ID, and viewport ID inside `BrowserPreviewPanel.tsx`; keep the service and backend as the single source for evidence records and capture bytes; avoid fallback, gate, compatibility, or local preview-source paths.
+
+## Batch P1-AX: BH-047 browser preview target selection failures must clear pending state
+
+### Findings
+
+- BH-047 targets `packages/overlay/src/components/BrowserPreviewPanel.tsx`.
+- HEAD set `pendingSelectedTargetID` before calling `selectTaskBrowserPreviewTarget(...)`.
+- The pending state cleared only when the target resource later resolved to the pending ID.
+- If the `PUT /task/:taskID/browser-preview/target` request failed, no resource could resolve to that pending ID, so `currentTarget()` stayed hidden and `targetTransitionPending()` kept the panel in loading.
+- The failed PUT is an action-scoped error, not a backend target-resolution fallback; it must be visible without changing the persisted selected target authority.
+
+### Call-point Inventory
+
+- `packages/overlay/src/components/BrowserPreviewPanel.tsx::selectCandidate(...)` owns candidate selection action state.
+- `packages/overlay/src/components/BrowserPreviewPanel.tsx::pendingSelectedTargetID` blocks old target rendering while a candidate selection is in flight.
+- `packages/overlay/src/components/BrowserPreviewPanel.tsx::currentTarget(...)` hides the currently loaded target when it does not match the pending ID.
+- `packages/overlay/src/components/BrowserPreviewPanel.tsx::targetTransitionPending(...)` drives loading state while the selected target transition is pending.
+- `packages/overlay/src/components/BrowserPreviewPanel.tsx::currentTargetError(...)` now includes action-scoped selection errors.
+- `packages/overlay/src/services/browser-preview.ts::selectTaskBrowserPreviewTarget(...)` remains the single overlay service entrypoint for backend target promotion.
+- `packages/opencorvus/src/server/routes/browser-preview.ts::PUT /task/:taskID/browser-preview/target` remains the backend authority; this batch does not change routes or target persistence.
+- `packages/overlay/test/browser-preview-panel.test.ts`, `packages/overlay/test/browser-preview-service.test.ts`, and `packages/overlay/test/browser/browser-preview-evidence.test.ts` cover the repaired boundary.
+
+### Fix Shape
+
+- Add `targetSelectionError` as local action state in `BrowserPreviewPanel`.
+- Clear selection errors on new selection, refresh, task change, and directory change.
+- On selection PUT failure, if the pending ID still matches that candidate, store the error message and clear `pendingSelectedTargetID`.
+- Make target error rendering outrank loading and stale evidence so the user sees the failed selection instead of an indefinite spinner.
+- Keep successful selection behavior unchanged: a successful PUT still triggers the target refetch and clears pending only when the backend-selected target ID is observed.
+- Do not switch to another candidate, infer a URL, retry automatically, alter backend routes, or add a compatibility target source.
+
+### Verification
+
+- Focused overlay tests passed: `bun test packages/overlay/test/browser-preview-panel.test.ts packages/overlay/test/browser-preview-service.test.ts --timeout 60000`.
+- Overlay typecheck passed: `bun run --cwd packages/overlay typecheck`.
+- Real browser regression passed with the required Node runner: `node test/browser-runner.mjs test/browser/browser-preview-evidence.test.ts`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Goodall confirmed BH-047 was still present in current HEAD before the local repair.
+- Goodall traced the root cause to `selectCandidate()` setting `pendingSelectedTargetID` without a failure path, while the only cleanup path required a later target resource with the pending ID.
+- Goodall recommended keeping the backend target authority untouched and repairing only overlay action state plus browser/static/service tests; the final implementation follows that boundary.

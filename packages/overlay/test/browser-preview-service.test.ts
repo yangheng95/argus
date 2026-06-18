@@ -110,6 +110,39 @@ test("browser preview service selects an existing backend target by ID", async (
   })
 })
 
+test("browser preview service rejects failed backend target selection", async () => {
+  let captured: TransportRequest | undefined
+  __setHostTransportForTest({
+    ...fakePreviewTransport((req) => {
+      captured = req
+    }),
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      captured = req
+      return {
+        status: 500,
+        ok: false,
+        headers: {},
+        body: { message: "target selection unavailable" } as T,
+      }
+    },
+  })
+
+  await expect(
+    selectTaskBrowserPreviewTarget({ taskID: TASK_ID, targetID: "art_previewtarget_unavailable" }),
+  ).rejects.toThrow(
+    "API 500 task/tsk_browserpreviewservice0001/browser-preview/target: target selection unavailable",
+  )
+  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/target`)
+  expect(captured?.method).toBe("PUT")
+  expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
+  expect(captured?.body).toEqual({
+    kind: "json",
+    value: {
+      targetID: "art_previewtarget_unavailable",
+    },
+  })
+})
+
 test("browser preview service asks the backend to persist Playwright evidence", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest({
