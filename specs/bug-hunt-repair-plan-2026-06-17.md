@@ -4867,3 +4867,54 @@ LINE:
 - `bun run docs:api` rewrote API references with no tracked docs diff.
 - `bun run api:routes-check`, `bun run docs:check`, `bun run --cwd packages/opencorvus typecheck`, and `bun run --cwd packages/sdk/js typecheck` passed.
 - `git diff --check` passed for the P2-CG touched files.
+
+## Batch P0-K: BH-090 DingTalk, Google Chat, and WeCom inbound authentication
+
+### Findings
+
+- BH-090 remained partially open after P0-I: WhatsApp and Mattermost fail closed, but DingTalk, Google Chat, and WeCom still accepted unsigned inbound requests.
+- `packages/channel-runtime/src/adapters/dingtalk.ts::route(...)` parsed POST JSON and dispatched `sessionWebhook` before any DingTalk callback signature verification or encrypted callback body decryption.
+- `packages/channel-runtime/src/adapters/googlechat.ts::route(...)` parsed POST JSON and dispatched `MESSAGE` events without checking the Google Chat `Authorization: Bearer ...` token.
+- `packages/channel-runtime/src/adapters/wecom.ts::route(...)` returned `echostr` without signature verification on GET and parsed plaintext XML POST bodies without WeCom `msg_signature` verification or `Encrypt` body decryption.
+- Existing WeCom docs already told operators to configure Token / EncodingAESKey, but `packages/channel-config/src/index.ts`, `packages/channel-runtime/src/registry.ts`, and `WeComAdapter` did not model those required fields.
+- Existing DingTalk docs incorrectly described callback signature troubleshooting without exposing the callback Token / EncodingAESKey env fields needed for the platform callback crypto contract.
+- Google's current Chat HTTP endpoint docs require self-managed servers to verify the bearer token and return 401 when it does not verify; HTTP endpoint audience uses a Google-signed ID token whose `email` is `chat@system.gserviceaccount.com`.
+- DingTalk's official callback crypto implementation takes the developer Token, EncodingAESKey, and app key for enterprise internal app event subscriptions; WeCom's receive-message callback similarly signs `token + timestamp + nonce + encrypt` and decrypts to a plaintext XML envelope with trailing CorpID.
+
+### Call-point Inventory
+
+- `packages/channel-runtime/src/adapters/dingtalk.ts` owns DingTalk inbound callback parsing, `sessionWebhook` persistence, and outbound custom group webhook replies.
+- `packages/channel-runtime/src/adapters/googlechat.ts` owns Google Chat inbound event parsing and outbound service-account send auth.
+- `packages/channel-runtime/src/adapters/wecom.ts` owns WeCom URL validation, inbound XML parsing, access-token refresh, and outbound sends.
+- `packages/channel-runtime/src/registry.ts::AdapterOptions`, `build(...)`, and `registerAdapters(...)` own env-to-adapter option wiring.
+- `packages/channel-config/src/index.ts::ChannelCatalog` is the single source of required env fields used by registry readiness and UI config.
+- `packages/channel-runtime/test/mainstream-adapters.test.ts` already covers mainstream adapter inbound/outbound behavior and contains JWT/HMAC helpers from adjacent platforms.
+- `packages/channel-runtime/test/registry.test.ts` owns required-env regression tests for channel registration.
+- `packages/web/src/content/docs/channels/{dingtalk,googlechat,wecom}.mdx` and `packages/web/src/content/docs/zh-cn/channels/{dingtalk,googlechat,wecom}.mdx` document operator setup.
+- `packages/opencorvus/test/channel/supervisor-env.test.ts` mocks `registerAdapters(...)` and individual adapters, so it should remain unaffected unless registry exports or adapter names change.
+
+### Fix Shape
+
+- Add a small callback crypto helper for the DingTalk/WeCom AES-CBC envelope: SHA1 sorted-parameter signature verification, EncodingAESKey validation, PKCS#7 unpadding, receive-id check, XML `Encrypt` extraction, and encrypted DingTalk success ack generation.
+- Make DingTalk require `callbackToken` and `encodingAesKey` in catalog, registry, adapter constructor, and docs; decrypt inbound callback bodies before challenge/message handling and return 401 before dispatch on missing or wrong signature.
+- Make WeCom require `token` and `encodingAesKey` in catalog, registry, adapter constructor, and docs; verify/decrypt GET `echostr` and POST body `Encrypt` before XML parsing, returning 401 before dispatch on missing or wrong signature.
+- Make Google Chat require `authAudience` in catalog, registry, adapter constructor, and docs; verify the bearer ID token with `jose` against Google's OIDC keys, require `email_verified === true` and `email === "chat@system.gserviceaccount.com"`, and return 401 before dispatch on missing or invalid auth.
+- Keep outbound service-account authentication untouched; it is not an inbound-auth source.
+- Do not add shared tokens, local gates, unsigned compatibility paths, or plaintext callback fallback.
+
+### Regression Tests
+
+- Extend `packages/channel-runtime/test/mainstream-adapters.test.ts` with signed Google Chat, DingTalk encrypted, and WeCom encrypted inbound fixtures plus missing/wrong auth rejection assertions.
+- Extend `packages/channel-runtime/test/registry.test.ts` so partial DingTalk, Google Chat, and WeCom env sets are skipped and complete env sets forward the new options.
+- Existing docs health checks will cover channel documentation drift and required-env examples.
+
+### Verification
+
+- Anscombe independently confirmed the same remaining BH-090 impact surface and warned against using outbound secrets or shared local gates for inbound authentication.
+- `bun test packages/channel-runtime/test/mainstream-adapters.test.ts --timeout 60000` passed with 23 adapter tests.
+- `bun test packages/channel-runtime/test/registry.test.ts --timeout 60000` passed with 13 registry tests.
+- `bun test packages/channel-runtime/test/mainstream-adapters.test.ts packages/channel-runtime/test/registry.test.ts packages/opencorvus/test/channel/registry.test.ts packages/opencorvus/test/channel/supervisor-env.test.ts packages/opencorvus/test/script/document-health.test.ts --timeout 60000` passed with 62 tests and 447 assertions.
+- `bun run --cwd packages/channel-runtime typecheck`, `bun run --cwd packages/channel-config typecheck`, `bun run --cwd packages/opencorvus typecheck`, `bun run --cwd packages/sdk/js typecheck`, and root `bun run typecheck` passed.
+- `bun run --cwd packages/web check` passed with the existing 3 Astro hints.
+- `bun run docs:api`, `bun run --cwd packages/sdk/js build`, `bun run docs:check`, and `bun run api:routes-check` passed after regenerating tracked API/SDK outputs for the current workspace.
+- `git diff --check` passed for the BH-090 touched files.

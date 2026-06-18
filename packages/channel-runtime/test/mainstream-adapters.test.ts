@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
   createHmac,
   createPrivateKey,
   createPublicKey,
@@ -107,6 +110,82 @@ function whatsappSignedRequest(body: unknown, appSecret: string, signature?: str
   })
 }
 
+const callbackAesKey = Buffer.from("0123456789abcdefghijklmnopqrstuv").toString("base64").slice(0, 43)
+
+function callbackKey(encodingAesKey: string) {
+  return Buffer.from(`${encodingAesKey}=`, "base64")
+}
+
+function pad32(value: Buffer) {
+  const remainder = value.length % 32
+  const padding = remainder === 0 ? 32 : 32 - remainder
+  return Buffer.concat([value, Buffer.alloc(padding, padding)])
+}
+
+function callbackEncrypt(message: string, receiveId: string, encodingAesKey = callbackAesKey) {
+  const key = callbackKey(encodingAesKey)
+  const length = Buffer.alloc(4)
+  const body = Buffer.from(message)
+  length.writeUInt32BE(body.length)
+  const plain = pad32(Buffer.concat([Buffer.from("abcdefghijklmnop"), length, body, Buffer.from(receiveId)]))
+  const cipher = createCipheriv("aes-256-cbc", key, key.subarray(0, 16))
+  cipher.setAutoPadding(false)
+  return Buffer.concat([cipher.update(plain), cipher.final()]).toString("base64")
+}
+
+function callbackDecrypt(encrypted: string, receiveId: string, encodingAesKey = callbackAesKey) {
+  const key = callbackKey(encodingAesKey)
+  const decipher = createDecipheriv("aes-256-cbc", key, key.subarray(0, 16))
+  decipher.setAutoPadding(false)
+  const decrypted = Buffer.concat([decipher.update(encrypted, "base64"), decipher.final()])
+  const padding = decrypted.at(-1)!
+  const unpadded = decrypted.subarray(0, decrypted.length - padding)
+  const length = unpadded.readUInt32BE(16)
+  const message = unpadded.subarray(20, 20 + length)
+  expect(unpadded.subarray(20 + length).toString()).toBe(receiveId)
+  return message.toString()
+}
+
+function callbackSigned(token: string, timestamp: string, nonce: string, encrypted: string) {
+  return createHash("sha1").update([token, timestamp, nonce, encrypted].sort().join("")).digest("hex")
+}
+
+function encryptedCallbackJson(
+  url: string,
+  body: Record<string, unknown>,
+  opts: { receiveId: string; token: string; encodingAesKey?: string; signature?: string },
+) {
+  const timestamp = "1710000000"
+  const nonce = "nonce-1"
+  const encrypted = callbackEncrypt(JSON.stringify(body), opts.receiveId, opts.encodingAesKey)
+  const signature = opts.signature ?? callbackSigned(opts.token, timestamp, nonce, encrypted)
+  return new Request(`${url}?timestamp=${timestamp}&nonce=${nonce}&signature=${signature}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ encrypt: encrypted }),
+  })
+}
+
+function encryptedCallbackXml(
+  url: string,
+  xml: string,
+  opts: { receiveId: string; token: string; encodingAesKey?: string; signature?: string; method?: string },
+) {
+  const timestamp = "1710000000"
+  const nonce = "nonce-1"
+  const encrypted = callbackEncrypt(xml, opts.receiveId, opts.encodingAesKey)
+  const signature = opts.signature ?? callbackSigned(opts.token, timestamp, nonce, encrypted)
+  const params = `timestamp=${timestamp}&nonce=${nonce}&msg_signature=${signature}`
+  if (opts.method === "GET") {
+    return new Request(`${url}?${params}&echostr=${encodeURIComponent(encrypted)}`)
+  }
+  return new Request(`${url}?${params}`, {
+    method: "POST",
+    headers: { "content-type": "application/xml" },
+    body: `<xml><Encrypt><![CDATA[${encrypted}]]></Encrypt></xml>`,
+  })
+}
+
 function b64url(raw: Buffer | string) {
   const source: Buffer = typeof raw === "string" ? Buffer.from(raw) : raw
   return source.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
@@ -177,6 +256,57 @@ function msTeamsFetch(publicJwk: JsonWebKey, calls: string[]) {
       return Response.json({ access_token: "ms_token", expires_in: 3600 })
     }
     return Response.json({ id: "reply-1" })
+  }) as typeof globalThis.fetch
+}
+
+function googleChatAuthFixture(audience: string) {
+  const pair = generateKeyPairSync("rsa", { modulusLength: 2048 })
+  const kid = "google-chat-key-1"
+  const publicJwk = pair.publicKey.export({ format: "jwk" }) as JsonWebKey & {
+    kid?: string
+    use?: string
+    alg?: string
+  }
+  publicJwk.kid = kid
+  publicJwk.use = "sig"
+  publicJwk.alg = "RS256"
+
+  const auth = (
+    overrides: { audience?: string; email?: string; emailVerified?: boolean; expiresIn?: number; privateKey?: KeyObject } = {},
+  ) => {
+    const now = Math.floor(Date.now() / 1000)
+    const header = jwtSegment({ alg: "RS256", typ: "JWT", kid })
+    const payload = jwtSegment({
+      iss: "https://accounts.google.com",
+      aud: overrides.audience ?? audience,
+      iat: now,
+      nbf: now - 60,
+      exp: now + (overrides.expiresIn ?? 3600),
+      email: overrides.email ?? "chat@system.gserviceaccount.com",
+      email_verified: overrides.emailVerified ?? true,
+    })
+    const input = `${header}.${payload}`
+    const signature = sign("RSA-SHA256", Buffer.from(input), overrides.privateKey ?? pair.privateKey)
+    return `Bearer ${input}.${b64url(signature)}`
+  }
+
+  return {
+    publicJwk,
+    auth,
+  }
+}
+
+function googleChatFetch(publicJwk: JsonWebKey, calls: string[]) {
+  return (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    calls.push(url)
+    if (url.includes("oauth2/v3/certs")) {
+      return Response.json({ keys: [publicJwk] })
+    }
+    if (url.includes("oauth2.googleapis.com/token")) {
+      return Response.json({ access_token: "g_token", expires_in: 3600 })
+    }
+    return Response.json({ name: "spaces/AAA/messages/m2" })
   }) as typeof globalThis.fetch
 }
 
@@ -314,11 +444,16 @@ describe("mainstream adapters", () => {
       .privateKey.export({ type: "pkcs1", format: "pem" })
       .toString()
     const s = stub()
+    const audience = "https://public.opencorvus.dev/googlechat"
+    const auth = googleChatAuthFixture(audience)
+    const calls: string[] = []
+    globalThis.fetch = googleChatFetch(auth.publicJwk, calls)
     const adapter = new GoogleChatAdapter({
       serviceAccount: JSON.stringify({
         client_email: "bot@example.iam.gserviceaccount.com",
         private_key: key,
       }),
+      authAudience: audience,
       serve: s.serve,
     })
     const seen: Array<any> = []
@@ -340,7 +475,10 @@ describe("mainstream adapters", () => {
     await s.route()(
       new Request("http://127.0.0.1:19999/googlechat", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: auth.auth(),
+        },
         body: JSON.stringify(event),
       }),
     )
@@ -353,18 +491,98 @@ describe("mainstream adapters", () => {
       text: "run task",
     })
 
-    const calls: string[] = []
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
-      const url = String(input)
-      calls.push(url)
-      if (url.includes("oauth2.googleapis.com/token")) {
-        return Response.json({ access_token: "g_token", expires_in: 3600 })
-      }
-      return Response.json({ name: "spaces/AAA/messages/m2" })
-    }) as typeof globalThis.fetch
     await adapter.sendMessage("spaces/AAA", "spaces/AAA/threads/t-1", "done")
+    expect(calls.some((item) => item.includes("oauth2/v3/certs"))).toBe(true)
     expect(calls.some((item) => item.includes("oauth2.googleapis.com/token"))).toBe(true)
     expect(calls.some((item) => item.includes("/v1/spaces/AAA/messages"))).toBe(true)
+  })
+
+  test("googlechat requires a valid Google request token before dispatch", async () => {
+    const key = generateKeyPairSync("rsa", { modulusLength: 1024 })
+      .privateKey.export({ type: "pkcs1", format: "pem" })
+      .toString()
+    const s = stub()
+    const audience = "https://public.opencorvus.dev/googlechat"
+    const auth = googleChatAuthFixture(audience)
+    globalThis.fetch = googleChatFetch(auth.publicJwk, [])
+    const adapter = new GoogleChatAdapter({
+      serviceAccount: JSON.stringify({
+        client_email: "bot@example.iam.gserviceaccount.com",
+        private_key: key,
+      }),
+      authAudience: audience,
+      serve: s.serve,
+    })
+    const seen: Array<any> = []
+    adapter.onMessage(async (msg) => {
+      seen.push(msg)
+    })
+    await adapter.start()
+
+    const event = {
+      type: "MESSAGE",
+      space: { name: "spaces/AAA" },
+      message: {
+        name: "spaces/AAA/messages/msg-1",
+        sender: { name: "users/123" },
+        text: "run task",
+      },
+    }
+    const body = JSON.stringify(event)
+    const unsigned = await s.route()(
+      new Request("http://127.0.0.1:19999/googlechat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+      }),
+    )
+    const wrongAudience = await s.route()(
+      new Request("http://127.0.0.1:19999/googlechat", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: auth.auth({ audience: "https://other.example.com/googlechat" }),
+        },
+        body,
+      }),
+    )
+    const wrongSender = await s.route()(
+      new Request("http://127.0.0.1:19999/googlechat", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: auth.auth({ email: "attacker@example.com" }),
+        },
+        body,
+      }),
+    )
+    const unverifiedEmail = await s.route()(
+      new Request("http://127.0.0.1:19999/googlechat", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: auth.auth({ emailVerified: false }),
+        },
+        body,
+      }),
+    )
+    const valid = await s.route()(
+      new Request("http://127.0.0.1:19999/googlechat", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: auth.auth(),
+        },
+        body,
+      }),
+    )
+
+    expect(unsigned.status).toBe(401)
+    expect(wrongAudience.status).toBe(401)
+    expect(wrongSender.status).toBe(401)
+    expect(unverifiedEmail.status).toBe(401)
+    expect(valid.status).toBe(200)
+    expect(seen).toHaveLength(1)
   })
 
   test("googlechat sends screenshot cards from a public image URL", async () => {
@@ -376,6 +594,7 @@ describe("mainstream adapters", () => {
         client_email: "bot@example.iam.gserviceaccount.com",
         private_key: key,
       }),
+      authAudience: "https://public.opencorvus.dev/googlechat",
     })
     const calls: Array<{ url: string; body?: string }> = []
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -948,10 +1167,14 @@ describe("mainstream adapters", () => {
 
   test("wecom maps inbound xml and sends outbound", async () => {
     const s = stub()
+    const corpId = "wxcorp"
+    const callbackToken = "wecom_token"
     const adapter = new WeComAdapter({
-      corpId: "wxcorp",
+      corpId,
       secret: "wxsec",
       agentId: "1000002",
+      token: callbackToken,
+      encodingAesKey: callbackAesKey,
       serve: s.serve,
     })
     const seen: Array<any> = []
@@ -968,13 +1191,7 @@ describe("mainstream adapters", () => {
   <Content><![CDATA[hello]]></Content>
   <MsgId>999</MsgId>
 </xml>`
-    await s.route()(
-      new Request("http://127.0.0.1:19999/wecom", {
-        method: "POST",
-        headers: { "content-type": "application/xml" },
-        body: xml,
-      }),
-    )
+    await s.route()(encryptedCallbackXml("http://127.0.0.1:19999/wecom", xml, { receiveId: corpId, token: callbackToken }))
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({
       platform: "wecom",
@@ -998,11 +1215,16 @@ describe("mainstream adapters", () => {
     expect(calls.some((item) => item.includes("/cgi-bin/message/send"))).toBe(true)
   })
 
-  test("dingtalk maps inbound and replies with session webhook", async () => {
+  test("wecom requires callback signature and decrypts encrypted callbacks before dispatch", async () => {
     const s = stub()
-    const adapter = new DingTalkAdapter({
-      appKey: "ding_key",
-      appSecret: "ding_secret",
+    const corpId = "wxcorp"
+    const callbackToken = "wecom_token"
+    const adapter = new WeComAdapter({
+      corpId,
+      secret: "wxsec",
+      agentId: "1000002",
+      token: callbackToken,
+      encodingAesKey: callbackAesKey,
       serve: s.serve,
     })
     const seen: Array<any> = []
@@ -1010,20 +1232,86 @@ describe("mainstream adapters", () => {
       seen.push(msg)
     })
     await adapter.start()
-    await s.route()(
-      new Request("http://127.0.0.1:19999/dingtalk", {
+
+    const xml = `<xml>
+  <ToUserName><![CDATA[to]]></ToUserName>
+  <FromUserName><![CDATA[user1]]></FromUserName>
+  <CreateTime>1710000</CreateTime>
+  <MsgType><![CDATA[text]]></MsgType>
+  <Content><![CDATA[hello]]></Content>
+  <MsgId>999</MsgId>
+</xml>`
+    const missingSignature = await s.route()(
+      new Request("http://127.0.0.1:19999/wecom?timestamp=1710000000&nonce=nonce-1", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+        headers: { "content-type": "application/xml" },
+        body: "<xml><Encrypt><![CDATA[bad]]></Encrypt></xml>",
+      }),
+    )
+    const wrongSignature = await s.route()(
+      encryptedCallbackXml("http://127.0.0.1:19999/wecom", xml, {
+        receiveId: corpId,
+        token: callbackToken,
+        signature: "bad",
+      }),
+    )
+    const wrongReceiveId = await s.route()(
+      encryptedCallbackXml("http://127.0.0.1:19999/wecom", xml, {
+        receiveId: "other-corp",
+        token: callbackToken,
+      }),
+    )
+    const validation = await s.route()(
+      encryptedCallbackXml("http://127.0.0.1:19999/wecom", "plain-echo", {
+        receiveId: corpId,
+        token: callbackToken,
+        method: "GET",
+      }),
+    )
+    const valid = await s.route()(
+      encryptedCallbackXml("http://127.0.0.1:19999/wecom", xml, { receiveId: corpId, token: callbackToken }),
+    )
+
+    expect(missingSignature.status).toBe(401)
+    expect(wrongSignature.status).toBe(401)
+    expect(wrongReceiveId.status).toBe(401)
+    expect(validation.status).toBe(200)
+    expect(await validation.text()).toBe("plain-echo")
+    expect(valid.status).toBe(200)
+    expect(seen).toHaveLength(1)
+  })
+
+  test("dingtalk maps inbound and replies with session webhook", async () => {
+    const s = stub()
+    const appKey = "ding_key"
+    const callbackToken = "ding_token"
+    const adapter = new DingTalkAdapter({
+      appKey,
+      appSecret: "ding_secret",
+      callbackToken,
+      encodingAesKey: callbackAesKey,
+      serve: s.serve,
+    })
+    const seen: Array<any> = []
+    adapter.onMessage(async (msg) => {
+      seen.push(msg)
+    })
+    await adapter.start()
+    const inbound = await s.route()(
+      encryptedCallbackJson(
+        "http://127.0.0.1:19999/dingtalk",
+        {
           msgtype: "text",
           text: { content: "hello" },
           senderStaffId: "staff_1",
           conversationId: "cid_1",
           msgId: "mid_1",
           sessionWebhook: "https://oapi.dingtalk.com/robot/send?access_token=abc",
-        }),
-      }),
+        },
+        { receiveId: appKey, token: callbackToken },
+      ),
     )
+    expect(inbound.status).toBe(200)
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({
       platform: "dingtalk",
@@ -1042,10 +1330,91 @@ describe("mainstream adapters", () => {
     expect(calls[0]).toContain("oapi.dingtalk.com/robot/send")
   })
 
+  test("dingtalk requires callback signature and encrypted body before dispatch", async () => {
+    const s = stub()
+    const appKey = "ding_key"
+    const callbackToken = "ding_token"
+    const adapter = new DingTalkAdapter({
+      appKey,
+      appSecret: "ding_secret",
+      callbackToken,
+      encodingAesKey: callbackAesKey,
+      serve: s.serve,
+    })
+    const seen: Array<any> = []
+    adapter.onMessage(async (msg) => {
+      seen.push(msg)
+    })
+    await adapter.start()
+
+    const body = {
+      msgtype: "text",
+      text: { content: "hello" },
+      senderStaffId: "staff_1",
+      conversationId: "cid_1",
+      msgId: "mid_1",
+      sessionWebhook: "https://oapi.dingtalk.com/robot/send?access_token=abc",
+    }
+    const unsigned = await s.route()(
+      new Request("http://127.0.0.1:19999/dingtalk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    )
+    const wrongSignature = await s.route()(
+      encryptedCallbackJson("http://127.0.0.1:19999/dingtalk", body, {
+        receiveId: appKey,
+        token: callbackToken,
+        signature: "bad",
+      }),
+    )
+    await expect(adapter.sendMessage("cid_1", "", "done")).rejects.toThrow("DingTalk conversation not initialized")
+    const wrongReceiveId = await s.route()(
+      encryptedCallbackJson("http://127.0.0.1:19999/dingtalk", body, {
+        receiveId: "other-app",
+        token: callbackToken,
+      }),
+    )
+    const challenge = await s.route()(
+      encryptedCallbackJson(
+        "http://127.0.0.1:19999/dingtalk",
+        { challenge: "plain-challenge" },
+        { receiveId: appKey, token: callbackToken },
+      ),
+    )
+    const challengeBody = (await challenge.json()) as {
+      encrypt?: string
+      msg_signature?: string
+      timeStamp?: string
+      nonce?: string
+    }
+    const valid = await s.route()(
+      encryptedCallbackJson("http://127.0.0.1:19999/dingtalk", body, {
+        receiveId: appKey,
+        token: callbackToken,
+      }),
+    )
+
+    expect(unsigned.status).toBe(400)
+    expect(wrongSignature.status).toBe(401)
+    expect(wrongReceiveId.status).toBe(401)
+    expect(challenge.status).toBe(200)
+    expect(challengeBody.encrypt).toBeString()
+    expect(challengeBody.msg_signature).toBe(
+      callbackSigned(callbackToken, challengeBody.timeStamp!, challengeBody.nonce!, challengeBody.encrypt!),
+    )
+    expect(callbackDecrypt(challengeBody.encrypt!, appKey)).toBe("plain-challenge")
+    expect(valid.status).toBe(200)
+    expect(seen).toHaveLength(1)
+  })
+
   test("dingtalk sends markdown screenshot links from a public image URL", async () => {
     const adapter = new DingTalkAdapter({
       appKey: "ding_key",
       appSecret: "ding_secret",
+      callbackToken: "ding_token",
+      encodingAesKey: callbackAesKey,
       defaultWebhook: "https://oapi.dingtalk.com/robot/send?access_token=abc",
     })
     const calls: Array<{ url: string; body?: string }> = []

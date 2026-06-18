@@ -1,5 +1,12 @@
+import { randomBytes } from "node:crypto"
 import type { ChannelAdapter, MessageHandler } from "../adapter"
 import { adapt, path, type Serve, type Server } from "./http"
+import {
+  callbackSignature,
+  decryptCallbackEnvelope,
+  encryptCallbackEnvelope,
+  verifyCallbackSignature,
+} from "./callback-crypto"
 
 type Body = {
   challenge?: string
@@ -18,6 +25,8 @@ export class DingTalkAdapter implements ChannelAdapter {
   private handler?: MessageHandler
   private appKey: string
   private appSecret: string
+  private callbackToken: string
+  private encodingAesKey: string
   private host: string
   private port: number
   private hook: string
@@ -29,6 +38,8 @@ export class DingTalkAdapter implements ChannelAdapter {
   constructor(opts: {
     appKey: string
     appSecret: string
+    callbackToken: string
+    encodingAesKey: string
     host?: string
     port?: number
     path?: string
@@ -37,6 +48,10 @@ export class DingTalkAdapter implements ChannelAdapter {
   }) {
     this.appKey = opts.appKey
     this.appSecret = opts.appSecret
+    this.callbackToken = opts.callbackToken
+    this.encodingAesKey = opts.encodingAesKey
+    if (!this.callbackToken.trim()) throw new Error("DingTalk callback token is required")
+    if (!this.encodingAesKey.trim()) throw new Error("DingTalk EncodingAESKey is required")
     this.host = opts.host ?? "0.0.0.0"
     this.port = opts.port ?? 16673
     this.hook = path(opts.path, "/dingtalk")
@@ -124,17 +139,32 @@ export class DingTalkAdapter implements ChannelAdapter {
     if (req.method === "GET") return new Response("ok")
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 })
 
-    // Malformed JSON → 400 below
-    const body = (await req.json().catch(() => undefined)) as Body | undefined
+    const outer = (await req.json().catch(() => undefined)) as { encrypt?: string } | undefined
+    if (!outer?.encrypt) return Response.json({ error: "invalid body" }, { status: 400 })
+    if (
+      !verifyCallbackSignature({
+        token: this.callbackToken,
+        timestamp: url.searchParams.get("timestamp"),
+        nonce: url.searchParams.get("nonce"),
+        encrypted: outer.encrypt,
+        signature: url.searchParams.get("signature"),
+      })
+    ) {
+      return Response.json({ error: "invalid signature" }, { status: 401 })
+    }
+
+    const decrypted = this.decrypt(outer.encrypt)
+    if (!decrypted) return Response.json({ error: "invalid signature" }, { status: 401 })
+    const body = (await new Response(decrypted).json().catch(() => undefined)) as Body | undefined
     if (!body) return Response.json({ error: "invalid body" }, { status: 400 })
-    if (body.challenge) return Response.json({ challenge: body.challenge })
-    if (!this.handler) return Response.json({ ok: true })
+    if (body.challenge) return this.encryptedResponse(body.challenge, url)
+    if (!this.handler) return this.encryptedResponse("success", url)
 
     const channel = body.conversationId
     const user = body.senderStaffId
     const thread = body.msgId ?? `${Date.now()}`
     const text = (body.text?.content ?? "").trim()
-    if (!channel || !user || !thread || !text) return Response.json({ ok: true })
+    if (!channel || !user || !thread || !text) return this.encryptedResponse("success", url)
     if (body.sessionWebhook) this.webhooks.set(channel, body.sessionWebhook)
 
     await this.handler({
@@ -145,6 +175,34 @@ export class DingTalkAdapter implements ChannelAdapter {
       text,
     })
 
-    return Response.json({ ok: true })
+    return this.encryptedResponse("success", url)
+  }
+
+  private encryptedResponse(message: string, url: URL) {
+    const timestamp = url.searchParams.get("timestamp") ?? `${Math.floor(Date.now() / 1000)}`
+    const nonce = url.searchParams.get("nonce") ?? randomBytes(8).toString("hex")
+    const encrypt = encryptCallbackEnvelope({
+      encodingAesKey: this.encodingAesKey,
+      receiveId: this.appKey,
+      message,
+    })
+    return Response.json({
+      msg_signature: callbackSignature(this.callbackToken, timestamp, nonce, encrypt),
+      timeStamp: timestamp,
+      nonce,
+      encrypt,
+    })
+  }
+
+  private decrypt(encrypted: string) {
+    try {
+      return decryptCallbackEnvelope({
+        encodingAesKey: this.encodingAesKey,
+        encrypted,
+        receiveId: this.appKey,
+      })
+    } catch {
+      return undefined
+    }
   }
 }

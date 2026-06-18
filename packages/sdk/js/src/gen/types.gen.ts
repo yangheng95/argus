@@ -253,6 +253,10 @@ export type GoogleChatChannelConfig = {
    */
   serviceAccount?: string
   /**
+   * Google Chat request token audience, usually the HTTPS endpoint URL
+   */
+  authAudience?: string
+  /**
    * Optional Google Chat webhook host
    */
   webhookHost?: string
@@ -403,6 +407,14 @@ export type WeComChannelConfig = {
    */
   agentId?: string
   /**
+   * WeCom receive-message callback token
+   */
+  token?: string
+  /**
+   * WeCom receive-message callback EncodingAESKey
+   */
+  encodingAesKey?: string
+  /**
    * Optional WeCom webhook host
    */
   webhookHost?: string
@@ -429,6 +441,14 @@ export type DingTalkChannelConfig = {
    * DingTalk app secret
    */
   appSecret?: string
+  /**
+   * DingTalk callback token
+   */
+  callbackToken?: string
+  /**
+   * DingTalk callback EncodingAESKey
+   */
+  encodingAesKey?: string
   /**
    * Optional DingTalk default session webhook
    */

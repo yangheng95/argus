@@ -36780,6 +36780,10 @@
             "description": "Google Chat service account JSON or path",
             "type": "string"
           },
+          "authAudience": {
+            "description": "Google Chat request token audience, usually the HTTPS endpoint URL",
+            "type": "string"
+          },
           "webhookHost": {
             "description": "Optional Google Chat webhook host",
             "type": "string"
@@ -36948,6 +36952,14 @@
             "description": "WeCom agent ID",
             "type": "string"
           },
+          "token": {
+            "description": "WeCom receive-message callback token",
+            "type": "string"
+          },
+          "encodingAesKey": {
+            "description": "WeCom receive-message callback EncodingAESKey",
+            "type": "string"
+          },
           "webhookHost": {
             "description": "Optional WeCom webhook host",
             "type": "string"
@@ -36976,6 +36988,14 @@
           },
           "appSecret": {
             "description": "DingTalk app secret",
+            "type": "string"
+          },
+          "callbackToken": {
+            "description": "DingTalk callback token",
+            "type": "string"
+          },
+          "encodingAesKey": {
+            "description": "DingTalk callback EncodingAESKey",
             "type": "string"
           },
           "defaultWebhook": {
