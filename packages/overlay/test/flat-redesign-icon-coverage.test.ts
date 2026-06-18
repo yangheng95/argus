@@ -125,10 +125,9 @@ describe("flat-redesign character-icon callsites are gone", () => {
   function gatherSources(): string[] {
     return [
       ...listTsx(COMPONENTS_ROOT, EXCLUDED),
-      // Step 7 (2026-05-04): main.tsx is now in scope — its innerHTML
-      // template-string for the recent-dirs panel close button was
-      // migrated from `>×</button>` to inline SVG matching the Icon
-      // primitive contract.
+      // Step 7 (2026-05-04): main.tsx is now in scope; its innerHTML
+      // template-string for the recent-dirs panel close button must not
+      // regress to a character icon escape.
       join(import.meta.dir, "..", "src", "main.tsx"),
     ]
   }
@@ -160,7 +159,7 @@ describe("flat-redesign character-icon callsites are gone", () => {
     expect(board).not.toMatch(/innerHTML=\{[^}]*SECTION_ICONS/)
   })
 
-  test("no inline 16px or 24px icon svg literals outside Icon.tsx", () => {
+  test("no inline icon svg literals outside Icon.tsx", () => {
     const EXEMPT = new Set([join(COMPONENTS_ROOT, "Icon.tsx")])
     const files = [
       ...listTsx(COMPONENTS_ROOT, EXEMPT),
@@ -172,7 +171,7 @@ describe("flat-redesign character-icon callsites are gone", () => {
     const violations: string[] = []
     for (const file of files) {
       const text = readFileSync(file, "utf8")
-      if (/<svg\b[^>]*viewBox="0 0 (?:16 16|24 24)"/.test(text)) {
+      if (/<svg\b/i.test(text)) {
         violations.push(file)
       }
     }
