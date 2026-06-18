@@ -969,6 +969,10 @@ describe("overlay architecture guards", () => {
 
     expect(html).not.toContain("btnWorkspaceToggle")
     expect(workspaceSurface).not.toContain(".workspace-toggle")
+    expect(workspaceSurface).not.toContain(".chat-plugin-activity")
+    expect(workspaceSurface).not.toContain(".chat-plugin-outlet")
+    expect(activitySurface).not.toContain(".chat-plugin-activity")
+    expect(activitySurface).not.toContain(".chat-plugin-outlet")
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace::before\s*\{/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer:hover::before/)
