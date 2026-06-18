@@ -1026,7 +1026,6 @@
 .config-sidebar {
   display: flex;
   flex-direction: column;
-  gap: calc(1px * var(--ui-scale));
   width: clamp(calc(168px * var(--ui-scale)), calc(188px * var(--ui-scale)), calc(208px * var(--ui-scale)));
   min-width: clamp(calc(168px * var(--ui-scale)), calc(188px * var(--ui-scale)), calc(208px * var(--ui-scale)));
   /* Density refresh 2026-05-06: dropped from 12/10 → 8/6. The nav was
@@ -1040,15 +1039,32 @@
   flex-shrink: 0;
 }
 
-/* Tab nav button. `.active` lift uses an accent-tinted
-   linear-gradient — raw `rgba(84, 138, 247, X)` (which is the
-   literal expansion of `--accent`) routed through `color-mix`
-   on the canonical token. */
-.config-nav-item {
+.config-sidebar .oc-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(1px * var(--ui-scale));
+  width: 100%;
+  min-height: 100%;
+  height: auto;
+  padding: 0;
+  background: transparent;
+}
+
+/* Settings sidebar tabs keep the local rail layout, while Kobalte owns tab
+   semantics through the shared `.oc-tab` primitive. */
+.config-sidebar .oc-tab {
+  --oc-tab-bg: transparent;
+  --oc-tab-color: var(--text-soft);
+
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: calc(9px * var(--ui-scale));
   width: 100%;
+  min-height: calc(28px * var(--ui-scale));
+  height: auto;
   /* Density refresh 2026-05-06: dropped from 8/12 → 5/9. Combined with
    * the tighter sidebar padding above, this brings the nav block from
    * ~36px per row to ~28px — comparable to VSCode/Linear settings nav
@@ -1056,31 +1072,37 @@
   padding: calc(5px * var(--ui-scale)) calc(9px * var(--ui-scale));
   border: none;
   border-radius: var(--oc-radius-soft);
-  background: transparent;
-  color: var(--text-soft);
+  background: var(--oc-tab-bg);
+  color: var(--oc-tab-color);
   font-size: var(--ui-font-body);
   font-family: var(--font);
   font-weight: var(--ui-font-weight-medium);
   text-align: left;
-  cursor: pointer;
   transition:
     background var(--ui-duration-base),
     color var(--ui-duration-base);
   position: relative;
 }
 
-.config-nav-item:hover {
+.config-sidebar .oc-tab:hover,
+.config-sidebar .oc-tab:focus-visible {
+  --oc-tab-bg: var(--settings-surface-hover);
+  --oc-tab-color: var(--text-strong);
+
   background: var(--settings-surface-hover);
   color: var(--text-strong);
 }
 
-.config-nav-item.active {
+.config-sidebar .oc-tab[data-active="true"] {
+  --oc-tab-bg: transparent;
+  --oc-tab-color: var(--accent-hover);
+
   background: transparent;
   color: var(--accent-hover);
   font-weight: var(--ui-font-weight-strong);
 }
 
-.config-nav-item.active::before {
+.config-sidebar .oc-tab[data-active="true"]::before {
   content: "";
   position: absolute;
   left: 0;
@@ -1092,6 +1114,10 @@
   background: var(--accent);
 }
 
+.config-sidebar .oc-tab[data-config-tab="about"] {
+  margin-top: auto;
+}
+
 .config-nav-icon {
   width: calc(18px * var(--ui-scale));
   height: calc(18px * var(--ui-scale));
@@ -1099,7 +1125,7 @@
   opacity: var(--ui-opacity-dim);
 }
 
-.config-nav-item.active .config-nav-icon {
+.config-sidebar .oc-tab[data-active="true"] .config-nav-icon {
   opacity: var(--ui-opacity-full);
 }
 
@@ -1123,7 +1149,7 @@
   display: none;
 }
 
-.config-nav-item.active .config-nav-badge {
+.config-sidebar .oc-tab[data-active="true"] .config-nav-badge {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent-hover);
 }
@@ -1147,14 +1173,10 @@
 }
 
 .config-tab-panel {
-  display: none;
-}
-
-.config-tab-panel.active {
   display: block;
 }
 
-.config-tab-panel[data-config-panel="memory"].active {
+.config-tab-panel[data-config-panel="memory"] {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1210,10 +1232,6 @@
 .config-resizer:focus-visible::before,
 .config-resizer[data-active="true"]::before {
   background: var(--accent);
-}
-
-.config-nav-spacer {
-  flex: 1;
 }
 
 /* ── Config tab panel body ────────────────────────────────── */

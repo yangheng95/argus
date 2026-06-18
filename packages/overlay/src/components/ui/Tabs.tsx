@@ -11,6 +11,7 @@ export type TabsTone = (typeof TABS_TONES)[number]
 export interface TabsProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, "classList" | "role" | "onChange"> {
   value: string
   onValueChange?: (value: string) => void
+  orientation?: "horizontal" | "vertical"
 }
 
 export interface TabListProps
@@ -32,10 +33,16 @@ export interface TabPanelProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
 }
 
 export function Tabs(props: TabsProps): JSX.Element {
-  const [local, tabsProps] = splitProps(props, ["value", "onValueChange", "children"])
+  const [local, tabsProps] = splitProps(props, ["value", "onValueChange", "orientation", "children"])
 
   return (
-    <KobalteTabs {...tabsProps} value={local.value} onChange={local.onValueChange} activationMode="manual">
+    <KobalteTabs
+      {...tabsProps}
+      value={local.value}
+      onChange={local.onValueChange}
+      orientation={local.orientation}
+      activationMode="manual"
+    >
       {local.children}
     </KobalteTabs>
   )

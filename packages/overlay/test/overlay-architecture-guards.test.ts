@@ -1179,12 +1179,13 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
-    for (const className of ["config-content", "config-tab-panel", "config-resizer", "config-nav-spacer"]) {
+    for (const className of ["config-content", "config-tab-panel", "config-resizer"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(settingsSurface).toMatch(/\.config-tab-panel\.active\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.config-tab-panel\.active\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-tab-panel\s*\{/)
     expect(settingsSurface).toMatch(/\.config-tab-panel \> \.config-section-body\s*\{/)
     expect(settingsSurface).not.toMatch(/\.config-content \.config-subsection/)
     expect(settingsSurface).toMatch(/\.config-content \.extension-head,\s*\.config-content \.knowledge-toolbar\s*\{/)
@@ -1209,19 +1210,19 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).not.toMatch(/(^|\n)\.config-dialog-(form|head)\s*\{/)
   })
 
-  test("settings sidebar nav is owned by surfaces/settings.css", () => {
+  test("settings sidebar nav is owned by the shared Tabs primitive and surfaces/settings.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+    const configDialog = readText(join(OVERLAY_ROOT, "src/components/ConfigDialogHost.tsx"))
 
-    for (const className of [
-      "config-close-btn",
-      "config-sidebar",
-      "config-nav-item",
-      "config-nav-icon",
-      "config-nav-badge",
-    ]) {
+    for (const className of ["config-close-btn", "config-sidebar", "config-nav-icon", "config-nav-badge"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+    for (const className of ["config-nav-item", "config-nav-spacer"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(configDialog).not.toContain(className)
     }
 
     expect(settingsSurface).toMatch(/(^|\n)\.config-dialog-layout\s*\{/)
@@ -1233,10 +1234,18 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).toMatch(/\.config-close-btn:hover\s*\{/)
     const sidebarBody = settingsSurface.match(/(^|\n)\.config-sidebar\s*\{([^}]*)\}/)?.[2] ?? ""
     expect(sidebarBody).toContain("background: transparent")
-    expect(settingsSurface).toMatch(/\.config-nav-item\.active\s*\{/)
-    expect(settingsSurface).toMatch(/\.config-nav-item\.active::before\s*\{/)
-    expect(settingsSurface).toMatch(/\.config-nav-item\.active \.config-nav-icon\s*\{/)
-    expect(settingsSurface).toMatch(/\.config-nav-item\.active \.config-nav-badge\s*\{/)
+    expect(configDialog).toContain('import { Tab, TabList, TabPanel, Tabs } from "./ui/Tabs"')
+    expect(configDialog).toContain("<Tabs")
+    expect(configDialog).toContain("<TabList")
+    expect(configDialog).toContain("<TabPanel")
+    expect(configDialog).toContain("onValueChange={switchConfigTab}")
+    expect(configDialog).toContain('orientation="vertical"')
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tabs\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-active="true"\]\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-active="true"\]::before\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-active="true"\] \.config-nav-icon\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-active="true"\] \.config-nav-badge\s*\{/)
     expect(settingsSurface).not.toMatch(/rgba\(84,\s*138,\s*247,\s*0\.15\)/)
     expect(settingsSurface).not.toMatch(/rgba\(84,\s*138,\s*247,\s*0\.2\)/)
   })
