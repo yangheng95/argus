@@ -90,10 +90,11 @@ describe("AcceptancePanel retires the bespoke empty placeholder", () => {
 describe("surface CSS declares .empty-hint--card on the shared card-chrome group", () => {
   test("the card-chrome selector list advertises .empty-hint--card", () => {
     // Anchored at the canonical nested-card block (lines 2444+ before the
-    // refactor). We assert the modifier sits in the same selector group
-    // as `.section-body > .empty-hint`, so all card-chrome empties stay
-    // in lockstep.
-    const cardChromeBlock = STYLES.match(/(\.section-body\s*>\s*\.empty-hint[^{]*\{[\s\S]*?border-radius[^}]*\})/)
+    // refactor). Right-panel empty states now opt into card chrome with the
+    // `.empty-hint--card` modifier, not a dead section-body child selector.
+    expect(STYLES).not.toMatch(new RegExp("(?:^|[\\s,])\\.section" + "-body\\s*>"))
+    expect(STYLES).not.toMatch(/\.oc-section__body\s*>\s*\.empty-hint/)
+    const cardChromeBlock = STYLES.match(/(\.empty-hint--card[^{]*\{[\s\S]*?border-radius[^}]*\})/)
     expect(cardChromeBlock).not.toBeNull()
     expect(cardChromeBlock![0]).toContain(".empty-hint--card")
   })

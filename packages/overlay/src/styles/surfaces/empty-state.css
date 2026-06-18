@@ -4,9 +4,9 @@
    inspector section bodies, change panels, and diff preview. Two display modes:
    - inline `.empty-hint` (loose text, no chrome) — default in
      compact contexts.
-   - card `.empty-hint--card` + container-prefixed empty-hints
-     (`.section-body > .empty-hint`, `#solidChangesPanel >
-     .empty-hint`, etc.) — boxed with a colored dot rail.
+   - card `.empty-hint--card` + live container-prefixed empty-hints
+     (`#solidChangesPanel > .empty-hint`, etc.) — boxed with a
+     colored dot rail.
    The container-prefixed variants share their visual contract via a
    single multi-selector rule rather than per-container forks.
    ───────────────────────────────────────────────────────────── */
@@ -20,7 +20,6 @@
 }
 
 .sidebar-list-cluster > .empty-hint,
-.section-body > .empty-hint,
 #solidChangesPanel > .empty-hint,
 .diff-preview-empty .empty-hint,
 .empty-hint--card {
@@ -37,7 +36,6 @@
 }
 
 .sidebar-list-cluster > .empty-hint::before,
-.section-body > .empty-hint::before,
 #solidChangesPanel > .empty-hint::before,
 .diff-preview-empty .empty-hint::before,
 .empty-hint--card::before {
@@ -48,14 +46,12 @@
   background: var(--accent);
 }
 
-.section-body > .empty-hint,
 #solidChangesPanel > .empty-hint,
 .sidebar-list-cluster > .empty-hint,
 .empty-hint--card {
   max-width: calc(420px * var(--ui-scale));
 }
 
-.section-body > .empty-hint,
 #solidChangesPanel > .empty-hint {
   gap: calc(4px * var(--ui-scale));
   width: 100%;

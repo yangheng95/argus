@@ -1223,11 +1223,6 @@ test(
             props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 7,
           },
-          {
-            selector: ".section-body > .empty-hint",
-            props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-            max: 7,
-          },
         ]
         return checks.flatMap(({ selector, props, max }) => {
           const node = document.querySelector<HTMLElement>(selector)
@@ -1248,7 +1243,6 @@ test(
           ".sections-header",
           ".section",
           ".section-head",
-          ".section-body > .empty-hint",
           ".acceptance-panel",
         ]
         const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const
