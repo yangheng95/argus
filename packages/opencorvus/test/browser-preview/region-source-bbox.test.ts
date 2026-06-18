@@ -53,7 +53,7 @@ describe("browser preview region source bbox bounds", () => {
         const validRegion = result.regions.find((region) => region.region_id === "valid-source-bbox")
         expect(badRegion?.status).toBe("failed")
         expect(badRegion?.reason).toContain("source bbox exceeds source image bounds")
-        expect(badRegion?.source_bbox).toEqual({ x: 80, y: 80, width: 30, height: 30 })
+        expect(badRegion?.source_bbox).toEqual({ x: 250, y: 210, width: 30, height: 30 })
         expect(badRegion?.implementation_bbox?.width).toBeGreaterThan(100)
         expect(badRegion?.artifacts).toBeUndefined()
         expect(validRegion?.status).toBe("completed")
@@ -61,8 +61,8 @@ describe("browser preview region source bbox bounds", () => {
         const validSourceCrop = await sharp(
           resolveRuntimeRelativePath(tmp.path, validRegion!.artifacts!.source_crop),
         ).metadata()
-        expect(validSourceCrop.width).toBe(40)
-        expect(validSourceCrop.height).toBe(30)
+        expect(validSourceCrop.width).toBe(180)
+        expect(validSourceCrop.height).toBe(120)
 
         const evidenceID = result.evidenceIDs["desktop:default:bad-source-bbox"]
         expect(evidenceID).toBeTruthy()
@@ -102,7 +102,7 @@ function sourceBboxBinding(regionID: "bad-source-bbox" | "valid-source-bbox"): B
     region_scope: "page-section",
     source: {
       reference_artifact_id: "reference.png",
-      bbox: bad ? { x: 80, y: 80, width: 30, height: 30 } : { x: 10, y: 12, width: 40, height: 30 },
+      bbox: bad ? { x: 250, y: 210, width: 30, height: 30 } : { x: 40, y: 40, width: 180, height: 120 },
       semantic_role: bad ? "bad source bbox" : "valid source bbox",
       text_anchors: [bad ? "Bad Source Bbox" : "Valid Source Bbox"],
       source_refs: ["source screenshot"],
@@ -144,8 +144,8 @@ async function writeSmallReferenceScreenshot(sourcePackageAbsolute: string): Pro
   await fs.mkdir(sourcePackageAbsolute, { recursive: true })
   await sharp({
     create: {
-      width: 100,
-      height: 100,
+      width: 260,
+      height: 220,
       channels: 4,
       background: "#ffffff",
     },
@@ -153,12 +153,12 @@ async function writeSmallReferenceScreenshot(sourcePackageAbsolute: string): Pro
     .composite([
       {
         input: Buffer.from(
-          `<svg width="40" height="30" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="30" fill="#dcfce7"/>
+          `<svg width="180" height="120" xmlns="http://www.w3.org/2000/svg">
+            <rect width="180" height="120" fill="#dcfce7"/>
           </svg>`,
         ),
-        left: 10,
-        top: 12,
+        left: 40,
+        top: 40,
       },
     ])
     .png()
@@ -189,7 +189,7 @@ async function startSourceBboxServer(): Promise<{ url: string; close: () => Prom
         </head>
         <body>
           <section data-oc-region="bad-source-bbox">Bad Source Bbox</section>
-          <section data-oc-region="valid-source-bbox">Valid Source Bbox</section>
+          <section data-oc-region="valid-source-bbox" aria-label="Valid Source Bbox"></section>
         </body>
       </html>`
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" })

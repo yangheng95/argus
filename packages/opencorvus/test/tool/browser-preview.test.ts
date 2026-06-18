@@ -536,8 +536,8 @@ async function writeBindingToolReference(sourcePackageAbsolute: string): Promise
         input: Buffer.from(
           `<svg width="180" height="92" xmlns="http://www.w3.org/2000/svg">
             <rect width="180" height="92" fill="#fef3c7"/>
-            <text x="14" y="38" font-family="Arial" font-size="20" fill="#78350f">Tool Local Module</text>
-            <text x="14" y="68" font-family="Arial" font-size="16" fill="#92400e">Binding Anchor</text>
+            <text x="16" y="38" font-family="Arial" font-size="20" font-weight="700" fill="#78350f">Tool Local Module</text>
+            <text x="16" y="66" font-family="Arial" font-size="16" fill="#92400e">Binding Anchor</text>
           </svg>`,
         ),
         left: 24,
@@ -577,14 +577,14 @@ async function startBindingToolPreviewServer(): Promise<{ url: string; close: ()
             body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
             main { padding: 48px; }
             [data-oc-region="tool-local-module"] {
-              width: 210px;
-              height: 112px;
+              width: 180px;
+              height: 92px;
               box-sizing: border-box;
               padding: 16px;
               background: #fef3c7;
               color: #78350f;
             }
-            h2 { margin: 0 0 12px; font-size: 22px; }
+            h2 { margin: 0 0 10px; font-size: 20px; line-height: 1; }
             p { margin: 0; font-size: 16px; color: #92400e; }
           </style>
         </head>

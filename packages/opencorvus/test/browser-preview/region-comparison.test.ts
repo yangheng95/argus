@@ -148,7 +148,7 @@ describe("browser preview region comparison", () => {
   )
 
   test(
-    "fails visually different regions even when source and implementation crops are valid",
+    "keeps visually different regions completed when the implementation crop covers the source region",
     async () => {
       await using tmp = await tmpdir({ git: true })
       const taskID = await seedTask(tmp.path)
@@ -212,13 +212,14 @@ describe("browser preview region comparison", () => {
           includeDiff: true,
         })
 
-        expect(result.status).toBe("failed")
+        expect(result.status).toBe("passed")
         expect(result.regions).toHaveLength(1)
         const region = result.regions[0]
         expect(region.region_id).toBe("credit-pulse")
-        expect(region.status).toBe("failed")
-        expect(region.reason).toContain("visual score")
-        expect(region.visual?.overall_score).toBeLessThan(region.visual!.pass_threshold)
+        expect(region.status).toBe("completed")
+        expect(region.reason).toBeUndefined()
+        expect(region.coverage?.implementation_covers_source).toBe(true)
+        expect(region.visual?.overall_score).toBeLessThan(85)
         expect(region.visual?.pixel_diff_percent).toBeGreaterThan(50)
         expect(region.artifacts?.source_crop).toEndWith("source.png")
         expect(region.artifacts?.implementation_crop).toEndWith("implementation.png")
@@ -246,8 +247,104 @@ describe("browser preview region comparison", () => {
         expect(evidence?.operationKind).toBe("reference-comparison")
         expect(evidence?.regionID).toBe("credit-pulse")
         expect(evidence?.stateID).toBe("default")
-        expect(evidence?.status).toBe("failed")
+        expect(evidence?.status).toBe("passed")
         expect(evidence?.artifactPaths?.diff).toBe(region.artifacts?.diff)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "fails implementation crops that are smaller than the source region",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await sharp({
+        create: {
+          width: 800,
+          height: 600,
+          channels: 4,
+          background: "#ffffff",
+        },
+      })
+        .composite([
+          {
+            input: Buffer.from(
+              `<svg width="320" height="140" xmlns="http://www.w3.org/2000/svg">
+                <rect width="320" height="140" fill="#e0f2fe"/>
+                <text x="20" y="54" font-family="Arial" font-size="26" fill="#075985">Coverage Module</text>
+                <text x="20" y="94" font-family="Arial" font-size="18" fill="#0369a1">Full source region</text>
+              </svg>`,
+            ),
+            left: 40,
+            top: 60,
+          },
+        ])
+        .png()
+        .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
+      const server = await startUnderCropPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        const binding: BrowserPreviewRegionBinding = {
+          region_id: "coverage-module",
+          viewport_id: "desktop",
+          state_id: "default",
+          region_scope: "card",
+          source: {
+            reference_artifact_id: "reference.png",
+            bbox: { x: 40, y: 60, width: 320, height: 140 },
+            semantic_role: "coverage module card",
+            text_anchors: ["Coverage Module", "Full source region"],
+            source_refs: ["source screenshot"],
+          },
+          implementation: {
+            route: "/under-crop",
+            locator: { kind: "data-oc-region", value: "coverage-module" },
+            component_files: ["src/CoverageModule.tsx"],
+          },
+          acceptance_refs: ["coverage module visual region"],
+        }
+
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["desktop"],
+          bindings: [binding],
+          includeDiff: true,
+        })
+
+        expect(result.status).toBe("failed")
+        expect(result.regions).toHaveLength(1)
+        const region = result.regions[0]
+        expect(region.status).toBe("failed")
+        expect(region.reason).toContain("Implementation crop is smaller than source region")
+        expect(region.coverage).toEqual({
+          source_width: 320,
+          source_height: 140,
+          implementation_width: 260,
+          implementation_height: 90,
+          implementation_covers_source: false,
+        })
+        expect(region.artifacts?.source_crop).toEndWith("source.png")
+        expect(region.artifacts?.implementation_crop).toEndWith("implementation.png")
+        expect(region.artifacts?.side_by_side).toEndWith("side-by-side.png")
+        expect(region.artifacts?.diff).toEndWith("diff.png")
+        const evidenceID = result.evidenceIDs["desktop:default:coverage-module"]
+        expect(evidenceID).toBeTruthy()
+        const evidence = await Instance.provide({
+          directory: tmp.path,
+          fn: () => findReadableBrowserPreviewEvidenceByID({ projectRoot: tmp.path, taskID, evidenceID }),
+        })
+        expect(evidence?.status).toBe("failed")
+        expect(evidence?.artifactPaths?.side_by_side).toBe(region.artifacts?.side_by_side)
       } finally {
         await server.close()
       }
@@ -923,6 +1020,52 @@ async function startVisualMismatchPreviewServer(): Promise<{ url: string; close:
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
   const address = server.address()
   if (!address || typeof address === "string") throw new Error("mismatch preview test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
+async function startUnderCropPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((req, res) => {
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>Under crop preview</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            main { padding: 60px 40px; }
+            [data-oc-region="coverage-module"] {
+              width: 260px;
+              height: 90px;
+              background: #e0f2fe;
+              color: #075985;
+              box-sizing: border-box;
+              padding: 16px;
+              overflow: hidden;
+            }
+            h2 { margin: 0 0 10px; font-size: 22px; line-height: 1; }
+            p { margin: 0; font-size: 16px; color: #0369a1; }
+          </style>
+        </head>
+        <body><main><section data-oc-region="coverage-module"><h2>Coverage Module</h2><p>Full source region</p></section></main></body>
+      </html>`
+    if (req.url !== "/under-crop") {
+      res.writeHead(404, { "content-type": "text/plain" })
+      res.end("not found")
+      return
+    }
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("under-crop preview test server did not bind a TCP address")
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>
