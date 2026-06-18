@@ -26,12 +26,12 @@ afterEach(async () => {
 })
 
 describe("EngineService.retryTask — active blocked run wake", () => {
-  test("retry wakes without rewriting a blocked active run", async () => {
+  test("retry wakes without rewriting a blocked active run and dispatches retry intent", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const runID = Identifier.ascending("run")
         const now = Date.now()
@@ -84,6 +84,13 @@ describe("EngineService.retryTask — active blocked run wake", () => {
         expect(blocked?.status).toBe("blocked")
         expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
         expect(blocked?.error).toBe("MessageAbortedError: total deadline")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        const event = (runTaskLoop.mock.calls[0]?.[0] as
+          | { event?: { note?: string; operatorIntent?: { kind?: string } } }
+          | undefined)?.event
+        expect(event?.operatorIntent).toEqual({ kind: "retry" })
+        expect(event?.note).toContain("User requested retry")
+        expect(event?.note).not.toContain("User requested replan")
       },
     })
   })
