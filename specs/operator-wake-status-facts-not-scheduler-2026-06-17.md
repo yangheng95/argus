@@ -31,9 +31,11 @@ Operator wake status gates
 - `packages/opencorvus/src/task-api/index.ts::recordOperatorNote`: currently
   returns without dispatch for completed/cancelled/no-run cases. Use the same
   reactivation helper and always dispatch.
-- `packages/opencorvus/src/engine/task-message-open.ts`: deleted. It rewrote a
-  blocked active run to `running` on operator wake. The next orchestrator pass
-  now reads the blocked/error facts and decides.
+- `packages/opencorvus/src/engine/task-message-open.ts`: removed from
+  user-message and operator-note wake paths. It rewrote a blocked active run to
+  `running` on ordinary operator wake. The next orchestrator pass now reads the
+  blocked/error facts and decides. See the BH-110 correction below for the
+  explicit retry-only exception.
 - `packages/opencorvus/src/engine/goal-status.ts::deriveGoalStatus`: currently
   projects an owner-orphan live goal run as `failed`. Keep lifecycle projection
   from the persisted run status; expose orphan confidence through
@@ -141,3 +143,15 @@ Revised acceptance:
 - Repeating the same no-live-goal snapshot does not wake again; appending a new
   terminal goal-run snapshot changes the fingerprint and can wake again.
 - Task queue background polling remains absent.
+
+## BH-110 correction: explicit retry remains a retry control
+
+The original acceptance line grouped user messages, operator notes, and retry
+under the same blocked-run rule. BH-110 split the public controls:
+
+- user/operator messages and operator notes still do not rewrite a blocked run
+  to `running`;
+- `retryTask(...)` is the explicit retry control and may clear a stale blocked
+  active run when no pending interaction owns the block;
+- `replanTask(...)` must not use that retry reopen path, and instead supersedes
+  active plans before dispatching structured `operatorIntent.kind="replan"`.
