@@ -382,6 +382,24 @@ test("evidence rows reuse the shared .verdict-pill primitive — no per-row colo
   expect(board).toContain('class="verdict-pill"')
 })
 
+test("AcceptancePanel action controls use the shared Button primitive", async () => {
+  const board = await readSrc("src/components/Board.tsx")
+  const evidenceStart = board.indexOf("export function AcceptanceEvidenceGroup")
+  const panelStart = board.indexOf("export function AcceptancePanel")
+  const taskActionsStart = board.indexOf("// ── TaskActionsPanel ──")
+  const evidenceSlice = board.slice(evidenceStart, panelStart)
+  const panelSlice = board.slice(panelStart, taskActionsStart)
+
+  expect(evidenceSlice).not.toContain("<button")
+  expect(panelSlice).not.toContain("<button")
+  expect(evidenceSlice).toContain("<Button")
+  expect(panelSlice).toContain("<Button")
+  expect(evidenceSlice).toContain('data-ui="acceptance-evidence-goal-pill"')
+  expect(panelSlice).toContain('data-ui="acceptance-summary-toggle"')
+  expect(panelSlice).toContain('data-ui="acceptance-files-link"')
+  expect(evidenceSlice).toContain('attr:data-has-pill={row.goalRunID ? "true" : undefined}')
+})
+
 test("`acceptance:focus-changes` event contract — AcceptancePanel dispatches, ChangesPanel listens", async () => {
   const board = await readSrc("src/components/Board.tsx")
   const changes = await readSrc("src/components/ChangesPanel.tsx")

@@ -165,16 +165,23 @@ export function AcceptanceEvidenceGroup(props: AcceptanceEvidenceGroupProps) {
             <ul class="acceptance-evidence-list">
               <For each={props.rows}>
                 {(row) => (
-                  <li class="acceptance-evidence-row" data-status={row.status}>
+                  <li
+                    class="acceptance-evidence-row"
+                    data-status={row.status}
+                    attr:data-has-pill={row.goalRunID ? "true" : undefined}
+                  >
                     <Show when={row.goalRunID}>
-                      <button
-                        class="acceptance-evidence-goal-pill"
+                      <Button
+                        variant="outline"
+                        size="mini"
+                        tone="neutral"
+                        data-ui="acceptance-evidence-goal-pill"
                         type="button"
                         title={t("acceptance.row_goal_pill_title")}
                         onClick={() => focusChangesPanel(row.goalRunID)}
                       >
                         {row.goalRunID ? row.goalRunID.slice(-6) : ""}
-                      </button>
+                      </Button>
                     </Show>
                     <span class="acceptance-evidence-name">{row.label}</span>
                     <span class="verdict-pill" data-verdict={rowVerdict(row.status)}>
@@ -282,9 +289,16 @@ export function AcceptancePanel(props: AcceptancePanelProps) {
               innerHTML={renderMarkdown(summaryText())}
             />
             <Show when={summaryNeedsClamp()}>
-              <button class="acceptance-summary-toggle" type="button" onClick={summary.toggle}>
+              <Button
+                variant="ghost"
+                size="mini"
+                tone="accent"
+                data-ui="acceptance-summary-toggle"
+                type="button"
+                onClick={summary.toggle}
+              >
                 {summary.open() ? t("acceptance.show_less") : t("acceptance.show_more")}
-              </button>
+              </Button>
             </Show>
           </Show>
 
@@ -292,9 +306,16 @@ export function AcceptancePanel(props: AcceptancePanelProps) {
           <AcceptanceEvidenceGroup label={t("acceptance.reviews")} kind="review" rows={reviews()} />
 
           <Show when={filesChanged() > 0}>
-            <button class="acceptance-files-link" type="button" onClick={() => focusChangesPanel(undefined)}>
+            <Button
+              variant="outline"
+              size="sm"
+              tone="neutral"
+              data-ui="acceptance-files-link"
+              type="button"
+              onClick={() => focusChangesPanel(undefined)}
+            >
               {tc("acceptance.files_changed", filesChanged(), { count: filesChanged() })}
-            </button>
+            </Button>
           </Show>
         </section>
       </Show>
