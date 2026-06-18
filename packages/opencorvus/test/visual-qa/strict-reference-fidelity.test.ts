@@ -33,6 +33,19 @@ describe("visual-qa strict reference image fidelity", () => {
     expect(normalized).toContain("unless the task explicitly assigns that exact port")
   })
 
+  test("core prompt requires task-scoped region bind and comparison for clone work", () => {
+    const normalized = VISUAL_QA_CORE.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("task-scoped preview repair chain as primary region evidence")
+    expect(normalized).toContain("call `browser_preview_bind_local_module`")
+    expect(normalized).toContain("pass that binding to `browser_preview_compare_regions`")
+    expect(normalized).toContain(
+      "Do not substitute `webpage_render`, `webpage_evaluate`, `webpage_vision_judge`, or standalone screenshots as the final region-parity evidence",
+    )
+    expect(normalized).toContain("task-scoped `reference-comparison` artifacts")
+    expect(normalized).toContain("fail the visual QA report with the exact blocker")
+  })
+
   test("runtime delegation requires one-to-one reference-image acceptance evidence", () => {
     const prompt = VisualQaTestHooks.buildVisualQaUserPrompt({
       taskTitle: "Clone reference",
@@ -45,6 +58,10 @@ describe("visual-qa strict reference image fidelity", () => {
     expect(prompt).toContain("not a relaxed similarity standard")
     expect(prompt).toContain("professional product designer and design QA reviewer")
     expect(prompt).toContain("Numeric similarity scores are evidence, not the verdict")
+    expect(prompt).toContain("call `browser_preview_bind_local_module`")
+    expect(prompt).toContain("pass the binding to `browser_preview_compare_regions`")
+    expect(prompt).toContain("task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`")
+    expect(prompt).toContain("screenshot-only evidence as the final region-parity proof")
     expect(prompt).toContain("no production_blockers")
     expect(prompt).toContain("Product Design QA Principles")
     expect(prompt).toContain("component-truth")
