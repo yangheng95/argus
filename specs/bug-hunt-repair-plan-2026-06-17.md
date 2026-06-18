@@ -3304,3 +3304,52 @@ LINE:
 - Popper confirmed BH-099 was still substantive in committed HEAD `7d8d8ce649`: `syncRuntime()` caught startup errors and did not rethrow, while `PATCH /config` swallowed thrown sync errors and always returned the config payload.
 - Popper confirmed the two-signal root cause: supervisor encoded startup failure as normal data (`status: "error"`) while the config route treated only thrown exceptions as failure.
 - Popper recommended the same final boundary used here: preserve supervisor error status for `/channel/runtime`, throw structured `ChannelRuntimeStartError` from `sync()` / `restart()` startup failures, remove the project `/config` catch, and avoid retry, fallback disabled state, rollback, route gate, or second status source.
+
+## Batch P1-BD: BH-106 edit create-file path must not overwrite existing files
+
+### Findings
+
+- BH-106 targets `packages/opencorvus/src/tool/edit.ts::EditTool.execute(...)`.
+- `EditTool` treats `oldString === ""` as a create-file path, but HEAD first checks `Filesystem.exists(filePath)` only to choose watcher event type and then writes through `Filesystem.write(...)`.
+- That branch never calls `FileTime.assert(...)`, prompts permission with an add-only diff from empty content, and overwrites existing files while reporting the operation as a create.
+- The adjacent `apply_patch` Add File repair already defines the single-source create-file semantics: `Patch.assertAddFileTargetDoesNotExist(...)` rejects existing targets before permission metadata, and the actual write uses `flag: "wx"` so an interleaving create cannot be overwritten after permission approval.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/tool/edit.ts::EditTool.execute(...)` is the direct tool path for string edits and create-file requests through empty `oldString`.
+- `packages/opencorvus/src/tool/apply_patch.ts::ApplyPatchTool.execute(...)` handles patch Add File hunks and already uses `Patch.assertAddFileTargetDoesNotExist(...)` plus exclusive create writes.
+- `packages/opencorvus/src/patch/index.ts::Patch.assertAddFileTargetDoesNotExist(...)` is the existing Add File target-existence verifier used by apply_patch parsing/apply flows.
+- `packages/opencorvus/src/file/time.ts::FileTime.assert(...)` protects overwrite edits that modify an existing file after a read; a create-file path should reject existing targets instead of treating them as stale-write candidates.
+- `packages/opencorvus/test/tool/edit.test.ts` already covers create-file behavior, existing-file edits, FileTime failures, watcher events, and concurrent edits.
+- `packages/opencorvus/test/tool/apply_patch.test.ts` covers the sibling Add File no-overwrite behavior and remains the reference for create-only semantics.
+
+### Fix Shape
+
+- Import `fs/promises` and `Patch` into `edit.ts`.
+- In the `oldString === ""` branch, call `Patch.assertAddFileTargetDoesNotExist(filePath)` before constructing permission metadata.
+- Keep the permission prompt's add-only diff only after the target has been proven absent.
+- Create parent directories and write the file with `{ flag: "wx" }` instead of `Filesystem.write(...)`.
+- Publish only an `add` watcher event for that branch, because existing targets are no longer legal create-file targets.
+- Do not add an update fallback, compatibility path, retry, route gate, or alternate create-file verifier.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/tool/edit.test.ts`.
+- Assert existing file plus `oldString: ""` rejects with the shared Add File target-exists error, does not call `ctx.ask(...)`, and preserves original file content.
+- Assert a target created while `ctx.ask(...)` is pending makes the exclusive create write fail and preserves the interloper content.
+- Preserve the existing successful create-file and nested-directory create coverage.
+- Assert the create-file path emits only an `add` watcher event.
+- Add a source-level guard that the edit create path uses `Patch.assertAddFileTargetDoesNotExist(...)` and an exclusive `flag: "wx"` write, matching apply_patch Add File semantics.
+
+### Verification
+
+- Focused tool tests passed: `bun test packages/opencorvus/test/tool/edit.test.ts packages/opencorvus/test/tool/apply_patch.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Dirac confirmed BH-106 was still substantive in committed HEAD `3468fffb5b0ed4a347dacd9c5678491b4015e2ec`: `oldString === ""` used `Filesystem.exists(...)` only for watcher event selection, skipped `FileTime.assert(...)`, prompted with an add-only diff, and overwrote through `Filesystem.write(...)`.
+- Dirac identified the same single-source repair boundary: use `Patch.assertAddFileTargetDoesNotExist(...)`, write with `flag: "wx"`, publish only `add`, and avoid update fallbacks, retries, gates, or compatibility paths.
+- Dirac added the required race regression where the file is absent during validation but appears during permission; the final test suite covers that interleaving.
