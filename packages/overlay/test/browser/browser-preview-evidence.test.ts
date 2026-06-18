@@ -129,6 +129,7 @@ test(
     const taskID = "tsk_browserpreview_e2e"
     const targetID = "art_previewtarget_e2e"
     const alternateTargetID = "art_previewtarget_alt_e2e"
+    const failingTargetID = "art_previewtarget_fail_e2e"
     const evidenceID = "art_previewevidence_desktop"
     const projectRoot = "D:/overlay/workspace/app"
     const captureBodies: unknown[] = []
@@ -146,6 +147,7 @@ test(
     let serverOrigin = ""
     const previewTarget = () => `${serverOrigin}/preview-target`
     const alternatePreviewTarget = () => `${serverOrigin}/preview-target-alt`
+    const failingPreviewTarget = () => `${serverOrigin}/preview-target-fail`
     const selectedPreviewTarget = () =>
       selectedTargetID === alternateTargetID ? alternatePreviewTarget() : previewTarget()
     const captureSummary = (target: string) =>
@@ -277,6 +279,13 @@ test(
               selected: selectedTargetID === alternateTargetID,
               timeUpdated: now - 250,
             },
+            {
+              id: failingTargetID,
+              url: failingPreviewTarget(),
+              source: "task-artifact",
+              selected: false,
+              timeUpdated: now - 100,
+            },
           ],
           source: "task-artifact",
         })
@@ -284,6 +293,9 @@ test(
       if (path === `/task/${taskID}/browser-preview/target` && req.method === "PUT") {
         const body = await req.json()
         selectedTargets.push(body)
+        if (body?.targetID === failingTargetID) {
+          return send({ message: "target selection unavailable" }, { status: 500 })
+        }
         if (body?.targetID === alternateTargetID || body?.targetID === targetID) {
           selectedTargetID = body.targetID
         }
@@ -310,6 +322,13 @@ test(
               source: "task-artifact",
               selected: selectedTargetID === alternateTargetID,
               timeUpdated: now - 250,
+            },
+            {
+              id: failingTargetID,
+              url: failingPreviewTarget(),
+              source: "task-artifact",
+              selected: false,
+              timeUpdated: now - 100,
             },
           ],
           source: "task-artifact",
@@ -466,6 +485,7 @@ test(
         errors.push(`requestfailed: ${request.url()}`)
       })
       page.on("response", (response) => {
+        if (response.status() === 500 && response.url().includes(`/task/${taskID}/browser-preview/target`)) return
         if (response.status() >= 400) errors.push(`response${response.status()}: ${response.url()}`)
       })
       page.on("console", (msg) => {
@@ -518,6 +538,23 @@ test(
         () => ({ errors, requestLog }),
       )
       await page.click('[data-ui="browser-preview-candidate-trigger"]')
+      await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${failingTargetID}"]`)
+      await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${failingTargetID}"]`)
+      await waitForPageState(
+        page,
+        () => {
+          const error = document.querySelector<HTMLElement>('[data-ui="browser-preview-target-error"]')
+          const loading = document.querySelector<HTMLElement>(".browser-preview-stage [data-status='loading']")
+          return (
+            error?.textContent?.includes("Preview target selection failed.") === true &&
+            error.textContent.includes("target selection unavailable") &&
+            !loading
+          )
+        },
+        "failed target selection clears pending state and shows a visible error",
+        () => ({ errors, requestLog, selectedTargets }),
+      )
+      await page.click('[data-ui="browser-preview-candidate-trigger"]')
       await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${alternateTargetID}"]`)
       await waitForPageText(page, alternatePreviewTarget(), "alternate preview target text")
@@ -560,7 +597,7 @@ test(
       assert.match(preview.text, /alternate target desktop capture passed/)
       assert.doesNotMatch(preview.text, /primary target desktop capture passed/)
       assert.match(preview.text, new RegExp(alternatePreviewTarget().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
-      assert.deepEqual(selectedTargets, [{ targetID: alternateTargetID }])
+      assert.deepEqual(selectedTargets, [{ targetID: failingTargetID }, { targetID: alternateTargetID }])
       assert.ok(
         captureBodies.some(
           (body) => JSON.stringify(body) === JSON.stringify({ targetID, viewportIDs: ["desktop", "tablet", "mobile"] }),
