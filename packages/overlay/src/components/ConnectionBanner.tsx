@@ -13,6 +13,7 @@ import { appStore } from "../store/app"
 import { openConfigDialog } from "../services/dialog"
 import { t } from "../utils/i18n"
 import { useDisclosure } from "../solid/disclosure"
+import { Button } from "./ui/Button"
 
 const OFFLINE_GRACE_MS = 2500
 
@@ -55,18 +56,29 @@ export function ConnectionBanner() {
       <div class="conn-banner" role="status" aria-live="polite" data-status={appStore.connectionStatus}>
         <span class="conn-banner__dot" aria-hidden="true" />
         <span class="conn-banner__text">{t("connection.banner_text", { status: label() })}</span>
-        <button
+        <Button
           type="button"
-          class="conn-banner__action"
+          variant="ghost"
+          size="sm"
+          tone="neutral"
           onClick={() => openConfigDialog("general")}
           title={t("titlebar.connection_diagnostics")}
+          data-ui="connection-banner-setup"
           data-testid="connection-banner-setup"
         >
           {t("titlebar.setup")}
-        </button>
-        <button type="button" class="conn-banner__action" onClick={reload} title={t("connection.banner_reload_title")}>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          tone="neutral"
+          onClick={reload}
+          title={t("connection.banner_reload_title")}
+          data-ui="connection-banner-reload"
+        >
           {t("connection.banner_reload")}
-        </button>
+        </Button>
       </div>
     </Show>
   )

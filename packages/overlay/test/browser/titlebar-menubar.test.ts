@@ -1193,7 +1193,7 @@ test(
           ".titlebar-btn",
           '[data-ui="sidebar-new-task-button"]',
           ".btn.mini",
-          ".conn-banner__action",
+          '[data-ui^="connection-banner-"]',
           ".board-intro__cta-action",
         ]
         const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const
@@ -1299,7 +1299,7 @@ test(
           '[data-ui="titlebar-menubar-trigger"]',
           ".titlebar-btn",
           ".btn.mini",
-          ".conn-banner__action",
+          '[data-ui^="connection-banner-"]',
         ]
         const transparent = (value: string) =>
           value === "transparent" ||
