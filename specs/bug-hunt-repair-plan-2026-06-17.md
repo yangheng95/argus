@@ -4,7 +4,7 @@
 
 Repair the substantive findings recorded in `specs/bug-hunt-2026-06-17.md` by priority. This plan is append-only by batch: each batch records the disk evidence, call-point inventory, fix shape, and regression tests before code changes.
 
-Glossary: TLS means Transport Layer Security. API means Application Programming Interface. HMAC means Hash-based Message Authentication Code. STT means Speech To Text. UI means User Interface.
+Glossary: TLS means Transport Layer Security. API means Application Programming Interface. HMAC means Hash-based Message Authentication Code. STT means Speech To Text. UI means User Interface. URL means Uniform Resource Locator. DOM means Document Object Model. PNG means Portable Network Graphics.
 
 ## Batch P0-A: channel runtime fail-closed inbound security
 
@@ -2975,3 +2975,50 @@ LINE:
 - Avicenna confirmed BH-107 was still uncovered in the repair plan and traced the root cause to outbound JSON-RPC `pending` promises that only settled on response, reader error, or child exit.
 - Avicenna identified two gaps in the first working-tree draft: startup requests still lacked caller abort wiring, and `bootstrap.ts` initially used `EngineConfig.defaults` instead of current project config.
 - The final implementation addresses both review findings by passing `AbortSignal` through `initialize` / `threadStart` / `threadResume` / `turnStart` and by reading `EngineConfig.get()` inside the async Codex app-server client factory.
+
+## Batch P1-AW: BH-046 browser preview evidence screenshots must be identity-bound
+
+### Findings
+
+- BH-046 targets `packages/overlay/src/components/BrowserPreviewPanel.tsx`.
+- HEAD loaded capture screenshots as a bare object URL string through `captureImageUrl`.
+- When `renderedEvidence()` changed from one evidence record to another, Solid's resource could keep the previous successful object URL visible while the new capture image request was pending or failed.
+- That allowed a new evidence summary to render with a stale screenshot from a different evidence ID or viewport.
+- The related GUI audit record already required browser preview evidence to stay scoped to the current task, target, and viewport; this batch closes the remaining capture-image object URL hole.
+
+### Call-point Inventory
+
+- `packages/overlay/src/components/BrowserPreviewPanel.tsx::renderedEvidence(...)` chooses the current persisted or freshly verified evidence record.
+- `packages/overlay/src/components/BrowserPreviewPanel.tsx::captureImage(...)` now loads capture object URLs with the evidence identity.
+- `packages/overlay/src/components/BrowserPreviewPanel.tsx::currentCaptureImage(...)` is the render-time identity check for task ID, evidence ID, and viewport ID.
+- `packages/overlay/src/services/browser-preview.ts::loadTaskBrowserPreviewEvidence(...)` and `loadTaskBrowserPreviewEvidenceCaptureObjectUrl(...)` are the overlay service entrypoints.
+- `packages/opencorvus/src/server/routes/browser-preview.ts` owns the persisted evidence JSON and capture PNG route.
+- `packages/opencorvus/src/browser-preview/persist.ts` resolves persisted evidence artifacts and capture paths.
+- `packages/overlay/test/browser-preview-panel.test.ts` owns source-contract coverage for the panel and its center workbench mounting.
+- `packages/overlay/test/browser-preview-service.test.ts` owns binary error decoding for capture object URL loading.
+- `packages/overlay/test/browser/browser-preview-evidence.test.ts` owns the real Playwright evidence rendering regression.
+- `packages/opencorvus/test/server/browser-preview-routes.test.ts` owns backend route coverage for persisted evidence and capture PNG bytes.
+
+### Fix Shape
+
+- Replace the bare `captureImageUrl` resource with a `BrowserPreviewEvidenceImage` value carrying `taskID`, `evidenceID`, `viewportID`, and `url`.
+- Render screenshots only through `currentCaptureImage()`, which returns an image only when its identity matches the current `renderedEvidence()`.
+- Continue revoking old object URLs when resources change or the panel unmounts.
+- Add `data-evidence-id` to the rendered screenshot so browser tests can prove the visible image belongs to the visible evidence.
+- Extend the real browser test so desktop evidence first renders a valid screenshot, tablet evidence then returns a delayed 404 capture, and the assertion requires the tablet summary to render with no stale desktop image.
+- Refresh stale static source-contract assertions for the center workbench selection path: current code uses `selectedCenterWorkbenchPanel(...)` and `focusTaskPanel()` instead of the retired `selectedRightActivity()` and inline task reset assertion. This is test maintenance required to run the BH-046 contract test, not a product behavior change.
+- Do not add a fallback screenshot, retry gate, compatibility image cache, or second service-side state source.
+
+### Verification
+
+- Focused overlay tests passed: `bun test packages/overlay/test/browser-preview-panel.test.ts packages/overlay/test/browser-preview-service.test.ts --timeout 60000`.
+- Overlay typecheck passed: `bun run --cwd packages/overlay typecheck`.
+- Real browser regression passed with the required Node runner: `node test/browser-runner.mjs test/browser/browser-preview-evidence.test.ts`.
+- Backend evidence route regression passed: `bun test packages/opencorvus/test/server/browser-preview-routes.test.ts --timeout 60000`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Pasteur confirmed BH-046 had no independent repair-plan batch before this entry.
+- Pasteur confirmed the root cause: the previous panel stored a capture image as a bare blob URL, so a new evidence summary could keep rendering an old screenshot while the new capture load was pending or failed.
+- Pasteur agreed with the fix boundary: bind the object URL to task ID, evidence ID, and viewport ID inside `BrowserPreviewPanel.tsx`; keep the service and backend as the single source for evidence records and capture bytes; avoid fallback, gate, compatibility, or local preview-source paths.
