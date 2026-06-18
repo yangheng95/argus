@@ -2016,8 +2016,11 @@ describe("overlay architecture guards", () => {
   test("brand-guide family is owned by surfaces/titlebar.css", () => {
     const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
+    const html = readText(join(OVERLAY_ROOT, "src/index.html"))
+    const component = readText(join(OVERLAY_ROOT, "src/components/titlebar/TitlebarBrandGuide.tsx"))
 
     for (const className of [
+      "brand-guide-anchor",
       "brand-guide",
       "brand-guide-card",
       "brand-guide-kicker",
@@ -2035,7 +2038,15 @@ describe("overlay architecture guards", () => {
 
     expect(titlebarSurface).toMatch(/\.brand-guide-card::before\s*\{/)
     expect(titlebarSurface).toMatch(/\.brand-guide-card::after\s*\{/)
+    expect(titlebarSurface).not.toMatch(/\.brand-guide:hover\s+\.brand-guide-card/)
+    expect(titlebarSurface).not.toMatch(/\.brand-guide:focus-within\s+\.brand-guide-card/)
     expect(titlebarSurface).toMatch(/var\(--oc-radius-pill\)/)
+    expect(html).toContain('id="solidTitlebarBrandGuide"')
+    expect(html).not.toMatch(/\bclass=["'][^"']*\bbrand-guide\b/)
+    expect(component).toContain('import * as Popover from "@kobalte/core/popover"')
+    expect(component).toContain("<Popover.Root")
+    expect(component).toContain("<Popover.Trigger")
+    expect(component).toContain("<Popover.Content")
   })
 
   test("titlebar layout containers and connection badge are owned by surfaces/titlebar.css", () => {

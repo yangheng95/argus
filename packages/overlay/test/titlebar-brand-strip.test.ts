@@ -21,6 +21,10 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const HTML = readFileSync(path.resolve(import.meta.dir, "..", "src", "index.html"), "utf8")
+const BRAND_GUIDE = readFileSync(
+  path.resolve(import.meta.dir, "..", "src", "components", "titlebar", "TitlebarBrandGuide.tsx"),
+  "utf8",
+)
 
 describe("titlebar brand wordmark is gone", () => {
   test('no `<span class="brand-name">OpenCorvus</span>` survives in index.html', () => {
@@ -33,9 +37,12 @@ describe("titlebar brand wordmark is gone", () => {
     expect(titlebar![0]).not.toMatch(/class=["']brand-name["'][^>]*>OpenCorvus</)
   })
 
-  test("brand-guide popover trigger is preserved (so the quick-guide affordance is not lost)", () => {
-    expect(HTML).toMatch(/class=["']brand-guide["']/)
-    expect(HTML).toMatch(/class=["']brand-guide-card["']/)
+  test("brand-guide popover mounts through Solid instead of static titlebar markup", () => {
+    expect(HTML).toContain('id="solidTitlebarBrandGuide"')
+    expect(HTML).not.toMatch(/class=["']brand-guide["']/)
+    expect(HTML).not.toMatch(/class=["']brand-guide-card["']/)
+    expect(BRAND_GUIDE).toMatch(/class=["']brand-guide["']/)
+    expect(BRAND_GUIDE).toMatch(/class=["']brand-guide-card["']/)
   })
 })
 

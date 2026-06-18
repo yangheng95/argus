@@ -14,6 +14,7 @@ import { NotificationCenter } from "./NotificationCenter"
 import { SessionDialogHost } from "./SessionDialogHost"
 import { ProjectDirectoryBar } from "./TaskDirBar"
 import { TaskStatusHeader } from "./TaskStatusHeader"
+import { TitlebarBrandGuide } from "./titlebar/TitlebarBrandGuide"
 import { TitlebarMenubar } from "./titlebar/TitlebarMenubar"
 import { WindowControls } from "./WindowControls"
 import { WorkspaceOnboardingDialog } from "./WorkspaceOnboardingDialog"
@@ -35,6 +36,9 @@ function StaticMountPortal(props: { id: string; children: JSX.Element }) {
 export function App() {
   return (
     <>
+      <StaticMountPortal id="solidTitlebarBrandGuide">
+        <TitlebarBrandGuide />
+      </StaticMountPortal>
       <StaticMountPortal id="solidTitlebarMenu">
         <TitlebarMenubar />
       </StaticMountPortal>
