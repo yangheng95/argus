@@ -63,7 +63,7 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
             <div class="task-row-mini global-task-row mission-row" data-ui="mission-row" data-session-id="mission-a" data-active="true" title="Mission A">
               <span class="task-row-badge mission-row-kind-badge" aria-hidden="true">M</span>
               <div class="task-row-body">
-                <button type="button" class="task-row-main mission-row-main" data-action="mission-select">
+                <button type="button" class="task-row-main mission-row-main" data-action="mission-select" aria-current="page">
                   <div class="task-row-head"><strong>Mission A</strong></div>
                 </button>
               </div>
@@ -128,6 +128,8 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
         missionTabindex: missionRow.getAttribute("tabindex"),
         assistantRole: assistantRow.getAttribute("role"),
         assistantTabindex: assistantRow.getAttribute("tabindex"),
+        missionCurrent: missionRow.querySelector(".mission-row-main")?.getAttribute("aria-current"),
+        assistantCurrent: assistantRow.querySelector(".coding-assistant-row-main")?.getAttribute("aria-current"),
         missionButtons: missionRow.querySelectorAll("button").length,
         assistantButtons: assistantRow.querySelectorAll("button").length,
       }
@@ -137,6 +139,8 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
     assert.equal(structure.missionTabindex, null)
     assert.equal(structure.assistantRole, null)
     assert.equal(structure.assistantTabindex, null)
+    assert.equal(structure.missionCurrent, "page")
+    assert.equal(structure.assistantCurrent, null)
     assert.equal(structure.missionButtons, 4)
     assert.equal(structure.assistantButtons, 4)
 
