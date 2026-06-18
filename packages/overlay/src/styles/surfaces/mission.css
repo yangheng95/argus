@@ -218,12 +218,13 @@
   align-items: center;
 }
 
-.mission-action-error-dismiss {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
+.mission-action-error .oc-button[data-ui="mission-action-error-dismiss"] {
+  --oc-button-color: var(--text-muted);
+
+  flex: none;
+}
+
+.mission-action-error .oc-button[data-ui="mission-action-error-dismiss"] > svg {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
 }
