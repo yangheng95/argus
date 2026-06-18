@@ -317,6 +317,7 @@ describe("route directory policy", () => {
       "/config/providers",
       "/config/proxy/test",
       "/config/prompt-profile",
+      "/file/upload",
       "/session/session_123/conversation",
       "/mission/wake",
       "/task/abc/browser-preview?targetID=art_1",

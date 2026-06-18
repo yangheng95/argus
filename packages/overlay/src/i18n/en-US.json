@@ -750,6 +750,14 @@
   "screenshots.group_count": "{{count}}",
   "screenshots.title": "Screenshots",
   "explorer.search_placeholder": "Search files",
+  "explorer.drop_upload_title": "Drop files to upload",
+  "explorer.drop_upload_target": "Target {{target}}",
+  "explorer.uploading": "Uploading",
+  "explorer.upload_success": {
+    "one": "Uploaded {{count}} file to {{target}}",
+    "other": "Uploaded {{count}} files to {{target}}"
+  },
+  "explorer.upload_error": "Upload failed: {{message}}",
   "explorer.empty": "No files in this directory",
   "explorer.load_failed": "Unable to load files",
   "explorer.no_matches": "No matching files",

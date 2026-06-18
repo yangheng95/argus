@@ -62,6 +62,8 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
       else if (err.name === "TaskGlobalProjectBindingError") status = 409
       else if (err.name === "TaskChannelBindingProjectConflictError") status = 409
       else if (err.name === "PtyCreateFailedError") status = 400
+      else if (err.name === "FileUploadConflictError") status = 409
+      else if (err.name.startsWith("FileUpload")) status = 400
       else status = 500
       return c.json((err as NamedError & { toObject(): { name: string; data: unknown } }).toObject(), { status })
     }
@@ -250,6 +252,40 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       409,
       "TaskChannelBindingProjectConflictError",
+    )
+  })
+
+  test("FileUploadInvalidNameError maps to 400", async () => {
+    const FileUploadInvalidNameError = NamedError.create(
+      "FileUploadInvalidNameError",
+      z.object({ name: z.string(), message: z.string() }),
+    )
+    await expectMapping(
+      () => {
+        throw new FileUploadInvalidNameError({
+          name: "../escape.txt",
+          message: "Uploaded file name must be a basename",
+        })
+      },
+      400,
+      "FileUploadInvalidNameError",
+    )
+  })
+
+  test("FileUploadConflictError maps to 409", async () => {
+    const FileUploadConflictError = NamedError.create(
+      "FileUploadConflictError",
+      z.object({ path: z.string(), message: z.string() }),
+    )
+    await expectMapping(
+      () => {
+        throw new FileUploadConflictError({
+          path: "README.md",
+          message: "Upload destination already exists",
+        })
+      },
+      409,
+      "FileUploadConflictError",
     )
   })
 

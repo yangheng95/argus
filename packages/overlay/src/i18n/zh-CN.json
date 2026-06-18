@@ -750,6 +750,14 @@
   "screenshots.group_count": "{{count}}",
   "screenshots.title": "截图",
   "explorer.search_placeholder": "搜索文件",
+  "explorer.drop_upload_title": "拖入文件以上传",
+  "explorer.drop_upload_target": "目标 {{target}}",
+  "explorer.uploading": "正在上传",
+  "explorer.upload_success": {
+    "one": "已上传 {{count}} 个文件到 {{target}}",
+    "other": "已上传 {{count}} 个文件到 {{target}}"
+  },
+  "explorer.upload_error": "上传失败：{{message}}",
   "explorer.empty": "当前目录没有文件",
   "explorer.load_failed": "无法加载文件",
   "explorer.no_matches": "没有匹配的文件",

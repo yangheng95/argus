@@ -11,8 +11,8 @@ import {
 } from "solid-js"
 import { Virtualizer, type CustomContainerComponentProps, type CustomItemComponentProps } from "virtua/solid"
 import { apiJson } from "../services/api"
-import { openFileEditor, selectedFilePath, type FileNode } from "../services/file-workbench"
-import { t } from "../utils/i18n"
+import { openFileEditor, selectedFilePath, uploadDroppedFiles, type FileNode } from "../services/file-workbench"
+import { t, tc } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
@@ -69,6 +69,17 @@ function dirname(path: string): string {
   return parentPath(path)
 }
 
+function dragHasFiles(event: DragEvent): boolean {
+  const transfer = event.dataTransfer
+  if (!transfer) return false
+  if (transfer.files.length > 0) return true
+  return Array.from(transfer.items ?? []).some((item) => item.kind === "file")
+}
+
+function dataTransferFiles(dataTransfer: DataTransfer | null): File[] {
+  return Array.from(dataTransfer?.files ?? [])
+}
+
 async function listDirectory(path: string): Promise<FileNode[]> {
   return (await apiJson(`file?path=${encodeURIComponent(path)}`)) as FileNode[]
 }
@@ -89,6 +100,10 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   const [childrenByPath, setChildrenByPath] = createSignal(new Map<string, FileNode[]>())
   const [loadingPaths, setLoadingPaths] = createSignal(new Set<string>())
   const [directoryErrors, setDirectoryErrors] = createSignal(new Map<string, string>())
+  const [uploadDragTarget, setUploadDragTarget] = createSignal("")
+  const [uploading, setUploading] = createSignal(false)
+  const [uploadMessage, setUploadMessage] = createSignal("")
+  const [uploadMessageStatus, setUploadMessageStatus] = createSignal<"active" | "error">("active")
   const active = createMemo(() => props.active?.() ?? true)
   const directory = createMemo(() => (props.directory ? props.directory().trim() : "unscoped"))
 
@@ -207,6 +222,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   const rootLoading = createMemo(() => !deferredQuery() && loadingPaths().has("") && !childrenByPath().has(""))
   const searchLoading = createMemo(() => !!deferredQuery() && searchResults.loading)
   const rootError = createMemo(() => (!deferredQuery() ? (directoryErrors().get("") ?? "") : ""))
+  const uploadTargetLabel = createMemo(() => uploadDragTarget() || ".")
 
   const toggleDirectory = (path: string) => {
     setExpandedPaths((prev) => {
@@ -216,6 +232,44 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
       return next
     })
     void loadDirectory(path)
+  }
+
+  const beginUploadDrag = (event: DragEvent, targetDir: string) => {
+    if (!dragHasFiles(event)) return
+    event.preventDefault()
+    setUploadDragTarget(targetDir)
+  }
+
+  const handleUploadDragOver = (event: DragEvent, targetDir: string) => {
+    if (!dragHasFiles(event)) return
+    event.preventDefault()
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
+    setUploadDragTarget(targetDir)
+  }
+
+  const handleUploadDrop = async (event: DragEvent, targetDir: string) => {
+    if (!dragHasFiles(event)) return
+    event.preventDefault()
+    const files = dataTransferFiles(event.dataTransfer)
+    if (files.length === 0) {
+      setUploadDragTarget("")
+      return
+    }
+    setUploading(true)
+    setUploadMessage("")
+    try {
+      const uploaded = await uploadDroppedFiles(targetDir, files)
+      setExpandedPaths((prev) => new Set([...prev, targetDir]))
+      await loadDirectory(targetDir, { force: true })
+      setUploadMessageStatus("active")
+      setUploadMessage(tc("explorer.upload_success", uploaded.length, { target: targetDir || "." }))
+    } catch (error) {
+      setUploadMessageStatus("error")
+      setUploadMessage(t("explorer.upload_error", { message: error instanceof Error ? error.message : String(error) }))
+    } finally {
+      setUploadDragTarget("")
+      setUploading(false)
+    }
   }
 
   const renderRow = (row: ExplorerRow) => {
@@ -243,12 +297,14 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
     const node = row.node
     const isDirectory = node.type === "directory"
     const isNodeCurrent = () => selectedFilePath() === node.path
+    const isUploadTarget = () => isDirectory && uploadDragTarget() === node.path
     return (
       <button
         type="button"
         class="file-explorer-row"
         data-kind={node.type}
         data-active={isNodeCurrent() ? "true" : "false"}
+        data-upload-target={isUploadTarget() ? "true" : undefined}
         data-ignored={node.ignored ? "true" : "false"}
         aria-current={isNodeCurrent() ? "true" : undefined}
         aria-expanded={isDirectory ? row.expanded : undefined}
@@ -257,6 +313,25 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
         onClick={() => {
           if (isDirectory) toggleDirectory(node.path)
           else openFileEditor(node.path)
+        }}
+        onDragEnter={(event) => {
+          if (!isDirectory) return
+          event.stopPropagation()
+          beginUploadDrag(event, node.path)
+        }}
+        onDragOver={(event) => {
+          if (!isDirectory) return
+          event.stopPropagation()
+          handleUploadDragOver(event, node.path)
+        }}
+        onDragLeave={(event) => {
+          if (!isDirectory || event.currentTarget.contains(event.relatedTarget as Node | null)) return
+          if (uploadDragTarget() === node.path) setUploadDragTarget("")
+        }}
+        onDrop={(event) => {
+          if (!isDirectory) return
+          event.stopPropagation()
+          void handleUploadDrop(event, node.path)
         }}
       >
         <span class="file-explorer-chevron" data-open={row.expanded ? "true" : "false"}>
@@ -277,7 +352,19 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   }
 
   return (
-    <section class="file-explorer-panel" aria-label={t("explorer.title")}>
+    <section
+      class="file-explorer-panel"
+      aria-label={t("explorer.title")}
+      data-upload-drag={uploadDragTarget() ? "true" : "false"}
+      data-uploading={uploading() ? "true" : "false"}
+      onDragEnter={(event) => beginUploadDrag(event, "")}
+      onDragOver={(event) => handleUploadDragOver(event, "")}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+        setUploadDragTarget("")
+      }}
+      onDrop={(event) => void handleUploadDrop(event, "")}
+    >
       <SurfaceHeader
         variant="panel"
         title={t("explorer.title")}
@@ -310,6 +397,25 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
           </label>
         }
       />
+      <div
+        class="file-explorer-upload-strip"
+        data-active={uploadDragTarget() ? "true" : "false"}
+        data-status={uploadMessage() ? uploadMessageStatus() : undefined}
+        data-ui="file-explorer-upload-dropzone"
+      >
+        <Icon name="upload" size={13} />
+        <span class="file-explorer-upload-title">
+          {uploading() ? t("explorer.uploading") : t("explorer.drop_upload_title")}
+        </span>
+        <span class="file-explorer-upload-target">
+          {t("explorer.drop_upload_target", { target: uploadTargetLabel() })}
+        </span>
+      </div>
+      <Show when={uploadMessage()}>
+        <div class="file-explorer-upload-message" data-status={uploadMessageStatus()}>
+          {uploadMessage()}
+        </div>
+      </Show>
       <div
         class="file-explorer-list"
         data-virtualized={shouldVirtualize() ? "true" : "false"}

@@ -55,6 +55,8 @@ test("file explorer current file and directory expansion are exposed on the row 
   assert.equal(typeof globalThis.Bun, "undefined")
 
   const requestLog: string[] = []
+  const uploadBodies: Array<{ targetDir: string; files: Array<{ name: string; contentBase64: string }> }> = []
+  const uploadedSrcFiles: Array<{ name: string; path: string; absolute: string; type: "file"; ignored: boolean }> = []
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
@@ -128,9 +130,30 @@ test("file explorer current file and directory expansion are exposed on the row 
             type: "file",
             ignored: false,
           },
+          ...uploadedSrcFiles,
         ])
       }
       return send([])
+    }
+    if (path === "/file/upload" && req.method === "POST") {
+      const body = (await req.json()) as { targetDir: string; files: Array<{ name: string; contentBase64: string }> }
+      uploadBodies.push(body)
+      for (const file of body.files) {
+        uploadedSrcFiles.push({
+          name: file.name,
+          path: `${body.targetDir}/${file.name}`,
+          absolute: `D:/overlay/workspace/app/${body.targetDir}/${file.name}`,
+          type: "file",
+          ignored: false,
+        })
+      }
+      return send(
+        body.files.map((file) => ({
+          name: file.name,
+          path: `${body.targetDir}/${file.name}`,
+          bytes: Buffer.from(file.contentBase64, "base64").byteLength,
+        })),
+      )
     }
     if (path === "/find/file") return send(["src/main.tsx"])
     if (path === "/file/content") return send({ type: "text", content: "export const file = true;\n" })
@@ -239,6 +262,40 @@ test("file explorer current file and directory expansion are exposed on the row 
     )
     assert.ok((selectedState.explorerBox?.width ?? 0) > 240)
     assert.ok((selectedState.explorerBox?.height ?? 0) > 240)
+
+    await page.evaluate(() => {
+      const target = document.querySelector<HTMLElement>('.file-explorer-row[title="src"]')
+      if (!target) throw new Error("src row missing")
+      const transfer = new DataTransfer()
+      transfer.items.add(new File(["from browser"], "uploaded-from-browser.txt", { type: "text/plain" }))
+      target.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+      target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+    })
+    await page.waitForSelector('.file-explorer-row[title="src"][data-upload-target="true"]')
+    const uploadScreenshotPath = resolve(".scratch/file-explorer-upload-dropzone.png")
+    mkdirSync(dirname(uploadScreenshotPath), { recursive: true })
+    const explorerElementForUpload = await page.$("#centerWorkbenchExplorer")
+    assert.ok(explorerElementForUpload)
+    writeFileSync(uploadScreenshotPath, await explorerElementForUpload.screenshot({}))
+
+    await page.evaluate(() => {
+      const target = document.querySelector<HTMLElement>('.file-explorer-row[title="src"]')
+      if (!target) throw new Error("src row missing")
+      const transfer = new DataTransfer()
+      transfer.items.add(new File(["from browser"], "uploaded-from-browser.txt", { type: "text/plain" }))
+      target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+    })
+    await page.waitForSelector('.file-explorer-row[title="src/uploaded-from-browser.txt"]', { visible: true })
+    assert.equal(uploadBodies.length, 1)
+    assert.equal(uploadBodies[0]?.targetDir, "src")
+    assert.equal(uploadBodies[0]?.files[0]?.name, "uploaded-from-browser.txt")
+    assert.equal(
+      Buffer.from(uploadBodies[0]?.files[0]?.contentBase64 ?? "", "base64").toString("utf-8"),
+      "from browser",
+    )
+    assert.ok(
+      requestLog.some((entry) => entry.startsWith("POST /file/upload?directory=D%3A%2Foverlay%2Fworkspace%2Fapp")),
+    )
 
     const screenshotPath = resolve(".scratch/file-explorer-accessibility.png")
     mkdirSync(dirname(screenshotPath), { recursive: true })

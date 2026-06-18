@@ -21,6 +21,8 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   const inspectorCss = readText("src/styles/surfaces/inspector.css")
   const activityCss = readText("src/styles/surfaces/activity.css")
   const workspaceCss = readText("src/styles/surfaces/workspace.css")
+  const en = readText("src/i18n/en-US.json")
+  const zh = readText("src/i18n/zh-CN.json")
 
   expect(html).toContain('id="solidLeftActivityToolbar"')
   expect(html).not.toContain('id="leftPanelExplorer"')
@@ -76,6 +78,14 @@ test("file explorer, diff, and editor are wired through center workbench panels"
 
   expect(explorer).toContain("apiJson(`file?path=")
   expect(explorer).toContain("apiJson(`find/file?")
+  expect(explorer).toContain("uploadDroppedFiles")
+  expect(explorer).toContain("dragHasFiles")
+  expect(explorer).toContain("dataTransferFiles")
+  expect(explorer).toContain("handleUploadDrop")
+  expect(explorer).toContain('data-ui="file-explorer-upload-dropzone"')
+  expect(explorer).toContain('data-upload-target={isUploadTarget() ? "true" : undefined}')
+  expect(explorer).toContain('tc("explorer.upload_success"')
+  expect(explorer).not.toContain("fetch(")
   expect(explorer).toContain("INITIAL_DIRECTORY_LOAD_DELAY_MS")
   expect(explorer).toContain("ACTIVE_DIRECTORY_REFRESH_INTERVAL_MS")
   expect(explorer).toContain("props.active?.() ?? true")
@@ -120,6 +130,10 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(service).not.toContain("showWorkbenchPane")
   expect(service).toContain("const [fileWorkbenchOpen, setFileWorkbenchOpen]")
   expect(service).toContain("setFileWorkbenchOpen(false)")
+  expect(service).toContain('import { uint8ToBase64 } from "@opencorvus-ai/transport-protocol"')
+  expect(service).toContain("uploadDroppedFiles")
+  expect(service).toContain('apiJson("file/upload"')
+  expect(service).toContain("file.arrayBuffer()")
   expect(editor).not.toContain("showMessagesPane")
   expect(filesPanel).toContain("<ChangesPanel hasSelectedTask />")
   expect(filesPanel).toContain("<DiffPreviewPanel")
@@ -134,6 +148,10 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(main).toContain("onActiveViewChange={setFileChangesActiveView}")
 
   expect(inspectorCss).toContain(".file-explorer-panel")
+  expect(inspectorCss).toContain(".file-explorer-upload-strip")
+  expect(inspectorCss).toContain('.file-explorer-upload-strip[data-active="true"]')
+  expect(inspectorCss).toContain(".file-explorer-upload-message")
+  expect(inspectorCss).toContain('.file-explorer-row[data-upload-target="true"]')
   expect(inspectorCss).toContain('.file-explorer-list[data-virtualized="true"]')
   expect(inspectorCss).toContain(".file-explorer-retry")
   expect(activityCss).toContain(".sidebar-file-changes-panel")
@@ -162,6 +180,16 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(workspaceCss).not.toContain("@container chat-workbench (max-width: 860px)")
   expect(workspaceCss).not.toContain('[data-editor-focus="editor"] .chat-message-pane')
   expect(workspaceCss).not.toContain('[data-editor-focus="messages"] .file-editor-mount')
+  for (const key of [
+    "explorer.drop_upload_title",
+    "explorer.drop_upload_target",
+    "explorer.uploading",
+    "explorer.upload_success",
+    "explorer.upload_error",
+  ]) {
+    expect(en).toContain(`"${key}"`)
+    expect(zh).toContain(`"${key}"`)
+  }
 })
 
 test("file workbench open state is independent from selected task presence", () => {

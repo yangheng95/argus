@@ -463,6 +463,65 @@
   padding: var(--ui-gap-sm);
 }
 
+.file-explorer-upload-strip {
+  min-height: calc(30px * var(--ui-scale));
+  display: grid;
+  grid-template-columns: calc(16px * var(--ui-scale)) minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  margin: 0 var(--ui-gap-sm);
+  padding: calc(5px * var(--ui-scale)) calc(7px * var(--ui-scale));
+  border: var(--oc-border-width) dashed color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+}
+
+.file-explorer-upload-strip[data-active="true"] {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-inset));
+  color: var(--text-strong);
+}
+
+.file-explorer-upload-strip[data-status="error"] {
+  border-color: color-mix(in srgb, var(--bad) 52%, var(--border));
+  color: var(--bad);
+}
+
+.file-explorer-upload-title,
+.file-explorer-upload-target {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-explorer-upload-title {
+  color: inherit;
+  font-weight: var(--ui-font-weight-medium);
+}
+
+.file-explorer-upload-target {
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+}
+
+.file-explorer-upload-message {
+  margin: 0 var(--ui-gap-sm);
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.file-explorer-upload-message[data-status="active"] {
+  color: color-mix(in srgb, var(--good) 76%, var(--text-soft));
+}
+
+.file-explorer-upload-message[data-status="error"] {
+  color: var(--bad);
+}
+
 .file-explorer-search-input.field-input {
   min-height: 0;
 }
@@ -517,6 +576,12 @@
 .file-explorer-row[data-active="true"] {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--text-strong);
+}
+
+.file-explorer-row[data-upload-target="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-hover));
+  color: var(--text-strong);
+  box-shadow: inset calc(2px * var(--ui-scale)) 0 0 color-mix(in srgb, var(--accent) 84%, transparent);
 }
 
 .file-explorer-row[data-ignored="true"] {

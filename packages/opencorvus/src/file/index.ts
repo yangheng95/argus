@@ -13,6 +13,7 @@ import { Project } from "../project/project"
 import { Ripgrep } from "./ripgrep"
 import fuzzysort from "fuzzysort"
 import { Global } from "../global"
+import { NamedError } from "@opencorvus-ai/util/error"
 
 export namespace File {
   const log = Log.create({ service: "file" })
@@ -73,6 +74,58 @@ export namespace File {
       ref: "FileContent",
     })
   export type Content = z.infer<typeof Content>
+
+  export const UploadFile = z.object({
+    name: z.string().min(1),
+    contentBase64: z.string(),
+    mimeType: z.string().optional(),
+  })
+  export type UploadFile = z.infer<typeof UploadFile>
+
+  export const UploadRequest = z.object({
+    targetDir: z.string(),
+    files: UploadFile.array().min(1),
+  })
+  export type UploadRequest = z.infer<typeof UploadRequest>
+
+  export const UploadResult = z.object({
+    name: z.string(),
+    path: z.string(),
+    bytes: z.number().int().nonnegative(),
+  })
+  export type UploadResult = z.infer<typeof UploadResult>
+
+  export const UploadInvalidTargetError = NamedError.create(
+    "FileUploadInvalidTargetError",
+    z.object({
+      targetDir: z.string(),
+      message: z.string(),
+    }),
+  )
+
+  export const UploadInvalidNameError = NamedError.create(
+    "FileUploadInvalidNameError",
+    z.object({
+      name: z.string(),
+      message: z.string(),
+    }),
+  )
+
+  export const UploadInvalidContentError = NamedError.create(
+    "FileUploadInvalidContentError",
+    z.object({
+      name: z.string(),
+      message: z.string(),
+    }),
+  )
+
+  export const UploadConflictError = NamedError.create(
+    "FileUploadConflictError",
+    z.object({
+      path: z.string(),
+      message: z.string(),
+    }),
+  )
 
   const binaryExtensions = new Set([
     "exe",
@@ -363,6 +416,60 @@ export namespace File {
     ),
   }
 
+  const base64Pattern = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+  // Windows device names: CON (console), PRN (printer), AUX (auxiliary), NUL (null device),
+  // COM (communications port), and LPT (line printer port) cannot be created as normal files.
+  const windowsReservedDeviceNamePattern = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
+
+  function uploadNameKey(name: string): string {
+    return process.platform === "win32" ? name.toLowerCase() : name
+  }
+
+  function assertUploadFileName(name: string): string {
+    if (!name || name === "." || name === "..") {
+      throw new UploadInvalidNameError({
+        name,
+        message: `Invalid uploaded file name: ${name || "(empty)"}`,
+      })
+    }
+    if (name.includes("/") || name.includes("\\") || path.isAbsolute(name) || name.includes("\0")) {
+      throw new UploadInvalidNameError({
+        name,
+        message: `Uploaded file name must be a basename: ${name}`,
+      })
+    }
+    if (process.platform === "win32" && /[<>:"|?*\x00-\x1F]/.test(name)) {
+      throw new UploadInvalidNameError({
+        name,
+        message: `Uploaded file name is invalid on Windows: ${name}`,
+      })
+    }
+    if (process.platform === "win32" && (/[. ]$/.test(name) || windowsReservedDeviceNamePattern.test(name))) {
+      throw new UploadInvalidNameError({
+        name,
+        message: `Uploaded file name is reserved on Windows: ${name}`,
+      })
+    }
+    return name
+  }
+
+  function decodeUploadedBase64(file: UploadFile): Buffer {
+    if (file.contentBase64.length > 0 && !base64Pattern.test(file.contentBase64)) {
+      throw new UploadInvalidContentError({
+        name: file.name,
+        message: `Uploaded file content is not standard base64: ${file.name}`,
+      })
+    }
+    return Buffer.from(file.contentBase64, "base64")
+  }
+
+  function writeFileConflict(input: { path: string }): InstanceType<typeof UploadConflictError> {
+    return new UploadConflictError({
+      path: input.path,
+      message: `Upload destination already exists: ${input.path}`,
+    })
+  }
+
   const state = lazyInstanceState(async () => {
     type Entry = { files: string[]; dirs: string[] }
     let cache: Entry = { files: [], dirs: [] }
@@ -618,6 +725,77 @@ export namespace File {
     await Filesystem.write(full, content)
     await Bus.publish(Event.Edited, { file })
     return read(file)
+  }
+
+  export async function upload(input: UploadRequest): Promise<UploadResult[]> {
+    using _ = log.time("upload", { targetDir: input.targetDir, files: input.files.map((file) => file.name) })
+    const targetDir = input.targetDir
+    const fullTargetDir = targetDir ? path.join(Instance.directory, targetDir) : Instance.directory
+
+    if (!(await isPathAllowed(fullTargetDir))) {
+      throw new UploadInvalidTargetError({
+        targetDir,
+        message: `Access denied: upload target escapes project directory`,
+      })
+    }
+
+    const targetStat = await fs.promises.stat(fullTargetDir).catch(() => undefined)
+    if (!targetStat?.isDirectory()) {
+      throw new UploadInvalidTargetError({
+        targetDir,
+        message: `Upload target is not an existing directory: ${targetDir || "."}`,
+      })
+    }
+
+    const seenNames = new Set<string>()
+    const writes: Array<{ name: string; relativePath: string; fullPath: string; bytes: Buffer }> = []
+    for (const file of input.files) {
+      const name = assertUploadFileName(file.name)
+      const key = uploadNameKey(name)
+      if (seenNames.has(key)) {
+        throw new UploadConflictError({
+          path: path.join(targetDir, name),
+          message: `Duplicate uploaded file name: ${name}`,
+        })
+      }
+      seenNames.add(key)
+
+      const fullPath = path.join(fullTargetDir, name)
+      if (!(await isPathAllowed(fullPath))) {
+        throw new UploadInvalidNameError({
+          name,
+          message: `Uploaded file name escapes project directory: ${name}`,
+        })
+      }
+      if (await Filesystem.exists(fullPath)) {
+        throw writeFileConflict({ path: path.relative(Instance.directory, fullPath) })
+      }
+      writes.push({
+        name,
+        relativePath: path.relative(Instance.directory, fullPath),
+        fullPath,
+        bytes: decodeUploadedBase64(file),
+      })
+    }
+
+    const results: UploadResult[] = []
+    for (const item of writes) {
+      try {
+        await fs.promises.writeFile(item.fullPath, item.bytes, { flag: "wx" })
+      } catch (error) {
+        if (error && typeof error === "object" && (error as { code?: string }).code === "EEXIST") {
+          throw writeFileConflict({ path: item.relativePath })
+        }
+        throw error
+      }
+      await Bus.publish(Event.Edited, { file: item.relativePath })
+      results.push({
+        name: item.name,
+        path: item.relativePath,
+        bytes: item.bytes.byteLength,
+      })
+    }
+    return results
   }
 
   export async function list(dir?: string) {
