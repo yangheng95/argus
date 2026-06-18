@@ -113,7 +113,7 @@ function wrapCodeBlock(rawText: string, language: string, highlightedHtml: strin
     `<div class="md-code" data-lang="${escapeAttr(language)}">`,
     `<div class="md-code-toolbar">`,
     `<span class="md-code-lang">${escapeHtml(langLabel)}</span>`,
-    `<button type="button" class="md-code-copy" data-md-copy="${dataSource}" title="Copy code" aria-label="Copy code">`,
+    `<button type="button" class="oc-button md-code-copy" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="icon-action" data-ui="markdown-code-copy" data-md-copy="${dataSource}" title="Copy code" aria-label="Copy code">`,
     iconHtml("copy", 12),
     `</button>`,
     `</div>`,

@@ -400,35 +400,24 @@
   color: var(--text-muted);
   padding: 0 calc(4px * var(--ui-scale));
 }
-.md-code-copy {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.oc-button[data-ui="markdown-code-copy"] {
+  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-color: var(--text-soft);
+
   width: calc(22px * var(--ui-scale));
-  height: calc(22px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--subtle-2);
-  color: var(--text-soft);
-  cursor: pointer;
-  transition:
-    background var(--ui-duration-base),
-    color var(--ui-duration-base),
-    border-color var(--ui-duration-base);
+  min-width: calc(22px * var(--ui-scale));
 }
-.md-code-copy:hover {
-  background: var(--subtle-3);
-  color: var(--text-strong);
-  border-color: var(--border-strong);
+
+.oc-button[data-ui="markdown-code-copy"] > svg {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
 }
-.md-code-copy:focus-visible {
-  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 60%, transparent);
-  outline-offset: calc(1px * var(--ui-scale));
-}
-.md-code-copy[data-copied="true"] {
-  color: var(--good);
-  border-color: color-mix(in srgb, var(--good) 50%, transparent);
-  background: var(--good-dim);
+
+.oc-button[data-ui="markdown-code-copy"][data-copied="true"] {
+  --oc-button-bg: var(--good-dim);
+  --oc-button-color: var(--good);
+  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--good) 50%, transparent);
 }
 
 .msg-text a,
