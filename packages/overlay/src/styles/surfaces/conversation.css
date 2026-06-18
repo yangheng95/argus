@@ -1089,35 +1089,27 @@
   background: var(--warn-dim);
 }
 
-.project-worktree-remove {
-  appearance: none;
-  width: calc(26px * var(--ui-scale));
-  height: calc(26px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
+.project-worktree-row .oc-button[data-ui="project-worktree-remove"] {
+  --oc-button-height: calc(26px * var(--ui-scale));
+
+  width: var(--oc-button-height);
+  min-width: var(--oc-button-height);
 }
 
-.project-worktree-remove:hover,
-.project-worktree-remove:focus-visible {
-  background: var(--bad-dim);
-  color: var(--bad);
-  outline: none;
+.project-worktree-row .oc-button[data-ui="project-worktree-remove"]:not(:hover):not(:focus-visible) {
+  --oc-button-color: var(--text-muted);
 }
 
-.project-worktree-row[data-status="expired"] .project-worktree-remove {
-  color: var(--warn);
+.project-worktree-row[data-status="expired"]
+  .oc-button[data-ui="project-worktree-remove"]:not(:hover):not(:focus-visible):not(:disabled) {
+  --oc-button-color: var(--warn);
 }
 
-.project-worktree-remove:disabled {
-  cursor: default;
-  background: transparent;
-  color: var(--text-muted);
+.project-worktree-row
+  .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"][data-ui="project-worktree-remove"]:disabled {
+  --oc-button-bg: transparent;
+  --oc-button-color: var(--text-muted);
+  opacity: 1;
 }
 
 .project-worktree-empty {

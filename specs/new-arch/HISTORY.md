@@ -25,6 +25,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-select-control-shell-single-source.md](2026-06-18-select-control-shell-single-source.md)                                       | Select Control Shell Single Source |
 | [2026-06-18-config-dialog-close-button-primitive.md](2026-06-18-config-dialog-close-button-primitive.md)                                   | Config Dialog Close Button Primitive |
 | [2026-06-18-workspace-split-launcher-button-primitive.md](2026-06-18-workspace-split-launcher-button-primitive.md)                         | Workspace Split Launcher Button Primitive |
+| [2026-06-18-project-worktree-remove-button-primitive.md](2026-06-18-project-worktree-remove-button-primitive.md)                           | Project Worktree Remove Button Primitive |
 | [2026-06-18-file-changes-filter-primitive-owner.md](2026-06-18-file-changes-filter-primitive-owner.md) | File Changes Filter Primitive Owner |
 | [2026-06-18-card-trace-action-button-owner.md](2026-06-18-card-trace-action-button-owner.md)                                               | Card Trace Action Button Owner |
 | [2026-06-18-goal-workflow-header-native-button.md](2026-06-18-goal-workflow-header-native-button.md)                                       | Goal Workflow Header Native Button |

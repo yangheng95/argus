@@ -136,8 +136,16 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                       <span class="project-worktree-branch" data-popup-text>coding-assistant</span>
                       <span class="project-worktree-state" data-popup-text>Expired</span>
                     </button>
-                    <button class="project-worktree-remove" type="button" data-popup-text>×</button>
-                    <button class="project-worktree-remove" type="button" disabled data-popup-text>×</button>
+                    <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="danger" data-chrome="icon-action" data-ui="project-worktree-remove" type="button" data-popup-text>×</button>
+                  </div>
+                  <div class="project-worktree-row" data-status="expired">
+                    <button class="project-worktree-item" type="button">
+                      <span class="project-worktree-name" data-popup-text>stale/api</span>
+                      <span class="project-worktree-path" data-popup-text>C:/repo/worktrees/api</span>
+                      <span class="project-worktree-branch" data-popup-text>stale-cleanup</span>
+                      <span class="project-worktree-state" data-popup-text>Expired</span>
+                    </button>
+                    <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="danger" data-chrome="icon-action" data-ui="project-worktree-remove" type="button" disabled data-popup-text>×</button>
                   </div>
                   <div class="project-worktree-row" data-status="active">
                     <button class="project-worktree-item" type="button">
@@ -146,6 +154,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                       <span class="project-worktree-branch" data-popup-text>coding-assistant</span>
                       <span class="project-worktree-state" data-popup-text>Active</span>
                     </button>
+                    <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="danger" data-chrome="icon-action" data-ui="project-worktree-remove" type="button" data-popup-text>×</button>
                   </div>
                   <div class="project-worktree-empty" data-popup-text>No archived worktrees.</div>
                 </div>
@@ -251,6 +260,77 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
     assert.ok(matrix)
     const screenshot = await saveScreenshot(matrix, "popup-contrast-matrix.png")
     assert.ok(screenshot.endsWith("popup-contrast-matrix.png"))
+
+    const worktreeRemoveSelector =
+      '[data-popup-sample="worktree-panel"] .oc-button[data-ui="project-worktree-remove"]:not(:disabled)'
+    await page.hover(worktreeRemoveSelector)
+    const hoverMetrics = await page.$eval(worktreeRemoveSelector, (node) => {
+      const styles = getComputedStyle(node as HTMLElement)
+      return {
+        backgroundColor: styles.backgroundColor,
+        color: styles.color,
+        className: (node as HTMLElement).className,
+        chrome: (node as HTMLElement).dataset.chrome,
+      }
+    })
+    assert.match(hoverMetrics.className, /\boc-button\b/)
+    assert.equal(hoverMetrics.chrome, "icon-action")
+    assert.notEqual(hoverMetrics.backgroundColor, "rgba(0, 0, 0, 0)")
+    assert.notEqual(hoverMetrics.backgroundColor, "transparent")
+
+    let focusedWorktreeRemove = false
+    for (let idx = 0; idx < 16; idx += 1) {
+      focusedWorktreeRemove = await page.$eval(
+        worktreeRemoveSelector,
+        (node) => document.activeElement === node,
+      )
+      if (focusedWorktreeRemove) break
+      await page.keyboard.press("Tab")
+    }
+    assert.equal(focusedWorktreeRemove, true)
+    const focusMetrics = await page.$eval(worktreeRemoveSelector, (node) => {
+      const styles = getComputedStyle(node as HTMLElement)
+      return {
+        focusVisible: (node as HTMLElement).matches(":focus-visible"),
+        outlineStyle: styles.outlineStyle,
+        outlineWidth: styles.outlineWidth,
+      }
+    })
+    assert.equal(focusMetrics.focusVisible, true)
+    assert.notEqual(focusMetrics.outlineStyle, "none")
+    assert.notEqual(focusMetrics.outlineWidth, "0px")
+
+    const worktreeRemoveStates = await page.$$eval(
+      '[data-popup-sample="worktree-panel"] .oc-button[data-ui="project-worktree-remove"]',
+      (nodes) =>
+        nodes.map((node) => {
+          const element = node as HTMLButtonElement
+          const styles = getComputedStyle(element)
+          return {
+            disabled: element.disabled,
+            status: element.closest<HTMLElement>(".project-worktree-row")?.dataset.status,
+            opacity: styles.opacity,
+            chrome: element.dataset.chrome,
+            size: element.dataset.size,
+            tone: element.dataset.tone,
+          }
+        }),
+    )
+    assert.deepEqual(
+      worktreeRemoveStates.map((state) => state.chrome),
+      ["icon-action", "icon-action", "icon-action"],
+    )
+    assert.deepEqual(
+      worktreeRemoveStates.map((state) => state.size),
+      ["icon", "icon", "icon"],
+    )
+    assert.deepEqual(
+      worktreeRemoveStates.map((state) => state.tone),
+      ["danger", "danger", "danger"],
+    )
+    assert.ok(worktreeRemoveStates.some((state) => state.status === "active" && !state.disabled))
+    assert.ok(worktreeRemoveStates.some((state) => state.status === "expired" && !state.disabled))
+    assert.ok(worktreeRemoveStates.some((state) => state.status === "expired" && state.disabled && state.opacity === "1"))
 
     const result = await page.evaluate(() => {
       interface Rgba {
