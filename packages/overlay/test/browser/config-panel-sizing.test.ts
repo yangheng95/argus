@@ -182,6 +182,47 @@ test(
       assert.ok(Math.abs(metrics.apiInputHeight - metrics.apiButtonHeight) <= 1)
       assert.ok(metrics.dialogHeight >= 600)
 
+      await page.setViewport({ width: 760, height: 900 })
+      await page.waitForFunction(() => {
+        const actions = document.querySelector(".provider-head-actions") as HTMLElement | null
+        return actions && getComputedStyle(actions).justifyContent === "flex-start"
+      })
+      const mobileActions = await page.evaluate(() => {
+        const actions = document.querySelector(".provider-head-actions") as HTMLElement
+        const command = document.querySelector(".provider-command") as HTMLElement
+        const buttons = Array.from(actions.querySelectorAll(".oc-button")).map((node) =>
+          Math.round((node as HTMLElement).getBoundingClientRect().height),
+        )
+        const actionsRect = actions.getBoundingClientRect()
+        const commandRect = command.getBoundingClientRect()
+        const style = getComputedStyle(actions)
+        return {
+          alignItems: style.alignItems,
+          justifyContent: style.justifyContent,
+          leftOffset: Math.round(actionsRect.left - commandRect.left),
+          buttonCount: buttons.length,
+          headHeights: buttons,
+        }
+      })
+      assert.deepEqual(mobileActions, {
+        alignItems: "flex-start",
+        justifyContent: "flex-start",
+        leftOffset: 0,
+        buttonCount: 2,
+        headHeights: metrics.headHeights,
+      })
+      const providerCommand = await page.$(".provider-command")
+      assert.ok(providerCommand)
+      const mobileActionsScreenshot = resolve(".scratch", "provider-head-actions-mobile.png")
+      mkdirSync(dirname(mobileActionsScreenshot), { recursive: true })
+      await writeFile(mobileActionsScreenshot, await providerCommand.screenshot({}))
+
+      await page.setViewport({ width: 1280, height: 900 })
+      await page.waitForFunction(() => {
+        const actions = document.querySelector(".provider-head-actions") as HTMLElement | null
+        return actions && getComputedStyle(actions).justifyContent === "flex-end"
+      })
+
       await page.click('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]')
       await refreshStarted
       await page.waitForFunction(() => {
