@@ -180,9 +180,12 @@ export function WorkspaceOnboardingDialog() {
             <div class="workspace-onboarding-recent-list">
               <For each={discoveredProjects().slice(0, 6)}>
                 {(project, index) => (
-                  <button
+                  <Button
                     type="button"
-                    class="workspace-onboarding-recent-item"
+                    variant="ghost"
+                    size="md"
+                    tone="neutral"
+                    data-ui="workspace-onboarding-directory-row"
                     data-testid={`workspace-onboarding-detected-${index()}`}
                     data-busy={activeAction() === `detected:${project.directory}` ? "true" : "false"}
                     disabled={actionRunner.pending()}
@@ -201,7 +204,7 @@ export function WorkspaceOnboardingDialog() {
                     <span class="workspace-onboarding-recent-open">
                       <Icon name="chevron" />
                     </span>
-                  </button>
+                  </Button>
                 )}
               </For>
             </div>
@@ -217,9 +220,12 @@ export function WorkspaceOnboardingDialog() {
             <div class="workspace-onboarding-recent-list">
               <For each={recentDirectories().slice(0, 6)}>
                 {(dir, index) => (
-                  <button
+                  <Button
                     type="button"
-                    class="workspace-onboarding-recent-item"
+                    variant="ghost"
+                    size="md"
+                    tone="neutral"
+                    data-ui="workspace-onboarding-directory-row"
                     data-testid={`workspace-onboarding-recent-${index()}`}
                     data-busy={activeAction() === `recent:${dir}` ? "true" : "false"}
                     disabled={actionRunner.pending()}
@@ -236,7 +242,7 @@ export function WorkspaceOnboardingDialog() {
                     <span class="workspace-onboarding-recent-open">
                       <Icon name="chevron" />
                     </span>
-                  </button>
+                  </Button>
                 )}
               </For>
             </div>
