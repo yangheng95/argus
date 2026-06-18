@@ -11,6 +11,7 @@
  * specs/overlay-settings-primitives-2026-05-26.md.
  */
 import { Show, mergeProps, splitProps } from "solid-js"
+import { Dynamic } from "solid-js/web"
 import * as Select from "@kobalte/core/select"
 import type { JSX } from "solid-js"
 import { Icon } from "../Icon"
@@ -58,6 +59,8 @@ export function SettingsGroup(props: SettingsGroupProps): JSX.Element {
 }
 
 export interface SettingsRowProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, "class" | "children" | "title"> {
+  /** Root element. Use button for selectable settings rows. */
+  as?: "div" | "button"
   /** Optional leading slot (icon, avatar, drag handle). */
   leading?: JSX.Element
   /** Bold title — typically a label or item name. */
@@ -85,6 +88,7 @@ export interface SettingsRowProps extends Omit<JSX.HTMLAttributes<HTMLDivElement
 export function SettingsRow(props: SettingsRowProps): JSX.Element {
   const [local, rest] = splitProps(props, [
     "leading",
+    "as",
     "title",
     "desc",
     "meta",
@@ -97,11 +101,13 @@ export function SettingsRow(props: SettingsRowProps): JSX.Element {
     "id",
     "class",
   ])
-  const merged = mergeProps({ align: "start" as const, interactive: false }, local)
+  const merged = mergeProps({ align: "start" as const, as: "div" as const, interactive: false }, local)
   return (
-    <div
+    <Dynamic
+      component={merged.as}
       {...rest}
       class={merged.class ? `s-row ${merged.class}` : "s-row"}
+      type={merged.as === "button" ? "button" : undefined}
       id={merged.id}
       title={merged.nativeTitle}
       data-align={merged.align === "center" ? "center" : undefined}
@@ -134,7 +140,7 @@ export function SettingsRow(props: SettingsRowProps): JSX.Element {
       >
         {merged.children}
       </Show>
-    </div>
+    </Dynamic>
   )
 }
 

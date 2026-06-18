@@ -92,6 +92,20 @@
     color var(--ui-duration-base) var(--ui-timing-standard);
 }
 
+button.s-row {
+  appearance: none;
+  inline-size: 100%;
+  color: var(--text);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+
+button.s-row:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
+}
+
 .s-row[data-align="center"] {
   align-items: center;
 }
@@ -1456,35 +1470,7 @@
   min-width: 0;
 }
 
-.prompt-profile-list-item {
-  appearance: none;
-  -webkit-appearance: none;
-  display: grid;
-  gap: calc(8px * var(--ui-scale));
-  width: 100%;
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color var(--ui-duration-base) var(--ui-timing-standard),
-    background var(--ui-duration-base) var(--ui-timing-standard),
-    box-shadow var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.prompt-profile-list-item:hover,
-.prompt-profile-list-item:focus-visible {
-  border-color: color-mix(in srgb, var(--accent) 36%, transparent);
-  background: var(--settings-surface-hover);
-  box-shadow: 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
-  outline: none;
-}
-
-.prompt-profile-list-item[data-active="true"] {
-  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+.prompt-profile-list-row[data-active="true"] {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 }
 

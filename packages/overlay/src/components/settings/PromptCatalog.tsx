@@ -26,7 +26,7 @@ import {
   type PromptProfileTarget,
 } from "../../services/config"
 import { Button } from "../ui/Button"
-import { SettingsGroup, SettingsPanel, SettingsPill } from "./primitives"
+import { SettingsGroup, SettingsPanel, SettingsPill, SettingsRow } from "./primitives"
 
 function promptPreviewHtml(value: string): string {
   if (!value.trim()) {
@@ -481,12 +481,30 @@ export default function PromptCatalog() {
                 <div class="prompt-profile-list" data-ui="prompt-profile-list">
                   <For each={profiles()}>
                     {(profile) => (
-                      <button
-                        type="button"
-                        class="prompt-profile-list-item"
+                      <SettingsRow
+                        as="button"
+                        class="prompt-profile-list-row"
+                        interactive
                         data-active={selectedProfileID() === profile.id ? "true" : "false"}
                         aria-current={selectedProfileID() === profile.id ? "true" : undefined}
                         onClick={() => setSelectedProfileID(profile.id)}
+                        actions={
+                          <div class="prompt-profile-list-meta">
+                            <Show when={projectActiveProfileID() === profile.id}>
+                              <SettingsPill tone="accent">
+                                {t("prompt_profile.project_active")}
+                              </SettingsPill>
+                            </Show>
+                            <Show when={!!currentScopeSessionID() && sessionActiveProfileID() === profile.id}>
+                              <SettingsPill tone="ok">
+                                {t("prompt_profile.session_active")}
+                              </SettingsPill>
+                            </Show>
+                            <SettingsPill tone={profile.built_in ? "muted" : "ok"}>
+                              {profileTypeLabel(profile)}
+                            </SettingsPill>
+                          </div>
+                        }
                       >
                         <div class="prompt-profile-list-copy">
                           <strong>{profile.label}</strong>
@@ -495,22 +513,7 @@ export default function PromptCatalog() {
                             <small>{profile.description}</small>
                           </Show>
                         </div>
-                        <div class="prompt-profile-list-meta">
-                          <Show when={projectActiveProfileID() === profile.id}>
-                            <SettingsPill tone="accent">
-                              {t("prompt_profile.project_active")}
-                            </SettingsPill>
-                          </Show>
-                          <Show when={!!currentScopeSessionID() && sessionActiveProfileID() === profile.id}>
-                            <SettingsPill tone="ok">
-                              {t("prompt_profile.session_active")}
-                            </SettingsPill>
-                          </Show>
-                          <SettingsPill tone={profile.built_in ? "muted" : "ok"}>
-                            {profileTypeLabel(profile)}
-                          </SettingsPill>
-                        </div>
-                      </button>
+                      </SettingsRow>
                     )}
                   </For>
                 </div>
