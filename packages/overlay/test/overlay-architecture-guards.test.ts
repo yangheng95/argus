@@ -1376,11 +1376,12 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
     const activitySurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/activity.css"))
+    const memoryPanelSource = readText(join(OVERLAY_ROOT, "src/components/MemoryPanel.tsx"))
     const sourceText = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx|html)$/.test(path))
       .map((path) => readText(path))
       .join("\n")
 
-    for (const className of ["knowledge-item-actions", "knowledge-delete"]) {
+    for (const className of ["knowledge-item-actions", "knowledge-delete", "knowledge-search"]) {
       expect(sourceText).not.toMatch(new RegExp(`\\b${className}\\b`))
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(settingsSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -1389,7 +1390,6 @@ describe("overlay architecture guards", () => {
 
     for (const className of [
       "knowledge-toolbar",
-      "knowledge-search",
       "knowledge-list",
       "knowledge-item",
       "knowledge-item-main",
@@ -1405,9 +1405,11 @@ describe("overlay architecture guards", () => {
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
+    expect(memoryPanelSource).toContain('class="memory-search search-field"')
+    expect(memoryPanelSource).toContain('class="memory-search-input search-field-input"')
+    expect(memoryPanelSource).toContain('data-ui="memory-search-clear"')
+    expect(settingsSurface).toMatch(/\.knowledge-toolbar \.memory-search\s*\{/)
     expect(settingsSurface).toMatch(/\.knowledge-toolbar:hover,\s*\.knowledge-toolbar:focus-within\s*\{/)
-    expect(settingsSurface).toMatch(/\.knowledge-search:focus\s*\{/)
-    expect(settingsSurface).toMatch(/\.knowledge-search::placeholder\s*\{/)
     expect(settingsSurface).toMatch(/\.knowledge-item\[data-mode="search"\]/)
     for (const variant of ["global", "session"]) {
       expect(settingsSurface).toMatch(new RegExp(`\\.knowledge-scope\\[data-scope="${variant}"\\]`))

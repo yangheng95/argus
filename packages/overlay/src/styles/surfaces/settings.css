@@ -345,10 +345,10 @@ button.s-row:focus-visible {
 /* Toolbar above the knowledge list. Settings uses a flat toolbar:
    controls own their chrome, the toolbar itself does not draw a card. */
 .knowledge-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
-  flex-wrap: wrap;
   padding: 0;
   border: 0 solid transparent;
   border-radius: 0;
@@ -368,26 +368,10 @@ button.s-row:focus-visible {
   transform: none;
 }
 
-.knowledge-search {
-  flex: 1;
+.knowledge-toolbar .memory-search {
+  width: 100%;
   min-width: 0;
-  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
-  color: var(--text);
-  font-size: var(--ui-font-control);
-  font-family: var(--font);
-  outline: none;
-  box-shadow: none;
-}
-
-.knowledge-search:focus {
-  border-color: var(--accent);
-}
-
-.knowledge-search::placeholder {
-  color: var(--text-muted);
+  box-sizing: border-box;
 }
 
 /* Knowledge list: scrollable column inside the panel body. The
