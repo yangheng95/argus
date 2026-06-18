@@ -138,9 +138,35 @@ describe("settings primitives — Solid exports", () => {
     }
   })
 
-  test("Row exposes the documented slots", () => {
-    for (const slot of ["leading", "title", "desc", "meta", "actions", "children"]) {
+  test("Row exposes the documented slots and complex-row escape hatch", () => {
+    for (const slot of ["leading", "title", "desc", "meta", "actions", "children", "customContent", "nativeTitle"]) {
       expect(PRIMITIVES_SRC).toMatch(new RegExp(`${slot}\\?:`))
+    }
+    expect(PRIMITIVES_SRC).toContain("title={merged.nativeTitle}")
+    expect(PRIMITIVES_SRC).toContain("when={merged.customContent}")
+  })
+
+  test("settings production components do not create retired row/group/status selectors", () => {
+    const source = walkSettingsComponents(SETTINGS_COMPONENT_ROOT)
+      .filter((file) => !file.endsWith("primitives.tsx"))
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n")
+    for (const legacy of [
+      "config-panel-group",
+      "config-panel-card",
+      "config-toggle-list-item",
+      "agent-model-row",
+      "provider-flat-row",
+      "provider-count-pill",
+      "provider-row-status",
+      "ext-group",
+      "ext-group-body",
+      "extension-row",
+      "extension-row-main",
+      "extension-row-actions",
+      "extension-status",
+    ]) {
+      expect(source).not.toContain(legacy)
     }
   })
 

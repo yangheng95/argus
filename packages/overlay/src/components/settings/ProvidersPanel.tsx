@@ -23,11 +23,19 @@ import { nativeMessage } from "../../services/app-dialog"
 import { Icon } from "../Icon"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
+import { SettingsGroup, SettingsPanel, SettingsPill, SettingsRow, type SettingsPillTone } from "./primitives"
 
 function describeFailure(e: unknown): string {
   if (e instanceof ApiError) return e.message
   if (e instanceof Error) return e.message
   return String(e)
+}
+
+function providerStatusTone(tone: string | undefined): SettingsPillTone {
+  if (tone === "active" || tone === "ready") return "accent"
+  if (tone === "error") return "bad"
+  if (tone === "warn") return "warn"
+  return "neutral"
 }
 
 interface ProviderModel {
@@ -683,8 +691,8 @@ export default function ProvidersPanel() {
   }
 
   return (
-    <div class="general-panel provider-panel">
-      <div class="config-panel-group provider-settings-flat">
+    <SettingsPanel class="general-panel provider-panel">
+      <SettingsGroup class="provider-settings-flat">
         <div class="provider-command">
           <div class="provider-command-main">
             <div class="provider-title-block">
@@ -802,7 +810,12 @@ export default function ProvidersPanel() {
                   const modelIds = Object.keys(provider.models || {})
                   const status = providerAuthMethods(id).length > 0 ? providerState(id, undefined) : null
                   return (
-                    <div class="provider-flat-row" data-testid={`provider-custom-row-${id}`}>
+                    <SettingsRow
+                      class="provider-settings-row"
+                      data-testid={`provider-custom-row-${id}`}
+                      customContent
+                      interactive
+                    >
                       <div class="provider-row-main">
                         <div class="provider-row-title-line">
                           <strong class="provider-row-title">{provider.name || id}</strong>
@@ -820,14 +833,14 @@ export default function ProvidersPanel() {
                         </div>
                       </div>
                       <div class="provider-row-summary">
-                        <span class="provider-count-pill">
+                        <SettingsPill class="provider-model-count">
                           {t("provider.models.count", { count: modelIds.length })}
-                        </span>
+                        </SettingsPill>
                         <Show when={status}>
                           {(s) => (
-                            <span class="provider-row-status" data-tone={s().tone}>
+                            <SettingsPill class="provider-auth-status" tone={providerStatusTone(s().tone)}>
                               {s().label}: {s().detail}
-                            </span>
+                            </SettingsPill>
                           )}
                         </Show>
                       </div>
@@ -901,7 +914,7 @@ export default function ProvidersPanel() {
                           </span>
                         </Show>
                       </div>
-                    </div>
+                    </SettingsRow>
                   )
                 }}
               </For>
@@ -911,7 +924,7 @@ export default function ProvidersPanel() {
 
         {/* ── Add / Edit Form ── */}
         <Show when={showAdd()}>
-          <div class="config-panel-card provider-add-card">
+          <div class="provider-add-card">
             <h4 class="provider-add-title">
               {editing() ? t("provider.form.edit_title", { id: editing() ?? "" }) : t("provider.form.add_title")}
             </h4>
@@ -1072,7 +1085,12 @@ export default function ProvidersPanel() {
             <div class="provider-flat-list">
               <For each={catalogEntries()}>
                 {(p) => (
-                  <div class="provider-flat-row provider-catalog-row" data-testid={`provider-catalog-row-${p.id}`}>
+                  <SettingsRow
+                    class="provider-settings-row provider-catalog-row"
+                    data-testid={`provider-catalog-row-${p.id}`}
+                    customContent
+                    interactive
+                  >
                     <div class="provider-row-main">
                       <div class="provider-row-title-line">
                         <strong class="provider-row-title">{p.name}</strong>
@@ -1083,10 +1101,12 @@ export default function ProvidersPanel() {
                       </div>
                     </div>
                     <div class="provider-row-summary">
-                      <span class="provider-count-pill">{t("provider.models.count", { count: p.modelCount })}</span>
-                      <span class="provider-row-status" data-tone={p.status.tone}>
+                      <SettingsPill class="provider-model-count">
+                        {t("provider.models.count", { count: p.modelCount })}
+                      </SettingsPill>
+                      <SettingsPill class="provider-auth-status" tone={providerStatusTone(p.status.tone)}>
                         {p.status.label}: {p.status.detail}
-                      </span>
+                      </SettingsPill>
                     </div>
                     <div class="provider-row-actions">
                       <Show when={p.authMethods > 0}>
@@ -1107,13 +1127,13 @@ export default function ProvidersPanel() {
                     <div class="provider-row-key">
                       <ApiKeyEditor providerId={p.id} />
                     </div>
-                  </div>
+                  </SettingsRow>
                 )}
               </For>
             </div>
           </div>
         </Show>
-      </div>
-    </div>
+      </SettingsGroup>
+    </SettingsPanel>
   )
 }

@@ -32,30 +32,32 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
   )
 }
 
-export interface SettingsGroupProps {
+export interface SettingsGroupProps extends Omit<JSX.HTMLAttributes<HTMLElement>, "class" | "children" | "title"> {
   title?: JSX.Element
   actions?: JSX.Element
   children: JSX.Element
   id?: string
+  class?: string
 }
 
 export function SettingsGroup(props: SettingsGroupProps): JSX.Element {
+  const [local, rest] = splitProps(props, ["title", "actions", "children", "id", "class"])
   return (
-    <section class="s-group" id={props.id}>
-      <Show when={props.title || props.actions}>
+    <section {...rest} class={local.class ? `s-group ${local.class}` : "s-group"} id={local.id}>
+      <Show when={local.title || local.actions}>
         <header class="s-group-head">
-          <span class="s-group-head-title">{props.title}</span>
-          <Show when={props.actions}>
-            <span class="s-group-head-actions">{props.actions}</span>
+          <span class="s-group-head-title">{local.title}</span>
+          <Show when={local.actions}>
+            <span class="s-group-head-actions">{local.actions}</span>
           </Show>
         </header>
       </Show>
-      <div class="s-group-body">{props.children}</div>
+      <div class="s-group-body">{local.children}</div>
     </section>
   )
 }
 
-export interface SettingsRowProps {
+export interface SettingsRowProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, "class" | "children" | "title"> {
   /** Optional leading slot (icon, avatar, drag handle). */
   leading?: JSX.Element
   /** Bold title — typically a label or item name. */
@@ -68,39 +70,69 @@ export interface SettingsRowProps {
   actions?: JSX.Element
   /** Use children when the main column needs richer content than title/desc. */
   children?: JSX.Element
+  /** Let complex domain rows provide their own inner grid while this primitive owns row chrome. */
+  customContent?: boolean
   /** Center-align the row instead of the default top-align. */
   align?: "start" | "center"
   /** Opt-in hover wash. Default false — rows are static unless declared interactive. */
   interactive?: boolean
+  /** Native tooltip title; kept separate from the visual title slot. */
+  nativeTitle?: string
   id?: string
+  class?: string
 }
 
 export function SettingsRow(props: SettingsRowProps): JSX.Element {
-  const merged = mergeProps({ align: "start" as const, interactive: false }, props)
+  const [local, rest] = splitProps(props, [
+    "leading",
+    "title",
+    "desc",
+    "meta",
+    "actions",
+    "children",
+    "customContent",
+    "align",
+    "interactive",
+    "nativeTitle",
+    "id",
+    "class",
+  ])
+  const merged = mergeProps({ align: "start" as const, interactive: false }, local)
   return (
     <div
-      class="s-row"
+      {...rest}
+      class={merged.class ? `s-row ${merged.class}` : "s-row"}
       id={merged.id}
+      title={merged.nativeTitle}
       data-align={merged.align === "center" ? "center" : undefined}
       data-interactive={merged.interactive ? "true" : undefined}
     >
-      <Show when={merged.leading}>
-        <span class="s-row-leading">{merged.leading}</span>
-      </Show>
-      <div class="s-row-main">
-        <Show when={merged.title}>
-          <span class="s-row-title">{merged.title}</span>
-        </Show>
-        <Show when={merged.children}>{merged.children}</Show>
-        <Show when={merged.desc}>
-          <span class="s-row-desc">{merged.desc}</span>
-        </Show>
-        <Show when={merged.meta}>
-          <span class="s-row-meta">{merged.meta}</span>
-        </Show>
-      </div>
-      <Show when={merged.actions}>
-        <div class="s-row-actions">{merged.actions}</div>
+      <Show
+        when={merged.customContent}
+        fallback={
+          <>
+            <Show when={merged.leading}>
+              <span class="s-row-leading">{merged.leading}</span>
+            </Show>
+            <div class="s-row-main">
+              <Show when={merged.title}>
+                <span class="s-row-title">{merged.title}</span>
+              </Show>
+              <Show when={merged.children}>{merged.children}</Show>
+              <Show when={merged.desc}>
+                <span class="s-row-desc">{merged.desc}</span>
+              </Show>
+              <Show when={merged.meta}>
+                <span class="s-row-meta">{merged.meta}</span>
+              </Show>
+            </div>
+            <Show when={merged.actions}>
+              <div class="s-row-actions">{merged.actions}</div>
+            </Show>
+          </>
+        }
+      >
+        {merged.children}
       </Show>
     </div>
   )
@@ -109,12 +141,13 @@ export function SettingsRow(props: SettingsRowProps): JSX.Element {
 export interface SettingsPillProps extends Omit<JSX.HTMLAttributes<HTMLSpanElement>, "class"> {
   tone?: SettingsPillTone
   children: JSX.Element
+  class?: string
 }
 
 export function SettingsPill(props: SettingsPillProps): JSX.Element {
-  const [local, rest] = splitProps(props, ["tone", "children"])
+  const [local, rest] = splitProps(props, ["tone", "children", "class"])
   return (
-    <span {...rest} class="s-pill" data-tone={local.tone ?? "neutral"}>
+    <span {...rest} class={local.class ? `s-pill ${local.class}` : "s-pill"} data-tone={local.tone ?? "neutral"}>
       {local.children}
     </span>
   )

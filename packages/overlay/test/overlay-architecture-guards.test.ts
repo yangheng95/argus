@@ -472,7 +472,7 @@ describe("overlay architecture guards", () => {
 
   test("inline-pill family has no theme chrome override", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    // task-row-badge / section-badge / extension-status / gwg-priority-badge /
+    // task-row-badge / section-badge / gwg-priority-badge /
     // change-status / diff-dialog-stat all converged on the iter15+
     // "dot-prefix" canonical (transparent base + variant tint via dim tokens
     // + colored ::before). No theme selector is allowed to re-paint a
@@ -480,10 +480,10 @@ describe("overlay architecture guards", () => {
     // the variant differentiation and reintroduces themes owning component
     // chrome. (.llm-status / .llm-notice were retired 2026-05-04 — no
     // remaining call sites in TS/TSX/HTML.)
+    expect(readText(join(OVERLAY_ROOT, "src/styles/surfaces/inline-pill.css"))).not.toContain(".extension-status")
     for (const cls of [
       "task-row-badge",
       "section-badge",
-      "extension-status",
       "gwg-priority-badge",
       "change-status",
       "diff-dialog-stat",
@@ -1150,9 +1150,10 @@ describe("overlay architecture guards", () => {
   test("retired settings section + subsection shells stay removed from settings.css", () => {
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
-    for (const className of ["config-section-body", "ext-group", "ext-group-body"]) {
+    for (const className of ["config-section-body", "extension-settings-body"]) {
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+    expect(settingsSurface).toMatch(/(^|\n)\.extension-settings-group(?:\s|\[|\+|\.)/)
 
     for (const className of [
       "config-section",
@@ -1161,11 +1162,13 @@ describe("overlay architecture guards", () => {
       "config-subsection",
       "config-subsection-head",
       "config-subsection-body",
+      "ext-group",
+      "ext-group-body",
     ]) {
       expect(settingsSurface).not.toMatch(new RegExp(`(^|[\\n,{])\\s*\\.${className}(?:\\s|[,>{:+~.#\\[]|$)`, "m"))
     }
 
-    expect(settingsSurface).toMatch(/\.ext-group \+ \.ext-group\s*\{/)
+    expect(settingsSurface).toMatch(/\.extension-settings-group \+ \.extension-settings-group\s*\{/)
     expect(settingsSurface).not.toMatch(/rgba\(91,\s*141,\s*239/)
 
     expect(() => soloRuleBody(readLegacyStylesCss("src/styles.css"), ".config-section")).toThrow()
@@ -1323,14 +1326,22 @@ describe("overlay architecture guards", () => {
       expect(settingsSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    for (const className of ["extension-head", "extension-list", "extension-row", "extension-row-main", "extension-row-actions"]) {
+    for (const className of ["extension-head", "extension-list"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+    for (const className of ["extension-settings-row", "extension-settings-actions"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|\\{)`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|\\{)`))
+    }
+    for (const className of ["extension-row", "extension-row-main", "extension-row-actions"]) {
+      expect(sourceText).not.toMatch(new RegExp(`\\b${className}\\b`))
+      expect(settingsSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\{|\\.)`))
+    }
 
     expect(settingsSurface).toMatch(/\.extension-head:hover,\s*\.extension-head:focus-within\s*\{/)
-    expect(settingsSurface).toMatch(/\.extension-row span,\s*\.extension-row small\s*\{/)
-    const titleBody = soloRuleBody(settingsSurface, ".extension-row strong")
+    expect(settingsSurface).toMatch(/\.extension-settings-row \.s-row-desc,\s*\.extension-settings-row \.s-row-meta\s*\{/)
+    const titleBody = soloRuleBody(settingsSurface, ".extension-settings-row .s-row-title")
     expect(titleBody).toContain("display: inline-flex")
     expect(titleBody).toContain("gap: calc(6px * var(--ui-scale))")
     expect(titleBody).toContain("min-width: 0")
@@ -2321,8 +2332,8 @@ describe("overlay architecture guards", () => {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         const selector = match[1] ?? ""
         const body = match[2] ?? ""
-        const hasExtensionRow = /(?:^|\s|:is\([^)]*)\.extension-row(?:\b|[:.[#])/.test(selector)
-        if (!hasExtensionRow) continue
+        const hasSettingsRow = /(?:^|\s|:is\([^)]*)\.s-row(?:\b|[:.[#])/.test(selector)
+        if (!hasSettingsRow) continue
 
         const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         const usesChromeImportant = /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(
@@ -2334,7 +2345,7 @@ describe("overlay architecture guards", () => {
       }
     }
 
-    const body = settingsSurface.match(/\.extension-row\s*\{([^}]*)\}/)?.[1] ?? ""
+    const body = settingsSurface.match(/\.s-row\s*\{([^}]*)\}/)?.[1] ?? ""
     expect(body).toContain("background: transparent")
     expect(body).toContain("border: 0")
   })
@@ -3092,26 +3103,32 @@ describe("overlay architecture guards", () => {
     }
 
     const skillMarket = readText(join(OVERLAY_ROOT, "src/components/settings/SkillMarketPanel.tsx"))
-    expect(count(/<SurfaceHeader/g, skillMarket)).toBe(3)
+    expect(count(/<SettingsGroup/g, skillMarket)).toBe(3)
+    expect(skillMarket).toContain('class="extension-settings-group"')
+    expect(skillMarket).not.toContain("<SurfaceHeader")
 
     const generalPanel = readText(join(OVERLAY_ROOT, "src/components/settings/GeneralPanel.tsx"))
-    expect(count(/<SurfaceHeader/g, generalPanel)).toBe(3)
+    expect(count(/<SettingsGroup/g, generalPanel)).toBe(3)
     for (const key of [
       "settings.section.connection",
       "settings.section.database",
       "settings.section.behaviour",
     ]) {
-      expect(generalPanel).toContain(`<SurfaceHeader variant="settings-group" title={t("${key}")} />`)
+      expect(generalPanel).toContain(`title={t("${key}")}`)
     }
+    expect(generalPanel).not.toContain("<SurfaceHeader")
     expect(generalPanel).not.toContain("config-panel-group-title")
     expect(generalPanel).not.toContain("config-panel-group-head")
 
     const agentModelsPanel = readText(join(OVERLAY_ROOT, "src/components/settings/AgentModelsPanel.tsx"))
-    expect(count(/<SurfaceHeader/g, agentModelsPanel)).toBe(1)
+    expect(count(/<SettingsGroup/g, agentModelsPanel)).toBe(1)
+    expect(agentModelsPanel).toContain('title="Agent Models"')
+    expect(agentModelsPanel).not.toContain("<SurfaceHeader")
     expect(agentModelsPanel).not.toContain("config-panel-group-head")
     expect(agentModelsPanel).not.toContain("config-panel-group-title")
 
     const providersPanel = readText(join(OVERLAY_ROOT, "src/components/settings/ProvidersPanel.tsx"))
+    expect(count(/<SettingsGroup/g, providersPanel)).toBe(1)
     expect(count(/<SurfaceHeader/g, providersPanel)).toBe(1)
     expect(providersPanel).not.toContain("config-panel-group-title")
 

@@ -30,8 +30,7 @@ import { settingsStore } from "../../store/settings"
 import { t } from "../../utils/i18n"
 import { loadAgentModelsData, type AgentInfo, type ProvidersPayload } from "./agent-models-data"
 import { Button } from "../ui/Button"
-import { SurfaceHeader } from "../ui/SurfaceHeader"
-import { SettingsSelect, type SettingsSelectOption } from "./primitives"
+import { SettingsGroup, SettingsPanel, SettingsRow, SettingsSelect, type SettingsSelectOption } from "./primitives"
 
 // Tier groupings are display-only: they organize the UI list but no longer
 // affect default model resolution (all agents inherit the project default).
@@ -282,9 +281,8 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
   }
 
   return (
-    <div class="general-panel">
-      <div class="config-panel-group">
-        <SurfaceHeader variant="settings-group" title="Agent Models" />
+    <SettingsPanel class="general-panel">
+      <SettingsGroup title="Agent Models">
         <p class="agent-models-info">{t("agent_models.intro")}</p>
 
         <Show when={data.loading || (scope() === "session" && sessionConfig.loading)}>
@@ -348,26 +346,34 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
             return (
               <>
                 <div class="agent-model-project-default">
-                  <div class="agent-model-row" title={t("agent_models.project_default_title")}>
-                    <span class="agent-model-name">{t("agent_models.project_default")}</span>
-                    <ModelSelect
-                      id="project"
-                      testid="agent-model-select-project"
-                      ariaLabel={t("agent_models.project_default")}
-                      value={currentProjectModel()}
-                      disabled={savingDefault()}
-                      groups={groups}
-                      unavailable={projectModelUnavailable()}
-                      emptyLabel={t("agent_models.option_not_set")}
-                      unavailableLabel={t("agent_models.option_unavailable", { model: currentProjectModel() })}
-                      onSelect={onSelectProjectDefault}
-                    />
-                    <span class="agent-model-status">
-                      <Show when={savingDefault()}>{t("agent_models.saving")}</Show>
-                    </span>
-                  </div>
+                  <SettingsRow
+                    class="agent-model-assignment"
+                    nativeTitle={t("agent_models.project_default_title")}
+                    title={<span class="agent-model-name">{t("agent_models.project_default")}</span>}
+                    align="center"
+                    interactive
+                    actions={
+                      <>
+                        <ModelSelect
+                          id="project"
+                          testid="agent-model-select-project"
+                          ariaLabel={t("agent_models.project_default")}
+                          value={currentProjectModel()}
+                          disabled={savingDefault()}
+                          groups={groups}
+                          unavailable={projectModelUnavailable()}
+                          emptyLabel={t("agent_models.option_not_set")}
+                          unavailableLabel={t("agent_models.option_unavailable", { model: currentProjectModel() })}
+                          onSelect={onSelectProjectDefault}
+                        />
+                        <span class="agent-model-status">
+                          <Show when={savingDefault()}>{t("agent_models.saving")}</Show>
+                        </span>
+                      </>
+                    }
+                  />
                   <Show when={projectModelMissing()}>
-                    <div class="config-panel-card agent-models-warning">
+                    <div class="agent-models-warning">
                       {t("agent_models.warning_no_default_prefix")}
                       <code> MissingModelConfigError </code>
                       {t("agent_models.warning_no_default_suffix")}
@@ -387,24 +393,32 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
                               return selected !== "" && !available.has(selected)
                             }
                             return (
-                              <div class="agent-model-row" title={agent.description || ""}>
-                                <span class="agent-model-name">{agent.name}</span>
-                                <ModelSelect
-                                  id={`agent:${agent.name}`}
-                                  testid={`agent-model-select-${agent.name}`}
-                                  ariaLabel={agent.name}
-                                  value={current()}
-                                  disabled={savingAgents().has(agent.name)}
-                                  groups={groups}
-                                  unavailable={missing()}
-                                  emptyLabel="— inherit project default —"
-                                  unavailableLabel={`${current()} (unavailable)`}
-                                  onSelect={(value) => onSelect(agent.name, value)}
-                                />
-                                <span class="agent-model-status">
-                                  <Show when={savingAgents().has(agent.name)}>saving…</Show>
-                                </span>
-                              </div>
+                              <SettingsRow
+                                class="agent-model-assignment"
+                                nativeTitle={agent.description || ""}
+                                title={<span class="agent-model-name">{agent.name}</span>}
+                                align="center"
+                                interactive
+                                actions={
+                                  <>
+                                    <ModelSelect
+                                      id={`agent:${agent.name}`}
+                                      testid={`agent-model-select-${agent.name}`}
+                                      ariaLabel={agent.name}
+                                      value={current()}
+                                      disabled={savingAgents().has(agent.name)}
+                                      groups={groups}
+                                      unavailable={missing()}
+                                      emptyLabel="— inherit project default —"
+                                      unavailableLabel={`${current()} (unavailable)`}
+                                      onSelect={(value) => onSelect(agent.name, value)}
+                                    />
+                                    <span class="agent-model-status">
+                                      <Show when={savingAgents().has(agent.name)}>saving…</Show>
+                                    </span>
+                                  </>
+                                }
+                              />
                             )
                           }}
                         </For>
@@ -416,7 +430,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
             )
           }}
         </Show>
-      </div>
-    </div>
+      </SettingsGroup>
+    </SettingsPanel>
   )
 }

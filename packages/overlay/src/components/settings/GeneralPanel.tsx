@@ -9,7 +9,7 @@ import { ensureDesktopNotificationPermission } from "../../services/notify"
 import { activeProjectDirectory } from "../../services/project-directory"
 import { appStore } from "../../store/app"
 import { Button } from "../ui/Button"
-import { SurfaceHeader } from "../ui/SurfaceHeader"
+import { SettingsGroup, SettingsPanel, SettingsRow } from "./primitives"
 
 export default function GeneralPanel() {
   const [saved, setSaved] = createSignal(false)
@@ -137,11 +137,10 @@ export default function GeneralPanel() {
   }
 
   return (
-    <div class="general-panel">
+    <SettingsPanel class="general-panel">
       {/* ── Connection ── */}
-      <div class="config-panel-group">
-        <SurfaceHeader variant="settings-group" title={t("settings.section.connection")} />
-        <div class="config-panel-card">
+      <SettingsGroup title={t("settings.section.connection")}>
+        <SettingsRow>
           <label class="field">
             <span class="field-label">{t("settings.server_url")}</span>
             <input
@@ -152,92 +151,108 @@ export default function GeneralPanel() {
               onInput={handleServerUrlChange}
             />
           </label>
+        </SettingsRow>
 
+        <SettingsRow>
           <label class="field">
             <span class="field-label">{t("settings.username")}</span>
             <input class="field-input" type="text" value={settingsStore.username} onInput={handleUsernameChange} />
           </label>
+        </SettingsRow>
 
+        <SettingsRow>
           <label class="field">
             <span class="field-label">{t("settings.password")}</span>
             <input class="field-input" type="password" value={settingsStore.password} onInput={handlePasswordChange} />
           </label>
+        </SettingsRow>
 
-          <div class="dialog-actions compact">
-            <Button type="button" variant="solid" size="sm" tone="accent" onClick={handleSaveServer}>
+        <SettingsRow
+          align="center"
+          actions={
+            <Button
+              type="button"
+              variant="solid"
+              size="sm"
+              tone="accent"
+              data-ui="settings-server-save"
+              onClick={handleSaveServer}
+            >
               {saved() ? t("common.saved") : t("common.save")}
             </Button>
+          }
+        />
+        {error() ? (
+          <div class="config-status-box" data-status="error">
+            <span class="config-status-box__text">{error()}</span>
           </div>
-          {error() ? (
-            <div class="config-status-box" data-status="error">
-              <span class="config-status-box__text">{error()}</span>
-            </div>
-          ) : null}
-        </div>
-      </div>
+        ) : null}
+      </SettingsGroup>
 
       {/* ── Database ── */}
-      <div class="config-panel-group">
-        <SurfaceHeader variant="settings-group" title={t("settings.section.database")} />
-        <div class="config-panel-card">
-          <div class="config-toggle-list">
-            <div class="config-toggle-list-item">
-              <span class="toggle-label">
-                {t("settings.db_reset_label")}
-                <span class="toggle-hint">{t("settings.db_reset_hint")}</span>
-              </span>
-              <Button
-                type="button"
-                variant="solid"
-                size="sm"
-                tone="danger"
-                data-ui="settings-db-reset"
-                disabled={dbResetting() || !appStore.connected}
-                onClick={handleDatabaseReset}
-              >
-                {dbResetting() ? t("settings.db_reset_running") : t("settings.db_reset_button")}
-              </Button>
-            </div>
+      <SettingsGroup title={t("settings.section.database")}>
+        <SettingsRow
+          title={t("settings.db_reset_label")}
+          desc={t("settings.db_reset_hint")}
+          align="center"
+          interactive
+          actions={
+            <Button
+              type="button"
+              variant="solid"
+              size="sm"
+              tone="danger"
+              data-ui="settings-db-reset"
+              disabled={dbResetting() || !appStore.connected}
+              onClick={handleDatabaseReset}
+            >
+              {dbResetting() ? t("settings.db_reset_running") : t("settings.db_reset_button")}
+            </Button>
+          }
+        />
+        {dbResetNotice() ? (
+          <div class="config-status-box" data-status={dbResetNoticeStatus()}>
+            <span class="config-status-box__text">{dbResetNotice()}</span>
           </div>
-          {dbResetNotice() ? (
-            <div class="config-status-box" data-status={dbResetNoticeStatus()}>
-              <span class="config-status-box__text">{dbResetNotice()}</span>
-            </div>
-          ) : null}
-        </div>
-      </div>
+        ) : null}
+      </SettingsGroup>
 
       {/* ── Behaviour ── */}
-      <div class="config-panel-group">
-        <SurfaceHeader variant="settings-group" title={t("settings.section.behaviour")} />
-        <div class="config-panel-card">
-          <div class="config-toggle-list">
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">
-                {t("settings.desktop_notifications_label")}
-                <span class="toggle-hint">{t("settings.desktop_notifications_hint")}</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={settingsStore.desktopNotifications}
-                onChange={handleDesktopNotificationsChange}
-              />
-            </label>
+      <SettingsGroup title={t("settings.section.behaviour")}>
+        <SettingsRow
+          title={<label for="settings-desktop-notifications">{t("settings.desktop_notifications_label")}</label>}
+          desc={t("settings.desktop_notifications_hint")}
+          align="center"
+          interactive
+          actions={
+            <input
+              id="settings-desktop-notifications"
+              type="checkbox"
+              checked={settingsStore.desktopNotifications}
+              onChange={handleDesktopNotificationsChange}
+            />
+          }
+        />
 
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">
-                {t("settings.fail_on_information_missing_label")}
-                <span class="toggle-hint">{t("settings.fail_on_information_missing_hint")}</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={Boolean((appStore.config as any)?.assistant?.debug?.fail_on_information_missing)}
-                onChange={handleInformationMissingChange}
-              />
+        <SettingsRow
+          title={
+            <label for="settings-fail-on-information-missing">
+              {t("settings.fail_on_information_missing_label")}
             </label>
-          </div>
-        </div>
-      </div>
-    </div>
+          }
+          desc={t("settings.fail_on_information_missing_hint")}
+          align="center"
+          interactive
+          actions={
+            <input
+              id="settings-fail-on-information-missing"
+              type="checkbox"
+              checked={Boolean((appStore.config as any)?.assistant?.debug?.fail_on_information_missing)}
+              onChange={handleInformationMissingChange}
+            />
+          }
+        />
+      </SettingsGroup>
+    </SettingsPanel>
   )
 }

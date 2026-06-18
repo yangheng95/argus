@@ -78,18 +78,18 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(toolbar).toContain("tooltipKey?: string")
   expect(toolbar).toContain("title={tooltip()}")
   expect(toolbar).toContain("aria-label={tooltip()}")
-  expect(activityCss).toContain(".sidebar-tool-panel .ext-group")
+  expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-group")
   expect(activityCss).toContain(".left-activity-shell")
   expect(activityCss).toContain("flex-direction: row")
   expect(activityCss).toMatch(
-    /\.sidebar-tool-panel \.ext-group-body,\s*\.sidebar-tool-panel \.memory-panel\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s,
+    /\.sidebar-tool-panel \.extension-settings-body,\s*\.sidebar-tool-panel \.memory-panel\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s,
   )
   expect(activityCss).toContain(".sidebar-tool-panel .tool-panel-toolbar")
   expect(activityCss).toContain('.sidebar-tool-panel .oc-button[data-ui="tool-panel-action"]')
   expect(activityCss).toContain(".sidebar-tool-panel .config-status-box")
   expect(activityCss).toContain('.sidebar-tool-panel .memory-panel[data-compact="true"] .knowledge-toolbar')
-  expect(activityCss).toContain(".sidebar-tool-panel .extension-row")
-  expect(activityCss).toContain(".sidebar-tool-panel .extension-row-main > span")
+  expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-row")
+  expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-row .s-row-desc")
   expect(activityCss).toContain("-webkit-line-clamp: 3")
   expect(activityCss).toContain(".sidebar-tool-panel .skill-drop-zone__copy strong")
   for (const key of [
@@ -140,17 +140,17 @@ test("skill panel imports dropped files, directories, and zip archives through t
 
 test("skill panel surfaces duplicate skill locations from installed skill metadata", () => {
   const panel = read("src/components/settings/SkillMarketPanel.tsx")
-  const inlinePill = read("src/styles/surfaces/inline-pill.css")
+  const settingsCss = read("src/styles/surfaces/settings.css")
   const en = read("src/i18n/en-US.json")
   const zh = read("src/i18n/zh-CN.json")
 
   expect(panel).toContain("duplicate_locations?: string[]")
   expect(panel).toContain("function skillDuplicateLocations")
-  expect(panel).toContain('data-state="warn"')
+  expect(panel).toContain('<SettingsPill tone="warn" title={skillDuplicateTitle(item)}>')
   expect(panel).toContain("title={skillDuplicateTitle(item)}")
   expect(panel).toContain('t("skill.duplicate")')
   expect(panel).toContain('t("skill.duplicate_locations_title"')
-  expect(inlinePill).toContain('.extension-status[data-state="warn"]')
+  expect(settingsCss).toContain('.s-pill[data-tone="warn"]')
   expect(en).toContain('"skill.duplicate"')
   expect(en).toContain('"skill.duplicate_locations_title"')
   expect(zh).toContain('"skill.duplicate"')

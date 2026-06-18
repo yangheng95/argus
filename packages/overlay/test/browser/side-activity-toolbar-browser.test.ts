@@ -977,7 +977,7 @@ test(
       )
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
-      await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-row")
+      await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-settings-row")
       assertMatchObject(await activeState(), {
         leftHeaderTitle: "Skills",
         leftHeaderAriaLabel: "Skills",
@@ -997,11 +997,11 @@ test(
             width: Math.round(node.getBoundingClientRect().width),
           }),
         )
-        const row = panel.querySelector<HTMLElement>(".extension-row")!
-        const desc = row.querySelector<HTMLElement>(".extension-row-main > span")!
-        const path = row.querySelector<HTMLElement>(".extension-row-main > small")
-        const title = row.querySelector<HTMLElement>(".extension-row-main > strong")!
-        const actions = row.querySelector<HTMLElement>(".extension-row-actions")!
+        const row = panel.querySelector<HTMLElement>(".extension-settings-row")!
+        const desc = row.querySelector<HTMLElement>(".s-row-desc")!
+        const path = row.querySelector<HTMLElement>(".s-row-meta")
+        const title = row.querySelector<HTMLElement>(".s-row-title")!
+        const actions = row.querySelector<HTMLElement>(".extension-settings-actions")!
         const drop = panel.querySelector<HTMLElement>(".skill-drop-zone")!
         return {
           active: panel.dataset.active,
@@ -1046,15 +1046,15 @@ test(
       )
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
-      await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-row")
+      await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-settings-row")
       const mcpPanelState = await page.evaluate(() => {
         const panel = document.querySelector<HTMLElement>("#leftPanelMcp")!
-        const row = panel.querySelector<HTMLElement>(".extension-row")!
+        const row = panel.querySelector<HTMLElement>(".extension-settings-row")!
         return {
           active: panel.dataset.active,
-          name: row.querySelector<HTMLElement>(".extension-row-main > strong")?.textContent || "",
-          detail: row.querySelector<HTMLElement>(".extension-row-main > span")?.textContent || "",
-          status: row.querySelector<HTMLElement>(".extension-status")?.textContent || "",
+          name: row.querySelector<HTMLElement>(".s-row-title")?.textContent || "",
+          detail: row.querySelector<HTMLElement>(".s-row-desc")?.textContent || "",
+          status: row.querySelector<HTMLElement>(".s-pill")?.textContent || "",
         }
       })
       assert.deepEqual(mcpPanelState, {

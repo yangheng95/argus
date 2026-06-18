@@ -74,8 +74,9 @@ describe("config panel sizing", () => {
     expect(layoutBody).toContain("--settings-surface-emphasis:")
 
     for (const selector of [
-      ".config-panel-card",
-      ".provider-flat-row",
+      ".s-row",
+      ".provider-settings-row",
+      ".provider-add-card",
       ".provider-command",
       ".config-status-box",
       ".about-author-card",
@@ -83,7 +84,6 @@ describe("config panel sizing", () => {
       ".about-shortcut-grid",
       ".prompt-preview-card",
       ".extension-head",
-      ".extension-row",
       ".channel-doc-card",
       ".market-card",
       ".detail-card",
@@ -97,14 +97,7 @@ describe("config panel sizing", () => {
 
     for (const selector of [
       ".config-nav-item:hover",
-      ".config-toggle-list-item:hover",
-      ".agent-model-row:hover",
-      // PermissionsPanel migrated off .perm-row → .s-row on 2026-05-26.
-      // The primitive's hover wash is opt-in via data-interactive; the
-      // selector below is what every settings panel will use once its
-      // rows migrate too.
       '.s-row[data-interactive="true"]:hover,\n.s-row[data-interactive="true"]:focus-within',
-      ".provider-flat-row:hover,\n.provider-flat-row:focus-within",
     ]) {
       expect(bodyOf(selector)).toMatch(/background:\s*var\(--settings-surface-hover\)/)
     }
