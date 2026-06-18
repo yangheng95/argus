@@ -11,6 +11,7 @@ import { mergeAgentRecords } from "../utils/agent-workflow-records"
 import { orderedReachableCardIDs } from "../utils/card-tree"
 import { stageAccent } from "../utils/card-color"
 import { Avatar, avatarRole } from "./Avatar"
+import { Button } from "./ui/Button"
 
 function compactLabel(record: AgentWorkflowRecord): string {
   const parts = [record.agentName, record.status]
@@ -177,14 +178,18 @@ function AgentRailRow(props: {
       data-status={record().status}
       style={{ "--card-stage": stageAccent(avatarRole(record().stage)) }}
     >
-      <button
+      <Button
         type="button"
-        class="conversation-agent-rail__avatar-button"
+        variant="ghost"
+        size="icon"
+        tone="neutral"
+        data-ui="conversation-agent-rail-locate"
+        aria-label={compactLabel(record())}
         title={compactLabel(record())}
         onClick={() => props.onLocate(record())}
       >
         <Avatar role={record().stage} status={record().status} />
-      </button>
+      </Button>
     </div>
   )
 }

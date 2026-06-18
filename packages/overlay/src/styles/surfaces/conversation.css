@@ -138,15 +138,6 @@
   min-width: 0;
 }
 
-.conversation-agent-rail__avatar-button {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
 .conversation-agent-rail__row {
   position: relative;
   flex: 0 0 calc(38px * var(--ui-scale));
@@ -159,20 +150,23 @@
   padding: 0;
 }
 
-.conversation-agent-rail__avatar-button {
+.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"] {
+  --oc-button-height: calc(34px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-bg: transparent;
+  --oc-button-border: var(--oc-border-width) solid transparent;
+  --oc-button-color: var(--text-strong);
+
   width: calc(34px * var(--ui-scale));
-  height: calc(34px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
+  min-width: calc(34px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
 }
 
-.conversation-agent-rail__avatar-button:hover {
-  background: var(--subtle-2);
-  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
-  color: var(--text-strong);
+.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]:hover,
+.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]:focus-visible {
+  --oc-button-bg: var(--subtle-2);
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 24%, transparent);
+  --oc-button-color: var(--text-strong);
 }
 
 .conversation-agent-target--pulse {
