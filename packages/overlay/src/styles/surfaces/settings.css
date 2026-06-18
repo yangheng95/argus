@@ -2497,7 +2497,7 @@
 /* The .pref-item canonical previously appeared twice in styles.css —
  * one rule cleared border-bottom (overriding the shared card baseline
  * `border:1px solid var(--border)` in styles.css that also applied to
- * .goal-item / .market-card / .knowledge-item), and
+ * .market-card / .knowledge-item), and
  * a second rule eight lines later set cursor:pointer. Rule 9 cleanup:
  * merged into one canonical here. The .pref-item entry in those
  * shared card multi-selectors stays in styles.css until the broader

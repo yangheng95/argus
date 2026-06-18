@@ -2178,180 +2178,6 @@
   white-space: nowrap;
 }
 
-.goals-list {
-  display: flex;
-  flex-direction: column;
-  gap: calc(1px * var(--ui-scale));
-}
-
-details.goal-item {
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  border: none;
-  transition: background var(--ui-duration-fast);
-}
-details.goal-item:hover {
-  background: var(--ui-glass-tint);
-}
-details.goal-item[open] {
-  background: var(--ui-glass-tint);
-}
-
-.goal-item-head {
-  display: flex;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  cursor: pointer;
-  user-select: none;
-  list-style: none;
-  min-height: calc(22px * var(--ui-scale));
-}
-.goal-item-head::-webkit-details-marker {
-  display: none;
-}
-.goal-item-head::marker {
-  display: none;
-  content: "";
-}
-
-.goal-item-chevron {
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  flex-shrink: 0;
-  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
-  line-height: 1;
-  opacity: var(--ui-opacity-disabled);
-}
-details.goal-item[open] > .goal-item-head > .goal-item-chevron {
-  transform: rotate(90deg);
-}
-
-.goal-desc-inline {
-  flex-shrink: 0;
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--text-strong);
-  letter-spacing: var(--ui-letter-spacing-loose);
-}
-.goal-title-brief {
-  flex: 1;
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.goal-item-id {
-  font-family: var(--mono);
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  opacity: var(--ui-opacity-disabled);
-  cursor: pointer;
-  padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  flex-shrink: 0;
-  transition:
-    opacity var(--ui-duration-base),
-    background var(--ui-duration-base);
-}
-.goal-item-id:hover {
-  opacity: var(--ui-opacity-full);
-  background: var(--ui-glass-tint);
-}
-
-.goal-item-body {
-  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-top: none;
-}
-.goal-item-body .goal-desc {
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-body);
-  color: var(--text);
-  line-height: 1.5;
-}
-.goal-item-body .plan-version {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  margin-bottom: calc(3px * var(--ui-scale));
-}
-
-.goal-status-icon {
-  width: calc(14px * var(--ui-scale));
-  height: calc(14px * var(--ui-scale));
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-size: var(--ui-font-small);
-  line-height: 1;
-}
-.goal-status-icon[data-status="pending"] {
-  background: var(--surface-hover);
-  color: var(--text-muted);
-}
-.goal-status-icon[data-status="running"] {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-.goal-status-icon[data-status="passed"] {
-  background: var(--good-dim);
-  color: var(--good);
-}
-.goal-status-icon[data-status="failed"] {
-  background: var(--bad-dim);
-  color: var(--bad);
-}
-
-.goal-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.goal-desc {
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-  word-break: break-word;
-}
-
-.goal-priority {
-  font-size: var(--ui-font-small);
-  font-weight: var(--ui-font-weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  flex-shrink: 0;
-}
-.goal-priority[data-priority="blocking"] {
-  color: var(--bad);
-  background: var(--bad-dim);
-}
-.goal-priority[data-priority="advisory"] {
-  color: var(--text-soft);
-  background: var(--surface-hover);
-}
-
-.goal-actions {
-  position: absolute;
-  top: calc(6px * var(--ui-scale));
-  right: calc(6px * var(--ui-scale));
-  display: flex;
-  gap: calc(4px * var(--ui-scale));
-  align-items: center;
-  opacity: var(--ui-opacity-hidden);
-  pointer-events: none;
-  transition: opacity var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.goal-item:hover .goal-actions {
-  opacity: var(--ui-opacity-full);
-  pointer-events: auto;
-}
-
 .task-actions-buttons {
   display: flex;
   gap: var(--ui-gap-sm);
@@ -2360,7 +2186,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 
 /* Two task-actions button rules previously lived in styles.css
- * (base padding/font-size near plan-version, then deeper presentation
+ * (base padding/font-size, then deeper presentation
  * with positioning + ::before dot 1500 lines lower). The deeper rule's
  * padding shorthand stomped the base rule's padding; merging here
  * collapses both into a single canonical so the cascade has one
@@ -2529,7 +2355,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .sections .plan-summary,
 .sections .overview-summary,
 .sections .overview-next-step,
-.sections .goal-desc,
 .sections .change-path {
   max-height: calc(112px * var(--ui-scale));
   overflow: auto;
@@ -2582,7 +2407,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
    market-card chrome is owned by surfaces/settings.css.
    ───────────────────────────────────────────────────────────── */
 
-.goal-item,
 .knowledge-item,
 .pref-item {
   border: 0 solid transparent;
@@ -2596,7 +2420,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
     transform var(--ui-duration-base);
 }
 
-.goal-item:hover,
 .extension-row:hover,
 .channel-doc-card:hover,
 .knowledge-item:hover,

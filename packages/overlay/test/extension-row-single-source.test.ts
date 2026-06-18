@@ -8,8 +8,8 @@
 //                 var(--radius), `--subtle-1` bg,
 //                 hardcoded `8px 10px` padding.
 //   - line ~9204: multi-selector card-treatment shared with
-//                 .goal-item / .channel-doc-card /
-//                 .market-card / .knowledge-item / .pref-item
+//                 .channel-doc-card / .market-card /
+//                 .knowledge-item / .pref-item
 //                 / .criteria-check — same border/radius/bg
 //                 but token-based padding.
 //   - line ~12327: !important reset shared with
