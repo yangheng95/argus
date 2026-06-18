@@ -4316,7 +4316,12 @@ export type ExecutorGetModelResponses = {
 export type ExecutorGetModelResponse = ExecutorGetModelResponses[keyof ExecutorGetModelResponses]
 
 export type ExecutorSetModelData = {
-  body?: never
+  body: {
+    /**
+     * Native executor model value. An empty string clears the executor model override.
+     */
+    model: string
+  }
   path: {
     executorID: string
   }
@@ -4331,10 +4336,16 @@ export type ExecutorSetModelData = {
 
 export type ExecutorSetModelErrors = {
   /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
    * Executor not found or does not support model switching
    */
   404: unknown
 }
+
+export type ExecutorSetModelError = ExecutorSetModelErrors[keyof ExecutorSetModelErrors]
 
 export type ExecutorSetModelResponses = {
   /**

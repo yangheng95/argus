@@ -1,5 +1,5 @@
 import { Hono } from "hono"
-import { describeRoute, resolver } from "hono-openapi"
+import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ToolAdapterRegistry, protocolInfo } from "@/executor/protocol"
@@ -8,6 +8,7 @@ import { ExecutorRegistry } from "@/executor/registry"
 import { envKeyFor, getModelOverride, setModelOverride } from "@/executor/runtime-env"
 import { NotFoundError } from "../../storage/db"
 import { lazy } from "../../util/lazy"
+import { errors } from "../error"
 
 const ExecutorToolInfo = z.object({
   name: z.string(),
@@ -31,6 +32,14 @@ const ExecutorInfo = z.object({
   version: z.string().optional(),
   model: z.string().optional(),
 })
+
+const ExecutorSetModelInput = z
+  .object({
+    model: z.string().meta({
+      description: "Native executor model value. An empty string clears the executor model override.",
+    }),
+  })
+  .strict()
 
 export const ExecutorRoutes = lazy(() => {
   const app = new Hono()
@@ -160,15 +169,17 @@ export const ExecutorRoutes = lazy(() => {
         404: {
           description: "Executor not found or does not support model switching",
         },
+        ...errors(400),
       },
     }),
+    validator("json", ExecutorSetModelInput),
     async (c) => {
       const executorID = c.req.param("executorID")
       if (!envKeyFor(executorID)) {
         throw new NotFoundError({ message: `executor does not support model switching: ${executorID}` })
       }
-      const body = await c.req.json<{ model?: string }>()
-      const model = typeof body?.model === "string" ? body.model.trim() : ""
+      const body = c.req.valid("json")
+      const model = body.model.trim()
       setModelOverride(executorID, model || null)
       return c.json({ ok: true })
     },
