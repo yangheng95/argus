@@ -188,6 +188,7 @@ export async function captureReferenceManifest(input: {
   outDir: string
   timeoutMs?: number
   browserExecutable?: string
+  browserProxy?: BrowserRuntime.BrowserProxyConfig
 }): Promise<CaptureResult> {
   if (!/^https?:\/\//i.test(input.url)) {
     throw new CaptureReferenceError(`capture url must start with http(s)://: ${input.url}`, "navigate")
@@ -204,6 +205,7 @@ export async function captureReferenceManifest(input: {
     deviceScaleFactor,
     timeoutMs,
     browserExecutable: input.browserExecutable,
+    browserProxy: input.browserProxy,
   })
 
   const pngBuf = evidence.screenshotPng
@@ -283,6 +285,7 @@ async function captureBrowserEvidence(input: {
   deviceScaleFactor: number
   timeoutMs: number
   browserExecutable?: string
+  browserProxy?: BrowserRuntime.BrowserProxyConfig
 }): Promise<BrowserEvidence> {
   return captureBrowserEvidenceViaNode(input)
 }
@@ -293,11 +296,13 @@ async function captureBrowserEvidenceViaNode(input: {
   deviceScaleFactor: number
   timeoutMs: number
   browserExecutable?: string
+  browserProxy?: BrowserRuntime.BrowserProxyConfig
 }): Promise<BrowserEvidence> {
   const executablePath = await BrowserRuntime.findBrowserExecutable(input.browserExecutable)
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(input.timeoutMs)
   const hardTimeoutMs = launchTimeoutMs + input.timeoutMs + 30_000
   const runtime = await resolveBrowserNodeSidecarRuntime()
+  const browserProxy = input.browserProxy ?? BrowserRuntime.resolveBrowserProxyConfig()
   const run = await runBrowserNodeSidecar<
     | {
         ok: true
@@ -312,7 +317,13 @@ async function captureBrowserEvidenceViaNode(input: {
   >({
     runtime,
     script: NODE_CAPTURE_SCRIPT,
-    payload: { ...input, executablePath, launchArgs: BrowserRuntime.defaultLaunchArgs(), launchTimeoutMs },
+    payload: {
+      ...input,
+      executablePath,
+      launchArgs: BrowserRuntime.defaultLaunchArgs({ proxyServer: browserProxy?.server }),
+      launchTimeoutMs,
+      browserProxy,
+    },
     payloadEnvName: "OPENCORVUS_CAPTURE_INPUT",
     hardTimeoutMs,
     label: "Node browser capture",
@@ -369,6 +380,7 @@ async function main() {
     const context = await browser.newContext({
       viewport: { width: input.viewport.width, height: input.viewport.height },
       deviceScaleFactor: input.deviceScaleFactor,
+      ...(input.browserProxy ? { proxy: input.browserProxy } : {}),
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
     });
     const page = await context.newPage();

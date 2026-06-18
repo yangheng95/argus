@@ -83,6 +83,14 @@ describe("capture reference diagnostics", () => {
     expect(source).not.toContain('page.goto(input.url, { waitUntil: "networkidle"')
   })
 
+  test("node capture script passes browser proxy credentials to the Playwright context", () => {
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
+
+    expect(source).toContain("browserProxy?: BrowserRuntime.BrowserProxyConfig")
+    expect(source).toContain("proxyServer: browserProxy?.server")
+    expect(source).toContain("...(input.browserProxy ? { proxy: input.browserProxy } : {})")
+  })
+
   test("url screenshot tool does not downgrade unusable captures into attachments", () => {
     const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/url-screenshot-tool.ts"), "utf8")
 

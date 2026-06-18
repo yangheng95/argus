@@ -131,6 +131,24 @@ describe("BrowserRuntime", () => {
     expect(args).not.toContain("--proxy-server=http://172.25.160.1:6268")
   })
 
+  test("keeps authenticated proxy credentials out of Chromium launch arguments", () => {
+    const env = {
+      BROWSER_PROXY: "http://proxy-user:proxy-secret@10.217.133.185:30100",
+      NO_PROXY: "localhost,127.0.0.1",
+    }
+    const args = BrowserRuntime.defaultLaunchArgs({ env })
+    const proxy = BrowserRuntime.resolveBrowserProxyConfig({ env })
+
+    expect(args).toContain("--proxy-server=http://10.217.133.185:30100")
+    expect(args.join(" ")).not.toContain("proxy-secret")
+    expect(proxy).toEqual({
+      server: "http://10.217.133.185:30100",
+      username: "proxy-user",
+      password: "proxy-secret",
+      bypass: "localhost,127.0.0.1",
+    })
+  })
+
   test("passes shared proxy-aware launch arguments into every webpage evidence Node sidecar", async () => {
     const files: Array<{ path: string; snippet: string }> = [
       { path: "src/browser/webpage/extract.ts", snippet: "launchArgs: BrowserRuntime.defaultLaunchArgs({" },
