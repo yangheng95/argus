@@ -147,7 +147,6 @@ const LEGACY_BUTTON_CLASSES = [
   "executor-chip",
   "chat-toolbar-btn",
   "titlebar-menubar-trigger",
-  "titlebar-status-icon",
 ]
 const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
   btn: 0,
@@ -161,7 +160,6 @@ const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
   "executor-chip": 0,
   "chat-toolbar-btn": 0,
   "titlebar-menubar-trigger": 0,
-  "titlebar-status-icon": 0,
 }
 
 function countThemeLayoutOverrides(css: string): number {
@@ -508,31 +506,26 @@ describe("overlay architecture guards", () => {
     expect(styles).not.toContain(".board-intro__cta-action")
   })
 
-  test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
+  test("retired titlebar status utility shell stays out of titlebar.css", () => {
     const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
 
-    expect(styles).not.toMatch(/^\.titlebar-task-status\b/m)
+    for (const className of [
+      "titlebar-status-chip",
+      "titlebar-setup-cta",
+      "titlebar-status-icon",
+      "titlebar-task-status",
+      "titlebar-status-label",
+      "titlebar-status-value",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|[,{:#.>+~\\[])`))
+      expect(titlebarSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|[,{:#.>+~\\[])`))
+    }
+
     expect(styles).not.toMatch(/^\.status-icon\b/m)
-    expect(titlebarSurface).toMatch(/\.titlebar-task-status\s*\{/)
-    expect(titlebarSurface).toMatch(/\.titlebar-task-status\[data-status="active"\]/)
     expect(titlebarSurface).toMatch(/\.status-icon\s*\{/)
     expect(titlebarSurface).toMatch(/\.status-icon\[data-status="completed"\]/)
     expect(titlebarSurface).toContain("var(--oc-titlebar-status-icon)")
-  })
-
-  test("titlebar status chip and setup CTA are owned by surfaces/titlebar.css", () => {
-    const styles = readLegacyStylesCss("src/styles.css")
-    const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
-
-    expect(styles).not.toMatch(/^\.titlebar-status-chip\b/m)
-    expect(styles).not.toMatch(/^\.titlebar-setup-cta\b/m)
-    expect(styles).not.toMatch(/^\.titlebar-status-label\b/m)
-    expect(styles).not.toMatch(/^\.titlebar-status-value\b/m)
-    expect(titlebarSurface).toMatch(/\.titlebar-status-chip\s*\{/)
-    expect(titlebarSurface).toMatch(/\.titlebar-setup-cta\s*\{/)
-    expect(titlebarSurface).toMatch(/\.titlebar-status-label\s*\{/)
-    expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
   })
 
   test("composer toolbar column stays retired", () => {
@@ -2068,10 +2061,6 @@ describe("overlay architecture guards", () => {
     const migratedTitlebarClasses = [
       "titlebar",
       "titlebar-menubar-trigger",
-      "titlebar-status-chip",
-      "titlebar-setup-cta",
-      "titlebar-status-icon",
-      "titlebar-task-status",
       "brand-guide",
     ]
 
@@ -2853,12 +2842,12 @@ describe("overlay architecture guards", () => {
     expect(violations).toEqual([])
   })
 
-  test("icon button padding is canonical, not theme scoped", () => {
+  test("retired titlebar status icon padding selector stays absent", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const titlebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")))
     const composerSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")))
     const combined = `${styles}\n${titlebarSurface}\n${composerSurface}`
-    const iconButtonClasses = [".titlebar-status-icon"]
+    const iconButtonClasses: string[] = []
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2870,14 +2859,7 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\bpadding(?:-[a-z]+)?\s*:/)
     }
 
-    for (const className of iconButtonClasses) {
-      const escaped = className.replace(".", "\\.")
-      const ruleBodies = Array.from(
-        combined.matchAll(new RegExp(`(^|[\\n,])\\s*${escaped}[^{},]*\\{([^{}]*)\\}`, "g")),
-      ).map((match) => match[2] ?? "")
-      const bodyText = ruleBodies.join("\n")
-      expect(bodyText).toContain("padding: 0")
-    }
+    expect(combined).not.toMatch(/\.titlebar-status-icon(?:\s|[,{:#.>+~\[])/)
   })
 
   test("titlebar layout container gaps are canonical, not theme scoped", () => {
