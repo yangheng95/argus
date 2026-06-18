@@ -139,6 +139,49 @@ describe("POST /mission/wake — happy path", () => {
     })
   })
 
+  test("same missionID in linked worktree wakes that directory's Mission session", async () => {
+    await using primary = await tmpdir({ git: true })
+    const unique = Date.now()
+    const branch = `opencorvus/mission-wake-${unique}`
+    const linkedDir = path.resolve(primary.path, "..", `mission-wake-linked-${unique}`)
+
+    await $`git worktree add --no-checkout -b ${branch} ${linkedDir}`.cwd(primary.path).quiet()
+    try {
+      await $`git reset --hard`.cwd(linkedDir).quiet()
+
+      const wakeSpy = spyOn(SessionWake, "wake").mockResolvedValue("ses_stub")
+      const first = await post("/mission/wake", primary.path, { missionID: "linked-wake", text: "primary" })
+      expect(first.status).toBe(200)
+      const firstBody = (await first.json()) as { sessionID: string; created: boolean }
+      expect(firstBody.created).toBe(true)
+
+      const second = await post("/mission/wake", linkedDir, { missionID: "linked-wake", text: "linked" })
+      expect(second.status).toBe(200)
+      const secondBody = (await second.json()) as { sessionID: string; created: boolean }
+      expect(secondBody.created).toBe(true)
+      expect(secondBody.sessionID).not.toBe(firstBody.sessionID)
+
+      const firstSession = await Session.get(firstBody.sessionID)
+      const secondSession = await Session.get(secondBody.sessionID)
+      expect(firstSession.projectID).toBe(secondSession.projectID)
+      expect(firstSession.directory).toBe(primary.path)
+      expect(secondSession.directory).toBe(linkedDir)
+      expect(wakeSpy.mock.calls[0]?.[0]?.sessionID).toBe(firstBody.sessionID)
+      expect(wakeSpy.mock.calls[1]?.[0]?.sessionID).toBe(secondBody.sessionID)
+      expect(wakeSpy.mock.calls[1]?.[0]?.prompt).toBe("linked")
+
+      const third = await post("/mission/wake", linkedDir, { missionID: "linked-wake", text: "linked again" })
+      expect(third.status).toBe(200)
+      const thirdBody = (await third.json()) as { sessionID: string; created: boolean }
+      expect(thirdBody.created).toBe(false)
+      expect(thirdBody.sessionID).toBe(secondBody.sessionID)
+    } finally {
+      await Instance.disposeAll()
+      await $`git worktree remove --force ${linkedDir}`.cwd(primary.path).nothrow().quiet()
+      await $`git branch -D ${branch}`.cwd(primary.path).nothrow().quiet()
+    }
+  }, 30_000)
+
   test("accepts operator-supplied lowercase / hyphen / digit missionID", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -211,7 +254,7 @@ describe("POST /mission/wake — happy path", () => {
         expect(res.status).toBe(400)
         expect(await res.json()).toEqual({ error: 'Unknown prompt profile "does-not-exist"' })
         expect(wakeSpy).not.toHaveBeenCalled()
-        expect(findExistingMissionSession("unknown-profile")).toBeUndefined()
+        expect(findExistingMissionSession({ missionID: "unknown-profile", directory: tmp.path })).toBeUndefined()
       },
     })
   })

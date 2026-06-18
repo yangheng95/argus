@@ -3828,3 +3828,56 @@ LINE:
 - Einstein confirmed BH-102 was still present in HEAD `9a24dcb130382fb43cc3d9215d2661fad428fe06`: `Filesystem.readJson(...).catch(() => undefined)` collapsed all read/parse failures, stdout printed `File not found`, and handler returned normally.
 - Einstein identified the direct automation impact: `packages/opencorvus/src/cli/cmd/pr.ts` uses `.nothrow()` and only sees exit code, so import false-success hides a failed restore.
 - Einstein required process-level CLI coverage in addition to handler-level tests; the final suite includes missing and malformed JSON subprocess assertions.
+
+## Batch P1-BO: BH-104 Mission wake must be directory-bound inside linked worktrees
+
+### Findings
+
+- BH-104 targets `packages/opencorvus/src/mission/session.ts` and `packages/opencorvus/src/project/project.ts`.
+- `Project.fromDirectory(...)` intentionally gives linked git worktrees the same `project.id` while exposing each active worktree as a distinct `Instance.directory`.
+- Mission read/action routes already resolve records with `getMissionSessionByDirectory({ missionID, directory: Instance.directory })`.
+- The wake/create side still used a project-wide lookup and lock: `findMissionSessionID(missionID)`, `findExistingMissionSession(missionID)`, `ensureMissionSessionInner(...)`, and lock key `${Instance.project.id}:${missionID}`.
+- Therefore a primary worktree could create mission session A, and a linked worktree waking the same `missionID` would reuse session A and inject the second worktree prompt into the wrong Mission session.
+- This is not a `Project.fromDirectory(...)` bug; linked worktrees sharing project identity is the intended project model. Mission session identity must include the active directory.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/mission/session.ts::findExistingMissionSession(...)` is used by the wake route only to compute `created`.
+- `packages/opencorvus/src/mission/session.ts::ensureMissionSession(...)` is used by `/mission/wake`, Mission helper tests, mission-state tests, panel provenance tests, and task lineage/title tests.
+- `packages/opencorvus/src/server/routes/mission.ts::missionRouteSession(...)` already resolves action routes by `Instance.directory`.
+- `packages/opencorvus/src/server/routes/mission.ts::POST /mission/wake` is the production path that selects the Mission session and then calls `SessionWake.wake(...)`.
+- `packages/opencorvus/src/session/wake.ts` writes to the supplied `sessionID`; it cannot repair a wrong Mission session selection upstream.
+- `packages/opencorvus/test/mission/session.test.ts` encoded the previous `(project, missionID)` singleton invariant and needed to be updated.
+- `packages/opencorvus/test/mission/wake-route.test.ts` had same-directory reuse coverage but no linked-worktree reuse coverage.
+
+### Fix Shape
+
+- Remove the project-only Mission session lookup from the wake/create path.
+- Make `findExistingMissionSession(...)` require `{ missionID, directory }` and query by project, directory, kind, and mission metadata id.
+- Make `ensureMissionSession(...)` normalize `defaultCwd`, parse `missionID`, and use `(projectID, normalized directory, missionID)` for both the in-process lock key and the DB lookup.
+- Keep `getMissionSessionByDirectory(...)` as the action-route read path, with normalized directory comparison.
+- Do not add project-only fallback lookup, reject-after-lookup gates, route bypasses, or changes to linked-worktree project identity.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/mission/session.test.ts` with a real `git worktree` fixture proving the same project can hold two directory-bound Mission sessions with the same `missionID`, while repeated ensure in the same linked directory still reuses that directory's row.
+- Extend `packages/opencorvus/test/mission/wake-route.test.ts` with a real linked-worktree route test: wake primary, wake linked directory with the same `missionID`, assert `SessionWake.wake(...)` receives the linked session id and `created:true`, then wake linked again and assert `created:false`.
+- Update `findExistingMissionSession(...)` assertions to require the active directory.
+- Keep same-directory wake reuse tests unchanged.
+
+### Verification
+
+- Focused Mission helper and wake route tests passed: `bun test packages/opencorvus/test/mission/session.test.ts packages/opencorvus/test/mission/wake-route.test.ts --timeout 90000`.
+- Mission action route tests passed: `bun test packages/opencorvus/test/server/mission-routes.test.ts --timeout 90000`.
+- Package test-entry guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Ohm confirmed BH-104 was still present at HEAD `df4778223c9c4b50b13ba0d7c85cb1f4fb643f49`.
+- Ohm independently identified the same root cause: wake/session acquisition used `projectID + missionID`, while later Mission routes used `directory + missionID`.
+- Ohm required a real `git worktree` test, route-level `SessionWake.wake(...)` assertions, directory-aware `created` semantics, and no project-only fallback path.
+- Ohm noted the implementation should normalize raw `defaultCwd`; `ensureMissionSession(...)` now uses `Filesystem.resolve(...)` before lookup and lock key construction.

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { $ } from "bun"
 import fs from "node:fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -12,8 +13,9 @@ const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
 
 // Invariants for mission/session (the Mission agent wake path uses these):
-//   - ensureMissionSession is a true singleton per (project, missionID):
-//     two calls with the same missionID return the same row, no
+//   - ensureMissionSession is a true singleton per (project, directory,
+//     missionID): two calls with the same missionID and directory return the
+//     same row, no
 //     race-induced duplicate.
 //   - First call creates a kind="mission" session titled "Mission Control"
 //     and seeds metadata.mission.{id, channelKey, cwd}. channelKey is
@@ -88,13 +90,52 @@ describe("Mission session helpers", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        expect(findExistingMissionSession("m-find")).toBeUndefined()
+        expect(findExistingMissionSession({ missionID: "m-find", directory: projectRoot })).toBeUndefined()
         const s = await ensureMissionSession({ missionID: "m-find", defaultCwd: projectRoot })
-        expect(findExistingMissionSession("m-find")).toBe(s.id)
+        expect(findExistingMissionSession({ missionID: "m-find", directory: projectRoot })).toBe(s.id)
         await Session.remove(s.id)
       },
     })
   })
+
+  test("linked worktrees keep same missionID in separate directory sessions", async () => {
+    await using primary = await tmpdir({ git: true })
+    const unique = Date.now()
+    const branch = `opencorvus/mission-session-${unique}`
+    const linkedDir = path.resolve(primary.path, "..", `mission-session-linked-${unique}`)
+
+    await $`git worktree add --no-checkout -b ${branch} ${linkedDir}`.cwd(primary.path).quiet()
+    try {
+      await $`git reset --hard`.cwd(linkedDir).quiet()
+
+      const primarySession = await Instance.provide({
+        directory: primary.path,
+        fn: () => ensureMissionSession({ missionID: "m-linked", defaultCwd: primary.path }),
+      })
+      const linkedSession = await Instance.provide({
+        directory: linkedDir,
+        fn: () => ensureMissionSession({ missionID: "m-linked", defaultCwd: linkedDir }),
+      })
+
+      expect(primarySession.projectID).toBe(linkedSession.projectID)
+      expect(primarySession.id).not.toBe(linkedSession.id)
+      expect(primarySession.directory).toBe(primary.path)
+      expect(linkedSession.directory).toBe(linkedDir)
+
+      const linkedRepeat = await Instance.provide({
+        directory: linkedDir,
+        fn: () => ensureMissionSession({ missionID: "m-linked", defaultCwd: linkedDir }),
+      })
+      expect(linkedRepeat.id).toBe(linkedSession.id)
+
+      await Session.removeInProject({ sessionID: primarySession.id, projectID: primarySession.projectID })
+      await Session.removeInProject({ sessionID: linkedSession.id, projectID: linkedSession.projectID })
+    } finally {
+      await Instance.disposeAll()
+      await $`git worktree remove --force ${linkedDir}`.cwd(primary.path).nothrow().quiet()
+      await $`git branch -D ${branch}`.cwd(primary.path).nothrow().quiet()
+    }
+  }, 30_000)
 
   test("distinct missionIDs key distinct sessions", async () => {
     await Instance.provide({
