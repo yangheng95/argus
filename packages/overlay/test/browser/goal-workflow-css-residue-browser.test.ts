@@ -214,11 +214,17 @@ test("GoalWorkflowGroup renders through GWG selectors after goal-item residue re
     const state = await page.$eval(".gwg-list", (list: HTMLElement) => {
       const oldSelectors = [".goals-list", ".goal-item", ".goal-status-icon", ".goal-priority", ".goal-actions"]
       const first = list.querySelector<HTMLElement>(".gwg")
+      const header = list.querySelector<HTMLButtonElement>(".gwg-header")
       const statusIcon = list.querySelector<HTMLElement>(".gwg-status-icon")
       return {
         oldSelectorCount: oldSelectors.reduce((sum, selector) => sum + document.querySelectorAll(selector).length, 0),
         goalCount: list.querySelectorAll(".gwg").length,
         firstDisplay: first ? getComputedStyle(first).display : "",
+        headerTagName: header?.tagName ?? "",
+        headerType: header?.getAttribute("type") ?? "",
+        headerRole: header?.getAttribute("role") ?? null,
+        headerTabindex: header?.getAttribute("tabindex") ?? null,
+        headerExpanded: header?.getAttribute("aria-expanded") ?? "",
         statusIconDisplay: statusIcon ? getComputedStyle(statusIcon).display : "",
       }
     })
@@ -226,11 +232,44 @@ test("GoalWorkflowGroup renders through GWG selectors after goal-item residue re
       oldSelectorCount: 0,
       goalCount: 2,
       firstDisplay: "block",
+      headerTagName: "BUTTON",
+      headerType: "button",
+      headerRole: null,
+      headerTabindex: null,
+      headerExpanded: "true",
       statusIconDisplay: "flex",
     })
 
-    const screenshot = await saveElementScreenshot(page, ".gwg-list", "goal-workflow-css-residue.png")
-    assert.ok(screenshot.endsWith("goal-workflow-css-residue.png"))
+    await page.focus(".gwg-header")
+    const focusState = await page.$eval(".gwg-header", (header: HTMLButtonElement) => ({
+      active: document.activeElement === header,
+      tagName: header.tagName,
+      type: header.type,
+      ariaExpanded: header.getAttribute("aria-expanded"),
+    }))
+    assert.deepEqual(focusState, {
+      active: true,
+      tagName: "BUTTON",
+      type: "button",
+      ariaExpanded: "true",
+    })
+
+    await page.keyboard.press("Enter")
+    await page.waitForFunction(() => document.querySelector(".gwg-header")?.getAttribute("aria-expanded") === "false")
+    assert.equal(
+      await page.$eval(".gwg-header", (header: HTMLButtonElement) => header.getAttribute("aria-expanded")),
+      "false",
+    )
+
+    await page.keyboard.press("Space")
+    await page.waitForFunction(() => document.querySelector(".gwg-header")?.getAttribute("aria-expanded") === "true")
+    assert.equal(
+      await page.$eval(".gwg-header", (header: HTMLButtonElement) => header.getAttribute("aria-expanded")),
+      "true",
+    )
+
+    const screenshot = await saveElementScreenshot(page, ".gwg-list", "goal-workflow-header-native-button.png")
+    assert.ok(screenshot.endsWith("goal-workflow-header-native-button.png"))
   } finally {
     await browser.close().catch(() => undefined)
     await server.close()

@@ -130,26 +130,19 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
 
   return (
     <div class="gwg" data-goal-status={props.goal.goalStatus} classList={{ "gwg--expanded": expanded() }}>
-      <div
+      <button
+        type="button"
         class="gwg-header"
-        role="button"
-        tabindex="0"
         aria-expanded={expanded()}
         onClick={toggleExpanded}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault()
-            toggleExpanded()
-          }
-        }}
       >
         <span class="gwg-status-icon" data-status={props.goal.goalStatus}>
           <Icon name={statusIconName(goalStatusToTaskStatus(props.goal.goalStatus))} />
         </span>
-        <div class="gwg-title-row">
+        <span class="gwg-title-row">
           <span class="gwg-title">{props.goal.goalTitle}</span>
-        </div>
-        <div class="gwg-header-meta">
+        </span>
+        <span class="gwg-header-meta">
           <Show when={revisionLabel()}>
             <span class="gwg-revision">{revisionLabel()}</span>
           </Show>
@@ -165,7 +158,7 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
               ⎇ {props.goal.workspaceBranch}
             </span>
           </Show>
-        </div>
+        </span>
         {/* iter44: edit + delete buttons removed per user feedback
             (2026-05-03) \u2014 goal authoring lives elsewhere (the
             requirements/architect flow owns goal definition; manual
@@ -173,7 +166,7 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
             and rarely the right action). The `onEditGoal` / `onDeleteGoal`
             props remain on the component so callers don't break;
             they're just no-ops on this surface now. */}
-      </div>
+      </button>
       <Show when={expanded()}>
         <div class="gwg-body">
           <Show when={props.goal.goalObjective}>
