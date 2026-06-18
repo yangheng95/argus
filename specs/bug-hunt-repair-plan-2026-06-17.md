@@ -3685,3 +3685,41 @@ LINE:
 - Newton confirmed BH-086 was still present in HEAD `4575fee8b0`: `-Apply` backed up only `$changedUnion`, then clean tracked divergence later added mutating actions that could overwrite/delete unbacked files.
 - Newton identified the same root cause: backup paths and mutation actions were two sources of truth; backups must derive from the final mutation action list.
 - Newton required behavior-level clean git workspace fixtures beyond source guards; the final test suite includes host-preferred, WSL-preferred, deletion, and no-preference clean tracked divergence fixtures.
+
+## Batch P1-BL: BH-096 secret scan must include env example compound suffixes
+
+### Findings
+
+- BH-096 targets `script/secret-scan.ts`.
+- `TEXT_EXTENSIONS` lists `.env.example`, but `shouldScan(...)` derives only `path.extname(rel).toLowerCase()`.
+- For a tracked file such as `config/app.env.example`, Node returns `.example`, not `.env.example`, so `scan(...)` skips the file before applying `SECRET_PATTERNS`.
+- That makes pre-push secret scanning miss exactly the class of env template files that commonly contain credential placeholders and accidental copied keys.
+
+### Call-point Inventory
+
+- `script/secret-scan.ts::scan(...)` is the only production scanner entrypoint and calls `shouldScan(...)` before reading each tracked path.
+- `script/secret-scan.ts::listTrackedFiles(...)` provides the default tracked path list from the git index; BH-097 will address the separate indexed-content versus worktree-content read boundary.
+- `script/secret-scan.ts::TEXT_EXTENSIONS` owns ordinary text extension classification.
+- `.husky/pre-push` invokes `bun run script/secret-scan.ts`, so pre-push coverage depends on the same `scan(...)` path.
+- `packages/vscode-extension/test/secret-scan.test.ts` is the existing scanner regression suite and already imports `scan(...)`, `SECRET_PATTERNS`, and `parseGitIndexPaths(...)`.
+- `packages/vscode-extension/package.json` exposes `bun test`, which discovers the scanner test file.
+
+### Fix Shape
+
+- Keep ordinary extension matching as the single source for normal text extensions.
+- Move `.env.example` out of `TEXT_EXTENSIONS` because it is not an extension under `path.extname(...)`.
+- Add a dedicated compound-suffix classifier for paths ending in `.env.example` before ordinary extension classification.
+- Do not add a fallback scan-all mode, binary sniffing, compatibility path, hook-only gate, or any behavior that hides the classifier boundary.
+
+### Regression Tests
+
+- Extend `packages/vscode-extension/test/secret-scan.test.ts`.
+- Add fixtures `.env.example` and `config/app.env.example` containing OpenAI-style key shapes and assert `scan(...)` reports `openai-style` hits for both files.
+- Add `config/notes.example` with the same key shape and assert it is not reported, proving the fix did not broaden scanning to every `.example` file.
+- Keep the fixture string marked with `// secret-scan: ignore` in the test source so the production pre-push scan does not flag the regression test file itself.
+
+### Independent Review Feedback
+
+- Averroes confirmed BH-096 was still present in HEAD `2bfa5ef247`: `.env.example` was modeled as an extension, while `path.extname(...)` returned `.example`.
+- Averroes verified the current classifier shape hits `.env.example` and `config/app.env.example` while skipping `config/notes.example`.
+- Averroes required the regression to cover root `.env.example`, nested `*.env.example`, and a negative `.example` fixture; the final test covers all three paths.

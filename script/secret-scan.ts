@@ -77,9 +77,9 @@ const TEXT_EXTENSIONS = new Set([
   ".html",
   ".css",
   ".sh",
-  ".env.example",
   ".rs",
 ])
+const TEXT_COMPOUND_SUFFIXES = [".env.example"]
 
 export interface SecretHit {
   file: string
@@ -150,6 +150,8 @@ export function listTrackedFiles(repoRoot: string): string[] {
 }
 
 function shouldScan(rel: string): boolean {
+  const normalized = rel.toLowerCase()
+  if (TEXT_COMPOUND_SUFFIXES.some((suffix) => normalized.endsWith(suffix))) return true
   const ext = path.extname(rel).toLowerCase()
   // No extension is fine (e.g. Dockerfile, LICENSE) — scan as text.
   if (!ext) return true

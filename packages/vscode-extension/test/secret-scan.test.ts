@@ -50,6 +50,17 @@ describe("scan", () => {
     expect(hits[0]!.match).toContain("sk-eq7WQu0ylel")
   })
 
+  test("scans env example files with compound suffixes", () => {
+    write(".env.example", "OPENAI_API_KEY=sk-BBBBBBBBBBBBBBBBBBBBBB") // secret-scan: ignore
+    write("config/app.env.example", "OPENAI_API_KEY=sk-AAAAAAAAAAAAAAAAAAAAAA") // secret-scan: ignore
+    write("config/notes.example", "OPENAI_API_KEY=sk-CCCCCCCCCCCCCCCCCCCCCC") // secret-scan: ignore
+    const hits = scan({ repoRoot: root, files: [".env.example", "config/app.env.example", "config/notes.example"] })
+    expect(hits.map((hit) => [hit.file, hit.patternId])).toEqual([
+      [".env.example", "openai-style"],
+      ["config/app.env.example", "openai-style"],
+    ])
+  })
+
   test("flags GitHub PAT, AWS AKID, Google AIza, Slack token, JWT", () => {
     // Realistic-shape but invalid fixtures. Every line carries the
     // ignore directive so this test file itself can pass through the
