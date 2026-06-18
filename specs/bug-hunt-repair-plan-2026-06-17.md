@@ -3501,3 +3501,47 @@ LINE:
 - Sartre confirmed BH-074 was still present in HEAD `9b208f74dc3794d0183504d7ac840c027aaf5100`: macOS and Linux release bundle checks used `requireAny(...)`, so a single bundle satisfied a required bundle set.
 - Sartre confirmed the root cause is validator logic, not staging or ambiguous Tauri targets: `.github/workflows/build.yml` stages all bundle families, and `packages/overlay/script/build.ts::bundleTargets()` explicitly requests the complete platform set.
 - Sartre recommended the final no-fallback boundary used here: keep `--require-bundle` release-only, require every platform bundle family independently, and keep dev snapshot validation to the bare overlay binary.
+
+## Batch P1-BH: BH-075 serve must not kill unrelated port owners
+
+### Findings
+
+- BH-075 targets `packages/opencorvus/src/cli/cmd/serve.ts`.
+- `handleServeCommand(...)` currently probes the requested port with `net.createConnection(...)`. When the port is open, it calls `killOldProcess(...)`.
+- `killOldProcess(...)` runs `fuser -k <port>/tcp` on Unix and `netstat | findstr` plus `taskkill /F /PID` on Windows. Neither path proves the listener is an OpenCorvus process owned by the current runtime.
+- `Server.listen(...)` already has the correct fail-fast boundary: it attempts `Bun.serve(...)` and throws `Failed to start server on port ...` if the bind fails.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/cli/cmd/serve.ts::handleServeCommand(...)` is the only production caller of `isPortInUse(...)` and `killOldProcess(...)`.
+- `packages/opencorvus/src/cli/cmd/serve.ts::ServeCommand` and `DefaultServeCommand` both route to `handleServeCommand(...)`.
+- `packages/opencorvus/src/index.ts` and `packages/opencorvus/src/overlay-server.ts` register those serve command entrypoints for the CLI and overlay-server binary.
+- `packages/opencorvus/src/server/server.ts::Server.listen(...)` owns actual port binding and already returns a structured startup failure when binding fails.
+- `packages/opencorvus/src/cli/network.ts::resolveNetworkOptions(...)` resolves `--port`, `--hostname`, mDNS, and CORS before startup.
+- `packages/opencorvus/test/cli/serve-default-command.test.ts` already covers command routing and can own the occupied-port regression.
+
+### Fix Shape
+
+- Remove `isPortInUse(...)`, `killOldProcess(...)`, the `net.createConnection` import, and the startup block that kills and waits for port release.
+- Let `Server.listen(opts)` be the single startup authority. If the port is occupied, startup fails visibly.
+- Do not add process-name heuristics, owner checks, retries, fallback ports, prompts, or any automatic process termination.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/cli/serve-default-command.test.ts`.
+- Bind an unrelated local HTTP listener on an OS-assigned port, call `handleServeCommand(...)` with that exact port, and assert it rejects with the server bind failure.
+- Spy on `Bun.spawnSync` and assert no `fuser`, `netstat`, or `taskkill` process is spawned.
+- After the failed serve startup, fetch the unrelated listener and assert it is still alive.
+
+### Verification
+
+- Focused CLI tests passed: `bun test packages/opencorvus/test/cli/serve-default-command.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Pauli confirmed BH-075 was still present in HEAD `aab98e52b3315dd51cafdc901d2b46a247a39088`: serve probed the port, then ran `fuser -k` or `netstat` plus `taskkill` before calling `Server.listen(...)`.
+- Pauli identified the same root cause: "target port has a listener" was treated as "old OpenCorvus process can be killed" without ownership proof, host/interface distinction, or project/runtime identity.
+- Pauli recommended the final no-fallback boundary used here: delete pre-bind probing and automatic process termination, make `Server.listen(opts)` the only startup authority, and let explicit occupied ports fail visibly.
