@@ -2197,11 +2197,6 @@ button.s-row:focus-visible {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.provider-refresh-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-}
 .provider-refresh-icon {
   display: inline-block;
   line-height: 1;
@@ -2209,7 +2204,7 @@ button.s-row:focus-visible {
   transform-origin: center;
   transition: transform var(--ui-duration-slow) var(--ui-timing-standard);
 }
-.provider-refresh-btn[data-spinning="true"] .provider-refresh-icon {
+.provider-head-actions .oc-button[data-ui="provider-refresh-button"][data-spinning="true"] .provider-refresh-icon {
   transform: rotate(90deg);
 }
 
