@@ -57,6 +57,75 @@ index 0d7846d..6370972 100644
  declare const index_useListboxContext: typeof useListboxContext;
  declare namespace index {
    export {
+diff --git a/dist/index-42fe8e12.d.ts b/dist/index-42fe8e12.d.ts
+index 5d986b2..197580f 100644
+--- a/dist/index-42fe8e12.d.ts
++++ b/dist/index-42fe8e12.d.ts
+@@ -48,34 +48,34 @@ declare const Combobox: typeof ComboboxRoot & {
+ };
+ 
+ declare const index_Combobox: typeof Combobox;
+-declare const index_ComboboxContentCommonProps: typeof ComboboxContentCommonProps;
+-declare const index_ComboboxContentOptions: typeof ComboboxContentOptions;
+-declare const index_ComboboxContentProps: typeof ComboboxContentProps;
+-declare const index_ComboboxContentRenderProps: typeof ComboboxContentRenderProps;
+-declare const index_ComboboxContextValue: typeof ComboboxContextValue;
+-declare const index_ComboboxControlCommonProps: typeof ComboboxControlCommonProps;
+-declare const index_ComboboxControlOptions: typeof ComboboxControlOptions;
+-declare const index_ComboboxControlProps: typeof ComboboxControlProps;
+-declare const index_ComboboxControlRenderProps: typeof ComboboxControlRenderProps;
+-declare const index_ComboboxHiddenSelectProps: typeof ComboboxHiddenSelectProps;
+-declare const index_ComboboxIconProps: typeof ComboboxIconProps;
+-declare const index_ComboboxInputCommonProps: typeof ComboboxInputCommonProps;
+-declare const index_ComboboxInputOptions: typeof ComboboxInputOptions;
+-declare const index_ComboboxInputProps: typeof ComboboxInputProps;
+-declare const index_ComboboxInputRenderProps: typeof ComboboxInputRenderProps;
+-declare const index_ComboboxListboxCommonProps: typeof ComboboxListboxCommonProps;
+-declare const index_ComboboxListboxOptions: typeof ComboboxListboxOptions;
+-declare const index_ComboboxListboxProps: typeof ComboboxListboxProps;
+-declare const index_ComboboxListboxRenderProps: typeof ComboboxListboxRenderProps;
+-declare const index_ComboboxMultipleSelectionOptions: typeof ComboboxMultipleSelectionOptions;
+-declare const index_ComboboxPortalProps: typeof ComboboxPortalProps;
+-declare const index_ComboboxRootCommonProps: typeof ComboboxRootCommonProps;
+-declare const index_ComboboxRootOptions: typeof ComboboxRootOptions;
+-declare const index_ComboboxRootProps: typeof ComboboxRootProps;
+-declare const index_ComboboxRootRenderProps: typeof ComboboxRootRenderProps;
+-declare const index_ComboboxSingleSelectionOptions: typeof ComboboxSingleSelectionOptions;
++type index_ComboboxContentCommonProps = ComboboxContentCommonProps;
++type index_ComboboxContentOptions = ComboboxContentOptions;
++type index_ComboboxContentProps = ComboboxContentProps;
++type index_ComboboxContentRenderProps = ComboboxContentRenderProps;
++type index_ComboboxContextValue = ComboboxContextValue;
++type index_ComboboxControlCommonProps = ComboboxControlCommonProps;
++type index_ComboboxControlOptions = ComboboxControlOptions<any>;
++type index_ComboboxControlProps = ComboboxControlProps<any>;
++type index_ComboboxControlRenderProps = ComboboxControlRenderProps;
++type index_ComboboxHiddenSelectProps = ComboboxHiddenSelectProps;
++type index_ComboboxIconProps = ComboboxIconProps;
++type index_ComboboxInputCommonProps = ComboboxInputCommonProps;
++type index_ComboboxInputOptions = ComboboxInputOptions;
++type index_ComboboxInputProps = ComboboxInputProps;
++type index_ComboboxInputRenderProps = ComboboxInputRenderProps;
++type index_ComboboxListboxCommonProps = ComboboxListboxCommonProps;
++type index_ComboboxListboxOptions = ComboboxListboxOptions<any, any>;
++type index_ComboboxListboxProps = ComboboxListboxProps<any, any>;
++type index_ComboboxListboxRenderProps = ComboboxListboxRenderProps;
++type index_ComboboxMultipleSelectionOptions = ComboboxMultipleSelectionOptions<any>;
++type index_ComboboxPortalProps = ComboboxPortalProps;
++type index_ComboboxRootCommonProps = ComboboxRootCommonProps;
++type index_ComboboxRootOptions = ComboboxRootOptions<any, any>;
++type index_ComboboxRootProps = ComboboxRootProps<any, any>;
++type index_ComboboxRootRenderProps = ComboboxRootRenderProps;
++type index_ComboboxSingleSelectionOptions = ComboboxSingleSelectionOptions<any>;
+ type index_ComboboxTriggerCommonProps<T extends HTMLElement = HTMLElement> = ComboboxTriggerCommonProps<T>;
+-declare const index_ComboboxTriggerMode: typeof ComboboxTriggerMode;
++type index_ComboboxTriggerMode = ComboboxTriggerMode;
+ type index_ComboboxTriggerOptions = ComboboxTriggerOptions;
+ type index_ComboboxTriggerProps<T extends ValidComponent | HTMLElement = HTMLElement> = ComboboxTriggerProps<T>;
+ type index_ComboboxTriggerRenderProps = ComboboxTriggerRenderProps;
+ declare const index_useComboboxContext: typeof useComboboxContext;
+ declare namespace index {
+   export {
 diff --git a/dist/index-9e11b9e4.d.ts b/dist/index-9e11b9e4.d.ts
 index 9fab529..6fae062 100644
 --- a/dist/index-9e11b9e4.d.ts

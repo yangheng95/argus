@@ -160,7 +160,11 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
         (targetPanelID) => {
           const activeID = document.querySelector<HTMLInputElement>(".cmdk-input")?.getAttribute("aria-activedescendant")
           const active = activeID ? document.getElementById(activeID) : null
-          return active?.id.includes(`settings-${targetPanelID}`) === true
+          return (
+            active instanceof HTMLElement &&
+            active.dataset.commandId === `settings:${targetPanelID}` &&
+            active.hasAttribute("data-highlighted")
+          )
         },
         {},
         panelID,
@@ -169,7 +173,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
       await page.waitForFunction(
         (targetPanelID) =>
           document.querySelector("#configDialog") !== null &&
-          document.querySelector(`[data-config-panel="${targetPanelID}"]`)?.classList.contains("active") === true,
+          document.querySelector(".config-tab-panel[data-config-panel]")?.getAttribute("data-config-panel") === targetPanelID,
         {},
         panelID,
       )
@@ -235,7 +239,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
       openState.viewportWidth - openState.panelWidth >= 64,
       `expected command palette side breathing room: ${JSON.stringify(openState)}`,
     )
-    const activeRelation = await page.evaluate(() => {
+    const initialRelation = await page.evaluate(() => {
       const input = document.querySelector<HTMLInputElement>(".cmdk-input")
       const list = document.querySelector<HTMLElement>(".cmdk-list")
       const activeID = input?.getAttribute("aria-activedescendant") || ""
@@ -250,23 +254,48 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
         activeID,
         activeRole: active?.getAttribute("role") || "",
         activeSelected: active?.getAttribute("aria-selected") || "",
+        activeHighlighted: active instanceof HTMLElement && active.hasAttribute("data-highlighted") ? "true" : "false",
+        activeCommandID: active instanceof HTMLElement ? active.dataset.commandId || "" : "",
         activeClass: active?.className || "",
       }
     })
-    assert.deepEqual(activeRelation, {
+    assert.deepEqual(initialRelation, {
       inputRole: "combobox",
       autocomplete: "list",
       expanded: "true",
       controls: "commandPaletteListbox",
       listID: "commandPaletteListbox",
       listRole: "listbox",
-      activeID: activeRelation.activeID,
+      activeID: initialRelation.activeID,
       activeRole: "option",
-      activeSelected: "true",
-      activeClass: activeRelation.activeClass,
+      activeSelected: "false",
+      activeHighlighted: "true",
+      activeCommandID: initialRelation.activeCommandID,
+      activeClass: initialRelation.activeClass,
     })
-    assert.match(activeRelation.activeID, /^commandPaletteOption-/)
-    assert.match(activeRelation.activeClass, /cmdk-item--active/)
+    assert.ok(initialRelation.activeID.length > 0)
+    assert.ok(initialRelation.activeCommandID.length > 0)
+    assert.match(initialRelation.activeClass, /cmdk-item/)
+
+    await page.keyboard.press("ArrowDown")
+    const activeRelation = await page.evaluate(() => {
+      const input = document.querySelector<HTMLInputElement>(".cmdk-input")
+      const activeID = input?.getAttribute("aria-activedescendant") || ""
+      const active = activeID ? document.getElementById(activeID) : null
+      return {
+        activeID,
+        activeRole: active?.getAttribute("role") || "",
+        activeSelected: active?.getAttribute("aria-selected") || "",
+        activeHighlighted: active instanceof HTMLElement && active.hasAttribute("data-highlighted") ? "true" : "false",
+        activeCommandID: active instanceof HTMLElement ? active.dataset.commandId || "" : "",
+        activeClass: active?.className || "",
+      }
+    })
+    assert.ok(activeRelation.activeID.length > 0)
+    assert.equal(activeRelation.activeRole, "option")
+    assert.equal(activeRelation.activeHighlighted, "true")
+    assert.ok(activeRelation.activeCommandID.length > 0)
+    assert.match(activeRelation.activeClass, /cmdk-item/)
 
     await page.keyboard.press("ArrowDown")
     const afterArrow = await page.evaluate(() => {
@@ -277,14 +306,17 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
         activeID,
         activeRole: active?.getAttribute("role") || "",
         activeSelected: active?.getAttribute("aria-selected") || "",
+        activeHighlighted: active instanceof HTMLElement && active.hasAttribute("data-highlighted") ? "true" : "false",
+        activeCommandID: active instanceof HTMLElement ? active.dataset.commandId || "" : "",
         activeClass: active?.className || "",
       }
     })
     assert.notEqual(afterArrow.activeID, activeRelation.activeID)
-    assert.match(afterArrow.activeID, /^commandPaletteOption-/)
+    assert.ok(afterArrow.activeID.length > 0)
     assert.equal(afterArrow.activeRole, "option")
-    assert.equal(afterArrow.activeSelected, "true")
-    assert.match(afterArrow.activeClass, /cmdk-item--active/)
+    assert.equal(afterArrow.activeHighlighted, "true")
+    assert.notEqual(afterArrow.activeCommandID, activeRelation.activeCommandID)
+    assert.match(afterArrow.activeClass, /cmdk-item/)
     const visibleErrors = await page.evaluate(() =>
       Array.from(document.querySelectorAll<HTMLElement>('.app-notification[data-tone="error"], .app-notification[data-tone="warning"]')).map(
         (item) => item.textContent?.replace(/\s+/g, " ").trim() || "",

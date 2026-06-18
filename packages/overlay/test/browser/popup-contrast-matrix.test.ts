@@ -226,19 +226,19 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
               <strong>Command Palette</strong>
               <form class="dialog-form cmdk-panel">
                 <input class="cmdk-input" value="config" aria-label="Search commands" />
-                <div class="cmdk-list" role="listbox">
-                  <div class="cmdk-item" role="option">
+                <ul class="cmdk-list" role="listbox">
+                  <li class="cmdk-item" role="option">
                     <span class="cmdk-item-group" data-popup-text>Settings</span>
                     <span class="cmdk-item-label" data-popup-text>Open Skill Market</span>
                     <span class="cmdk-item-hint" data-popup-text>Ctrl+K</span>
-                  </div>
-                  <div class="cmdk-item cmdk-item--active" role="option" aria-selected="true">
+                  </li>
+                  <li class="cmdk-item" role="option" aria-selected="false" data-highlighted>
                     <span class="cmdk-item-group" data-popup-text>Workspace</span>
                     <span class="cmdk-item-label" data-popup-text>Open recent workspace</span>
                     <span class="cmdk-item-hint" data-popup-text>Enter</span>
-                  </div>
-                  <div class="cmdk-empty" data-popup-text>No matching commands.</div>
-                </div>
+                  </li>
+                  <li class="cmdk-empty" data-popup-text>No matching commands.</li>
+                </ul>
                 <div class="cmdk-foot" data-popup-text>Use arrow keys to move through results.</div>
               </form>
             </section>

@@ -37,6 +37,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-left-pane-resizer-browser-max-contract.md](2026-06-18-left-pane-resizer-browser-max-contract.md)                               | Left Pane Resizer Browser Max Contract |
 | [2026-06-18-command-palette-activedescendant.md](2026-06-18-command-palette-activedescendant.md)                                           | Command Palette Active Descendant      |
 | [2026-06-18-command-palette-config-sections-single-source.md](2026-06-18-command-palette-config-sections-single-source.md)                 | Command Palette Config Sections Single Source |
+| [2026-06-18-command-palette-combobox-primitive.md](2026-06-18-command-palette-combobox-primitive.md)                                       | Command Palette Combobox Primitive |
 | [2026-06-18-dialog-header-drag-kobalte-regression.md](2026-06-18-dialog-header-drag-kobalte-regression.md)                                 | Dialog Header Drag Kobalte Regression |
 | [2026-06-18-executor-chip-density-guard.md](2026-06-18-executor-chip-density-guard.md)                                                     | Executor Chip Density Guard |
 | [2026-06-18-expert-squad-unselected-option-contrast-guard.md](2026-06-18-expert-squad-unselected-option-contrast-guard.md)                   | Expert Squad Unselected Option Contrast Guard |

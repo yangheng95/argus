@@ -56,8 +56,17 @@
   clip-path: inset(50%);
 }
 
+.cmdk-combobox,
+.cmdk-control {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .cmdk-input {
   appearance: none;
+  width: 100%;
+  box-sizing: border-box;
   border: none;
   border-bottom: var(--oc-border-width) solid var(--border);
   background: transparent;
@@ -87,6 +96,8 @@
 
 .cmdk-list {
   overflow-y: auto;
+  margin: 0;
+  list-style: none;
   padding: var(--ui-gap-xs) 0;
 }
 
@@ -101,7 +112,8 @@
   user-select: none;
 }
 
-.cmdk-item--active {
+.cmdk-item[data-highlighted],
+.cmdk-item[data-selected] {
   background: var(--accent-dim);
   color: var(--text-strong);
 }
