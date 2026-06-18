@@ -112,7 +112,10 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).toContain('size="sm"')
     expect(TASK_DIR_BAR).not.toContain('class="project-worktree-dropdown"')
     expect(TASK_DIR_BAR).toContain('class="project-worktree-panel"')
-    expect(TASK_DIR_BAR).toContain('class="project-worktree-remove"')
+    expect(TASK_DIR_BAR).toContain('data-ui="project-worktree-remove"')
+    expect(TASK_DIR_BAR).toContain('data-chrome="icon-action"')
+    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="project-worktree-remove"/)
+    expect(TASK_DIR_BAR).not.toContain('class="project-worktree-remove"')
     expect(TASK_DIR_BAR).toContain('data-kind="active"')
     expect(TASK_DIR_BAR).toContain('data-kind="expired"')
     expect(TASK_DIR_BAR).toContain('t("worktree.active")')
@@ -139,6 +142,13 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const row = soloRuleBody(".project-worktree-item")
     expect(row).toMatch(/grid-template-columns:/)
     expect(row).toMatch(/min-height:\s*calc\(28px \* var\(--ui-scale\)\)/)
+    const remove = soloRuleBody('.project-worktree-row .oc-button[data-ui="project-worktree-remove"]')
+    expect(remove).toMatch(/--oc-button-height:\s*calc\(26px \* var\(--ui-scale\)\)/)
+    expect(STYLES).toContain(
+      '.project-worktree-row\n  .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"][data-ui="project-worktree-remove"]:disabled',
+    )
+    expect(STYLES).not.toContain(".project-worktree-remove")
+    expect(remove).not.toMatch(/outline:\s*none/)
     expect(STYLES).not.toContain(".project-worktree-main")
   })
 

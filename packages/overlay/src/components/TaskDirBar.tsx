@@ -456,16 +456,20 @@ export function ProjectWorktreeDropdown() {
                             {compactPath(item.directory)}
                           </span>
                         </DropdownMenu.Item>
-                        <button
+                        <Button
                           type="button"
-                          class="project-worktree-remove"
+                          variant="ghost"
+                          size="icon"
+                          tone="danger"
+                          data-chrome="icon-action"
+                          data-ui="project-worktree-remove"
                           title={item.status === "expired" ? t("worktree.cleanup_expired") : t("worktree.delete")}
                           aria-label={item.status === "expired" ? t("worktree.cleanup_expired") : t("worktree.delete")}
                           disabled={!item.removable}
                           onClick={(event) => void removeWorktree(item, event)}
                         >
                           <Icon name="close" size={12} />
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </For>
