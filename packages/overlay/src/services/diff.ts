@@ -31,6 +31,7 @@ export interface ChangeGroup {
 }
 
 const diffCache = new Map<string, FileChange[]>()
+const diffInFlight = new Map<string, Promise<FileChange[]>>()
 
 export function changeGroupsRevisionKey(groups: ChangeGroup[]): string {
   return groups
@@ -231,12 +232,22 @@ async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): 
   if (!key) return []
   const cached = diffCache.get(key)
   if (cached) return cached
-  const data = scope.goalRunID
-    ? await apiJson(`goal-run/${encodeURIComponent(scope.goalRunID)}/acceptance`)
-    : await apiJson(`run/${encodeURIComponent(String(scope.runID))}/acceptance`)
-  const diffs = normalizeAcceptanceDiffs((data as any)?.result?.diffs)
-  if (diffs.length > 0) diffCache.set(key, diffs)
-  return diffs
+  const active = diffInFlight.get(key)
+  if (active) return active
+  const pending = (async () => {
+    const data = scope.goalRunID
+      ? await apiJson(`goal-run/${encodeURIComponent(scope.goalRunID)}/acceptance`)
+      : await apiJson(`run/${encodeURIComponent(String(scope.runID))}/acceptance`)
+    const diffs = normalizeAcceptanceDiffs((data as any)?.result?.diffs)
+    if (diffs.length > 0) diffCache.set(key, diffs)
+    return diffs
+  })()
+  diffInFlight.set(key, pending)
+  try {
+    return await pending
+  } finally {
+    if (diffInFlight.get(key) === pending) diffInFlight.delete(key)
+  }
 }
 
 /**

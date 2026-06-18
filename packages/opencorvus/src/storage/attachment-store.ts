@@ -3,8 +3,8 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
-import { Database } from "@/storage/db"
-import { PartTable } from "@/session/session.sql"
+import { Database, eq } from "@/storage/db"
+import { PartTable, SessionTable } from "@/session/session.sql"
 import { EngineTaskTable } from "@/engine/engine.sql"
 import { Log } from "@/util/log"
 
@@ -715,19 +715,28 @@ export namespace AttachmentStore {
    * the serialized JSON (see `harvestReferences`) covers every retain surface
    * — no per-source parsing, no row-shape assumptions to drift.
    */
-  export function collectReferencedShas(): Map<string, Set<string>> {
+  export function collectReferencedShas(projectID?: string): Map<string, Set<string>> {
     const byProject = new Map<string, Set<string>>()
     Database.use((db) => {
-      for (const row of db.select({ data: PartTable.data }).from(PartTable).all()) {
+      const partRows = projectID
+        ? db
+            .select({ data: PartTable.data })
+            .from(PartTable)
+            .innerJoin(SessionTable, eq(PartTable.session_id, SessionTable.id))
+            .where(eq(SessionTable.project_id, projectID))
+            .all()
+        : db.select({ data: PartTable.data }).from(PartTable).all()
+      for (const row of partRows) {
         harvestReferences(row.data, byProject)
       }
-      for (const row of db
+      const taskQuery = db
         .select({
           attachments: EngineTaskTable.attachments,
           system_artifacts: EngineTaskTable.system_artifacts,
         })
         .from(EngineTaskTable)
-        .all()) {
+      const taskRows = projectID ? taskQuery.where(eq(EngineTaskTable.project_id, projectID)).all() : taskQuery.all()
+      for (const row of taskRows) {
         harvestReferences(row.attachments, byProject)
         harvestReferences(row.system_artifacts, byProject)
       }
@@ -752,7 +761,7 @@ export namespace AttachmentStore {
   }> {
     const files = await listOnDisk(projectID)
     if (files.length === 0) return { deleted: 0, bytesFreed: 0, skippedYoung: 0, kept: 0 }
-    const referenced = collectReferencedShas().get(projectID) ?? new Set<string>()
+    const referenced = collectReferencedShas(projectID).get(projectID) ?? new Set<string>()
     const now = Date.now()
     let deleted = 0
     let bytesFreed = 0

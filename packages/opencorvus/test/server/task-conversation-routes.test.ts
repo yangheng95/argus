@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import fs from "node:fs/promises"
-import z from "zod"
-import { BusEvent } from "../../src/bus/bus-event"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
@@ -24,18 +22,6 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
-
-const SessionStatusProtocolEvent = BusEvent.define(
-  "session.status",
-  z.object({
-    taskID: z.string(),
-    sessionID: z.string(),
-    channel: z.string(),
-    resolvedRole: z.string(),
-    parentSessionID: z.string().optional(),
-    status: z.record(z.string(), z.any()),
-  }),
-)
 
 function sseReader(response: Response): () => Promise<any> {
   const reader = response.body?.getReader()
@@ -237,16 +223,12 @@ describe("task conversation routes", () => {
         )
 
         await EngineProtocol.emit(
-          SessionStatusProtocolEvent,
+          SessionStatus.Event.Status,
           {
-            taskID,
             sessionID: frontendResearch.id,
-            channel: "frontend-research",
-            resolvedRole: "frontend-research",
-            parentSessionID: root.id,
             status: { type: "terminal", reason: "error", error: "prepared evidence missing" },
           },
-          { source: "test.server", sessionID: frontendResearch.id },
+          { source: "test.server", taskID, sessionID: frontendResearch.id },
         )
 
         const response = await app.request(`/task/${taskID}/conversation/session/${frontendResearch.id}`, {
@@ -270,6 +252,133 @@ describe("task conversation routes", () => {
         expect(body.events?.map((event) => event.type)).toEqual(["session.status"])
         expect(body.events?.[0]?.payload?.sessionID).toBe(frontendResearch.id)
         expect(body.view?.sessions).toEqual([])
+      },
+    })
+  })
+
+  test("GET /task/:taskID/conversation/session/:sessionID does not use full task transcript", async () => {
+    const source = await fs.readFile(new URL("../../src/server/routes/orchestrator.ts", import.meta.url), "utf8")
+    const routeStart = source.indexOf('"/task/:taskID/conversation/session/:sessionID"')
+    const routeEnd = source.indexOf('"/task/:taskID/conversation/history"', routeStart)
+    const routeBlock = source.slice(routeStart, routeEnd)
+
+    expect(routeBlock).toContain("loadTaskSessionTranscript(taskID, sessionID)")
+    expect(routeBlock).not.toContain("loadFullTaskTranscript(taskID)")
+  })
+
+  test("GET /task/:taskID/conversation/session/:sessionID reads requested session without sibling transcript", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "session transcript root",
+        })
+        const requested = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "requested session",
+        })
+        const sibling = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "large sibling session",
+        })
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "single session transcript task",
+              request: "single session transcript task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+
+          db.insert(MessageTable)
+            .values({
+              id: "msg_requested_session",
+              session_id: requested.id,
+              time_created: now + 1,
+              time_updated: now + 1,
+              data: {
+                role: "assistant",
+                time: { created: now + 1 },
+              } as any,
+            })
+            .run()
+          db.insert(PartTable)
+            .values({
+              id: "prt_requested_session",
+              message_id: "msg_requested_session",
+              session_id: requested.id,
+              time_created: now + 1,
+              time_updated: now + 1,
+              data: {
+                type: "text",
+                text: "requested session text",
+              } as any,
+            })
+            .run()
+
+          for (let index = 0; index < 120; index++) {
+            const suffix = String(index).padStart(3, "0")
+            db.insert(MessageTable)
+              .values({
+                id: `msg_sibling_${suffix}`,
+                session_id: sibling.id,
+                time_created: now + 10 + index,
+                time_updated: now + 10 + index,
+                data: {
+                  role: "assistant",
+                  time: { created: now + 10 + index },
+                } as any,
+              })
+              .run()
+            db.insert(PartTable)
+              .values({
+                id: `prt_sibling_${suffix}`,
+                message_id: `msg_sibling_${suffix}`,
+                session_id: sibling.id,
+                time_created: now + 10 + index,
+                time_updated: now + 10 + index,
+                data: {
+                  type: "text",
+                  text: `sibling transcript ${index}`,
+                } as any,
+              })
+              .run()
+          }
+        })
+
+        const response = await app.request(`/task/${taskID}/conversation/session/${requested.id}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        if (response.status !== 200) {
+          throw new Error(await response.text())
+        }
+        const body = (await response.json()) as {
+          transcript?: Array<{ info?: { id?: string; sessionID?: string; channel?: string }; parts?: Array<{ text?: string }> }>
+        }
+
+        expect(body.transcript?.map((message) => message.info?.id)).toEqual(["msg_requested_session"])
+        expect(body.transcript?.[0]?.info?.sessionID).toBe(requested.id)
+        expect(body.transcript?.[0]?.info?.channel).toBe("build")
+        expect(body.transcript?.[0]?.parts?.[0]?.text).toBe("requested session text")
       },
     })
   })
@@ -366,16 +475,12 @@ describe("task conversation routes", () => {
         })
 
         await EngineProtocol.emit(
-          SessionStatusProtocolEvent,
+          SessionStatus.Event.Status,
           {
-            taskID,
             sessionID: frontendResearch.id,
-            channel: "frontend-research",
-            resolvedRole: "frontend-research",
-            parentSessionID: root.id,
             status: { type: "terminal", reason: "error", error: "history preparation failed" },
           },
-          { source: "test.server", sessionID: frontendResearch.id },
+          { source: "test.server", taskID, sessionID: frontendResearch.id },
         )
 
         const response = await app.request(
