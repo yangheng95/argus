@@ -476,48 +476,6 @@ body[data-resizing="true"] .pane-resizer::after {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Task-overlay error pill (.task-overlay-error)
-   Displayed on the workspace shell when a task fails to dispatch
-   or hit a transport error. Shows the error msg + a retry button.
-   ───────────────────────────────────────────────────────────── */
-
-.task-overlay-error {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  padding: calc(2px * var(--ui-scale)) var(--ui-gap-md);
-  border-radius: var(--oc-radius-pill);
-  background: var(--bad-dim);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 36%, transparent);
-  color: var(--bad);
-  font-size: var(--ui-font-meta);
-  max-width: 60vw;
-}
-.task-overlay-error-msg {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.task-overlay-error-retry {
-  appearance: none;
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 50%, transparent);
-  background: transparent;
-  color: var(--bad);
-  border-radius: var(--oc-radius-pill);
-  padding: calc(1px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  font-size: var(--ui-font-meta);
-  cursor: pointer;
-}
-.task-overlay-error-retry:hover {
-  background: color-mix(in srgb, var(--bad) 16%, transparent);
-}
-.task-overlay-error-retry:focus-visible {
-  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--bad) 60%, transparent);
-  outline-offset: calc(1px * var(--ui-scale));
-}
-
-/* ─────────────────────────────────────────────────────────────
    Workspace shell layout (.panel / .panel-body / .sections /
    .config-dialog-layout)
    The outer flex chain that fills the viewport between the
