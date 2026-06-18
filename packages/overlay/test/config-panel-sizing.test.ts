@@ -9,8 +9,10 @@ import {
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "settings.css"), "utf8")
+const FIELD_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "field.css"), "utf8")
 const SETTINGS_COMPONENTS_DIR = join(OVERLAY_ROOT, "src", "components", "settings")
 const CONFIG_DIALOG_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "ConfigDialogHost.tsx"), "utf8")
+const CHANNELS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ChannelsPanel.tsx"), "utf8")
 const HEADER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "header.css"), "utf8")
 const PROVIDERS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ProvidersPanel.tsx"), "utf8")
 const PROMPT_CATALOG_TSX = readFileSync(
@@ -23,6 +25,16 @@ const RETIRED_LLM_PROVIDER_SELECTORS = [
   ".llm-summary",
   ".llm-api-key-summary",
   ".llm-auth-row",
+]
+const RETIRED_SETTINGS_CONTINUATION_SELECTORS = [
+  ".playwright-options",
+  ".channel-public-url-head",
+  ".config-field-row",
+  ".config-inline-popup",
+  ".config-row",
+  ".config-label",
+  ".config-value",
+  ".opacity-field",
 ]
 
 function walkFiles(root: string, accept: (path: string) => boolean): string[] {
@@ -145,6 +157,22 @@ describe("config panel sizing", () => {
     expect(residues).toEqual([])
     expect(PROVIDERS_TSX).toContain('class="provider-row-summary"')
     expect(PROVIDERS_TSX).toContain("SettingsPill")
+  })
+
+  test("retired settings continuation selectors stay out while channel owners stay live", () => {
+    for (const selector of RETIRED_SETTINGS_CONTINUATION_SELECTORS) {
+      expect(SETTINGS_CSS).not.toContain(selector)
+      expect(FIELD_CSS).not.toContain(selector)
+    }
+
+    expect(SETTINGS_CSS).toContain("#channelConfigBody")
+    expect(SETTINGS_CSS).toContain("#channelList")
+    expect(SETTINGS_CSS).toContain(".config-inline-form")
+    expect(SETTINGS_CSS).toContain(".extension-head .field-label")
+    expect(SETTINGS_CSS).toContain(".general-panel")
+    expect(SETTINGS_CSS).toContain(".loading-hint")
+    expect(CONFIG_DIALOG_TSX).toContain('return "channelConfigBody"')
+    expect(CHANNELS_TSX).toContain('id="channelList"')
   })
 
   test("settings content normalizes same-level small button dimensions", () => {

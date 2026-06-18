@@ -2406,6 +2406,37 @@ describe("overlay architecture guards", () => {
     expect(body).toContain("border: 0 solid transparent")
   })
 
+  test("retired settings continuation selector families stay removed while channel list has an owner", () => {
+    const settingsSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css")))
+    const fieldSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/field.css")))
+    const channelsPanel = withoutComments(readText(join(OVERLAY_ROOT, "src/components/settings/ChannelsPanel.tsx")))
+    const configDialog = withoutComments(readText(join(OVERLAY_ROOT, "src/components/ConfigDialogHost.tsx")))
+    const retiredContinuationSelectors = [
+      ".playwright-options",
+      ".channel-public-url-head",
+      ".config-field-row",
+      ".config-inline-popup",
+      ".config-row",
+      ".config-label",
+      ".config-value",
+      ".opacity-field",
+    ]
+
+    for (const selector of retiredContinuationSelectors) {
+      expect(settingsSurface).not.toContain(selector)
+      expect(fieldSurface).not.toContain(selector)
+    }
+
+    expect(settingsSurface).toContain("#channelConfigBody")
+    expect(settingsSurface).toContain("#channelList")
+    expect(settingsSurface).toContain(".config-inline-form")
+    expect(settingsSurface).toContain(".extension-head .field-label")
+    expect(settingsSurface).toContain(".general-panel")
+    expect(settingsSurface).toContain(".loading-hint")
+    expect(configDialog).toContain('return "channelConfigBody"')
+    expect(channelsPanel).toContain('id="channelList"')
+  })
+
   test("composer shell does not rely on theme chrome resets", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
 

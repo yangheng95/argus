@@ -373,8 +373,7 @@ textarea.field-input {
   min-width: calc(32px * var(--ui-scale));
 }
 
-.sections .field-row,
-.sections .config-field-row {
+.sections .field-row {
   gap: var(--section-row-gap);
 }
 
