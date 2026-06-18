@@ -11,8 +11,11 @@ function readText(rel: string): string {
 describe("retired dialog dead code is removed from overlay runtime", () => {
   const domRefs = readText("src/dom.ts")
   const indexHtml = readText("src/index.html")
+  const components = readText("src/components/App.tsx") + "\n" + readText("src/components/SessionDialogHost.tsx")
+  const dialogService = readText("src/services/dialog.ts")
   const diffSurface = readText("src/styles/surfaces/diff.css")
   const dialogSurface = readText("src/styles/surfaces/dialog.css")
+  const inspectorSurface = readText("src/styles/surfaces/inspector.css")
   const diffPreview = readText("src/components/DiffPreviewPanel.tsx")
 
   test("dom.ts no longer caches unused app/config/goal/diff dialog refs", () => {
@@ -65,5 +68,16 @@ describe("retired dialog dead code is removed from overlay runtime", () => {
     expect(diffSurface).not.toContain(".diff-dialog-meta")
     expect(diffSurface).not.toContain(".diff-preview {")
     expect(dialogSurface).not.toContain(".diff-dialog-form")
+  })
+
+  test("retired section dialog and session action selectors stay removed", () => {
+    const productionSource = [indexHtml, components, dialogService].join("\n")
+
+    expect(dialogSurface).toContain(".session-dialog-body")
+    expect(inspectorSurface).toContain(".session-msg")
+    for (const selector of [".section-dialog-head", ".section-dialog-meta", ".section-dialog-body", ".session-actions"]) {
+      expect(dialogSurface).not.toContain(selector)
+      expect(productionSource).not.toContain(selector.slice(1))
+    }
   })
 })
