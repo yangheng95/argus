@@ -1,4 +1,6 @@
 import { afterAll, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { installIconHtmlRenderer } from "../src/utils/icon-html"
 import {
   CODE_BLOCK_RENDER_LINE_LIMIT,
@@ -7,6 +9,8 @@ import {
   renderCodeBlock,
   renderMarkdown,
 } from "../src/utils/markdown"
+
+const MARKDOWN_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/markdown.css"), "utf8")
 
 const disposeIconHtmlRenderer = installIconHtmlRenderer(({ name, size }) => {
   if (name !== "copy") throw new Error(`Unknown test icon "${name}"`)
@@ -99,4 +103,22 @@ test("renderCodeBlock respects render line and copy budgets", () => {
   expect(result.html).toContain("Overlay display clipped")
   expect(result.html).not.toContain(sentinel)
   expect(result.html).not.toContain(`data-md-copy="${content}`)
+})
+
+test("renderCodeBlock copy action uses the shared Button contract", () => {
+  const result = renderCodeBlock("console.log('ok')", "typescript", Infinity)
+
+  expect(result.html).toContain('class="oc-button md-code-copy"')
+  expect(result.html).toContain('data-variant="ghost"')
+  expect(result.html).toContain('data-size="icon"')
+  expect(result.html).toContain('data-tone="neutral"')
+  expect(result.html).toContain('data-chrome="icon-action"')
+  expect(result.html).toContain('data-ui="markdown-code-copy"')
+  expect(result.html).toContain('data-md-copy=')
+  expect(result.html).toContain('title="Copy code"')
+  expect(result.html).toContain('aria-label="Copy code"')
+  expect(result.html).toContain('data-test-icon="copy"')
+  expect(MARKDOWN_CSS).toContain('.oc-button[data-ui="markdown-code-copy"]')
+  expect(MARKDOWN_CSS).toContain('.oc-button[data-ui="markdown-code-copy"][data-copied="true"]')
+  expect(MARKDOWN_CSS).not.toMatch(/\.md-code-copy:(?:hover|focus-visible)\b/)
 })
