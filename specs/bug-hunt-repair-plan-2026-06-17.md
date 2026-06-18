@@ -5022,3 +5022,41 @@ LINE:
 - `bun run --cwd packages/overlay typecheck` passed.
 - `bun run --cwd packages/overlay check:i18n` passed.
 - `git diff --check` passed for the P2-BW2 touched files.
+
+## Batch P2-CC2: QuickNote README must match implemented route and service exports
+
+### Findings
+
+- Maxwell's independent residual scan found the deferred README drift from Batch P2-CC still present in `packages/opencorvus/src/quicknote/README.md`.
+- The README documented `GET /api/v1/notes/:id`, but `QuickNoteRoutes()` only mounts `POST /notes` under `/api/v1`.
+- The README documented `QuickNoteService.getNoteById`, `QuickNoteService.updateNoteStatus`, and `QuickNoteService.getNotesByUser`, but `quicknote/index.ts` exports named functions `createNote`, `listNotes`, `getNote`, and `deleteNote`.
+- The README create-route body also documented `tags` and `user_id`, while the OpenAPI request schema only accepts `content`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/quicknote/README.md` is the internal QuickNote module documentation.
+- `packages/opencorvus/src/quicknote/routes.ts::QuickNoteRoutes` is the only HTTP route owner and documents `quicknote.create`.
+- `packages/opencorvus/src/server/routes/app.ts::AppRoutes(...)` mounts `QuickNoteRoutes()` at `/api/v1`.
+- `packages/opencorvus/src/quicknote/index.ts` is the public module export surface for examples.
+- `packages/opencorvus/src/quicknote/service.ts` owns the named service functions and their input shape.
+- `packages/opencorvus/test/quicknote/routes.test.ts` already verifies the mounted route and OpenAPI operation and is the focused place to lock README/API consistency.
+
+### Fix Shape
+
+- Rewrite the README API section to document only `POST /api/v1/notes` with a `content` JSON body and the current response.
+- Rewrite service examples to import and call the exported named functions: `createNote`, `getNote`, `listNotes`, and `deleteNote`.
+- Update the data object and file-structure snippets to match the current service and route files.
+- Do not add unplanned GET/update/list-by-user HTTP routes, compatibility endpoints, or facade objects just to satisfy stale documentation.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/quicknote/routes.test.ts` so every README HTTP example under `/api/` exists in `Server.openapi()`.
+- Extend the same test so every named `@/quicknote` import in README examples exists on the actual module export.
+
+### Verification
+
+- Focused QuickNote tests passed: `bun test packages/opencorvus/test/quicknote/routes.test.ts packages/opencorvus/test/quicknote/service.test.ts packages/opencorvus/test/quicknote/text-processor.test.ts --timeout 60000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Route inventory passed: `bun run api:routes-check`.
+- API reference check passed: `bun run docs:check`.
+- `git diff --check` passed for the P2-CC2 touched files.
