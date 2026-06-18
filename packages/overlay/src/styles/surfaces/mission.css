@@ -182,7 +182,7 @@
 
 .mission-task-projection-status {
   color: var(--text-muted);
-  font-size: var(--ui-font-size-xs);
+  font-size: var(--ui-font-tiny);
   white-space: nowrap;
 }
 
@@ -208,7 +208,7 @@
   background: var(--surface);
   color: var(--text);
   padding: var(--ui-gap-sm);
-  font-size: var(--ui-font-size-sm);
+  font-size: var(--ui-font-small);
 }
 
 .mission-action-error {

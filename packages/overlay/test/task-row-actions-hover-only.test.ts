@@ -70,7 +70,7 @@ describe("task-row action buttons hover-only contract", () => {
     const body = extractRule(css, '.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-delete"]')
     expect(body).not.toBeNull()
     expect(body!).toContain("--oc-button-shadow: none")
-    expect(body!).toContain("border-radius: var(--oc-radius-sm)")
+    expect(body!).toContain("border-radius: var(--oc-radius-soft)")
 
     const iconBody = extractRule(css, '.task-row-actions .oc-button[data-ui="task-row-delete"] svg')
     expect(iconBody).not.toBeNull()

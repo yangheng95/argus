@@ -6,10 +6,16 @@ const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles")
 
 const RUNTIME_STYLE_VARS = new Set([
   "--card-sticky-inline-size",
+  "--center-workbench-panel-grow",
   "--conversation-agent-rail-height",
+  "--dialog-drag-x",
+  "--dialog-drag-y",
+  "--image-preview-rendered-height",
+  "--image-preview-rendered-width",
   "--pct",
   "--progress-failed",
   "--progress-passed",
+  "--titlebar-menu-anchor-left",
   "--todo-progress",
 ])
 

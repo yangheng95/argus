@@ -583,7 +583,7 @@
   height: calc(20px * var(--ui-scale));
   min-width: calc(20px * var(--ui-scale));
   min-height: calc(20px * var(--ui-scale));
-  border-radius: var(--oc-radius-sm);
+  border-radius: var(--oc-radius-soft);
   /* Hover-only chrome: buttons stay hidden until the row is hovered or
      focused. The row switches its right grid track to an action slot only in
      those visible states, so hidden controls do not consume resting layout
@@ -703,7 +703,7 @@
   color: inherit;
   background: var(--surface-elevated, var(--surface, transparent));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
-  border-radius: var(--oc-radius-sm, 3px);
+  border-radius: var(--oc-radius-soft);
   padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
   outline: none;
 }

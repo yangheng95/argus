@@ -266,7 +266,7 @@ body[data-notifications-panel-open="true"] .app-notifications[data-surface="toas
   background: var(--subtle-2);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
-  font-family: var(--ui-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-family: var(--mono);
   font-size: var(--ui-font-meta);
   line-height: 1.4;
   color: var(--text-strong);
