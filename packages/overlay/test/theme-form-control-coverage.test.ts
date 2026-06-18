@@ -90,6 +90,7 @@ describe("shared Kobalte select popup colors", () => {
   const composerCss = stripComments(readCss(join("surfaces", "composer.css")))
   const inspectorCss = stripComments(readCss(join("surfaces", "inspector.css")))
   const settingsCss = stripComments(readCss(join("surfaces", "settings.css")))
+  const selectControl = readFileSync(join(import.meta.dir, "..", "src", "components", "ui", "SelectControl.tsx"), "utf8")
   const browserPreviewPanel = readFileSync(
     join(import.meta.dir, "..", "src", "components", "BrowserPreviewPanel.tsx"),
     "utf8",
@@ -113,6 +114,14 @@ describe("shared Kobalte select popup colors", () => {
     expect(optionCopyBlock).not.toMatch(/color\s*:/)
   })
 
+  test("SelectControl composes the shared select class family", () => {
+    expect(selectControl).toContain('withClass("oc-select-trigger", props.triggerClass)')
+    expect(selectControl).toContain('withClass("oc-select-content", props.contentClass)')
+    expect(selectControl).toContain('withClass("oc-select-listbox", props.listboxClass)')
+    expect(selectControl).toContain('withClass("oc-select-option", props.optionClass)')
+    expect(selectControl).toContain('withClass("oc-select-indicator", props.indicatorClass)')
+  })
+
   test("prompt profile option descriptions inherit the shared popup foreground", () => {
     const promptProfileDescriptionBlock =
       composerCss.match(/\.prompt-profile-select-option-copy\s+small\s*{[^}]*}/)?.[0] ?? ""
@@ -121,10 +130,11 @@ describe("shared Kobalte select popup colors", () => {
   })
 
   test("browser preview candidate dropdown uses the shared select popup colors", () => {
-    expect(browserPreviewPanel).toContain('class="oc-select-content browser-preview-candidate-content"')
-    expect(browserPreviewPanel).toContain('class="oc-select-listbox browser-preview-candidate-listbox"')
-    expect(browserPreviewPanel).toContain('class="oc-select-option browser-preview-candidate-option"')
-    expect(browserPreviewPanel).toContain('class="oc-select-indicator browser-preview-candidate-indicator"')
+    expect(browserPreviewPanel).toContain("<SelectControl<BrowserPreviewCandidate>")
+    expect(browserPreviewPanel).toContain('contentClass="browser-preview-candidate-content"')
+    expect(browserPreviewPanel).toContain('listboxClass="browser-preview-candidate-listbox"')
+    expect(browserPreviewPanel).toContain('optionClass="browser-preview-candidate-option"')
+    expect(browserPreviewPanel).toContain('indicatorClass="browser-preview-candidate-indicator"')
 
     const candidateContentBlock = inspectorCss.match(/\.browser-preview-candidate-content\s*{[^}]*}/)?.[0] ?? ""
     const candidateOptionBlock = inspectorCss.match(/\.browser-preview-candidate-option\s*{[^}]*}/)?.[0] ?? ""
@@ -136,14 +146,16 @@ describe("shared Kobalte select popup colors", () => {
   })
 
   test("log viewer level dropdown uses the shared Select trigger chrome", () => {
-    expect(logViewer).toContain('class="field-input oc-select-trigger log-level-select-trigger"')
+    expect(logViewer).toContain("<SelectControl<LogLevelSelectOption>")
+    expect(logViewer).toContain('triggerClass="field-input log-level-select-trigger"')
 
     expect(settingsCss).not.toContain(".log-level-select {")
     expect(settingsCss).not.toContain(".log-level-select:focus")
   })
 
   test("app dialog select trigger uses the shared Select trigger chrome", () => {
-    expect(appDialogHost).toContain('class="field-input oc-select-trigger app-dialog-input app-dialog-select-trigger"')
+    expect(appDialogHost).toContain("<SelectControl<AppDialogSelectOption>")
+    expect(appDialogHost).toContain('triggerClass="field-input app-dialog-input app-dialog-select-trigger"')
     expect(appDialogHost).not.toContain('class="field-input app-dialog-input custom-select app-dialog-select-trigger"')
   })
 
@@ -151,6 +163,7 @@ describe("shared Kobalte select popup colors", () => {
     const violations: string[] = []
 
     for (const file of walkTsx(SRC_ROOT)) {
+      if (file.endsWith(join("components", "ui", "SelectControl.tsx"))) continue
       const source = readFileSync(file, "utf8")
       for (const match of source.matchAll(/<Select\.Trigger\b[\s\S]*?>/g)) {
         const tag = match[0]
