@@ -514,6 +514,15 @@ function focusTaskPanel(): void {
   resetCenterWorkbenchToFocusedPanel("tasks")
 }
 
+function focusInitialRestoredTaskWorkspace(): void {
+  if (!activeTaskID() || boardStore.selectedSource?.kind !== "task") return
+  setMissionLauncherActive(false)
+  setAssistantLauncherActive(false)
+  resetCenterWorkbenchToFocusedPanel("tasks")
+  setSelectedLeftActivity("tasks")
+  setSelectedLeftPanelActivity("tasks")
+}
+
 function selectTaskFromTaskList(taskID: string): void {
   if (activeTaskID() !== taskID) focusTaskPanel()
   void selectTask(taskID)
@@ -1958,6 +1967,7 @@ void (async () => {
       onSettingsLoaded: () => {
         setSettingsHydrated(true)
       },
+      onConnected: focusInitialRestoredTaskWorkspace,
     })
     renderAboutVersion()
   } catch (error) {
