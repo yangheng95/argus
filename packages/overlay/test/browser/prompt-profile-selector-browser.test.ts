@@ -252,23 +252,41 @@ test("prompt profile selector options remain readable on the light popup surface
     assert.ok(screenshot.endsWith("prompt-profile-selector-current.png"))
 
     const result = await page.evaluate(() => {
-      function parseRgb(value: string): [number, number, number] {
+      interface Rgba {
+        r: number
+        g: number
+        b: number
+        a: number
+      }
+      function parseColor(value: string): Rgba {
         const match = value.match(/rgba?\(([^)]+)\)/)
         if (!match) throw new Error(`Unsupported color: ${value}`)
-        const [r, g, b] = match[1].split(",").map((part) => Number.parseFloat(part.trim()))
-        if (![r, g, b].every(Number.isFinite)) throw new Error(`Invalid color: ${value}`)
-        return [r, g, b]
+        const parts = match[1].split(",").map((part) => Number.parseFloat(part.trim()))
+        const [r, g, b] = parts
+        const a = parts.length >= 4 ? parts[3] : 1
+        if (![r, g, b, a].every(Number.isFinite)) throw new Error(`Invalid color: ${value}`)
+        return { r, g, b, a }
+      }
+      function composite(foreground: Rgba, background: Rgba): Rgba {
+        const alpha = foreground.a + background.a * (1 - foreground.a)
+        if (alpha === 0) return { r: 0, g: 0, b: 0, a: 0 }
+        return {
+          r: (foreground.r * foreground.a + background.r * background.a * (1 - foreground.a)) / alpha,
+          g: (foreground.g * foreground.a + background.g * background.a * (1 - foreground.a)) / alpha,
+          b: (foreground.b * foreground.a + background.b * background.a * (1 - foreground.a)) / alpha,
+          a: alpha,
+        }
       }
       function channel(value: number): number {
         const scaled = value / 255
         return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4
       }
-      function luminance([r, g, b]: [number, number, number]): number {
-        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+      function luminance(color: Rgba): number {
+        return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b)
       }
-      function contrastRatio(foreground: string, background: string): number {
-        const lighter = Math.max(luminance(parseRgb(foreground)), luminance(parseRgb(background)))
-        const darker = Math.min(luminance(parseRgb(foreground)), luminance(parseRgb(background)))
+      function contrastRatio(foreground: Rgba, background: Rgba): number {
+        const lighter = Math.max(luminance(foreground), luminance(background))
+        const darker = Math.min(luminance(foreground), luminance(background))
         return (lighter + 0.05) / (darker + 0.05)
       }
 
@@ -286,19 +304,25 @@ test("prompt profile selector options remain readable on the light popup surface
       const contentBackgroundParts = contentBackground.match(/rgba?\(([^)]+)\)/)?.[1].split(",") ?? []
       const contentBackgroundAlpha =
         contentBackgroundParts.length >= 4 ? Number.parseFloat(contentBackgroundParts[3].trim()) : 1
+      const contentBackgroundColor = parseColor(contentBackground)
       const options = Array.from(document.querySelectorAll(".prompt-profile-select-option")).map((node) => {
         const option = node as HTMLElement
         const style = getComputedStyle(option)
+        const optionBackgroundColor = parseColor(style.backgroundColor)
+        const surface =
+          optionBackgroundColor.a > 0 ? composite(optionBackgroundColor, contentBackgroundColor) : contentBackgroundColor
+        const optionColor = parseColor(style.color)
         const copy = option.querySelector(".prompt-profile-select-option-copy") as HTMLElement | null
         const textParts = Array.from(copy?.children ?? [])
           .map((child) => {
             const element = child as HTMLElement
             const color = getComputedStyle(element).color
+            const colorValue = parseColor(color)
             return {
               tag: element.tagName.toLowerCase(),
               text: element.textContent?.trim() ?? "",
               color,
-              contrast: contrastRatio(color, contentBackground),
+              contrast: contrastRatio(colorValue, surface),
             }
           })
           .filter((part) => part.text)
@@ -310,8 +334,9 @@ test("prompt profile selector options remain readable on the light popup surface
           label,
           selected: option.hasAttribute("data-selected") || option.getAttribute("aria-selected") === "true",
           color: style.color,
-          background: contentBackground,
-          contrast: contrastRatio(style.color, contentBackground),
+          background: style.backgroundColor,
+          surfaceAlpha: surface.a,
+          contrast: contrastRatio(optionColor, surface),
           textParts,
         }
       })
@@ -343,12 +368,21 @@ test("prompt profile selector options remain readable on the light popup surface
         "Algorithm Correctness and benchmark squad.",
       ],
     )
-    assert.equal(result.options.filter((option) => !option.selected).length >= 3, true)
+    const unselectedOptions = result.options.filter((option) => !option.selected)
+    assert.equal(unselectedOptions.length >= 3, true)
     assert.equal(result.options.every((option) => option.color !== "rgba(0, 0, 0, 0)"), true)
+    assert.equal(result.options.every((option) => option.surfaceAlpha === 1), true)
     assert.equal(result.options.every((option) => option.contrast >= 4.5), true)
     assert.equal(result.options.every((option) => option.textParts.length >= 2), true)
+    assert.equal(unselectedOptions.every((option) => option.contrast >= 4.5), true)
     assert.equal(
       result.options.every((option) =>
+        option.textParts.every((part) => part.color !== "rgba(0, 0, 0, 0)" && part.contrast >= 4.5),
+      ),
+      true,
+    )
+    assert.equal(
+      unselectedOptions.every((option) =>
         option.textParts.every((part) => part.color !== "rgba(0, 0, 0, 0)" && part.contrast >= 4.5),
       ),
       true,
