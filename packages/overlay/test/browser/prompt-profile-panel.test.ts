@@ -273,10 +273,29 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     })
     await page.waitForFunction(() => document.querySelectorAll(".prompt-profile-textarea").length === 2)
     const selectedProfileListItem = await page.evaluate(() => {
-      const selected = document.querySelector('[data-ui="prompt-profile-list"] .prompt-profile-list-item[data-active="true"]')
-      return selected?.querySelector("strong")?.textContent?.trim() || ""
+      const rows = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-list"] .prompt-profile-list-item'),
+      )
+      const selected = rows.find((row) => row.dataset.active === "true")
+      return {
+        labels: rows.map((row) => row.querySelector("strong")?.textContent?.trim() || ""),
+        currentLabels: rows
+          .filter((row) => row.getAttribute("aria-current") === "true")
+          .map((row) => row.querySelector("strong")?.textContent?.trim() || ""),
+        selectedLabel: selected?.querySelector("strong")?.textContent?.trim() || "",
+        selectedCurrent: selected?.getAttribute("aria-current") || "",
+        selectedAriaSelected: selected?.getAttribute("aria-selected") || "",
+        selectedAriaPressed: selected?.getAttribute("aria-pressed") || "",
+      }
     })
-    assert.equal(selectedProfileListItem, "Custom Squad")
+    assert.deepEqual(selectedProfileListItem, {
+      labels: ["General", "Frontend", "Custom Squad"],
+      currentLabels: ["Custom Squad"],
+      selectedLabel: "Custom Squad",
+      selectedCurrent: "true",
+      selectedAriaSelected: "",
+      selectedAriaPressed: "",
+    })
 
     const textareaLabels = await page.evaluate(() =>
       Array.from(document.querySelectorAll<HTMLTextAreaElement>(".prompt-profile-textarea")).map((textarea) => {
