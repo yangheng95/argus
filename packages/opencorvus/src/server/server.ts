@@ -21,7 +21,7 @@ import { DEFAULT_SERVER_PORT } from "./defaults"
 import { requestID, serverErrorResponse } from "./error-handler"
 import { configureCorsOrigins, isAllowedCorsOrigin, isAllowedRequestOrigin } from "./cors"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
-import { decodeProjectDirectory } from "./directory"
+import { selectProjectDirectory } from "./directory"
 
 muteAISdkWarnings()
 
@@ -250,13 +250,15 @@ export namespace Server {
           if (!routeRequiresProjectDirectory(c.req.path, c.req.method)) {
             return next()
           }
-          const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory")
-          if (!raw) {
+          const directory = selectProjectDirectory({
+            queryDirectory: c.req.query("directory"),
+            headerDirectory: c.req.header("x-opencorvus-directory"),
+          })
+          if (!directory) {
             throw new DirectoryRequiredError({
               message: `Project-scoped route ${c.req.path} requires ?directory= query parameter or x-opencorvus-directory header`,
             })
           }
-          const directory = decodeProjectDirectory(raw)
           return Instance.provide({
             directory,
             init: InstanceBootstrap,

@@ -7,7 +7,7 @@ import z from "zod"
 import { Pty } from "@/pty"
 import { Instance } from "@/project/instance"
 import { NotFoundError } from "../../storage/db"
-import { decodeProjectDirectory } from "../directory"
+import { selectProjectDirectory } from "../directory"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -165,8 +165,10 @@ export const PtyRoutes = lazy(() =>
       },
       upgradeWebSocket((c) => {
         const id = c.req.param("ptyID")
-        const rawDirectory = c.req.query("directory") || c.req.header("x-opencorvus-directory")
-        const directory = rawDirectory ? decodeProjectDirectory(rawDirectory) : undefined
+        const directory = selectProjectDirectory({
+          queryDirectory: c.req.query("directory"),
+          headerDirectory: c.req.header("x-opencorvus-directory"),
+        })
         const cursor = (() => {
           const value = c.req.query("cursor")
           if (!value) return

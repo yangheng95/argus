@@ -45,7 +45,9 @@
     "typescript": "catalog:",
     "@typescript/native-preview": "catalog:"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@opencorvus-ai/transport-protocol": "workspace:*"
+  },
   "publishConfig": {
     "directory": "dist"
   }

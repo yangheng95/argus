@@ -41,6 +41,7 @@ test("General Settings write failures stay visible and do not report saved state
   assert.equal(typeof globalThis.Bun, "undefined")
 
   const configPatches: unknown[] = []
+  const dbResetRequests: unknown[] = []
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
@@ -84,6 +85,13 @@ test("General Settings write failures stay visible and do not report saved state
       configPatches.push(await req.json())
       return send({ error: "config write denied" }, { status: 503 })
     }
+    if (path === "/global/db/reset" && req.method === "POST") {
+      dbResetRequests.push(await req.json())
+      return send({
+        ok: true,
+        targets: [{ label: "db", path: "D:/overlay/global/opencorvus.db", ok: true }],
+      })
+    }
     if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
     if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
     if (path === "/agent") return send([])
@@ -111,6 +119,11 @@ test("General Settings write failures stay visible and do not report saved state
     await page.evaluateOnNewDocument((serverUrl) => {
       ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
       ;(window as any).__settingsSaveShouldFail = true
+      ;(window as any).__dbResetConfirmMessage = ""
+      window.confirm = (message: string) => {
+        ;(window as any).__dbResetConfirmMessage = message
+        return true
+      }
       localStorage.setItem("oc_locale", "en-US")
       localStorage.setItem("oc_theme", "light")
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
@@ -159,6 +172,18 @@ test("General Settings write failures stay visible and do not report saved state
     await page.waitForSelector('[data-testid="titlebar-settings-general"]', { visible: true })
     await page.click('[data-testid="titlebar-settings-general"]')
     await page.waitForSelector(".general-panel")
+
+    const dbResetButton = '[data-ui="settings-db-reset"]'
+    await page.waitForSelector(dbResetButton, { visible: true })
+    await page.click(dbResetButton)
+    await page.waitForFunction(() =>
+      document.querySelector(".general-panel .config-status-box")?.textContent?.includes("Database reset completed"),
+    )
+    assert.deepEqual(dbResetRequests, [{ projectDir: "D:/overlay/workspace/app" }])
+    assert.match(
+      await page.evaluate(() => (window as any).__dbResetConfirmMessage),
+      /Reset the OpenCorvus database for D:\/overlay\/workspace\/app/,
+    )
 
     const saveButton = "#configDialog .general-panel .dialog-actions .oc-button"
     await page.waitForSelector(saveButton, { visible: true })

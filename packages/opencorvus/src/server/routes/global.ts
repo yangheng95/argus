@@ -243,7 +243,7 @@ export const GlobalRoutes = lazy(() =>
       describeRoute({
         summary: "Reset database",
         description:
-          "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
+          "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify a registered absolute projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
         operationId: "global.db.reset",
         responses: {
           200: {

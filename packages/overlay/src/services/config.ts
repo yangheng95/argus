@@ -163,6 +163,18 @@ export interface NetworkProxyTestResult {
   message: string
 }
 
+export interface DatabaseResetTarget {
+  label: string
+  path: string
+  ok: boolean
+  error?: string
+}
+
+export interface DatabaseResetResponse {
+  ok: boolean
+  targets: DatabaseResetTarget[]
+}
+
 export interface PromptProfileOption {
   id: string
   label: string
@@ -261,6 +273,21 @@ export async function testNetworkProxy(proxy: NetworkProxyDraft): Promise<Networ
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ proxy }),
+  })
+}
+
+export async function resetDatabase(projectDir: string): Promise<DatabaseResetResponse> {
+  const directory = projectDir.trim()
+  if (!appStore.connected) {
+    throw new Error("Cannot reset database while disconnected")
+  }
+  if (!directory) {
+    throw new Error("Cannot reset database without an active project directory")
+  }
+  return await apiJson("global/db/reset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectDir: directory }),
   })
 }
 

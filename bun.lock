@@ -223,6 +223,9 @@
     "packages/sdk/js": {
       "name": "@opencorvus-ai/sdk",
       "version": "0.0.1-alpha",
+      "dependencies": {
+        "@opencorvus-ai/transport-protocol": "workspace:*",
+      },
       "devDependencies": {
         "@hey-api/openapi-ts": "0.90.10",
         "@tsconfig/node22": "catalog:",
