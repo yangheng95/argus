@@ -2331,23 +2331,6 @@
   gap: calc(6px * var(--ui-scale));
 }
 
-.config-panel-group-title {
-  min-width: 0;
-  flex: 1 1 auto;
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-muted);
-  margin: 0;
-  padding: 0 calc(2px * var(--ui-scale));
-}
-
-.config-panel-group-head {
-  display: flex;
-  align-items: center;
-  gap: calc(12px * var(--ui-scale));
-  min-width: 0;
-}
-
 .config-panel-card {
   display: flex;
   flex-direction: column;

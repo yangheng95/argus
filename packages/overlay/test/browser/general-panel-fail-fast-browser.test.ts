@@ -36,6 +36,22 @@ async function savePanelScreenshot(page: any, filename: string) {
   return target
 }
 
+async function readGeneralHeaderState(page: any) {
+  return page.$$eval(
+    ".general-panel .oc-surface-header[data-surface='settings-group'] .oc-surface-header__title",
+    (nodes: HTMLElement[]) =>
+      nodes.map((node) => {
+        const style = getComputedStyle(node)
+        return {
+          text: node.textContent?.trim() || "",
+          textTransform: style.textTransform,
+          letterSpacing: style.letterSpacing,
+          fontWeight: style.fontWeight,
+        }
+      }),
+  )
+}
+
 test("General Settings write failures stay visible and do not report saved state", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
@@ -115,7 +131,7 @@ test("General Settings write failures stay visible and do not report saved state
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    await page.setViewport({ width: 960, height: 720 })
+    await page.setViewport({ width: 960, height: 900 })
     await page.evaluateOnNewDocument((serverUrl) => {
       ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
       ;(window as any).__settingsSaveShouldFail = true
@@ -172,6 +188,16 @@ test("General Settings write failures stay visible and do not report saved state
     await page.waitForSelector('[data-testid="titlebar-settings-general"]', { visible: true })
     await page.click('[data-testid="titlebar-settings-general"]')
     await page.waitForSelector(".general-panel")
+    await page.$eval(".general-panel", (node: HTMLElement) => {
+      node.scrollTop = 0
+    })
+    assert.deepEqual(await readGeneralHeaderState(page), [
+      { text: "Connection", textTransform: "none", letterSpacing: "normal", fontWeight: "550" },
+      { text: "Database", textTransform: "none", letterSpacing: "normal", fontWeight: "550" },
+      { text: "Behaviour", textTransform: "none", letterSpacing: "normal", fontWeight: "550" },
+    ])
+    const headerScreenshot = await savePanelScreenshot(page, "general-settings-surface-headers.png")
+    assert.ok(headerScreenshot.endsWith("general-settings-surface-headers.png"))
 
     const dbResetButton = '[data-ui="settings-db-reset"]'
     await page.waitForSelector(dbResetButton, { visible: true })
