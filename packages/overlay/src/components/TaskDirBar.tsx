@@ -1,7 +1,7 @@
 // ── TaskDirBar ──
 // Solid components for the project directory cluster used by both Panel and
-// Mission. The cwd dropdown owns the breadcrumb, recent-directory popup, and
-// path actions; project worktree management, the git branch badge, and
+// Mission. The cwd control owns the breadcrumb, path actions, and
+// recent-directory popup trigger; project worktree management, the git branch badge, and
 // workspace launchers are siblings in the same project bar so there is one
 // workspace chrome implementation.
 
@@ -64,6 +64,7 @@ function compactBranch(value: string): string {
 
 export function TaskDirContent() {
   const nativeCommands = getHostTransport().capabilities.nativeCommands
+  let cwdShellRef: HTMLDivElement | undefined
   const dir = createMemo(directoryMemo)
   const breadcrumbHtml = createMemo(() =>
     pathBreadcrumb(dir(), {
@@ -174,13 +175,13 @@ export function TaskDirContent() {
       gutter={6}
       sameWidth
       fitViewport
+      getAnchorRect={() => cwdShellRef?.getBoundingClientRect()}
     >
-      <DropdownMenu.Trigger
-        as="div"
+      <div
+        ref={cwdShellRef}
         class="task-dir-shell task-cwd-dropdown"
         data-open={open() ? "true" : "false"}
-        aria-label={t("cwd.recent")}
-        title={t("cwd.recent")}
+        title={dirTitle()}
       >
         <span
           class="task-dir"
@@ -189,12 +190,21 @@ export function TaskDirContent() {
           innerHTML={breadcrumbHtml()}
           onClick={(event) => void handlePathAction(event)}
         />
-        <div class="task-dir-actions">
-          <span class="task-cwd-caret" aria-hidden="true">
-            ▾
-          </span>
+        <div class="task-dir-menu-actions">
+          <DropdownMenu.Trigger
+            class="task-dir-recent-trigger"
+            type="button"
+            data-ui="cwd-recent-trigger"
+            data-open={open() ? "true" : "false"}
+            aria-label={t("cwd.recent")}
+            title={t("cwd.recent")}
+          >
+            <span class="task-cwd-caret" aria-hidden="true">
+              ▾
+            </span>
+          </DropdownMenu.Trigger>
         </div>
-      </DropdownMenu.Trigger>
+      </div>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="recent-dir-panel">
           <div class="recent-dir-panel-shell">
