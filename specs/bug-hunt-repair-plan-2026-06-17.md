@@ -4428,3 +4428,50 @@ LINE:
 - Fermat confirmed the authoritative direct-reply kind source remains `packages/opencorvus/src/orchestrator/direct-reply.ts`, while runtime policy and 202 task-root wake behavior live in `packages/opencorvus/src/task-api/index.ts`.
 - Fermat recommended deletion rather than replacement because a generated or manually synced overlay mirror would still be a second policy source.
 - Fermat explicitly warned not to mix backend BH-026/BH-027 contract reconciliation or build task-message `target` changes into this batch.
+
+## Batch P2-BZ: BH-083 ACP prompt image HTTPS URIs must not be dropped
+
+### Findings
+
+- BH-083 targets `packages/opencorvus/src/acp/agent.ts`.
+- `initialize(...)` advertises prompt image support through `capabilities.promptCapabilities.image` and `capabilities.promptCapabilities.http`.
+- The ACP prompt mapper accepted inline image data and `http:` image URIs, but rejected `https:` image URIs by omission: `part.uri.startsWith("http:")`.
+- The mapped `parts` array is passed directly to `this.sdk.session.prompt(...)`; dropping the ACP image part before that call means the OpenCorvus session never sees the user-provided image.
+- `SessionPrompt.createUserMessage(...)` already accepts file parts with remote URLs by falling through non-`data:`/`file:` protocols as persisted file parts, so the ACP layer should not discard normal HTTPS image URLs.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/acp/agent.ts::prompt(...)` converts ACP `PromptRequest.prompt` parts into OpenCorvus prompt `parts`.
+- `packages/opencorvus/src/acp/agent.ts::parseUri(...)` handles local `file://` and `zed://` resource URIs for filenames; remote image filenames currently default to `image`.
+- `packages/opencorvus/src/session/prompt/schema.ts::PromptInput` accepts user file parts with `{ type: "file", url, filename, mime }`.
+- `packages/opencorvus/src/session/prompt/parts.ts::createUserMessage(...)` materializes `data:` and `file:` file parts and preserves other file part URLs.
+- `packages/opencorvus/test/acp/event-subscription.test.ts::createFakeAgent()` owns the fake SDK used by ACP agent tests and can capture `sdk.session.prompt(...)` parameters.
+
+### Fix Shape
+
+- Replace the `part.uri.startsWith("http:")` check with `isHttpUri(...)`, which parses the URI and accepts exactly `http:` and `https:` protocols.
+- Keep inline data handling unchanged.
+- Do not broaden this batch to non-HTTP image URI behavior or attachment materialization policy.
+- Extend the fake ACP SDK with a `session.prompt(...)` capture path and add a regression test proving an ACP `image` part with `https://example.test/reference.png` becomes an SDK file part.
+
+### Regression Tests
+
+- `packages/opencorvus/test/acp/event-subscription.test.ts` now includes `forwards https prompt image URIs as SDK file parts`, which:
+  - creates an ACP session with the fake SDK;
+  - calls `agent.prompt(...)` with a text part and an HTTPS image part;
+  - asserts the captured SDK `session.prompt` call includes `{ type: "file", url: "https://example.test/reference.png", filename: "image", mime: "image/png" }`.
+
+### Verification
+
+- Focused ACP test passed: `bun test packages/opencorvus/test/acp/event-subscription.test.ts --timeout 120000`.
+- Source residual scans passed: `rg -n -F 'startsWith("http:")' packages/opencorvus/src/acp/agent.ts packages/opencorvus/test/acp/event-subscription.test.ts` and `rg -n -F "startsWith('http:')" packages/opencorvus/src/acp/agent.ts packages/opencorvus/test/acp/event-subscription.test.ts` returned no matches.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Epicurus confirmed BH-083 was present in committed `HEAD`: ACP advertised `promptCapabilities.image: true` while the URI image branch only accepted `http:`.
+- Epicurus traced the exact mapping path from ACP `PromptRequest.prompt[]` through `ACP.Agent.prompt(...)` to `this.sdk.session.prompt({ parts })`.
+- Epicurus confirmed `packages/opencorvus/test/acp/event-subscription.test.ts` is the right regression location because its fake SDK can capture forwarded `session.prompt(...)` parts.
+- Epicurus recommended accepting exactly `http:` and `https:` through URL parsing and explicitly not mixing broader `file:`, `zed:`, `blob:`, `data:`, or `ftp:` image URI semantics into this batch.

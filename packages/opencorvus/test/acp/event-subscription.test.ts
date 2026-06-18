@@ -194,6 +194,7 @@ function createFakeAgent() {
     eventSubscribe: 0,
     sessionCreate: 0,
   }
+  const promptRequests: any[] = []
 
   const sdk = {
     global: {
@@ -222,6 +223,10 @@ function createFakeAgent() {
       },
       messages: async () => {
         return { data: [] }
+      },
+      prompt: async (params?: any) => {
+        promptRequests.push(params)
+        return { data: undefined }
       },
       message: async (params?: any) => {
         // Return a message with parts that can be looked up by partID
@@ -299,10 +304,43 @@ function createFakeAgent() {
     ;(agent as any).eventAbort.abort()
   }
 
-  return { agent, controller, calls, updates, chunks, sessionUpdates, stop, sdk, connection }
+  return { agent, controller, calls, updates, chunks, promptRequests, sessionUpdates, stop, sdk, connection }
 }
 
 describe("acp.agent event subscription", () => {
+  test("forwards https prompt image URIs as SDK file parts", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, promptRequests, stop } = createFakeAgent()
+        const sessionId = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any).then((x) => x.sessionId)
+
+        await agent.prompt({
+          sessionId,
+          prompt: [
+            { type: "text", text: "inspect this image" },
+            {
+              type: "image",
+              uri: "https://example.test/reference.png",
+              mimeType: "image/png",
+            },
+          ],
+        } as any)
+
+        expect(promptRequests).toHaveLength(1)
+        expect(promptRequests[0].parts).toContainEqual({
+          type: "file",
+          url: "https://example.test/reference.png",
+          filename: "image",
+          mime: "image/png",
+        })
+
+        stop()
+      },
+    })
+  })
+
   test("routes message.part.delta by the event sessionID (no cross-session pollution)", async () => {
     await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
