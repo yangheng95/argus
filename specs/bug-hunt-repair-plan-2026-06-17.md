@@ -4632,3 +4632,44 @@ LINE:
 - Hegel confirmed the current route shape is correct only when paired with tracked OpenAPI and Software Development Kit regeneration; before regeneration `api:routes-check` failed on `POST /api/v1/notes`.
 - Hegel traced the generated contract chain through `Server.routeInventoryApp()`, `Server.openapi()`, `packages/opencorvus/script/check/routes.ts`, and `packages/sdk/js/script/build.ts`.
 - Hegel noted a separate README drift: the internal QuickNote README also mentions additional note routes that this batch does not implement. BH-062 acceptance is the canonical `POST /api/v1/notes` route and OpenAPI visibility, so that drift is recorded for a later issue instead of expanding this batch.
+
+## Verification Maintenance: browser-preview target OpenAPI test drift
+
+### Findings
+
+- After BH-062, `bun test packages/opencorvus/test/server/app-routes.test.ts --timeout 60000` still failed in committed `HEAD`.
+- The failing assertion expected `PUT /task/{taskID}/browser-preview/target` to document a JSON body field named `url`.
+- The current production route defines `BrowserPreviewTargetSelectionRequest` with only required `targetID` and rejects arbitrary URL bodies.
+- `packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts` already encodes the current generated contract: the select-target body has `targetID`, does not have `url`, and the Software Development Kit requires `targetID`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/browser-preview.ts` defines `BrowserPreviewTargetSelectionRequest` and the `PUT /task/:taskID/browser-preview/target` route.
+- `packages/opencorvus/test/server/browser-preview-routes.test.ts` covers selecting an existing saved target by `targetID` and rejecting arbitrary `url` bodies.
+- `packages/opencorvus/test/server/app-routes.test.ts` verifies `Server.openapi()` post-processing for project route documentation.
+- `packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts` verifies the generated OpenAPI and JavaScript Software Development Kit contract for the same route.
+
+### Fix Shape
+
+- Update the app-routes OpenAPI test to assert the current contract: request body is required, `targetID` is documented and required, and `url` is absent.
+- Do not modify browser-preview production code, do not reintroduce URL body acceptance, and do not add compatibility handling.
+
+### Regression Tests
+
+- `packages/opencorvus/test/server/app-routes.test.ts` now protects the current select-target OpenAPI shape.
+- Existing browser-preview route tests continue to protect runtime rejection of arbitrary URL bodies.
+- Existing Software Development Kit contract tests continue to protect generated client shape.
+
+### Verification
+
+- App route OpenAPI tests passed: `bun test packages/opencorvus/test/server/app-routes.test.ts --timeout 60000`.
+- Target-selection runtime tests passed: `bun test packages/opencorvus/test/server/browser-preview-routes.test.ts --timeout 120000 -t "PUT /task/:taskID/browser-preview/target"`.
+- Software Development Kit contract tests passed: `bun test packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts --timeout 60000`.
+- Full browser-preview route suite was also run and exposed a separate pre-existing live-input screenshot color assertion failure in `POST /task/:taskID/browser-preview/live/input serializes concurrent same-session commands`; that failure is not caused by the OpenAPI body-shape test drift and remains a later repair target.
+
+### Independent Review Feedback
+
+- Dalton confirmed this is a test drift in `app-routes.test.ts`, not a production OpenAPI generator bug.
+- Dalton verified the route request schema is `.strict()` and only reads `body.targetID`.
+- Dalton verified tracked OpenAPI and generated Software Development Kit types already contain only `targetID` for `BrowserPreviewSelectTaskTargetData`.
+- Dalton recommended changing only the app-routes test assertions and not modifying production browser-preview code, OpenAPI generation, or URL body compatibility.
