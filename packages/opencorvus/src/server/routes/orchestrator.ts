@@ -852,11 +852,10 @@ export const EngineRoutes = lazy(() =>
         const rewindCursor = taskRewindCursor(taskID)
         const [board, transcript, timeline] = await Promise.all([
           EngineService.getBoard(taskID, { sync: false }),
-          loadFullTaskTranscript(taskID),
+          loadTaskSessionTranscript(taskID, sessionID),
           Promise.resolve(ControlTimeline.list({ taskID })),
         ])
         const sessionTranscript = transcript.filter((item) => {
-          if (String(item?.info?.sessionID || "") !== sessionID) return false
           if (rewindCursor == null) return true
           const created = typeof item?.info?.time?.created === "number" ? item.info.time.created : undefined
           return created == null || created <= rewindCursor
@@ -1949,6 +1948,22 @@ async function loadTaskTranscript(taskID: string, input: { perSessionLimit?: num
     }),
   )
   const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
+  annotateTaskTranscriptMessages(messages, rootSessionID)
+  return {
+    transcript: __displayableConversationTranscriptForTest(messages),
+    truncated,
+  }
+}
+
+async function loadTaskSessionTranscript(taskID: string, sessionID: string) {
+  const { rootSessionID, sessionIDs } = await taskSessionIDs(taskID)
+  if (!rootSessionID || !sessionIDs.includes(sessionID)) return []
+  const messages = await Session.messages({ sessionID })
+  annotateTaskTranscriptMessages(messages, rootSessionID)
+  return __displayableConversationTranscriptForTest(messages)
+}
+
+function annotateTaskTranscriptMessages(messages: Array<{ info: Record<string, any> }>, rootSessionID: string) {
   for (const msg of messages) {
     const sid = msg.info.sessionID || ""
     const meta = overlayMeta(sid, rootSessionID, {
@@ -1961,10 +1976,6 @@ async function loadTaskTranscript(taskID: string, input: { perSessionLimit?: num
     if (goalID) (msg.info as any).goalID = goalID
     const parentSessionID = sessionParentID(sid)
     if (parentSessionID) (msg.info as any).parentSessionID = parentSessionID
-  }
-  return {
-    transcript: __displayableConversationTranscriptForTest(messages),
-    truncated,
   }
 }
 

@@ -2,11 +2,46 @@ import { beforeEach, expect, mock, test } from "bun:test"
 
 let acceptanceCalls = 0
 let vcsCalls = 0
+let concurrentAcceptance: Deferred<unknown> | null = null
+let emptyAcceptance: Deferred<unknown> | null = null
 const boardStore: any = {
   board: null,
   changes: [],
   selectedSource: null,
   snapshotVersion: "",
+}
+
+interface Deferred<T> {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+  reject: (reason?: unknown) => void
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+function acceptanceDiff(file: string) {
+  return {
+    result: {
+      diffs: [
+        {
+          file,
+          before: "",
+          after: "export const value = 1;\n",
+          additions: 1,
+          deletions: 0,
+          status: "added",
+        },
+      ],
+    },
+  }
 }
 
 mock.module("../src/services/api", () => ({
@@ -26,20 +61,14 @@ mock.module("../src/services/api", () => ({
     acceptanceCalls += 1
     if (path === "goal-run/gr_inflight_cache/acceptance") {
       if (acceptanceCalls === 1) return null
-      return {
-        result: {
-          diffs: [
-            {
-              file: "src/new-file.ts",
-              before: "",
-              after: "export const value = 1;\n",
-              additions: 1,
-              deletions: 0,
-              status: "added",
-            },
-          ],
-        },
-      }
+      return acceptanceDiff("src/new-file.ts")
+    }
+    if (path === "goal-run/gr_concurrent/acceptance") {
+      if (!concurrentAcceptance) throw new Error("missing concurrent acceptance test promise")
+      return concurrentAcceptance.promise
+    }
+    if (path === "goal-run/gr_empty_recheck/acceptance") {
+      return emptyAcceptance?.promise ?? { result: { diffs: [] } }
     }
     if (path === "goal-run/gr_no_body/acceptance") {
       return { result: { diffs: [] } }
@@ -104,6 +133,8 @@ function setGoalBoard(goalRunID: string, file: string) {
 beforeEach(() => {
   acceptanceCalls = 0
   vcsCalls = 0
+  concurrentAcceptance = null
+  emptyAcceptance = null
   setGoalBoard("gr_inflight_cache", "src/new-file.ts")
 })
 
@@ -120,6 +151,47 @@ test("resolveDiff does not cache an in-flight empty acceptance over added-file c
     after: "export const value = 1;\n",
     status: "added",
   })
+  expect(acceptanceCalls).toBe(2)
+  expect(vcsCalls).toBe(0)
+})
+
+test("resolveDiff shares one in-flight acceptance request for concurrent same-goal lookups", async () => {
+  concurrentAcceptance = deferred()
+  setGoalBoard("gr_concurrent", "src/new-file.ts")
+  const target = { goalRunID: "gr_concurrent", filePath: "src/new-file.ts" }
+
+  const first = resolveDiff(target)
+  const second = resolveDiff(target)
+  const third = resolveDiff(target)
+  await Promise.resolve()
+
+  expect(acceptanceCalls).toBe(1)
+  concurrentAcceptance.resolve(acceptanceDiff("src/new-file.ts"))
+  const resolved = await Promise.all([first, second, third])
+
+  expect(resolved.map((item) => item?.after)).toEqual([
+    "export const value = 1;\n",
+    "export const value = 1;\n",
+    "export const value = 1;\n",
+  ])
+  expect(acceptanceCalls).toBe(1)
+  expect(vcsCalls).toBe(0)
+})
+
+test("resolveDiff coalesces concurrent empty acceptance but re-fetches after it settles", async () => {
+  emptyAcceptance = deferred()
+  setGoalBoard("gr_empty_recheck", "src/live-file.ts")
+  const target = { goalRunID: "gr_empty_recheck", filePath: "src/live-file.ts" }
+
+  const first = resolveDiff(target)
+  const second = resolveDiff(target)
+  await Promise.resolve()
+
+  expect(acceptanceCalls).toBe(1)
+  emptyAcceptance.resolve({ result: { diffs: [] } })
+  expect(await Promise.all([first, second])).toEqual([null, null])
+
+  expect(await resolveDiff(target)).toBeNull()
   expect(acceptanceCalls).toBe(2)
   expect(vcsCalls).toBe(0)
 })

@@ -268,8 +268,8 @@ function normalizeLoadedPart(
 function normalizeLoadedMessage(input: any): Message {
   const message = record(input) ? input : {}
   const info = record(message.info) ? message.info : {}
-  const signature = messageSignature(message)
-  const id = typeof info.id === "string" && info.id.trim() ? info.id.trim() : `loaded-msg:${hashText(signature)}`
+  const explicitID = typeof info.id === "string" && info.id.trim() ? info.id.trim() : ""
+  const id = explicitID || `loaded-msg:${hashText(messageSignature(message))}`
   const sessionID = typeof info.sessionID === "string" && info.sessionID.trim() ? info.sessionID.trim() : ""
   const partsSource = Array.isArray(message.parts) ? message.parts : []
   const parts: Part[] = []

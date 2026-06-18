@@ -73,6 +73,27 @@ function seedTaskWithFileRefs(input: {
   })
 }
 
+async function seedPartFileRef(input: { url: string; filename: string }) {
+  const session = await Session.create({ kind: "orchestrator" })
+  const message = await Session.updateMessage({
+    id: Identifier.ascending("message"),
+    sessionID: session.id,
+    role: "user",
+    time: { created: Date.now() },
+    agent: "user",
+    model: { providerID: "test", modelID: "test" },
+  } as any)
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    messageID: message.id,
+    sessionID: session.id,
+    type: "file",
+    mime: "image/png",
+    filename: input.filename,
+    url: input.url,
+  } as any)
+}
+
 describe("AttachmentStore.sweep", () => {
   test("deletes unreferenced files older than the min-age gate", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -122,24 +143,7 @@ describe("AttachmentStore.sweep", () => {
         // collectReferencedShas pulls every `/attachment/<id>/<sha>.<ext>`
         // url out of `part.data`. We do not need full message lineage; a
         // tool part written directly via Session.updatePart is enough.
-        const session = await Session.create({ kind: "orchestrator" })
-        const message = await Session.updateMessage({
-          id: Identifier.ascending("message"),
-          sessionID: session.id,
-          role: "user",
-          time: { created: Date.now() },
-          agent: "user",
-          model: { providerID: "test", modelID: "test" },
-        } as any)
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID: message.id,
-          sessionID: session.id,
-          type: "file",
-          mime: "image/png",
-          filename: "kept.png",
-          url: kept.url,
-        } as any)
+        await seedPartFileRef({ filename: "kept.png", url: kept.url })
 
         // Backdate both attachments past the min-age gate.
         await ageFile(AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(kept.url)!.name)!, 120_000)
@@ -274,24 +278,7 @@ describe("AttachmentStore.sweep", () => {
         // D: orphan — not referenced anywhere
         const orphan = await AttachmentStore.write(projectID, differentBytes(23), "image/png", "d.png")
 
-        const session = await Session.create({ kind: "orchestrator" })
-        const message = await Session.updateMessage({
-          id: Identifier.ascending("message"),
-          sessionID: session.id,
-          role: "user",
-          time: { created: Date.now() },
-          agent: "user",
-          model: { providerID: "test", modelID: "test" },
-        } as any)
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID: message.id,
-          sessionID: session.id,
-          type: "file",
-          mime: "image/png",
-          filename: "a.png",
-          url: partRef.url,
-        } as any)
+        await seedPartFileRef({ filename: "a.png", url: partRef.url })
 
         seedTaskWithFileRefs({
           projectID,
@@ -323,6 +310,64 @@ describe("AttachmentStore.sweep", () => {
         expect(remaining).toEqual([partRef.sha, userAttachment.sha, systemArtifact.sha].sort())
       },
     })
+  })
+
+  test("project-scoped retain scan ignores foreign project rows", async () => {
+    await using one = await tmpdir({ git: true })
+    await using two = await tmpdir({ git: true })
+
+    let projectA = ""
+    let projectB = ""
+    let partA = ""
+    let taskA = ""
+    let partB = ""
+    let taskB = ""
+
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        projectA = Instance.project.id
+        const partRef = await AttachmentStore.write(projectA, differentBytes(40), "image/png", "a-part.png")
+        const taskRef = await AttachmentStore.write(projectA, differentBytes(41), "image/png", "a-task.png")
+        partA = partRef.sha
+        taskA = taskRef.sha
+        await seedPartFileRef({ filename: "a-part.png", url: partRef.url })
+        seedTaskWithFileRefs({
+          projectID: projectA,
+          taskID: Identifier.ascending("task"),
+          attachments: [{ sha: taskRef.sha, url: taskRef.url, mime: "image/png", size: taskRef.size }],
+        })
+      },
+    })
+
+    await Instance.provide({
+      directory: two.path,
+      fn: async () => {
+        projectB = Instance.project.id
+        const partRef = await AttachmentStore.write(projectB, differentBytes(42), "image/png", "b-part.png")
+        const taskRef = await AttachmentStore.write(projectB, differentBytes(43), "image/png", "b-task.png")
+        partB = partRef.sha
+        taskB = taskRef.sha
+        await seedPartFileRef({ filename: "b-part.png", url: partRef.url })
+        seedTaskWithFileRefs({
+          projectID: projectB,
+          taskID: Identifier.ascending("task"),
+          systemArtifacts: [{ sha: taskRef.sha, url: taskRef.url, mime: "image/png", size: taskRef.size }],
+        })
+      },
+    })
+
+    const scopedA = AttachmentStore.collectReferencedShas(projectA)
+    expect([...scopedA.keys()]).toEqual([projectA])
+    expect([...(scopedA.get(projectA) ?? [])].sort()).toEqual([partA, taskA].sort())
+
+    const scopedB = AttachmentStore.collectReferencedShas(projectB)
+    expect([...scopedB.keys()]).toEqual([projectB])
+    expect([...(scopedB.get(projectB) ?? [])].sort()).toEqual([partB, taskB].sort())
+
+    const unscoped = AttachmentStore.collectReferencedShas()
+    expect([...(unscoped.get(projectA) ?? [])].sort()).toEqual([partA, taskA].sort())
+    expect([...(unscoped.get(projectB) ?? [])].sort()).toEqual([partB, taskB].sort())
   })
 
   test("still deletes a sha that is absent from all three retain surfaces", async () => {

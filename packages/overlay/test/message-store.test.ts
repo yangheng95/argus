@@ -1,5 +1,11 @@
 import { beforeEach, expect, test } from "bun:test"
-import { clearEventQueue, enqueueEvent, messageStore, setMessages } from "../src/store/messages"
+import {
+  clearEventQueue,
+  enqueueEvent,
+  mergeLoadedConversationMessages,
+  messageStore,
+  setMessages,
+} from "../src/store/messages"
 
 if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).requestAnimationFrame = (cb: () => void) => {
@@ -86,4 +92,58 @@ test("message updates keep the earliest created time and stable ordering", async
       }),
     }),
   )
+})
+
+test("loaded messages with explicit ids do not compute content signatures", () => {
+  const part: any = {
+    id: "part-explicit",
+    type: "text",
+    text: "body",
+  }
+  Object.defineProperty(part, "state", {
+    enumerable: false,
+    get() {
+      throw new Error("explicit-id messages must not read signature-only body fields")
+    },
+  })
+
+  const messages = mergeLoadedConversationMessages([], [
+    {
+      info: {
+        id: "msg-explicit",
+        sessionID: "session-explicit",
+        role: "assistant",
+      },
+      parts: [part],
+    },
+  ])
+
+  expect(messages).toHaveLength(1)
+  expect(messages[0].info.id).toBe("msg-explicit")
+  expect(messages[0].parts[0].id).toBe("part-explicit")
+})
+
+test("loaded messages without explicit ids still use deterministic content signatures", () => {
+  const message = {
+    info: {
+      sessionID: "session-generated",
+      role: "assistant",
+      time: { created: 10, updated: 10 },
+    },
+    parts: [
+      {
+        id: "part-generated",
+        type: "text",
+        text: "body",
+      },
+    ],
+  }
+
+  const first = mergeLoadedConversationMessages([], [message])
+  const second = mergeLoadedConversationMessages([], [message])
+  const deduped = mergeLoadedConversationMessages([message], [message])
+
+  expect(first[0].info.id.startsWith("loaded-msg:")).toBe(true)
+  expect(second[0].info.id).toBe(first[0].info.id)
+  expect(deduped).toHaveLength(1)
 })
