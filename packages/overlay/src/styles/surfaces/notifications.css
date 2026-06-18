@@ -207,6 +207,20 @@ body[data-notifications-panel-open="true"] .app-notifications[data-surface="toas
   overflow-wrap: anywhere;
 }
 
+.app-notification__actions {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--ui-scale));
+  align-items: center;
+  margin-top: calc(4px * var(--ui-scale));
+}
+
+.app-notification__actions .oc-button {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .app-notification .oc-button[data-ui="app-notification-close"] {
   --oc-button-height: calc(22px * var(--ui-scale));
   --oc-button-padding-x: 0;
