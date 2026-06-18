@@ -17,7 +17,7 @@
      perm-row / extension-row / market-card / channel-doc-card /
      provider-flat-row / agent-model-row / knowledge-item /
      config-toggle-list-item → .s-row
-     config-panel-group / extension-block / ext-group → .s-group
+     config-panel-group / ext-group → .s-group
      extension-status / provider-row-status / provider-count-pill /
      knowledge-scope → .s-pill
      perm-action-btn → .s-segmented-btn
@@ -485,16 +485,6 @@
   flex: 0 0 auto;
 }
 
-.knowledge-item-actions {
-  display: flex;
-  gap: calc(4px * var(--ui-scale));
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.knowledge-delete {
-  white-space: nowrap;
-}
 
 /* Memory scope chip: "global" / "session" / "builtin_default"
    tones. The pill-shape declaration (border-radius / padding /
@@ -577,16 +567,6 @@
 
 /* ── ExtensionsPanel.tsx (Skill / Channel sections) ─────── */
 
-/* Outer block + sibling spacing for stacked extension sections. */
-.extension-block {
-  display: flex;
-  flex-direction: column;
-  gap: calc(8px * var(--ui-scale));
-}
-
-.extension-block + .extension-block {
-  margin-top: calc(12px * var(--ui-scale));
-}
 
 /* Section head: card-shaped header that opens the section body
    beneath. Hover/focus-within wash routed through the shared
@@ -671,18 +651,6 @@
   flex-shrink: 0;
 }
 
-/* Policy select control inside an extension row (allow / ask /
-   deny dropdown). Uses overlay control vocab (border + radius +
-   surface bg). */
-.extension-policy {
-  min-width: calc(88px * var(--ui-scale));
-  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface-inset);
-  color: var(--text);
-  font-size: var(--ui-font-control);
-}
 
 /* ── ChannelsPanel.tsx (channel docs + actions) ──────────── */
 
