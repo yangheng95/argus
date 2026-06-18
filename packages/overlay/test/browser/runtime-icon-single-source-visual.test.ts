@@ -36,7 +36,7 @@ function taskItem(): any {
       id: "task-runtime-icon-visual",
       requestID: "req-runtime-icon-visual",
       title: "Runtime icon visual task",
-      request: "Runtime icon visual task",
+      request: "",
       directory: "D:/runtime-icon/workspace",
       status: "queued",
       sessionID: "session-runtime-icon-visual",
@@ -75,7 +75,7 @@ async function installOverlaySettings(page: any, serverUrl: string): Promise<voi
               directoryMode: "custom",
             }
           }
-          if (command === "overlay_settings_save") return args.settings ?? true
+          if (command === "overlay_settings_save") return true
           if (command === "overlay_open_url") return true
           if (command === "overlay_open_path") return true
           return null
