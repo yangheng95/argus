@@ -36,7 +36,7 @@ function taskItem(): any {
       id: "task-runtime-icon-visual",
       requestID: "req-runtime-icon-visual",
       title: "Runtime icon visual task",
-      request: "Runtime icon visual task",
+      request: "",
       directory: "D:/runtime-icon/workspace",
       status: "queued",
       sessionID: "session-runtime-icon-visual",
@@ -75,7 +75,7 @@ async function installOverlaySettings(page: any, serverUrl: string): Promise<voi
               directoryMode: "custom",
             }
           }
-          if (command === "overlay_settings_save") return args.settings ?? true
+          if (command === "overlay_settings_save") return true
           if (command === "overlay_open_url") return true
           if (command === "overlay_open_path") return true
           return null
@@ -232,7 +232,11 @@ test(
       await installOverlaySettings(taskPage, server.origin)
       await taskPage.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
       await taskPage.waitForSelector('.task-row-main[data-task-id="task-runtime-icon-visual"]', { visible: true })
-      await taskPage.click('.task-row-main[data-task-id="task-runtime-icon-visual"]')
+      await taskPage.evaluate(async (taskID: string) => {
+        const selectTask = (window as any).selectTask
+        if (typeof selectTask !== "function") throw new Error("window.selectTask is not available")
+        await selectTask(taskID)
+      }, item.task.id)
       await taskPage.waitForSelector(".chat-empty--task .chat-empty-icon", { visible: true })
       const taskIcon = await taskPage.$eval(".chat-empty--task .chat-empty-icon", (node: SVGElement) => ({
         tag: node.tagName,

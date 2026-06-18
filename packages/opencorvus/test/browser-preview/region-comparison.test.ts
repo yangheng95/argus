@@ -130,7 +130,7 @@ describe("browser preview region comparison", () => {
           true,
         )
         expect(await fileExists(resolveRuntimeRelativePath(tmp.path, result.regions[0].artifacts!.diff!))).toBe(true)
-        const evidenceID = result.evidenceIDs["desktop:economy"]
+        const evidenceID = result.evidenceIDs["desktop:default:economy"]
         expect(evidenceID).toBeTruthy()
         const evidence = await Instance.provide({
           directory: tmp.path,
@@ -138,7 +138,334 @@ describe("browser preview region comparison", () => {
         })
         expect(evidence?.operationKind).toBe("reference-comparison")
         expect(evidence?.regionID).toBe("economy")
+        expect(evidence?.stateID).toBe("default")
         expect(evidence?.artifactPaths?.side_by_side).toBe(result.regions[0].artifacts?.side_by_side)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "keeps multiple same-route visual region evidence independent",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await sharp({
+        create: {
+          width: 800,
+          height: 600,
+          channels: 4,
+          background: "#ffffff",
+        },
+      })
+        .composite([
+          {
+            input: Buffer.from(
+              `<svg width="280" height="110" xmlns="http://www.w3.org/2000/svg">
+                <rect width="280" height="110" fill="#dcfce7"/>
+                <text x="18" y="44" font-family="Arial" font-size="24" fill="#14532d">Labor Market</text>
+                <text x="18" y="78" font-family="Arial" font-size="16" fill="#166534">Payroll growth</text>
+              </svg>`,
+            ),
+            left: 40,
+            top: 60,
+          },
+          {
+            input: Buffer.from(
+              `<svg width="280" height="110" xmlns="http://www.w3.org/2000/svg">
+                <rect width="280" height="110" fill="#ede9fe"/>
+                <text x="18" y="44" font-family="Arial" font-size="24" fill="#4c1d95">Trade Flow</text>
+                <text x="18" y="78" font-family="Arial" font-size="16" fill="#5b21b6">Export balance</text>
+              </svg>`,
+            ),
+            left: 40,
+            top: 200,
+          },
+        ])
+        .png()
+        .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
+      const server = await startMultiRegionPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        const bindings: BrowserPreviewRegionBinding[] = [
+          {
+            region_id: "labor-card",
+            viewport_id: "desktop",
+            region_scope: "card",
+            source: {
+              reference_artifact_id: "reference.png",
+              bbox: { x: 40, y: 60, width: 280, height: 110 },
+              semantic_role: "labor market metric card",
+              text_anchors: ["Labor Market", "Payroll growth"],
+              source_refs: ["source screenshot labor"],
+            },
+            implementation: {
+              route: "/dashboard",
+              locator: { kind: "data-oc-region", value: "labor-card" },
+              component_files: ["src/LaborCard.tsx"],
+            },
+            acceptance_refs: ["labor visual parity"],
+          },
+          {
+            region_id: "trade-card",
+            viewport_id: "desktop",
+            region_scope: "card",
+            source: {
+              reference_artifact_id: "reference.png",
+              bbox: { x: 40, y: 200, width: 280, height: 110 },
+              semantic_role: "trade flow metric card",
+              text_anchors: ["Trade Flow", "Export balance"],
+              source_refs: ["source screenshot trade"],
+            },
+            implementation: {
+              route: "/dashboard",
+              locator: { kind: "data-oc-region", value: "trade-card" },
+              component_files: ["src/TradeCard.tsx"],
+            },
+            acceptance_refs: ["trade visual parity"],
+          },
+        ]
+
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["desktop"],
+          bindings,
+          includeDiff: true,
+        })
+
+        expect(result.status).toBe("passed")
+        expect(result.regions).toHaveLength(2)
+        const labor = result.regions.find((region) => region.region_id === "labor-card")
+        const trade = result.regions.find((region) => region.region_id === "trade-card")
+        expect(labor).toBeTruthy()
+        expect(trade).toBeTruthy()
+        expect(result.evidenceIDs["desktop:default:labor-card"]).toBeTruthy()
+        expect(result.evidenceIDs["desktop:default:trade-card"]).toBeTruthy()
+        expect(result.evidenceIDs["desktop:default:labor-card"]).not.toBe(result.evidenceIDs["desktop:default:trade-card"])
+        expect(labor!.artifacts?.source_crop).not.toBe(trade!.artifacts?.source_crop)
+        expect(labor!.artifacts?.implementation_crop).not.toBe(trade!.artifacts?.implementation_crop)
+        expect(labor!.artifacts?.side_by_side).not.toBe(trade!.artifacts?.side_by_side)
+        expect(labor!.artifacts?.diff).not.toBe(trade!.artifacts?.diff)
+
+        const laborSourceCrop = resolveRuntimeRelativePath(tmp.path, labor!.artifacts!.source_crop)
+        const laborImplementationCrop = resolveRuntimeRelativePath(tmp.path, labor!.artifacts!.implementation_crop)
+        const laborSideBySide = resolveRuntimeRelativePath(tmp.path, labor!.artifacts!.side_by_side)
+        const tradeSourceCrop = resolveRuntimeRelativePath(tmp.path, trade!.artifacts!.source_crop)
+        const tradeImplementationCrop = resolveRuntimeRelativePath(tmp.path, trade!.artifacts!.implementation_crop)
+        const tradeSideBySide = resolveRuntimeRelativePath(tmp.path, trade!.artifacts!.side_by_side)
+
+        await expectPngDimensions(laborSourceCrop, { width: 280, height: 110 })
+        await expectPngDimensions(laborImplementationCrop, { width: 280, height: 110 })
+        await expectPngDimensions(laborSideBySide, { width: 576, height: 186 })
+        await expectPngContainsColor(laborSourceCrop, { red: 220, green: 252, blue: 231 })
+        await expectPngContainsColor(laborImplementationCrop, { red: 220, green: 252, blue: 231 })
+        await expectPngDimensions(tradeSourceCrop, { width: 280, height: 110 })
+        await expectPngDimensions(tradeImplementationCrop, { width: 280, height: 110 })
+        await expectPngDimensions(tradeSideBySide, { width: 576, height: 186 })
+        await expectPngContainsColor(tradeSourceCrop, { red: 237, green: 233, blue: 254 })
+        await expectPngContainsColor(tradeImplementationCrop, { red: 237, green: 233, blue: 254 })
+
+        const laborEvidence = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID: result.evidenceIDs["desktop:default:labor-card"],
+            }),
+        })
+        const tradeEvidence = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID: result.evidenceIDs["desktop:default:trade-card"],
+            }),
+        })
+        expect(laborEvidence?.operationKind).toBe("reference-comparison")
+        expect(laborEvidence?.regionID).toBe("labor-card")
+        expect(laborEvidence?.stateID).toBe("default")
+        expect(laborEvidence?.artifactPaths?.side_by_side).toBe(labor!.artifacts?.side_by_side)
+        expect(tradeEvidence?.operationKind).toBe("reference-comparison")
+        expect(tradeEvidence?.regionID).toBe("trade-card")
+        expect(tradeEvidence?.stateID).toBe("default")
+        expect(tradeEvidence?.artifactPaths?.side_by_side).toBe(trade!.artifacts?.side_by_side)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "keeps the same visual region independent across interaction states",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await sharp({
+        create: {
+          width: 800,
+          height: 600,
+          channels: 4,
+          background: "#ffffff",
+        },
+      })
+        .composite([
+          {
+            input: Buffer.from(
+              `<svg width="280" height="100" xmlns="http://www.w3.org/2000/svg">
+                <rect width="280" height="100" fill="#fef3c7"/>
+                <text x="18" y="40" font-family="Arial" font-size="23" fill="#78350f">Summary</text>
+                <text x="18" y="70" font-family="Arial" font-size="15" fill="#92400e">Compact state</text>
+              </svg>`,
+            ),
+            left: 40,
+            top: 60,
+          },
+          {
+            input: Buffer.from(
+              `<svg width="280" height="160" xmlns="http://www.w3.org/2000/svg">
+                <rect width="280" height="160" fill="#cffafe"/>
+                <text x="18" y="44" font-family="Arial" font-size="23" fill="#155e75">Summary</text>
+                <text x="18" y="76" font-family="Arial" font-size="15" fill="#0e7490">Expanded state</text>
+                <text x="18" y="116" font-family="Arial" font-size="15" fill="#0e7490">Details visible</text>
+              </svg>`,
+            ),
+            left: 40,
+            top: 210,
+          },
+        ])
+        .png()
+        .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
+      const server = await startStatefulRegionPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        const bindings: BrowserPreviewRegionBinding[] = [
+          {
+            region_id: "summary-card",
+            viewport_id: "desktop",
+            state_id: "compact",
+            region_scope: "card",
+            source: {
+              reference_artifact_id: "reference.png",
+              bbox: { x: 40, y: 60, width: 280, height: 100 },
+              semantic_role: "summary card compact state",
+              text_anchors: ["Summary", "Compact state"],
+              source_refs: ["source screenshot compact"],
+            },
+            implementation: {
+              route: "/summary?state=compact",
+              locator: { kind: "data-oc-region", value: "summary-card" },
+              component_files: ["src/SummaryCard.tsx"],
+            },
+            acceptance_refs: ["summary compact visual parity"],
+          },
+          {
+            region_id: "summary-card",
+            viewport_id: "desktop",
+            state_id: "expanded",
+            region_scope: "card",
+            source: {
+              reference_artifact_id: "reference.png",
+              bbox: { x: 40, y: 210, width: 280, height: 160 },
+              semantic_role: "summary card expanded state",
+              text_anchors: ["Summary", "Expanded state", "Details visible"],
+              source_refs: ["source screenshot expanded"],
+            },
+            implementation: {
+              route: "/summary?state=expanded",
+              locator: { kind: "data-oc-region", value: "summary-card" },
+              component_files: ["src/SummaryCard.tsx"],
+            },
+            acceptance_refs: ["summary expanded visual parity"],
+          },
+        ]
+
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["desktop"],
+          bindings,
+          includeDiff: true,
+        })
+
+        expect(result.status).toBe("passed")
+        expect(result.regions).toHaveLength(2)
+        const compact = result.regions.find((region) => region.region_id === "summary-card" && region.state_id === "compact")
+        const expanded = result.regions.find(
+          (region) => region.region_id === "summary-card" && region.state_id === "expanded",
+        )
+        expect(compact).toBeTruthy()
+        expect(expanded).toBeTruthy()
+        expect(result.evidenceIDs["desktop:compact:summary-card"]).toBeTruthy()
+        expect(result.evidenceIDs["desktop:expanded:summary-card"]).toBeTruthy()
+        expect(result.evidenceIDs["desktop:compact:summary-card"]).not.toBe(
+          result.evidenceIDs["desktop:expanded:summary-card"],
+        )
+        expect(compact!.artifacts?.source_crop).not.toBe(expanded!.artifacts?.source_crop)
+        expect(compact!.artifacts?.implementation_crop).not.toBe(expanded!.artifacts?.implementation_crop)
+        expect(compact!.artifacts?.side_by_side).not.toBe(expanded!.artifacts?.side_by_side)
+
+        const compactSourceCrop = resolveRuntimeRelativePath(tmp.path, compact!.artifacts!.source_crop)
+        const compactImplementationCrop = resolveRuntimeRelativePath(tmp.path, compact!.artifacts!.implementation_crop)
+        const compactSideBySide = resolveRuntimeRelativePath(tmp.path, compact!.artifacts!.side_by_side)
+        const expandedSourceCrop = resolveRuntimeRelativePath(tmp.path, expanded!.artifacts!.source_crop)
+        const expandedImplementationCrop = resolveRuntimeRelativePath(tmp.path, expanded!.artifacts!.implementation_crop)
+        const expandedSideBySide = resolveRuntimeRelativePath(tmp.path, expanded!.artifacts!.side_by_side)
+
+        await expectPngDimensions(compactSourceCrop, { width: 280, height: 100 })
+        await expectPngDimensions(compactImplementationCrop, { width: 280, height: 100 })
+        await expectPngDimensions(compactSideBySide, { width: 576, height: 176 })
+        await expectPngContainsColor(compactSourceCrop, { red: 254, green: 243, blue: 199 })
+        await expectPngContainsColor(compactImplementationCrop, { red: 254, green: 243, blue: 199 })
+        await expectPngDimensions(expandedSourceCrop, { width: 280, height: 160 })
+        await expectPngDimensions(expandedImplementationCrop, { width: 280, height: 160 })
+        await expectPngDimensions(expandedSideBySide, { width: 576, height: 236 })
+        await expectPngContainsColor(expandedSourceCrop, { red: 207, green: 250, blue: 254 })
+        await expectPngContainsColor(expandedImplementationCrop, { red: 207, green: 250, blue: 254 })
+
+        const compactEvidence = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID: result.evidenceIDs["desktop:compact:summary-card"],
+            }),
+        })
+        const expandedEvidence = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID: result.evidenceIDs["desktop:expanded:summary-card"],
+            }),
+        })
+        expect(compactEvidence?.operationKind).toBe("reference-comparison")
+        expect(compactEvidence?.regionID).toBe("summary-card")
+        expect(compactEvidence?.stateID).toBe("compact")
+        expect(compactEvidence?.artifactPaths?.side_by_side).toBe(compact!.artifacts?.side_by_side)
+        expect(expandedEvidence?.operationKind).toBe("reference-comparison")
+        expect(expandedEvidence?.regionID).toBe("summary-card")
+        expect(expandedEvidence?.stateID).toBe("expanded")
+        expect(expandedEvidence?.artifactPaths?.side_by_side).toBe(expanded!.artifacts?.side_by_side)
       } finally {
         await server.close()
       }
@@ -298,7 +625,7 @@ describe("browser preview region comparison", () => {
         expect(result.status).toBe("passed")
         expect(result.regions).toHaveLength(1)
         const region = result.regions[0]
-        expect(result.evidenceIDs["mobile:mobile-module"]).toBeTruthy()
+        expect(result.evidenceIDs["mobile:default:mobile-module"]).toBeTruthy()
         expect(region.viewport_id).toBe("mobile")
         expect(region.source_bbox).toEqual({ x: 24, y: 36, width: 300, height: 128 })
         expect(region.implementation_bbox?.width).toBe(300)
@@ -453,6 +780,112 @@ async function startBelowFoldPreviewServer(): Promise<{ url: string; close: () =
   }
 }
 
+async function startMultiRegionPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((req, res) => {
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>Multi region preview</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            main { padding: 60px 40px; display: flex; flex-direction: column; gap: 30px; }
+            [data-oc-region] {
+              width: 280px;
+              height: 110px;
+              box-sizing: border-box;
+              padding: 18px;
+            }
+            [data-oc-region="labor-card"] { background: #dcfce7; color: #14532d; }
+            [data-oc-region="trade-card"] { background: #ede9fe; color: #4c1d95; }
+            h2 { margin: 0 0 14px; font-size: 24px; line-height: 1; }
+            p { margin: 0; font-size: 16px; }
+          </style>
+        </head>
+        <body>
+          <main>
+            <section data-oc-region="labor-card"><h2>Labor Market</h2><p>Payroll growth</p></section>
+            <section data-oc-region="trade-card"><h2>Trade Flow</h2><p>Export balance</p></section>
+          </main>
+        </body>
+      </html>`
+    if (req.url !== "/dashboard") {
+      res.writeHead(404, { "content-type": "text/plain" })
+      res.end("not found")
+      return
+    }
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("multi-region preview test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
+async function startStatefulRegionPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((req, res) => {
+    const state = new URL(req.url ?? "/", "http://127.0.0.1").searchParams.get("state")
+    const compact = state === "compact"
+    const expanded = state === "expanded"
+    if (!compact && !expanded) {
+      res.writeHead(404, { "content-type": "text/plain" })
+      res.end("not found")
+      return
+    }
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>Stateful region preview</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            main { padding: 60px 40px; }
+            [data-oc-region="summary-card"] {
+              width: 280px;
+              height: ${compact ? 100 : 160}px;
+              background: ${compact ? "#fef3c7" : "#cffafe"};
+              color: ${compact ? "#78350f" : "#155e75"};
+              box-sizing: border-box;
+              padding: 18px;
+            }
+            h2 { margin: 0 0 12px; font-size: 23px; line-height: 1; }
+            p { margin: 0 0 20px; font-size: 15px; color: ${compact ? "#92400e" : "#0e7490"}; }
+          </style>
+        </head>
+        <body>
+          <main>
+            <section data-oc-region="summary-card">
+              <h2>Summary</h2>
+              <p>${compact ? "Compact state" : "Expanded state"}</p>
+              ${expanded ? "<p>Details visible</p>" : ""}
+            </section>
+          </main>
+        </body>
+      </html>`
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("stateful preview test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
 async function startMobilePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
   server = createServer((req, res) => {
@@ -516,4 +949,25 @@ async function expectPngDimensions(input: string, expected: { width: number; hei
 async function expectPngHasColorDiversity(input: string): Promise<void> {
   const stats = await sharp(input).stats()
   expect(stats.channels.some((channel) => channel.min !== channel.max)).toBe(true)
+}
+
+async function expectPngContainsColor(
+  input: string,
+  expected: { red: number; green: number; blue: number },
+): Promise<void> {
+  const { data, info } = await sharp(input).raw().toBuffer({ resolveWithObject: true })
+  let matchingPixels = 0
+  for (let index = 0; index < data.length; index += info.channels) {
+    const red = data[index] ?? 0
+    const green = data[index + 1] ?? 0
+    const blue = data[index + 2] ?? 0
+    if (
+      Math.abs(red - expected.red) <= 3 &&
+      Math.abs(green - expected.green) <= 3 &&
+      Math.abs(blue - expected.blue) <= 3
+    ) {
+      matchingPixels += 1
+    }
+  }
+  expect(matchingPixels).toBeGreaterThan(5_000)
 }

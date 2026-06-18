@@ -440,7 +440,7 @@ describe("tool.browser_preview", () => {
               { ...baseCtx, extra: { taskID } },
             )
             const comparisonPayload = JSON.parse(comparison.output)
-            const evidenceID = comparison.metadata.evidenceIDs["desktop:tool-local-module"]
+            const evidenceID = comparison.metadata.evidenceIDs["desktop:default:tool-local-module"]
             const evidence = await findReadableBrowserPreviewEvidenceByID({
               projectRoot: tmp.path,
               taskID,

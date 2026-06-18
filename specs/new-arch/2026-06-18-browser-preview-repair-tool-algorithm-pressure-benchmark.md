@@ -90,6 +90,7 @@ last-resort hung-test guard for Playwright calls.
 | Below-fold implementation region | Region comparison | Crop from a full-page implementation screenshot so valid offscreen module bboxes do not fail as viewport-clipped artifacts. |
 | Mobile source reference artifact | Region comparison | Use `reference-mobile.png` with the mobile viewport and persist mobile source/local comparison artifacts instead of silently comparing desktop evidence. |
 | Multiple visual regions in one route and viewport | Region comparison | Persist independent source crop, implementation crop, side-by-side, diff, and evidence IDs for each region without cross-wiring artifacts. |
+| Same visual region across multiple interaction states | Region comparison | Include `state_id` in comparison identity so default, expanded, hover, or modal states cannot overwrite each other's crops or evidence IDs. |
 | Multiple routes in one viewport | Region runner | Navigate per binding and restore route-specific region coordinates. |
 | Playwright sidecar lifecycle errors | Evidence runner | Propagate locator and close errors instead of converting them into missing regions or successful captures. |
 | Tool-level bind output feeds compare input | Toolchain integration | `browser_preview_bind_local_module` metadata binding is accepted by `browser_preview_compare_regions`, which persists `reference-comparison` evidence and side-by-side artifacts. |
