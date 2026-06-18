@@ -6,7 +6,6 @@ import { Instance } from "@/project/instance"
 import {
   ensureMissionSession,
   findExistingMissionSession,
-  getMissionSession,
   getMissionSessionByDirectory,
   listGlobalMissionSessions,
 } from "@/mission/session"
@@ -112,7 +111,7 @@ const MissionTitleInput = z.object({
   title: z.string().trim().min(1).max(200),
 })
 
-type MissionSessionRecord = Awaited<ReturnType<typeof getMissionSession>>
+type MissionSessionRecord = Awaited<ReturnType<typeof getMissionSessionByDirectory>>
 type MissionTaskProjectionValue = z.infer<typeof MissionTaskProjection>
 
 function missionRouteSession(missionID: string): Promise<MissionSessionRecord> {
@@ -307,7 +306,7 @@ export function MissionRoutes() {
         description:
           "Start (or resume) a Mission agent session and inject a user prompt. " +
           "Omit `missionID` to start a new mission; supply it to resume an existing one. " +
-          "The route is idempotent for (project, missionID) — exactly one mission " +
+          "The route is idempotent for (project, directory, missionID) — exactly one mission " +
           "session is keyed per mission.",
         operationId: "mission.wake",
         responses: {
@@ -330,9 +329,9 @@ export function MissionRoutes() {
         const missionID = input.missionID ?? newMissionID()
         // Snapshot existence BEFORE ensureMissionSession so the response
         // distinguishes "started" from "resumed". The lookup and the ensure
-        // call both go through the same in-process lock on missionID, so they
-        // observe the same state for any single wake call.
-        const existing = findExistingMissionSession(missionID)
+        // call both use the active request directory, so linked worktrees do
+        // not resume each other's Mission session.
+        const existing = findExistingMissionSession({ missionID, directory: Instance.directory })
         const session = await ensureMissionSession({
           missionID,
           defaultCwd: Instance.directory,
