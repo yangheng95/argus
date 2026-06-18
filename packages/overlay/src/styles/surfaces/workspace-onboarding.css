@@ -243,41 +243,39 @@
   gap: calc(8px * var(--ui-scale));
 }
 
-.workspace-onboarding-recent-item {
-  appearance: none;
+.workspace-onboarding-recent-list .oc-button[data-ui="workspace-onboarding-directory-row"] {
+  --oc-button-bg: color-mix(in srgb, var(--surface) 94%, transparent);
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
+  --oc-button-color: var(--text);
+  --oc-button-padding-x: calc(14px * var(--ui-scale));
+  --oc-button-padding-y: calc(12px * var(--ui-scale));
+
   width: 100%;
+  height: auto;
+  min-height: calc(58px * var(--ui-scale));
   display: grid;
   grid-template-columns: calc(32px * var(--ui-scale)) minmax(0, 1fr) calc(18px * var(--ui-scale));
   align-items: center;
   gap: calc(10px * var(--ui-scale));
-  padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  color: inherit;
+  font-weight: var(--ui-font-weight-body);
   text-align: left;
-  cursor: pointer;
+  white-space: normal;
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base),
     color var(--ui-duration-base);
 }
 
-.workspace-onboarding-recent-item:hover,
-.workspace-onboarding-recent-item:focus-visible {
-  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
-  background: color-mix(in srgb, var(--accent) 6%, var(--surface-hover));
-  outline: none;
+.workspace-onboarding-recent-list .oc-button[data-ui="workspace-onboarding-directory-row"]:hover,
+.workspace-onboarding-recent-list .oc-button[data-ui="workspace-onboarding-directory-row"]:focus-visible {
+  --oc-button-bg: color-mix(in srgb, var(--accent) 6%, var(--surface-hover));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
-.workspace-onboarding-recent-item[data-busy="true"] {
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface-hover));
-}
-
-.workspace-onboarding-recent-item:disabled {
-  opacity: var(--ui-opacity-disabled);
-  cursor: default;
+.workspace-onboarding-recent-list .oc-button[data-ui="workspace-onboarding-directory-row"][data-busy="true"] {
+  --oc-button-bg: color-mix(in srgb, var(--accent) 10%, var(--surface-hover));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 28%, var(--border));
 }
 
 .workspace-onboarding-recent-icon {

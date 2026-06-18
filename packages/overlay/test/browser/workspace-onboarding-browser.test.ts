@@ -83,6 +83,26 @@ async function saveDialogScreenshot(page: OverlayPage) {
   return target
 }
 
+async function saveElementScreenshot(page: OverlayPage, selector: string, name: string) {
+  const element = await page.$(selector)
+  assert.ok(element, `${selector} should exist before screenshot`)
+  const target = resolve(".scratch", name)
+  mkdirSync(dirname(target), { recursive: true })
+  const screenshot = await element.screenshot({})
+  assert.ok(screenshot.length > 0, `${name} screenshot should not be empty`)
+  writeFileSync(target, screenshot)
+  return target
+}
+
+async function focusByTab(page: OverlayPage, testID: string) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    await page.keyboard.press("Tab")
+    const activeTestID = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid ?? "")
+    if (activeTestID === testID) return
+  }
+  assert.equal(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid ?? ""), testID)
+}
+
 test("browser overlay opens a project by submitting an explicit server path", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
@@ -184,6 +204,150 @@ test("browser onboarding surfaces project discovery failures instead of renderin
       hasManualPathForm: true,
     })
     assert.ok((await saveDialogScreenshot(page)).endsWith("workspace-onboarding-discovery-error.png"))
+  } finally {
+    await browser.close()
+    await server.close()
+  }
+})
+
+test("browser onboarding directory rows use Button focus chrome and keep setDirectory actions", async () => {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
+  const requestedDirectories: string[] = []
+  const detectedPath = "D:/browser-overlay/detected-app"
+  const recentPath = "D:/browser-overlay/recent-app"
+  const discovery = {
+    body: {
+      root: "D:/browser-overlay",
+      defaultDirectory: "",
+      projects: [{ name: "detected-app", directory: detectedPath, marker: ".opencorvus" }],
+    },
+  }
+  const server = await startBrowserFixture((req) =>
+    onboardingFixtureResponse(req, {
+      projectPath: detectedPath,
+      requestedDirectories,
+      discovery,
+    }),
+  )
+
+  const browser = await launchBrowser(["--disable-dev-shm-usage"])
+  try {
+    const openOnboardingPage = async () => {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 900, height: 760 })
+      await page.evaluateOnNewDocument(
+        ({ portValue, recentDirectory }) => {
+          localStorage.setItem("oc_locale", "en-US")
+          localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
+          localStorage.setItem("oc_auto_server", "false")
+          localStorage.removeItem("oc_directory")
+          localStorage.setItem("oc_recent_directories", JSON.stringify([recentDirectory]))
+        },
+        { portValue: server.port, recentDirectory: recentPath },
+      )
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+      await page.waitForSelector('[data-testid="workspace-onboarding-detected-0"]', { visible: true })
+      await page.waitForSelector('[data-testid="workspace-onboarding-recent-0"]', { visible: true })
+      return page
+    }
+
+    const page = await openOnboardingPage()
+    const rowState = await page.evaluate(() => {
+      const detected = document.querySelector<HTMLButtonElement>('[data-testid="workspace-onboarding-detected-0"]')
+      const recent = document.querySelector<HTMLButtonElement>('[data-testid="workspace-onboarding-recent-0"]')
+      return {
+        oldClassCount: document.querySelectorAll(".workspace-onboarding-recent-item").length,
+        detectedClass: detected?.className ?? "",
+        recentClass: recent?.className ?? "",
+        detectedDataUi: detected?.dataset.ui ?? "",
+        recentDataUi: recent?.dataset.ui ?? "",
+        detectedVariant: detected?.dataset.variant ?? "",
+        recentVariant: recent?.dataset.variant ?? "",
+        detectedSize: detected?.dataset.size ?? "",
+        recentSize: recent?.dataset.size ?? "",
+        detectedTone: detected?.dataset.tone ?? "",
+        recentTone: recent?.dataset.tone ?? "",
+      }
+    })
+    assert.deepEqual(rowState, {
+      oldClassCount: 0,
+      detectedClass: "oc-button",
+      recentClass: "oc-button",
+      detectedDataUi: "workspace-onboarding-directory-row",
+      recentDataUi: "workspace-onboarding-directory-row",
+      detectedVariant: "ghost",
+      recentVariant: "ghost",
+      detectedSize: "md",
+      recentSize: "md",
+      detectedTone: "neutral",
+      recentTone: "neutral",
+    })
+
+    await focusByTab(page, "workspace-onboarding-detected-0")
+    const detectedFocus = await page.$eval('[data-testid="workspace-onboarding-detected-0"]', (node) => {
+      const button = node as HTMLElement
+      const style = getComputedStyle(button)
+      const rect = button.getBoundingClientRect()
+      return {
+        active: document.activeElement === button,
+        focusVisible: button.matches(":focus-visible"),
+        display: style.display,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        backgroundColor: style.backgroundColor,
+        width: rect.width,
+        height: rect.height,
+      }
+    })
+    assert.equal(detectedFocus.active, true)
+    assert.equal(detectedFocus.focusVisible, true)
+    assert.equal(detectedFocus.display, "grid")
+    assert.notEqual(detectedFocus.outlineStyle, "none")
+    assert.notEqual(detectedFocus.outlineWidth, "0px")
+    assert.notEqual(detectedFocus.backgroundColor, "rgba(0, 0, 0, 0)")
+    assert.ok(detectedFocus.width > 400, JSON.stringify(detectedFocus))
+    assert.ok(detectedFocus.height >= 50, JSON.stringify(detectedFocus))
+    assert.ok((await saveElementScreenshot(page, ".workspace-onboarding-form", "workspace-onboarding-detected-row-focus.png")).endsWith("workspace-onboarding-detected-row-focus.png"))
+
+    await focusByTab(page, "workspace-onboarding-recent-0")
+    const recentFocus = await page.$eval('[data-testid="workspace-onboarding-recent-0"]', (node) => {
+      const button = node as HTMLElement
+      const style = getComputedStyle(button)
+      const rect = button.getBoundingClientRect()
+      return {
+        active: document.activeElement === button,
+        focusVisible: button.matches(":focus-visible"),
+        display: style.display,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        backgroundColor: style.backgroundColor,
+        width: rect.width,
+        height: rect.height,
+      }
+    })
+    assert.equal(recentFocus.active, true)
+    assert.equal(recentFocus.focusVisible, true)
+    assert.equal(recentFocus.display, "grid")
+    assert.notEqual(recentFocus.outlineStyle, "none")
+    assert.notEqual(recentFocus.outlineWidth, "0px")
+    assert.notEqual(recentFocus.backgroundColor, "rgba(0, 0, 0, 0)")
+    assert.ok(recentFocus.width > 400, JSON.stringify(recentFocus))
+    assert.ok(recentFocus.height >= 50, JSON.stringify(recentFocus))
+    assert.ok((await saveElementScreenshot(page, ".workspace-onboarding-form", "workspace-onboarding-recent-row-focus.png")).endsWith("workspace-onboarding-recent-row-focus.png"))
+
+    await page.click('[data-testid="workspace-onboarding-detected-0"]')
+    await page.waitForFunction((expected) => (window as any).settingsStore.directory === expected, {}, detectedPath)
+    await page.close()
+
+    const recentPage = await openOnboardingPage()
+    await recentPage.click('[data-testid="workspace-onboarding-recent-0"]')
+    await recentPage.waitForFunction((expected) => (window as any).settingsStore.directory === expected, {}, recentPath)
+    await recentPage.close()
+
+    assert.ok(requestedDirectories.includes(detectedPath))
+    assert.ok(requestedDirectories.includes(recentPath))
   } finally {
     await browser.close()
     await server.close()
