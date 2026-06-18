@@ -43,6 +43,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-trace-event-head-focus.md](2026-06-18-trace-event-head-focus.md)                                                               | Trace Event Head Focus |
 | [2026-06-18-css-token-closure.md](2026-06-18-css-token-closure.md)                                                                         | CSS Token Closure |
 | [2026-06-18-select-control-static-coverage-alignment.md](2026-06-18-select-control-static-coverage-alignment.md)                           | Select Control Static Coverage Alignment |
+| [2026-06-18-coding-cli-icon-token-source.md](2026-06-18-coding-cli-icon-token-source.md)                                                     | Coding CLI Icon Token Source |
 | [2026-06-18-file-changes-filter-primitive-owner.md](2026-06-18-file-changes-filter-primitive-owner.md) | File Changes Filter Primitive Owner |
 | [2026-06-18-card-trace-action-button-owner.md](2026-06-18-card-trace-action-button-owner.md)                                               | Card Trace Action Button Owner |
 | [2026-06-18-goal-workflow-header-native-button.md](2026-06-18-goal-workflow-header-native-button.md)                                       | Goal Workflow Header Native Button |
