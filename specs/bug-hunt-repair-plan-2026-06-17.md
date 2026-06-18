@@ -3635,3 +3635,53 @@ LINE:
 - Galileo confirmed BH-078 was still present in HEAD `73711ecc5a`: `summarize(response)` caught every summary model failure and returned `Fix issue: ${title}`.
 - Galileo identified the same root cause: commit/PR title generation failure was treated as recoverable, hiding the model failure and continuing into repository mutation.
 - Galileo required a flow-level regression beyond helper/source tests; this batch adds the issue dirty handler test that verifies no post-summary git staging/commit and no PR creation when summary generation fails.
+
+## Batch P1-BK: BH-086 sync apply backups must cover every mutating action
+
+### Findings
+
+- BH-086 targets `script/sync-host-wsl.ps1`.
+- The script computes `$changedUnion` from modified/untracked files, then in `-Apply` mode immediately backs up only those paths.
+- It later discovers clean tracked divergences by iterating `$trackedUnion` and, when a conflict preference is provided, turns them into mutating `host-to-wsl`, `wsl-to-host`, `delete-host`, or `delete-wsl` actions.
+- Those later clean-tracked-divergence actions can overwrite or delete files that were not in `$changedUnion`, so no copy of the overwritten side exists in `backup-host-files`, `backup-wsl-files`, or deleted lists.
+
+### Call-point Inventory
+
+- `script/sync-host-wsl.ps1` is the only host/WSL sync entrypoint required by `AGENTS.md` rule 38.
+- `Invoke-HostGitLines(...)` and `Invoke-WslGitLines(...)` collect `ls-files`, changed lists, and HEAD values.
+- `$changedUnion` currently drives early apply-mode backups.
+- `$trackedUnion` clean divergence detection can add mutating actions after backup creation.
+- `Add-PreferredConflictAction(...)` maps both touched conflicts and clean tracked divergences into the same action vocabulary.
+- Final `foreach ($entry in $actions)` is the single mutation site that copies or deletes files.
+- No existing automated test covers `script/sync-host-wsl.ps1`.
+
+### Fix Shape
+
+- Move apply-mode backup creation until after actions, conflicts, and resolved conflicts are fully computed, but still before the final action loop mutates files.
+- Derive backup paths from the final non-`noop` action list, not from `$changedUnion`.
+- Back up both host and WSL sides for every mutating action path; this preserves overwritten sources, overwritten destinations, and deletion targets without needing per-action special cases.
+- Treat an empty path set as containing no paths in `Contains-PathItem(...)`; behavior-level clean divergence tests showed PowerShell can materialize an empty `$changedUnion` as `$null`, which otherwise prevents the clean-divergence branch from reaching conflict handling.
+- Keep dry-run behavior free of file backups and keep conflict-without-preference behavior non-mutating.
+- Do not add a fallback sync direction, compatibility overwrite path, or route gate.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/script/sync-host-wsl.test.ts`.
+- Assert source structure derives `$mutatingActionPaths` from `$mutatingActions`, then backs up that set with `Copy-BackupFile` for both host and WSL before the action loop.
+- Assert the old `foreach ($relative in $changedUnion)` backup loop is gone.
+- Assert the clean tracked divergence loop still routes preferred conflicts through `Add-PreferredConflictAction(...)`, so the mutating action path backup set includes those rows.
+- Add behavior-level local WSL harness tests using two clean git workspaces with divergent tracked content and an empty changed set.
+- Assert `-Apply -PreferHostForConflicts` copies host content to WSL and stores both original sides in backup files before overwrite.
+- Assert `-Apply -PreferWslForConflicts` copies WSL content to host and stores both original sides in backup files before overwrite.
+- Assert preferred clean tracked deletion backs up the deletion target and records the missing preferred side in `backup-*-deleted.txt`.
+- Assert clean tracked divergence without a preference fails before mutation and before backup directories are created.
+
+### Verification
+
+- Focused sync tests passed: `bun test packages/opencorvus/test/script/sync-host-wsl.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+
+### Independent Review Feedback
+
+- Newton confirmed BH-086 was still present in HEAD `4575fee8b0`: `-Apply` backed up only `$changedUnion`, then clean tracked divergence later added mutating actions that could overwrite/delete unbacked files.
+- Newton identified the same root cause: backup paths and mutation actions were two sources of truth; backups must derive from the final mutation action list.
+- Newton required behavior-level clean git workspace fixtures beyond source guards; the final test suite includes host-preferred, WSL-preferred, deletion, and no-preference clean tracked divergence fixtures.

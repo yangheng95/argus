@@ -129,6 +129,9 @@ function Set-Union([string[]]$Left, [string[]]$Right) {
 }
 
 function Contains-PathItem($Set, $Item) {
+  if ($null -eq $Set) {
+    return $false
+  }
   return $Set.Contains(($Item -replace "\\", "/"))
 }
 
@@ -203,23 +206,6 @@ Write-Lines (Join-Path $reportDir "host-changed.txt") $hostChanged
 Write-Lines (Join-Path $reportDir "wsl-changed.txt") $wslChanged
 Write-Lines (Join-Path $reportDir "host-head.txt") @($hostHead)
 Write-Lines (Join-Path $reportDir "wsl-head.txt") @($wslHead)
-
-if ($Apply) {
-  $hostBackup = Join-Path $reportDir "backup-host-files"
-  $wslBackup = Join-Path $reportDir "backup-wsl-files"
-  New-Item -ItemType Directory -Force -Path $hostBackup, $wslBackup | Out-Null
-  $hostDeleted = Join-Path $reportDir "backup-host-deleted.txt"
-  $wslDeleted = Join-Path $reportDir "backup-wsl-deleted.txt"
-  New-Item -ItemType File -Force -Path $hostDeleted, $wslDeleted | Out-Null
-  foreach ($relative in $changedUnion) {
-    Copy-BackupFile $HostRoot $hostBackup $relative $hostDeleted
-    Copy-BackupFile $WslUncRoot $wslBackup $relative $wslDeleted
-  }
-  $hostDiff = & git -C $HostRoot diff --binary
-  Write-Lines (Join-Path $reportDir "host-tracked.diff") @($hostDiff)
-  $wslDiff = & wsl.exe -d $WslDistro -- git -C $WslRoot diff --binary
-  Write-Lines (Join-Path $reportDir "wsl-tracked.diff") @($wslDiff)
-}
 
 $actions = [System.Collections.Generic.List[string]]::new()
 $conflicts = [System.Collections.Generic.List[string]]::new()
@@ -312,6 +298,14 @@ Write-Lines (Join-Path $reportDir "actions.tsv") @($actions)
 Write-Lines (Join-Path $reportDir "conflicts.tsv") @($conflicts)
 Write-Lines (Join-Path $reportDir "resolved-conflicts.tsv") @($resolutions)
 $mutatingActions = @($actions | Where-Object { -not $_.StartsWith("noop`t") })
+$mutatingActionPathSet = [System.Collections.Generic.SortedSet[string]]::new([StringComparer]::Ordinal)
+foreach ($entry in $mutatingActions) {
+  $parts = $entry -split "`t", 2
+  if ($parts.Count -eq 2 -and -not [string]::IsNullOrWhiteSpace($parts[1])) {
+    [void]$mutatingActionPathSet.Add($parts[1])
+  }
+}
+$mutatingActionPaths = @($mutatingActionPathSet)
 
 if ($conflicts.Count -gt 0) {
   Write-Host "Host HEAD: $hostHead"
@@ -330,6 +324,23 @@ if (-not $Apply) {
   Write-Host "Copy/delete: $($mutatingActions.Count)"
   Write-Host "Report:    $reportDir"
   exit 0
+}
+
+if ($Apply) {
+  $hostBackup = Join-Path $reportDir "backup-host-files"
+  $wslBackup = Join-Path $reportDir "backup-wsl-files"
+  New-Item -ItemType Directory -Force -Path $hostBackup, $wslBackup | Out-Null
+  $hostDeleted = Join-Path $reportDir "backup-host-deleted.txt"
+  $wslDeleted = Join-Path $reportDir "backup-wsl-deleted.txt"
+  New-Item -ItemType File -Force -Path $hostDeleted, $wslDeleted | Out-Null
+  foreach ($relative in $mutatingActionPaths) {
+    Copy-BackupFile $HostRoot $hostBackup $relative $hostDeleted
+    Copy-BackupFile $WslUncRoot $wslBackup $relative $wslDeleted
+  }
+  $hostDiff = & git -C $HostRoot diff --binary
+  Write-Lines (Join-Path $reportDir "host-tracked.diff") @($hostDiff)
+  $wslDiff = & wsl.exe -d $WslDistro -- git -C $WslRoot diff --binary
+  Write-Lines (Join-Path $reportDir "wsl-tracked.diff") @($wslDiff)
 }
 
 foreach ($entry in $actions) {
