@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser, type OverlayBrowser, type OverlayPage } from "../launch.ts"
@@ -48,6 +50,13 @@ function send(value: unknown, init?: ResponseInit) {
       ...(init?.headers || {}),
     },
   })
+}
+
+async function saveElementScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+  const screenshotPath = resolve(".scratch", name)
+  mkdirSync(dirname(screenshotPath), { recursive: true })
+  writeFileSync(screenshotPath, await element.screenshot({}))
+  return screenshotPath
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -125,6 +134,16 @@ async function withOverlay(
       })
     }
     if (path === "/config/prompt") return send([])
+    if (path === "/config/prompt-profile") {
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
+    }
     if (path === "/config" && req.method === "GET") return send(data.config)
     if (path === "/config" && req.method === "PATCH") {
       const body = (await req.json()) as Record<string, unknown>
@@ -142,6 +161,7 @@ async function withOverlay(
       return send(true)
     }
     if (path === "/channel") return send(data.channels)
+    if (path === "/mission") return send([])
     if (path === "/skill/installed" || path === "/skill") return send(data.skills)
     if (path === "/mcp") return send(data.mcp)
     if (path === "/executor") return send(data.executors)
@@ -416,12 +436,21 @@ test(
             searchTop: search.top,
             titleBottom: title.bottom,
             toolbarRight: toolbar.right,
+            llmResidueCount: document.querySelectorAll('[class*="llm-"]').length,
+            providerRows: document.querySelectorAll(".provider-settings-row").length,
           }
         })
         assert.ok(layout.actionsRight <= layout.toolbarRight + 1)
         assert.ok(layout.searchRight <= layout.contentRight + 1)
         assert.ok(layout.saveRight <= layout.contentRight + 1)
         assert.ok(layout.searchTop >= layout.titleBottom - 1)
+        assert.equal(layout.llmResidueCount, 0)
+        assert.ok(layout.providerRows >= 3)
+
+        const dialog = await tab.$("#configDialog")
+        assert.ok(dialog)
+        const screenshotPath = await saveElementScreenshot(dialog, "provider-settings-primitive-owner.png")
+        assert.ok(screenshotPath.endsWith("provider-settings-primitive-owner.png"))
 
         await tab.type('[data-testid="provider-search-input"]', "claude")
         await tab.waitForFunction(

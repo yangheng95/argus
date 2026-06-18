@@ -2517,15 +2517,10 @@ button.s-row:focus-visible {
   color: var(--bad);
 }
 
-.general-panel,
-.llm-panel {
+.general-panel {
   display: flex;
   flex-direction: column;
   gap: calc(20px * var(--ui-scale));
-}
-
-.llm-panel {
-  position: relative;
 }
 
 .opacity-field {
@@ -2554,43 +2549,6 @@ button.s-row:focus-visible {
   /* `accent-color` declared globally on body (tokens/design-language.css). */
   cursor: pointer;
   margin: calc(4px * var(--ui-scale)) 0;
-}
-
-.llm-summary-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(10px * var(--ui-scale));
-  padding: 0;
-  border: 0 solid transparent;
-  border-radius: 0;
-  background: transparent;
-  min-height: calc(40px * var(--ui-scale));
-  transition: border-color var(--ui-duration-base);
-}
-.llm-summary-row:hover {
-  border-color: transparent;
-}
-
-.llm-summary {
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--text-strong);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.llm-api-key-summary {
-  font-size: var(--ui-font-small);
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--accent);
-  padding: calc(2px * var(--ui-scale)) 0;
-}
-
-.llm-auth-row {
-  padding-top: calc(4px * var(--ui-scale));
 }
 
 .loading-hint {
