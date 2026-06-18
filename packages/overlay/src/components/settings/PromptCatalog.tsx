@@ -488,6 +488,7 @@ export default function PromptCatalog() {
                         type="button"
                         class="prompt-profile-list-item"
                         data-active={selectedProfileID() === profile.id ? "true" : "false"}
+                        aria-current={selectedProfileID() === profile.id ? "true" : undefined}
                         onClick={() => setSelectedProfileID(profile.id)}
                       >
                         <div class="prompt-profile-list-copy">
