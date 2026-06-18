@@ -291,7 +291,7 @@ export const ExperimentalRoutes = lazy(() =>
       validator("json", Worktree.remove.schema),
       async (c) => {
         const body = c.req.valid("json")
-        await Worktree.remove(body)
+        await Worktree.removeProjectWorktree(body)
         await Project.removeSandbox(Instance.project.id, body.directory)
         return c.json(true)
       },
