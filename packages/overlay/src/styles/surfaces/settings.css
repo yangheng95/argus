@@ -1323,6 +1323,7 @@
 
 .about-author-avatar {
   flex-shrink: 0;
+  color: var(--accent);
   opacity: var(--ui-opacity-subtle);
 }
 
