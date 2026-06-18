@@ -400,3 +400,143 @@ test("file explorer current file and directory expansion are exposed on the row 
     await server.close()
   }
 })
+
+test("file explorer load-failed retry uses the shared button primitive", async () => {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
+  const server = await startBrowserFixture(async (req) => {
+    const url = new URL(req.url)
+    const path = route(url)
+    if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+    const staticResponse = await overlayStaticResponse(path)
+    if (staticResponse) return staticResponse
+    if (path === "/global/health") return send({ version: "1.2.3" })
+    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/mission" || path === "/session") return send([])
+    if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+    if (path === "/vcs") {
+      return send({
+        branch: "dev",
+        clean: true,
+        dirty: false,
+        staged: 0,
+        modified: 0,
+        untracked: 0,
+        conflicts: 0,
+        ahead: 0,
+        behind: 0,
+      })
+    }
+    if (path === "/provider") return send({ all: [], connected: [], default: {} })
+    if (path === "/provider/auth") return send({})
+    if (path === "/config/providers") return send({ providers: [], default: {} })
+    if (path === "/config") return send({ model: "opencorvus/gpt-5-nano", prompt_profile: { active: "general" } })
+    if (path === "/config/prompt") return send([])
+    if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+    if (path === "/terminal/profiles") return send({ defaultProfileID: "powershell", profiles: [] })
+    if (path === "/coding/cli/profiles") return send({ profiles: [] })
+    if (path === "/agent" || path === "/channel" || path === "/executor") return send([])
+    if (path === "/skill/installed" || path === "/skill") return send([])
+    if (path === "/mcp") return send({})
+    if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
+    if (path === "/file") return send({ error: "root directory unavailable" }, { status: 500 })
+    if (path === "/task/events") return eventStream()
+    return send({})
+  })
+
+  const browser = await launchBrowser(["--disable-dev-shm-usage"])
+  try {
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1280, height: 760 })
+    await page.evaluateOnNewDocument((serverUrl) => {
+      ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+      localStorage.setItem("oc_locale", "en-US")
+      localStorage.setItem("oc_theme", "light")
+      localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+      localStorage.setItem("oc_server_url", serverUrl)
+      localStorage.setItem("oc_right_panel_collapsed", "false")
+    }, server.origin)
+
+    await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
+    const retrySelector = '.file-explorer-empty .oc-button[data-ui="file-explorer-retry"]'
+    await page.waitForSelector(retrySelector, { visible: true })
+
+    const retryState = await page.$eval(retrySelector, (node) => {
+      const element = node as HTMLButtonElement
+      const styles = getComputedStyle(element)
+      return {
+        className: element.className,
+        tag: element.tagName,
+        variant: element.dataset.variant ?? "",
+        size: element.dataset.size ?? "",
+        tone: element.dataset.tone ?? "",
+        color: styles.color,
+        background: styles.backgroundColor,
+        borderColor: styles.borderColor,
+      }
+    })
+    assert.deepEqual(
+      {
+        className: retryState.className,
+        tag: retryState.tag,
+        variant: retryState.variant,
+        size: retryState.size,
+        tone: retryState.tone,
+      },
+      {
+        className: "oc-button",
+        tag: "BUTTON",
+        variant: "outline",
+        size: "md",
+        tone: "danger",
+      },
+    )
+    assert.notEqual(retryState.color, "rgba(0, 0, 0, 0)")
+    assert.notEqual(retryState.borderColor, "rgba(0, 0, 0, 0)")
+
+    await page.hover(retrySelector)
+    const hoverState = await page.$eval(retrySelector, (node) => {
+      const styles = getComputedStyle(node as HTMLElement)
+      return {
+        background: styles.backgroundColor,
+        color: styles.color,
+      }
+    })
+    assert.notEqual(hoverState.background, retryState.background)
+    assert.notEqual(hoverState.color, "rgba(0, 0, 0, 0)")
+
+    let focusedByKeyboard = false
+    for (let idx = 0; idx < 80; idx += 1) {
+      await page.keyboard.press("Tab")
+      focusedByKeyboard = await page.$eval(retrySelector, (node) => document.activeElement === node)
+      if (focusedByKeyboard) break
+    }
+    assert.equal(focusedByKeyboard, true)
+    const focusState = await page.$eval(retrySelector, (node) => {
+      const element = node as HTMLElement
+      const styles = getComputedStyle(element)
+      return {
+        focusVisible: element.matches(":focus-visible"),
+        outlineStyle: styles.outlineStyle,
+        outlineWidth: styles.outlineWidth,
+      }
+    })
+    assert.equal(focusState.focusVisible, true)
+    assert.notEqual(focusState.outlineStyle, "none")
+    assert.notEqual(focusState.outlineWidth, "0px")
+
+    const screenshotPath = resolve(".scratch/file-explorer-retry-button-primitive.png")
+    mkdirSync(dirname(screenshotPath), { recursive: true })
+    const explorerElement = await page.$("#centerWorkbenchExplorer")
+    assert.ok(explorerElement)
+    const screenshot = await explorerElement.screenshot({})
+    assert.ok(screenshot.length > 0)
+    writeFileSync(screenshotPath, screenshot)
+  } finally {
+    await browser.close()
+    await server.close()
+  }
+})
