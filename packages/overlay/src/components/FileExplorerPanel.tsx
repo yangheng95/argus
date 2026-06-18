@@ -220,12 +220,14 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
 
   const renderRow = (row: ExplorerRow) => {
     if (row.kind === "search") {
+      const isSearchRowCurrent = () => selectedFilePath() === row.path
       return (
         <button
           type="button"
           class="file-explorer-row"
           data-kind="file"
-          data-active={selectedFilePath() === row.path ? "true" : "false"}
+          data-active={isSearchRowCurrent() ? "true" : "false"}
+          aria-current={isSearchRowCurrent() ? "true" : undefined}
           style={{ "padding-left": `calc(${row.depth * 14 + 3}px * var(--ui-scale))` }}
           title={row.path}
           onClick={() => openFileEditor(row.path)}
@@ -240,13 +242,16 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
 
     const node = row.node
     const isDirectory = node.type === "directory"
+    const isNodeCurrent = () => selectedFilePath() === node.path
     return (
       <button
         type="button"
         class="file-explorer-row"
         data-kind={node.type}
-        data-active={selectedFilePath() === node.path ? "true" : "false"}
+        data-active={isNodeCurrent() ? "true" : "false"}
         data-ignored={node.ignored ? "true" : "false"}
+        aria-current={isNodeCurrent() ? "true" : undefined}
+        aria-expanded={isDirectory ? row.expanded : undefined}
         style={{ "padding-left": `calc(${row.depth * 14 + 3}px * var(--ui-scale))` }}
         title={node.path}
         onClick={() => {
@@ -309,8 +314,6 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
         class="file-explorer-list"
         data-virtualized={shouldVirtualize() ? "true" : "false"}
         data-searching={deferredQuery() ? "true" : "false"}
-        role="tree"
-        aria-label={t("explorer.title")}
       >
         <Show
           when={!rootLoading() && !searchLoading()}
