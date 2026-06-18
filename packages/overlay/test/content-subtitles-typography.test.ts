@@ -20,7 +20,7 @@
 // All five are plain subtitles inside content. Same logic as iter4 /
 // iter7 / iter9 / iter10 / iter11: no pill chrome → not a status
 // chip → drop the all-caps + wide tracking. The remaining
-// uppercase tier-3 pills (verdict-pill, req-status, reasoning-label,
+// uppercase tier-3 pills (verdict-pill, req-status, reasoning toggle,
 // criteria-result, eval-error-meta, session-msg-role, md-code-lang,
 // gwg-priority-badge, gwg-verdict, integrity__tag,
 // req-priority, req-type, status-label, brand-guide-kicker)
@@ -79,7 +79,7 @@ describe("legitimate tier-3 pills keep uppercase (negative control)", () => {
   for (const sel of [
     ".verdict-pill",
     ".req-status",
-    ".reasoning-label",
+    '.oc-button[data-ui="reasoning-toggle"]',
     ".gwg-priority-badge",
     ".gwg-verdict",
     ".md-code-lang",

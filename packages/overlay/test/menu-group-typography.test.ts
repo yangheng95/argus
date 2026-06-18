@@ -74,7 +74,7 @@ describe("command palette responsive footer", () => {
 })
 
 describe("tier-3 status pills keep uppercase (negative control)", () => {
-  for (const sel of [".verdict-pill", ".req-status", ".reasoning-label"]) {
+  for (const sel of [".verdict-pill", ".req-status", '.oc-button[data-ui="reasoning-toggle"]']) {
     test(`${sel} stays uppercase`, () => {
       expect(ruleBody(sel)).toContain("text-transform: uppercase")
     })
