@@ -162,12 +162,25 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     await page.keyboard.press("Enter")
     await page.waitForSelector(".recent-dir-panel", { visible: true })
     await page.waitForSelector('[data-ui="cwd-path-input"]', { visible: true })
+    await page.waitForFunction(
+      () => document.querySelectorAll('.recent-dir-row[data-active="true"] .recent-dir-item[aria-current="location"]').length >= 1,
+    )
 
     const openState = await page.evaluate(() => ({
       panelVisible: !!document.querySelector(".recent-dir-panel"),
       triggerExpanded: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("aria-expanded") ?? "",
       shellOpen: document.querySelector(".task-cwd-dropdown")?.getAttribute("data-open") ?? "",
       recentRows: document.querySelectorAll('.recent-dir-list[data-kind="recent"] .recent-dir-row').length,
+      currentRows: Array.from(document.querySelectorAll<HTMLElement>(".recent-dir-row")).map((row) => {
+        const item = row.querySelector<HTMLElement>(".recent-dir-item")
+        return {
+          title: item?.getAttribute("title") ?? "",
+          active: row.dataset.active ?? "",
+          current: item?.getAttribute("aria-current") ?? "",
+          selected: item?.getAttribute("aria-selected") ?? "",
+          pressed: item?.getAttribute("aria-pressed") ?? "",
+        }
+      }),
       geometry: (() => {
         const shell = document.querySelector<HTMLElement>(".task-cwd-dropdown")?.getBoundingClientRect()
         const panel = document.querySelector<HTMLElement>(".recent-dir-panel")?.getBoundingClientRect()
@@ -184,6 +197,12 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     assert.equal(openState.triggerExpanded, "true")
     assert.equal(openState.shellOpen, "true")
     assert.ok(openState.recentRows >= 3)
+    assert.ok(openState.currentRows.filter((row) => row.active === "true").length >= 1)
+    for (const row of openState.currentRows) {
+      assert.equal(row.current, row.active === "true" ? "location" : "", JSON.stringify(openState.currentRows))
+      assert.equal(row.selected, "")
+      assert.equal(row.pressed, "")
+    }
     assert.ok(openState.geometry)
     assert.ok(openState.geometry.leftDelta <= 2)
     assert.ok(openState.geometry.panelWidth > 240)
