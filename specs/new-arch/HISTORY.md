@@ -18,6 +18,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
 | [2026-06-18-titlebar-brand-guide-popover-primitive.md](2026-06-18-titlebar-brand-guide-popover-primitive.md)                               | Titlebar Brand Guide Popover Primitive |
 | [2026-06-18-extension-head-field-label-single-source.md](2026-06-18-extension-head-field-label-single-source.md)                           | Extension Head Field Label Single Source |
+| [2026-06-18-acceptance-panel-button-owner.md](2026-06-18-acceptance-panel-button-owner.md)                                                 | Acceptance Panel Button Owner |
 | [2026-06-18-settings-surface-header-residue.md](2026-06-18-settings-surface-header-residue.md)                                             | Settings Surface Header Residue |
 | [2026-06-18-connection-banner-button-primitive.md](2026-06-18-connection-banner-button-primitive.md)                                       | Connection Banner Button Primitive |
 | [2026-06-18-notification-live-region-task-action.md](2026-06-18-notification-live-region-task-action.md)                                   | Notification Live Region Task Action |

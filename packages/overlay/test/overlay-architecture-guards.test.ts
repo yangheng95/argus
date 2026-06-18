@@ -1738,11 +1738,21 @@ describe("overlay architecture guards", () => {
   test("acceptance panel chrome is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+    const messagesSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/messages.css"))
+    const boardSource = readText(join(OVERLAY_ROOT, "src/components/Board.tsx"))
 
     expect(styles).not.toMatch(/(^|\n)\.acceptance-panel\s*\{/)
     expect(styles).not.toMatch(/(^|\n)\.acceptance-panel::before\s*\{/)
     expect(inspectorSurface).toMatch(/\.acceptance-panel\s*\{/)
     expect(inspectorSurface).toMatch(/\.acceptance-panel::before\s*\{/)
+    expect(inspectorSurface).toContain('.acceptance-panel .oc-button[data-ui="acceptance-summary-toggle"]')
+    expect(inspectorSurface).toContain('.acceptance-panel .oc-button[data-ui="acceptance-files-link"]')
+    expect(inspectorSurface).toContain('.acceptance-panel .oc-button[data-ui="acceptance-evidence-goal-pill"]')
+    expect(boardSource).toContain('data-ui="acceptance-summary-toggle"')
+    expect(boardSource).toContain('data-ui="acceptance-files-link"')
+    expect(boardSource).toContain('data-ui="acceptance-evidence-goal-pill"')
+    expect(boardSource).toContain('attr:data-has-pill={row.goalRunID ? "true" : undefined}')
 
     for (const verdict of ["accepted", "rejected", "inflight", "empty"]) {
       expect(inspectorSurface).toMatch(new RegExp(`\\.acceptance-panel\\[data-verdict="${verdict}"\\]`))
@@ -1750,6 +1760,17 @@ describe("overlay architecture guards", () => {
 
     expect(inspectorSurface).toMatch(/--acceptance-panel-accent: var\(--good\)/)
     expect(inspectorSurface).toMatch(/--acceptance-panel-accent: var\(--bad\)/)
+    for (const retiredOwnerSelector of [
+      "acceptance-panel-meta",
+      "acceptance-summary",
+      "acceptance-summary-toggle",
+      "acceptance-files-link",
+    ]) {
+      expect(settingsSurface).not.toContain(retiredOwnerSelector)
+    }
+    for (const retiredOverflowSelector of ["acceptance-panel", "acceptance-summary", "acceptance-files-link"]) {
+      expect(messagesSurface).not.toContain(retiredOverflowSelector)
+    }
     expect(inspectorSurface).not.toMatch(/#63a2ff/)
   })
 
