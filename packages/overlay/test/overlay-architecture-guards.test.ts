@@ -829,6 +829,7 @@ describe("overlay architecture guards", () => {
       "workspace-command-dock",
       "workspace-command-divider",
       "workspace-editor-launchers",
+      "workspace-coding-cli-launchers",
       "workspace-layout-controls",
       "recent-dir-panel",
       "recent-dir-row",
@@ -851,6 +852,11 @@ describe("overlay architecture guards", () => {
     // Canonical properties must use tokens, not raw values
     expect(conversationSurface).toContain("var(--oc-border-width)")
     expect(conversationSurface).toContain("var(--oc-radius-pill)")
+    expect(conversationSurface).not.toContain(".workspace-split-launcher-primary")
+    expect(conversationSurface).not.toContain(".workspace-split-launcher-menu-button")
+    expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome^="workspace-split"]')
+    expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-primary"]')
+    expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"]')
     expect(conversationSurface).not.toMatch(/border-radius:\s*999px/)
     expect(conversationSurface).not.toMatch(/rgba\(116,\s*133,\s*184/)
     expect(conversationSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.62\)/)

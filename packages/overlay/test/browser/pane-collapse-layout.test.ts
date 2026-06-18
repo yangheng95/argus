@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -215,6 +217,68 @@ test(
       })
       assert.deepEqual(launcherDimensions.terminal, launcherDimensions.editor)
       assert.deepEqual(launcherDimensions.terminal, launcherDimensions.codingCli)
+      const launcherPrimitives = await page.evaluate(() => {
+        const selectors = [
+          '[data-ui="workspace-terminal-open"]',
+          '[data-ui="workspace-terminal-menu"]',
+          '[data-ui="workspace-editor-open-default"]',
+          '[data-ui="workspace-editor-menu"]',
+          '[data-ui="workspace-coding-cli-open-default"]',
+          '[data-ui="workspace-coding-cli-menu"]',
+        ]
+        return selectors.map((selector) => {
+          const node = document.querySelector<HTMLElement>(`.workspace-command-dock ${selector}`)
+          if (!node) throw new Error(`Missing workspace launcher ${selector}`)
+          const rect = node.getBoundingClientRect()
+          return {
+            selector,
+            button: node.tagName === "BUTTON",
+            primitive: node.classList.contains("oc-button"),
+            variant: node.dataset.variant || "",
+            size: node.dataset.size || "",
+            tone: node.dataset.tone || "",
+            chrome: node.dataset.chrome || "",
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          }
+        })
+      })
+      assert.equal(launcherPrimitives.length, 6)
+      for (const state of launcherPrimitives) {
+        assert.equal(state.button, true, state.selector)
+        assert.equal(state.primitive, true, state.selector)
+        assert.equal(state.variant, "ghost", state.selector)
+        assert.equal(state.size, "icon", state.selector)
+        assert.equal(state.tone, "neutral", state.selector)
+        assert.match(state.chrome, /^workspace-split-(primary|menu)$/, state.selector)
+        assert.ok(state.width > 0, state.selector)
+        assert.ok(state.height > 0, state.selector)
+      }
+      await page.focus('.workspace-command-dock [data-ui="workspace-editor-menu"]')
+      const launcherFocus = await page.$eval('.workspace-command-dock [data-ui="workspace-editor-menu"]', (node) => {
+        const style = getComputedStyle(node as HTMLElement)
+        return {
+          focusVisible: (node as HTMLElement).matches(":focus-visible"),
+          outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth,
+        }
+      })
+      assert.equal(launcherFocus.focusVisible, true)
+      assert.notEqual(launcherFocus.outlineStyle, "none")
+      assert.notEqual(launcherFocus.outlineWidth, "0px")
+      mkdirSync(resolve(".scratch"), { recursive: true })
+      const launcherClip = await page.$eval(".workspace-command-dock", (node) => {
+        const rect = (node as HTMLElement).getBoundingClientRect()
+        return {
+          x: Math.max(0, rect.x - 8),
+          y: Math.max(0, rect.y - 8),
+          width: rect.width + 16,
+          height: rect.height + 16,
+        }
+      })
+      const launcherScreenshot = await page.screenshot({ clip: launcherClip })
+      assert.ok(launcherScreenshot.length > 0)
+      writeFileSync(resolve(".scratch/workspace-split-launcher-button-primitive.png"), launcherScreenshot)
       assertPresent(await page.$('.workspace-editor-select-icon[data-editor="vscode"] svg'))
       await page.click('.workspace-command-dock [data-ui="workspace-terminal-open"]')
       for (let i = 0; i < 40 && terminalOpenBodies.length === 0; i++) {
