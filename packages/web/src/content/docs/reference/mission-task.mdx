@@ -33,21 +33,21 @@ A Mission is the long-running coordination layer. One Mission is backed by one `
 
 ## Request Basics
 
-The default local server is `http://127.0.0.1:7878`. Project-scoped routes need the current project directory, either as a header:
-
-```bash
-x-opencorvus-directory: D:\repo\my-project
-```
-
-or as a query parameter:
+The default local server is `http://127.0.0.1:7878`. Project-scoped routes need the current project directory. The generated OpenAPI spec and SDK use the `directory` query parameter:
 
 ```text
 ?directory=D:\repo\my-project
 ```
 
+Raw HTTP clients may also send the equivalent header:
+
+```bash
+x-opencorvus-directory: D:\repo\my-project
+```
+
 When `OPENCORVUS_SERVER_PASSWORD` is set, requests need HTTP Basic Auth. The default username is `opencorvus`; `OPENCORVUS_SERVER_USERNAME` overrides it.
 
-The SDK handles the directory header and Basic Auth:
+The SDK appends the directory query parameter on project-scoped routes and handles Basic Auth:
 
 ```typescript
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
@@ -159,11 +159,12 @@ Use `POST /task/{taskID}/message` when the user needs to add instructions while 
 ```typescript
 await client.task.message({
   taskID,
+  source: "api",
   text: "Prioritize the mobile layout and keep desktop behavior unchanged.",
 })
 ```
 
-For direct controls, use the explicit routes:
+`source` is required and should identify the caller, such as `api`, `github-action`, or your integration name. For direct controls, use the explicit routes:
 
 | Action                | Route                           |
 | --------------------- | ------------------------------- |

@@ -31,7 +31,7 @@ const client = createOpenCorvusClient({
 | 选项            | 用途                                                                                         |
 | --------------- | -------------------------------------------------------------------------------------------- |
 | `baseUrl`       | OpenCorvus 服务地址；未传时使用生成时的默认地址。                                            |
-| `directory`     | 为项目作用域请求添加 `x-opencorvus-directory`；Windows 下会规范化 `/c/repo` 这类 MSYS 路径。 |
+| `directory`     | 为项目作用域请求添加 `directory` query 参数；Windows 下会规范化 `/c/repo` 这类 MSYS 路径。 |
 | `username`      | Basic Auth 用户名，默认 `opencorvus`。                                                       |
 | `password`      | Basic Auth 密码；服务端启用 `OPENCORVUS_SERVER_PASSWORD` 时传入该值。                        |
 | `headers`       | 额外 header；显式传入的 `Authorization` 不会被 `password` 覆盖。                             |
