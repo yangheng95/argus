@@ -2764,3 +2764,41 @@ LINE:
 
 - Herschel confirmed BH-059 is not present in current production code: `HexinBudgetResponse` is a `z.discriminatedUnion("ok", ...)`, `/provider/hexin/budget` binds it through `resolver(...)`, and the route only returns complete success or failure payloads.
 - Herschel identified the remaining risk as test-fixture contract drift in `command-palette.test.ts` and `rewind-visual-stress.test.ts`, not a production fallback or route bug.
+
+## Batch P1-AR: BH-060 Hexin budget tests must exercise Server.App directory middleware
+
+### Findings
+
+- BH-060 targets `packages/opencorvus/test/server/provider-hexin-budget.test.ts`.
+- HEAD still mounted `ProviderRoutes()` directly through `new Hono().route("/provider", ProviderRoutes())` and then wrapped requests in `Instance.provide(...)`.
+- That test shape bypassed the real `Server.App()` middleware that enforces `?directory=` or `x-opencorvus-directory` for project-scoped routes.
+- The production route is mounted through `AppRoutes(...).route("/provider", ProviderRoutes())`, and `routeRequiresProjectDirectory(...)` does not bypass `/provider/hexin/budget`, so the route must be tested through `Server.App()`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/server.ts` owns `Server.App()` and `DirectoryRequiredError`.
+- `packages/opencorvus/src/server/routes/app.ts` mounts `/provider` under the project-scoped app routes.
+- `packages/opencorvus/src/server/routes/provider.ts` owns `/provider/hexin/budget`.
+- `packages/transport-protocol/src/index.ts` owns the route directory-injection policy; overlay coverage for `provider/hexin/budget` already exists in `packages/overlay/test/api-directory-injection.test.ts`.
+- `packages/opencorvus/test/server/provider-hexin-budget.test.ts` is the focused route test suite.
+
+### Fix Shape
+
+- Delete the direct `new Hono().route("/provider", ProviderRoutes())` test helper.
+- Route every budget request through `Server.App().request("/provider/hexin/budget", ...)`.
+- Add a missing-directory regression that asserts 400 `DirectoryRequiredError` and no upstream fetch.
+- For positive route cases, pass `x-opencorvus-directory` with a real temporary git project directory.
+- Use process env restoration for the Hexin key so the real `Instance.provide(...)` bootstrapped by `Server.App()` sees the intended key snapshot.
+- Do not change production middleware, add bypasses, or add compatibility route behavior.
+
+### Verification
+
+- Focused test passed: `bun test packages/opencorvus/test/server/provider-hexin-budget.test.ts --timeout 120000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Direct route bypass removed: `rg -n "ProviderRoutes\\(\\)|new Hono\\(" packages/opencorvus/test/server/provider-hexin-budget.test.ts` returned no matches.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Leibniz confirmed BH-060 was present in HEAD because the old test mounted `ProviderRoutes()` directly and manually wrapped `Instance.provide(...)`.
+- Leibniz confirmed the candidate repair uses the correct boundary: missing `x-opencorvus-directory` returns `DirectoryRequiredError`, and present header enters the provider handler through `Server.App()`.
