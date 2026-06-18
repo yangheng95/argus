@@ -3881,3 +3881,56 @@ LINE:
 - Ohm independently identified the same root cause: wake/session acquisition used `projectID + missionID`, while later Mission routes used `directory + missionID`.
 - Ohm required a real `git worktree` test, route-level `SessionWake.wake(...)` assertions, directory-aware `created` semantics, and no project-only fallback path.
 - Ohm noted the implementation should normalize raw `defaultCwd`; `ensureMissionSession(...)` now uses `Filesystem.resolve(...)` before lookup and lock key construction.
+
+## Batch P1-BP: BH-110 public replan surfaces must not use retry intent
+
+### Findings
+
+- BH-110 targets `packages/opencorvus/src/server/routes/orchestrator.ts`, `packages/opencorvus/src/tool/panel.ts`, and `packages/opencorvus/src/task-api/index.ts`.
+- `/task/:taskID/replan` and panel `replan_task` returned "Replan queued" but called `EngineService.retryTask(...)`.
+- `retryTask(...)` reopens active blocked runs and dispatches retry text, so a failed task with an active plan could continue the stale blocked plan instead of forcing fresh planning.
+- A text-only note was not enough as the contract boundary because route/tool callers need a structured operator intent that tests can assert without inferring semantics from free-form prose.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/orchestrator.ts::POST /task/:taskID/retry` remains the retry route and must keep retry semantics.
+- `packages/opencorvus/src/server/routes/orchestrator.ts::POST /task/:taskID/replan` is the HTTP replan surface and now calls `EngineService.replanTask(...)`.
+- `packages/opencorvus/src/tool/panel.ts::retry_task` remains the panel retry action and calls `EngineService.retryTask(...)`.
+- `packages/opencorvus/src/tool/panel.ts::replan_task` is the panel replan action and now calls `EngineService.replanTask(...)`.
+- `packages/opencorvus/src/task-api/index.ts::retryTask(...)` is the canonical retry service and still reopens blocked active runs.
+- `packages/opencorvus/src/task-api/index.ts::replanTask(...)` is the canonical replan service, supersedes active plans, and dispatches `operatorIntent.kind="replan"` without using the retry reopen path.
+- `packages/opencorvus/src/orchestrator/agent.ts::OrchestratorEvent` now carries structured `operatorIntent` so retry/replan dispatch is not inferred from note text.
+- `packages/opencorvus/test/panel/actor-whitelist.test.ts` covers the panel actor boundary; validation exposed that the denied `update_goal` fixture had invalid acceptance spec shape and was not testing the intended actor guard.
+
+### Fix Shape
+
+- Introduce a shared internal wake helper for operator intents and expose separate `retryTask(...)` and `replanTask(...)` services.
+- Keep retry behavior unchanged: clear cancellation metadata, reopen stale blocked active runs, and dispatch `operatorIntent.kind="retry"`.
+- For replan, clear cancellation metadata, supersede prior active plans through the existing plan persistence helper, skip `reopenActiveRunForOperatorWake(...)`, and dispatch `operatorIntent.kind="replan"` with an explicit fresh-plan note.
+- Route `/replan` and panel `replan_task` use the new service directly; route `/retry` and panel `retry_task` remain on retry.
+- Do not add route gates, note-string parsing, retry fallback, or compatibility behavior.
+- Make the panel actor whitelist denied `update_goal` fixture schema-valid so the test verifies authorization before downstream business logic.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/orchestrator/operator-message.test.ts` to prove retry and replan notes remain distinct.
+- Extend `packages/opencorvus/test/engine/task-message-revive.test.ts` to prove `EngineService.replanTask(...)` supersedes the active plan, does not reopen a blocked run as retry, and dispatches structured replan intent.
+- Extend `packages/opencorvus/test/server/replan-routes.test.ts` to prove `/replan` dispatches `operatorIntent.kind="replan"` and removes the active plan, while `/retry` dispatches `operatorIntent.kind="retry"` and keeps the active plan.
+- Extend `packages/opencorvus/test/tool/panel-replan.test.ts` to prove panel `replan_task` dispatches structured replan intent and supersedes the active plan.
+- Update `packages/opencorvus/test/panel/actor-whitelist.test.ts` so every denied mission action, including `update_goal`, reaches the actor guard with valid params.
+
+### Verification
+
+- Focused BH-110 tests passed: `bun test packages/opencorvus/test/orchestrator/operator-message.test.ts packages/opencorvus/test/engine/task-message-revive.test.ts packages/opencorvus/test/server/replan-routes.test.ts packages/opencorvus/test/tool/panel-replan.test.ts --timeout 90000`.
+- Panel actor whitelist passed: `bun test packages/opencorvus/test/panel/actor-whitelist.test.ts --timeout 90000`.
+- Package test-entry guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Darwin confirmed BH-110 was still present before the repair: HTTP `/replan` and panel `replan_task` both flowed into `retryTask(...)`.
+- Darwin required a first-class replan service or intent rather than string-only note differences, plus service, route, and panel tests that prove retry and replan are separate paths.
+- Darwin also called out stale active plans as the deep risk; the final repair supersedes active plans on replan and verifies the blocked retry reopen path is not invoked.

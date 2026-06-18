@@ -132,21 +132,45 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     const semantics = await page.evaluate(() => {
       const trigger = document.querySelector<HTMLElement>('[data-ui="cwd-recent-trigger"]')
       const pathButton = document.querySelector<HTMLElement>(".task-dir-step")
+      const currentNode = document.querySelector<HTMLElement>(".task-dir-node[data-current='true']")
       return {
         triggerTag: trigger?.tagName ?? "",
         triggerType: trigger?.getAttribute("type") ?? "",
         pathButtonTag: pathButton?.tagName ?? "",
         triggerContainsPathButton: !!trigger && !!pathButton && trigger.contains(pathButton),
         pathButtonTriggerAncestor: !!pathButton?.closest('[data-ui="cwd-recent-trigger"]'),
+        currentNodeTag: currentNode?.tagName ?? "",
+        currentNodeCurrent: currentNode?.getAttribute("aria-current") ?? "",
+        currentNodeSelected: currentNode?.getAttribute("aria-selected") ?? "",
+        currentNodePressed: currentNode?.getAttribute("aria-pressed") ?? "",
       }
     })
 
-    assert.deepEqual(semantics, {
-      triggerTag: "BUTTON",
-      triggerType: "button",
-      pathButtonTag: "BUTTON",
-      triggerContainsPathButton: false,
-      pathButtonTriggerAncestor: false,
+    assert.deepEqual(
+      {
+        triggerTag: semantics.triggerTag,
+        triggerType: semantics.triggerType,
+        pathButtonTag: semantics.pathButtonTag,
+        triggerContainsPathButton: semantics.triggerContainsPathButton,
+        pathButtonTriggerAncestor: semantics.pathButtonTriggerAncestor,
+      },
+      {
+        triggerTag: "BUTTON",
+        triggerType: "button",
+        pathButtonTag: "BUTTON",
+        triggerContainsPathButton: false,
+        pathButtonTriggerAncestor: false,
+      },
+    )
+    assert.ok(["BUTTON", "SPAN"].includes(semantics.currentNodeTag), JSON.stringify(semantics))
+    assert.deepEqual({
+      currentNodeCurrent: semantics.currentNodeCurrent,
+      currentNodeSelected: semantics.currentNodeSelected,
+      currentNodePressed: semantics.currentNodePressed,
+    }, {
+      currentNodeCurrent: "location",
+      currentNodeSelected: "",
+      currentNodePressed: "",
     })
 
     await page.focus(".task-dir-step")
