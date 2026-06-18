@@ -52,7 +52,9 @@ describe("composer shell stays tighter than the surrounding canvas", () => {
   })
 
   test("send button shares the textarea height contract", () => {
-    expect(COMPOSER).toMatch(/\.chat-send\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/)
+    expect(COMPOSER).toMatch(
+      /\.chat-compose-row\s+\.oc-button\[data-mode\]\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/,
+    )
   })
 })
 

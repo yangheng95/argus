@@ -45,7 +45,7 @@ test(
                 <div class="chat-textarea-wrap">
                   <textarea class="chat-textarea" disabled></textarea>
                 </div>
-                <button class="chat-send" disabled>
+                <button class="oc-button" data-variant="solid" data-size="md" data-tone="accent" data-mode="send" disabled>
                   <span class="chat-send-icon">
                     <span aria-hidden="true">Send</span>
                   </span>
@@ -109,7 +109,7 @@ test(
           }
         }
         return {
-          send: read(".chat-send-icon", ".chat-send"),
+          send: read(".chat-send-icon", '.oc-button[data-mode="send"]'),
         }
       })
 

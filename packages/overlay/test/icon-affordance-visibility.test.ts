@@ -29,11 +29,11 @@ describe("icon affordances stay visible at rest", () => {
 
   test("disabled send button keeps an explicit visible shell instead of opacity fade", () => {
     const css = read("src/styles/surfaces/composer.css")
-    const body = soloRuleBody(css, ".chat-send:disabled")
-    expect(body).toContain("border-color:")
-    expect(body).toContain("background:")
-    expect(body).toContain("color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));")
-    expect(body).not.toContain("opacity:")
+    const body = soloRuleBody(css, '.chat-compose-row .oc-button[data-mode="send"]:disabled')
+    expect(body).toContain("--oc-button-border:")
+    expect(body).toContain("--oc-button-bg:")
+    expect(body).toContain("--oc-button-color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));")
+    expect(body).toContain("opacity: 1;")
     expect(body).not.toContain("white 78%")
     expect(body).not.toContain("var(--accent) 44%")
   })
