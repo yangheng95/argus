@@ -1893,10 +1893,10 @@ describe("overlay architecture guards", () => {
     }
 
     expect(composerSurface).not.toMatch(/(^|\n)\.chat-compose-meta-right(?:\s|\.|:|\{|,|\[)/)
+    expect(composerSurface).not.toMatch(/(^|\n)\.chat-compose-meta-left\s+a(?:\s|\.|:|\{|,|\[)/)
 
     expect(composerSurface).toMatch(/\.chat-attachment-remove:hover\s*\{/)
     expect(composerSurface).toMatch(/\.chat-input\[data-dragover\]\s+\.chat-compose-row\s*\{/)
-    expect(composerSurface).toMatch(/\.chat-compose-meta-left a:hover\s*\{/)
   })
 
   test("composer chat-send and busy state are owned by surfaces/composer.css", () => {
