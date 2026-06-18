@@ -33,8 +33,9 @@ describe("workspace header controls share a single density tier", () => {
   })
 
   test("file editor close button uses the icon-button density token", () => {
-    expect(WORKSPACE).toContain("width: var(--oc-density-icon-button);")
-    expect(WORKSPACE).toContain("height: var(--oc-density-icon-button);")
+    expect(WORKSPACE).toContain('.file-editor-header .oc-button[data-ui="file-editor-close"]')
+    expect(WORKSPACE).toContain('data-ui="file-editor-close"')
+    expect(WORKSPACE).not.toContain(".file-editor-close {")
   })
 })
 

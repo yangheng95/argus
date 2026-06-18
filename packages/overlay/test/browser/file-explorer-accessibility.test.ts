@@ -263,6 +263,97 @@ test("file explorer current file and directory expansion are exposed on the row 
     assert.ok((selectedState.explorerBox?.width ?? 0) > 240)
     assert.ok((selectedState.explorerBox?.height ?? 0) > 240)
 
+    await page.waitForSelector('.file-editor-pane .oc-button[data-ui="file-editor-save"]', { visible: true })
+    await page.waitForFunction(() =>
+      document.querySelector<HTMLElement>(".file-editor-pane .cm-content")?.textContent?.includes("export const file"),
+    )
+    const editorButtonState = await page.evaluate(() => {
+      const save = document.querySelector<HTMLButtonElement>('.file-editor-pane .oc-button[data-ui="file-editor-save"]')
+      const close = document.querySelector<HTMLButtonElement>('.file-editor-pane .oc-button[data-ui="file-editor-close"]')
+      const pane = document.querySelector<HTMLElement>(".file-editor-pane")
+      const code = document.querySelector<HTMLElement>(".file-editor-code")
+      const editor = document.querySelector<HTMLElement>(".file-editor-pane .cm-editor")
+      const line = document.querySelector<HTMLElement>(".file-editor-pane .cm-line")
+      const paneBox = pane?.getBoundingClientRect()
+      const codeBox = code?.getBoundingClientRect()
+      const editorBox = editor?.getBoundingClientRect()
+      const lineBox = line?.getBoundingClientRect()
+      const lineColor = line ? getComputedStyle(line).color : ""
+      const editorBackground = editor ? getComputedStyle(editor).backgroundColor : ""
+      return {
+        saveClass: save?.className ?? "",
+        saveDisabled: save?.disabled ?? null,
+        saveSize: save?.dataset.size ?? "",
+        saveTone: save?.dataset.tone ?? "",
+        closeClass: close?.className ?? "",
+        closeChrome: close?.dataset.chrome ?? "",
+        closeSize: close?.dataset.size ?? "",
+        lineText: line?.textContent ?? "",
+        paneBox: paneBox ? { width: paneBox.width, height: paneBox.height } : null,
+        codeBox: codeBox ? { width: codeBox.width, height: codeBox.height } : null,
+        editorBox: editorBox ? { width: editorBox.width, height: editorBox.height } : null,
+        lineBox: lineBox ? { width: lineBox.width, height: lineBox.height } : null,
+        lineColor,
+        editorBackground,
+      }
+    })
+    assert.deepEqual(
+      {
+        saveClass: editorButtonState.saveClass,
+        saveDisabled: editorButtonState.saveDisabled,
+        saveSize: editorButtonState.saveSize,
+        saveTone: editorButtonState.saveTone,
+        closeClass: editorButtonState.closeClass,
+        closeChrome: editorButtonState.closeChrome,
+        closeSize: editorButtonState.closeSize,
+        lineText: editorButtonState.lineText,
+      },
+      {
+        saveClass: "oc-button",
+        saveDisabled: true,
+        saveSize: "sm",
+        saveTone: "neutral",
+        closeClass: "oc-button",
+        closeChrome: "icon-action",
+        closeSize: "icon",
+        lineText: "export const file = true;",
+      },
+    )
+    assert.ok((editorButtonState.paneBox?.height ?? 0) > 300)
+    assert.ok((editorButtonState.codeBox?.height ?? 0) > 250)
+    assert.ok((editorButtonState.editorBox?.height ?? 0) > 250)
+    assert.ok((editorButtonState.lineBox?.width ?? 0) > 100)
+    assert.ok((editorButtonState.lineBox?.height ?? 0) > 10)
+    assert.notEqual(editorButtonState.lineColor, editorButtonState.editorBackground)
+
+    const fileEditorCloseSelector = '.file-editor-pane .oc-button[data-ui="file-editor-close"]'
+    let closeFocusedByKeyboard = false
+    for (let idx = 0; idx < 80; idx += 1) {
+      await page.keyboard.press("Tab")
+      closeFocusedByKeyboard = await page.$eval(fileEditorCloseSelector, (node) => document.activeElement === node)
+      if (closeFocusedByKeyboard) break
+    }
+    assert.equal(closeFocusedByKeyboard, true)
+    const closeFocusState = await page.$eval(fileEditorCloseSelector, (node) => {
+      const styles = getComputedStyle(node as HTMLElement)
+      return {
+        focusVisible: (node as HTMLElement).matches(":focus-visible"),
+        outlineStyle: styles.outlineStyle,
+        outlineWidth: styles.outlineWidth,
+      }
+    })
+    assert.equal(closeFocusState.focusVisible, true)
+    assert.notEqual(closeFocusState.outlineStyle, "none")
+    assert.notEqual(closeFocusState.outlineWidth, "0px")
+
+    const fileEditorScreenshotPath = resolve(".scratch/file-editor-button-primitive.png")
+    mkdirSync(dirname(fileEditorScreenshotPath), { recursive: true })
+    const fileEditorElement = await page.$("#centerWorkbenchFile")
+    assert.ok(fileEditorElement)
+    const fileEditorScreenshot = await fileEditorElement.screenshot({})
+    assert.ok(fileEditorScreenshot.length > 0)
+    writeFileSync(fileEditorScreenshotPath, fileEditorScreenshot)
+
     await page.evaluate(() => {
       const target = document.querySelector<HTMLElement>('.file-explorer-row[title="src"]')
       if (!target) throw new Error("src row missing")
