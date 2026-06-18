@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import {
   clampConfigSidebarWidth,
@@ -9,6 +9,7 @@ import {
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "settings.css"), "utf8")
+const SETTINGS_COMPONENTS_DIR = join(OVERLAY_ROOT, "src", "components", "settings")
 const CONFIG_DIALOG_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "ConfigDialogHost.tsx"), "utf8")
 const HEADER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "header.css"), "utf8")
 const PROVIDERS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ProvidersPanel.tsx"), "utf8")
@@ -16,6 +17,22 @@ const PROMPT_CATALOG_TSX = readFileSync(
   join(OVERLAY_ROOT, "src", "components", "settings", "PromptCatalog.tsx"),
   "utf8",
 )
+const RETIRED_LLM_PROVIDER_SELECTORS = [
+  ".llm-panel",
+  ".llm-summary-row",
+  ".llm-summary",
+  ".llm-api-key-summary",
+  ".llm-auth-row",
+]
+
+function walkFiles(root: string, accept: (path: string) => boolean): string[] {
+  return readdirSync(root).flatMap((entry) => {
+    const path = join(root, entry)
+    const stat = statSync(path)
+    if (stat.isDirectory()) return walkFiles(path, accept)
+    return accept(path) ? [path] : []
+  })
+}
 
 function bodyOfSource(source: string, selector: string): string {
   const css = source.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -88,7 +105,6 @@ describe("config panel sizing", () => {
       ".market-card",
       ".detail-card",
       ".agent-model-table",
-      ".llm-summary-row",
     ]) {
       const body = bodyOf(selector)
       expect(body).toMatch(/background:\s*transparent/)
@@ -114,6 +130,22 @@ describe("config panel sizing", () => {
     expect(bodyOfSource(HEADER_CSS, '.oc-surface-header[data-surface="settings-group"]')).toMatch(
       /border-block-end:\s*0 solid transparent/,
     )
+  })
+
+  test("retired LLM provider summary selectors stay out of settings surfaces", () => {
+    for (const selector of RETIRED_LLM_PROVIDER_SELECTORS) {
+      expect(SETTINGS_CSS).not.toContain(selector)
+    }
+
+    const residues = walkFiles(SETTINGS_COMPONENTS_DIR, (path) => /\.(?:ts|tsx)$/.test(path)).flatMap((file) => {
+      const source = readFileSync(file, "utf8")
+      return RETIRED_LLM_PROVIDER_SELECTORS.filter((selector) => source.includes(selector)).map(
+        (selector) => `${file.replace(OVERLAY_ROOT, "").replace(/\\/g, "/")}: ${selector}`,
+      )
+    })
+    expect(residues).toEqual([])
+    expect(PROVIDERS_TSX).toContain('class="provider-row-summary"')
+    expect(PROVIDERS_TSX).toContain("SettingsPill")
   })
 
   test("settings content normalizes same-level small button dimensions", () => {
