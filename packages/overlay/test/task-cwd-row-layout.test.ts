@@ -173,6 +173,18 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).not.toContain('class="recent-dir-panel" style={panelStyle()} role="listbox"')
   })
 
+  test("recent directory trigger is separate from native breadcrumb path buttons", () => {
+    expect(TASK_DIR_BAR).toMatch(/<div[\s\S]*ref=\{cwdShellRef\}[\s\S]*class="task-dir-shell task-cwd-dropdown"/)
+    expect(TASK_DIR_BAR).toContain('class="task-dir-menu-actions"')
+    expect(TASK_DIR_BAR).toContain('class="task-dir-recent-trigger"')
+    expect(TASK_DIR_BAR).toContain('data-ui="cwd-recent-trigger"')
+    expect(TASK_DIR_BAR).toContain("getAnchorRect={() => cwdShellRef?.getBoundingClientRect()}")
+    expect(TASK_DIR_BAR).not.toContain('as="div"')
+    expect(TASK_DIR_BAR).not.toMatch(
+      /<DropdownMenu\.Trigger[\s\S]*innerHTML=\{breadcrumbHtml\(\)\}[\s\S]*<\/DropdownMenu\.Trigger>/,
+    )
+  })
+
   test("cwd popup owns editable path entry and discovered OpenCorvus projects", () => {
     expect(TASK_DIR_BAR).toContain("loadDiscoveredProjects")
     expect(TASK_DIR_BAR).toContain('class="recent-dir-edit-form"')
