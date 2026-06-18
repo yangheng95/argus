@@ -132,6 +132,13 @@ describe("config panel sizing", () => {
     expect(PROVIDERS_TSX).toContain('data-ui="provider-refresh-button"')
   })
 
+  test("about author avatar uses the Icon primitive", () => {
+    expect(CONFIG_DIALOG_TSX).toContain('<Icon name="avatar-user" size={40} />')
+    expect(CONFIG_DIALOG_TSX).not.toContain('viewBox="0 0 40 40"')
+    expect(CONFIG_DIALOG_TSX).not.toMatch(/<svg\b/i)
+    expect(bodyOf(".about-author-avatar")).toMatch(/color:\s*var\(--accent\)/)
+  })
+
   test("memory tab owns a full-height scrollable list", () => {
     expect(bodyOf(".memory-panel")).toMatch(/flex\s*:\s*1 1 auto/)
     expect(bodyOf('.config-tab-panel[data-config-panel="memory"].active')).toMatch(/display:\s*flex/)
