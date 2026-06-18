@@ -95,6 +95,16 @@ describe("settings primitives — CSS contract", () => {
     )
   })
 
+  test("button rows keep keyboard focus chrome in the row primitive", () => {
+    expect(PRIMITIVES_SRC).toContain('as?: "div" | "button"')
+    expect(PRIMITIVES_SRC).toContain('component={merged.as}')
+    expect(PRIMITIVES_SRC).toContain('type={merged.as === "button" ? "button" : undefined}')
+    expect(SETTINGS_CSS).toMatch(/button\.s-row\s*\{[^}]*appearance:\s*none;/s)
+    expect(SETTINGS_CSS).toMatch(
+      /button\.s-row:focus-visible\s*\{[^}]*outline:\s*var\(--oc-border-width\)\s+solid\s+var\(--accent\);/s,
+    )
+  })
+
   test("row+row separator stays out of layout flow", () => {
     // We want a hairline divider that does not contribute height —
     // box-shadow (inset 0 1px 0) gives that; border-bottom would add 1px.
@@ -139,7 +149,7 @@ describe("settings primitives — Solid exports", () => {
   })
 
   test("Row exposes the documented slots and complex-row escape hatch", () => {
-    for (const slot of ["leading", "title", "desc", "meta", "actions", "children", "customContent", "nativeTitle"]) {
+    for (const slot of ["as", "leading", "title", "desc", "meta", "actions", "children", "customContent", "nativeTitle"]) {
       expect(PRIMITIVES_SRC).toMatch(new RegExp(`${slot}\\?:`))
     }
     expect(PRIMITIVES_SRC).toContain("title={merged.nativeTitle}")
@@ -165,6 +175,7 @@ describe("settings primitives — Solid exports", () => {
       "extension-row-main",
       "extension-row-actions",
       "extension-status",
+      "prompt-profile-list-item",
     ]) {
       expect(source).not.toContain(legacy)
     }

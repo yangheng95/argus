@@ -254,7 +254,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
 
     const builtInState = await page.evaluate(() => {
       const list = Array.from(
-        document.querySelectorAll('[data-ui="prompt-profile-list"] .prompt-profile-list-item'),
+        document.querySelectorAll('[data-ui="prompt-profile-list"] .prompt-profile-list-row'),
       ).map((node) => node.querySelector("strong")?.textContent?.trim() || "")
       const readonly = document.querySelector(".prompt-profile-readonly-note")?.textContent?.trim() || ""
       const editors = document.querySelectorAll(".prompt-profile-textarea").length
@@ -266,7 +266,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     assert.equal(builtInState.editors, 0)
     assert.equal(builtInState.promptCards, 0)
 
-    await page.click('[data-ui="prompt-profile-list"] .prompt-profile-list-item:last-child')
+    await page.click('[data-ui="prompt-profile-list"] .prompt-profile-list-row:last-child')
     await page.waitForFunction(() => {
       const title = document.querySelector('[data-ui="prompt-profile-detail"] .prompt-profile-detail-copy strong')
       return title?.textContent?.trim() === "Custom Squad"
@@ -274,11 +274,14 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     await page.waitForFunction(() => document.querySelectorAll(".prompt-profile-textarea").length === 2)
     const selectedProfileListItem = await page.evaluate(() => {
       const rows = Array.from(
-        document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-list"] .prompt-profile-list-item'),
+        document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-list"] .prompt-profile-list-row'),
       )
       const selected = rows.find((row) => row.dataset.active === "true")
       return {
         labels: rows.map((row) => row.querySelector("strong")?.textContent?.trim() || ""),
+        primitiveRows: rows.filter((row) => row.classList.contains("s-row")).length,
+        rowTags: rows.map((row) => row.tagName),
+        legacyRows: document.querySelectorAll('[data-ui="prompt-profile-list"] .prompt-profile-list-item').length,
         currentLabels: rows
           .filter((row) => row.getAttribute("aria-current") === "true")
           .map((row) => row.querySelector("strong")?.textContent?.trim() || ""),
@@ -290,12 +293,39 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     })
     assert.deepEqual(selectedProfileListItem, {
       labels: ["General", "Frontend", "Custom Squad"],
+      primitiveRows: 3,
+      rowTags: ["BUTTON", "BUTTON", "BUTTON"],
+      legacyRows: 0,
       currentLabels: ["Custom Squad"],
       selectedLabel: "Custom Squad",
       selectedCurrent: "true",
       selectedAriaSelected: "",
       selectedAriaPressed: "",
     })
+    await page.keyboard.press("Tab")
+    await page.keyboard.press("Shift+Tab")
+    await page.waitForFunction(
+      () => document.activeElement?.matches('[data-ui="prompt-profile-list"] .prompt-profile-list-row[data-active="true"]'),
+    )
+    const focusedProfileRow = await page.$eval(
+      '[data-ui="prompt-profile-list"] .prompt-profile-list-row[data-active="true"]',
+      (node: HTMLElement) => {
+        const style = getComputedStyle(node)
+        return {
+          focused: document.activeElement === node,
+          focusVisible: node.matches(":focus-visible"),
+          outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth,
+        }
+      },
+    )
+    assert.equal(focusedProfileRow.focused, true)
+    assert.equal(focusedProfileRow.focusVisible, true)
+    assert.notEqual(focusedProfileRow.outlineStyle, "none")
+    assert.notEqual(focusedProfileRow.outlineWidth, "0px")
+    const rowList = await page.$('[data-ui="prompt-profile-list"]')
+    assert.ok(rowList)
+    writeFileSync(resolve(".scratch/prompt-profile-list-row-focus.png"), await rowList.screenshot({}))
 
     const textareaLabels = await page.evaluate(() =>
       Array.from(document.querySelectorAll<HTMLTextAreaElement>(".prompt-profile-textarea")).map((textarea) => {
