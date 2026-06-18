@@ -64,14 +64,15 @@ describe("app routes", () => {
     expect(parameterNames(paths["/log/tail"]?.get)).toEqual([])
   })
 
-  test("Server.openapi marks JSON request bodies required even when fields are refined", async () => {
+  test("Server.openapi marks selected preview target request body required", async () => {
     const spec = await Server.openapi()
     const requestBody = spec.paths?.["/task/{taskID}/browser-preview/target"]?.put?.requestBody
     const schema = requestBody?.content?.["application/json"]?.schema
 
     expect(requestBody?.required).toBe(true)
     expect(schema?.properties?.targetID?.type).toBe("string")
-    expect(schema?.properties?.url?.type).toBe("string")
+    expect(schema?.required).toContain("targetID")
+    expect(schema?.properties).not.toHaveProperty("url")
   })
 
   test("POST /shutdown returns 503 without a registered handler", async () => {
