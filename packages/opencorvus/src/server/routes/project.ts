@@ -200,8 +200,8 @@ export const ProjectRoutes = lazy(() =>
       validator("json", Worktree.RemoveInput),
       async (c) => {
         const body = c.req.valid("json")
-        await Worktree.removeProjectWorktree(body)
-        await Project.removeSandbox(Instance.project.id, body.directory)
+        const removed = await Worktree.removeProjectWorktree(body)
+        await Project.removeSandbox(Instance.project.id, removed.directory)
         return c.json({ ok: true })
       },
     )

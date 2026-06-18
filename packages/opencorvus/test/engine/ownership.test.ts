@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import os from "os"
 import { Ownership } from "../../src/engine/ownership"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 let rootDir = ""
 
@@ -89,7 +90,7 @@ describe("Ownership.Worktree", () => {
     })
 
     // Drop a bad marker: simulate a partially-written marker file.
-    const badMarkerPath = path.join(rootDir, ".opencorvus", "r", "o", "w", "garbage.json")
+    const badMarkerPath = path.join(ProjectRuntimePaths.ownershipRoot(rootDir), "w", "garbage.json")
     await fs.mkdir(path.dirname(badMarkerPath), { recursive: true })
     await fs.writeFile(badMarkerPath, "{not-json}\n", { encoding: "utf8" })
 
@@ -135,15 +136,15 @@ describe("Ownership.Process", () => {
       primaryWorktreeDir: rootDir,
       pid: 999_999_999,
       cwd: rootDir,
-      taskID: "task_dead",
-      sessionID: "sess_dead",
+      taskID: "task_dead_process",
+      sessionID: "sess_process",
     })
     await Ownership.Process.record({
       primaryWorktreeDir: rootDir,
       pid: process.pid,
       cwd: rootDir,
-      taskID: "task_live",
-      sessionID: "sess_live",
+      taskID: "task_live_process",
+      sessionID: "sess_process",
     })
 
     const orphans = await Ownership.Process.orphans({
@@ -151,7 +152,7 @@ describe("Ownership.Process", () => {
       isPidAlive: (pid) => pid === process.pid,
     })
     expect(orphans.length).toBe(1)
-    expect(orphans[0].marker.taskID).toBe("task_dead")
+    expect(orphans[0].marker.taskID).toBe("task_dead_process")
     expect(orphans[0].reason).toBe("owner-process-dead")
   })
 })
