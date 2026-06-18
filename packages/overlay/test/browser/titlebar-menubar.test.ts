@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -624,12 +626,28 @@ test(
       await page.keyboard.up("Alt")
       await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
       assert.notEqual(await page.$('[data-testid="titlebar-theme-vscode-dark"]'), null)
+      await page.waitForFunction(
+        () => (document.activeElement as HTMLElement | null)?.getAttribute("role") === "menuitemradio",
+      )
       const altOpenState = await page.evaluate(() => ({
         expanded: document.querySelector('[data-menu-trigger="view"]')?.getAttribute("aria-expanded"),
+        focusedClass: (document.activeElement as HTMLElement | null)?.className || "",
+        focusedRole: (document.activeElement as HTMLElement | null)?.getAttribute("role") || "",
+        focusedTestid: (document.activeElement as HTMLElement | null)?.dataset.testid || "",
+        focusedAriaChecked: (document.activeElement as HTMLElement | null)?.getAttribute("aria-checked") || "",
         focusedMenuText: (document.activeElement as HTMLElement | null)?.textContent?.trim() || "",
       }))
       assert.equal(altOpenState.expanded, "true")
-      assert.ok(altOpenState.focusedMenuText.includes("Language"))
+      assert.equal(altOpenState.focusedRole, "menuitemradio", JSON.stringify(altOpenState))
+      assert.match(altOpenState.focusedClass, /titlebar-theme-option/, JSON.stringify(altOpenState))
+      assert.equal(altOpenState.focusedTestid, "titlebar-theme-vscode-dark", JSON.stringify(altOpenState))
+      assert.equal(altOpenState.focusedAriaChecked, "true", JSON.stringify(altOpenState))
+      assert.ok(altOpenState.focusedMenuText.includes("VS Code Dark"), JSON.stringify(altOpenState))
+      const viewMenuElement = await page.$('[data-testid="titlebar-menu-view"]')
+      assert.ok(viewMenuElement)
+      const screenshotPath = resolve(".scratch/titlebar-view-radio-focus.png")
+      mkdirSync(dirname(screenshotPath), { recursive: true })
+      writeFileSync(screenshotPath, await viewMenuElement.screenshot({}))
       const themeRadioState = await page.$eval('[data-testid="titlebar-menu-view"]', (node) => {
         const items = Array.from(node.querySelectorAll<HTMLElement>(".titlebar-theme-option"))
         return {
