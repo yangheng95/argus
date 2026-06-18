@@ -21,6 +21,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-dialog-header-drag-kobalte-regression.md](2026-06-18-dialog-header-drag-kobalte-regression.md) | Dialog Header Drag Kobalte Regression |
 | [2026-06-18-light-popup-active-state-contrast.md](2026-06-18-light-popup-active-state-contrast.md) | Light Popup Active State Contrast |
 | [2026-06-18-retire-titlebar-status-residue.md](2026-06-18-retire-titlebar-status-residue.md) | Retire Titlebar Status Residue |
+| [2026-06-18-retire-titlebar-nav-residue.md](2026-06-18-retire-titlebar-nav-residue.md) | Retire Titlebar Nav Residue |
 | [2026-06-18-right-activity-toolbar-responsive-rail.md](2026-06-18-right-activity-toolbar-responsive-rail.md) | Right Activity Toolbar Responsive Rail |
 | [2026-06-18-executor-chip-density-guard.md](2026-06-18-executor-chip-density-guard.md) | Executor Chip Density Guard |
 | [2026-06-18-popup-disabled-effective-contrast.md](2026-06-18-popup-disabled-effective-contrast.md) | Popup Disabled Effective Contrast |

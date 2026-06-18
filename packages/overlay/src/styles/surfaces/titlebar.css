@@ -56,24 +56,6 @@
   flex-shrink: 0;
 }
 
-.titlebar-nav {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--oc-titlebar-gap);
-  flex: 1 1 auto;
-  min-width: 0;
-  -webkit-app-region: no-drag;
-}
-
-.titlebar-nav-group {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--oc-titlebar-gap);
-  min-width: 0;
-}
-
 /* Single source after iter23: grid placement + flex container live together.
    The flex container layout is harmless when the parent is grid (icons flow
    flex-end inside the grid cell), and inside the narrow-width @media the
