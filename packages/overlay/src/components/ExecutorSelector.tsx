@@ -202,6 +202,7 @@ function HexinBudgetInline(props: { response: HexinBudgetResponse | undefined; l
     return response?.ok === false ? response.error : ""
   })
   const transportError = createMemo(() => budgetErrorMessage(props.error))
+  const errorDetail = createMemo(() => providerError() || transportError())
   const displayText = createMemo(() => {
     const value = budget()
     if (props.loading) return t("executor.hexin_budget_inline_loading")
@@ -211,7 +212,7 @@ function HexinBudgetInline(props: { response: HexinBudgetResponse | undefined; l
         max: formatBudgetAmount(value.maxBudget),
       })
     }
-    if (providerError() || transportError()) return t("executor.hexin_budget_inline_error")
+    if (errorDetail()) return t("executor.hexin_budget_inline_error")
     return ""
   })
   const title = createMemo(() => {
@@ -223,7 +224,8 @@ function HexinBudgetInline(props: { response: HexinBudgetResponse | undefined; l
         spend: formatBudgetAmount(value.spend),
       })
     }
-    return providerError() || transportError() || t("executor.hexin_budget_label")
+    if (errorDetail()) return t("executor.hexin_budget_retry_context", { reason: errorDetail() })
+    return t("executor.hexin_budget_label")
   })
   return (
     <span
@@ -235,6 +237,7 @@ function HexinBudgetInline(props: { response: HexinBudgetResponse | undefined; l
       title={title()}
       role="status"
       aria-live="polite"
+      aria-label={title()}
     >
       <span class="executor-budget-value">{displayText()}</span>
     </span>
@@ -286,6 +289,7 @@ export function ExecutorSelector() {
     return {
       directory: activeDirectory().trim(),
       model: parts.name,
+      providerAuthRefresh: appStore.providerAuthRefreshRevision,
       refresh: sessionConfigRefreshToken(),
       taskID: taskID(),
     }

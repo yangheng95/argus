@@ -18,6 +18,8 @@ import { dirname, join, resolve } from "node:path"
 import test from "node:test"
 import { fileURLToPath } from "node:url"
 
+import sharp from "sharp"
+
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
@@ -48,6 +50,41 @@ async function saveScreenshot(page: { screenshot(options?: Record<string, unknow
   return target
 }
 
+async function saveElementScreenshot(
+  element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
+  name: string,
+) {
+  const target = join(SCRATCH_ROOT, name)
+  mkdirSync(dirname(target), { recursive: true })
+  const screenshot = await element.screenshot({})
+  await writeFile(target, screenshot)
+  return { target, screenshot }
+}
+
+async function analyzeBudgetScreenshot(buffer: Buffer) {
+  const image = sharp(buffer)
+  const metadata = await image.metadata()
+  const width = metadata.width ?? 0
+  const height = metadata.height ?? 0
+  const raw = await image.ensureAlpha().raw().toBuffer()
+  const buckets = new Set<number>()
+  let nonTransparent = 0
+  let nonWhite = 0
+  let redDominant = 0
+  for (let index = 0; index < raw.length; index += 4) {
+    const red = raw[index]
+    const green = raw[index + 1]
+    const blue = raw[index + 2]
+    const alpha = raw[index + 3]
+    if (alpha < 16) continue
+    nonTransparent += 1
+    buckets.add(((red >> 4) << 8) | ((green >> 4) << 4) | (blue >> 4))
+    if (Math.max(red, green, blue) < 250) nonWhite += 1
+    if (red > green + 20 && red > blue + 20 && red > 120) redDominant += 1
+  }
+  return { width, height, nonTransparent, nonWhite, redDominant, uniqueColorBuckets: buckets.size }
+}
+
 test(
   "dual executor chip — mirror vs external popovers with availability",
   async () => {
@@ -56,7 +93,8 @@ test(
 
     const projectModel = "hexin/kimi-k2.7-code"
     const codexModel = "gpt-5.5-codex"
-    let budgetRequests = 0
+    let hexinApiKeySaveCount = 0
+    const budgetRequests: Array<{ directory: string; remaining: number }> = []
     const promptProfileCatalog = {
       active: "frontend",
       project_active: "frontend",
@@ -94,6 +132,11 @@ test(
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/task/events") {
+        return new Response("", {
+          headers: { "content-type": "text/event-stream; charset=utf-8" },
+        })
+      }
       if (path === "/session") return send([])
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
       if (path === "/vcs") {
@@ -144,18 +187,42 @@ test(
         })
       }
       if (path === "/provider/hexin/budget") {
-        budgetRequests++
+        const directory = url.searchParams.get("directory") ?? ""
+        const remaining = hexinApiKeySaveCount > 0 ? 16.5 : directory.endsWith("/next") ? 18.75 : 19.9873879199713
+        budgetRequests.push({ directory, remaining })
         return send({
           ok: true,
           budget: {
             maxBudget: 4435.3,
             spend: 4415.312612080029,
-            remaining: 19.9873879199713,
+            remaining,
             overBudget: false,
           },
         })
       }
-      if (path === "/provider/auth") return send({})
+      if (path === "/provider/auth") {
+        return send({
+          hexin: [
+            {
+              type: "api",
+              label: hexinApiKeySaveCount > 0 ? `API key saved ${hexinApiKeySaveCount}` : "API key",
+            },
+          ],
+        })
+      }
+      if (path === "/auth/hexin" && req.method === "PUT") {
+        const body = (await req.json()) as { key?: unknown }
+        assert.equal(typeof body.key, "string")
+        hexinApiKeySaveCount += 1
+        return send(true)
+      }
+      if (path === "/provider/hexin/refresh" && req.method === "POST") {
+        return send({
+          ok: true,
+          count: 1,
+          ids: ["kimi-k2.7-code"],
+        })
+      }
       if (path === "/config/providers") {
         return send({ providers: [], default: {} })
       }
@@ -258,7 +325,8 @@ test(
           "19.99",
         ),
       )
-      assert.equal(budgetRequests, 1)
+      assert.equal(budgetRequests.length, 1)
+      assert.equal(budgetRequests.at(-1)?.directory, "D:/overlay/workspace/app")
 
       // Both chips share one bar that spans the composer row.
       const layout = await page.evaluate(() => {
@@ -300,6 +368,8 @@ test(
         return {
           role: budget?.getAttribute("role") ?? "",
           live: budget?.getAttribute("aria-live") ?? "",
+          ariaLabel: budget?.getAttribute("aria-label") ?? "",
+          title: budget?.getAttribute("title") ?? "",
           low: budget?.dataset.lowBudget ?? "",
           parentSide: budget?.closest("[data-side]")?.getAttribute("data-side") ?? "",
           budgetLeft: budgetRect?.left ?? 0,
@@ -316,6 +386,8 @@ test(
       })
       assert.equal(budgetLayout.role, "status")
       assert.equal(budgetLayout.live, "polite")
+      assert.ok(budgetLayout.ariaLabel.includes("Remaining 19.99 / 4,435.30"), JSON.stringify(budgetLayout))
+      assert.ok(budgetLayout.title.includes("spent 4,415.31"), JSON.stringify(budgetLayout))
       assert.equal(budgetLayout.low, "true")
       assert.equal(budgetLayout.parentSide, "mirror")
       assert.ok(budgetLayout.budgetLeft >= budgetLayout.mirrorLeft - 1, JSON.stringify(budgetLayout))
@@ -328,6 +400,49 @@ test(
       assert.notEqual(colorMatch, null, budgetLayout.color)
       assert.ok(Number(colorMatch![1]) > Number(colorMatch![2]), budgetLayout.color)
       assert.ok(Number(colorMatch![1]) > Number(colorMatch![3]), budgetLayout.color)
+      const budgetElement = await page.$('[data-ui="executor-hexin-budget"]')
+      assert.ok(budgetElement, "Hexin budget element should exist before screenshot")
+      const budgetScreenshot = await saveElementScreenshot(budgetElement, "executor-selector-hexin-budget-inline.png")
+      assert.ok(budgetScreenshot.target.endsWith("executor-selector-hexin-budget-inline.png"))
+      const budgetScreenshotStats = await analyzeBudgetScreenshot(budgetScreenshot.screenshot)
+      assert.ok(budgetScreenshotStats.width >= 48, JSON.stringify(budgetScreenshotStats))
+      assert.ok(budgetScreenshotStats.height >= 8, JSON.stringify(budgetScreenshotStats))
+      assert.ok(budgetScreenshotStats.nonWhite > 0, JSON.stringify(budgetScreenshotStats))
+      assert.ok(budgetScreenshotStats.uniqueColorBuckets >= 4, JSON.stringify(budgetScreenshotStats))
+      assert.ok(budgetScreenshotStats.redDominant > 0, JSON.stringify(budgetScreenshotStats))
+
+      await page.evaluate(async () => {
+        await (window as any).applyDirectory("D:/overlay/workspace/next", { persist: false, save: false })
+      })
+      await page.waitForFunction(() =>
+        (document.querySelector('[data-ui="executor-hexin-budget"]') as HTMLElement | null)?.innerText.includes(
+          "18.75",
+        ),
+      )
+      assert.ok(
+        budgetRequests.some((item) => item.directory === "D:/overlay/workspace/next" && item.remaining === 18.75),
+        JSON.stringify(budgetRequests),
+      )
+
+      await page.click('[data-menu-trigger="provider"]')
+      await page.waitForSelector('[data-testid="titlebar-open-providers"]')
+      await page.click('[data-testid="titlebar-open-providers"]')
+      await page.waitForSelector('[data-testid="provider-api-key-input-hexin"]')
+      await page.type('[data-testid="provider-api-key-input-hexin"]', "sk-hexin-rotated")
+      await page.click('[data-testid="provider-api-key-save-hexin"]')
+      await page.waitForFunction(
+        () =>
+          (document.querySelector('[data-testid="provider-api-key-input-hexin"]') as HTMLInputElement | null)?.value ===
+          "",
+      )
+      await page.click("#btnCloseConfigDialog")
+      await page.waitForFunction(() =>
+        (document.querySelector('[data-ui="executor-hexin-budget"]') as HTMLElement | null)?.innerText.includes(
+          "16.50",
+        ),
+      )
+      assert.equal(hexinApiKeySaveCount, 1)
+      assert.equal(budgetRequests.at(-1)?.remaining, 16.5)
 
       // Mirror popover: opens above the left chip and lists only connected
       // providers (openai). Anthropic stays hidden because it isn't connected.
@@ -414,7 +529,7 @@ test(
         ),
       )
       await page.waitForFunction(() => document.querySelector('[data-ui="executor-hexin-budget"]') === null)
-      assert.equal(budgetRequests, 1)
+      assert.ok(budgetRequests.every((item) => item.directory), JSON.stringify(budgetRequests))
       await page.click('[data-ui="executor-chip-mirror"]')
       await page.waitForSelector('[data-section="mirror"]')
       // The external popover should NOT be open while the mirror popover is.

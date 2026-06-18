@@ -515,6 +515,7 @@
   "executor.hexin_budget_inline": "Hexin {{remaining}} / {{max}}",
   "executor.hexin_budget_inline_loading": "Hexin 加载中",
   "executor.hexin_budget_inline_error": "Hexin 错误",
+  "executor.hexin_budget_retry_context": "Hexin 预算不可用。重新打开 Provider 设置或保存 Hexin API key 以重试。原因：{{reason}}",
   "executor.hexin_budget_value": "剩余 {{remaining}} / {{max}} · 已用 {{spend}}",
   "executor.mirror_no_connected_providers": "尚未连接任何 provider，请先在「设置 → Providers」中认证。",
   "executor.mirror_popover_hint": "仅列出已连接 provider 的模型；有当前任务时写入任务会话，否则写入项目默认模型。",

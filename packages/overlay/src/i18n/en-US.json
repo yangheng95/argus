@@ -515,6 +515,7 @@
   "executor.hexin_budget_inline": "Hexin {{remaining}} / {{max}}",
   "executor.hexin_budget_inline_loading": "Hexin loading",
   "executor.hexin_budget_inline_error": "Hexin error",
+  "executor.hexin_budget_retry_context": "Hexin budget unavailable. Reopen Provider settings or save the Hexin API key to retry. Reason: {{reason}}",
   "executor.hexin_budget_value": "Remaining {{remaining}} / {{max}} · spent {{spend}}",
   "executor.mirror_no_connected_providers": "No connected providers. Authenticate one in Settings → Providers first.",
   "executor.mirror_popover_hint": "Lists models from connected providers; writes the current task session when one is selected, otherwise the project default.",

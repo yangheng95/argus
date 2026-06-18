@@ -287,6 +287,9 @@ export async function loadConfigInfo(
     config: config ?? null,
     providerCatalog: providerInfo.catalog ?? null,
     providerAuth: providerInfo.auth ?? null,
+    providerAuthRefreshRevision: includeSettingsData
+      ? appStore.providerAuthRefreshRevision + 1
+      : appStore.providerAuthRefreshRevision,
     configLoadErrors: errors,
     channels: Array.isArray(channels) ? channels : [],
     promptEntries: Array.isArray(prompts) ? prompts : [],
@@ -318,6 +321,7 @@ export async function loadProviderInfo(timeoutMilliseconds = CONFIG_INFO_LOAD_TI
   setAppStore({
     providerCatalog: providerInfo.catalog ?? null,
     providerAuth: providerInfo.auth ?? null,
+    providerAuthRefreshRevision: appStore.providerAuthRefreshRevision + 1,
     configLoadErrors: errors,
   })
 }
