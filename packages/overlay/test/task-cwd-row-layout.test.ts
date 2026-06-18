@@ -186,7 +186,7 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
   })
 
   test("cwd popup owns editable path entry and discovered OpenCorvus projects", () => {
-    expect(TASK_DIR_BAR).toContain("loadDiscoveredProjects")
+    expect(TASK_DIR_BAR).toContain("loadWorkspaceOnboardingDiscovery")
     expect(TASK_DIR_BAR).toContain('class="recent-dir-edit-form"')
     expect(TASK_DIR_BAR).toContain('data-ui="cwd-path-input"')
     expect(TASK_DIR_BAR).toContain("setPathDraft(event.currentTarget.value)")
@@ -194,6 +194,24 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).toContain('t("cwd.detected_projects")')
     expect(TASK_DIR_BAR).toContain("setDirectory(next)")
     expect(TASK_DIR_BAR).toContain("chooseRecentDirectory(project.directory)")
+  })
+
+  test("cwd popup surfaces project discovery failures as a visible state", () => {
+    const syncStart = TASK_DIR_BAR.indexOf("async function syncDiscoveredProjects")
+    const syncEnd = TASK_DIR_BAR.indexOf("function syncPanelData")
+    const syncSource = TASK_DIR_BAR.slice(syncStart, syncEnd)
+
+    expect(syncSource).toContain("loadWorkspaceOnboardingDiscovery")
+    expect(syncSource).toContain('discovery.status === "ready"')
+    expect(syncSource).toContain("setDiscoveryError(discovery.message)")
+    expect(syncSource).not.toContain("catch")
+    expect(TASK_DIR_BAR).toContain('data-testid="cwd-discovery-error"')
+    expect(TASK_DIR_BAR).toContain('class="recent-dir-discovery-error"')
+    expect(TASK_DIR_BAR).toContain('role="status"')
+    const error = soloRuleBody(".recent-dir-discovery-error")
+    expect(error).toMatch(/grid-template-columns:\s*auto minmax\(0,\s*1fr\)/)
+    expect(error).toMatch(/var\(--bad\)/)
+    expect(soloRuleBody(".recent-dir-discovery-error span")).toMatch(/overflow-wrap:\s*anywhere/)
   })
 
   test("cwd popup mirrors current location state onto focusable menu items", () => {

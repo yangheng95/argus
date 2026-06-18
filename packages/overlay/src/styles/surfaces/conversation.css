@@ -1541,6 +1541,30 @@
   color: var(--text-muted);
 }
 
+.recent-dir-discovery-error {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: calc(7px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 30%, var(--border));
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--bad) 8%, var(--surface-inset));
+  color: var(--bad);
+  font-size: var(--ui-font-small);
+  line-height: 1.35;
+}
+
+.recent-dir-discovery-error svg {
+  flex-shrink: 0;
+  margin-top: calc(1px * var(--ui-scale));
+}
+
+.recent-dir-discovery-error span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .recent-dir-section {
   display: flex;
   flex-direction: column;
