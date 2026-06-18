@@ -43,8 +43,7 @@ export async function activateTaskNotification(item: AppNotificationItem): Promi
 function NotificationDetails(props: { details: string }) {
   const [expanded, setExpanded] = createSignal(false)
   const [copied, setCopied] = createSignal(false)
-  async function copyDetails(event: MouseEvent): Promise<void> {
-    event.stopPropagation()
+  async function copyDetails(): Promise<void> {
     try {
       await navigator.clipboard.writeText(props.details)
       setCopied(true)
@@ -63,10 +62,7 @@ function NotificationDetails(props: { details: string }) {
           tone="neutral"
           data-ui="app-notification-details-toggle"
           aria-expanded={expanded()}
-          onClick={(event) => {
-            event.stopPropagation()
-            setExpanded(!expanded())
-          }}
+          onClick={() => setExpanded(!expanded())}
         >
           {expanded() ? t("notify.hide_details") : t("notify.show_details")}
         </Button>
@@ -109,24 +105,17 @@ function groupByTask(items: AppNotificationItem[]): NotificationGroup[] {
 }
 
 function NotificationItem(props: { item: AppNotificationItem; surface: NotificationSurface }) {
+  const taskTitle = () => (props.item.taskID ? notificationTaskTitle(props.item.taskID) : "")
+
   return (
     <section
       class="app-notification"
       data-tone={props.item.tone}
       data-notification-id={props.item.id}
       data-task-id={props.item.taskID || undefined}
-      data-clickable={props.item.taskID ? "true" : undefined}
       data-dismissed={props.item.dismissedAt > 0 ? "true" : "false"}
       role={props.item.tone === "error" || props.item.tone === "warning" ? "alert" : "status"}
       aria-live={props.item.tone === "error" || props.item.tone === "warning" ? "assertive" : "polite"}
-      tabIndex={props.item.taskID ? 0 : undefined}
-      onClick={() => void activateTaskNotification(props.item)}
-      onKeyDown={(event) => {
-        if (!props.item.taskID) return
-        if (event.key !== "Enter" && event.key !== " ") return
-        event.preventDefault()
-        void activateTaskNotification(props.item)
-      }}
     >
       <div class="app-notification__mark" aria-hidden="true">
         <Show when={props.item.tone === "progress"} fallback={<span>{toneLabel(props.item.tone).slice(0, 1)}</span>}>
@@ -137,6 +126,22 @@ function NotificationItem(props: { item: AppNotificationItem; surface: Notificat
         <div class="app-notification__title">{props.item.title}</div>
         <Show when={props.item.message}>
           <div class="app-notification__message">{props.item.message}</div>
+        </Show>
+        <Show when={props.item.taskID}>
+          <div class="app-notification__actions">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              tone="accent"
+              data-ui="app-notification-open-task"
+              title={`${t("common.open")}: ${taskTitle()}`}
+              aria-label={`${t("common.open")}: ${taskTitle()}`}
+              onClick={() => void activateTaskNotification(props.item)}
+            >
+              {t("common.open")}
+            </Button>
+          </div>
         </Show>
         <Show when={props.item.details}>
           <NotificationDetails details={props.item.details} />
@@ -152,10 +157,7 @@ function NotificationItem(props: { item: AppNotificationItem; surface: Notificat
           data-ui="app-notification-close"
           title={t("notify.dismiss")}
           aria-label={t("notify.dismiss")}
-          onClick={(event) => {
-            event.stopPropagation()
-            dismissNotification(props.item.id)
-          }}
+          onClick={() => dismissNotification(props.item.id)}
         >
           <Icon name="close" size={12} />
         </Button>
