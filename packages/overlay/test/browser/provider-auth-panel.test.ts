@@ -221,7 +221,7 @@ async function openProviderSettings(tab: Page) {
   await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
   await tab.click('[data-testid="titlebar-open-providers"]')
   await tab.waitForFunction(() => document.querySelector("#configDialog") !== null)
-  await tab.waitForSelector('[data-config-panel="providers"].active')
+  await tab.waitForSelector('[data-config-panel="providers"] .config-section-body')
 }
 
 async function clickVisible(tab: Page, selector: string) {

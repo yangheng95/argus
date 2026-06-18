@@ -39,9 +39,9 @@ drift unless every caller remembered to update two sources.
 - `CommandPalette` has no `SETTINGS_TABS` constant.
 - Adding a config section to `CONFIG_SECTIONS` automatically creates the
   CommandPalette setting command.
-- Searching `MCP` in Cmd/Ctrl+K and pressing Enter opens
-  `[data-config-panel="mcp"].active`.
-- Searching `skill market` in Cmd/Ctrl+K and pressing Enter opens
-  `[data-config-panel="skill-market"].active`.
+- Searching `MCP` in Cmd/Ctrl+K and pressing Enter renders
+  `[data-config-panel="mcp"]` with MCP panel content.
+- Searching `skill market` in Cmd/Ctrl+K and pressing Enter renders
+  `[data-config-panel="skill-market"]` with Skill Market content.
 - The browser test serves the real Skill/MCP panel API dependencies and
   asserts no page error, console error, 404, or failed request is emitted.

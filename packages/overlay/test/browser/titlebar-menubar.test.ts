@@ -227,12 +227,11 @@ test(
             }
           })
 
-          assert.deepEqual(geometry.triggers, ["workspace", "provider", "run", "settings", "view", "help"])
-            assert.equal(geometry.triggers.includes("product"), false)
-            assert.equal(geometry.triggers.includes("model"), false)
-            assert.equal(geometry.triggers.includes("agent"), false)
-            assert.deepEqual(geometry.triggers, ["workspace", "provider", "run", "view", "settings", "help"])
-            assert.equal(geometry.triggers.includes("tools"), false)
+          assert.equal(geometry.triggers.includes("product"), false)
+          assert.equal(geometry.triggers.includes("model"), false)
+          assert.equal(geometry.triggers.includes("agent"), false)
+          assert.deepEqual(geometry.triggers, ["workspace", "provider", "run", "view", "settings", "help"])
+          assert.equal(geometry.triggers.includes("tools"), false)
           assert.equal(geometry.triggers.includes("skill"), false)
           assert.equal(geometry.triggers.includes("mcp"), false)
           assert.equal(geometry.triggers.includes("memory"), false)
@@ -273,7 +272,6 @@ test(
               true,
             )
           }
-          for (const menu of ["workspace", "provider", "run", "view", "settings", "help"]) {
           for (const menu of ["workspace", "provider", "run", "view", "settings", "help"]) {
             await page.click(`[data-menu-trigger="${menu}"]`)
             await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { visible: true })
@@ -422,12 +420,12 @@ test(
           await page.click('[data-menu-trigger="help"]')
           await page.waitForSelector('[data-testid="titlebar-help-about"]', { visible: true })
           await page.click('[data-testid="titlebar-help-about"]')
-          await page.waitForFunction(
-            () =>
+          await page.waitForFunction(() => {
+            return (
               document.querySelector("#configDialog") !== null &&
-              document.querySelector('[data-config-panel="about"]')?.classList.contains("active") === true &&
-              document.querySelector("#aboutRuntimeGrid")?.textContent?.includes("12345") === true,
-          )
+              document.querySelector('[data-config-panel="about"] #aboutRuntimeGrid')?.textContent?.includes("12345") === true
+            )
+          })
           await page.click("#btnCloseConfigDialog")
           await page.waitForFunction(() => document.querySelector("#configDialog") === null)
           const openedUrls = await page.evaluate(() => (window as any).__helpOpenUrls as string[])

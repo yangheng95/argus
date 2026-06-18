@@ -252,7 +252,7 @@ test(
       await taskPage.click('[data-menu-trigger="help"]')
       await taskPage.waitForSelector('[data-testid="titlebar-help-about"]', { visible: true })
       await taskPage.click('[data-testid="titlebar-help-about"]')
-      await taskPage.waitForSelector('[data-config-panel="about"].active .about-author-avatar svg', { visible: true })
+      await taskPage.waitForSelector('[data-config-panel="about"] .about-author-avatar svg', { visible: true })
       const aboutIcon = await taskPage.$eval(".about-author-avatar svg", (node: SVGElement) => ({
         tag: node.tagName,
         hidden: node.getAttribute("aria-hidden"),

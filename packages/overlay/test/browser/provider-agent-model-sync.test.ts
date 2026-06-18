@@ -233,9 +233,7 @@ test(
 
       await page.waitForSelector('[data-config-tab="agent-models"]')
       await page.click('[data-config-tab="agent-models"]')
-      await page.waitForFunction(
-        () => document.querySelector('[data-config-panel="agent-models"]')?.classList.contains("active") === true,
-      )
+      await page.waitForSelector('[data-config-panel="agent-models"] .config-section-body')
       await page.waitForSelector('[data-testid="agent-model-select-build"]')
       await page.click('[data-testid="agent-model-select-build"]')
       await page.waitForSelector('.agent-model-select-option[data-model-value="hexin/gpt-5.4-mini"]')

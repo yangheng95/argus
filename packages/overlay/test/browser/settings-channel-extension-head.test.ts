@@ -115,9 +115,9 @@ test(
       await page.click('[data-menu-trigger="settings"]')
       await page.waitForSelector('[data-testid="titlebar-settings-channel"]', { visible: true })
       await page.click('[data-testid="titlebar-settings-channel"]')
-      await page.waitForSelector('[data-config-panel="channel"].active .extension-head .field-label')
+      await page.waitForSelector('[data-config-panel="channel"] .extension-head .field-label')
 
-      const metrics = await page.$eval('[data-config-panel="channel"].active .extension-head .field-label', (node) => {
+      const metrics = await page.$eval('[data-config-panel="channel"] .extension-head .field-label', (node) => {
         const label = node as HTMLElement
         const style = getComputedStyle(label)
         const rect = label.getBoundingClientRect()
@@ -139,7 +139,7 @@ test(
       assert.ok(metrics.width > 40)
       assert.ok(metrics.height > 10)
 
-      const head = await page.$('[data-config-panel="channel"].active .extension-head')
+      const head = await page.$('[data-config-panel="channel"] .extension-head')
       assert.ok(head)
       const screenshotPath = resolve(".scratch", "settings-channel-extension-head.png")
       mkdirSync(dirname(screenshotPath), { recursive: true })

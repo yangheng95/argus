@@ -173,7 +173,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
       await page.waitForFunction(
         (targetPanelID) =>
           document.querySelector("#configDialog") !== null &&
-          document.querySelector(".config-tab-panel[data-config-panel]")?.getAttribute("data-config-panel") === targetPanelID,
+          document.querySelector(`[data-config-panel="${targetPanelID}"] .config-section-body`) !== null,
         {},
         panelID,
       )
