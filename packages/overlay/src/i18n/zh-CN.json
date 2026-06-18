@@ -214,6 +214,7 @@
   "workspace_onboarding.browser_path_placeholder": "D:\\projects\\app 或 /Users/me/projects/app",
   "workspace_onboarding.browser_path_submit": "打开项目",
   "workspace_onboarding.browser_path_hint": "网页版 Overlay 无法读取原生目录选择器路径。请输入 OpenCorvus 后端所在机器可访问的绝对路径。",
+  "workspace_onboarding.discovery_failed": "项目发现失败：{{reason}}",
   "workspace_onboarding.recent_title": "最近工作区",
   "workspace_onboarding.recent_body": "直接恢复最近使用过的目录。",
   "workspace_onboarding.footnote": "之后仍可从标题栏的项目菜单切换目录。",

@@ -4270,3 +4270,56 @@ LINE:
 - Aquinas identified `persist.ts::findLatestAcceptanceArtifact(...)` as the adjacent same-root lifecycle helper; it is now sorted by `time_created desc, id desc`.
 - Aquinas recommended updating `engine.sql.ts` and helper comments to document the deterministic latest rule; those comments now match the implementation.
 - Aquinas pointed to existing `findRun`, `findGoalRun`, and acceptance-verdict readers as local precedent for `id desc` same-millisecond ordering.
+
+## Batch P2-BW: BH-052 workspace onboarding must surface discovery failures
+
+### Findings
+
+- BH-052 targets workspace discovery behavior in `packages/overlay/src/services/workspace.ts` and `packages/overlay/src/components/WorkspaceOnboardingDialog.tsx`.
+- `loadDiscoveredProjects()` already propagates `apiJson("global/projects/discover")` failures, and `ensureDefaultDirectory()` already lets those failures reject during initialization.
+- The UI bug was in `WorkspaceOnboardingDialog`: its mount-time discovery call caught every failure and set `discoveredRoot` to `""` plus `discoveredProjects` to `[]`, making API, server, or authentication failures indistinguishable from "no discovered projects".
+- The same root pattern exists in `TaskDirBar` discovery handling, but BH-052's recorded regression surface is the no-directory onboarding dialog. `TaskDirBar` remains an adjacent follow-up rather than being mixed into this onboarding repair.
+
+### Call-point Inventory
+
+- `packages/overlay/src/components/App.tsx` always mounts `WorkspaceOnboardingDialog`.
+- `WorkspaceOnboardingDialog` opens when `settingsStore.directory` is empty and owns the initial project-discovery rows shown before recent directories.
+- `WorkspaceOnboardingDialog` previously called `loadDiscoveredProjects()` directly and swallowed failures in the component.
+- `packages/overlay/src/services/workspace.ts::loadDiscoveredProjects()` owns the `global/projects/discover` API request.
+- `packages/overlay/src/services/workspace.ts::ensureDefaultDirectory()` calls `loadDiscoveredProjects()` during initialization and already rejects on discovery failure.
+- `packages/overlay/src/components/TaskDirBar.tsx` also calls `loadDiscoveredProjects()` for the current-directory dropdown and is documented as an adjacent same-root issue for a later batch.
+
+### Fix Shape
+
+- Add `packages/overlay/src/services/workspace-onboarding-discovery.ts` as the onboarding presentation adapter around `loadDiscoveredProjects()`.
+- Keep service-level discovery fail-fast. The adapter returns an explicit discriminated UI state: `{ status: "ready", root, projects }` or `{ status: "failed", message }`.
+- Replace the component-level catch-and-clear path with an explicit `discoveryError` signal rendered in the onboarding dialog.
+- Do not convert failed discovery to an empty project list, and do not add retry, gate, compatibility, or hidden fallback behavior.
+- Add English and Chinese internationalization strings for the visible discovery failure message.
+- Add a Cascading Style Sheets block for the visible onboarding error row using existing surface tokens.
+
+### Regression Tests
+
+- Extend `packages/overlay/test/workspace-discovery-service.test.ts` so direct `loadDiscoveredProjects()` failures preserve the `ApiError` status, path, body, and message.
+- Extend `packages/overlay/test/workspace-onboarding-surface.test.ts` so onboarding failure state returns a visible failure message and the component no longer contains the catch-and-clear project-list path.
+- Extend `packages/overlay/test/browser/workspace-onboarding-browser.test.ts` with a real browser fixture returning 503 from `/global/projects/discover`; assert the onboarding error row is visible, the directory remains empty, no detected-project rows render, and the manual path form remains available.
+- Save and inspect `.scratch/workspace-onboarding-discovery-error.png` for the visual state.
+
+### Verification
+
+- Focused service and surface tests passed: `bun test packages/overlay/test/workspace-onboarding-surface.test.ts packages/overlay/test/workspace-discovery-service.test.ts --timeout 60000`.
+- Real browser onboarding test passed: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/workspace-onboarding-browser.test.ts`.
+- Visual review passed for `.scratch/workspace-onboarding-discovery-error.png`.
+- Overlay typecheck passed: `bun run --cwd packages/overlay typecheck`.
+- Overlay internationalization check passed: `bun run --cwd packages/overlay check:i18n`.
+- API route inventory passed: `bun run api:routes-check`.
+- Docs check passed: `bun run docs:check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Pasteur confirmed `HEAD` still had BH-052 because `WorkspaceOnboardingDialog` caught discovery failures and wrote empty discovery state.
+- Pasteur confirmed `loadDiscoveredProjects()` and `ensureDefaultDirectory()` already propagated rejection, so the repair belongs at the onboarding presentation layer instead of the shared workspace service.
+- Pasteur recommended a real browser onboarding regression in addition to source-level checks; the browser test now exercises the visible error row and screenshot evidence.
+- Pasteur identified `TaskDirBar` as an adjacent same-root UI swallow; it is recorded for a later batch because this batch is scoped to the BH-052 onboarding surface.

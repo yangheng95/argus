@@ -149,4 +149,19 @@ describe("workspace discovery service", () => {
     expect(requests[0]!.path).toBe("global/projects/discover")
     expect(settingsStore.directory).toBe("")
   })
+
+  test("loadDiscoveredProjects surfaces failed discovery responses with status and body detail", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(failingDiscoveryTransport(requests))
+
+    await expect(loadDiscoveredProjects()).rejects.toMatchObject({
+      name: "ApiError",
+      status: 503,
+      path: "global/projects/discover",
+      body: { error: "discovery unavailable" },
+      message: "API 503 global/projects/discover: discovery unavailable",
+    })
+
+    expect(requests[0]!.path).toBe("global/projects/discover")
+  })
 })

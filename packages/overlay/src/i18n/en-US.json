@@ -214,6 +214,7 @@
   "workspace_onboarding.browser_path_placeholder": "D:\\projects\\app or /Users/me/projects/app",
   "workspace_onboarding.browser_path_submit": "Open Project",
   "workspace_onboarding.browser_path_hint": "Web overlay cannot read a native folder picker path. Enter an absolute path that the OpenCorvus server can access.",
+  "workspace_onboarding.discovery_failed": "Project discovery failed: {{reason}}",
   "workspace_onboarding.recent_title": "Recent workspaces",
   "workspace_onboarding.recent_body": "Reopen a directory you used recently.",
   "workspace_onboarding.footnote": "You can switch the workspace later from the Project menu in the title bar.",

@@ -6,12 +6,12 @@ import { settingsStore } from "../store/settings"
 import { useAsyncAction } from "../solid/async-action"
 import {
   browseDirectory,
-  loadDiscoveredProjects,
   loadRecentDirectories,
   setDirectory,
   type DiscoveredProject,
 } from "../services/workspace"
 import { getHostTransport } from "../services/host-transport"
+import { loadWorkspaceOnboardingDiscovery } from "../services/workspace-onboarding-discovery"
 import { t } from "../utils/i18n"
 
 function leafName(value: string): string {
@@ -24,6 +24,7 @@ export function WorkspaceOnboardingDialog() {
   const [browserPathDraft, setBrowserPathDraft] = createSignal("")
   const [discoveredRoot, setDiscoveredRoot] = createSignal("")
   const [discoveredProjects, setDiscoveredProjects] = createSignal<DiscoveredProject[]>([])
+  const [discoveryError, setDiscoveryError] = createSignal("")
   const open = createMemo(() => !settingsStore.directory)
   const manualWorkspacePathEntry = createMemo(() => getHostTransport().capabilities.ui.manualWorkspacePathEntry)
   const recentDirectories = createMemo(() => {
@@ -53,15 +54,15 @@ export function WorkspaceOnboardingDialog() {
   }
 
   onMount(() => {
-    void loadDiscoveredProjects()
-      .then((discovery) => {
+    void loadWorkspaceOnboardingDiscovery().then((discovery) => {
+      if (discovery.status === "ready") {
+        setDiscoveryError("")
         setDiscoveredRoot(discovery.root)
         setDiscoveredProjects(discovery.projects)
-      })
-      .catch(() => {
-        setDiscoveredRoot("")
-        setDiscoveredProjects([])
-      })
+        return
+      }
+      setDiscoveryError(discovery.message)
+    })
   })
 
   return (
@@ -158,6 +159,15 @@ export function WorkspaceOnboardingDialog() {
             </Show>
           </article>
         </section>
+
+        <Show when={discoveryError()}>
+          <section class="workspace-onboarding-discovery-error" data-testid="workspace-onboarding-discovery-error">
+            <span class="workspace-onboarding-discovery-error-icon" aria-hidden="true">
+              <Icon name="info-circle" />
+            </span>
+            <p>{discoveryError()}</p>
+          </section>
+        </Show>
 
         <Show when={discoveredProjects().length > 0}>
           <section class="workspace-onboarding-recent" data-kind="discovered">
