@@ -272,6 +272,32 @@ describe("apiUrl directory injection (W2-V31)", () => {
       expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
     })
 
+    test("apiUrl preserves literal percent-encoded slash through URLSearchParams", () => {
+      const directory = "D:/projects/literal%2Fname"
+      configure({ directory })
+
+      const url = new URL(apiUrl("tasks"))
+
+      expect(url.searchParams.get("directory")).toBe(directory)
+      expect(url.href).toContain("literal%252Fname")
+    })
+
+    test("apiJson preserves literal percent-encoded slash in transport query", async () => {
+      let captured: TransportRequest | undefined
+      const directory = "D:/projects/literal%2Fname"
+      configure({ directory })
+      __setHostTransportForTest(
+        fakeTransport((req) => {
+          captured = req
+        }),
+      )
+
+      await apiJson("tasks")
+
+      expect(captured?.path).toBe("tasks")
+      expect(captured?.query?.directory).toBe(directory)
+    })
+
     test("apiRequest preserves explicit directory through HostTransport query", async () => {
       let captured: TransportRequest | undefined
       __setHostTransportForTest(

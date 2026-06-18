@@ -4,6 +4,7 @@ import path from "node:path"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
+import { selectProjectDirectory } from "../../src/server/directory"
 import { Server } from "../../src/server/server"
 import { clearServerShutdownHandler } from "../../src/server/shutdown"
 import { SessionTable } from "../../src/session/session.sql"
@@ -243,6 +244,17 @@ describe("project-scope middleware: directory required", () => {
     expect(body.directory).not.toBe(path.resolve(nested))
   })
 
+  test("directory selector preserves literal values for middleware and websocket routes", () => {
+    expect(
+      selectProjectDirectory({
+        queryDirectory: "C:/work/literal%2Fname",
+        headerDirectory: "C:/work/nested/name",
+      }),
+    ).toBe("C:/work/literal%2Fname")
+    expect(selectProjectDirectory({ headerDirectory: "C:/work/literal%2Fname" })).toBe("C:/work/literal%2Fname")
+    expect(selectProjectDirectory({ queryDirectory: "   ", headerDirectory: "" })).toBeUndefined()
+  })
+
   test("cross-project MySQL transfer routes work without ?directory=", async () => {
     const app = Server.App()
 
@@ -391,11 +403,6 @@ describe("project-scope middleware: directory required", () => {
     expect(await response.json()).toBe(true)
   })
 
-  // The assertion that the header (or query) directory is accepted by
-  // the middleware is covered by full-engine integration tests; we
-  // intentionally do NOT exercise that branch here because it would
-  // require booting the project DB / git plumbing in a unit-test
-  // budget. The negative assertions above (no directory → 400) and
-  // the bypass tests (control-plane, cross-project) are sufficient
-  // to lock the directory-gate contract.
+  // The negative assertions above lock the missing-directory failure path;
+  // the literal percent tests lock the accepted query/header contract.
 })
