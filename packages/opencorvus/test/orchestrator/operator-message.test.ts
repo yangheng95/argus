@@ -29,6 +29,18 @@ test("orchestrator wake with caller note preserves the caller-authored note", ()
   expect(text).toBe("operator provided this exact follow-up")
 })
 
+test("retry and replan wake notes carry distinct operator intent", () => {
+  const task = { error: "acceptance failed" } as any
+  const retry = OrchestratorEventNote.retry(task)
+  const replan = OrchestratorEventNote.replan(task)
+
+  expect(retry).toContain("User requested retry")
+  expect(retry).not.toContain("User requested replan")
+  expect(replan).toContain("User requested replan")
+  expect(replan).not.toContain("User requested retry")
+  expect(replan).toContain("Create a fresh plan")
+})
+
 test("acceptanceRework wake note carries iteration + reason + summary so re-dispatch context is unambiguous", () => {
   const note = OrchestratorEventNote.acceptanceRework({
     reason: "render_prerequisite_failed:bun_install",

@@ -616,7 +616,7 @@ export const PanelTool = Tool.define<typeof PanelActionSchema, {}>("panel", asyn
           metadata: {},
         }
       case "replan_task":
-        await EngineService.retryTask(params.taskID)
+        await EngineService.replanTask(params.taskID)
         return {
           title: "Replan queued",
           output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Replan queued." }),
