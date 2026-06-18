@@ -22,6 +22,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-light-popup-active-state-contrast.md](2026-06-18-light-popup-active-state-contrast.md) | Light Popup Active State Contrast |
 | [2026-06-18-retire-titlebar-status-residue.md](2026-06-18-retire-titlebar-status-residue.md) | Retire Titlebar Status Residue |
 | [2026-06-18-executor-chip-density-guard.md](2026-06-18-executor-chip-density-guard.md) | Executor Chip Density Guard |
+| [2026-06-18-popup-disabled-effective-contrast.md](2026-06-18-popup-disabled-effective-contrast.md) | Popup Disabled Effective Contrast |
 | [2026-06-18-left-pane-resizer-browser-max-contract.md](2026-06-18-left-pane-resizer-browser-max-contract.md) | Left Pane Resizer Browser Max Contract |
 | [2026-06-18-popup-contrast-light-palette.md](2026-06-18-popup-contrast-light-palette.md) | Popup Contrast Light Palette |
 | [2026-06-18-prompt-profile-trigger-select-primitive.md](2026-06-18-prompt-profile-trigger-select-primitive.md) | Prompt Profile Trigger Select Primitive |

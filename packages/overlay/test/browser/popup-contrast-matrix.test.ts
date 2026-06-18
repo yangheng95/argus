@@ -115,6 +115,9 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                   <span class="executor-popover-hint" data-popup-text>Choose the runtime profile for this task.</span>
                 </div>
                 <div class="executor-popover-empty" data-popup-text>No external executors are configured.</div>
+                <button class="executor-popover-model" type="button" disabled data-popup-text>
+                  Unavailable model
+                </button>
                 <div class="executor-popover-group">
                   <div class="executor-popover-group-header">
                     <span class="executor-popover-group-name" data-popup-text>OpenAI</span>
@@ -141,6 +144,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                       <span class="project-worktree-state" data-popup-text>Expired</span>
                     </button>
                     <button class="project-worktree-remove" type="button" data-popup-text>×</button>
+                    <button class="project-worktree-remove" type="button" disabled data-popup-text>×</button>
                   </div>
                   <div class="project-worktree-row" data-status="active">
                     <button class="project-worktree-item" type="button">
@@ -173,6 +177,10 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                         </span>
                       </button>
                     </div>
+                    <label class="recent-dir-edit-label">
+                      <input value="OpenCorvus" aria-label="Rename directory" />
+                      <button class="recent-dir-edit-submit" type="button" disabled data-popup-text>Save</button>
+                    </label>
                   </section>
                 </div>
               </div>
@@ -212,6 +220,10 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                   <button class="titlebar-menubar-item" type="button">
                     <span class="titlebar-menubar-item-title" data-popup-text>Open folder</span>
                     <span class="titlebar-menubar-item-meta" data-popup-text>Ctrl+O</span>
+                  </button>
+                  <button class="titlebar-menubar-item" type="button" disabled>
+                    <span class="titlebar-menubar-item-title" data-popup-text>Unavailable action</span>
+                    <span class="titlebar-menubar-item-meta" data-popup-text>Offline</span>
                   </button>
                 </div>
               </div>
@@ -325,17 +337,30 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
         return surface
       }
 
+      function effectiveOpacity(element: HTMLElement, sample: HTMLElement): number {
+        let opacity = 1
+        for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+          const value = Number.parseFloat(getComputedStyle(node).opacity)
+          if (Number.isFinite(value)) opacity *= value
+          if (node === sample) break
+        }
+        return opacity
+      }
+
       return Array.from(document.querySelectorAll<HTMLElement>("[data-popup-sample]")).map((sample) => {
         const texts = Array.from(sample.querySelectorAll<HTMLElement>("[data-popup-text]")).map((element) => {
-          const color = parseColor(getComputedStyle(element).color)
+          const rawColor = parseColor(getComputedStyle(element).color)
+          const opacity = effectiveOpacity(element, sample)
           const surface = textSurface(element, sample)
+          const foreground = composite({ ...rawColor, a: rawColor.a * opacity }, surface)
           return {
             text: element.textContent?.trim().replace(/\s+/g, " ") ?? "",
             selector: element.className || element.tagName.toLowerCase(),
             color: getComputedStyle(element).color,
+            effectiveOpacity: opacity,
             surface,
             surfaceAlpha: surface.a,
-            contrast: contrastRatio(color, surface),
+            contrast: contrastRatio(foreground, surface),
           }
         })
         return {
@@ -362,6 +387,10 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
       for (const text of sample.texts) {
         assert.equal(text.surfaceAlpha, 1, `${sample.id} "${text.text}" surface must composite to opaque`)
         assert.notEqual(text.color, "rgba(0, 0, 0, 0)", `${sample.id} "${text.text}" must not be transparent`)
+        assert.ok(
+          text.effectiveOpacity >= 0.95,
+          `${sample.id} ${text.selector} "${text.text}" effective opacity ${text.effectiveOpacity.toFixed(2)}`,
+        )
         assert.ok(
           text.contrast >= 4.5,
           `${sample.id} ${text.selector} "${text.text}" contrast ${text.contrast.toFixed(2)}`,
