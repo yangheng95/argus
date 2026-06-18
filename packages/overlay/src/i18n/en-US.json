@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "09b1da64c5980c2e"
+    "panel_revision": "3a4e55608c1110c8"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -52,7 +52,7 @@
   "brand.guide_usage_1": "Choose the workspace folder and recent task before sending anything.",
   "brand.guide_usage_2": "Send a concrete request with constraints and acceptance criteria.",
   "brand.guide_usage_3": "Watch the workspace while it runs: Spec checks understanding, Plan checks route, Goals and Evaluation catch drift, Files shows what changed.",
-  "brand.guide_usage_4": "Titlebar menus configure workspace, model, tools, view, acceptance channels, and diagnostics.",
+  "brand.guide_usage_4": "Titlebar menus configure workspace, providers, runs, view, settings, help, acceptance channels, and diagnostics.",
   "brand.guide_usage_title": "Fast Path",
   "brand.logo_alt": "OpenCorvus logo",
   "brand.workspace_label": "Workspace",

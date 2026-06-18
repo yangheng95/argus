@@ -35,7 +35,7 @@ test("titlebar controls stay on the surface family", () => {
       '.titlebar-menubar-trigger:hover, .titlebar-menubar-trigger:focus-visible, .titlebar-menubar-trigger[data-active="true"]',
     ),
   ).toMatch(/background:\s*var\(--surface-hover\)/)
-  expect(bodyOf(TITLEBAR_CSS, ".brand-guide:hover, .brand-guide:focus-visible, .brand-guide:focus-within")).toMatch(
+  expect(bodyOf(TITLEBAR_CSS, '.brand-guide:hover, .brand-guide:focus-visible, .brand-guide[aria-expanded="true"]')).toMatch(
     /background:\s*var\(--surface-hover\)/,
   )
   expect(TITLEBAR_CSS).toContain("background: var(--menu-panel-bg)")

@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File | Title |
 | --- | --- |
+| [2026-06-18-titlebar-brand-guide-popover-primitive.md](2026-06-18-titlebar-brand-guide-popover-primitive.md) | Titlebar Brand Guide Popover Primitive |
 | [2026-06-18-command-palette-activedescendant.md](2026-06-18-command-palette-activedescendant.md) | Command Palette Active Descendant |
 | [2026-06-18-command-palette-config-sections-single-source.md](2026-06-18-command-palette-config-sections-single-source.md) | Command Palette Config Sections Single Source |
 | [2026-06-18-dialog-header-drag-kobalte-regression.md](2026-06-18-dialog-header-drag-kobalte-regression.md) | Dialog Header Drag Kobalte Regression |
