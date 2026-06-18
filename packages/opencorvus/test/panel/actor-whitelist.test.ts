@@ -109,7 +109,7 @@ describe("panel actor whitelist — mission", () => {
   })
 
   test("panel_ui is not subject to the mission whitelist (can replan_task)", async () => {
-    spyOn(EngineService, "retryTask").mockResolvedValue(undefined as any)
+    spyOn(EngineService, "replanTask").mockResolvedValue(undefined as any)
     const { error } = await call({ action: "replan_task", taskID: "task_1" }, "gateway")
     expect(isWhitelistDenied(error)).toBe(false)
   })

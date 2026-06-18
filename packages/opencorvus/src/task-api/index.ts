@@ -1886,7 +1886,7 @@ export namespace EngineService {
     return true
   }
 
-  export async function retryTask(taskID: string) {
+  async function wakeTaskForOperatorIntent(taskID: string, intent: "retry" | "replan") {
     const task = requireTaskInCurrentProject(taskID)
     const metadata =
       task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
@@ -1894,13 +1894,23 @@ export namespace EngineService {
         : {}
     delete metadata.cancelled
     const liveRun = findActiveRunForTask(task.id)
+    const label = intent === "retry" ? "Retry" : "Replan"
     const openedTask =
       isTaskTerminal(task) || !liveRun
-        ? await updateTask(task, { status: "queued", error: null, metadata }, "Retry requested by operator")
-        : await updateTask(task, { error: null, metadata }, "Retry requested by operator")
-    await reopenActiveRunForOperatorWake(openedTask, "Retry reopened blocked run")
-    void dispatchTaskLoop({ taskID, event: { note: OrchestratorEventNote.retry(task) } })
+        ? await updateTask(task, { status: "queued", error: null, metadata }, `${label} requested by operator`)
+        : await updateTask(task, { error: null, metadata }, `${label} requested by operator`)
+    await reopenActiveRunForOperatorWake(openedTask, `${label} reopened blocked run`)
+    const note = intent === "retry" ? OrchestratorEventNote.retry(task) : OrchestratorEventNote.replan(task)
+    void dispatchTaskLoop({ taskID, event: { note } })
     return viewTask(requireTaskInCurrentProject(taskID))
+  }
+
+  export async function retryTask(taskID: string) {
+    return wakeTaskForOperatorIntent(taskID, "retry")
+  }
+
+  export async function replanTask(taskID: string) {
+    return wakeTaskForOperatorIntent(taskID, "replan")
   }
 
   export async function recordOperatorNote(taskID: string, note: string) {

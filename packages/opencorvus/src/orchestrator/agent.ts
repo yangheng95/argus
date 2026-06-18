@@ -222,12 +222,11 @@ async function recordOrchestratorSessionErrorEnvelope(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Wake event — free-form hint about WHY the orchestrator is being woken.
+// Wake event — context about WHY the orchestrator is being woken.
 // Replaces the old typed trigger enum per specs/new-arch/16-unified-teardown.md
 // §3. Callers that previously sent trigger.kind="X" now synthesize the relevant
-// context string into `note`. Operator text + attachment summary are the only
-// structured fields because the tools layer still consumes them via
-// `createOrchestratorTools({ operatorMessage })`.
+// context string into `note`. The structured fields below carry user/operator
+// payload that host code must not infer from free-form text.
 // ---------------------------------------------------------------------------
 
 export interface OrchestratorEvent {
@@ -243,6 +242,11 @@ export interface OrchestratorEvent {
     source?: string
     target?: TaskMessageTargetInput
     messageID?: string
+  }
+  /** Operator lifecycle intent from public controls. Distinct from `note` so
+   * retry and replan cannot collapse into the same host event. */
+  operatorIntent?: {
+    kind: "retry" | "replan"
   }
 }
 
@@ -881,6 +885,14 @@ export const OrchestratorEventNote = {
   retry(task: TaskRow): string {
     const previousError = parseOrchestratorTaskErrorEnvelope(task.error)?.message ?? task.error
     return `User requested retry.${previousError ? ` Previous error: ${previousError}` : ""}\nDecide how to proceed.`
+  },
+
+  replan(task: TaskRow): string {
+    const previousError = parseOrchestratorTaskErrorEnvelope(task.error)?.message ?? task.error
+    return (
+      `User requested replan.${previousError ? ` Previous error: ${previousError}` : ""}\n` +
+      "Create a fresh plan before dispatching implementation work."
+    )
   },
 
   acceptanceRework(input: { reason: string; iteration: number; summary?: string; affectedGoalCount?: number }): string {
