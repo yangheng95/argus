@@ -10,15 +10,7 @@ export function SessionDialogHost() {
       id="sessionDialog"
       open={dialogStore.session.open}
       wide={true}
-      formClass="diff-dialog-form"
-      titleAs="div"
-      title={
-        <div class="diff-dialog-head">
-          <h3 class="dialog-title" id="sessionDialogTitle">
-            {dialogStore.session.title || t("log.title")}
-          </h3>
-        </div>
-      }
+      title={dialogStore.session.title || t("log.title")}
       onClose={closeBuildSessionDialog}
       headerActions={
         <Button

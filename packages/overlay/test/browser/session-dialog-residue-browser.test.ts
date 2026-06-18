@@ -30,7 +30,7 @@ async function saveScreenshot(element: { screenshot(options?: Record<string, unk
   return target
 }
 
-test("live session dialog body renders without retired section dialog selectors", async () => {
+test("live session dialog body renders without retired section or diff dialog selectors", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
@@ -57,11 +57,9 @@ test("live session dialog body renders without retired section dialog selectors"
         <body data-theme="light">
           <div id="sessionDialog" class="dialog dialog-wide" role="dialog" aria-modal="true">
             <div class="dialog-overlay" data-dialog-modal="true"></div>
-            <section class="dialog-form diff-dialog-form">
+            <section class="dialog-form">
               <header class="dialog-header">
-                <div class="diff-dialog-head">
-                  <h3 class="dialog-title" id="sessionDialogTitle">Build Session</h3>
-                </div>
+                <h2 class="dialog-title">Build Session</h2>
                 <div class="dialog-header-actions">
                   <button class="oc-button" data-size="sm" data-variant="ghost" type="button">Close</button>
                 </div>
@@ -86,10 +84,15 @@ test("live session dialog body renders without retired section dialog selectors"
       const style = getComputedStyle(body)
       const rect = body.getBoundingClientRect()
       const retired = Array.from(
-        document.querySelectorAll(".section-dialog-head, .section-dialog-meta, .section-dialog-body, .session-actions"),
+        document.querySelectorAll(
+          ".section-dialog-head, .section-dialog-meta, .section-dialog-body, .session-actions, .diff-dialog-head, .diff-dialog-form",
+        ),
       ).length
+      const nestedTitleCount = document.querySelectorAll(".dialog-title .dialog-title").length
       return {
         retired,
+        nestedTitleCount,
+        titleCount: document.querySelectorAll(".dialog-header > .dialog-title").length,
         width: rect.width,
         height: rect.height,
         borderTopWidth: style.borderTopWidth,
@@ -99,16 +102,18 @@ test("live session dialog body renders without retired section dialog selectors"
     })
 
     assert.equal(state.retired, 0)
+    assert.equal(state.nestedTitleCount, 0)
+    assert.equal(state.titleCount, 1)
     assert.ok(state.width > 240)
     assert.ok(state.height > 40)
     assert.equal(state.borderTopWidth, "1px")
     assert.notEqual(state.backgroundColor, "rgba(0, 0, 0, 0)")
     assert.match(state.text, /Session transcript/)
 
-    const body = await page.$(".session-dialog-body")
-    assert.ok(body)
-    const screenshot = await saveScreenshot(body, "session-dialog-residue-live-body.png")
-    assert.ok(screenshot.endsWith("session-dialog-residue-live-body.png"))
+    const form = await page.$(".dialog-form")
+    assert.ok(form)
+    const screenshot = await saveScreenshot(form, "session-dialog-residue-live-dialog.png")
+    assert.ok(screenshot.endsWith("session-dialog-residue-live-dialog.png"))
   } finally {
     await browser.close()
   }
