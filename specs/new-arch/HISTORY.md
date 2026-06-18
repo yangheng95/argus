@@ -23,6 +23,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-retire-message-path-link-residue.md](2026-06-19-retire-message-path-link-residue.md)               | Retire Message Path Link Residue |
 | [2026-06-19-retire-board-intro-residue.md](2026-06-19-retire-board-intro-residue.md)                           | Retire BoardIntro Residue |
 | [2026-06-19-retire-llm-provider-summary-residue.md](2026-06-19-retire-llm-provider-summary-residue.md)         | Retire LLM Provider Summary Residue |
+| [2026-06-19-retire-detail-card-residue.md](2026-06-19-retire-detail-card-residue.md)                           | Retire Detail Card Residue |
 
 ## 2026-06-18
 

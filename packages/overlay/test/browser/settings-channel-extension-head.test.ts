@@ -61,7 +61,23 @@ test(
       if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
       if (path === "/config") return send({ model: "", server: { publicUrl: "" } })
       if (path === "/agent") return send([])
-      if (path === "/channel") return send([])
+      if (path === "/channel")
+        return send([
+          {
+            id: "slack",
+            name: "Slack",
+            summary: "Post task updates to a Slack channel.",
+            status: "missing",
+            fields: [
+              {
+                key: "webhook_url",
+                label: "Webhook URL",
+                type: "text",
+                placeholder: "https://hooks.slack.com/services/...",
+              },
+            ],
+          },
+        ])
       if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
       if (path === "/executor") return send([])
       if (path === "/skill/installed" || path === "/skill") return send([])
@@ -144,6 +160,48 @@ test(
       const screenshotPath = resolve(".scratch", "settings-channel-extension-head.png")
       mkdirSync(dirname(screenshotPath), { recursive: true })
       writeFileSync(screenshotPath, await head.screenshot({}))
+
+      await page.waitForSelector('[data-config-panel="channel"] .channel-settings-row')
+      await page.evaluate(() => {
+        const buttons = Array.from(
+          document.querySelectorAll<HTMLButtonElement>('[data-config-panel="channel"] .channel-settings-row button'),
+        )
+        const editButton = buttons.find((button) => button.textContent?.trim() === "Edit")
+        if (!editButton) throw new Error("Missing channel edit button")
+        editButton.click()
+      })
+      await page.waitForSelector(".channel-doc-card")
+
+      const cardMetrics = await page.$eval(".channel-doc-card", (node) => {
+        const card = node as HTMLElement
+        const style = getComputedStyle(card)
+        const rect = card.getBoundingClientRect()
+        const retiredDetailClasses = Array.from(document.querySelectorAll<HTMLElement>('[class*="detail-"]')).flatMap(
+          (element) =>
+            Array.from(element.classList).filter((className) =>
+              /^(?:detail-stack|detail-card|detail-pre|detail-pre-json|detail-grid-row)$/.test(className),
+            ),
+        )
+        return {
+          backgroundColor: style.backgroundColor,
+          borderTopWidth: style.borderTopWidth,
+          text: card.textContent?.trim() ?? "",
+          width: rect.width,
+          height: rect.height,
+          retiredDetailClasses,
+        }
+      })
+      assert.equal(cardMetrics.backgroundColor, "rgba(0, 0, 0, 0)")
+      assert.equal(cardMetrics.borderTopWidth, "0px")
+      assert.match(cardMetrics.text, /OpenClaw Docs/)
+      assert.equal(cardMetrics.retiredDetailClasses.length, 0)
+      assert.ok(cardMetrics.width > 120)
+      assert.ok(cardMetrics.height > 20)
+
+      const card = await page.$(".channel-doc-card")
+      assert.ok(card)
+      const cardScreenshotPath = resolve(".scratch", "channel-doc-card-retired-detail.png")
+      writeFileSync(cardScreenshotPath, await card.screenshot({}))
 
       await page.close()
     } finally {

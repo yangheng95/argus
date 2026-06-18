@@ -2334,9 +2334,10 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.gwg-eval-summary\s*\{/)
   })
 
-  test("settings document/detail cards do not rely on theme chrome resets", () => {
+  test("settings channel docs card does not rely on theme chrome resets", () => {
     const styles = readLegacyStylesCss("src/styles.css")
-    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+    const settingsSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css")))
+    const messagesSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/messages.css")))
 
     for (const source of [styles, settingsSurface]) {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -2344,7 +2345,7 @@ describe("overlay architecture guards", () => {
         const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         if (!isThemeSelector) continue
 
-        expect(selector).not.toMatch(/(?:channel-doc-card|detail-card)/)
+        expect(selector).not.toMatch(/channel-doc-card/)
       }
     }
 
@@ -2352,9 +2353,11 @@ describe("overlay architecture guards", () => {
     expect(channelDocBody).toContain("background: transparent")
     expect(channelDocBody).toContain("border: 0")
 
-    const detailCardBody = settingsSurface.match(/\.detail-card\s*\{([^}]*)\}/)?.[1] ?? ""
-    expect(detailCardBody).toContain("background: transparent")
-    expect(detailCardBody).toContain("border: 0")
+    for (const className of ["detail-stack", "detail-card", "detail-pre", "detail-pre-json", "detail-grid-row"]) {
+      const selector = new RegExp(`(^|[\\n,{])\\s*\\.${className}(?:\\s|[,{:.#\\[]|$)`)
+      expect(settingsSurface).not.toMatch(selector)
+      expect(messagesSurface).not.toMatch(selector)
+    }
   })
 
   test("settings extension rows do not rely on theme or local important chrome resets", () => {

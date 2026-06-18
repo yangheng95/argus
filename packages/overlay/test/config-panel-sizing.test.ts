@@ -103,7 +103,6 @@ describe("config panel sizing", () => {
       ".extension-head",
       ".channel-doc-card",
       ".market-card",
-      ".detail-card",
       ".agent-model-table",
     ]) {
       const body = bodyOf(selector)
