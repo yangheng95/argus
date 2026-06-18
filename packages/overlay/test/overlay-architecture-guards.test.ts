@@ -2019,14 +2019,12 @@ describe("overlay architecture guards", () => {
     const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
 
-    for (const className of [
-      "titlebar-nav",
-      "titlebar-nav-group",
-      "titlebar-utility",
-      "titlebar-actions",
-      "titlebar-window-controls",
-      "conn-badge",
-    ]) {
+    for (const className of ["titlebar-nav", "titlebar-nav-group"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
+      expect(titlebarSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
+    }
+
+    for (const className of ["titlebar-utility", "titlebar-actions", "titlebar-window-controls", "conn-badge"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(titlebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
@@ -2868,12 +2866,12 @@ describe("overlay architecture guards", () => {
     const containerSelectors = [
       ".titlebar-left",
       ".titlebar-brand",
-      ".titlebar-nav",
-      ".titlebar-nav-group",
       ".titlebar-utility",
       ".titlebar-actions",
       ".titlebar-window-controls",
     ]
+    const retiredContainerSelectors = [".titlebar-nav", ".titlebar-nav-group"]
+    const combined = `${styles}\n${titlebarSurface}`
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2893,6 +2891,11 @@ describe("overlay architecture guards", () => {
         body = soloRuleBody(titlebarSurface, selector)
       }
       expect(body).toContain("gap: var(--oc-titlebar-gap)")
+    }
+
+    for (const selector of retiredContainerSelectors) {
+      const escaped = selector.replace(".", "\\.")
+      expect(combined).not.toMatch(new RegExp(`${escaped}(?:\\s|\\.|:|\\{|,|\\[)`))
     }
   })
 
