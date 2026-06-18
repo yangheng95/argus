@@ -18,8 +18,8 @@ import {
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
+import { SegmentedControl } from "./ui/SegmentedControl"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
-import { Tab, Tabs } from "./ui/Tabs"
 import { browserPreviewLivePoint } from "./browser-preview-live-point"
 
 type BrowserPreviewCandidate = BrowserPreviewTarget["candidates"][number]
@@ -126,6 +126,12 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   )
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
   const selectedViewport = createMemo(() => viewports().find((viewport) => viewport.id === viewportID()))
+  const viewportOptions = createMemo(() =>
+    viewports().map((viewport) => ({
+      value: viewport.id,
+      label: viewportLabel(viewport.id),
+    })),
+  )
   const targetUrl = createMemo(() => currentTarget()?.url)
   const readyTarget = createMemo(() => {
     const resolved = currentTarget()
@@ -562,31 +568,20 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
           </Show>
 
           <Show when={readyTarget() && viewports().length > 0}>
-            <div class="browser-preview-viewport-controls">
-              <Tabs
-                size="sm"
-                tone="neutral"
+            <div class="browser-preview-viewport-controls" data-ui="browser-preview-viewports" data-orientation="horizontal">
+              <SegmentedControl<BrowserPreviewViewportID>
+                options={viewportOptions()}
                 value={viewportID()}
-                onValueChange={(value) => setViewportID(value as BrowserPreviewViewportID)}
-                aria-label={t("browser_preview.viewport.label")}
-                data-ui="browser-preview-viewports"
-                data-orientation="horizontal"
-              >
-                <For each={viewports()}>
-                  {(item) => (
-                    <Tab
-                      value={item.id}
-                      active={viewportID() === item.id}
-                      size="sm"
-                      tone="neutral"
-                      data-ui="browser-preview-viewport"
-                      data-viewport-id={item.id}
-                    >
-                      {viewportLabel(item.id)}
-                    </Tab>
-                  )}
-                </For>
-              </Tabs>
+                onChange={setViewportID}
+                ariaLabel={t("browser_preview.viewport.label")}
+                class="oc-tabs"
+                itemClass="oc-tab"
+                itemAttributes={(option) => ({
+                  "data-ui": "browser-preview-viewport",
+                  "data-viewport-id": option.value,
+                  "data-size": "sm",
+                })}
+              />
             </div>
           </Show>
 
