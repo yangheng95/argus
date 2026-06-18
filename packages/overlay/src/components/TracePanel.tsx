@@ -28,6 +28,7 @@ import {
 } from "../services/trace"
 import { Panel } from "./primitives/Panel"
 import { Icon } from "./Icon"
+import { Button } from "./ui/Button"
 import { t } from "../utils/i18n"
 import { createVisibilityInterval } from "../utils/visibility-interval"
 
@@ -269,9 +270,12 @@ export function TracePanel(props: TracePanelProps) {
         <>
           <span class="trace-panel-title">{titleText()}</span>
           <span class="trace-panel-actions">
-            <button
+            <Button
               type="button"
-              class="trace-panel-copy"
+              variant="ghost"
+              size="icon"
+              tone="neutral"
+              data-ui="trace-copy"
               onClick={copyTrace}
               disabled={!hasTarget() || (events().length === 0 && !data())}
               data-state={copyState()}
@@ -285,26 +289,32 @@ export function TracePanel(props: TracePanelProps) {
               aria-label={t("trace.copy_json")}
             >
               <Icon name={copyState() === "ok" ? "check" : copyState() === "err" ? "cancel" : "copy"} size={13} />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              class="trace-panel-refresh"
+              variant="ghost"
+              size="icon"
+              tone="neutral"
+              data-ui="trace-refresh"
               onClick={refresh}
               title={t("trace.refresh_title")}
               aria-label={t("trace.refresh_title")}
             >
               <Icon name="refresh" size={13} />
-            </button>
+            </Button>
             <Show when={props.onClose}>
-              <button
+              <Button
                 type="button"
-                class="trace-panel-close"
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-ui="trace-close"
                 onClick={() => props.onClose?.()}
                 title={t("trace.close_title")}
                 aria-label={t("trace.close_title")}
               >
                 <Icon name="close" size={13} />
-              </button>
+              </Button>
             </Show>
           </span>
         </>

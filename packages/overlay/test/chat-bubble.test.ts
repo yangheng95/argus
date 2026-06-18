@@ -33,6 +33,7 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_TSX).not.toContain('class="card__copy"')
   expect(CHAT_BUBBLE_TSX).not.toContain("chat-bubble__avatar-slot")
   expect(CHAT_BUBBLE_TSX).toContain("<TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />")
+  expect(CHAT_BUBBLE_TSX).toContain('import { Button } from "./ui/Button"')
   expect(CHAT_BUBBLE_TSX).toContain("<AgentSessionReplyBox")
   expect(CHAT_BUBBLE_TSX).toContain("collapsedActivityPreviewText")
   expect(CHAT_BUBBLE_TSX).toContain("collectLatestActivityText")
@@ -89,4 +90,19 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_CSS).not.toMatch(/border-inline-(?:start|end)/)
   expect(CHAT_BUBBLE_CSS).not.toContain("var(--card-system-rail)")
   expect(CHAT_BUBBLE_CSS).toContain(".chat-avatar")
+})
+
+test("ChatBubble action controls use Button primitives", () => {
+  for (const dataUi of ["card-error-reason", "card-trace", "card-agent-cancel", "card-rewind"]) {
+    expect(CHAT_BUBBLE_TSX).toContain(`data-ui="${dataUi}"`)
+  }
+
+  for (const retired of [
+    'class="card__error-reason"',
+    'class="card__trace"',
+    'class="card__agent-cancel"',
+    'class="card__rewind"',
+  ]) {
+    expect(CHAT_BUBBLE_TSX).not.toContain(retired)
+  }
 })

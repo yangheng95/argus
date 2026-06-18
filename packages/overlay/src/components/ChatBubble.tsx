@@ -30,6 +30,7 @@ import { Icon } from "./Icon"
 import { ReviewStreamSection } from "./ReviewStreamSection"
 import { storeCardNode } from "./StoreCardNode"
 import { TracePanel } from "./TracePanel"
+import { Button } from "./ui/Button"
 
 async function writeClipboard(text: string): Promise<boolean> {
   if (!text) return false
@@ -348,10 +349,13 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 </span>
               </button>
               <Show when={props.node.status === "error" && !!props.node.errorReason}>
-                <button
+                <Button
                   type="button"
-                  class="card__error-reason"
-                  classList={{ "card__error-reason--copied": reasonCopied() }}
+                  variant="ghost"
+                  size="mini"
+                  tone={reasonCopied() ? "accent" : "danger"}
+                  data-ui="card-error-reason"
+                  data-state={reasonCopied() ? "copied" : "idle"}
                   title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
                   aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
                   onClick={(event) => {
@@ -366,8 +370,8 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                     })()
                   }}
                 >
-                  {props.node.errorReason}
-                </button>
+                  <span data-ui="card-error-reason-text">{props.node.errorReason}</span>
+                </Button>
               </Show>
               <div class="chat-bubble__actions">
                 <Show when={hasMetaActions()}>
@@ -419,10 +423,13 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 <Show when={hasControlActions()}>
                   <div class="card__control-actions">
                     <Show when={!!traceSessionID()}>
-                      <button
+                      <Button
                         type="button"
-                        class="card__trace"
-                        classList={{ "card__trace--open": traceOpen() }}
+                        variant="ghost"
+                        size="icon"
+                        tone="neutral"
+                        data-ui="card-trace"
+                        data-state={traceOpen() ? "open" : "closed"}
                         title={t("card.inspect_agent_trace")}
                         aria-label={t("card.inspect_agent_trace")}
                         aria-pressed={traceOpen()}
@@ -432,33 +439,39 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                         }}
                       >
                         <Icon name="inspect" size={13} />
-                      </button>
+                      </Button>
                     </Show>
                     <Show when={headActions.caps.canCancel()}>
-                      <button
+                      <Button
                         type="button"
-                        class="card__agent-cancel"
-                        classList={{ "card__agent-cancel--pending": headActions.state.cancelling() }}
+                        variant="ghost"
+                        size="icon"
+                        tone="neutral"
+                        data-ui="card-agent-cancel"
+                        data-state={headActions.state.cancelling() ? "pending" : "idle"}
                         title={headActions.labels.cancel()}
                         aria-label={headActions.labels.cancel()}
                         disabled={headActions.state.cancelling()}
                         onClick={headActions.onAgentCancel}
                       >
                         <Icon name="cancel" size={13} />
-                      </button>
+                      </Button>
                     </Show>
                     <Show when={headActions.caps.canRewind()}>
-                      <button
+                      <Button
                         type="button"
-                        class="card__rewind"
-                        classList={{ "card__rewind--pending": headActions.state.rewinding() }}
+                        variant="ghost"
+                        size="icon"
+                        tone="neutral"
+                        data-ui="card-rewind"
+                        data-state={headActions.state.rewinding() ? "pending" : "idle"}
                         title={headActions.labels.rewind()}
                         aria-label={headActions.labels.rewindStep()}
                         disabled={headActions.state.rewinding()}
                         onClick={headActions.onRewind}
                       >
                         <Icon name="rewind" size={13} />
-                      </button>
+                      </Button>
                     </Show>
                   </div>
                 </Show>

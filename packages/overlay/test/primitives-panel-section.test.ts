@@ -292,9 +292,29 @@ describe("FileViewPanel.tsx retirement", () => {
 
 describe("TracePanel.tsx — Panel primitive adoption", () => {
   const tsx = readText(join(OVERLAY_ROOT, "src/components/TracePanel.tsx"))
+  const cardCss = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
 
   test("imports Panel primitive", () => {
     expect(tsx).toContain('from "./primitives/Panel"')
+  })
+
+  test("header actions use Button primitive", () => {
+    expect(tsx).toContain('import { Button } from "./ui/Button"')
+    for (const dataUi of ["trace-copy", "trace-refresh", "trace-close"]) {
+      expect(tsx).toContain(`data-ui="${dataUi}"`)
+      expect(cardCss).toContain(`.oc-button[data-ui="${dataUi}"]`)
+    }
+    for (const retired of [
+      'class="trace-panel-copy"',
+      'class="trace-panel-refresh"',
+      'class="trace-panel-close"',
+      ".trace-panel-copy",
+      ".trace-panel-refresh",
+      ".trace-panel-close",
+    ]) {
+      expect(tsx).not.toContain(retired)
+      expect(cardCss).not.toContain(retired)
+    }
   })
 
   test("uses <Panel> element", () => {
