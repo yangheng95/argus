@@ -4,14 +4,15 @@ import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Session } from "@/session"
 import { SessionTable } from "@/session/session.sql"
+import { Filesystem } from "@/util/filesystem"
 import { MissionID } from "./schema"
 
 export type MissionSession = Session.Info & { missionID: string }
 
 const locks = new Map<string, Promise<MissionSession>>()
 
-// The channelKey pins exactly one mission session per (project, missionID).
-// It is derived from the missionID — single source, no separate input.
+// channelKey is legacy/display metadata derived from the missionID. Session
+// identity is the row selected by project, directory, and missionID.
 function channelKeyForMission(missionID: string): string {
   return `mission:${missionID}`
 }
@@ -30,7 +31,11 @@ async function ensureMissionRuntimeDirectory(input: { directory: string; mission
   await fs.mkdir(ProjectRuntimePaths.missionRoot(input.directory, input.missionID), { recursive: true })
 }
 
-function findMissionSessionID(missionID: string) {
+function normalizeDirectory(directory: string) {
+  return Filesystem.resolve(directory)
+}
+
+function findMissionSessionIDByDirectory(input: { missionID: string; directory: string }) {
   return Database.use(
     (db) =>
       db
@@ -39,15 +44,16 @@ function findMissionSessionID(missionID: string) {
         .where(
           and(
             eq(SessionTable.project_id, Instance.project.id),
+            eq(SessionTable.directory, input.directory),
             eq(SessionTable.kind, "mission"),
-            sql`json_extract(${SessionTable.metadata}, '$.mission.id') = ${missionID}`,
+            sql`json_extract(${SessionTable.metadata}, '$.mission.id') = ${input.missionID}`,
           ),
         )
         .get()?.id,
   )
 }
 
-function findMissionSessionIDByDirectory(input: { missionID: string; directory: string }) {
+function findGlobalMissionSessionIDByDirectory(input: { missionID: string; directory: string }) {
   return Database.use(
     (db) =>
       db
@@ -115,28 +121,23 @@ function missionSessionConditions(
  * session acquisition still goes through `ensureMissionSession` — this
  * lookup intentionally has no create semantics.
  */
-export function findExistingMissionSession(missionID: string): string | undefined {
-  return findMissionSessionID(missionID)
-}
-
-export async function getMissionSession(missionID: string): Promise<MissionSession> {
-  const sessionID = findMissionSessionID(missionID)
-  if (!sessionID) throw new NotFoundError({ message: `Mission not found: ${missionID}` })
-  const session = await Session.get(sessionID)
-  const parsedMissionID = missionIDFromInfo(session)
-  if (parsedMissionID !== missionID) throw new NotFoundError({ message: `Mission not found: ${missionID}` })
-  return withMissionID(session, parsedMissionID)
+export function findExistingMissionSession(input: { missionID: string; directory: string }): string | undefined {
+  return findMissionSessionIDByDirectory({
+    missionID: MissionID.parse(input.missionID),
+    directory: normalizeDirectory(input.directory),
+  })
 }
 
 export async function getMissionSessionByDirectory(input: {
   missionID: string
   directory: string
 }): Promise<MissionSession> {
-  const sessionID = findMissionSessionIDByDirectory(input)
+  const directory = normalizeDirectory(input.directory)
+  const sessionID = findGlobalMissionSessionIDByDirectory({ missionID: input.missionID, directory })
   if (!sessionID) throw new NotFoundError({ message: `Mission not found: ${input.missionID}` })
   const session = await Session.get(sessionID)
   const parsedMissionID = missionIDFromInfo(session)
-  if (parsedMissionID !== input.missionID || session.directory !== input.directory) {
+  if (parsedMissionID !== input.missionID || session.directory !== directory) {
     throw new NotFoundError({ message: `Mission not found: ${input.missionID}` })
   }
   return withMissionID(session, parsedMissionID)
@@ -198,9 +199,9 @@ export async function* listGlobalMissionSessions(input?: {
   }
 }
 
-async function ensureMissionSessionInner(input: { missionID: string; defaultCwd: string }) {
-  const missionID = MissionID.parse(input.missionID)
-  const existingID = findMissionSessionID(missionID)
+async function ensureMissionSessionInner(input: { missionID: MissionID; directory: string }) {
+  const missionID = input.missionID
+  const existingID = findMissionSessionIDByDirectory({ missionID, directory: input.directory })
   if (existingID) {
     const existing = await Session.get(existingID)
     await ensureMissionRuntimeDirectory({ directory: existing.directory, missionID })
@@ -210,7 +211,7 @@ async function ensureMissionSessionInner(input: { missionID: string; defaultCwd:
   const created = await Session.createNext({
     kind: "mission",
     title: "Mission Control",
-    directory: input.defaultCwd,
+    directory: input.directory,
   })
   const updated = await Session.mergeMetadata({
     sessionID: created.id,
@@ -218,7 +219,7 @@ async function ensureMissionSessionInner(input: { missionID: string; defaultCwd:
       mission: {
         id: missionID,
         channelKey: channelKeyForMission(missionID),
-        cwd: input.defaultCwd,
+        cwd: input.directory,
       },
     },
   })
@@ -227,11 +228,13 @@ async function ensureMissionSessionInner(input: { missionID: string; defaultCwd:
 }
 
 export async function ensureMissionSession(input: { missionID: string; defaultCwd: string }) {
-  const lockKey = `${Instance.project.id}:${input.missionID}`
+  const missionID = MissionID.parse(input.missionID)
+  const directory = normalizeDirectory(input.defaultCwd)
+  const lockKey = `${Instance.project.id}:${directory}:${missionID}`
   const existing = locks.get(lockKey)
   if (existing) return existing
 
-  const promise = ensureMissionSessionInner(input).finally(() => locks.delete(lockKey))
+  const promise = ensureMissionSessionInner({ missionID, directory }).finally(() => locks.delete(lockKey))
   locks.set(lockKey, promise)
   return promise
 }
