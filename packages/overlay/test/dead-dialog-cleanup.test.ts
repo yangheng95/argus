@@ -68,6 +68,8 @@ describe("retired dialog dead code is removed from overlay runtime", () => {
     expect(diffSurface).not.toContain(".diff-dialog-meta")
     expect(diffSurface).not.toContain(".diff-preview {")
     expect(dialogSurface).not.toContain(".diff-dialog-form")
+    expect(components).not.toContain("diff-dialog-head")
+    expect(components).not.toContain("diff-dialog-form")
   })
 
   test("retired section dialog and session action selectors stay removed", () => {

@@ -34,6 +34,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-retire-section-action-residue.md](2026-06-19-retire-section-action-residue.md)                     | Retire Section Action Residue |
 | [2026-06-19-retire-sidebar-orphan-selectors.md](2026-06-19-retire-sidebar-orphan-selectors.md)                 | Retire Sidebar Orphan Selectors |
 | [2026-06-19-retire-section-body-residue.md](2026-06-19-retire-section-body-residue.md)                         | Retire Section Body Residue |
+| [2026-06-19-retire-session-dialog-diff-residue.md](2026-06-19-retire-session-dialog-diff-residue.md)           | Retire Session Dialog Diff Residue |
 
 ## 2026-06-18
 

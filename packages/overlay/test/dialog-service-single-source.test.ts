@@ -95,6 +95,15 @@ describe("app/session dialog single source", () => {
     expect(configHost).toContain('id="btnCloseConfigDialog"')
   })
 
+  test("session dialog host delegates title and form chrome to the Dialog primitive", () => {
+    expect(sessionHost).toContain('title={dialogStore.session.title || t("log.title")}')
+    expect(sessionHost).not.toContain('formClass="diff-dialog-form"')
+    expect(sessionHost).not.toContain("diff-dialog-head")
+    expect(sessionHost).not.toContain('class="dialog-title"')
+    expect(sessionHost).not.toContain('id="sessionDialogTitle"')
+    expect(sessionHost).not.toContain('titleAs="div"')
+  })
+
   test("app dialog select input delegates listbox semantics to Kobalte", () => {
     expect(appHost).toContain('import { SelectControl } from "./ui/SelectControl"')
     expect(appHost).toContain("<SelectControl<AppDialogSelectOption>")
