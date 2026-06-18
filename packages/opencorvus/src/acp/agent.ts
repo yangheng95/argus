@@ -1360,7 +1360,7 @@ export namespace ACP {
                 filename,
                 mime: part.mimeType,
               })
-            } else if (part.uri && part.uri.startsWith("http:")) {
+            } else if (part.uri && isHttpUri(part.uri)) {
               parts.push({
                 type: "file",
                 url: part.uri,
@@ -1620,6 +1620,15 @@ export namespace ACP {
         type: "text",
         text: uri,
       }
+    }
+  }
+
+  function isHttpUri(uri: string): boolean {
+    try {
+      const protocol = new URL(uri).protocol
+      return protocol === "http:" || protocol === "https:"
+    } catch {
+      return false
     }
   }
 
