@@ -1,6 +1,7 @@
 import { createInterface } from "readline"
 import { Process } from "@/util/process"
 import { normalizeExecutableArgv } from "@/util/command"
+import { withStreamActivity, type StreamActivityGate } from "@/util/stream-activity"
 
 type RequestID = string | number
 
@@ -24,11 +25,19 @@ type JsonRpcInbound =
       params?: Record<string, unknown>
     }
 
+type JsonRpcRequestOptions = {
+  signal?: AbortSignal
+}
+
 export type JsonRpcTransport = ReturnType<typeof JsonRpcLineTransport.create>
 
 export const JsonRpcLineTransport = {
-  create(input: { command: string[]; cwd?: string; env?: NodeJS.ProcessEnv }) {
+  create(input: { command: string[]; cwd?: string; env?: NodeJS.ProcessEnv; requestIdleMs: number }) {
     const command = spawnCommand(input.command)
+    const requestIdleMs = input.requestIdleMs
+    if (!Number.isFinite(requestIdleMs) || requestIdleMs <= 0) {
+      throw new Error(`JSON-RPC requestIdleMs must be a positive finite number (got ${requestIdleMs})`)
+    }
     const proc = Process.spawn(command, {
       cwd: input.cwd,
       env: input.env,
@@ -45,17 +54,67 @@ export const JsonRpcLineTransport = {
       {
         resolve(value: unknown): void
         reject(reason?: unknown): void
+        cleanup(): void
       }
     >()
     const queue: JsonRpcInbound[] = []
     let wake: (() => void) | undefined
     let nextID = 0
     let closed = false
+    let requestGate: StreamActivityGate | undefined
+
+    const clearRequestGate = () => {
+      requestGate?.dispose()
+      requestGate = undefined
+    }
+
     const failAll = (error: unknown) => {
       for (const item of pending.values()) {
+        item.cleanup()
         item.reject(error)
       }
       pending.clear()
+      clearRequestGate()
+    }
+
+    const failTransport = (error: unknown) => {
+      if (closed) return
+      closed = true
+      reader.close()
+      proc.kill("SIGTERM")
+      failAll(error)
+      wake?.()
+    }
+
+    const observeRequestActivity = () => {
+      if (pending.size === 0) return
+      requestGate?.observe()
+    }
+
+    const ensureRequestGate = () => {
+      if (requestGate) {
+        requestGate.observe()
+        return
+      }
+      requestGate = withStreamActivity({
+        idleMs: requestIdleMs,
+        label: `json-rpc request: ${command.join(" ")}`,
+      })
+      requestGate.signal.addEventListener(
+        "abort",
+        () => {
+          failTransport(requestGate?.signal.reason ?? new Error(`JSON-RPC request idle timeout: ${command.join(" ")}`))
+        },
+        { once: true },
+      )
+    }
+
+    const settlePending = (id: RequestID, settle: () => void) => {
+      const item = pending.get(id)
+      item?.cleanup()
+      pending.delete(id)
+      if (pending.size === 0) clearRequestGate()
+      settle()
     }
 
     const push = (item: JsonRpcInbound) => {
@@ -68,6 +127,8 @@ export const JsonRpcLineTransport = {
       crlfDelay: Infinity,
     })
 
+    proc.stdout.on("data", observeRequestActivity)
+    proc.stderr.on("data", observeRequestActivity)
     ;(async () => {
       try {
         for await (const line of reader) {
@@ -100,17 +161,19 @@ export const JsonRpcLineTransport = {
           if (response.id === undefined) continue
           const item = pending.get(response.id)
           if (!item) continue
-          pending.delete(response.id)
           if (response.error !== undefined) {
-            item.reject(response.error)
+            settlePending(response.id, () => item.reject(response.error))
             continue
           }
-          item.resolve(response.result)
+          settlePending(response.id, () => item.resolve(response.result))
         }
       } catch (error) {
         failAll(error)
       } finally {
         closed = true
+        proc.stdout?.off("data", observeRequestActivity)
+        proc.stderr?.off("data", observeRequestActivity)
+        failAll(new Error(`JSON-RPC transport closed: ${command.join(" ")}`))
         wake?.()
       }
     })()
@@ -128,16 +191,32 @@ export const JsonRpcLineTransport = {
     }
 
     return {
-      async request(method: string, params?: Record<string, unknown>) {
+      async request(method: string, params?: Record<string, unknown>, options?: JsonRpcRequestOptions) {
         const id = ++nextID
+        options?.signal?.throwIfAborted()
+        const onAbort = () => {
+          failTransport(
+            options?.signal?.reason ?? new DOMException(`JSON-RPC request aborted: ${command.join(" ")}`, "AbortError"),
+          )
+        }
+        options?.signal?.addEventListener("abort", onAbort, { once: true })
+        const cleanup = () => options?.signal?.removeEventListener("abort", onAbort)
         const result = new Promise<unknown>((resolve, reject) => {
-          pending.set(id, { resolve, reject })
+          pending.set(id, { resolve, reject, cleanup })
         })
-        send({
-          id,
-          method,
-          params,
-        })
+        try {
+          ensureRequestGate()
+          send({
+            id,
+            method,
+            params,
+          })
+        } catch (error) {
+          cleanup()
+          pending.delete(id)
+          if (pending.size === 0) clearRequestGate()
+          throw error
+        }
         return result
       },
       async respond(input: { id: RequestID; result?: Record<string, unknown>; error?: Record<string, unknown> }) {
@@ -192,6 +271,7 @@ export const JsonRpcLineTransport = {
         closed = true
         reader.close()
         proc.kill("SIGTERM")
+        failAll(new Error(`JSON-RPC transport closed: ${command.join(" ")}`))
       },
     }
   },
