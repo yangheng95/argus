@@ -1379,7 +1379,7 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         return c.json(
-          await EngineService.retryTask(c.req.valid("param").taskID).catch((error) => {
+          await EngineService.replanTask(c.req.valid("param").taskID).catch((error) => {
             if (error instanceof PlannerFailureError) {
               throw new HTTPException(503, {
                 message: error.message,
