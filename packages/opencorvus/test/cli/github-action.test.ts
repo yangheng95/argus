@@ -1,5 +1,7 @@
 import { test, expect, describe } from "bun:test"
-import { extractResponseText, formatPromptTooLargeError } from "../../src/cli/cmd/github"
+import fs from "fs"
+import path from "path"
+import { extractResponseText, formatPromptTooLargeError, summarizeGitHubActionResponse } from "../../src/cli/cmd/github"
 import type { Message } from "../../src/session/message"
 
 // Helper to create minimal valid parts
@@ -193,5 +195,55 @@ describe("formatPromptTooLargeError", () => {
     expect(result).toInclude("img1.png (3 KB)")
     expect(result).toInclude("img2.jpg (6 KB)")
     expect(result).toInclude("img3.gif (9 KB)")
+  })
+})
+
+describe("summarizeGitHubActionResponse", () => {
+  test("uses the model-generated short title", async () => {
+    const prompts: string[] = []
+    const result = await summarizeGitHubActionResponse("Implemented the fix and updated tests.", async (message) => {
+      prompts.push(message)
+      return "Fix auth checks"
+    })
+
+    expect(result).toBe("Fix auth checks")
+    expect(prompts).toEqual([
+      "Summarize the following in less than 40 characters:\n\nImplemented the fix and updated tests.",
+    ])
+  })
+
+  test("propagates summary model failures instead of synthesizing a commit title", async () => {
+    await expect(
+      summarizeGitHubActionResponse("response", async () => {
+        throw new Error("summary model failed")
+      }),
+    ).rejects.toThrow("summary model failed")
+  })
+
+  test("keeps summary generation fail-closed before GitHub mutations", () => {
+    const source = fs.readFileSync(path.resolve(import.meta.dir, "../../src/cli/cmd/github.ts"), "utf8")
+    const summarizeStart = source.indexOf("async function summarize(response: string)")
+    const chatStart = source.indexOf("async function chat(message: string")
+    const summarizeSource = source.slice(summarizeStart, chatStart)
+
+    expect(summarizeStart).toBeGreaterThanOrEqual(0)
+    expect(chatStart).toBeGreaterThan(summarizeStart)
+    expect(summarizeSource).toContain("summarizeGitHubActionResponse(response, chat)")
+    expect(summarizeSource).not.toContain("catch")
+    expect(source).not.toContain("Fix issue:")
+
+    const mutationCalls = [
+      "await pushToNewBranch(summary, branch, uncommittedChanges, isScheduleEvent)",
+      "await pushToLocalBranch(summary, uncommittedChanges)",
+      "await pushToForkBranch(summary, prData, uncommittedChanges)",
+      "await pushToNewBranch(summary, branch, uncommittedChanges, false)",
+    ]
+
+    for (const mutationCall of mutationCalls) {
+      const mutationIndex = source.indexOf(mutationCall)
+      expect(mutationIndex).toBeGreaterThanOrEqual(0)
+      const summaryIndex = source.lastIndexOf("const summary = await summarize(response)", mutationIndex)
+      expect(summaryIndex).toBeGreaterThanOrEqual(0)
+    }
   })
 })

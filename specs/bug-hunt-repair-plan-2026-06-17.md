@@ -3590,3 +3590,48 @@ LINE:
 - Raman confirmed BH-077 was still present in HEAD `1e18eff61d`: missing agents and subagents returned `undefined`, then `session/prompt` and `command-exec` paths interpreted `undefined` as default agent selection.
 - Raman identified the same root cause: CLI collapses "explicit invalid agent" into "agent omitted"; server-side default selection is only valid for genuinely omitted agents.
 - Raman recommended adding handler-level tests that invalid prompt and command invocations exit before session creation or prompt/command submission; the final test suite includes mocked SDK assertions for both paths.
+
+## Batch P1-BJ: BH-078 GitHub action summary failures must stop git mutation
+
+### Findings
+
+- BH-078 targets `packages/opencorvus/src/cli/cmd/github.ts::summarize(...)`.
+- The GitHub action flow calls `summarize(response)` only after the agent has produced dirty work and immediately before infrastructure `git add/commit/push` and PR creation.
+- Current `summarize(...)` catches every summary model failure, derives a synthetic `Fix issue: <title>` string, and lets the caller continue into commit/push/PR mutation.
+- That synthetic title is a fallback: it hides a model failure and changes repository state after the action has lost the ability to produce the intended commit/PR title.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/cli/cmd/github.ts::GithubRunCommand` owns GitHub action event routing and the outer failure handler that records `core.setFailed(...)`, comments user-facing errors for user events, and restores git config.
+- `packages/opencorvus/src/cli/cmd/github.ts::summarize(...)` is the only summary-title helper and is called before every infrastructure mutation path.
+- Repo-event dirty path calls `summarize(response)`, then `pushToNewBranch(...)`, then `createPR(...)`.
+- Local PR dirty path calls `summarize(response)`, then `pushToLocalBranch(...)`.
+- Fork PR dirty path calls `summarize(response)`, then `pushToForkBranch(...)`.
+- Issue dirty path calls `summarize(response)`, then `pushToNewBranch(...)`, then `createPR(...)`, then comments the PR result.
+- `packages/opencorvus/src/cli/cmd/github.ts::chat(...)` wraps `SessionPrompt.prompt(...)` and already throws on assistant errors, prompt-too-large errors, missing text, and failed tool-only response summarization.
+- `packages/opencorvus/test/cli/github-action.test.ts` currently covers response extraction and prompt-too-large formatting, but not summary-title failure propagation.
+
+### Fix Shape
+
+- Extract a small exported `summarizeGitHubActionResponse(response, chat)` helper that builds the existing "less than 40 characters" prompt and returns the model-produced summary.
+- Make the nested `summarize(...)` delegate to that helper without catching errors.
+- Let summary failures propagate to the existing outer GitHub action catch block, which fails the action before push/PR creation.
+- Remove the `Fix issue: ...` fallback entirely. Do not replace it with a different fallback title, retry, prompt, route gate, or git mutation guard.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/cli/github-action.test.ts`.
+- Assert `summarizeGitHubActionResponse(...)` sends the expected short-title prompt and returns the chat result.
+- Assert a thrown summary chat error propagates and no `Fix issue:` text is synthesized.
+- Add a source-level guard that `github.ts::summarize(...)` contains no `catch`, delegates to `summarizeGitHubActionResponse(...)`, and each infrastructure mutation call remains after a local `const summary = await summarize(response)`.
+- Add `packages/opencorvus/test/cli/github-action-run.test.ts` to run the mocked issue dirty flow through `GithubRunCommand.handler(...)`: main chat succeeds and writes a dirty file, summary chat throws, the action fails, no pull request is created, no synthetic title appears, commit count does not advance after the summary boundary, and the index is not staged by infrastructure `git add`.
+
+### Verification
+
+- Focused GitHub action tests passed: `bun test packages/opencorvus/test/cli/github-action-run.test.ts packages/opencorvus/test/cli/github-action.test.ts packages/opencorvus/test/cli/github-remote.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+
+### Independent Review Feedback
+
+- Galileo confirmed BH-078 was still present in HEAD `73711ecc5a`: `summarize(response)` caught every summary model failure and returned `Fix issue: ${title}`.
+- Galileo identified the same root cause: commit/PR title generation failure was treated as recoverable, hiding the model failure and continuing into repository mutation.
+- Galileo required a flow-level regression beyond helper/source tests; this batch adds the issue dirty handler test that verifies no post-summary git staging/commit and no PR creation when summary generation fails.
