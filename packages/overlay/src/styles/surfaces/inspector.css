@@ -1017,17 +1017,24 @@
    through the three status modifier classes — those variants
    live next to the base so per-status chrome stays in one place. */
 .gwg-header {
+  appearance: none;
+  -webkit-appearance: none;
   display: flex;
+  width: 100%;
   align-items: center;
   gap: calc(4px * var(--ui-scale));
+  margin: 0;
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: 0;
   cursor: pointer;
   user-select: none;
+  font: inherit;
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
   min-height: calc(26px * var(--ui-scale));
   line-height: 1.22;
+  text-align: left;
   background: var(--oc-header-bg);
   transition:
     background var(--ui-duration-base) var(--ui-timing-standard),

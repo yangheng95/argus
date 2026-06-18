@@ -1650,13 +1650,26 @@ describe("overlay architecture guards", () => {
   test("gwg header + status icon are owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+    const goalWorkflowGroup = readText(join(OVERLAY_ROOT, "src/components/GoalWorkflowGroup.tsx"))
 
     for (const className of ["gwg-header", "gwg-title-row", "gwg-status-icon", "gwg-title", "gwg-revision"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
+    expect(goalWorkflowGroup).toContain("<button")
+    expect(goalWorkflowGroup).toContain('type="button"')
+    expect(goalWorkflowGroup).toContain('class="gwg-header"')
+    expect(goalWorkflowGroup).toContain("aria-expanded={expanded()}")
+    expect(goalWorkflowGroup).not.toContain('role="button"')
+    expect(goalWorkflowGroup).not.toContain('tabindex="0"')
+    expect(goalWorkflowGroup).not.toContain("onKeyDown={(e) =>")
     expect(inspectorSurface).toMatch(/\.gwg-header:focus-visible\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?appearance:\s*none;/)
+    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?-webkit-appearance:\s*none;/)
+    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?border:\s*0;/)
+    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?font:\s*inherit;/)
+    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?text-align:\s*left;/)
     for (const variant of ["passed", "failed", "running"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`))
       expect(inspectorSurface).toMatch(
