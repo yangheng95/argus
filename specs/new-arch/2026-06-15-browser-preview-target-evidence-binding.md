@@ -19,14 +19,14 @@ checking that the verification request belongs to the current target.
 
 ## Call Point Sweep
 
-| Surface | Call point | Decision |
-| --- | --- | --- |
-| Overlay panel | `packages/overlay/src/components/BrowserPreviewPanel.tsx` `verificationRequest` | Keep the existing request shape and use it as the ownership key. |
-| Overlay panel | `BrowserPreviewPanel.tsx` `renderedEvidence()` | Only use `verification()` when request `taskID` and `targetID` match the current resolved target. |
-| Overlay panel | `BrowserPreviewPanel.tsx` evidence status block | Display loading/result/error only for the current target request; old target results must be ignored after candidate selection. |
-| Overlay panel | `BrowserPreviewPanel.tsx` capture button and auto-capture effect | Avoid coupling current target availability to an unrelated old verification request. |
-| Overlay service | `packages/overlay/src/services/browser-preview.ts` | No contract change; target selection and capture requests already carry explicit `targetID`. |
-| Browser E2E | `packages/overlay/test/browser/browser-preview-evidence.test.ts` | After selecting an alternate target, assert the stale desktop capture summary disappears before the alternate target gets new evidence. |
+| Surface         | Call point                                                                      | Decision                                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Overlay panel   | `packages/overlay/src/components/BrowserPreviewPanel.tsx` `verificationRequest` | Keep the existing request shape and use it as the ownership key.                                                                        |
+| Overlay panel   | `BrowserPreviewPanel.tsx` `renderedEvidence()`                                  | Only use `verification()` when request `taskID` and `targetID` match the current resolved target.                                       |
+| Overlay panel   | `BrowserPreviewPanel.tsx` evidence status block                                 | Display loading/result/error only for the current target request; old target results must be ignored after candidate selection.         |
+| Overlay panel   | `BrowserPreviewPanel.tsx` capture button and auto-capture effect                | Avoid coupling current target availability to an unrelated old verification request.                                                    |
+| Overlay service | `packages/overlay/src/services/browser-preview.ts`                              | No contract change; target selection and capture requests already carry explicit `targetID`.                                            |
+| Browser E2E     | `packages/overlay/test/browser/browser-preview-evidence.test.ts`                | After selecting an alternate target, assert the stale desktop capture summary disappears before the alternate target gets new evidence. |
 
 ## Acceptance
 

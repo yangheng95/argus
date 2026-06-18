@@ -7,7 +7,7 @@ Worker sessions follow the **standard agentic loop**: LLM emits tool-call → to
 
 ## Three states
 
-`SessionLoop` (`packages/opencorvus/src/session/loop.ts:50`) is always in one of:
+`SessionLoop` (`packages/opencorvus/src/session/loop.ts`) is always in one of:
 
 | State         | Meaning                                                       | Exit                     |
 | ------------- | ------------------------------------------------------------- | ------------------------ |
@@ -28,7 +28,7 @@ Each tool-call returned by the LLM is routed by `SessionToolResolver` (`src/sess
 
 ## Sub-tasks
 
-`TaskTool` spawns sub-tasks that recurse into a new SessionLoop via `runSubtask` (`src/session/loop.ts:88`). This supports arbitrary nesting: main agent → research sub-agent → …
+`TaskTool` spawns sub-tasks that recurse into a new SessionLoop via `runSubtask` (`src/session/loop.ts`). This supports arbitrary nesting: main agent → research sub-agent → …
 
 ## Outer loop wiring
 
@@ -53,7 +53,7 @@ Reasoning models must use `toolChoice: "auto"`, not `"required"`. With `required
 
 ### 3. Stall-based timeouts, not wall-clock timeouts
 
-Tool-call timeouts are **inactivity timeouts** — long-running build/test calls are fine as long as stdout/stderr keeps flowing. `OPENCORVUS_TOOL_TIMEOUT_MS` controls this. Wall-clock timeouts are wrong.
+Tool-call timeouts are **inactivity timeouts**: long-running build/test calls are fine as long as stdout/stderr keeps flowing. Bash uses the bash tool inactivity timeout, and `opencorvus run` event-stream stalls can be tuned with `OPENCORVUS_RUN_STALL_TIMEOUT_MS`. Wall-clock timeouts are wrong.
 
 ### 4. Tool-call outputs are JSON strings
 

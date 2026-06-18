@@ -26,7 +26,7 @@ describe("mission task title format", () => {
         const firstTaskID = await EngineService.createTask({
           source: "mission",
           title: "Implement settings route",
-          request: "Implement settings route.\n\n## Original user input\n\"ship it\"",
+          request: 'Implement settings route.\n\n## Original user input\n"ship it"',
           queue: true,
           metadata: {
             actor: "mission",
@@ -36,7 +36,7 @@ describe("mission task title format", () => {
         const secondTaskID = await EngineService.createTask({
           source: "mission",
           title: "Verify delivery evidence",
-          request: "Verify delivery evidence.\n\n## Original user input\n\"ship it\"",
+          request: 'Verify delivery evidence.\n\n## Original user input\n"ship it"',
           queue: true,
           metadata: {
             actor: "mission",
@@ -68,7 +68,7 @@ describe("mission task title format", () => {
         await expect(
           EngineService.createTask({
             source: "mission",
-            request: "Missing semantic title.\n\n## Original user input\n\"ship it\"",
+            request: 'Missing semantic title.\n\n## Original user input\n"ship it"',
             queue: true,
             metadata: {
               actor: "mission",

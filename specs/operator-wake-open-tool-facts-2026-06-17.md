@@ -21,19 +21,19 @@ an open tool part and bypassed the orchestrator LLM's next real wake.
 Command:
 
 ```powershell
-rg "appendAndWakeTaskOperatorMessage|reopenActiveRunForOperatorWake|dispatchTaskLoop|interrupt: true|recordOrchestratorSessionErrorEnvelope|recordOrchestratorStreamError|recent_stream_failures|recent_agent_failures|recent_tool_execute_failures|toModelMessages|Session.treeInProject|Message.parts|PartTable" packages/opencorvus/src packages/opencorvus/test -n
+rg "appendAndWakeTaskOperatorMessage|dispatchTaskLoop|interrupt: true|recordOrchestratorSessionErrorEnvelope|recordOrchestratorStreamError|recent_stream_failures|recent_agent_failures|recent_tool_execute_failures|toModelMessages|Session.treeInProject|Message.parts|PartTable" packages/opencorvus/src packages/opencorvus/test -n
 ```
 
 Relevant findings:
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Operator wake | `task-api/index.ts::appendAndWakeTaskOperatorMessage` persists a real user message, reopens stale blocked runs, then calls `dispatchTaskLoop(... interrupt: true)`. | Keep. This is the natural wake boundary. |
-| Task loop | `orchestrator/loop.ts` runs one orchestrator decision pass and explicitly does not synthesize state-machine reactions. | Keep. Do not add queue gates. |
-| Orchestrator stream failures | `orchestrator/agent.ts::recordOrchestratorSessionErrorEnvelope` writes `orchestrator-stream-error`; `describe.ts` renders it for the next wake. | Reuse the pattern conceptually: facts in describe, LLM decides. |
-| Existing orphan facts | `goal-status.ts`, `workflow.ts`, and `describe.ts` already project owner-orphan goal/run facts without forcing redispatch. | Keep. The missing case is run-less open tool parts. |
-| Message replay | `session/message.ts::toModelMessages` only replays completed/error tool parts. Pending/running tool parts are not provider-visible content. | Do not mutate message history to fabricate tool results. Surface the fact in describe instead. |
-| Startup convergence | `engine/writer.ts::convergeDeadOwnerLiveExecution` handles live goal attempts by owner death. | Do not extend it to run-less open tool parts; that was the rejected hard-rule path. |
+| Area                         | Evidence                                                                                                                                                                                                                        | Decision                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Operator wake                | `task-api/index.ts::appendAndWakeTaskOperatorMessage` persists a real user message, reactivates terminal tasks for that user input, then calls `dispatchTaskLoop(... interrupt: true)`. It does not rewrite blocked run status. | Keep. This is the natural wake boundary.                                                       |
+| Task loop                    | `orchestrator/loop.ts` runs one orchestrator decision pass and explicitly does not synthesize state-machine reactions.                                                                                                          | Keep. Do not add queue gates.                                                                  |
+| Orchestrator stream failures | `orchestrator/agent.ts::recordOrchestratorSessionErrorEnvelope` writes `orchestrator-stream-error`; `describe.ts` renders it for the next wake.                                                                                 | Reuse the pattern conceptually: facts in describe, LLM decides.                                |
+| Existing orphan facts        | `goal-status.ts`, `workflow.ts`, and `describe.ts` already project owner-orphan goal/run facts without forcing redispatch.                                                                                                      | Keep. The missing case is run-less open tool parts.                                            |
+| Message replay               | `session/message.ts::toModelMessages` only replays completed/error tool parts. Pending/running tool parts are not provider-visible content.                                                                                     | Do not mutate message history to fabricate tool results. Surface the fact in describe instead. |
+| Startup convergence          | `engine/writer.ts::convergeDeadOwnerLiveExecution` handles live goal attempts by owner death.                                                                                                                                   | Do not extend it to run-less open tool parts; that was the rejected hard-rule path.            |
 
 ## Fix
 

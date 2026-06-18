@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test"
-import { extractInformationMissingBlock, messageHasInformationMissing } from "../../src/agent/runner"
+import {
+  AgentRunError,
+  buildInformationMissingError,
+  extractInformationMissingBlock,
+  messageHasInformationMissing,
+} from "../../src/agent/runner"
 
 /**
  * Pure-function tests for the INFORMATION MISSING detection helpers
- * called by `runAgentSession` immediately before host process.exit.
- * The runner's exit wiring itself is not tested here (process.exit
- * cannot be stubbed without spawning a child process); the contract
- * is "if helper returns true, host exits", and the helper is the unit
- * under test.
+ * called by `runAgentSession` immediately before the run is failed.
  */
 
 describe("messageHasInformationMissing", () => {
@@ -180,5 +181,20 @@ describe("extractInformationMissingBlock", () => {
         parts: [{ type: "text", text: "<INFORMATION MISSING><item>x</item></INFORMATION MISSING>" }],
       }),
     ).toBeNull()
+  })
+})
+
+describe("buildInformationMissingError", () => {
+  test("returns a non-retryable AgentRunError instead of a process-exit contract", () => {
+    const error = buildInformationMissingError({
+      kind: "build",
+      agentName: "build",
+      block: "<INFORMATION MISSING><item>x</item></INFORMATION MISSING>",
+    })
+
+    expect(error).toBeInstanceOf(AgentRunError)
+    expect(error.nonRetryable).toBe(true)
+    expect(error.message).toContain("INFORMATION MISSING detected in build")
+    expect(error.cause).toBeInstanceOf(Error)
   })
 })

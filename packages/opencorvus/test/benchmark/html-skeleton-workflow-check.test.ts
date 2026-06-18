@@ -348,7 +348,10 @@ describe("html skeleton workflow check", () => {
       path.join(passingFrontendDesignDir, "frontend-template.md"),
       "- role: visual_baseline_input\nvisual-html-skeleton/index.html\nvisual-diff\nsubmit_frontend_template\n",
     )
-    await Bun.write(path.join(passingFrontendDesignDir, "evidence-source-manifest.md"), "web-clone-source/reference.png")
+    await Bun.write(
+      path.join(passingFrontendDesignDir, "evidence-source-manifest.md"),
+      "web-clone-source/reference.png",
+    )
     await Bun.write(path.join(passingFrontendDesignDir, "frontend-design-process-trace.json"), "{}")
     await Bun.write(path.join(passingFrontendDesignDir, "frontend-design-iteration-state.json"), "{}")
 

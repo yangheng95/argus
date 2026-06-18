@@ -66,5 +66,5 @@ test("chat debug info is copyable from the conversation title for standalone ses
   expect(debugInfo).toContain("selected.source: ${source.kind}:${source.id}")
   expect(debugInfo).toContain("top.level: ${cardTree.order.length}")
   expect(main).toContain("buildChatDebugBlob(boardStore.board, selectedSource, cardTreeStore)")
-  expect(main).toContain("selectedSource?.kind === \"session\"")
+  expect(main).toContain('selectedSource?.kind === "session"')
 })

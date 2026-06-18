@@ -139,6 +139,6 @@ describe("composer.attach → messageStore.chatAttachments wire (audit W2-V12)",
     setComposerAttachmentInputEnabled(true)
     expect(canAcceptComposerAttachment()).toBe(true)
     expect(CHAT_COMPOSER).toContain("setComposerAttachmentInputEnabled(props.enabled)")
-    expect(COMPOSER_ATTACH).toContain('if (!canAcceptComposerAttachment()) return')
+    expect(COMPOSER_ATTACH).toContain("if (!canAcceptComposerAttachment()) return")
   })
 })

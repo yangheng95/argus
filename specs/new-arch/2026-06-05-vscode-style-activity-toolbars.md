@@ -1,7 +1,13 @@
 # VS Code Style Activity Toolbars For Overlay Side Panels
 
 Date: 2026-06-05
-Status: investigated, specified, and used for implementation
+Status: implemented toolbar history; TUI-host requirements superseded
+
+> The side-toolbar investigation remains historical implementation evidence.
+> Requirements below that name `rightPanelTui`, `TuiHostPanel`,
+> `TuiRuntimePanel`, or an embedded right-sidebar TUI host were superseded by
+> `2026-06-10-tui-removal-plan.md` and the later acceptance-panel tests that
+> keep those paths absent.
 
 ## Acronyms
 

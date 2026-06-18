@@ -27,10 +27,7 @@ async function readManifest(): Promise<NegativeFixtureManifest> {
   return (await Bun.file(manifestPath).json()) as NegativeFixtureManifest
 }
 
-function reportForFixture(
-  item: NegativeFixtureManifest["cases"][number],
-  accepted: boolean,
-): VisualQaReport {
+function reportForFixture(item: NegativeFixtureManifest["cases"][number], accepted: boolean): VisualQaReport {
   const imageRef = path.join(fixtureRoot, item.image).replaceAll("\\", "/")
   return {
     accepted,

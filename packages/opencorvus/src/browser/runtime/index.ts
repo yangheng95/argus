@@ -64,7 +64,7 @@ export namespace BrowserRuntime {
   }
 
   export async function findBrowserExecutable(override?: string): Promise<string> {
-    const explicit = override ?? process.env.OPENCORVUS_BROWSER_EXECUTABLE ?? process.env.BROWSER_EXECUTABLE
+    const explicit = override ?? process.env.OPENCORVUS_BROWSER_EXECUTABLE
     if (explicit) {
       await fs.access(explicit).catch(() => {
         throw new RuntimeError({

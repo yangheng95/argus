@@ -10,12 +10,12 @@ or legacy comparison rows pollute `latestEvidenceIDs` and evidence read routes.
 
 ## Call Points
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Persisted evidence schema | `packages/opencorvus/src/browser-preview/persist.ts` | Require an explicit known `operationKind`; do not default missing values to preview capture. |
-| Evidence row parser | `packages/opencorvus/src/browser-preview/persist.ts` | Reject rows whose `operation_kind` is absent or not one of the two operation kinds. |
-| Latest capture query | `packages/opencorvus/src/browser-preview/persist.ts` | Include only rows with `operation_kind === "preview-capture"`. |
-| Evidence JSON/PNG routes | `packages/opencorvus/src/server/routes/browser-preview.ts` | Keep routing through readable evidence helpers so malformed rows resolve to 404. |
+| Surface                   | File                                                             | Decision                                                                                                  |
+| ------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Persisted evidence schema | `packages/opencorvus/src/browser-preview/persist.ts`             | Require an explicit known `operationKind`; do not default missing values to preview capture.              |
+| Evidence row parser       | `packages/opencorvus/src/browser-preview/persist.ts`             | Reject rows whose `operation_kind` is absent or not one of the two operation kinds.                       |
+| Latest capture query      | `packages/opencorvus/src/browser-preview/persist.ts`             | Include only rows with `operation_kind === "preview-capture"`.                                            |
+| Evidence JSON/PNG routes  | `packages/opencorvus/src/server/routes/browser-preview.ts`       | Keep routing through readable evidence helpers so malformed rows resolve to 404.                          |
 | Route regression coverage | `packages/opencorvus/test/server/browser-preview-routes.test.ts` | Insert malformed rows directly and assert they do not become latest evidence or readable route artifacts. |
 
 ## Implementation

@@ -93,7 +93,8 @@ export interface SelectTaskOptions {}
 
 function taskPath(taskID: string, suffix = ""): string {
   const item = taskByID(taskID)
-  const directory = typeof item?.task?.directory === "string" && item.task.directory.trim() ? item.task.directory : activeDirectory()
+  const directory =
+    typeof item?.task?.directory === "string" && item.task.directory.trim() ? item.task.directory : activeDirectory()
   return taskScopedPath(taskID, directory, suffix)
 }
 
@@ -329,7 +330,7 @@ export async function deleteTask(taskID: string): Promise<boolean> {
   } catch (e) {
     console.error("[deleteTask] failed", { error: String(e), taskID })
     if (wasActive && e instanceof ApiError && e.status === 404) {
-      await loadTasks().catch(() => undefined)
+      await loadTasks()
       return true
     }
     return false

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES } from "../../src/orchestrator/stateful-tool-names"
 import { Message } from "../../src/session/message"
 import { Log } from "../../src/util/log"
 
@@ -42,5 +43,23 @@ describe("STATEFUL_SNAPSHOT_TOOLS registry consistency", () => {
     // this module exists for vanish silently. An empty set is almost
     // certainly a mistake — fail loudly.
     expect(Message.STATEFUL_SNAPSHOT_TOOLS.size).toBeGreaterThan(0)
+  })
+
+  test("every no-decision observation tool name is a real orchestrator tool", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_no_decision_observation_test",
+          agentSessionID: "ses_no_decision_observation_test",
+          signal: new AbortController().signal,
+          workflow: undefined,
+          workflowState: undefined,
+        })
+        const registered = new Set(Object.keys(tools))
+        const missing = ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES.filter((name) => !registered.has(name))
+        expect(missing).toEqual([])
+      },
+    })
   })
 })

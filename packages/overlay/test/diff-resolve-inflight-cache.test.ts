@@ -2,25 +2,12 @@ import { beforeEach, expect, mock, test } from "bun:test"
 
 let acceptanceCalls = 0
 let vcsCalls = 0
-let scenario: "acceptance-inflight" | "vcs-backfill" | "vcs-inflight" | "vcs-non-text" = "acceptance-inflight"
 const boardStore: any = {
   board: null,
   changes: [],
   selectedSource: null,
   snapshotVersion: "",
 }
-
-const VCS_PATCH = [
-  "Index: src/live-file.ts",
-  "===================================================================",
-  "--- src/live-file.ts",
-  "+++ src/live-file.ts",
-  "@@ -1,2 +1,3 @@",
-  " export const value = 1;",
-  "+export const next = 2;",
-  " export const end = true;",
-  "",
-].join("\n")
 
 mock.module("../src/services/api", () => ({
   ApiError: class ApiError extends Error {},
@@ -34,40 +21,7 @@ mock.module("../src/services/api", () => ({
   apiJson: async (path: string) => {
     if (path === "vcs/diff") {
       vcsCalls += 1
-      if (scenario === "vcs-backfill") {
-        return [
-          {
-            file: "src/live-file.ts",
-            patch: VCS_PATCH,
-            additions: 1,
-            deletions: 0,
-            status: "modified",
-          },
-        ]
-      }
-      if (scenario === "vcs-inflight") {
-        if (vcsCalls === 1) return []
-        return [
-          {
-            file: "src/live-file.ts",
-            patch: VCS_PATCH,
-            additions: 1,
-            deletions: 0,
-            status: "modified",
-          },
-        ]
-      }
-      if (scenario === "vcs-non-text") {
-        return [
-          {
-            file: "assets/logo.png",
-            additions: 0,
-            deletions: 0,
-            status: "added",
-          },
-        ]
-      }
-      return []
+      throw new Error("resolveDiff must not use live VCS diff as a preview source")
     }
     acceptanceCalls += 1
     if (path === "goal-run/gr_inflight_cache/acceptance") {
@@ -87,11 +41,7 @@ mock.module("../src/services/api", () => ({
         },
       }
     }
-    if (
-      path === "goal-run/gr_vcs_backfill/acceptance" ||
-      path === "goal-run/gr_vcs_inflight/acceptance" ||
-      path === "goal-run/gr_vcs_non_text/acceptance"
-    ) {
+    if (path === "goal-run/gr_no_body/acceptance") {
       return { result: { diffs: [] } }
     }
     throw new Error(`unexpected api path ${path}`)
@@ -154,7 +104,6 @@ function setGoalBoard(goalRunID: string, file: string) {
 beforeEach(() => {
   acceptanceCalls = 0
   vcsCalls = 0
-  scenario = "acceptance-inflight"
   setGoalBoard("gr_inflight_cache", "src/new-file.ts")
 })
 
@@ -162,13 +111,7 @@ test("resolveDiff does not cache an in-flight empty acceptance over added-file c
   const target = { goalRunID: "gr_inflight_cache", filePath: "src/new-file.ts" }
 
   const first = await resolveDiff(target)
-  expect(first).toMatchObject({
-    file: "src/new-file.ts",
-    status: "added",
-    additions: 1,
-    deletions: 0,
-  })
-  expect(first?.after).toBeUndefined()
+  expect(first).toBeNull()
 
   const second = await resolveDiff(target)
   expect(second).toMatchObject({
@@ -178,62 +121,15 @@ test("resolveDiff does not cache an in-flight empty acceptance over added-file c
     status: "added",
   })
   expect(acceptanceCalls).toBe(2)
-  expect(vcsCalls).toBe(1)
+  expect(vcsCalls).toBe(0)
 })
 
-test("resolveDiff backfills stub rows from the live VCS patch when acceptance has no body", async () => {
-  scenario = "vcs-backfill"
-  setGoalBoard("gr_vcs_backfill", "src/live-file.ts")
+test("resolveDiff returns null when scoped acceptance has no preview body", async () => {
+  setGoalBoard("gr_no_body", "src/live-file.ts")
 
-  const resolved = await resolveDiff({ goalRunID: "gr_vcs_backfill", filePath: "C:/repo/src/live-file.ts" })
+  const resolved = await resolveDiff({ goalRunID: "gr_no_body", filePath: "C:/repo/src/live-file.ts" })
 
-  expect(resolved).toMatchObject({
-    file: "src/live-file.ts",
-    before: "export const value = 1;\nexport const end = true;",
-    after: "export const value = 1;\nexport const next = 2;\nexport const end = true;",
-    additions: 1,
-    deletions: 0,
-    status: "modified",
-  })
+  expect(resolved).toBeNull()
   expect(acceptanceCalls).toBe(1)
-  expect(vcsCalls).toBe(1)
-})
-
-test("resolveDiff does not cache an empty live VCS diff over later patch content", async () => {
-  scenario = "vcs-inflight"
-  setGoalBoard("gr_vcs_inflight", "src/live-file.ts")
-
-  const target = { goalRunID: "gr_vcs_inflight", filePath: "src/live-file.ts" }
-  const first = await resolveDiff(target)
-  expect(first).toMatchObject({
-    file: "src/live-file.ts",
-    additions: 1,
-    deletions: 0,
-  })
-  expect(first?.before).toBeUndefined()
-
-  const second = await resolveDiff(target)
-  expect(second).toMatchObject({
-    file: "src/live-file.ts",
-    before: "export const value = 1;\nexport const end = true;",
-    after: "export const value = 1;\nexport const next = 2;\nexport const end = true;",
-  })
-  expect(vcsCalls).toBe(2)
-})
-
-test("resolveDiff marks VCS rows without text patches as non-text", async () => {
-  scenario = "vcs-non-text"
-  setGoalBoard("gr_vcs_non_text", "assets/logo.png")
-
-  const resolved = await resolveDiff({ goalRunID: "gr_vcs_non_text", filePath: "assets/logo.png" })
-
-  expect(resolved).toMatchObject({
-    file: "assets/logo.png",
-    additions: 0,
-    deletions: 0,
-    status: "added",
-    isText: false,
-  })
-  expect(resolved?.before).toBeUndefined()
-  expect(resolved?.after).toBeUndefined()
+  expect(vcsCalls).toBe(0)
 })

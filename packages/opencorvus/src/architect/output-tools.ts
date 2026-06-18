@@ -44,6 +44,7 @@ import {
 } from "./contract-graph"
 import { ContractIRSchema } from "./contract-ir"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 const RegisterContractToolInputSchema = ArchitectContractRefSchema.omit({
   ir: true,
@@ -193,6 +194,18 @@ function formatOwnedPathNormalizationNotice(changes: Array<{ from: string; to: s
   return (
     "\nNotice: normalized source-baseline owned_paths to acceptance-root paths: " +
     `${pairs}. frontend-design-skeleton remains a source input, not an implementation target.`
+  )
+}
+
+function forbiddenInternalRuntimeOwnedPaths(goal: RegisteredGoal): string[] {
+  return ProjectRuntimePaths.internalRuntimeRelativePaths(goal.owned_paths)
+}
+
+function formatInternalRuntimeOwnedPathError(goalID: string, paths: readonly string[]): string {
+  return (
+    `Error: goal "${goalID}" owned_paths include internal OpenCorvus runtime path(s): ${paths.join(", ")}. ` +
+    "`owned_paths` are build-owned project outputs and review surfaces; `.opencorvus/r/`, `.opencorvus/runtime/`, `.opencorvus/worktrees/`, `.opencorvus-worktrees/`, and `.opencorvus-meta.json` are host-owned runtime evidence/state. " +
+    "Keep those paths as exact read-only evidence references in the objective, acceptance specs, reference coverage, or contract rationale, and write durable deliverables under project source/docs paths instead."
   )
 }
 
@@ -385,6 +398,15 @@ export function architectValidationFindings(
   }
 
   for (const g of collector.goals) {
+    const internalRuntimePaths = forbiddenInternalRuntimeOwnedPaths(g)
+    if (internalRuntimePaths.length > 0) {
+      blocker(
+        "internal_runtime_owned_path",
+        formatInternalRuntimeOwnedPathError(g.id, internalRuntimePaths),
+        { goal_ids: [g.id] },
+        ["register_goal", "modify_goal"],
+      )
+    }
     if (g.kind === "verification") {
       const featureSourcePaths = g.owned_paths.filter((ownedPath) => !isVerificationOwnedPath(ownedPath))
       if (featureSourcePaths.length > 0) {
@@ -794,6 +816,10 @@ export function createArchitectOutputTools(input: {
       execute: async (goal) => {
         const normalized = normalizeSourceBaselineOwnedPaths(toRegisteredGoal(goal))
         const parsedGoal = normalized.goal
+        const internalRuntimePaths = forbiddenInternalRuntimeOwnedPaths(parsedGoal)
+        if (internalRuntimePaths.length > 0) {
+          return formatInternalRuntimeOwnedPathError(parsedGoal.id, internalRuntimePaths)
+        }
         const unknownContractIDs = unknownContractAuditContractIDs(collector, parsedGoal.acceptance_specs)
         if (unknownContractIDs.length > 0) {
           return `Error: goal "${parsedGoal.id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
@@ -863,6 +889,10 @@ export function createArchitectOutputTools(input: {
         }
         const normalized = normalizeSourceBaselineOwnedPaths(parsedNext.data)
         const next = normalized.goal
+        const internalRuntimePaths = forbiddenInternalRuntimeOwnedPaths(next)
+        if (internalRuntimePaths.length > 0) {
+          return formatInternalRuntimeOwnedPathError(id, internalRuntimePaths)
+        }
         if (updates.acceptance_specs !== undefined) {
           const unknownContractIDs = unknownContractAuditContractIDs(collector, next.acceptance_specs)
           if (unknownContractIDs.length > 0) {
@@ -873,11 +903,12 @@ export function createArchitectOutputTools(input: {
         if (missingScriptRefs.length > 0) {
           return scriptRefError(id, missingScriptRefs)
         }
-        const changedFields = Object.keys(normalizedUpdates).filter((key) =>
-          !isDeepStrictEqual(
-            (prior as unknown as Record<string, unknown>)[key],
-            (next as unknown as Record<string, unknown>)[key],
-          ),
+        const changedFields = Object.keys(normalizedUpdates).filter(
+          (key) =>
+            !isDeepStrictEqual(
+              (prior as unknown as Record<string, unknown>)[key],
+              (next as unknown as Record<string, unknown>)[key],
+            ),
         )
         if (changedFields.length === 0 && normalized.changes.length === 0) {
           return `No changes: goal "${id}" already matches the submitted updates.\nCurrent: ${formatGoalSnapshot(prior)}`

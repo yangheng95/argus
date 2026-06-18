@@ -47,6 +47,8 @@ import type {
   ConfigPromptProfileResponses,
   ConfigPromptResponses,
   ConfigProvidersResponses,
+  ConfigProxyTestErrors,
+  ConfigProxyTestResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
   ControlTimelineResponses,
@@ -114,6 +116,7 @@ import type {
   LogFilesResponses,
   LogReadErrors,
   LogReadResponses,
+  LogTailErrors,
   LogTailResponses,
   LspStatusResponses,
   McpAddErrors,
@@ -137,6 +140,7 @@ import type {
   MissionRenameResponses,
   MissionStatusResponses,
   MissionWakeResponses,
+  NetworkProxyTestRequest,
   OutputFormat,
   PanelCapabilitiesResponses,
   PanelKnowledgeMemoryDeleteResponses,
@@ -175,6 +179,7 @@ import type {
   ProviderAuthResponses,
   ProviderDiscoverModelsErrors,
   ProviderDiscoverModelsResponses,
+  ProviderHexinBudgetResponses,
   ProviderHexinRefreshResponses,
   ProviderListResponses,
   ProviderOauthAuthorizeErrors,
@@ -278,6 +283,8 @@ import type {
   TaskBriefResponses,
   TaskCancelErrors,
   TaskCancelResponses,
+  TaskClearRewindCursorErrors,
+  TaskClearRewindCursorResponses,
   TaskConversationErrors,
   TaskConversationEventsErrors,
   TaskConversationEventsResponses,
@@ -319,8 +326,6 @@ import type {
   TaskReplanResponses,
   TaskRetryErrors,
   TaskRetryResponses,
-  TaskRewindClearErrors,
-  TaskRewindClearResponses,
   TaskRewindErrors,
   TaskRewindResponses,
   TaskRunsErrors,
@@ -675,6 +680,43 @@ export class Terminal extends HeyApiClient {
   }
 }
 
+export class Proxy extends HeyApiClient {
+  /**
+   * Test network proxy
+   *
+   * Run a single HTTP request through the submitted network.proxy settings. This uses the edited proxy draft directly and never falls back to a direct request.
+   */
+  public test<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      networkProxyTestRequest?: NetworkProxyTestRequest
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { key: "networkProxyTestRequest", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ConfigProxyTestResponses, ConfigProxyTestErrors, ThrowOnError>({
+      url: "/config/proxy/test",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Config extends HeyApiClient {
   /**
    * Get configuration
@@ -799,6 +841,11 @@ export class Config extends HeyApiClient {
       ...params,
     })
   }
+
+  private _proxy?: Proxy
+  get proxy(): Proxy {
+    return (this._proxy ??= new Proxy({ client: this.client }))
+  }
 }
 
 export class Attachment extends HeyApiClient {
@@ -853,21 +900,10 @@ export class Attachment extends HeyApiClient {
   public get<ThrowOnError extends boolean = false>(
     parameters: {
       id: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "id" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "id" }] }])
     return (options?.client ?? this.client).get<
       ChannelAttachmentGetResponses,
       ChannelAttachmentGetErrors,
@@ -2987,6 +3023,25 @@ export class Hexin extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).post<ProviderHexinRefreshResponses, unknown, ThrowOnError>({
       url: "/provider/hexin/refresh",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get hexin gateway key budget
+   *
+   * Fetch the Hexin LiteLLM key budget using the configured Hexin provider credential. This route never exposes the API key to the overlay.
+   */
+  public budget<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ProviderHexinBudgetResponses, unknown, ThrowOnError>({
+      url: "/provider/hexin/budget",
       ...options,
       ...params,
     })
@@ -5823,7 +5878,7 @@ export class Session3 extends HeyApiClient {
   /**
    * Reply directly to a task agent session
    *
-   * Append a human-authored message to a non-orchestrator task agent session. This is scoped input for the target agent session, not a global task routing command. Returns 400 InvalidReplyTargetKindError / BuildSessionDirectReplyError for kinds the route refuses, 409 ReplyTargetEnvelopeMissingError when the session has no prior user envelope yet, and 410 SessionRuntimeContractMissingError when the in-memory runtime contract is gone (process restart or terminal collector already satisfied) — the overlay uses these to decide whether to retry, hide the reply box, or surface a generic failure.
+   * Accept a human-authored message aimed at a task agent session. When the target session can be continued in-process, the message is appended there. When the target session cannot be continued directly, the same request is recorded as a task-root operator message with target session facts so the orchestrator can decide the next action.
    */
   public reply<ThrowOnError extends boolean = false>(
     parameters: {
@@ -5892,36 +5947,6 @@ export class Session3 extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<TaskSessionCancelResponses, TaskSessionCancelErrors, ThrowOnError>({
       url: "/task/{taskID}/session/{sessionID}/cancel",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Rewind extends HeyApiClient {
-  /**
-   * Clear the rewind cursor (visibility only; will not unrevert any reset worktree files)
-   */
-  public clear<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TaskRewindClearResponses, TaskRewindClearErrors, ThrowOnError>({
-      url: "/task/{taskID}/rewind/clear",
       ...options,
       ...params,
     })
@@ -6209,9 +6234,9 @@ export class Task extends HeyApiClient {
           >
           severity: "essential" | "important" | "optional" | "pitfall"
           /**
-           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
+           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
            */
-          trigger?: "on_goal" | "on_integrity" | "on_acceptance"
+          trigger?: "on_goal" | "on_integrity"
         }>
         kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
         metadata?: {
@@ -6374,9 +6399,9 @@ export class Task extends HeyApiClient {
             >
             severity: "essential" | "important" | "optional" | "pitfall"
             /**
-             * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
+             * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
              */
-            trigger?: "on_goal" | "on_integrity" | "on_acceptance"
+            trigger?: "on_goal" | "on_integrity"
           }>
           kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
           metadata?: {
@@ -6984,7 +7009,7 @@ export class Task extends HeyApiClient {
   }
 
   /**
-   * Rewind task timeline; optionally also reset worktree files via PatchPart replay
+   * Rewind task timeline; optionally also reset goal worktree files
    */
   public rewind<ThrowOnError extends boolean = false>(
     parameters: {
@@ -7030,6 +7055,38 @@ export class Task extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Clear the rewind cursor (visibility only; will not unrevert any reset worktree files)
+   */
+  public clearRewindCursor<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      TaskClearRewindCursorResponses,
+      TaskClearRewindCursorErrors,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/rewind/clear",
+      ...options,
+      ...params,
     })
   }
 
@@ -7240,11 +7297,6 @@ export class Task extends HeyApiClient {
   private _session?: Session3
   get session(): Session3 {
     return (this._session ??= new Session3({ client: this.client }))
-  }
-
-  private _rewind?: Rewind
-  get rewind2(): Rewind {
-    return (this._rewind ??= new Rewind({ client: this.client }))
   }
 }
 
@@ -7707,9 +7759,9 @@ export class Goal extends HeyApiClient {
         >
         severity: "essential" | "important" | "optional" | "pitfall"
         /**
-         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
+         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
          */
-        trigger?: "on_goal" | "on_integrity" | "on_acceptance"
+        trigger?: "on_goal" | "on_integrity"
       }>
     },
     options?: Options<never, ThrowOnError>,
@@ -8632,23 +8684,12 @@ export class Log extends HeyApiClient {
    */
   public tail<ThrowOnError extends boolean = false>(
     parameters?: {
-      directory?: string
       n?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "n" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<LogTailResponses, unknown, ThrowOnError>({
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "n" }] }])
+    return (options?.client ?? this.client).get<LogTailResponses, LogTailErrors, ThrowOnError>({
       url: "/log/tail",
       ...options,
       ...params,

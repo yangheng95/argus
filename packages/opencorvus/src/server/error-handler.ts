@@ -24,9 +24,9 @@ export function requestID(c: { req: { header(name: string): string | undefined }
 
 export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "NotFoundError") return 404
+  if (err.name === "LogFileNotFoundError") return 404
   if (err.name === "ProviderModelNotFoundError") return 400
   if (err.name === "DirectoryRequiredError") return 400
-  if (err.name === "RequestOriginForbiddenError") return 403
   if (err.name === "InvalidDirectoryError") return 400
   if (err.name === "ChildSessionConfigError") return 400
   if (err.name === "WorktreeNotGitError") return 412

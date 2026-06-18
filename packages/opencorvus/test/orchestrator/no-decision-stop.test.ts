@@ -1,0 +1,145 @@
+import { describe, expect, test } from "bun:test"
+import { classifyOrchestratorDecisionStop } from "../../src/orchestrator/agent"
+
+describe("orchestrator no-decision stop classifier", () => {
+  test("rejects provider tool-call protocol residue emitted as text", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "stop",
+      finalText:
+        'oesmodify_goal:60<|tool_call_argument_begin|>{"goalID":"gol_1"}<|tool_calls_section_end|>',
+      providerVisiblePartCount: 1,
+      wakeTools: [
+        { name: "add_goal", decisionEffect: "decision" },
+        { name: "modify_goal", decisionEffect: "decision" },
+      ],
+    })
+
+    expect(reason).toContain("provider tool-call protocol text")
+  })
+
+  test("rejects an empty assistant shell with no finish or parts", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: undefined,
+      finalText: "",
+      providerVisiblePartCount: 0,
+      wakeTools: [],
+    })
+
+    expect(reason).toContain("empty assistant turn")
+  })
+
+  test("rejects prose stop after only observation tools", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "stop",
+      finalText: "The next dispatchable goals are G12 and G13.",
+      providerVisiblePartCount: 1,
+      wakeTools: [{ name: "read_context", decisionEffect: "observation" }],
+    })
+
+    expect(reason).toContain("only observation or pause tools")
+  })
+
+  test("rejects wait-only stop because wait does not schedule a later wake", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "stop",
+      finalText: "I waited for the external event.",
+      providerVisiblePartCount: 1,
+      wakeTools: [{ name: "wait", decisionEffect: "observation" }],
+    })
+
+    expect(reason).toContain("only observation or pause tools")
+  })
+
+  test("rejects prose stop with no tool calls on an active task", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "stop",
+      finalText: "I will continue the task.",
+      providerVisiblePartCount: 1,
+      wakeTools: [],
+    })
+
+    expect(reason).toContain("without calling any tool")
+  })
+
+  test("rejects non-stop finishes that would enter standby on an active task", () => {
+    const noToolReason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "length",
+      finalText: "I will keep going",
+      providerVisiblePartCount: 1,
+      wakeTools: [],
+    })
+    expect(noToolReason).toContain("finish=length")
+
+    const afterToolReason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "content-filter",
+      finalText: "Build dispatched but final text was filtered.",
+      providerVisiblePartCount: 1,
+      wakeTools: [{ name: "build", decisionEffect: "decision" }],
+    })
+    expect(afterToolReason).toContain("finish=content-filter")
+  })
+
+  test("rejects non-provider-visible empty assistant shells", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: undefined,
+      finalText: "",
+      providerVisiblePartCount: 0,
+      wakeTools: [],
+    })
+
+    expect(reason).toContain("empty assistant turn")
+  })
+
+  test("rejects decision-capable tools that produced no decision effect", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "stop",
+      finalText: "Build was called, but it only returned a precondition message.",
+      providerVisiblePartCount: 1,
+      wakeTools: [{ name: "build", decisionEffect: "none" }],
+    })
+
+    expect(reason).toContain("produced no task decision effect")
+  })
+
+  test("allows stops after real decision tools", () => {
+    expect(
+      classifyOrchestratorDecisionStop({
+        taskTerminal: false,
+        finish: "stop",
+        finalText: "Build dispatched.",
+        providerVisiblePartCount: 1,
+        wakeTools: [{ name: "build", decisionEffect: "decision" }],
+      }),
+    ).toBeUndefined()
+  })
+
+  test("allows terminal tasks and unfinished tool-call turns", () => {
+    expect(
+      classifyOrchestratorDecisionStop({
+        taskTerminal: true,
+        finish: "stop",
+        finalText: "Task completed.",
+        providerVisiblePartCount: 1,
+        wakeTools: [],
+      }),
+    ).toBeUndefined()
+    expect(
+      classifyOrchestratorDecisionStop({
+        taskTerminal: false,
+        finish: "tool-calls",
+        finalText: "",
+        providerVisiblePartCount: 1,
+        wakeTools: [{ name: "read_context", decisionEffect: "observation" }],
+      }),
+    ).toBeUndefined()
+  })
+})

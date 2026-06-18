@@ -13,7 +13,7 @@
 
 ### 2. Sub-agents 是 agent，不是 tool
 
-- Requirements / Architect / Frontend Design / Intent-Analysis / Integrity / Prosecutor / Acceptance 各有自己的 LLM + tools + 推理循环（旧 `Planner` 已下线，相关推理并入 orchestrator 与 build agent）
+- Requirements / Architect / Frontend Design / Frontend Research / Intent-Analysis / Integrity / Visual QA / Fact Check / Goal Workload Analyst 各有自己的 LLM + tools + 推理循环（旧 `Planner`、`Prosecutor`、独立 `Acceptance` review 已下线，相关推理并入 orchestrator、integrity 与 build agent）
 - 它们返回结构化结果，Orchestrator 据此推理下一步
 - 禁止把 sub-agent 降级为 tool function
 

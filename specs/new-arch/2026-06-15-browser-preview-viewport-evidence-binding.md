@@ -9,15 +9,15 @@ tab can load and display mobile evidence under the desktop tab.
 
 ## Call-point sweep
 
-| Call point | Decision |
-| --- | --- |
-| `src/browser-preview/persist.ts` | Replace target-only latest evidence lookup with a viewport-keyed latest evidence map. |
-| `src/browser-preview/target.ts` | Replace `latestEvidenceID` with `latestEvidenceIDs`. Target resolution passes a per-viewport map. |
-| `src/browser-preview/verification-core.ts` | Capture responses return `target.latestEvidenceIDs` for every captured viewport. |
-| `src/server/routes/browser-preview.ts` | Existing target route returns the updated target schema; no new route. |
-| `packages/overlay/src/services/browser-preview.ts` | Replace target type field with `latestEvidenceIDs`. |
-| `BrowserPreviewPanel.tsx` | Load persisted evidence for the selected viewport only and ignore stale evidence whose `targetID` or `viewportID` does not match the current tab. |
-| `packages/sdk/openapi.json` and generated SDK | Regenerate after schema change. |
+| Call point                                         | Decision                                                                                                                                          |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/browser-preview/persist.ts`                   | Replace target-only latest evidence lookup with a viewport-keyed latest evidence map.                                                             |
+| `src/browser-preview/target.ts`                    | Replace `latestEvidenceID` with `latestEvidenceIDs`. Target resolution passes a per-viewport map.                                                 |
+| `src/browser-preview/verification-core.ts`         | Capture responses return `target.latestEvidenceIDs` for every captured viewport.                                                                  |
+| `src/server/routes/browser-preview.ts`             | Existing target route returns the updated target schema; no new route.                                                                            |
+| `packages/overlay/src/services/browser-preview.ts` | Replace target type field with `latestEvidenceIDs`.                                                                                               |
+| `BrowserPreviewPanel.tsx`                          | Load persisted evidence for the selected viewport only and ignore stale evidence whose `targetID` or `viewportID` does not match the current tab. |
+| `packages/sdk/openapi.json` and generated SDK      | Regenerate after schema change.                                                                                                                   |
 
 ## Design
 

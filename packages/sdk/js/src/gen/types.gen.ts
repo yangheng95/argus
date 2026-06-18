@@ -40,13 +40,6 @@ export type BadRequestError = {
   success: false
 }
 
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
-  }
-}
-
 export type ProjectWorktree = {
   name: string
   branch?: string
@@ -229,7 +222,11 @@ export type WhatsappChannelConfig = {
    */
   numberId?: string
   /**
-   * Optional WhatsApp webhook verification token
+   * WhatsApp Meta app secret used to verify webhook signatures
+   */
+  appSecret?: string
+  /**
+   * WhatsApp webhook verification token
    */
   verifyToken?: string
   /**
@@ -306,7 +303,7 @@ export type LineChannelConfig = {
    */
   token?: string
   /**
-   * Optional LINE channel secret for webhook verification
+   * LINE channel secret for webhook verification
    */
   secret?: string
   /**
@@ -355,6 +352,10 @@ export type MattermostChannelConfig = {
    * Mattermost bot token
    */
   token?: string
+  /**
+   * Mattermost outgoing webhook token used to verify inbound requests
+   */
+  webhookToken?: string
   /**
    * Optional Mattermost webhook host
    */
@@ -641,7 +642,7 @@ export type ProviderConfig = {
         output: Array<"text" | "audio" | "image" | "video" | "pdf">
       }
       experimental?: boolean
-      status?: "alpha" | "beta" | "deprecated"
+      status?: "alpha" | "beta"
       options?: {
         [key: string]: unknown
       }
@@ -732,6 +733,10 @@ export type McpRemoteConfig = {
    * URL of the remote MCP server
    */
   url: string
+  /**
+   * Remote MCP transport. Use streamable-http for standard remote MCP endpoints or sse for SSE-only servers.
+   */
+  transport: "streamable-http" | "sse"
   /**
    * Enable or disable the MCP server on startup
    */
@@ -1093,7 +1098,7 @@ export type Config = {
        */
       executor_events_idle_ms?: number
       /**
-       * Total wall-clock cap for a single queued task run, ms
+       * Max idle window without queue task progress, ms
        */
       task_queue_run_timeout_ms?: number
     }
@@ -1102,7 +1107,7 @@ export type Config = {
      */
     debug?: {
       /**
-       * When true, the host injects an INFORMATION MISSING fallback section into every agent's system prompt and exits the process with code 99 the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.
+       * When true, the host injects an INFORMATION MISSING diagnostic section into every agent's system prompt and fails the current run the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.
        */
       fail_on_information_missing?: boolean
     }
@@ -1216,6 +1221,19 @@ export type Config = {
   }
 }
 
+export type NetworkProxyTestResponse = {
+  ok: boolean
+  status: "connected" | "error"
+  targetUrl: string
+  statusCode?: number
+  durationMs: number
+  message: string
+}
+
+export type NetworkProxyTestRequest = {
+  proxy: NetworkProxyConfig
+}
+
 export type Model = {
   id: string
   providerID: string
@@ -1282,7 +1300,7 @@ export type Model = {
     input?: number
     output: number
   }
-  status: "alpha" | "beta" | "deprecated" | "active"
+  status: "alpha" | "beta" | "active"
   options: {
     [key: string]: unknown
   }
@@ -1334,11 +1352,7 @@ export type WorktreeCreateInput = {
    */
   startCommand?: string
   /**
-   * Deprecated. Worktree.create always waits until checkout, bootstrap, and startup scripts complete before returning.
-   */
-  checkout?: "sync" | "async"
-  /**
-   * When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. Invalid existing trees (zombie linkage, missing branch, etc.) are rejected by the validity gate before the standard reclaim path runs, so corrupt state never silently survives a retry.
+   * When true and `name` is supplied, return the existing worktree only when `isValid()` confirms its `.git` linkage and `git worktree list` registration. Explicit retry flows use this to continue in a verified previous attempt directory. Invalid existing trees continue through the standard reclaim path, so corrupt state is not preserved.
    */
   reuseIfValid?: boolean
   taskID?: string
@@ -1359,6 +1373,7 @@ export type Workspace = {
 
 export type WorktreeResetInput = {
   directory: string
+  baseRef?: string
 }
 
 export type McpResource = {
@@ -2142,6 +2157,23 @@ export type ProviderAuthMethod = {
   label: string
 }
 
+export type HexinBudget = {
+  maxBudget: number
+  spend: number
+  remaining: number
+  overBudget: boolean
+}
+
+export type HexinBudgetResponse =
+  | {
+      ok: true
+      budget: HexinBudget
+    }
+  | {
+      ok: false
+      error: string
+    }
+
 export type ProviderAuthPrompt = {
   type: "text" | "select"
   key: string
@@ -2182,7 +2214,7 @@ export type AcceptanceDiffSummary = {
 }
 
 export type TaskMessageTarget = {
-  kind: "build_session"
+  kind: "agent_session" | "build_session"
   sessionID: string
   goalID?: string
 }
@@ -2403,6 +2435,13 @@ export type EventServerConnected = {
   }
 }
 
+export type EventServerHeartbeat = {
+  type: "server.heartbeat"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
 export type EventGlobalDisposed = {
   type: "global.disposed"
   properties: {
@@ -2479,7 +2518,7 @@ export type EventSessionError = {
   type: "session.error"
   properties: {
     sessionID?: string
-    error?:
+    error:
       | ProviderAuthError
       | UnknownError
       | MessageOutputLengthError
@@ -3371,6 +3410,7 @@ export type Event =
   | EventProjectUpdated
   | EventServerInstanceDisposed
   | EventServerConnected
+  | EventServerHeartbeat
   | EventGlobalDisposed
   | EventLspClientDiagnostics
   | EventLspUpdated
@@ -3552,7 +3592,19 @@ export type ProjectCurrentInitGitErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type ProjectCurrentInitGitError = ProjectCurrentInitGitErrors[keyof ProjectCurrentInitGitErrors]
@@ -3586,7 +3638,19 @@ export type ProjectCurrentWorktreesDeleteErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type ProjectCurrentWorktreesDeleteError =
@@ -3624,7 +3688,19 @@ export type ProjectCurrentWorktreesErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type ProjectCurrentWorktreesError = ProjectCurrentWorktreesErrors[keyof ProjectCurrentWorktreesErrors]
@@ -3658,7 +3734,19 @@ export type ProjectCurrentCleanupCandidatesErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type ProjectCurrentCleanupCandidatesError =
@@ -3745,7 +3833,19 @@ export type ProjectUpdateErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type ProjectUpdateError = ProjectUpdateErrors[keyof ProjectUpdateErrors]
@@ -3874,6 +3974,36 @@ export type ConfigUpdateResponses = {
 }
 
 export type ConfigUpdateResponse = ConfigUpdateResponses[keyof ConfigUpdateResponses]
+
+export type ConfigProxyTestData = {
+  body?: NetworkProxyTestRequest
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/config/proxy/test"
+}
+
+export type ConfigProxyTestErrors = {
+  /**
+   * Proxy test result for an invalid proxy draft
+   */
+  400: NetworkProxyTestResponse
+}
+
+export type ConfigProxyTestError = ConfigProxyTestErrors[keyof ConfigProxyTestErrors]
+
+export type ConfigProxyTestResponses = {
+  /**
+   * Proxy test result
+   */
+  200: NetworkProxyTestResponse
+}
+
+export type ConfigProxyTestResponse = ConfigProxyTestResponses[keyof ConfigProxyTestResponses]
 
 export type ConfigPromptData = {
   body?: never
@@ -4048,12 +4178,7 @@ export type ChannelAttachmentGetData = {
   path: {
     id: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/channel/attachment/{id}"
 }
 
@@ -4061,7 +4186,19 @@ export type ChannelAttachmentGetErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type ChannelAttachmentGetError = ChannelAttachmentGetErrors[keyof ChannelAttachmentGetErrors]
@@ -4480,6 +4617,22 @@ export type ExperimentalWorkspaceRemoveErrors = {
    * Bad request
    */
   400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type ExperimentalWorkspaceRemoveError =
@@ -4591,9 +4744,6 @@ export type ExperimentalScheduleListData = {
   body?: never
   path?: never
   query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
     directory?: string
   }
   url: "/experimental/schedule"
@@ -4658,9 +4808,6 @@ export type ExperimentalScheduleDeleteData = {
     id: string
   }
   query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
     directory?: string
   }
   url: "/experimental/schedule/{id}"
@@ -4682,9 +4829,6 @@ export type ExperimentalEventscheduleListData = {
   body?: never
   path?: never
   query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
     directory?: string
   }
   url: "/experimental/event-schedule"
@@ -4755,9 +4899,6 @@ export type ExperimentalEventscheduleDeleteData = {
     id: string
   }
   query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
     directory?: string
   }
   url: "/experimental/event-schedule/{id}"
@@ -5052,7 +5193,19 @@ export type SessionConfigGetErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionConfigGetError = SessionConfigGetErrors[keyof SessionConfigGetErrors]
@@ -5109,7 +5262,19 @@ export type SessionConfigUpdateErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionConfigUpdateError = SessionConfigUpdateErrors[keyof SessionConfigUpdateErrors]
@@ -5144,7 +5309,19 @@ export type SessionConversationErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionConversationError = SessionConversationErrors[keyof SessionConversationErrors]
@@ -5290,7 +5467,19 @@ export type SessionDeleteErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionDeleteError = SessionDeleteErrors[keyof SessionDeleteErrors]
@@ -5326,7 +5515,19 @@ export type SessionGetErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionGetError = SessionGetErrors[keyof SessionGetErrors]
@@ -5367,7 +5568,19 @@ export type SessionUpdateErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionUpdateError = SessionUpdateErrors[keyof SessionUpdateErrors]
@@ -5403,7 +5616,19 @@ export type SessionChildrenErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionChildrenError = SessionChildrenErrors[keyof SessionChildrenErrors]
@@ -5442,7 +5667,19 @@ export type SessionTodoErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionTodoError = SessionTodoErrors[keyof SessionTodoErrors]
@@ -5485,7 +5722,19 @@ export type SessionInitErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionInitError = SessionInitErrors[keyof SessionInitErrors]
@@ -5546,7 +5795,19 @@ export type SessionAbortErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionAbortError = SessionAbortErrors[keyof SessionAbortErrors]
@@ -5614,7 +5875,19 @@ export type SessionSummarizeErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionSummarizeError = SessionSummarizeErrors[keyof SessionSummarizeErrors]
@@ -5654,7 +5927,19 @@ export type SessionMessagesErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionMessagesError = SessionMessagesErrors[keyof SessionMessagesErrors]
@@ -5715,7 +6000,19 @@ export type SessionPromptErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionPromptError = SessionPromptErrors[keyof SessionPromptErrors]
@@ -5761,7 +6058,19 @@ export type SessionDeleteMessageErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionDeleteMessageError = SessionDeleteMessageErrors[keyof SessionDeleteMessageErrors]
@@ -5804,7 +6113,19 @@ export type SessionMessageErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionMessageError = SessionMessageErrors[keyof SessionMessageErrors]
@@ -5854,7 +6175,19 @@ export type PartDeleteErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type PartDeleteError = PartDeleteErrors[keyof PartDeleteErrors]
@@ -5901,7 +6234,19 @@ export type PartUpdateErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type PartUpdateError = PartUpdateErrors[keyof PartUpdateErrors]
@@ -5959,7 +6304,19 @@ export type SessionPromptAsyncErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionPromptAsyncError = SessionPromptAsyncErrors[keyof SessionPromptAsyncErrors]
@@ -6008,7 +6365,19 @@ export type SessionPromptAsyncStatusErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionPromptAsyncStatusError = SessionPromptAsyncStatusErrors[keyof SessionPromptAsyncStatusErrors]
@@ -6020,9 +6389,7 @@ export type SessionPromptAsyncStatusResponses = {
   200: {
     taskID: string
     sessionID: string
-    status: "queued" | "retrying" | "running" | "completed" | "failed"
-    retryCount: number
-    maxRetries: number
+    status: "queued" | "running" | "completed" | "failed"
     source: string
     prompt: string
     error: string | null
@@ -6075,7 +6442,19 @@ export type SessionCommandErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionCommandError = SessionCommandErrors[keyof SessionCommandErrors]
@@ -6124,7 +6503,19 @@ export type SessionShellErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionShellError = SessionShellErrors[keyof SessionShellErrors]
@@ -6164,7 +6555,19 @@ export type PermissionReplyErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type PermissionReplyError = PermissionReplyErrors[keyof PermissionReplyErrors]
@@ -6247,7 +6650,19 @@ export type QuestionReplyErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type QuestionReplyError = QuestionReplyErrors[keyof QuestionReplyErrors]
@@ -6283,7 +6698,19 @@ export type QuestionRejectErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type QuestionRejectError = QuestionRejectErrors[keyof QuestionRejectErrors]
@@ -6458,6 +6885,27 @@ export type ProviderHexinRefreshResponses = {
 }
 
 export type ProviderHexinRefreshResponse = ProviderHexinRefreshResponses[keyof ProviderHexinRefreshResponses]
+
+export type ProviderHexinBudgetData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/provider/hexin/budget"
+}
+
+export type ProviderHexinBudgetResponses = {
+  /**
+   * Hexin budget lookup result
+   */
+  200: HexinBudgetResponse
+}
+
+export type ProviderHexinBudgetResponse = ProviderHexinBudgetResponses[keyof ProviderHexinBudgetResponses]
 
 export type ProviderDiscoverModelsData = {
   body: {
@@ -9454,9 +9902,9 @@ export type TaskCreateData = {
         >
         severity: "essential" | "important" | "optional" | "pitfall"
         /**
-         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
+         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
          */
-        trigger?: "on_goal" | "on_integrity" | "on_acceptance"
+        trigger?: "on_goal" | "on_integrity"
       }>
       kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
       metadata?: {
@@ -9619,9 +10067,9 @@ export type TaskCreateData = {
           >
           severity: "essential" | "important" | "optional" | "pitfall"
           /**
-           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
+           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
            */
-          trigger?: "on_goal" | "on_integrity" | "on_acceptance"
+          trigger?: "on_goal" | "on_integrity"
         }>
         kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
         metadata?: {
@@ -9660,7 +10108,19 @@ export type TaskCreateErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskCreateError = TaskCreateErrors[keyof TaskCreateErrors]
@@ -10090,7 +10550,19 @@ export type TaskQueueStartNowErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Task is not queued
    */
@@ -10203,7 +10675,19 @@ export type TaskDeleteErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskDeleteError = TaskDeleteErrors[keyof TaskDeleteErrors]
@@ -10233,7 +10717,19 @@ export type TaskGetErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskGetError = TaskGetErrors[keyof TaskGetErrors]
@@ -10307,7 +10803,19 @@ export type TaskStatusErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskStatusError = TaskStatusErrors[keyof TaskStatusErrors]
@@ -10407,7 +10915,19 @@ export type TaskProjectArchiveErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Task project is not a Git worktree
    */
@@ -10479,7 +10999,19 @@ export type TaskProgressErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskProgressError = TaskProgressErrors[keyof TaskProgressErrors]
@@ -10755,7 +11287,19 @@ export type TaskConversationErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskConversationError = TaskConversationErrors[keyof TaskConversationErrors]
@@ -11244,7 +11788,19 @@ export type TaskConversationSessionErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskConversationSessionError = TaskConversationSessionErrors[keyof TaskConversationSessionErrors]
@@ -11321,7 +11877,19 @@ export type TaskConversationHistoryErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskConversationHistoryError = TaskConversationHistoryErrors[keyof TaskConversationHistoryErrors]
@@ -11399,7 +11967,19 @@ export type TaskConversationEventsErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskConversationEventsError = TaskConversationEventsErrors[keyof TaskConversationEventsErrors]
@@ -11458,7 +12038,19 @@ export type TaskBriefErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskBriefError = TaskBriefErrors[keyof TaskBriefErrors]
@@ -11500,7 +12092,19 @@ export type TaskBoardErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskBoardError = TaskBoardErrors[keyof TaskBoardErrors]
@@ -11919,7 +12523,19 @@ export type TaskTranscriptErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskTranscriptError = TaskTranscriptErrors[keyof TaskTranscriptErrors]
@@ -11958,7 +12574,19 @@ export type TaskOperatorModelContextErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Conflict
    */
@@ -12008,7 +12636,19 @@ export type TaskRunsErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskRunsError = TaskRunsErrors[keyof TaskRunsErrors]
@@ -12064,7 +12704,19 @@ export type TaskInteractionsErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskInteractionsError = TaskInteractionsErrors[keyof TaskInteractionsErrors]
@@ -12134,7 +12786,19 @@ export type TaskMessageErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Conflict
    */
@@ -12189,7 +12853,19 @@ export type TaskInjectErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Conflict
    */
@@ -12211,7 +12887,6 @@ export type TaskInjectResponses = {
     appended: boolean
     orchestratorWoken: boolean
     executorResumed: boolean
-    resumed: boolean
     status: string
   }
 }
@@ -12266,7 +12941,19 @@ export type TaskSessionReplyErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Conflict
    */
@@ -12320,7 +13007,19 @@ export type TaskSessionCancelErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskSessionCancelError = TaskSessionCancelErrors[keyof TaskSessionCancelErrors]
@@ -12356,7 +13055,19 @@ export type TaskCancelErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskCancelError = TaskCancelErrors[keyof TaskCancelErrors]
@@ -12403,7 +13114,19 @@ export type TaskRewindErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskRewindError = TaskRewindErrors[keyof TaskRewindErrors]
@@ -12423,7 +13146,7 @@ export type TaskRewindResponses = {
 
 export type TaskRewindResponse = TaskRewindResponses[keyof TaskRewindResponses]
 
-export type TaskRewindClearData = {
+export type TaskClearRewindCursorData = {
   body?: never
   path: {
     taskID: string
@@ -12437,23 +13160,35 @@ export type TaskRewindClearData = {
   url: "/task/{taskID}/rewind/clear"
 }
 
-export type TaskRewindClearErrors = {
+export type TaskClearRewindCursorErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
-export type TaskRewindClearError = TaskRewindClearErrors[keyof TaskRewindClearErrors]
+export type TaskClearRewindCursorError = TaskClearRewindCursorErrors[keyof TaskClearRewindCursorErrors]
 
-export type TaskRewindClearResponses = {
+export type TaskClearRewindCursorResponses = {
   /**
    * Cursor cleared
    */
   200: boolean
 }
 
-export type TaskRewindClearResponse = TaskRewindClearResponses[keyof TaskRewindClearResponses]
+export type TaskClearRewindCursorResponse = TaskClearRewindCursorResponses[keyof TaskClearRewindCursorResponses]
 
 export type TaskRetryData = {
   body?: never
@@ -12473,7 +13208,19 @@ export type TaskRetryErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskRetryError = TaskRetryErrors[keyof TaskRetryErrors]
@@ -12529,7 +13276,19 @@ export type TaskReplanErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskReplanError = TaskReplanErrors[keyof TaskReplanErrors]
@@ -12585,7 +13344,19 @@ export type TaskFollowupErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskFollowupError = TaskFollowupErrors[keyof TaskFollowupErrors]
@@ -12619,7 +13390,19 @@ export type RunGetErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type RunGetError = RunGetErrors[keyof RunGetErrors]
@@ -12675,7 +13458,19 @@ export type RunBriefErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type RunBriefError = RunBriefErrors[keyof RunBriefErrors]
@@ -12717,7 +13512,19 @@ export type RunAbortErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type RunAbortError = RunAbortErrors[keyof RunAbortErrors]
@@ -12749,7 +13556,19 @@ export type RunAcceptanceErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type RunAcceptanceError = RunAcceptanceErrors[keyof RunAcceptanceErrors]
@@ -12806,7 +13625,19 @@ export type GoalRunAcceptanceErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type GoalRunAcceptanceError = GoalRunAcceptanceErrors[keyof GoalRunAcceptanceErrors]
@@ -12902,7 +13733,19 @@ export type TaskTraceErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskTraceError = TaskTraceErrors[keyof TaskTraceErrors]
@@ -12950,7 +13793,19 @@ export type RunArtifactsErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type RunArtifactsError = RunArtifactsErrors[keyof RunArtifactsErrors]
@@ -12996,7 +13851,19 @@ export type RunEvaluationsErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type RunEvaluationsError = RunEvaluationsErrors[keyof RunEvaluationsErrors]
@@ -13057,7 +13924,19 @@ export type InteractionReplyErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type InteractionReplyError = InteractionReplyErrors[keyof InteractionReplyErrors]
@@ -13117,7 +13996,19 @@ export type InteractionRejectErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type InteractionRejectError = InteractionRejectErrors[keyof InteractionRejectErrors]
@@ -13170,7 +14061,19 @@ export type GoalDeleteErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type GoalDeleteError = GoalDeleteErrors[keyof GoalDeleteErrors]
@@ -13329,9 +14232,9 @@ export type GoalUpdateData = {
       >
       severity: "essential" | "important" | "optional" | "pitfall"
       /**
-       * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
+       * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
        */
-      trigger?: "on_goal" | "on_integrity" | "on_acceptance"
+      trigger?: "on_goal" | "on_integrity"
     }>
   }
   path: {
@@ -13350,7 +14253,19 @@ export type GoalUpdateErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type GoalUpdateError = GoalUpdateErrors[keyof GoalUpdateErrors]
@@ -13386,7 +14301,19 @@ export type TaskUpdateBudgetErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskUpdateBudgetError = TaskUpdateBudgetErrors[keyof TaskUpdateBudgetErrors]
@@ -13422,7 +14349,19 @@ export type TaskUpdateTitleErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskUpdateTitleError = TaskUpdateTitleErrors[keyof TaskUpdateTitleErrors]
@@ -13452,7 +14391,19 @@ export type ExportSessionErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type ExportSessionError = ExportSessionErrors[keyof ExportSessionErrors]
@@ -13748,7 +14699,19 @@ export type McpAuthRemoveErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type McpAuthRemoveError = McpAuthRemoveErrors[keyof McpAuthRemoveErrors]
@@ -13786,7 +14749,19 @@ export type McpAuthStartErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type McpAuthStartError = McpAuthStartErrors[keyof McpAuthStartErrors]
@@ -13832,7 +14807,19 @@ export type McpAuthCallbackErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type McpAuthCallbackError = McpAuthCallbackErrors[keyof McpAuthCallbackErrors]
@@ -13868,7 +14855,19 @@ export type McpAuthAuthenticateErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type McpAuthAuthenticateError = McpAuthAuthenticateErrors[keyof McpAuthAuthenticateErrors]
@@ -14005,7 +15004,19 @@ export type PtyRemoveErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type PtyRemoveError = PtyRemoveErrors[keyof PtyRemoveErrors]
@@ -14037,7 +15048,19 @@ export type PtyGetErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type PtyGetError = PtyGetErrors[keyof PtyGetErrors]
@@ -14079,7 +15102,19 @@ export type PtyUpdateErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type PtyUpdateError = PtyUpdateErrors[keyof PtyUpdateErrors]
@@ -14111,7 +15146,19 @@ export type PtyConnectErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type PtyConnectError = PtyConnectErrors[keyof PtyConnectErrors]
@@ -14244,6 +15291,22 @@ export type LogReadErrors = {
    * Bad request
    */
   400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type LogReadError = LogReadErrors[keyof LogReadErrors]
@@ -14293,6 +15356,22 @@ export type AppLogErrors = {
    * Bad request
    */
   400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type AppLogError = AppLogErrors[keyof AppLogErrors]
@@ -14336,11 +15415,31 @@ export type LogTailData = {
   body?: never
   path?: never
   query?: {
-    directory?: string
     n?: number
   }
   url: "/log/tail"
 }
+
+export type LogTailErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type LogTailError = LogTailErrors[keyof LogTailErrors]
 
 export type LogTailResponses = {
   /**
@@ -14575,6 +15674,10 @@ export type GlobalDbResetData = {
 }
 
 export type GlobalDbResetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
   /**
    * Conflict
    */

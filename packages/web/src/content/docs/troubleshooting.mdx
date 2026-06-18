@@ -14,14 +14,14 @@ Diagnose by symptom. Each entry gives a **check path**, not "try restarting".
 | `opencorvus doctor`          | Run the full diagnostic first                                                                                |
 | Port in use                  | Default 7878; `netstat -ano \| findstr 7878` on Windows                                                      |
 | `OPENCORVUS_SERVER_PASSWORD` | Required when exposing beyond localhost; otherwise startup rejects with `refuses to expose without password` |
-| `ENOSPC`                     | `~/.opencorvus` disk is full                                                                                 |
+| `ENOSPC`                     | The resolved OpenCorvus data or config directory is full                                                     |
 
 ### Overlay launches but can't reach the backend
 
 1. Tray → Restart (restarts backend + reloads frontend)
-2. Inspect `~/.opencorvus/overlay.log`
+2. Inspect the overlay startup log and sidecar log under the resolved OpenCorvus log directory (`$OPENCORVUS_HOME/data/log` when portable)
 3. Probe manually: `GET http://127.0.0.1:<port>/global/health`
-4. Set `OPENCORVUS_OVERLAY_SINGLETON_MODE=kill-old-start-new` to clear stale backends
+4. Stop the stale backend process if the logged PID no longer matches the tray process, then restart the overlay
 
 ## Provider / model
 
@@ -37,7 +37,7 @@ Root cause almost always: **missing provider API key**. Because `Env.state()` sn
 
 `alibaba-coding-plan-cn` is known to hang during peak hours. **Do not** mask by raising stall timeouts:
 
-- Use `--tool-timeout-ms=30000` to fail fast
+- Set `OPENCORVUS_RUN_STALL_TIMEOUT_MS=30000` for `opencorvus run` event-stream stalls
 - Or switch [providers](/docs/providers/)
 
 ## Orchestrator

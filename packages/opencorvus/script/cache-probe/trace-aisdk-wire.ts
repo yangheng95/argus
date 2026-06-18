@@ -10,15 +10,17 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { streamText } from "ai"
 
-const HEXIN_URL = process.env.HEXIN_OPENAI_URL?.trim()
-  ? `${process.env.HEXIN_OPENAI_URL.replace(/\/+$/, "")}/v1`
-  : "https://aimemodeldev.myhexin.com/litellm/v1"
-// Embedded fallback removed — operator must export HEXIN_API_KEY (rule 7).
-const API_KEY = process.env.HEXIN_API_KEY?.trim()
-if (!API_KEY) {
-  console.error("HEXIN_API_KEY is not set — export it before running this script.")
-  process.exit(1)
+function requiredEnv(name) {
+  const value = process.env[name]?.trim()
+  if (!value) {
+    console.error(`${name} is not set — export it before running this script.`)
+    process.exit(1)
+  }
+  return value
 }
+
+const HEXIN_URL = `${requiredEnv("HEXIN_OPENAI_URL").replace(/\/+$/, "")}/v1`
+const API_KEY = requiredEnv("HEXIN_API_KEY")
 
 const originalFetch = globalThis.fetch
 let captured: { url: string; body: any; headers: Record<string, string>; resp?: any } | undefined

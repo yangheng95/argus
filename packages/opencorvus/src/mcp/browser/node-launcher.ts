@@ -109,10 +109,7 @@ export namespace BrowserMCPNodeLauncher {
     return buildSourceBundle(transport)
   }
 
-  export function childSpawnOptions(input: {
-    env: NodeJS.ProcessEnv
-    platform?: NodeJS.Platform
-  }): SpawnOptions {
+  export function childSpawnOptions(input: { env: NodeJS.ProcessEnv; platform?: NodeJS.Platform }): SpawnOptions {
     return {
       cwd: process.cwd(),
       env: input.env,

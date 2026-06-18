@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { AcceptanceVerdict } from "../../src/acceptance/verdict"
+import { AcceptanceReviewVerdict } from "../../src/acceptance/review-verdict"
 
 describe("acceptance verdict schema", () => {
   test("materializes deferred check defaults during parse", () => {
-    const verdict = AcceptanceVerdict.parse({
+    const verdict = AcceptanceReviewVerdict.parse({
       verdict: "rejected",
       summary: "Acceptance is missing required behavior.",
       tool_call_evidence: [
@@ -26,7 +26,7 @@ describe("acceptance verdict schema", () => {
 
   test("rejects null deferred checks instead of treating them as empty", () => {
     expect(() =>
-      AcceptanceVerdict.parse({
+      AcceptanceReviewVerdict.parse({
         verdict: "rejected",
         summary: "Acceptance is missing required behavior.",
         deferred_checks: null,

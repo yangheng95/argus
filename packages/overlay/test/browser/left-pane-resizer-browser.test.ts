@@ -246,7 +246,10 @@ test(
       assert.equal(atMax.sidebarWidth, atMax.maxValue)
 
       await mkdir(resolve(".scratch"), { recursive: true })
-      await writeFile(resolve(".scratch", "left-pane-resizer-accessibility.png"), await page.screenshot({ fullPage: true }))
+      await writeFile(
+        resolve(".scratch", "left-pane-resizer-accessibility.png"),
+        await page.screenshot({ fullPage: true }),
+      )
 
       await page.setViewport({ width: 700, height: 760 })
       const compact = await waitForLeftPaneState(

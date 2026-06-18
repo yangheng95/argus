@@ -9,15 +9,15 @@
 
 ## Call-point inventory
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Mission dispatch prompt | `packages/opencorvus/src/prompt/core/mission-core.txt` | Already requires `Original user input` verbatim in `create_task.request`; keep it as the Mission-side contract. |
-| Panel tool execution | `packages/opencorvus/src/tool/panel.ts` | Replace `originalText || params.request` with `params.request`; text attachments append after that single source. |
-| Control-plane prompt | `packages/opencorvus/src/control/message.ts` | Add an explicit requirement that `create_task.request` carries the user's task text verbatim plus needed execution details. |
-| Mission wake route | `packages/opencorvus/src/server/routes/mission.ts` | No change; it injects the operator prompt as the Mission user message. |
-| Task creation API | `packages/opencorvus/src/task-api/index.ts` | No change; receives `request` from `panel.create_task` and persists it. |
-| Tool raw stream projection | `packages/overlay/src/services/tree-writer.ts` | No request-source change; existing deltas only update UI raw display. |
-| Tool body rendering | `packages/overlay/src/components/InlineToolPart.tsx` | No canonical request change; raw input body remains a pending diagnostic. |
+| Surface                    | File                                                   | Decision                                                                                                                    |
+| -------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | --- | -------------------------------------------------------------------------------------- |
+| Mission dispatch prompt    | `packages/opencorvus/src/prompt/core/mission-core.txt` | Already requires `Original user input` verbatim in `create_task.request`; keep it as the Mission-side contract.             |
+| Panel tool execution       | `packages/opencorvus/src/tool/panel.ts`                | Replace `originalText                                                                                                       |     | params.request`with`params.request`; text attachments append after that single source. |
+| Control-plane prompt       | `packages/opencorvus/src/control/message.ts`           | Add an explicit requirement that `create_task.request` carries the user's task text verbatim plus needed execution details. |
+| Mission wake route         | `packages/opencorvus/src/server/routes/mission.ts`     | No change; it injects the operator prompt as the Mission user message.                                                      |
+| Task creation API          | `packages/opencorvus/src/task-api/index.ts`            | No change; receives `request` from `panel.create_task` and persists it.                                                     |
+| Tool raw stream projection | `packages/overlay/src/services/tree-writer.ts`         | No request-source change; existing deltas only update UI raw display.                                                       |
+| Tool body rendering        | `packages/overlay/src/components/InlineToolPart.tsx`   | No canonical request change; raw input body remains a pending diagnostic.                                                   |
 
 ## Tests
 

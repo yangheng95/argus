@@ -44,6 +44,12 @@ describe("titlebar brand wordmark is gone", () => {
     expect(BRAND_GUIDE).toMatch(/class=["']brand-guide["']/)
     expect(BRAND_GUIDE).toMatch(/class=["']brand-guide-card["']/)
   })
+
+  test("brand-guide logo is resolved through the Vite asset graph", () => {
+    expect(BRAND_GUIDE).toContain('import brandLogoUrl from "../../opencorvus-logo-dark.svg"')
+    expect(BRAND_GUIDE).toContain("src={brandLogoUrl}")
+    expect(BRAND_GUIDE).not.toContain('src="opencorvus-logo-dark.svg"')
+  })
 })
 
 describe("sidebar version label", () => {

@@ -40,8 +40,10 @@ describe("release overlay artifact contract", () => {
 
   test("release workflow archives every CLI variant with installer-compatible root layout", () => {
     const workflow = readRepo(".github/workflows/build.yml")
-    const packageStep = /- name: Package CLI archive[\s\S]*?(?=\n      - name: Validate CLI assets)/.exec(workflow)?.[0] ?? ""
-    const validateStep = /- name: Validate CLI assets[\s\S]*?(?=\n      - name: Upload CLI dist artifact)/.exec(workflow)?.[0] ?? ""
+    const packageStep =
+      /- name: Package CLI archive[\s\S]*?(?=\n      - name: Validate CLI assets)/.exec(workflow)?.[0] ?? ""
+    const validateStep =
+      /- name: Validate CLI assets[\s\S]*?(?=\n      - name: Upload CLI dist artifact)/.exec(workflow)?.[0] ?? ""
 
     expect(packageStep).toContain("dirs=(opencorvus-${{ matrix.platform }}*)")
     expect(packageStep).toContain('for dir in "${dirs[@]}"; do')
@@ -51,7 +53,7 @@ describe("release overlay artifact contract", () => {
     expect(packageStep).not.toContain('tar -czf "${name}.tar.gz" "${name}"')
 
     expect(validateStep).toContain("platforms=()")
-    expect(validateStep).toContain("platforms+=(\"${dir##*/opencorvus-}\")")
+    expect(validateStep).toContain('platforms+=("${dir##*/opencorvus-}")')
     expect(validateStep).toContain('platforms_csv="$(IFS=,; echo "${platforms[*]}")"')
     expect(validateStep).toContain('--platforms "$platforms_csv"')
   })

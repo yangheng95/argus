@@ -4,9 +4,9 @@ name: build-vscode-extension
 # (plan-vscode-extension.md M7 / §8 / §19.1.4 / §19.2.5).
 #
 # Per CLAUDE.md §一-7 / 二-8 we never ship a universal "no-target"
-# VSIX: a fallback fallback like that would silently install on
-# unsupported architectures with the wrong sidecar binary. Each
-# matrix entry produces exactly one target's VSIX or fails.
+# VSIX: a universal package would silently install on unsupported
+# architectures with the wrong sidecar binary. Each matrix entry
+# produces exactly one target's VSIX or fails.
 #
 # Marketplace publish is intentionally NOT automated here. Until the
 # Apple Developer ID + macOS notarisation flow is wired in (plan
@@ -62,7 +62,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-bun
 
@@ -87,9 +89,9 @@ jobs:
 
       # Locate the build.yml run whose opencorvus-dist-${platform}
       # artifact we want. Either the user supplied a run_id directly
-      # or we fall back to the latest successful build.yml run on the
-      # current branch / tag — that's NOT a runtime fallback, it's a
-      # CI convenience for the same commit.
+      # or we resolve the latest successful build.yml run on the
+      # current branch / tag. This is a CI source-selection convenience
+      # for the same commit, not a runtime behavior change.
       - name: Resolve build.yml run id
         id: runid
         env:

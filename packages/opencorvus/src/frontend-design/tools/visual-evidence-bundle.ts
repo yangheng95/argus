@@ -81,7 +81,9 @@ export async function tryMaterializeVisualEvidenceBundle(input: {
     !rendered.width ||
     !rendered.height
   ) {
-    throw new Error(`Invalid visual evidence PNGs: reference=${evalResult.referencePath} rendered=${evalResult.renderedPath}`)
+    throw new Error(
+      `Invalid visual evidence PNGs: reference=${evalResult.referencePath} rendered=${evalResult.renderedPath}`,
+    )
   }
 
   const bundle = VisualEvidenceBundleSchema.parse({

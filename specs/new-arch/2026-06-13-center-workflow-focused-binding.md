@@ -12,13 +12,13 @@ behaved like Workflow.
 
 ## Grep Evidence
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `src/main.tsx` left focus | `selectedLeftActivity`, `selectedLeftPanelActivity`, `selectLeftActivity`, `openMissionLauncher`, `activateCodingAssistantSessionList` | Keep left focused activity as the source that decides the primary center owner: Tasks -> Task, Mission -> Mission, Assistant -> Chat. |
-| `src/main.tsx` center panels | `centerWorkbenchPanels`, `primaryCenterPanel`, `resetCenterWorkbenchToFocusedPanel`, `selectRightActivity` | Switching into Task / Mission / Chat resets optional middle panels and projects the shared primary DOM as the focused owner. |
-| `src/index.html` primary DOM | `#centerWorkbenchWorkflow`, `#chatMessagePane`, `#solidChatComposer` | Do not add a second composer or message panel. Reuse the existing DOM while changing its projected owner/title/data. |
-| `test/browser/side-activity-toolbar-browser.test.ts` | Browser test clicks left Task / Mission / Assistant activities and right toolbar panels. | Assert the visible primary panel is Task / Mission / Chat respectively and optional panels are cleared on each focused switch. |
-| `test/acceptance-panel-mount.test.ts` and `test/coding-assistant-panel.test.ts` | Static tests pin side activities and shared primary panel behavior. | Add static assertions for the focused primary-panel binding helper. |
+| Surface                                                                         | Evidence                                                                                                                               | Decision                                                                                                                              |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main.tsx` left focus                                                       | `selectedLeftActivity`, `selectedLeftPanelActivity`, `selectLeftActivity`, `openMissionLauncher`, `activateCodingAssistantSessionList` | Keep left focused activity as the source that decides the primary center owner: Tasks -> Task, Mission -> Mission, Assistant -> Chat. |
+| `src/main.tsx` center panels                                                    | `centerWorkbenchPanels`, `primaryCenterPanel`, `resetCenterWorkbenchToFocusedPanel`, `selectRightActivity`                             | Switching into Task / Mission / Chat resets optional middle panels and projects the shared primary DOM as the focused owner.          |
+| `src/index.html` primary DOM                                                    | `#centerWorkbenchWorkflow`, `#chatMessagePane`, `#solidChatComposer`                                                                   | Do not add a second composer or message panel. Reuse the existing DOM while changing its projected owner/title/data.                  |
+| `test/browser/side-activity-toolbar-browser.test.ts`                            | Browser test clicks left Task / Mission / Assistant activities and right toolbar panels.                                               | Assert the visible primary panel is Task / Mission / Chat respectively and optional panels are cleared on each focused switch.        |
+| `test/acceptance-panel-mount.test.ts` and `test/coding-assistant-panel.test.ts` | Static tests pin side activities and shared primary panel behavior.                                                                    | Add static assertions for the focused primary-panel binding helper.                                                                   |
 
 ## Acceptance
 

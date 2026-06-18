@@ -188,7 +188,7 @@ test("Mission launcher reuses the main ChatComposer with mission-scoped bindings
 test("Mission activity does not implicitly reopen the newest Mission session while launching a new Mission", () => {
   expect(MISSION_TSX).not.toContain("const mission = missionRecords()?.records[0]")
   expect(MISSION_TSX).not.toContain("rows.some((mission) => mission.sessionID === selected)")
-  expect(MISSION_TSX).toContain('onSelectMission={(mission) => void handleMissionSelect(mission)}')
+  expect(MISSION_TSX).toContain("onSelectMission={(mission) => void handleMissionSelect(mission)}")
   expect(MAIN_TSX).toContain("function selectLeftActivity(activity: LeftActivity)")
   expect(MAIN_TSX).toContain("setMissionLauncherActive(false)")
   expect(MAIN_TSX).toContain("function openMissionLauncher()")
@@ -209,7 +209,7 @@ test("Mission task projection selection explicitly rebinds the left toolbar and 
 test("selected task source does not globally steal Mission or Assistant activity focus", () => {
   const taskListMount = MAIN_TSX.indexOf('const taskListEl = document.getElementById("taskListPanel")')
   const beforeTaskListMount = MAIN_TSX.slice(0, taskListMount)
-  expect(beforeTaskListMount).not.toContain('const selectedSource = boardStore.selectedSource')
+  expect(beforeTaskListMount).not.toContain("const selectedSource = boardStore.selectedSource")
   expect(beforeTaskListMount).not.toContain('selectedSource?.kind !== "task"')
   expect(beforeTaskListMount).not.toContain('boardStore.selectedSource?.kind === "task"')
 })
@@ -219,10 +219,12 @@ test("main ChatComposer exposes the standard Mission data-ui hooks for downstrea
   expect(MAIN_TSX).toContain("return missionLauncherActive()")
   expect(MAIN_TSX).not.toContain('missionLauncherActive() || (primaryCenterPanel() === "mission"')
   expect(MAIN_TSX).toContain("function missionLedgerActive()")
-  expect(MAIN_TSX).toContain('primaryCenterPanel() === "mission" && !missionSubmitActive() && !isMissionSessionSource()')
+  expect(MAIN_TSX).toContain(
+    'primaryCenterPanel() === "mission" && !missionSubmitActive() && !isMissionSessionSource()',
+  )
   expect(MAIN_TSX).toContain("canComposeChat() && !missionLedgerActive()")
   expect(MAIN_TSX).toContain('composerDraftKey("mission", "ledger", directory)')
-  expect(MAIN_TSX).toContain('missionSubmitActive()')
+  expect(MAIN_TSX).toContain("missionSubmitActive()")
   expect(MAIN_TSX).toContain('"mission-composer-input"')
   expect(MAIN_TSX).toContain('"mission-composer-submit"')
   expect(MAIN_TSX).toMatch(

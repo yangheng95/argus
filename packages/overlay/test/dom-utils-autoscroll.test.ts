@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 const { setupAutoScroll } = await import("../src/utils/dom-utils")
 

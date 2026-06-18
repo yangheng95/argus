@@ -5,7 +5,12 @@ import { findChildrenOfTask } from "@/engine"
 import { Session } from "@/session"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
-import { PanelActionSchema, derivePanelActor, panelActionSchemaForAgent, panelCapabilityActionSet } from "@/panel/capability"
+import {
+  PanelActionSchema,
+  derivePanelActor,
+  panelActionSchemaForAgent,
+  panelCapabilityActionSet,
+} from "@/panel/capability"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE, isRightSidebarCodingAssistantSession } from "@/coding-assistant/session"
 
 // Action whitelist by actor. `mission` is a coordinator that drives
@@ -277,7 +282,7 @@ async function resolveCreateTaskQueueDecision(input: { queue?: boolean; ctx: Too
 function requireMissionTaskSemanticTitle(input: unknown): string {
   if (typeof input !== "string" || input.trim().length === 0) {
     throw new Error(
-      "panel.create_task by actor \"mission\" requires create_task.title. " +
+      'panel.create_task by actor "mission" requires create_task.title. ' +
         "Provide a short semantic title; the host formats the Mission prefix.",
     )
   }
@@ -546,10 +551,7 @@ export const PanelTool = Tool.define<typeof PanelActionSchema, {}>("panel", asyn
           }))
         const result = await EngineService.handleTaskMessage(params.taskID, {
           text: followText ? params.text + followText : params.text,
-          source:
-            actor === "right_sidebar_assistant"
-              ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
-              : params.source,
+          source: actor === "right_sidebar_assistant" ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE : params.source,
           user_id: params.user_id,
           ...(followBinaries.length > 0 ? { attachments: followBinaries } : {}),
         })

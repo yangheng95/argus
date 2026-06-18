@@ -25,14 +25,14 @@ Command:
 rg -n "iconHtml|data-oc-icon|REGISTERED_ICONS|ICON_PATHS" packages/overlay/src packages/overlay/test specs -g "*.ts" -g "*.tsx" -g "*.md" -g "*.html"
 ```
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `utils/icon-html.tsx` | Owns `ICON_PATHS` and unknown `square` fallback. | Delete the local registry; validate names against `REGISTERED_ICONS`. |
-| `components/Icon.tsx` | Exports `Icon`, `IconName`, and `REGISTERED_ICONS`. | Use this as the only icon source. |
-| `utils/markdown.ts` | `iconHtml("copy", 12)` for code-copy buttons. | Keep callsite; generated HTML must come from `Icon`. |
-| `utils/dom-utils.ts` | `iconHtml("folder", 13)` and `iconHtml("close", 13)`. | Keep callsites; generated HTML must come from `Icon`. |
-| `src/index.html` | Three `data-oc-icon="plus"` placeholders. | Keep placeholders; hydration must use `Icon` HTML. |
-| Tests mocking iconHtml | Several non-icon tests mock `iconHtml`. | Leave mocks unchanged; add focused source/runtime coverage in icon test. |
+| Surface                | Evidence                                              | Decision                                                                 |
+| ---------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| `utils/icon-html.tsx`  | Owns `ICON_PATHS` and unknown `square` fallback.      | Delete the local registry; validate names against `REGISTERED_ICONS`.    |
+| `components/Icon.tsx`  | Exports `Icon`, `IconName`, and `REGISTERED_ICONS`.   | Use this as the only icon source.                                        |
+| `utils/markdown.ts`    | `iconHtml("copy", 12)` for code-copy buttons.         | Keep callsite; generated HTML must come from `Icon`.                     |
+| `utils/dom-utils.ts`   | `iconHtml("folder", 13)` and `iconHtml("close", 13)`. | Keep callsites; generated HTML must come from `Icon`.                    |
+| `src/index.html`       | Three `data-oc-icon="plus"` placeholders.             | Keep placeholders; hydration must use `Icon` HTML.                       |
+| Tests mocking iconHtml | Several non-icon tests mock `iconHtml`.               | Leave mocks unchanged; add focused source/runtime coverage in icon test. |
 
 ## Fix
 

@@ -328,10 +328,15 @@ export namespace AgentTrace {
       payload?: unknown
     },
   ): Record<string, unknown> & { taskID?: string; kind: string } {
-    const redacted = redactValue(event) as Record<string, unknown> & { taskID?: string; kind: string; payload?: unknown }
+    const redacted = redactValue(event) as Record<string, unknown> & {
+      taskID?: string
+      kind: string
+      payload?: unknown
+    }
     const max = envBytes("OPENCORVUS_AGENT_TRACE_EVENT_MAX_BYTES", DEFAULT_EVENT_BYTES)
     const line = safeStringify(redacted)
-    if (byteLength(line) <= max || typeof redacted.taskID !== "string" || redacted.payload === undefined) return redacted
+    if (byteLength(line) <= max || typeof redacted.taskID !== "string" || redacted.payload === undefined)
+      return redacted
     const ref = payloadReference(redacted.taskID, redacted)
     return {
       ...redacted,

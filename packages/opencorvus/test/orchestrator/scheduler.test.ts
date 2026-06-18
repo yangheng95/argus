@@ -1,23 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import {
-  GOAL_RUN_RESETTABLE_STATUSES,
-  LIVE_RUN_STATUSES,
-  isRunReadyForGoalDispatch,
-  restartStagePlan,
-} from "../../src/orchestrator/scheduler"
+import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES, restartStagePlan } from "../../src/orchestrator/scheduler"
 
 describe("orchestrator scheduler invariants", () => {
-  test("run dispatch requires both a plan and an activated run status", () => {
-    expect(isRunReadyForGoalDispatch(null)).toBe(false)
-    expect(isRunReadyForGoalDispatch({ status: "queued", planVersionID: "plan_1" })).toBe(false)
-    expect(isRunReadyForGoalDispatch({ status: "completed", planVersionID: "plan_1" })).toBe(false)
-    expect(isRunReadyForGoalDispatch({ status: "running", planVersionID: null })).toBe(false)
-
-    expect(isRunReadyForGoalDispatch({ status: "accepted", planVersionID: "plan_1" })).toBe(true)
-    expect(isRunReadyForGoalDispatch({ status: "running", planVersionID: "plan_1" })).toBe(true)
-    expect(isRunReadyForGoalDispatch({ status: "blocked", planVersionID: "plan_1" })).toBe(true)
-  })
-
   test("live run statuses do not include terminal runs", () => {
     expect(LIVE_RUN_STATUSES).toEqual(["queued", "accepted", "running", "blocked"])
     expect(LIVE_RUN_STATUSES.includes("completed" as never)).toBe(false)

@@ -7,13 +7,13 @@ Slack 是 OpenCorvus 的**首选远程 channel**，也是 channel-runtime 对接
 
 ## 状态
 
-**生产可用**。`README.md:133` 已列为 Available。
+**生产可用**。`README.md` 已列为 Available。
 
 ## 快速配置
 
 ### 1. 创建 Slack App
 
-在 [api.slack.com/apps](https://api.slack.com/apps) 创建一个 App，**必须开启 Socket Mode**（代码在 `src/adapters/slack.ts:22` 强制 `socketMode: true`）。
+在 [api.slack.com/apps](https://api.slack.com/apps) 创建一个 App，**必须开启 Socket Mode**（代码在 `packages/channel-runtime/src/adapters/slack.ts` 强制 `socketMode: true`）。
 
 ### 2. Scopes
 
@@ -40,7 +40,7 @@ Event Subscriptions 中订阅：
 - `message.channels`
 - `message.im`
 
-（`.env.example:38-39` 说明）
+（`.env.example` 说明）
 
 ### 4. 环境变量
 
@@ -88,11 +88,11 @@ bun run dev
 ```
 用户在 Slack 频道/DM 发消息
   ↓ Socket Mode WebSocket
-SlackAdapter.app.message()                [src/adapters/slack.ts:41]
+SlackAdapter.app.message()                [packages/channel-runtime/src/adapters/slack.ts]
   ↓
 过滤：忽略 bot_id、非支持 subtype、去重
   ↓ IncomingMessage { platform: "slack", channel: C..., thread_ts: 123.456 }
-ChannelRuntime.handleMessage()            [src/core.ts:235]
+ChannelRuntime.handleMessage()            [packages/channel-runtime/src/core.ts]
   ↓
 SessionCoordinator.get("slack:C...:123")
   ↓  新 thread → 新 session；同 thread → 复用
@@ -106,7 +106,7 @@ Thread 语义：Slack 的 `thread_ts` 唯一标识一条对话；同 thread 内�
 ```
 OpenCorvus 后端 SSE 推事件
   ↓
-handleEvent(event)                        [src/core.ts:1132]
+handleEvent(event)                        [packages/channel-runtime/src/core.ts]
   ↓
 task.report        → safeSend() 发送进度 / 结果 / 需要输入
 message.updated    → 文本缓冲 → safeSend()
@@ -134,7 +134,7 @@ Slack 适配器会在接收到消息后立刻给原消息加一个 emoji 反应�
 
 ## 语音消息
 
-Slack 的 `file_share` 子类型（语音消息）会被下载并走 STT pipeline（`STT_PROVIDERS` 指定的提供者），转写文本后当作普通消息处理。
+Slack 的 `file_share` 子类型（语音消息）会被下载并走已配置的 STT pipeline（`STT_PROVIDER` 指定的单一提供者），转写文本后当作普通消息处理。
 
 ## 故障排查
 
@@ -145,7 +145,7 @@ Slack 的 `file_share` 子类型（语音消息）会被下载并走 STT pipelin
 **检查**：是否用了 Socket Mode；HTTP Request URL 模式在国内网络下延迟高。
 
 **问题**：同一消息被处理两次
-**检查**：去重逻辑在 `src/adapters/slack.ts`，基于 `event_id`；若看到重复，很可能是同时启动了 `opencorvus slack` 与 `channel-runtime`，二者都在订阅。
+**检查**：去重逻辑在 `packages/channel-runtime/src/adapters/slack.ts`，基于 `event_id`；若看到重复，很可能是同时启动了 `opencorvus slack` 与 `channel-runtime`，二者都在订阅。
 
 **问题**：权限审批消息无人回复
 **检查**：内置权限默认 `allow`；检查项目配置是否显式写了 `ask`，然后从操作员界面审批，或把对应规则改为 `allow`。

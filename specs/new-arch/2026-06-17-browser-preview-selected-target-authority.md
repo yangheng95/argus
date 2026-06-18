@@ -29,13 +29,13 @@ rg -n "resolveBrowserPreviewTarget\(|assessBrowserPreviewTargets|reachableTarget
 
 Findings:
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Resolver | `target.ts` assigns `const persisted = reachableTargets[0]`. | Replace with `selectedTarget = persistedTargets[0]`; visibility decides status only for that ID. |
-| Resolver unit test | `target.test.ts` already has a failing test named `does not replace the selected preview target with another reachable candidate`. | Keep the test and make it pass without weakening assertions. |
-| Server route | `GET /task/:taskID/browser-preview` calls `resolveBrowserPreviewTarget`. | Add route coverage for selected unreachable target plus older reachable target. |
-| Existing specs | `2026-06-15-browser-preview-live-target-boundary.md` says the selected target artifact is the single authority. | Follow that constraint; no new source or target promotion path. |
-| Tool/capture routes | Capture/live/compare routes resolve explicit `targetID` via `findBrowserPreviewTargetByID`. | No change needed; they already use explicit target IDs. |
+| Surface             | Evidence                                                                                                                           | Decision                                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Resolver            | `target.ts` assigns `const persisted = reachableTargets[0]`.                                                                       | Replace with `selectedTarget = persistedTargets[0]`; visibility decides status only for that ID. |
+| Resolver unit test  | `target.test.ts` already has a failing test named `does not replace the selected preview target with another reachable candidate`. | Keep the test and make it pass without weakening assertions.                                     |
+| Server route        | `GET /task/:taskID/browser-preview` calls `resolveBrowserPreviewTarget`.                                                           | Add route coverage for selected unreachable target plus older reachable target.                  |
+| Existing specs      | `2026-06-15-browser-preview-live-target-boundary.md` says the selected target artifact is the single authority.                    | Follow that constraint; no new source or target promotion path.                                  |
+| Tool/capture routes | Capture/live/compare routes resolve explicit `targetID` via `findBrowserPreviewTargetByID`.                                        | No change needed; they already use explicit target IDs.                                          |
 
 ## Fix
 

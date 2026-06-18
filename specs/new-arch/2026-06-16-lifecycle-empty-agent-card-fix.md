@@ -10,13 +10,13 @@ the agent emits any displayable conversation message.
 
 ## Evidence
 
-| Surface | Current behavior | Decision |
-| --- | --- | --- |
+| Surface                                                             | Current behavior                                                                                              | Decision                                                                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `packages/overlay/src/services/tree-writer.ts::handleSessionStatus` | Calls `ensureLifecycleSessionProjection`, which can create a `kind="agent"` card from `session.status` alone. | Lifecycle status updates an existing real message card or stays buffered in `pendingSessionStatus`. |
-| `packages/overlay/src/services/tree-writer.ts::handleSessionError` | Same lifecycle-only materialization path for `session.error`. | Buffer the error until a real message card exists; do not create a blank card. |
-| `packages/overlay/src/components/Card.tsx` | Shows `AgentSessionReplyBox` for every targetable session card. | No renderer hiding rule; the writer must not create a targetable empty card. |
-| `specs/new-arch/07-panel-reactivity.md` | Says `session.status` is buffered when the session is not materialized and drained by the first message. | Restore this documented contract. |
-| `specs/new-arch/2026-06-10-agent-rail-identity-empty-card-fix.md` | Says lifecycle events remain in events but message-less sessions are not display sessions. | Apply the same rule to the live tree-writer path. |
+| `packages/overlay/src/services/tree-writer.ts::handleSessionError`  | Same lifecycle-only materialization path for `session.error`.                                                 | Buffer the error until a real message card exists; do not create a blank card.                      |
+| `packages/overlay/src/components/Card.tsx`                          | Shows `AgentSessionReplyBox` for every targetable session card.                                               | No renderer hiding rule; the writer must not create a targetable empty card.                        |
+| `specs/new-arch/07-panel-reactivity.md`                             | Says `session.status` is buffered when the session is not materialized and drained by the first message.      | Restore this documented contract.                                                                   |
+| `specs/new-arch/2026-06-10-agent-rail-identity-empty-card-fix.md`   | Says lifecycle events remain in events but message-less sessions are not display sessions.                    | Apply the same rule to the live tree-writer path.                                                   |
 
 ## Call Point Grep
 

@@ -27,7 +27,7 @@ exports[`tool parameter schemas keeps built-in tool schemas stable 1`] = `
           },
           "limit": {
             "default": 20,
-            "description": "Maximum number of matching task rows to return from the analytics search.",
+            "description": "Max results",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991,
             "type": "integer",
@@ -310,7 +310,7 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "maxResults": {
-            "description": "Maximum number of ranked memory search results to return.",
+            "description": "Max results",
             "maximum": 50,
             "minimum": 1,
             "type": "integer",
@@ -326,7 +326,7 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "scope": {
-            "description": "Memory scope to search: all project memories, global long-term memories, or this session only.",
+            "description": "Which memory scope to search",
             "enum": [
               "all",
               "global",
@@ -413,7 +413,7 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "scope": {
-            "description": "Memory scope to list: all project memories, global long-term memories, or this session only.",
+            "description": "Which memory scope to list",
             "enum": [
               "all",
               "global",
@@ -458,7 +458,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "taskID": {
-            "description": "Task id whose plan and goal list should be inspected.",
             "type": "string",
           },
         },
@@ -476,7 +475,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "taskID": {
-            "description": "Task id whose board should be inspected; omit to list recent tasks.",
             "type": "string",
           },
         },
@@ -506,15 +504,12 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "includeChildren": {
-            "description": "Include compact child task summaries for each queried task.",
             "type": "boolean",
           },
           "includeInteractions": {
-            "description": "Include pending interaction counts for each queried task.",
             "type": "boolean",
           },
           "taskIDs": {
-            "description": "Task ids to query, preserving one output row per id.",
             "items": {
               "minLength": 1,
               "type": "string",
@@ -538,16 +533,13 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "allow_create": {
-            "description": "Set false to return an ignored response instead of creating a task.",
             "type": "boolean",
           },
           "channel": {
-            "description": "External channel id to bind this task to when created from a channel.",
             "type": "string",
           },
           "checks": {
             "additionalProperties": false,
-            "description": "Verification check configuration for the new task.",
             "properties": {
               "artifact": {
                 "additionalProperties": false,
@@ -1007,7 +999,6 @@ Output: Creates directory 'foo'"
             "type": "object",
           },
           "executor": {
-            "description": "Executor runtime to use for the new task when overriding the project default.",
             "enum": [
               "opencorvus",
               "codex",
@@ -1017,18 +1008,15 @@ Output: Creates directory 'foo'"
           },
           "metadata": {
             "additionalProperties": {},
-            "description": "Additional task metadata supplied by the caller.",
             "propertyNames": {
               "type": "string",
             },
             "type": "object",
           },
           "model": {
-            "description": "Model override for the new task, in provider/model form.",
             "type": "string",
           },
           "platform": {
-            "description": "External channel platform for the binding, such as slack or feishu.",
             "enum": [
               "slack",
               "telegram",
@@ -1048,20 +1036,16 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "queue": {
-            "description": "Whether to enqueue the task behind the directory queue instead of starting now.",
             "type": "boolean",
           },
           "request": {
-            "description": "Complete user-facing request for the task to execute.",
             "type": "string",
           },
           "request_id": {
-            "description": "Optional idempotency key from the originating channel or UI request.",
             "type": "string",
           },
           "routing": {
             "additionalProperties": false,
-            "description": "Stage routing overrides for the new task.",
             "properties": {
               "evaluation": {
                 "enum": [
@@ -1088,15 +1072,12 @@ Output: Creates directory 'foo'"
             "type": "object",
           },
           "source": {
-            "description": "Business source label for the task, for example panel or channel:slack.",
             "type": "string",
           },
           "thread": {
-            "description": "External thread id to bind this task to when created from a channel.",
             "type": "string",
           },
           "title": {
-            "description": "Short semantic title for the new task.",
             "maxLength": 80,
             "minLength": 1,
             "type": "string",
@@ -1116,20 +1097,16 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "source": {
-            "description": "Business source label for the follow-up message.",
             "minLength": 1,
             "type": "string",
           },
           "taskID": {
-            "description": "Task id that should receive the follow-up message.",
             "type": "string",
           },
           "text": {
-            "description": "Natural-language follow-up message to append to the task conversation.",
             "type": "string",
           },
           "user_id": {
-            "description": "Optional upstream user id associated with the follow-up message.",
             "type": "string",
           },
         },
@@ -1149,15 +1126,12 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "interactionID": {
-            "description": "Pending interaction id to answer.",
             "type": "string",
           },
           "message": {
-            "description": "Free-form answer message for the pending interaction.",
             "type": "string",
           },
           "reply": {
-            "description": "Predefined reply mode for permission-style interactions.",
             "enum": [
               "once",
               "always",
@@ -1179,11 +1153,9 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "interactionID": {
-            "description": "Pending interaction id to reject.",
             "type": "string",
           },
           "message": {
-            "description": "Optional rejection explanation to show with the interaction.",
             "type": "string",
           },
         },
@@ -1201,7 +1173,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "taskID": {
-            "description": "Task id to queue for retry.",
             "type": "string",
           },
         },
@@ -1219,7 +1190,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "taskID": {
-            "description": "Task id to queue for replanning.",
             "type": "string",
           },
         },
@@ -1237,7 +1207,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "taskID": {
-            "description": "Task id to cancel.",
             "type": "string",
           },
         },
@@ -1256,7 +1225,6 @@ Output: Creates directory 'foo'"
           },
           "checks": {
             "additionalProperties": false,
-            "description": "Full replacement verification check configuration.",
             "properties": {
               "artifact": {
                 "additionalProperties": false,
@@ -1719,14 +1687,12 @@ Output: Creates directory 'foo'"
             "additionalProperties": {
               "type": "boolean",
             },
-            "description": "Per-check enabled/disabled selection map keyed by check id.",
             "propertyNames": {
               "type": "string",
             },
             "type": "object",
           },
           "taskID": {
-            "description": "Task id whose verification checks should be updated.",
             "type": "string",
           },
         },
@@ -1744,7 +1710,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "match": {
-            "description": "Optional window-title match text used to select the OpenCorvus GUI window.",
             "type": "string",
           },
         },
@@ -1761,7 +1726,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "executor": {
-            "description": "Executor runtime to select in the local panel.",
             "enum": [
               "opencorvus",
               "codex",
@@ -1784,7 +1748,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "taskID": {
-            "description": "Task id to focus in the local project assistant surface.",
             "type": "string",
           },
         },
@@ -1802,7 +1765,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "sessionID": {
-            "description": "Session id to focus in the local project assistant surface.",
             "type": "string",
           },
         },
@@ -1833,7 +1795,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "sessionID": {
-            "description": "Existing session id to fork.",
             "type": "string",
           },
         },
@@ -1851,7 +1812,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "sessionID": {
-            "description": "Session id to delete along with linked tasks.",
             "type": "string",
           },
         },
@@ -1865,408 +1825,7 @@ Output: Creates directory 'foo'"
         "additionalProperties": false,
         "properties": {
           "acceptance_specs": {
-            "description": "Complete replacement acceptance specs for this goal using the canonical AcceptanceSpec schema.",
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "goal_id": {
-                  "description": "Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.",
-                  "minLength": 1,
-                  "type": "string",
-                },
-                "id": {
-                  "description": "Stable spec ID, e.g. 'acc-login-3s'.",
-                  "minLength": 1,
-                  "type": "string",
-                },
-                "scenario": {
-                  "additionalProperties": false,
-                  "description": "Gherkin Given/When/Then scenario. Optional — omit for pure code checks.",
-                  "properties": {
-                    "given": {
-                      "items": {
-                        "minLength": 1,
-                        "type": "string",
-                      },
-                      "minItems": 1,
-                      "type": "array",
-                    },
-                    "then": {
-                      "items": {
-                        "minLength": 1,
-                        "type": "string",
-                      },
-                      "minItems": 1,
-                      "type": "array",
-                    },
-                    "when": {
-                      "items": {
-                        "minLength": 1,
-                        "type": "string",
-                      },
-                      "minItems": 1,
-                      "type": "array",
-                    },
-                  },
-                  "required": [
-                    "given",
-                    "when",
-                    "then",
-                  ],
-                  "type": "object",
-                },
-                "scorers": {
-                  "description": "At least one scorer — a spec without a scorer is untestable.",
-                  "items": {
-                    "anyOf": [
-                      {
-                        "additionalProperties": false,
-                        "properties": {
-                          "expect": {
-                            "additionalProperties": false,
-                            "properties": {
-                              "exit_code": {
-                                "maximum": 9007199254740991,
-                                "minimum": -9007199254740991,
-                                "type": "integer",
-                              },
-                            },
-                            "type": "object",
-                          },
-                          "name": {
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "spec": {
-                            "anyOf": [
-                              {
-                                "additionalProperties": false,
-                                "properties": {
-                                  "cmd": {
-                                    "description": "Shell command. Exit 0 = pass unless expect.exit_code set.",
-                                    "minLength": 1,
-                                    "type": "string",
-                                  },
-                                  "cwd": {
-                                    "type": "string",
-                                  },
-                                  "kind": {
-                                    "const": "shell",
-                                    "description": "shell — run an inline command. Requires: cmd; optional cwd.",
-                                    "type": "string",
-                                  },
-                                },
-                                "required": [
-                                  "kind",
-                                  "cmd",
-                                ],
-                                "type": "object",
-                              },
-                              {
-                                "additionalProperties": false,
-                                "properties": {
-                                  "args": {
-                                    "items": {
-                                      "type": "string",
-                                    },
-                                    "type": "array",
-                                  },
-                                  "kind": {
-                                    "const": "script_ref",
-                                    "description": "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
-                                    "type": "string",
-                                  },
-                                  "path": {
-                                    "description": "Repo-relative script path that already exists at registration time.",
-                                    "minLength": 1,
-                                    "type": "string",
-                                  },
-                                },
-                                "required": [
-                                  "kind",
-                                  "path",
-                                ],
-                                "type": "object",
-                              },
-                            ],
-                          },
-                          "type": {
-                            "const": "heuristic",
-                            "description": "heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "type",
-                          "name",
-                          "spec",
-                        ],
-                        "type": "object",
-                      },
-                      {
-                        "additionalProperties": false,
-                        "properties": {
-                          "criteria": {
-                            "description": "Single-criterion evaluation question in natural language.",
-                            "minLength": 10,
-                            "type": "string",
-                          },
-                          "inputs": {
-                            "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
-                            "items": {
-                              "enum": [
-                                "acceptance_summary",
-                                "changed_files",
-                                "requirement_text",
-                                "visual_evidence",
-                              ],
-                              "type": "string",
-                            },
-                            "type": "array",
-                          },
-                          "name": {
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "rubric": {
-                            "description": "Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.",
-                            "items": {
-                              "additionalProperties": false,
-                              "properties": {
-                                "anchor": {
-                                  "description": "Behavioral description: what earns this score.",
-                                  "minLength": 1,
-                                  "type": "string",
-                                },
-                                "label": {
-                                  "description": "Short level label, e.g. 'fully met'.",
-                                  "minLength": 1,
-                                  "type": "string",
-                                },
-                                "passes": {
-                                  "description": "Does this level count as pass for binary verdict?",
-                                  "type": "boolean",
-                                },
-                                "score": {
-                                  "description": "Integer score for this level.",
-                                  "maximum": 9007199254740991,
-                                  "minimum": 0,
-                                  "type": "integer",
-                                },
-                              },
-                              "required": [
-                                "score",
-                                "label",
-                                "anchor",
-                                "passes",
-                              ],
-                              "type": "object",
-                            },
-                            "maxItems": 5,
-                            "minItems": 2,
-                            "type": "array",
-                          },
-                          "type": {
-                            "const": "llm_judge",
-                            "description": "llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "type",
-                          "name",
-                          "criteria",
-                        ],
-                        "type": "object",
-                      },
-                      {
-                        "additionalProperties": false,
-                        "properties": {
-                          "config": {
-                            "additionalProperties": false,
-                            "default": {},
-                            "description": "Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.",
-                            "properties": {
-                              "expected_text": {
-                                "description": "For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.",
-                                "minLength": 1,
-                                "type": "string",
-                              },
-                              "json_schema": {
-                                "description": "For json_schema: JSON.stringify of the expected JSON Schema object.",
-                                "minLength": 2,
-                                "type": "string",
-                              },
-                              "max_length": {
-                                "description": "For length_within: inclusive maximum character count.",
-                                "maximum": 9007199254740991,
-                                "minimum": 0,
-                                "type": "integer",
-                              },
-                              "min_length": {
-                                "description": "For length_within: inclusive minimum character count.",
-                                "maximum": 9007199254740991,
-                                "minimum": 0,
-                                "type": "integer",
-                              },
-                            },
-                            "type": "object",
-                          },
-                          "expect": {
-                            "additionalProperties": false,
-                            "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
-                            "properties": {
-                              "status": {
-                                "const": "passed",
-                                "type": "string",
-                              },
-                            },
-                            "required": [
-                              "status",
-                            ],
-                            "type": "object",
-                          },
-                          "name": {
-                            "enum": [
-                              "factuality",
-                              "relevance",
-                              "contains",
-                              "exact_match",
-                              "length_within",
-                              "json_schema",
-                              "visual-evidence-bundle",
-                            ],
-                            "type": "string",
-                          },
-                          "spec": {
-                            "additionalProperties": false,
-                            "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
-                            "properties": {
-                              "kind": {
-                                "const": "visual_evidence_bundle",
-                                "type": "string",
-                              },
-                              "viewport": {
-                                "minLength": 1,
-                                "type": "string",
-                              },
-                            },
-                            "required": [
-                              "kind",
-                            ],
-                            "type": "object",
-                          },
-                          "type": {
-                            "const": "prebuilt",
-                            "description": "prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "type",
-                          "name",
-                          "config",
-                        ],
-                        "type": "object",
-                      },
-                      {
-                        "additionalProperties": false,
-                        "properties": {
-                          "expect": {
-                            "additionalProperties": false,
-                            "properties": {
-                              "status": {
-                                "const": "passed",
-                                "type": "string",
-                              },
-                            },
-                            "required": [
-                              "status",
-                            ],
-                            "type": "object",
-                          },
-                          "name": {
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "spec": {
-                            "additionalProperties": false,
-                            "properties": {
-                              "contract_ids": {
-                                "items": {
-                                  "minLength": 1,
-                                  "type": "string",
-                                },
-                                "minItems": 1,
-                                "type": "array",
-                              },
-                              "kind": {
-                                "const": "contract_graph",
-                                "type": "string",
-                              },
-                            },
-                            "required": [
-                              "kind",
-                              "contract_ids",
-                            ],
-                            "type": "object",
-                          },
-                          "type": {
-                            "const": "contract_audit",
-                            "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "type",
-                          "name",
-                          "spec",
-                          "expect",
-                        ],
-                        "type": "object",
-                      },
-                    ],
-                  },
-                  "minItems": 1,
-                  "type": "array",
-                },
-                "severity": {
-                  "enum": [
-                    "essential",
-                    "important",
-                    "optional",
-                    "pitfall",
-                  ],
-                  "type": "string",
-                },
-                "source_requirement_id": {
-                  "description": "Requirement ID this spec was derived from (REQ-N).",
-                  "minLength": 1,
-                  "type": "string",
-                },
-                "title": {
-                  "minLength": 1,
-                  "type": "string",
-                },
-                "trigger": {
-                  "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.",
-                  "enum": [
-                    "on_goal",
-                    "on_integrity",
-                  ],
-                  "type": "string",
-                },
-              },
-              "required": [
-                "id",
-                "source_requirement_id",
-                "goal_id",
-                "title",
-                "scorers",
-                "severity",
-              ],
-              "type": "object",
-            },
+            "items": {},
             "minItems": 1,
             "type": "array",
           },
@@ -2275,11 +1834,9 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "description": {
-            "description": "Replacement goal description.",
             "type": "string",
           },
           "goalID": {
-            "description": "Goal id whose description and acceptance specs should be replaced.",
             "type": "string",
           },
         },
@@ -2299,7 +1856,6 @@ Output: Creates directory 'foo'"
             "type": "string",
           },
           "goalID": {
-            "description": "Goal id to delete from the task plan.",
             "type": "string",
           },
         },
@@ -2360,7 +1916,6 @@ Output: Creates directory 'foo'"
             "type": "integer",
           },
           "status": {
-            "description": "Lifecycle state to assign to the task after this update.",
             "enum": [
               "pending",
               "in_progress",

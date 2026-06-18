@@ -15,7 +15,7 @@
 import { clearEventQueue, messageStore, setSseConnected } from "../store/messages"
 import { boardStore, loadTasks, activeTaskID, type BoardSource } from "../store/board"
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events"
-import { recomputeBadgeFromTasks, notifyError, formatErrorDetails } from "./notify"
+import { recomputeBadgeFromTasks, formatErrorDetails } from "./notify"
 import { getHostTransport, type StreamHandle } from "./host-transport"
 import {
   recordConversationRecoveryAborted,
@@ -27,6 +27,7 @@ import { settingsStore } from "../store/settings"
 import { createVisibilityInterval, type VisibilityInterval } from "../utils/visibility-interval"
 import { mergeLatestConversationTail } from "./conversation"
 import { resetSelectedLiveCursor, selectedLiveReplayQuery } from "./selected-stream-cursor"
+import { AppLog } from "../utils/log"
 
 let sseHandle: StreamHandle | null = null
 let sseRetryTimer: any = null
@@ -91,16 +92,17 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
       durationMs: Date.now() - startedAt,
       error: err instanceof Error ? err.message : String(err || ""),
     })
-    console.error("[sse] reconnect restart failed for task", deps.taskID, err)
     // Persistent toast (id'd per task) keeps the operator aware that the
     // live stream is currently broken even after we schedule a retry.
     // Re-firing with the same id collapses repeated retries into one row.
-    notifyError({
-      id: `sse:reconnect-failed:${deps.taskID}`,
-      title: "Live stream disconnected",
-      message: `Failed to reopen the SSE stream for task ${deps.taskID}. Retrying in ${Math.round(deps.retryDelayMs / 1000)}s.`,
-      details: formatErrorDetails(err),
+    AppLog.error("sse", `reconnect restart failed for task ${deps.taskID}`, {
       taskID: deps.taskID,
+      retryDelayMs: deps.retryDelayMs,
+      error: formatErrorDetails(err),
+      notificationID: `sse:reconnect-failed:${deps.taskID}`,
+      notificationTitle: "Live stream disconnected",
+      notificationMessage: `Failed to reopen the SSE stream for task ${deps.taskID}. Retrying in ${Math.round(deps.retryDelayMs / 1000)}s.`,
+      notificationDetails: formatErrorDetails(err),
     })
     if (deps.currentTaskID() !== deps.taskID) return
     deps.scheduleRetry(() => {
@@ -236,19 +238,22 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
             handleEventStreamEvent(event)
           }
         } catch (err) {
-          console.error("[sse] dispatch error for event", event?.type, err, event)
-          notifyError({
-            id: `sse:dispatch-error:${taskID}`,
-            title: "Conversation event failed to render",
-            message: `Event type ${event?.type || "<unknown>"} threw while updating the conversation panel.`,
-            details: `${formatErrorDetails(err)}\n\nevent payload:\n${(() => {
-              try {
-                return JSON.stringify(event, null, 2)
-              } catch {
-                return String(event)
-              }
-            })()}`,
+          const eventPayload = (() => {
+            try {
+              return JSON.stringify(event, null, 2)
+            } catch {
+              return String(event)
+            }
+          })()
+          AppLog.error("sse", `dispatch error for event ${event?.type || "<unknown>"}`, {
             taskID,
+            eventType: event?.type || "<unknown>",
+            error: formatErrorDetails(err),
+            event,
+            notificationID: `sse:dispatch-error:${taskID}`,
+            notificationTitle: "Conversation event failed to render",
+            notificationMessage: `Event type ${event?.type || "<unknown>"} threw while updating the conversation panel.`,
+            notificationDetails: `${formatErrorDetails(err)}\n\nevent payload:\n${eventPayload}`,
           })
         }
       },
@@ -349,18 +354,21 @@ export function startTaskListSSE() {
           // and would throw on every missing payload).
           handleTaskListNotification(event)
         } catch (err) {
-          console.error("[task-list-sse] dispatch error for event", event?.type, err, event)
-          notifyError({
-            id: "task-list-sse:dispatch-error",
-            title: "Task list event failed to render",
-            message: `Event type ${event?.type || "<unknown>"} threw while updating the task list.`,
-            details: `${formatErrorDetails(err)}\n\nevent payload:\n${(() => {
-              try {
-                return JSON.stringify(event, null, 2)
-              } catch {
-                return String(event)
-              }
-            })()}`,
+          const eventPayload = (() => {
+            try {
+              return JSON.stringify(event, null, 2)
+            } catch {
+              return String(event)
+            }
+          })()
+          AppLog.error("sse", `task-list dispatch error for event ${event?.type || "<unknown>"}`, {
+            eventType: event?.type || "<unknown>",
+            error: formatErrorDetails(err),
+            event,
+            notificationID: "task-list-sse:dispatch-error",
+            notificationTitle: "Task list event failed to render",
+            notificationMessage: `Event type ${event?.type || "<unknown>"} threw while updating the task list.`,
+            notificationDetails: `${formatErrorDetails(err)}\n\nevent payload:\n${eventPayload}`,
           })
         }
       },

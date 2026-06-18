@@ -1,7 +1,13 @@
 # Right Panel Frontend Preview Mature Toolchain
 
 Date: 2026-06-04
-Status: Replacement plan
+Status: Superseded historical plan
+
+> Superseded on 2026-06-17 by the task-scoped browser preview target/evidence
+> contract and the strict request-schema notes. The iframe viewport requirements
+> below are historical rejected direction; current overlay tests assert that the
+> browser preview panel does not render an iframe or accept local query/signal
+> preview sources.
 
 ## Acronyms
 
@@ -15,11 +21,12 @@ Status: Replacement plan
 
 The previous frontend preview plan is retired and removed. It must not be used as source material for implementation.
 
-The right-panel frontend preview must be built from mature primitives:
+The superseded replacement plan proposed these mature primitives:
 
 - Kobalte/Solid UI primitives for tabs, buttons, toggles, menus, and tooltips.
 - Vite dev or preview server for local frontend projects when the project already exposes that runtime.
-- A sandboxed browser iframe as the embedded right-panel viewport.
+- A sandboxed browser iframe as the embedded right-panel viewport; this was
+  later rejected in favor of task-scoped backend preview target/evidence.
 - Playwright through the existing browser runtime for screenshots, console/pageerror/requestfailed evidence, and viewport verification.
 - Storybook only for component-library preview surfaces.
 - Sandpack or WebContainers only for explicit browser-sandbox code-lab tasks, not for normal local project preview.
@@ -48,11 +55,13 @@ No hand-written browser, custom devtools, custom tab keyboard model, custom resi
 
 ## Target Architecture
 
-The product surface should be a right-panel Preview surface backed by a server-side preview target record:
+The superseded product surface proposed a right-panel Preview surface backed by a server-side preview target record:
 
 1. The backend resolves one preview target for the active task.
 2. The backend returns the saved task preview target artifact: URL, root, status, diagnostics, and evidence IDs.
-3. The overlay renders that URL in a sandboxed iframe and controls the viewport with Kobalte-backed controls.
+3. The overlay would have rendered that URL in a sandboxed iframe; the current
+   contract rejects iframe preview rendering and keeps the backend evidence path
+   as the source of truth.
 4. The backend Playwright runtime captures verification evidence for the same URL and viewport presets.
 5. Console and runtime diagnostics come from Playwright evidence and, for controlled same-origin pages only, explicit postMessage instrumentation.
 
@@ -65,7 +74,7 @@ Automatic preview startup must feed this same artifact model. If a future Vite, 
 | Toolchain              | Use                                                                                      | Rejection Boundary                                                                 |
 | ---------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Vite                   | Local frontend dev/preview when the project declares Vite or generated source uses Vite. | Do not make OpenCorvus a Vite-only product; Vite is one supported runtime profile. |
-| Sandboxed iframe       | Right-panel embedded preview viewport.                                                   | Do not promise cross-origin DOM/console access.                                    |
+| Sandboxed iframe       | Historical rejected embedded preview viewport.                                           | Current preview work must not reintroduce iframe rendering.                        |
 | Playwright             | Screenshot, visible verification, console/pageerror/requestfailed evidence.              | Do not replace it with custom screenshot or pixel logic in overlay UI.             |
 | Kobalte                | Tabs, segmented controls, toggle buttons, menus, tooltips.                               | Do not write custom keyboard/ARIA behavior.                                        |
 | Storybook              | Component-library or design-system preview.                                              | Do not use it as the default for arbitrary app URLs.                               |
@@ -79,7 +88,8 @@ Automatic preview startup must feed this same artifact model. If a future Vite, 
 - Preview startup must fail truthfully with root, status, and diagnostics. It must not try another root or another server kind.
 - Overlay UI controls must use existing Kobalte-backed primitives and overlay design tokens.
 - Viewport presets must live in one shared config consumed by UI and Playwright verification.
-- The iframe must use a deliberate sandbox/allow/referrerpolicy contract.
+- The historical iframe sandbox contract must not be treated as current
+  implementation guidance.
 - Cross-origin diagnostics must be labeled as externally observed Playwright evidence; same-origin postMessage diagnostics must validate origin.
 - Mission page behavior is out of scope unless a separate Mission-specific spec replaces or extends its Channels column.
 

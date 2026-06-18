@@ -32,13 +32,13 @@ rg -n 'Project\.fromDirectory|Instance\.provide|Project\.isGitRepo|WorktreeNotGi
 
 Relevant findings:
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Project discovery | `project.ts::fromDirectory` returns `id="global"` for non-Git directories. | Replace with a deterministic directory-scoped id and directory worktree/sandbox. |
-| Task creation | `task-api/index.ts::prepareProject` already throws `WorktreeNotGitError` when `Instance.directory` is not Git. | Keep task creation strict; no task persistence in non-Git directory projects. |
-| Instance cache | `instance.ts::needsProjectRefresh` only exists because `global` cached `/` after the directory became Git. | Delete the global-specific refresh; a non-Git directory id can refresh normally when Git is initialized. |
-| Worktree operations | `worktree/index.ts` checks `Project.isGitRepo(Instance.directory)` before Git worktree operations. | Keep strict checks; no alternate cwd guessing. |
-| Legacy rows | Existing DBs may contain `project_id="global"` rows. | Treat as corrupt legacy data at task boundaries; do not create new rows in this shape. |
+| Area                | Evidence                                                                                                       | Decision                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Project discovery   | `project.ts::fromDirectory` returns `id="global"` for non-Git directories.                                     | Replace with a deterministic directory-scoped id and directory worktree/sandbox.                         |
+| Task creation       | `task-api/index.ts::prepareProject` already throws `WorktreeNotGitError` when `Instance.directory` is not Git. | Keep task creation strict; no task persistence in non-Git directory projects.                            |
+| Instance cache      | `instance.ts::needsProjectRefresh` only exists because `global` cached `/` after the directory became Git.     | Delete the global-specific refresh; a non-Git directory id can refresh normally when Git is initialized. |
+| Worktree operations | `worktree/index.ts` checks `Project.isGitRepo(Instance.directory)` before Git worktree operations.             | Keep strict checks; no alternate cwd guessing.                                                           |
+| Legacy rows         | Existing DBs may contain `project_id="global"` rows.                                                           | Treat as corrupt legacy data at task boundaries; do not create new rows in this shape.                   |
 
 Independent review correction:
 

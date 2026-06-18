@@ -33,14 +33,18 @@ describe("architect grep-only acceptance spec discipline", () => {
     expect(prompt).toContain("meaningful feature acceptance")
     expect(prompt).toContain("Syntax checks, typecheck, lint, build success, dev-server startup")
     expect(prompt).toContain("must never be the title, sole scorer, or whole success criterion")
-    expect(prompt).toContain("A shell scorer that only runs `tsc`, `typecheck`, `lint`, `build`, `npm start`, `bun dev`")
+    expect(prompt).toContain(
+      "A shell scorer that only runs `tsc`, `typecheck`, `lint`, `build`, `npm start`, `bun dev`",
+    )
     expect(prompt).toContain("surface that as an under-specified requirement in decomposition_analysis")
   })
 
   test("core prompt requires script_ref scorers to reference existing scripts", async () => {
     const prompt = await readArchitectPrompt()
 
-    expect(prompt).toContain('Use `spec.kind:"script_ref"` only for repo scripts that already exist at registration time')
+    expect(prompt).toContain(
+      'Use `spec.kind:"script_ref"` only for repo scripts that already exist at registration time',
+    )
     expect(prompt).toContain('For one-off checks, use `spec.kind:"shell"` with `cmd`')
     expect(prompt).toContain("do not register helper-script goals or temporary test goals to probe the schema")
   })
@@ -51,5 +55,15 @@ describe("architect grep-only acceptance spec discipline", () => {
     expect(prompt).toContain("`contract_audit` is a scorer `type`, not a `script_ref` path")
     expect(prompt).toContain("Never write `.opencorvus/scripts/contract-audit`")
     expect(prompt).toContain('for graph-contract checks use `type:"contract_audit"` with registered contract ids')
+  })
+
+  test("core prompt forbids internal runtime owned paths", async () => {
+    const prompt = await readArchitectPrompt()
+
+    expect(prompt).toContain("Never put `.opencorvus/r/`")
+    expect(prompt).toContain("in `owned_paths`")
+    expect(prompt).toContain("host-owned runtime evidence/state")
+    expect(prompt).toContain("read-only evidence references")
+    expect(prompt).toContain("project source/docs paths")
   })
 })

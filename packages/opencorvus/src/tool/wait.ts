@@ -21,9 +21,7 @@ export const WaitToolParameters = z.object({
   reason: z
     .string()
     .min(1)
-    .describe(
-      "Concrete external event you are waiting for and why no in-task dispatch is responsible until it lands.",
-    ),
+    .describe("Concrete external event you are waiting for and why no in-task dispatch is responsible until it lands."),
 })
 
 export const WaitToolDescription =

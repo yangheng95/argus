@@ -1,7 +1,10 @@
 import { Database } from "bun:sqlite"
+import { requiredEnv, requiredEnvList } from "./inspect-env"
 
-const TASK = "tsk_ddc529dfd0011ajJTgBqdlroyk"
-const DB = "D:/myhexin-local/argus/packages/overlay/dist/opencorvus-overlay-windows-x64/.opencorvus/opencorvus.db"
+const TASK = requiredEnv("TASK_ID")
+const TARGET_GOAL_IDS = new Set(requiredEnvList("GOAL_IDS"))
+const DETAIL_GOAL_ID = requiredEnv("DETAIL_GOAL_ID")
+const DB = requiredEnv("OPENCORVUS_DB")
 const db = new Database(DB, { readonly: true })
 
 const buildSessions = db
@@ -24,7 +27,7 @@ for (const b of buildSessions) {
 }
 
 for (const b of buildSessions) {
-  if (b.goal_id !== "gol_ddc5e098c004cknLf0UADTvjw1" && b.goal_id !== "gol_ddc5e098c003cNznIITC54ee1X") continue
+  if (!TARGET_GOAL_IDS.has(b.goal_id)) continue
   console.log(`\n\n===== goal=${b.goal_id} session=${b.id} — last 12 messages =====`)
   const msgs = db
     .query<
@@ -66,7 +69,7 @@ for (const b of buildSessions) {
 
 console.log("\n\n===== last assistant build msg per goal — full payload (first 3000) =====")
 for (const b of buildSessions) {
-  if (b.goal_id !== "gol_ddc5e098c004cknLf0UADTvjw1") continue
+  if (b.goal_id !== DETAIL_GOAL_ID) continue
   const last = db
     .query<
       { id: string; data: string; time_created: number },

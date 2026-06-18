@@ -18,9 +18,8 @@ Use this after a Build agent has written React/Vue/etc. source from web-clone-so
     sourcePackageDir: z
       .string()
       .describe(
-        "Directory containing reference.png, source-skeleton/, and source-ir/. Use the task-runtime path from frontend_design; omitted keeps the legacy <execution directory>/web-clone-source default.",
-      )
-      .optional(),
+        "Required directory containing reference.png, source-skeleton/, and source-ir/. Use the task-runtime path from frontend_design.",
+      ),
     outputPath: z
       .string()
       .describe("Audit JSON output path. Defaults to <projectDir>/web-clone-source-skeleton-consumption-audit.json.")
@@ -33,9 +32,7 @@ Use this after a Build agent has written React/Vue/etc. source from web-clone-so
   }),
   async execute(params) {
     const projectDir = resolveInputPath(params.projectDir ?? Instance.directory)
-    const sourcePackageDir = resolveInputPath(
-      params.sourcePackageDir ?? path.join(Instance.directory, "web-clone-source"),
-    )
+    const sourcePackageDir = resolveInputPath(params.sourcePackageDir)
     const outputPath = params.outputPath ? resolveInputPath(params.outputPath) : undefined
     if (outputPath) assertInsideDirectory(outputPath, projectDir, "outputPath")
     const { audit, auditPath } = await writeWebCloneSourceSkeletonConsumptionAudit({

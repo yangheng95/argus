@@ -3,13 +3,13 @@ import { Message } from "../../src/session/message"
 import type { Provider } from "../../src/provider/provider"
 
 /**
- * Stream early-death structural-validity gate at the toModelMessages
+ * Stream early-death structural-validity check at the toModelMessages
  * boundary. See specs/new-arch/2026-05-08-stream-early-death-and-retry-fuse.md.
  *
  * When an LLM stream early-dies (provider truncates response after opening
  * a reasoning block, socket dies, model returns nothing), the persisted
  * assistant turn ends up with `finish=null`, `error=null`, and parts like
- * `[step-start, reasoning(text="")]`. Without this gate the message gets
+ * `[step-start, reasoning(text="")]`. Without this check the message gets
  * serialised to `{role:"assistant", content:"", tool_calls:undefined}`,
  * which OpenAI / DeepSeek / any chat-completion provider rejects with
  * HTTP 4xx. Before restart recovery became passive, `monitorRuns`
@@ -80,7 +80,7 @@ const userTurn: Message.WithParts = {
   parts: [{ ...part("m-user", "u1"), type: "text", text: "hello" }] as Message.Part[],
 }
 
-describe("toModelMessages — stream early-death structural gate", () => {
+describe("toModelMessages — stream early-death structural check", () => {
   test("drops assistant turn that has only step-start + empty reasoning (the 2026-05-08 bug shape)", async () => {
     const broken: Message.WithParts = {
       info: assistantInfo("m-assistant-broken", "m-user"),

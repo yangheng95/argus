@@ -26,4 +26,4 @@ LINE is 1:1 or group; thread key = `userId` or `groupId`.
 ## Troubleshooting
 
 - **Signature validation failed**: `LINE_CHANNEL_SECRET` wrong; signature algorithm is HMAC-SHA256.
-- **Reply token expired**: replyTokens are valid for 1 minute; long tasks automatically fall back to push messages.
+- **Reply token expired**: this adapter sends task responses with LINE push messages; reply tokens are only part of incoming webhook metadata.

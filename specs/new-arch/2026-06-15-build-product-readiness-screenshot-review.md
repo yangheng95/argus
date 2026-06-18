@@ -17,10 +17,10 @@ product-readiness self-review before `report_build_result(status="passed")`.
 
 ## Call Point Inventory
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
-| `packages/opencorvus/src/prompt/core/build-core.txt` | Requires frontend screenshot inspection but not an explicit product-manager readiness verdict. | Add a product-readiness review section: inspect screenshots as a product manager, reject premature code/design, and fail or keep iterating when the deliverable is not product-grade. |
-| `packages/opencorvus/test/build-agent/prompt-goal-discipline.test.ts` | Tests visual evidence loop and random ports. | Add regression assertions for product-manager screenshot review, product-grade deliverables, and premature implementation/design blockers. |
+| Surface                                                               | Current behavior                                                                               | Change                                                                                                                                                                                |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/prompt/core/build-core.txt`                  | Requires frontend screenshot inspection but not an explicit product-manager readiness verdict. | Add a product-readiness review section: inspect screenshots as a product manager, reject premature code/design, and fail or keep iterating when the deliverable is not product-grade. |
+| `packages/opencorvus/test/build-agent/prompt-goal-discipline.test.ts` | Tests visual evidence loop and random ports.                                                   | Add regression assertions for product-manager screenshot review, product-grade deliverables, and premature implementation/design blockers.                                            |
 
 ## Acceptance
 

@@ -339,7 +339,7 @@ test("submit_frontend_template renders compact structured fields into markdown h
   const final = kit.getCollector().final
   expect(final?.frontend_template).toContain("Route")
   expect(final?.fillable_modules).toContain("Markets table")
-  expect(final?.component_inventory).toContain("Legacy compatibility summary only")
+  expect(final?.component_inventory).toContain("Component-family cross-check")
   expect(final?.component_inventory).toContain("comp-table")
   expect(final?.quality_project_contract).toContain("Source layout")
   expect(final?.quality_project_contract).toContain("source skeleton")

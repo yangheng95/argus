@@ -1,26 +1,26 @@
 /**
- * INFORMATION MISSING fallback — debug-only prompt block + helper.
+ * INFORMATION MISSING diagnostic — debug-only prompt block + helper.
  *
  * When `EngineConfig.debug.fail_on_information_missing` is true the host
  * appends this block to every agent's system prompt and runs the matching
  * detection in `agent/runner.ts` (see `messageHasInformationMissing` /
- * `extractInformationMissingBlock`). On detection the host process.exits
- * with code 99 so the operator immediately sees that upstream context
- * dropped instead of a long log of guessed-default work.
+ * `extractInformationMissingBlock`). On detection the host fails the current
+ * run with a non-retryable AgentRunError so the operator immediately sees
+ * that upstream context dropped instead of a long log of guessed-default work.
  *
  * Single-source: this file owns the prompt text. Prompt files
  * (`packages/opencorvus/src/prompt/core/*-core.txt`) deliberately do
- * NOT carry the fallback section; the host injects it at runtime when
+ * NOT carry the diagnostic section; the host injects it at runtime when
  * the toggle is on, strips it (by not appending) when off. Toggle is
  * exposed via overlay GeneralPanel → PATCH /config → opencorvus.jsonc.
  *
  * Spec / origin: 2026-05-07 INFORMATION MISSING debug toggle. Pinned via
- * `test/agent/information-missing-fallback.test.ts` (constant text +
+ * `test/agent/information-missing-diagnostic.test.ts` (constant text +
  * helper) and `test/agent/information-missing-detection.test.ts`
  * (host-side detection helpers).
  */
 
-export const INFORMATION_MISSING_FALLBACK_TEXT = `## INFORMATION MISSING fallback (debug toggle ON — guessing is FORBIDDEN)
+export const INFORMATION_MISSING_DIAGNOSTIC_TEXT = `## INFORMATION MISSING diagnostic (debug toggle ON — guessing is FORBIDDEN)
 
 This invocation runs with the operator's debug toggle ON. The
 operator wants to surface every place the dispatcher chain dropped
@@ -84,15 +84,16 @@ Permission rules — these CLOSE the helpful-bias loophole:
   mode under audit.
 
 The host detects \`<INFORMATION MISSING>\` in your stream and
-process.exits the run with code 99. That is the desired outcome.
+terminates the current run with a non-retryable AgentRunError. That is
+the desired outcome.
 You have ONE emit — enumerate every missing field in ONE block.`
 
 /**
- * Append the fallback block to a system prompt. Trims trailing whitespace
+ * Append the diagnostic block to a system prompt. Trims trailing whitespace
  * on the input and inserts a blank line so the block always renders as a
  * standalone section regardless of whether the upstream prompt ended with
  * `\n` or not.
  */
-export function appendInformationMissingFallback(systemPrompt: string): string {
-  return `${systemPrompt.trimEnd()}\n\n${INFORMATION_MISSING_FALLBACK_TEXT}`
+export function appendInformationMissingDiagnostic(systemPrompt: string): string {
+  return `${systemPrompt.trimEnd()}\n\n${INFORMATION_MISSING_DIAGNOSTIC_TEXT}`
 }

@@ -45,6 +45,14 @@ test("runtime visual render uses the shared browser launch timeout resolver", as
   expect(source).not.toContain("OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000")
 })
 
+test("runtime visual render reports glyph coverage as a capture layer", async () => {
+  const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/runtime/visual-page.ts"), "utf8")
+
+  expect(source).toContain("collectGlyphCoverage(page)")
+  expect(source).toContain("const glyph = await collectGlyphCoverage(page)")
+  expect(source).toContain("glyph,")
+})
+
 test("visual diff fails runtime capture layers even when screenshot similarity passes", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-runtime-visual-diff-"))
   tempDirs.push(dir)

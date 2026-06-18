@@ -549,7 +549,7 @@ export const TaskAccepted = z.object({
 
 export const TaskMessageTarget = z
   .object({
-    kind: z.literal("build_session"),
+    kind: z.enum(["agent_session", "build_session"]),
     sessionID: z.string().min(1),
     goalID: z.string().min(1).optional(),
   })
@@ -894,8 +894,8 @@ export const TaskBoard = z.object({
   /** Task-level rollup of every quality criterion that touched this task —
    *  per-goal evaluator outcomes, integrity acceptance review, and external
    *  quality gates (e.g. visual-diff). Persisted in engine_task.criteria_results
-   *  and exposed here so the overlay's EvaluationCriteriaPanel and the acceptance
-   *  agent's `query_criteria` tool both read from the same place. */
+   *  and exposed here so acceptance and contract-audit readers use the same
+   *  source. */
   criteriaResults: EvaluationCheck.array().optional(),
 })
 

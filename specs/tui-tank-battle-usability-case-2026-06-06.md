@@ -1,8 +1,15 @@
 # Overlay TUI Tank Battle Usability Case - 2026-06-06
 
+> **Status (2026-06-17): Superseded.** The overlay right-side TUI surface and
+> the source/test paths named below were retired by
+> `specs/new-arch/2026-06-10-tui-removal-plan.md`. This file is retained only
+> as historical usability evidence.
+
 ## Corrected Goal
 
-Use "build a Tank Battle game" as a realistic overlay TUI usability case. The test target is the overlay right-side TUI surface, not a standalone game package.
+This historical note used "build a Tank Battle game" as a realistic overlay TUI
+usability case. The test target was the retired overlay right-side TUI surface,
+not a standalone game package.
 
 ## Existing Call Points
 

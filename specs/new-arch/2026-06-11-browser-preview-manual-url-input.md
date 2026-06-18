@@ -1,7 +1,12 @@
 # Browser Preview Manual URL Input
 
 Date: 2026-06-11
-Status: Implementation plan
+Status: superseded historical implementation plan
+
+> **Status (2026-06-17): Superseded.** The route body contract proposed here was rejected by
+> `2026-06-15-browser-preview-consensus-closure.md`. The current browser-preview target route
+> accepts a task-scoped `targetID`; direct URL bodies are historical proposal text, not current API
+> contract.
 
 ## Acronyms
 
@@ -15,14 +20,14 @@ The overlay browser preview must let an operator type a preview URL manually. It
 
 ## Call Point Sweep
 
-| Symbol / route | Call points | Action |
-| --- | --- | --- |
-| `normalizeBrowserPreviewUrl` | `browser-preview/target.ts`, `browser-preview/extract.ts`, `dev-server-command.ts`, `browser-preview/target.test.ts` | Reuse unchanged. It already accepts explicit HTTP(S) URLs and scheme-less loopback host-port text. |
-| `persistBrowserPreviewTarget` | extraction, shell/tool materialization, route tests, verification tests | Reuse for manual input so the target artifact remains the single source. |
-| `PUT /task/:taskID/browser-preview/target` | overlay service, backend route tests, SDK/OpenAPI route contract | Accept exactly one of `targetID` or `url`; `targetID` promotes an existing artifact, `url` normalizes and persists a task artifact. |
-| `selectTaskBrowserPreviewTarget` | `BrowserPreviewPanel.tsx`, overlay service tests, browser E2E fixture | Keep for targetID selection and extend input shape to include URL submit. |
-| `BrowserPreviewPanel` | mounted from `main.tsx`, source tests, browser E2E fixture | Add a compact URL form in the command surface; submit calls the backend target route, then refreshes the resolved target. |
-| live/capture routes | service tests and browser E2E fixture | Keep targetID-only. Manual URLs must not be passed to live/capture bodies. |
+| Symbol / route                             | Call points                                                                                                          | Action                                                                                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `normalizeBrowserPreviewUrl`               | `browser-preview/target.ts`, `browser-preview/extract.ts`, `dev-server-command.ts`, `browser-preview/target.test.ts` | Reuse unchanged. It already accepts explicit HTTP(S) URLs and scheme-less loopback host-port text.                                  |
+| `persistBrowserPreviewTarget`              | extraction, shell/tool materialization, route tests, verification tests                                              | Reuse for manual input so the target artifact remains the single source.                                                            |
+| `PUT /task/:taskID/browser-preview/target` | overlay service, backend route tests, SDK/OpenAPI route contract                                                     | Accept exactly one of `targetID` or `url`; `targetID` promotes an existing artifact, `url` normalizes and persists a task artifact. |
+| `selectTaskBrowserPreviewTarget`           | `BrowserPreviewPanel.tsx`, overlay service tests, browser E2E fixture                                                | Keep for targetID selection and extend input shape to include URL submit.                                                           |
+| `BrowserPreviewPanel`                      | mounted from `main.tsx`, source tests, browser E2E fixture                                                           | Add a compact URL form in the command surface; submit calls the backend target route, then refreshes the resolved target.           |
+| live/capture routes                        | service tests and browser E2E fixture                                                                                | Keep targetID-only. Manual URLs must not be passed to live/capture bodies.                                                          |
 
 ## Design
 

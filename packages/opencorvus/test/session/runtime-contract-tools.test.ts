@@ -9,8 +9,10 @@ describe("session runtime contract tool surface", () => {
   test("worker runtime metadata covers current runAgentSession stage agents", () => {
     expect(AgentRuntimeMetadata.AGENT_OWNED_SESSION_KIND_SET.has("visual-qa")).toBe(true)
     expect(SessionLoop.agentKindRequiresRuntimeContract("visual-qa")).toBe(true)
+    expect(SessionLoop.agentKindRequiresRuntimeContract("explore")).toBe(true)
     expect(SessionLoop.agentKindRequiresRuntimeContract("goal-workload-analyst")).toBe(true)
     expect(AgentRuntimeMetadata.EXACT_RUNTIME_CONTRACT_AGENT_KIND_SET.has("visual-qa")).toBe(true)
+    expect(AgentRuntimeMetadata.EXACT_RUNTIME_CONTRACT_AGENT_KIND_SET.has("explore")).toBe(false)
     expect(AgentRuntimeMetadata.EXACT_RUNTIME_CONTRACT_AGENT_KIND_SET.has("goal-workload-analyst")).toBe(true)
     expect(AgentRuntimeMetadata.EXACT_RUNTIME_CONTRACT_AGENT_KIND_SET.has("deep-research")).toBe(true)
     expect(AgentRuntimeMetadata.EXACT_RUNTIME_CONTRACT_AGENT_KIND_SET.has("fact-check")).toBe(true)

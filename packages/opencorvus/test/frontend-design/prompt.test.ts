@@ -211,9 +211,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("restore the static HTML/CSS skeleton")
     expect(prompt).toContain("Treat `nextSourceDomReplacement` as the first visual-region queue item")
     expect(prompt).toContain("not as a target-project extraction command")
-    expect(prompt).toContain(
-      `Default visual HTML skeleton root: \`${visualSkeleton}\``,
-    )
+    expect(prompt).toContain(`Default visual HTML skeleton root: \`${visualSkeleton}\``)
     expect(prompt).toContain("Report the public project root as `visual-html-skeleton`")
     expect(prompt).toContain(
       "do not name `web-clone-target`, a framework app root, or `frontend-design-skeleton` as the current workflow deliverable",
@@ -263,7 +261,9 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(
       "compare it against `reference.png` with `webpage_render`, `webpage_evaluate` diagnostic output, and `webpage_vision_judge` evidence when available",
     )
-    expect(prompt).toContain("repair the same region before selecting another region when screenshot review or the visual judge names mismatches")
+    expect(prompt).toContain(
+      "repair the same region before selecting another region when screenshot review or the visual judge names mismatches",
+    )
     expect(prompt).toContain("Do not use shell listings or build success as visual evidence")
     expect(prompt).toContain(
       "the skeleton is source-editable static HTML/CSS, not compiled output, not raw source DOM replay",

@@ -17,7 +17,10 @@ describe("workspace export runtime filtering", () => {
     await fs.mkdir(path.join(tmp.path, ".opencorvus", "r", "t", "ab", "cdef12"), { recursive: true })
     await fs.writeFile(path.join(tmp.path, ".opencorvus", "r", "t", "ab", "cdef12", "trace.jsonl"), "large runtime\n")
     await fs.mkdir(path.join(tmp.path, ".opencorvus", "runtime", "tasks", "legacy"), { recursive: true })
-    await fs.writeFile(path.join(tmp.path, ".opencorvus", "runtime", "tasks", "legacy", "trace.jsonl"), "legacy runtime\n")
+    await fs.writeFile(
+      path.join(tmp.path, ".opencorvus", "runtime", "tasks", "legacy", "trace.jsonl"),
+      "legacy runtime\n",
+    )
     await fs.writeFile(path.join(tmp.path, "src", "app.ts"), "export const value = 2\n")
     await $`git add -f .opencorvus/r/t/ab/cdef12/trace.jsonl .opencorvus/runtime/tasks/legacy/trace.jsonl src/app.ts`
       .cwd(tmp.path)

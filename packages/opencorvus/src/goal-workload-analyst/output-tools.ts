@@ -75,9 +75,14 @@ const WorkloadBriefSchema = z.object({
 })
 
 export function buildGoalWorkloadReport(collector: GoalWorkloadCollector) {
+  if (!collector.finalized) {
+    throw new Error("Goal Workload Analyst report requires submit_workload_analysis before buildReport.")
+  }
+  const summary = collector.summary.trim()
+  if (summary.length === 0) {
+    throw new Error("Goal Workload Analyst report requires a submitted summary.")
+  }
   const flagged = collector.briefs.filter((b) => b.decomposition_concern?.trim())
-  const fallbackSummary = `${collector.briefs.length} workload brief(s), ${flagged.length} flagged for re-sizing`
-  const summary = collector.summary.trim().length > 0 ? collector.summary : fallbackSummary
   const lines = collector.briefs.map((b) => {
     const inv = b.execution_inventory
     const flag = b.decomposition_concern?.trim() ? " [decomposition_concern]" : ""

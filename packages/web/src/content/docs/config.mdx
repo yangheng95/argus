@@ -1,21 +1,28 @@
 ---
 title: Configuration
-description: Configure OpenCorvus via opencorvus.jsonc, environment variables, and CLI flags.
+description: Configure OpenCorvus with JSONC files and environment variables.
 ---
 
-OpenCorvus config layers: **CLI flag > environment variable > `opencorvus.jsonc` file**. The file has lowest precedence but is the most durable.
+OpenCorvus loads JSONC config files and selected environment variables. There is no global `--config` CLI flag; use `OPENCORVUS_CONFIG` for an explicit file or `OPENCORVUS_CONFIG_CONTENT` for inline JSON.
 
 ## File locations
 
-| Location                               | Purpose                                           |
-| -------------------------------------- | ------------------------------------------------- |
-| `~/.opencorvus/config/opencorvus.json` | Global defaults                                   |
-| `<repo>/.opencorvus/opencorvus.jsonc`  | Project-level override (JSONC comments supported) |
-| `OPENCORVUS_CONFIG_CONTENT` env        | Runtime injection (recommended for CI/containers) |
+| Location                                       | Purpose                                              |
+| ---------------------------------------------- | ---------------------------------------------------- |
+| `$XDG_CONFIG_HOME/opencorvus/opencorvus.jsonc` | Global user config on Linux and other XDG systems    |
+| `%APPDATA%/opencorvus/opencorvus.jsonc`        | Global user config on Windows                        |
+| `$OPENCORVUS_HOME/config/opencorvus.jsonc`     | Global user config when `OPENCORVUS_HOME` is set     |
+| `<repo>/opencorvus.jsonc`                      | Project config discovered upward inside the worktree |
+| `<repo>/.opencorvus/opencorvus.jsonc`          | Project-local OpenCorvus config directory            |
+| `$OPENCORVUS_CONFIG_DIR/opencorvus.jsonc`      | Explicit local config directory                      |
+| `$OPENCORVUS_CONFIG`                           | Explicit single config file                          |
+| `OPENCORVUS_CONFIG_CONTENT`                    | Inline JSON config content                           |
 
-Same-name fields: later wins.
+`.json` is also accepted, but `.jsonc` is preferred because comments are supported.
 
 ## Minimal config
+
+Create a project file at `<repo>/.opencorvus/opencorvus.jsonc`:
 
 ```jsonc
 {
@@ -26,8 +33,6 @@ Same-name fields: later wins.
 
 ## Complete example
 
-Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
-
 ```jsonc
 {
   "$schema": "https://opencorvus.ai/config.json",
@@ -35,8 +40,9 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
 
   "network": {
     "proxy": {
-      "enabled": true,
       "url": "http://127.0.0.1:7890",
+      "llmProvider": true,
+      "webResearch": true,
     },
   },
 
@@ -65,11 +71,11 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
 
 ### `model`
 
-Default LLM. Format `<providerId>/<modelId>`; provider must be registered in `provider` or built-in.
+Default LLM model. Format: `<providerId>/<modelId>`.
 
 ### `network.proxy`
 
-HTTP(S) proxy for model provider requests. `enabled: false` or an empty `url` means direct fetch. `url` supports `http://` and `https://`.
+HTTP(S) proxy settings. `llmProvider: true` routes model provider traffic through the proxy, and `webResearch: true` routes websearch/webfetch traffic through it. `url` supports `http://` and `https://`; use `username` / `password` for proxy authentication instead of embedding credentials in the URL.
 
 ### `skills.paths` / `skills.urls`
 
@@ -77,23 +83,23 @@ Local skill market paths and remote skill URLs. Loaded at startup. See [Skills](
 
 ### `permission`
 
-Per-skill / per-tool `allow / ask / deny`. **Rule order matters, last declaration wins** (last-match-wins).
+Per-skill and per-tool `allow`, `ask`, or `deny` rules. Rule order matters; later declarations override earlier declarations.
 
 See [Permissions](/docs/permissions/).
 
 ### `experimental.auto_question`
 
-Fine-grained switch for stale clarification questions (default `true` — `src/config/config.ts`). When enabled, a stale question interaction is rejected after the interaction timeout. Permission prompts are not controlled here; built-in agent permissions default to `allow`, and explicit `ask` rules wait for an operator reply until the reject timeout fires. See [Permissions](/docs/permissions/).
+Fine-grained switch for stale clarification questions. When enabled, a stale question interaction is rejected after the question timeout. Permission prompts are controlled by permission rules and `OPENCORVUS_PERMISSION_TIMEOUT_MS`.
 
-### `assistant` block
+### `assistant`
 
-Fine-tunes each agent (merged in `OrchestratorConfig.get()` — see `src/orchestrator/config.ts:67`):
+Fine-tunes each agent through the config schema in `packages/opencorvus/src/config/config.ts`:
 
 ```jsonc
 {
   "assistant": {
     "requirements": { "max_steps": 20 },
-    "evaluator": { "tier": "standard" }, // core | standard | full
+    "evaluator": { "tier": "standard" },
     "max_runs": 3,
     "max_fix_runs": 2,
     "max_executor_groups": 4,
@@ -103,16 +109,23 @@ Fine-tunes each agent (merged in `OrchestratorConfig.get()` — see `src/orchest
 
 ## Load order
 
-1. `~/.opencorvus/config/opencorvus.json`
-2. `$OPENCORVUS_CONFIG_DIR/opencorvus.json` (if set)
-3. `<repo>/.opencorvus/opencorvus.jsonc`
-4. Merge `OPENCORVUS_CONFIG_CONTENT` env (JSON string)
-5. CLI flags override
+Current source loads config in this low-to-high precedence order:
+
+1. Remote `.well-known/opencorvus` organization defaults from stored well-known credentials.
+2. Packaged plugins bundled beside the executable.
+3. Global user config from the resolved global config directory.
+4. Explicit file from `OPENCORVUS_CONFIG`.
+5. Project root config files discovered upward inside the worktree: `opencorvus.jsonc`, then `opencorvus.json`.
+6. OpenCorvus config directories: global config directory, discovered project `.opencorvus/` directories, then `OPENCORVUS_CONFIG_DIR`.
+7. Inline JSON from `OPENCORVUS_CONFIG_CONTENT`.
+8. Managed enterprise config directory, when present.
+
+Managed config directories are `/Library/Application Support/opencorvus` on macOS, `%ProgramData%/opencorvus` on Windows, and `/etc/opencorvus` on Linux.
 
 :::note
-Env snapshot: `Env.state()` snapshots `process.env` on instance creation. `.env` files must be loaded **before** the process starts — benchmarks inject env explicitly for this reason.
+Environment variables are read by the running process. Load `.env` files before starting `opencorvus serve` or `opencorvus run`.
 :::
 
 ## Hot reload
 
-Not supported today. Restart `opencorvus serve` after config changes.
+Config hot reload is not supported. Restart `opencorvus serve` after changing config files or environment variables.

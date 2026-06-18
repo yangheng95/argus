@@ -430,10 +430,8 @@ function buildUserPrompt(
   hostPreparedFrontendProject?: HostPreparedFrontendProject,
 ): string {
   const runtimePaths = input.taskID ? ProjectRuntimePaths.frontendDesignPaths("", input.taskID) : undefined
-  const webpageEvidenceRef =
-    runtimePaths?.webpageEvidenceRelative ?? ".opencorvus/r/t/<task-key>/fd/webpage-evidence"
-  const sourcePackageRef =
-    runtimePaths?.sourcePackageRelative ?? ".opencorvus/r/t/<task-key>/fd/web-clone-source"
+  const webpageEvidenceRef = runtimePaths?.webpageEvidenceRelative ?? ".opencorvus/r/t/<task-key>/fd/webpage-evidence"
+  const sourcePackageRef = runtimePaths?.sourcePackageRelative ?? ".opencorvus/r/t/<task-key>/fd/web-clone-source"
   const skeletonProjectRef =
     runtimePaths?.skeletonProjectRelative ?? ".opencorvus/r/t/<task-key>/fd/frontend-design-skeleton"
   const visualSkeletonRef = input.taskID
@@ -539,7 +537,7 @@ function buildUserPrompt(
       "Describe this as rawproject source-region visual restoration: all skeleton HTML, CSS, assets, and representative states must trace to rawproject source nodes/regions/assets/reference screenshots, and visual replacement work should happen source-region by source-region. " +
       "When the target is an existing frontend project, inspect package manifests and obvious component/UI directories only to document later transcription constraints; do not turn this workflow into app-source implementation. " +
       "In principle, downstream implementation must reuse existing project components/design-system primitives first and mature maintained libraries second; custom code is limited to simple page-specific glue or micro-adjust layout/spacing. Charts, maps, tables, calendars, popovers, dialogs, menus, forms, virtualized lists, drag/drop, editors, rich media, and complex layouts require reusable project or library options when available. " +
-      "Your final report should not be a component catalog. Put known problems, evidence gaps, extraction-vs-rewrite risk, source organization, debug commands, reuse decisions, PRD delta boundaries, and agent handoff notes into `quality_project_contract`, `completeness_review`, and `open_questions`; leave `component_inventory` empty unless the provider requires a legacy compatibility summary. " +
+      "Your final report should not be a component catalog. Put known problems, evidence gaps, extraction-vs-rewrite risk, source organization, debug commands, reuse decisions, PRD delta boundaries, and agent handoff notes into `quality_project_contract`, `completeness_review`, and `open_questions`; leave `component_inventory` empty unless the provider requires a compact component-family cross-check. " +
       renderFinalAcceptanceModeInstruction(Boolean(hostPreparedFrontendProject)) +
       " " +
       "For webpage replicas, set `final_acceptance_mode=visual_baseline_allowed` and `frontend_project.role=visual_baseline_input` for the first workflow, then put the future skeleton-to-project transcription contract into `quality_project_contract`, `visual_consistency_contract`, `reference_artifacts`, and `frontend_project.notes`; do not describe the HTML skeleton as Build's implementation target. " +

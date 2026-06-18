@@ -5,7 +5,11 @@ export function validResearchBrief(
   request = "research request",
   overrides: Partial<ResearchBrief> = {},
 ): ResearchBrief {
-  const bundleRoot = ProjectRuntimePaths.deepResearchPaths("", "tsk_research_fixture", "ses_research_fixture").relativeDir
+  const bundleRoot = ProjectRuntimePaths.deepResearchPaths(
+    "",
+    "tsk_research_fixture",
+    "ses_research_fixture",
+  ).relativeDir
   const evidence = [
     {
       id: "ev_1",

@@ -1,21 +1,28 @@
 ---
 title: 配置
-description: 通过 opencorvus.jsonc、环境变量与 CLI flag 配置 OpenCorvus。
+description: 通过 JSONC 文件和环境变量配置 OpenCorvus。
 ---
 
-OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` 文件**。后者优先级最低，但最稳定。
+OpenCorvus 读取 JSONC config 文件和指定环境变量。当前没有全局 `--config` CLI flag；显式文件使用 `OPENCORVUS_CONFIG`，内联 JSON 使用 `OPENCORVUS_CONFIG_CONTENT`。
 
 ## 配置文件位置
 
-| 位置                                   | 用途                          |
-| -------------------------------------- | ----------------------------- |
-| `~/.opencorvus/config/opencorvus.json` | 全局默认                      |
-| `<repo>/.opencorvus/opencorvus.jsonc`  | 项目级覆盖（支持 JSONC 注释） |
-| `OPENCORVUS_CONFIG_CONTENT` env        | 运行时注入（CI/容器推荐）     |
+| 位置                                           | 用途                                    |
+| ---------------------------------------------- | --------------------------------------- |
+| `$XDG_CONFIG_HOME/opencorvus/opencorvus.jsonc` | Linux 和其他 XDG 系统的全局用户配置     |
+| `%APPDATA%/opencorvus/opencorvus.jsonc`        | Windows 全局用户配置                    |
+| `$OPENCORVUS_HOME/config/opencorvus.jsonc`     | 设置 `OPENCORVUS_HOME` 时的全局用户配置 |
+| `<repo>/opencorvus.jsonc`                      | 在 worktree 内向上发现的项目配置        |
+| `<repo>/.opencorvus/opencorvus.jsonc`          | 项目本地 OpenCorvus config 目录         |
+| `$OPENCORVUS_CONFIG_DIR/opencorvus.jsonc`      | 显式本地 config 目录                    |
+| `$OPENCORVUS_CONFIG`                           | 显式单个 config 文件                    |
+| `OPENCORVUS_CONFIG_CONTENT`                    | 内联 JSON config                        |
 
-同名字段，后者覆盖前者。
+`.json` 也被接受；推荐使用 `.jsonc`，因为支持注释。
 
 ## 最小配置
+
+在项目里创建 `<repo>/.opencorvus/opencorvus.jsonc`：
 
 ```jsonc
 {
@@ -26,8 +33,6 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 ## 完整示例
 
-参考仓库中的真实配置 `packages/opencorvus/.opencorvus/opencorvus.jsonc`：
-
 ```jsonc
 {
   "$schema": "https://opencorvus.ai/config.json",
@@ -35,16 +40,14 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
   "network": {
     "proxy": {
-      "enabled": true,
       "url": "http://127.0.0.1:7890",
+      "llmProvider": true,
+      "webResearch": true,
     },
   },
 
   "skills": {
-    "paths": [
-      "<abs-path>/skills-market/github.com-openai-skills",
-      "<abs-path>/skills-market/github.com-anthropics-skills",
-    ],
+    "paths": ["<abs-path>/skills-market/github.com-anthropics-skills"],
     "urls": [],
   },
 
@@ -55,7 +58,6 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
       "local-note": "deny",
       "sora": "ask",
       "figma": "ask",
-      "doc-coauthoring": "ask",
     },
   },
 
@@ -69,35 +71,35 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 ### `model`
 
-默认 LLM。格式 `<providerId>/<modelId>`，provider 需在 `provider` 块或内置列表里注册。
+默认 LLM 模型。格式为 `<providerId>/<modelId>`。
 
 ### `network.proxy`
 
-模型 Provider 请求的 HTTP(S) 代理。`enabled: false` 或空 `url` 表示直连；`url` 仅支持 `http://` / `https://`。
+HTTP(S) 代理设置。`llmProvider: true` 会让模型 provider 流量走代理，`webResearch: true` 会让 websearch/webfetch 流量走代理。`url` 支持 `http://` 与 `https://`；代理认证请使用 `username` / `password`，不要把凭据内嵌在 URL 里。
 
 ### `skills.paths` / `skills.urls`
 
-本地 skill 市场路径与远程 skill URL。OpenCorvus 启动时加载全部 skill。详见 [Skills](/docs/zh-cn/skills/)。
+本地 skill 市场路径与远程 skill URL。启动时加载。详见 [Skills](/docs/zh-cn/skills/)。
 
 ### `permission`
 
-每个 skill/tool 的 `allow / ask / deny`。**规则顺序 matters，后声明的覆盖前声明的**（last-match-wins）。
+每个 skill 和 tool 的 `allow`、`ask`、`deny` 规则。规则顺序重要；后声明的规则覆盖先声明的规则。
 
 详见 [Permissions](/docs/zh-cn/permissions/)。
 
 ### `experimental.auto_question`
 
-悬置澄清提问的细粒度开关（默认 `true`——`src/config/config.ts`）。开启时，过期的 question interaction 会在交互超时后被拒绝。权限提示不由这里控制；内置 agent 权限默认 `allow`，显式 `ask` 规则会等待操作员回复，直到拒绝超时触发。详见 [Permissions](/docs/zh-cn/permissions/)。
+悬置澄清提问的细粒度开关。开启时，过期 question interaction 会在 question timeout 后被拒绝。权限提示由 permission 规则和 `OPENCORVUS_PERMISSION_TIMEOUT_MS` 控制。
 
-### `assistant` 子块
+### `assistant`
 
-各 agent 的精细调优（在 `OrchestratorConfig.get()` 里合并，见 `src/orchestrator/config.ts:67`）：
+各 agent 的精细调优由 `packages/opencorvus/src/config/config.ts` 的 config schema 声明：
 
 ```jsonc
 {
   "assistant": {
     "requirements": { "max_steps": 20 },
-    "evaluator": { "tier": "standard" }, // core | standard | full
+    "evaluator": { "tier": "standard" },
     "max_runs": 3,
     "max_fix_runs": 2,
     "max_executor_groups": 4,
@@ -107,16 +109,23 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 ## 配置加载顺序
 
-1. 读 `~/.opencorvus/config/opencorvus.json`
-2. 读 `$OPENCORVUS_CONFIG_DIR/opencorvus.json`（若设置）
-3. 读 `<repo>/.opencorvus/opencorvus.jsonc`
-4. 合并 `OPENCORVUS_CONFIG_CONTENT` 环境变量（JSON 字符串）
-5. CLI flag 覆盖
+当前源码按以下低到高优先级加载：
+
+1. 已保存 well-known 凭据对应的远端 `.well-known/opencorvus` 组织默认配置。
+2. executable 旁打包的 plugins。
+3. 解析后的全局用户配置目录。
+4. `OPENCORVUS_CONFIG` 指向的显式文件。
+5. 在 worktree 内向上发现的项目根配置：`opencorvus.jsonc`，然后 `opencorvus.json`。
+6. OpenCorvus config 目录：全局 config 目录、发现到的项目 `.opencorvus/` 目录，然后是 `OPENCORVUS_CONFIG_DIR`。
+7. `OPENCORVUS_CONFIG_CONTENT` 提供的内联 JSON。
+8. managed enterprise config 目录（若存在）。
+
+managed config 目录：macOS 为 `/Library/Application Support/opencorvus`，Windows 为 `%ProgramData%/opencorvus`，Linux 为 `/etc/opencorvus`。
 
 :::note
-Env 快照时机：`Env.state()` 在实例创建时快照 `process.env`，因此 `.env` 文件必须在进程启动**前**加载。这是 benchmark 里要显式注入 env 的原因。
+环境变量由运行中的进程读取。`.env` 文件必须在启动 `opencorvus serve` 或 `opencorvus run` 前加载。
 :::
 
 ## 热重载
 
-目前 OpenCorvus **不支持** config 热重载。修改配置后需重启 `opencorvus serve`。
+目前不支持 config 热重载。修改 config 文件或环境变量后，需要重启 `opencorvus serve`。

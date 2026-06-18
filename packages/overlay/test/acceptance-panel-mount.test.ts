@@ -209,7 +209,9 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain(
     'id: "mission", icon: "mission", labelKey: "mission.title", tooltipKey: "activity.tooltip.mission"',
   )
-  expect(main).toContain('id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks"')
+  expect(main).toContain(
+    'id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks"',
+  )
   expect(main).toContain(
     'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
   )
@@ -226,7 +228,9 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain("const panel = selectedCenterWorkbenchPanel()")
   expect(main).toContain('return panel && panel !== "file" ? panel : null')
   expect(main).not.toContain('primaryCenterPanel() === "task" && isCenterWorkbenchPanelOpen("workflow")')
-  expect(main).toContain("function selectedCenterWorkbenchPanel(panels = centerWorkbenchPanels()): CenterWorkbenchPanel | null")
+  expect(main).toContain(
+    "function selectedCenterWorkbenchPanel(panels = centerWorkbenchPanels()): CenterWorkbenchPanel | null",
+  )
   expect(main).toContain("const selectedPanel = selectedCenterWorkbenchPanel(panels)")
   expect(main).toContain("body.dataset.selected = String(open && panel === selectedPanel)")
   expect(main).toContain("active={activeRightActivity}")

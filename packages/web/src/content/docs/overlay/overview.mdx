@@ -66,17 +66,17 @@ Settings (sidebar): General / Providers / Channels / Orchestration / Permissions
    GET http://127.0.0.1:7878/task/{taskID}/events?after={sequence}
    ```
 
-   Code: `src/services/sse.ts:21` `startSSE()`. Uses native `EventSource` to bypass WebView2's `fetch().body` buffering.
+   Code: `src/services/sse.ts` `startSSE()`. Uses native `EventSource` to bypass WebView2's `fetch().body` buffering.
 
 2. **Global task-list stream** (app level)
    ```
    GET http://127.0.0.1:7878/task/events
    ```
-   Code: `src/services/sse.ts:104` `startTaskListSSE()`. This stream owns OS notification routing from stamped `notify` metadata and refreshes the task-list badge projection.
+   Code: `src/services/sse.ts` `startTaskListSSE()`. This stream owns OS notification routing from stamped `notify` metadata and refreshes the task-list badge projection.
 
 ### Event routing
 
-`src/services/events.ts:261` `routeSSEEvent()`:
+`src/services/events.ts` `routeSSEEvent()`:
 
 | Event                                         | Sink                                                                |
 | --------------------------------------------- | ------------------------------------------------------------------- |
@@ -94,7 +94,7 @@ Settings (sidebar): General / Providers / Channels / Orchestration / Permissions
 | Command                                           | Role                                                                                                           |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `overlay_server_info` / `overlay_server_restart`  | Embedded opencorvus process management                                                                         |
-| `overlay_settings_load` / `overlay_settings_save` | Persists to `.opencorvus/overlay.jsonc`                                                                        |
+| `overlay_settings_load` / `overlay_settings_save` | Persists to Tauri's app config directory as `overlay.jsonc`                                                    |
 | `overlay_pick_dir` / `overlay_pick_files`         | File/dir dialogs                                                                                               |
 | `overlay_open_url` / `overlay_open_path`          | External open                                                                                                  |
 | `overlay_attention_set`                           | Tray blink                                                                                                     |
@@ -112,4 +112,4 @@ Process cleanup: Windows uses a Job Object + `KILL_ON_JOB_CLOSE`; Unix uses SIGK
 
 ## Configuration
 
-`~/.opencorvus/overlay.jsonc` stores UI preferences (theme, position, zoom, server URL override). The tray **Restart** menu restarts the backend process and reloads the frontend.
+Tauri's app config directory stores `overlay.jsonc` with UI preferences (theme, position, zoom, server URL override). The tray **Restart** menu restarts the backend process and reloads the frontend.

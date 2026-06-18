@@ -85,19 +85,18 @@ export namespace LLM {
       await resolveSessionOverlay(input.sessionID ? { sessionID: input.sessionID } : undefined),
     )
     const completeSystemMode = input.runtimeSystemMode === "complete" || input.user.systemMode === "complete"
-    const providerPrompt =
-      completeSystemMode
-        ? []
-        : agent.prompt
-          ? [
-              PromptProfile.composeAgentPrompt({
-                agentID: agent.name,
-                base: agent.prompt,
-                userAppend: agent.promptAppend,
-                config,
-              }),
-            ]
-          : await SystemPrompt.provider(input.model, { sessionID: input.sessionID })
+    const providerPrompt = completeSystemMode
+      ? []
+      : agent.prompt
+        ? [
+            PromptProfile.composeAgentPrompt({
+              agentID: agent.name,
+              base: agent.prompt,
+              userAppend: agent.promptAppend,
+              config,
+            }),
+          ]
+        : await SystemPrompt.provider(input.model, { sessionID: input.sessionID })
     const userSystem = input.runtimeSystemMode === "complete" ? [] : input.user.system ? [input.user.system] : []
 
     return [

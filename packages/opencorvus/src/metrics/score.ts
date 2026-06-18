@@ -1,7 +1,7 @@
 /**
  * Pure score / snapshot computation for the adversarial metric loop.
  *
- * Given typed input data (specs, results, counterexamples, prior state), emit
+ * Given typed input data (specs, results, prior state), emit
  * the IterationSnapshot row the Arbiter consumes. No DB access — the store
  * layer fetches the inputs, feeds them in, and persists the output.
  *
@@ -14,7 +14,7 @@
  *   - Global contribution: weighted mean over all global metrics.
  *   - S_k = α * per_goal_overall + β * global_overall, with α=β=0.5 default.
  */
-import type { Counterexample, IterationSnapshot, MetricResult, MetricSpec } from "./types"
+import type { IterationSnapshot, MetricResult, MetricSpec } from "./types"
 
 export interface ScoreWeights {
   /** Weight of per-goal aggregate in S_k. Default 0.5. */
@@ -33,8 +33,6 @@ export interface SnapshotInput {
   currentResults: readonly MetricResult[]
   /** Results for the PREVIOUS iteration only — used for regression detection. */
   previousResults: readonly MetricResult[]
-  /** All counterexamples for the task (open and closed). */
-  counterexamples: readonly Counterexample[]
   /** S_{k-1}, or 0 when this is iteration 0. */
   previousAggregateScore: number
   weights?: ScoreWeights
@@ -90,14 +88,6 @@ export function computeIterationSnapshot(input: SnapshotInput): IterationSnapsho
     if (regressed) regressedBlocking++
   }
 
-  // Counterexamples: open count + novelty_score (new this iteration).
-  let openCounterexamples = 0
-  let noveltyScore = 0
-  for (const c of input.counterexamples) {
-    if (c.iteration_resolved === null) openCounterexamples++
-    if (c.iteration_found === input.iteration) noveltyScore++
-  }
-
   // Unused for correctness but kept to silence "specByID unused" — when we
   // later want to group by scope we will need it.
   void specByID
@@ -109,9 +99,9 @@ export function computeIterationSnapshot(input: SnapshotInput): IterationSnapsho
     per_goal_score: perGoalScore,
     global_score: globalOverall,
     delta_vs_prev: delta,
-    novelty_score: noveltyScore,
+    novelty_score: 0,
     blocking_unmet_count: blockingUnmet,
-    open_counterexamples: openCounterexamples,
+    open_counterexamples: 0,
     regressed_blocking: regressedBlocking,
     arbiter_verdict: "continue",
   }

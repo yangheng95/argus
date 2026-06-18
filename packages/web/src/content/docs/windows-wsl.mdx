@@ -31,10 +31,10 @@ For maximum parity with the Linux CI environment, run inside WSL2:
 ```bash
 # inside Ubuntu-on-WSL
 curl -fsSL https://bun.sh/install | bash
-git clone https://github.com/yangheng95/argus
-cd argus/packages/opencorvus
+git clone https://github.com/yangheng95/opencorvus
+cd opencorvus
 bun install
-bun run start
+bun run --cwd packages/opencorvus dev -- serve
 ```
 
 When developing the overlay, the Tauri build still requires native Windows — only the headless `opencorvus serve` benefits from WSL parity.

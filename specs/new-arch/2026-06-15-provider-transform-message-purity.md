@@ -13,16 +13,16 @@ breakpoint placement strategy documented by `cache-stability.test.ts` H5.
 
 ## Call-point sweep
 
-| Call point | Decision |
-| --- | --- |
-| `src/provider/llm.ts` | Continues to call `ProviderTransform.message()` for every wrapped stream. The transform must not mutate `args.params.prompt`. |
-| `src/session/llm.ts` | Canonical session stream passes model messages through the wrapper; no call-site change. |
-| `src/agent/agent.ts` | Helper stream now uses the wrapper from the previous fix; benefits from pure transform. |
-| `src/task-api/index.ts` | Helper stream now uses the wrapper from the previous fix; benefits from pure transform. |
-| `src/acceptance/checks/walkthrough/translate.ts` | Helper stream now uses the wrapper from the previous fix; benefits from pure transform. |
-| `src/server/routes/provider.ts` | Probe stream now uses the wrapper from the previous fix; benefits from pure transform. |
-| `src/frontend-design/tools/webpage-vision-judge.ts` | Already wrapped; benefits from pure transform. |
-| `test/frontend-design/cache-stability.test.ts` | Keep H5 behavior documentation; add separate purity coverage in provider transform tests. |
+| Call point                                          | Decision                                                                                                                      |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `src/provider/llm.ts`                               | Continues to call `ProviderTransform.message()` for every wrapped stream. The transform must not mutate `args.params.prompt`. |
+| `src/session/llm.ts`                                | Canonical session stream passes model messages through the wrapper; no call-site change.                                      |
+| `src/agent/agent.ts`                                | Helper stream now uses the wrapper from the previous fix; benefits from pure transform.                                       |
+| `src/task-api/index.ts`                             | Helper stream now uses the wrapper from the previous fix; benefits from pure transform.                                       |
+| `src/acceptance/checks/walkthrough/translate.ts`    | Helper stream now uses the wrapper from the previous fix; benefits from pure transform.                                       |
+| `src/server/routes/provider.ts`                     | Probe stream now uses the wrapper from the previous fix; benefits from pure transform.                                        |
+| `src/frontend-design/tools/webpage-vision-judge.ts` | Already wrapped; benefits from pure transform.                                                                                |
+| `test/frontend-design/cache-stability.test.ts`      | Keep H5 behavior documentation; add separate purity coverage in provider transform tests.                                     |
 
 ## Design
 

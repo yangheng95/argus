@@ -26,4 +26,4 @@ LINE 为 1:1 聊天或群聊；thread key = `userId` 或 `groupId`。
 ## 故障排查
 
 - **Signature validation failed**：`LINE_CHANNEL_SECRET` 错；签名算法是 HMAC-SHA256。
-- **Reply token expired**：LINE 的 replyToken 有效期 1 分钟；OpenCorvus 对长任务自动改走 push 消息。
+- **Reply token expired**：此适配器使用 LINE push message 发送任务回复；replyToken 只作为传入 webhook 元数据保留。

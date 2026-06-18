@@ -187,6 +187,7 @@ export namespace MCP {
 
   type ResourceInfo = Awaited<ReturnType<MCPClient["listResources"]>>["resources"][number]
   type McpEntry = NonNullable<Config.Info["mcp"]>[string]
+  type RemoteMcpConfig = Extract<Config.Mcp, { type: "remote" }>
   function isMcpConfigured(entry: McpEntry): entry is Config.Mcp {
     return typeof entry === "object" && entry !== null && "type" in entry
   }
@@ -205,6 +206,23 @@ export namespace MCP {
 
   function errorMessage(error: unknown) {
     return error instanceof Error ? error.message : String(error)
+  }
+
+  function createRemoteTransport(mcp: RemoteMcpConfig, authProvider?: McpOAuthProvider) {
+    const options = {
+      authProvider,
+      requestInit: mcp.headers ? { headers: mcp.headers } : undefined,
+    }
+    if (mcp.transport === "sse") {
+      return {
+        name: "SSE",
+        transport: new SSEClientTransport(new URL(mcp.url), options),
+      }
+    }
+    return {
+      name: "StreamableHTTP",
+      transport: new StreamableHTTPClientTransport(new URL(mcp.url), options),
+    }
   }
 
   type McpState = {
@@ -459,80 +477,64 @@ export namespace MCP {
         )
       }
 
-      const transports: Array<{ name: string; transport: TransportWithAuth }> = [
-        {
-          name: "StreamableHTTP",
-          transport: new StreamableHTTPClientTransport(new URL(mcp.url), {
-            authProvider,
-            requestInit: mcp.headers ? { headers: mcp.headers } : undefined,
-          }),
-        },
-        {
-          name: "SSE",
-          transport: new SSEClientTransport(new URL(mcp.url), {
-            authProvider,
-            requestInit: mcp.headers ? { headers: mcp.headers } : undefined,
-          }),
-        },
-      ]
+      const { name: transportName, transport } = createRemoteTransport(mcp, authProvider)
 
-      let lastError: Error | undefined
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
-      for (const { name, transport } of transports) {
-        let client: Client | undefined
-        try {
-          client = new Client({
-            name: "opencorvus",
-            version: Installation.VERSION,
-          })
-          await withTimeout(client.connect(transport), connectTimeout)
-          registerNotificationHandlers(client, key)
-          mcpClient = client
-          mcpTransport = transport
-          log.info("connected", { key, transport: name })
-          status = { status: "connected" }
-          break
-        } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error))
+      let client: Client | undefined
+      try {
+        client = new Client({
+          name: "opencorvus",
+          version: Installation.VERSION,
+        })
+        await withTimeout(client.connect(transport), connectTimeout)
+        registerNotificationHandlers(client, key)
+        mcpClient = client
+        mcpTransport = transport
+        log.info("connected", { key, transport: transportName })
+        status = { status: "connected" }
+      } catch (error) {
+        const lastError = error instanceof Error ? error : new Error(String(error))
 
-          // Handle OAuth-specific errors
-          if (error instanceof UnauthorizedError) {
-            log.info("mcp server requires authentication", { key, transport: name })
+        // Handle OAuth-specific errors
+        if (error instanceof UnauthorizedError) {
+          log.info("mcp server requires authentication", { key, transport: transportName })
 
-            // Check if this is a "needs registration" error
-            if (lastError.message.includes("registration") || lastError.message.includes("client_id")) {
-              status = {
-                status: "needs_client_registration" as const,
-                error: "Server does not support dynamic client registration. Please provide clientId in config.",
-              }
-              Bus.publish(AuthRequired, {
-                name: key,
-                message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
-                reason: "needs_client_registration",
-              }).catch((e) => log.debug("failed to publish MCP auth notice", { error: e }))
-            } else {
-              // Store transport for later finishAuth call
-              pendingOAuthTransports.set(key, transport)
-              status = { status: "needs_auth" as const }
-              Bus.publish(AuthRequired, {
-                name: key,
-                message: `Server "${key}" requires authentication. Run: opencorvus mcp auth ${key}`,
-                reason: "needs_auth",
-              }).catch((e) => log.debug("failed to publish MCP auth notice", { error: e }))
+          // Check if this is a "needs registration" error
+          if (lastError.message.includes("registration") || lastError.message.includes("client_id")) {
+            status = {
+              status: "needs_client_registration" as const,
+              error: "Server does not support dynamic client registration. Please provide clientId in config.",
             }
-            break
+            Bus.publish(AuthRequired, {
+              name: key,
+              message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
+              reason: "needs_client_registration",
+            }).catch((e) => log.debug("failed to publish MCP auth notice", { error: e }))
+          } else {
+            // Store transport for later finishAuth call
+            pendingOAuthTransports.set(key, transport)
+            status = { status: "needs_auth" as const }
+            Bus.publish(AuthRequired, {
+              name: key,
+              message: `Server "${key}" requires authentication. Run: opencorvus mcp auth ${key}`,
+              reason: "needs_auth",
+            }).catch((e) => log.debug("failed to publish MCP auth notice", { error: e }))
           }
-
+        } else {
           await client?.close().catch((closeError) => {
-            log.error("Failed to close failed remote MCP client", { key, transport: name, error: closeError })
+            log.error("Failed to close failed remote MCP client", { key, transport: transportName, error: closeError })
           })
           await transport.close().catch((closeError) => {
-            log.error("Failed to close failed remote MCP transport", { key, transport: name, error: closeError })
+            log.error("Failed to close failed remote MCP transport", {
+              key,
+              transport: transportName,
+              error: closeError,
+            })
           })
 
           log.debug("transport connection failed", {
             key,
-            transport: name,
+            transport: transportName,
             url: mcp.url,
             error: lastError.message,
           })
@@ -929,10 +931,7 @@ export namespace MCP {
       },
     )
 
-    // Create transport with auth provider
-    const transport = new StreamableHTTPClientTransport(new URL(mcpConfig.url), {
-      authProvider,
-    })
+    const { transport } = createRemoteTransport(mcpConfig, authProvider)
 
     // Try to connect - this will trigger the OAuth flow
     try {

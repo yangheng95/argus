@@ -79,6 +79,8 @@ describe("build-artifact", () => {
     const source = readFileSync(resolve(import.meta.dir, "../../../../script/package-local.ts"), "utf8")
     expect(source).toContain("bun run build --overlay-server --all")
     expect(source).not.toContain("bun run build --all")
+    expect(source).toContain("Docker is required for Linux overlay builds")
+    expect(source).not.toContain("skipping Linux overlay builds")
   })
 
   test("overlay-server flavor compiles only the overlay launcher entrypoint", () => {
@@ -139,7 +141,10 @@ describe("build-artifact", () => {
     const screenshotSource = readFileSync(resolve(import.meta.dir, "../../src/gui/screenshot.ts"), "utf8")
     const capabilitySource = readFileSync(resolve(import.meta.dir, "../../src/platform/capability.ts"), "utf8")
     const ptyHostSource = readFileSync(resolve(import.meta.dir, "../../src/pty/host.ts"), "utf8")
-    const regionComparisonSource = readFileSync(resolve(import.meta.dir, "../../src/browser-preview/region-comparison.ts"), "utf8")
+    const regionComparisonSource = readFileSync(
+      resolve(import.meta.dir, "../../src/browser-preview/region-comparison.ts"),
+      "utf8",
+    )
     const visualRegionBindingToolSource = readFileSync(
       resolve(import.meta.dir, "../../src/frontend-design/visual-region-binding-tool.ts"),
       "utf8",

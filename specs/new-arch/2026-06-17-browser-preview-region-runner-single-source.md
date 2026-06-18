@@ -29,13 +29,13 @@ rg -n "runImplementationCapture|REGION_COMPARISON_SCRIPT|runBrowserPreviewRegion
 
 Findings:
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Product function input | `BrowserPreviewRegionComparisonInput` contains `url: string`. | Remove direct URL input; `taskID/targetID` are the product authority. |
-| Server route | `/task/:taskID/browser-preview/compare` looks up target then passes `url: target.url`. | Keep target existence check if useful for 404, but do not pass URL into comparison. |
-| Tool route | `browser_preview_compare_regions` looks up target then passes `url: target.url`. | Keep missing-target error, but do not pass URL into comparison. |
-| Region implementation capture | `region-comparison.ts` owns `runImplementationCapture` and `REGION_COMPARISON_SCRIPT`. | Delete them and call `runBrowserPreviewRegionComparisonCapture`. |
-| Evidence runner | `evidence-runner.ts` already exposes `runBrowserPreviewRegionComparisonCapture` and resolves target URL / output directory internally. | Use this runner as the single runtime capture source. |
+| Surface                       | Evidence                                                                                                                               | Decision                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Product function input        | `BrowserPreviewRegionComparisonInput` contains `url: string`.                                                                          | Remove direct URL input; `taskID/targetID` are the product authority.               |
+| Server route                  | `/task/:taskID/browser-preview/compare` looks up target then passes `url: target.url`.                                                 | Keep target existence check if useful for 404, but do not pass URL into comparison. |
+| Tool route                    | `browser_preview_compare_regions` looks up target then passes `url: target.url`.                                                       | Keep missing-target error, but do not pass URL into comparison.                     |
+| Region implementation capture | `region-comparison.ts` owns `runImplementationCapture` and `REGION_COMPARISON_SCRIPT`.                                                 | Delete them and call `runBrowserPreviewRegionComparisonCapture`.                    |
+| Evidence runner               | `evidence-runner.ts` already exposes `runBrowserPreviewRegionComparisonCapture` and resolves target URL / output directory internally. | Use this runner as the single runtime capture source.                               |
 
 ## Fix
 
@@ -44,7 +44,7 @@ Findings:
 2. Remove `url` from `BrowserPreviewRegionComparisonInput`.
 3. Replace `runImplementationCapture(...)` with
    `runBrowserPreviewRegionComparisonCapture({ projectRoot, taskID, targetID,
-   viewportIDs, bindings, includeFullpageOverview, signal })`.
+viewportIDs, bindings, includeFullpageOverview, signal })`.
 4. Delete duplicate sidecar imports, binding types, `runImplementationCapture`,
    and `REGION_COMPARISON_SCRIPT` from `region-comparison.ts`.
 5. Update server route, tool execution, and tests so comparison calls do not pass

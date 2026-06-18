@@ -75,14 +75,14 @@ rg -n "\\.opencorvus/runtime|\\.opencorvus\\\\runtime|runtime/tasks|runtime\\\\t
 
 Primary implementation surface:
 
-| Surface | Decision |
-| --- | --- |
-| `packages/opencorvus/src/project/runtime-paths.ts` | Single runtime path source; update all writer paths to `.opencorvus/r`. |
-| `packages/opencorvus/src/id/id.ts` | Add deterministic 8-character directory key helper; keep full ID generation unchanged. |
-| `packages/opencorvus/src/project/runtime-id-lookup.ts` | Resolve path keys through DB enumeration plus hash comparison; remove legacy prefix matching. |
-| Trace/session diff readers | Return only the single new path; no legacy read candidates. |
-| Prompt/path templates | Replace hardcoded `.opencorvus/runtime/tasks/...` user-facing templates with `ProjectRuntimePaths`-derived `.opencorvus/r/...` strings where code can compute the task key. |
-| Tests | Assert path length reduction, same-millisecond uniqueness, and absence of old runtime writers/readers. |
+| Surface                                                | Decision                                                                                                                                                                    |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/project/runtime-paths.ts`     | Single runtime path source; update all writer paths to `.opencorvus/r`.                                                                                                     |
+| `packages/opencorvus/src/id/id.ts`                     | Add deterministic 8-character directory key helper; keep full ID generation unchanged.                                                                                      |
+| `packages/opencorvus/src/project/runtime-id-lookup.ts` | Resolve path keys through DB enumeration plus hash comparison; remove legacy prefix matching.                                                                               |
+| Trace/session diff readers                             | Return only the single new path; no legacy read candidates.                                                                                                                 |
+| Prompt/path templates                                  | Replace hardcoded `.opencorvus/runtime/tasks/...` user-facing templates with `ProjectRuntimePaths`-derived `.opencorvus/r/...` strings where code can compute the task key. |
+| Tests                                                  | Assert path length reduction, same-millisecond uniqueness, and absence of old runtime writers/readers.                                                                      |
 
 ## Review Iteration Fixes
 

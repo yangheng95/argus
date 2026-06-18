@@ -19,7 +19,7 @@ import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { findTask, type TaskRow } from "./store"
-import { deriveTaskStatus, isTaskActive, isTaskQueued, isTaskTerminal } from "./task-status"
+import { isTaskActive, isTaskQueued } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
 import { Identifier } from "@/id/id"
 import { Event } from "./model"
@@ -168,10 +168,7 @@ export function reorderQueuedTasksForCwd(input: {
 }
 
 async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefined, interrupt = false): Promise<void> {
-  const [{ runTaskLoop, interruptTaskLoop }, { hooks }] = await Promise.all([
-    import("@/orchestrator/loop"),
-    import("@/engine/state"),
-  ])
+  const { runTaskLoop, interruptTaskLoop } = await import("@/orchestrator/loop")
   if (interrupt) interruptTaskLoop(taskID, "task loop dispatch interrupt")
   // Return the loop's own promise (absorbing errors). Callers that want to
   // observe actual loop exit (queue-advance hook) attach `.finally` to the
@@ -181,7 +178,7 @@ async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefin
   // attached by the caller fired before the loop had done anything, so the
   // queue-advance hook never fired on real task termination and sibling
   // queued tasks in the same cwd stayed stuck forever.
-  return runTaskLoop({ taskID, event, hooks: hooks() }).catch((err) => {
+  return runTaskLoop({ taskID, event }).catch((err) => {
     log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
   })
 }
@@ -204,16 +201,7 @@ function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<
     // Detach via queueMicrotask so `advanceQueue` → `startLoopForTask` →
     // `.finally` re-entry doesn't stack synchronously.
     queueMicrotask(() => {
-      const queuedEvent = queuedTaskEvents.get(taskID)
-      const task = findTask(taskID)
-      if (queuedEvent && task && isTaskTerminal(task)) {
-        queuedTaskEvents.delete(taskID)
-      }
-      if (queuedEvent && task && !isTaskTerminal(task) && listLiveOrchestratorToolOwnership(taskID).length === 0) {
-        queuedTaskEvents.delete(taskID)
-        attachLoopCompletion(taskID, cwd, launchTaskLoop(taskID, queuedEvent))
-        return
-      }
+      if (drainQueuedTaskEventIfUnowned(taskID)) return
       advanceQueue(cwd).catch((err) => {
         log.error("advanceQueue failed after loop exit", {
           cwd,
@@ -222,6 +210,33 @@ function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<
       })
     })
   })
+}
+
+export function drainQueuedTaskEventIfUnowned(taskID: string): boolean {
+  const queuedEvent = queuedTaskEvents.get(taskID)
+  if (!queuedEvent) return false
+
+  const task = findTask(taskID)
+  if (!task) {
+    queuedTaskEvents.delete(taskID)
+    log.warn("discarding queued wake for missing task", { taskID })
+    return false
+  }
+
+  const cwd = taskCwd(task.id)
+  if (!cwd) {
+    queuedTaskEvents.delete(taskID)
+    log.warn("discarding queued wake for task without cwd", { taskID })
+    return false
+  }
+
+  const liveOwners = listLiveOrchestratorToolOwnership(taskID)
+  if (liveOwners.length > 0) return false
+
+  queuedTaskEvents.delete(taskID)
+  attachLoopCompletion(taskID, cwd, launchTaskLoop(taskID, queuedEvent))
+  log.info("drained queued wake after orchestrator tool ownership cleared", { taskID })
+  return true
 }
 
 /**
@@ -475,15 +490,6 @@ export async function dispatchTaskLoop(input: {
   const cwd = taskCwd(task.id)
   if (!cwd) {
     log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, note: input.event?.note })
-    return "ignored"
-  }
-  if (isTaskTerminal(task)) {
-    discardQueuedTaskEvent(task.id)
-    log.info("dispatchTaskLoop: terminal task ignored", {
-      taskID: task.id,
-      status: deriveTaskStatus(task),
-      note: input.event?.note,
-    })
     return "ignored"
   }
   if (isTaskQueued(task)) {

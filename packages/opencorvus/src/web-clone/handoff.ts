@@ -51,7 +51,7 @@ export function buildWebCloneHandoff(pageIr: WebClonePageIr, assetGraph: WebClon
     rules: [
       "Use page.ir.json for DOM order, hierarchy, attributes, visible text, and asset references.",
       "Use node layout bounds and computed style summaries in page.ir.json/segments.json as the primary geometry source.",
-      "Use each segment's nodeOutline as the bounded source-code generation plan; fall back to page.ir.json only for omittedNodeCount gaps.",
+      "Use each segment's nodeOutline as the bounded source-code generation plan; expand omittedNodeCount gaps directly from page.ir.json.",
       "Use assets/manifest.json for dense CSS, SVG path data, data URIs, images, canvas captures, and long values.",
       "Do not inline long CSS, SVG path data, base64, or copied asset payloads into React/Vue source; import or reference sidecar assets.",
       "Preserve text and link coverage before decorative refactors.",

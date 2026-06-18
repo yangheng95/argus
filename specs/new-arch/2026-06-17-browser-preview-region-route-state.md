@@ -18,13 +18,13 @@ This can bind source regions to the wrong implementation page or persist a faile
 
 `rg "firstRoute|binding\\.route|page\\.goto|runBrowserPreviewRegionComparisonCapture|BrowserPreviewRegionBinding" packages/opencorvus/src/browser-preview packages/opencorvus/test/browser-preview -S`
 
-| Area | Finding | Decision |
-| --- | --- | --- |
-| `src/browser-preview/evidence-runner.ts` sidecar script | Uses `firstRoute` for all route comparisons in the per-viewport binding loop. | Track `currentRoute` after each navigation and compare each binding against that actual current route. |
-| `src/browser-preview/region-comparison.ts` | Delegates capture to `runBrowserPreviewRegionComparisonCapture`; no route loop ownership. | Leave unchanged. |
-| `test/browser-preview/region-comparison.test.ts` | Existing file has unrelated dirty edits. | Do not edit. |
-| `test/browser-preview/evidence-runner.test.ts` | Static contract tests only. | Add a separate browser-side regression test file for `/a -> /b -> /a`. |
-| Root `test-preload.ts` | `bun test` from the repo root uses a per-PID temp directory but did not remove a pre-existing directory before setting `OPENCORVUS_HOME`. PID reuse can expose stale database schema and break targeted verification. | Recreate the per-PID temp root at preload startup and cover this with a static tooling test. |
+| Area                                                    | Finding                                                                                                                                                                                                               | Decision                                                                                               |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `src/browser-preview/evidence-runner.ts` sidecar script | Uses `firstRoute` for all route comparisons in the per-viewport binding loop.                                                                                                                                         | Track `currentRoute` after each navigation and compare each binding against that actual current route. |
+| `src/browser-preview/region-comparison.ts`              | Delegates capture to `runBrowserPreviewRegionComparisonCapture`; no route loop ownership.                                                                                                                             | Leave unchanged.                                                                                       |
+| `test/browser-preview/region-comparison.test.ts`        | Existing file has unrelated dirty edits.                                                                                                                                                                              | Do not edit.                                                                                           |
+| `test/browser-preview/evidence-runner.test.ts`          | Static contract tests only.                                                                                                                                                                                           | Add a separate browser-side regression test file for `/a -> /b -> /a`.                                 |
+| Root `test-preload.ts`                                  | `bun test` from the repo root uses a per-PID temp directory but did not remove a pre-existing directory before setting `OPENCORVUS_HOME`. PID reuse can expose stale database schema and break targeted verification. | Recreate the per-PID temp root at preload startup and cover this with a static tooling test.           |
 
 ## Acceptance
 

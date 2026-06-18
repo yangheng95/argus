@@ -34,16 +34,16 @@ new task automatically behind the model.
 
 ## Call Point Inventory
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
-| `packages/opencorvus/src/visual-qa/schema.ts` | Report has `production_blockers[]` but no structured new-round request. | Add a nullable follow-up task request object with blocker ID references. |
-| `packages/opencorvus/src/visual-qa/output-tools.ts` | Rejects passing blocker-bearing reports and renders blockers. | Reject accepted reports that include follow-up requests; validate follow-up blocker IDs; render follow-up request prominently. |
-| `packages/opencorvus/src/visual-qa/agent.ts` | Delegation says failed reports list blockers, but not that unrepairable blockers need a follow-up task request. | Require follow-up task request when blockers cannot be safely repaired by Visual QA in the current worktree. |
-| `packages/opencorvus/src/prompt/core/visual-qa-core.txt` | Terminal reporting allows failed terminal result without next-task structure. | Require strict product-grade judgment and structured follow-up request for unrepairable production blockers. |
-| `packages/opencorvus/src/orchestrator/tools.ts` visual_qa result | Returns accepted/blocker counts only. | Surface follow-up task request in decision-log summary and tool result fields. |
-| `packages/opencorvus/src/orchestrator/tools.ts` `propose_task` description | Mentions inheriting follow-up work generally. | Name failed Visual QA follow-up requests as a direct evidence source for `propose_task`. |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | Routes failed Visual QA to repair before completion. | Say an unrepairable Visual QA follow-up request should be turned into `propose_task` instead of ending passively. |
-| Tests | Cover blocker acceptance but not follow-up task requests. | Add schema/output rendering and prompt guidance regressions. |
+| Surface                                                                    | Current behavior                                                                                                | Change                                                                                                                         |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/visual-qa/schema.ts`                              | Report has `production_blockers[]` but no structured new-round request.                                         | Add a nullable follow-up task request object with blocker ID references.                                                       |
+| `packages/opencorvus/src/visual-qa/output-tools.ts`                        | Rejects passing blocker-bearing reports and renders blockers.                                                   | Reject accepted reports that include follow-up requests; validate follow-up blocker IDs; render follow-up request prominently. |
+| `packages/opencorvus/src/visual-qa/agent.ts`                               | Delegation says failed reports list blockers, but not that unrepairable blockers need a follow-up task request. | Require follow-up task request when blockers cannot be safely repaired by Visual QA in the current worktree.                   |
+| `packages/opencorvus/src/prompt/core/visual-qa-core.txt`                   | Terminal reporting allows failed terminal result without next-task structure.                                   | Require strict product-grade judgment and structured follow-up request for unrepairable production blockers.                   |
+| `packages/opencorvus/src/orchestrator/tools.ts` visual_qa result           | Returns accepted/blocker counts only.                                                                           | Surface follow-up task request in decision-log summary and tool result fields.                                                 |
+| `packages/opencorvus/src/orchestrator/tools.ts` `propose_task` description | Mentions inheriting follow-up work generally.                                                                   | Name failed Visual QA follow-up requests as a direct evidence source for `propose_task`.                                       |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt`                | Routes failed Visual QA to repair before completion.                                                            | Say an unrepairable Visual QA follow-up request should be turned into `propose_task` instead of ending passively.              |
+| Tests                                                                      | Cover blocker acceptance but not follow-up task requests.                                                       | Add schema/output rendering and prompt guidance regressions.                                                                   |
 
 ## Acceptance
 

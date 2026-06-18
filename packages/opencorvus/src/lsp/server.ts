@@ -2178,9 +2178,13 @@ export namespace LSPServer {
         return
       }
       return {
-        process: spawnStdio(julia, ["--startup-file=no", "--history-file=no", "-e", "using LanguageServer; runserver()"], {
-          cwd: root,
-        }),
+        process: spawnStdio(
+          julia,
+          ["--startup-file=no", "--history-file=no", "-e", "using LanguageServer; runserver()"],
+          {
+            cwd: root,
+          },
+        ),
       }
     },
   }

@@ -54,11 +54,10 @@ interface BuildConfig {
  * Phase-6-d-0: `goal_run_idle_ms` + goal-run-watchdog scanner deleted
  * (rule 23 FSM wall-clock driver duplicating the two inner gates).
  *
- * `task_queue_run_timeout_ms` is the absolute wall-clock cap on a
- * single queue task's total runtime — measured from claim() to
- * either completion or the last *observed* chunk (chunk-driven
- * heartbeat), NOT from an unconditional setInterval. See
- * scheduler/task-queue-service.ts.
+ * `task_queue_run_timeout_ms` is the max no-activity window for a
+ * single queue task — measured from the last observed chunk-driven
+ * heartbeat, NOT from process start or an unconditional setInterval.
+ * See scheduler/task-queue-service.ts.
  */
 interface ActivityConfig {
   session_llm_idle_ms: number
@@ -100,13 +99,13 @@ interface AcceptanceVisualConfig {
  * DebugConfig — operator-toggled debug behaviour.
  *
  * `fail_on_information_missing`: when true the host (a) appends the
- * INFORMATION MISSING fallback block to every agent's system prompt
+ * INFORMATION MISSING diagnostic block to every agent's system prompt
  * (see `prompt/information-missing.ts`), and (b) runs detection on
  * each agent's final assistant message — if the agent emits the
- * `<INFORMATION MISSING>` XML block the host process.exits with
- * code 99 so operators see upstream-context drops immediately
- * instead of a long log of guessed-default work. Toggle is exposed
- * via overlay GeneralPanel.
+ * `<INFORMATION MISSING>` XML block the host fails the current run with a
+ * non-retryable AgentRunError so operators see upstream-context drops
+ * immediately instead of a long log of guessed-default work. Toggle is
+ * exposed via overlay GeneralPanel.
  */
 interface DebugConfig {
   fail_on_information_missing: boolean

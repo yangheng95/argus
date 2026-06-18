@@ -42,6 +42,23 @@ test("legacy spec/plan event types stay removed from DIAG_TYPES", () => {
   expect(src).not.toMatch(/orchestrator\.plan\.activated/)
 })
 
+test("legacy benchmark stage aliases stay removed from report summaries", () => {
+  const stageNamesBlock = src.slice(
+    src.indexOf("const stageNames = ["),
+    src.indexOf("const stages =", src.indexOf("const stageNames = [")),
+  )
+
+  expect(stageNamesBlock).not.toContain("legacy stage names kept")
+  expect(stageNamesBlock).not.toContain('"spec"')
+  expect(stageNamesBlock).not.toContain('"evaluator"')
+  expect(stageNamesBlock).not.toContain('"task"')
+  expect(stageNamesBlock).not.toContain('"decompose"')
+  expect(stageNamesBlock).not.toContain('"eval"')
+  expect(src).not.toContain("submit_spec")
+  expect(src).not.toContain("submit_plan")
+  expect(src).not.toContain("submit_analysis")
+})
+
 test("unused module-scope `headless` const is gone (Playwright launch keeps the literal)", () => {
   expect(src).not.toMatch(/^const headless = false$/m)
   // Sanity: the Playwright launch site still exists and still uses the literal,
@@ -152,6 +169,9 @@ test("benchmark requires a visible overlay browser path", () => {
   expect(src).toContain('await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })')
   expect(src).toContain("const screenshot = await withTimeout(takeBenchmarkScreenshot(page)")
   expect(src).toContain("const currentOverlay = await withTimeout(overlaySnapshot(page)")
+  expect(src).toContain("BrowserRuntime.findBrowserExecutable()")
+  expect(src).not.toContain("C:/Program Files/Google/Chrome/Application/chrome.exe")
+  expect(src).not.toContain("C:/Program Files/Microsoft/Edge/Application/msedge.exe")
 })
 
 test("benchmark planning evidence must come from visible task-list DOM rows", () => {
@@ -163,10 +183,7 @@ test("benchmark planning evidence must come from visible task-list DOM rows", ()
     src.indexOf("async function waitForTaskCreated"),
     src.indexOf("async function verifyResume"),
   )
-  const planningAssertion = src.slice(
-    src.indexOf("planning_visible: {"),
-    src.indexOf("streaming_visible: {"),
-  )
+  const planningAssertion = src.slice(src.indexOf("planning_visible: {"), src.indexOf("streaming_visible: {"))
   const materializedAssertion = src.slice(src.indexOf("materialized: {"), src.indexOf("frontend_design_agent_card: {"))
 
   expect(planningFn).not.toContain('api("/tasks")')
@@ -188,7 +205,10 @@ test("benchmark frontend-design card evidence must be viewport visible", () => {
     src.indexOf("frontend_design_agent_card: {"),
     src.indexOf("architect_contract_graph: {"),
   )
-  const snapshotSource = src.slice(src.indexOf("const frontendDesignCard = {"), src.indexOf("return {", src.indexOf("const frontendDesignCard = {")))
+  const snapshotSource = src.slice(
+    src.indexOf("const frontendDesignCard = {"),
+    src.indexOf("return {", src.indexOf("const frontendDesignCard = {")),
+  )
 
   expect(frontendCardAssertion).toContain("frontendDesignCard?.storePresent")
   expect(frontendCardAssertion).toContain("frontendDesignCard?.renderedPresent")
@@ -198,10 +218,7 @@ test("benchmark frontend-design card evidence must be viewport visible", () => {
 })
 
 test("benchmark final pass requires architect contract graph in full runs", () => {
-  const passHelper = src.slice(
-    src.indexOf("function benchmarkReportPass"),
-    src.indexOf("async function withTimeout"),
-  )
+  const passHelper = src.slice(src.indexOf("function benchmarkReportPass"), src.indexOf("async function withTimeout"))
 
   expect(src).toContain("const pass = benchmarkReportPass(out, { stopAfterArchitect })")
   expect(passHelper).toContain("out.assertions.architect_contract_graph.pass")

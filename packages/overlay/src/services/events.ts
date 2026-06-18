@@ -3,7 +3,7 @@
 // Executor events (run.progress/run.output) are converted to standard
 // message events and routed to cardTreeStore — no separate executorStore.
 
-import { boardStore, scheduleBoard, loadTasks, setTaskSequence, setSnapshotVersion, activeTaskID } from "../store/board"
+import { boardStore, scheduleBoard, loadTasks, setTaskSequence, activeTaskID } from "../store/board"
 import { configRefreshIncludesSettingsData, loadConfigInfo, loadSettingsInfo } from "./init"
 import { markSessionConfigStale } from "./config"
 import { applyEvent as applyTreeWriterEvent, hasProjectedPart } from "./tree-writer"
@@ -12,8 +12,8 @@ import { isBoardInvalidatingEventType, isRouterConsumedNoopEventType } from "./e
 import { markSelectedLiveEventConsumed } from "./selected-stream-cursor"
 
 // Forward SSE events to the tree-writer. The conversation view reads
-// `cardTreeStore`; message events are no longer mirrored into the legacy
-// message array on the hot path.
+// `cardTreeStore`; message events stay out of the transcript mirror on the
+// visible hot path.
 function writeToTree(event: any): void {
   applyTreeWriterEvent(event)
 }
@@ -590,8 +590,8 @@ export function routeSSEEvent(event: any): boolean {
     return true
   }
 
-  // Double-write to the new cardTreeStore. Runs before non-message legacy
-  // routing so a writer crash surfaces with the original event context intact.
+  // Project the event into cardTreeStore before router-specific side effects so
+  // a writer crash surfaces with the original event context intact.
   writeToTree(event)
 
   // Replay buffer expiry is loud. Do not full-refresh the loaded transcript:
@@ -622,7 +622,7 @@ export function routeSSEEvent(event: any): boolean {
       void (async () => {
         const { pruneCardsAfterCursor } = await import("../store/card-tree")
         pruneCardsAfterCursor(cursorTime)
-        if (resetWorktree) setSnapshotVersion(`${evtTaskID}:${cursorTime}:${Date.now()}`)
+        if (resetWorktree) scheduleBoard(0)
       })()
       advanceHandledSelectedTaskSequence(event)
     } else if (evtTaskID === activeTaskID() && cursorTime === 0) {

@@ -30,15 +30,15 @@ truth for pagination: `loadTasks()` owns the first page refresh, and
 
 ## Call Point Sweep
 
-| Surface | Current use | Decision |
-| --- | --- | --- |
-| `/global/tasks` | Overlay sidebar list and task-list SSE refresh target. | Return lean rows only. |
-| `/task` project board list | Same `taskItems()` helper. | Return lean rows only. |
-| `/task/:taskID` | Direct full task lookup. | Keep full `viewTask()`. |
-| `/task/:taskID/board` and conversation hydration | Selected task detail, request bubble, attachments, git metadata. | Keep full payload. |
-| Overlay `TaskList.tsx` | Uses title/id/status/directory/time/queue/parentTaskID/pending count. | No frontend field-hiding workaround. |
-| Overlay `tree-writer.ts` | Uses `boardStore.board.task.request` and attachments. | Unchanged; selected board remains full. |
-| `config.ts` / `git.ts` | Read selected board task metadata. | Unchanged. |
+| Surface                                          | Current use                                                           | Decision                                |
+| ------------------------------------------------ | --------------------------------------------------------------------- | --------------------------------------- |
+| `/global/tasks`                                  | Overlay sidebar list and task-list SSE refresh target.                | Return lean rows only.                  |
+| `/task` project board list                       | Same `taskItems()` helper.                                            | Return lean rows only.                  |
+| `/task/:taskID`                                  | Direct full task lookup.                                              | Keep full `viewTask()`.                 |
+| `/task/:taskID/board` and conversation hydration | Selected task detail, request bubble, attachments, git metadata.      | Keep full payload.                      |
+| Overlay `TaskList.tsx`                           | Uses title/id/status/directory/time/queue/parentTaskID/pending count. | No frontend field-hiding workaround.    |
+| Overlay `tree-writer.ts`                         | Uses `boardStore.board.task.request` and attachments.                 | Unchanged; selected board remains full. |
+| `config.ts` / `git.ts`                           | Read selected board task metadata.                                    | Unchanged.                              |
 
 ## Design
 

@@ -24,7 +24,7 @@ OPENCORVUS_ENABLE_QUESTION_TOOL=1 opencorvus acp   # 启用 QuestionTool
 3. 通过 `@agentclientprotocol/sdk` 的 `ndJsonStream` 在 **stdin/stdout** 建立 JSON-RPC 通道
 4. 实例化 `ACP.Agent`，等待客户端连接
 
-传输层：**newline-delimited JSON (ndjson) over stdio**，客户端与 `opencorvus` 进程通过标准输入输出通信，不暴露外部端口（`src/cli/cmd/acp.ts:28-67`）。
+传输层：**newline-delimited JSON (ndjson) over stdio**，客户端与 `opencorvus` 进程通过标准输入输出通信，不暴露外部端口（`src/cli/cmd/acp.ts`）。
 
 ## Zed 编辑器连接
 
@@ -41,7 +41,7 @@ OPENCORVUS_ENABLE_QUESTION_TOOL=1 opencorvus acp   # 启用 QuestionTool
 }
 ```
 
-Zed 按需 spawn `opencorvus acp`，通过 stdin/stdout 通信（`src/acp/README.md:67-78`）。
+Zed 按需 spawn `opencorvus acp`，通过 stdin/stdout 通信（`src/acp/README.md`）。
 
 ## 支持的 ACP 方法
 
@@ -51,7 +51,7 @@ Zed 按需 spawn `opencorvus acp`，通过 stdin/stdout 通信（`src/acp/README
 | ------------ | ----------------------------------------------------- |
 | `initialize` | 协商协议版本（返回 `protocolVersion: 1`），广播能力集 |
 
-广播的能力（`src/acp/agent.ts:539-555`）：`loadSession: true`，MCP 支持 `http` / `sse`，Prompt 支持 `embeddedContext` / `image`，Session 能力 `fork` / `list` / `resume`。
+广播的能力（`src/acp/agent.ts`）：`loadSession: true`，MCP 支持 `http` / `sse`，Prompt 支持 `embeddedContext` / `image`，Session 能力 `fork` / `list` / `resume`。
 
 ### 会话管理
 
@@ -88,14 +88,14 @@ Zed 按需 spawn `opencorvus acp`，通过 stdin/stdout 通信（`src/acp/README
 ### 认证
 
 :::caution
-`authenticate` **未实装**，调用抛 `"Authentication not implemented"`（`src/acp/agent.ts:564-566`）。
+`authenticate` **未实装**，调用抛 `"Authentication not implemented"`（`src/acp/agent.ts`）。
 :::
 
 ## 权限处理
 
 ACP 转发内部 `permission.asked` 到客户端（通过 `connection.requestPermission()`）：`once` / `always` / `reject`。
 
-对 `edit` 类权限，客户端批准后 ACP 层调 `connection.writeTextFile()` 把 diff 应用后的内容同步给编辑器（`src/acp/agent.ts:184-261`）。
+对 `edit` 类权限，客户端批准后 ACP 层调 `connection.writeTextFile()` 把 diff 应用后的内容同步给编辑器（`src/acp/agent.ts`）。
 
 ## MCP 服务器支持
 
@@ -129,7 +129,7 @@ ACP 转发内部 `permission.asked` 到客户端（通过 `connection.requestPer
 
 ## 当前限制
 
-（`src/acp/README.md:109-119`）
+（`src/acp/README.md`）
 
 - **认证**：`authenticate` 直接抛错
 - **Session 持久化**：`session/load` 回放历史消息，但不恢复工作目录快照

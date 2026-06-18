@@ -13,16 +13,16 @@ current width values.
 
 ## Call Points
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Default pane config | `packages/overlay/src/services/pane.ts` `PANEL_PANE_CONFIG` | Keep pane resize behavior in the shared pane service. Add controlled element IDs to the config so ARIA ownership is not hardcoded in `main.tsx`. |
-| Left separator DOM | `packages/overlay/src/index.html` `leftPaneResizer` | Keep the real separator element. Add initial `tabindex`, `aria-controls`, and value attributes that the service refreshes after mount. |
-| Reactive layout render | `packages/overlay/src/main.tsx` `renderPaneLayout(...)` effect | Continue to call the pane service as the single width renderer; do not add a second ARIA writer in `main.tsx`. |
-| Pointer resize | `packages/overlay/src/services/pane.ts` `startPaneResize` | Preserve the existing pointer path. |
-| Keyboard resize | `packages/overlay/src/services/pane.ts` new key handler | ArrowLeft/ArrowRight resize by the same clamp math as pointer drag; Home/End move to min/max. |
-| Disabled/mobile state | `packages/overlay/src/services/pane.ts`, `workspace.css` | Hidden or zero-width handles are removed from tab order and expose no stale ARIA value attributes. Mobile CSS already hides pane handles. |
-| Static tests | `packages/overlay/test/pane-config.test.ts`, `acceptance-panel-mount.test.ts` | Pin config controls, separator ARIA, and keydown ownership. |
-| Browser test | `packages/overlay/test/browser/left-pane-resizer-browser.test.ts` | Open the real overlay, focus the separator, exercise Arrow/Home/End, and inspect screenshot. |
+| Surface                | File                                                                          | Decision                                                                                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Default pane config    | `packages/overlay/src/services/pane.ts` `PANEL_PANE_CONFIG`                   | Keep pane resize behavior in the shared pane service. Add controlled element IDs to the config so ARIA ownership is not hardcoded in `main.tsx`. |
+| Left separator DOM     | `packages/overlay/src/index.html` `leftPaneResizer`                           | Keep the real separator element. Add initial `tabindex`, `aria-controls`, and value attributes that the service refreshes after mount.           |
+| Reactive layout render | `packages/overlay/src/main.tsx` `renderPaneLayout(...)` effect                | Continue to call the pane service as the single width renderer; do not add a second ARIA writer in `main.tsx`.                                   |
+| Pointer resize         | `packages/overlay/src/services/pane.ts` `startPaneResize`                     | Preserve the existing pointer path.                                                                                                              |
+| Keyboard resize        | `packages/overlay/src/services/pane.ts` new key handler                       | ArrowLeft/ArrowRight resize by the same clamp math as pointer drag; Home/End move to min/max.                                                    |
+| Disabled/mobile state  | `packages/overlay/src/services/pane.ts`, `workspace.css`                      | Hidden or zero-width handles are removed from tab order and expose no stale ARIA value attributes. Mobile CSS already hides pane handles.        |
+| Static tests           | `packages/overlay/test/pane-config.test.ts`, `acceptance-panel-mount.test.ts` | Pin config controls, separator ARIA, and keydown ownership.                                                                                      |
+| Browser test           | `packages/overlay/test/browser/left-pane-resizer-browser.test.ts`             | Open the real overlay, focus the separator, exercise Arrow/Home/End, and inspect screenshot.                                                     |
 
 ## Design
 

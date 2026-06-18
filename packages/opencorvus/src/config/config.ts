@@ -626,6 +626,11 @@ export namespace Config {
     .object({
       type: z.literal("remote").describe("Type of MCP server connection"),
       url: z.string().describe("URL of the remote MCP server"),
+      transport: z
+        .enum(["streamable-http", "sse"])
+        .describe(
+          "Remote MCP transport. Use streamable-http for standard remote MCP endpoints or sse for SSE-only servers.",
+        ),
       enabled: z.boolean().optional().describe("Enable or disable the MCP server on startup"),
       headers: z.record(z.string(), z.string()).optional().describe("Headers to send with the request"),
       oauth: z
@@ -1074,6 +1079,7 @@ export namespace Config {
         .record(
           z.string(),
           ModelsDev.Model.partial().extend({
+            status: z.enum(["alpha", "beta"]).optional(),
             variants: z
               .record(
                 z.string(),
@@ -1531,7 +1537,7 @@ export namespace Config {
                 .int()
                 .min(1000)
                 .optional()
-                .describe("Total wall-clock cap for a single queued task run, ms"),
+                .describe("Max idle window without queue task progress, ms"),
             })
             .optional()
             .describe(
@@ -1543,7 +1549,7 @@ export namespace Config {
                 .boolean()
                 .optional()
                 .describe(
-                  "When true, the host injects an INFORMATION MISSING fallback section into every agent's system prompt and exits the process with code 99 the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.",
+                  "When true, the host injects an INFORMATION MISSING diagnostic section into every agent's system prompt and fails the current run the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.",
                 ),
             })
             .optional()

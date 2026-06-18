@@ -31,34 +31,33 @@ https://github.com/yangheng95/models.dev
 
 ## Developing OpenCorvus
 
-- Requirements: Bun 1.3+
-- Install dependencies and start the dev server from the repo root:
+- Requirements: Bun 1.3.13 or newer
+- Install dependencies from the repo root:
 
   ```bash
   bun install
-  bun dev
   ```
 
 ### Running against a different directory
 
-By default, `bun dev` runs OpenCorvus in the `packages/opencorvus` directory. To run it against a different directory or repository:
+Run the source CLI entrypoint and pass the project directory explicitly:
 
 ```bash
-bun dev <directory>
+bun --cwd packages/opencorvus ./src/index.ts serve --project-dir /absolute/path/to/repo
 ```
 
-To run OpenCorvus in the root of the opencorvus repo itself:
+To run OpenCorvus against this repository root:
 
 ```bash
-bun dev .
+bun --cwd packages/opencorvus ./src/index.ts serve --project-dir ../..
 ```
 
-### Building a "localcode"
+### Building a local binary
 
 To compile a standalone executable:
 
 ```bash
-./packages/opencorvus/script/build.ts --single
+bun run --cwd packages/opencorvus build --single
 ```
 
 Then run it with:
@@ -77,16 +76,16 @@ Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
 
 ### Understanding bun dev vs opencorvus
 
-During development, `bun dev` is the local equivalent of the built `opencorvus` command:
+During development, the source entrypoint is the local equivalent of the built `opencorvus` command:
 
 ```bash
 # Development (from project root)
-bun dev serve            # Start headless API server
-bun dev --help           # Show all available commands
+bun --cwd packages/opencorvus ./src/index.ts serve
+bun --cwd packages/opencorvus ./src/index.ts --help
 
 # Production
-opencorvus serve              # Start headless API server
-opencorvus --help             # Show all available commands
+opencorvus serve
+opencorvus --help
 ```
 
 ### Running the API Server
@@ -94,13 +93,13 @@ opencorvus --help             # Show all available commands
 To start the OpenCorvus headless API server:
 
 ```bash
-bun dev serve
+bun --cwd packages/opencorvus ./src/index.ts serve
 ```
 
 This starts the headless server on port 7878 by default. You can specify a different port:
 
 ```bash
-bun dev serve --port 8080
+bun --cwd packages/opencorvus ./src/index.ts serve --port 8080
 ```
 
 > [!NOTE]

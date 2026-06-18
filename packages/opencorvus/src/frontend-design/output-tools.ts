@@ -134,7 +134,7 @@ function renderComponentInventoryFromReusePlan(
 ): string {
   if (items.length === 0) return ""
   return [
-    "Legacy compatibility summary only.",
+    "Component-family cross-check.",
     "Do not treat this field as a standalone component checklist; use component_reuse_plan, quality_project_contract, completeness_review, open_questions, and named source artifacts for implementation decisions.",
     `Reuse families captured: ${items.map((item) => item.family_id).join(", ")}`,
   ].join("\n")

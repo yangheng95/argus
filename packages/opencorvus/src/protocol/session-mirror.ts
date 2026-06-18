@@ -95,17 +95,9 @@ function stampPayloadWithMeta(
 ): Record<string, unknown> {
   const payload = { ...props }
   const info = payload.info
-  const part = payload.part
   if (info && typeof info === "object") {
     payload.info = {
       ...(info as Record<string, unknown>),
-      channel: meta.channel,
-      resolvedRole: meta.resolvedRole,
-    }
-  }
-  if (part && typeof part === "object") {
-    payload.part = {
-      ...(part as Record<string, unknown>),
       channel: meta.channel,
       resolvedRole: meta.resolvedRole,
     }
@@ -133,11 +125,7 @@ export function enrichStandaloneSessionTranscript(messages: Message.WithParts[])
         channel: meta.channel,
         resolvedRole: meta.resolvedRole,
       } as unknown as Message.Info,
-      parts: message.parts.map((part) => ({
-        ...part,
-        channel: meta.channel,
-        resolvedRole: meta.resolvedRole,
-      })),
+      parts: message.parts,
     }
   })
 }

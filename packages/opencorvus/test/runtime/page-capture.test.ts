@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import path from "node:path"
-import { normalizeRuntimeCaptureRequest, normalizeRuntimeCaptureViewport } from "../../src/runtime/capture-contract"
+import {
+  normalizeRuntimeCaptureRequest,
+  normalizeRuntimeCaptureViewport,
+  runtimeCaptureFailureSummary,
+  type RuntimeCaptureSuccess,
+} from "../../src/runtime/capture-contract"
 
 describe("runtime page capture", () => {
   test("keeps normal captures inside the defensive viewport", () => {
@@ -32,6 +37,19 @@ describe("runtime page capture", () => {
     })
   })
 
+  test("runtime capture failure summaries include JavaScript layer details", () => {
+    const layers = passedLayers("desktop.png")
+    layers.js = {
+      passed: false,
+      console_errors: ["forwardRef render functions accept exactly two parameters: props and ref."],
+      page_errors: [],
+    }
+
+    expect(runtimeCaptureFailureSummary(layers)).toBe(
+      "failed layers: js; js console error: forwardRef render functions accept exactly two parameters: props and ref.",
+    )
+  })
+
   test("build agent does not expose the retired direct screenshot tool", async () => {
     const source = await Bun.file(path.resolve(import.meta.dir, "../../src/build/agent.ts")).text()
 
@@ -40,3 +58,15 @@ describe("runtime page capture", () => {
     expect(source).not.toContain("captureRuntimePage")
   })
 })
+
+function passedLayers(screenshotPath: string): RuntimeCaptureSuccess["layers"] {
+  return {
+    http: { passed: true, status: 200, content_type: "text/html", body_length: 240, reason: "" },
+    asset: { passed: true, total: 1, failed: [] },
+    dom: { passed: true, body_descendants: 20, required: 20 },
+    js: { passed: true, console_errors: [], page_errors: [] },
+    glyph: { passed: true, checked: 0, failed: [] },
+    pixel: { passed: true, variance: 64, floor: 25, screenshot_path: screenshotPath },
+    expected: { passed: true, missing_selectors: [], missing_texts: [] },
+  }
+}

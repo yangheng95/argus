@@ -80,4 +80,11 @@ describe("goal-workload-analyst output tools", () => {
     expect(passed).toContain("gol_a") // flagged goal surfaced for architect re-sizing
     expect(kit.getCollector().finalized).toBe(true)
   })
+
+  test("buildReport fails before terminal submit instead of synthesizing a summary", async () => {
+    const kit = createGoalWorkloadOutputTools({ knownGoalIDs: ["gol_a"] })
+    await callTool(kit.tools, "register_workload_brief", validBrief("gol_a"))
+
+    expect(() => kit.buildReport()).toThrow("requires submit_workload_analysis")
+  })
 })

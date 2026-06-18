@@ -323,19 +323,15 @@ export async function syncTask(taskID: string) {
     clearMessages()
     return
   }
-  try {
-    const [transcript, timeline] = await Promise.all([
-      apiJson(`task/${encodeURIComponent(taskID)}/transcript`).catch(() => []),
-      apiJson(`control/timeline?taskID=${encodeURIComponent(taskID)}`).catch(() => []),
-    ])
-    const messages = mergeLoadedConversationMessages(
-      Array.isArray(timeline) ? timeline : [],
-      Array.isArray(transcript) ? transcript : [],
-    )
-    setMessages(messages)
-  } catch (e) {
-    console.error("syncTask failed", e)
-  }
+  const [transcript, timeline] = await Promise.all([
+    apiJson(`task/${encodeURIComponent(taskID)}/transcript`),
+    apiJson(`control/timeline?taskID=${encodeURIComponent(taskID)}`),
+  ])
+  const messages = mergeLoadedConversationMessages(
+    Array.isArray(timeline) ? timeline : [],
+    Array.isArray(transcript) ? transcript : [],
+  )
+  setMessages(messages)
 }
 
 // ── Conversation loading (.ts) ──
@@ -382,11 +378,8 @@ export async function loadConversation(): Promise<void> {
         setMessages([])
         return
       }
-      // Pre-existing `.catch(() => [])` silent fallback is preserved here
-      // — plan §5.4 calls these out as cleanup for a future milestone.
-      // M3.A only re-routes through the HostTransport chokepoint.
-      const transcript = await apiJson(`task/${encodeURIComponent(taskID)}/transcript`).catch(() => [])
-      const timeline = await apiJson(`control/timeline?taskID=${encodeURIComponent(taskID)}`).catch(() => [])
+      const transcript = await apiJson(`task/${encodeURIComponent(taskID)}/transcript`)
+      const timeline = await apiJson(`control/timeline?taskID=${encodeURIComponent(taskID)}`)
       if (taskID !== activeTaskID()) continue
       const merged = mergeLoadedConversationMessages(
         Array.isArray(timeline) ? timeline : [],
@@ -421,11 +414,11 @@ function applyMessageEvent(event: any): boolean {
         : {}
 
   // All mutation branches below touch two reactive views in lock-step:
-  //   1. `store.messages` — flat chronological array (legacy consumers)
-  //   2. `store.messagesBySession[sid]` — per-session bucket (card memos)
+  //   1. `store.messages` — flat chronological transcript consumers
+  //   2. `store.messagesBySession[sid]` — per-session bucket consumers
   // Both hold references to the SAME Message objects, but Solid tracks
   // them as independent reactive slots. Writing only one side leaves the
-  // other's subscribers unnotified — so every write is mirrored.
+  // other's subscribers unnotified, so every mutation updates both views.
 
   if (type === "message.updated") {
     const info = properties.info

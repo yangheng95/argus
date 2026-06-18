@@ -77,8 +77,8 @@
 
 ```ts
 {
-  id: string                 // "claude-sonnet-4-20250514"
-  providerID: string         // "anthropic"
+  id: string                 // "qwen3.5-plus"
+  providerID: string         // "alibaba-cn"
   api: { id, url, npm }      // API model ID · base URL · SDK package
   capabilities: {
     temperature, reasoning, toolcall, attachment,

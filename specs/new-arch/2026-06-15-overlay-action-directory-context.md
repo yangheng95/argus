@@ -6,13 +6,13 @@ Some project-scoped overlay actions build task or interaction API paths without 
 
 ## Call sites
 
-| Surface | Current state | Decision |
-| --- | --- | --- |
-| `services/task.ts` `taskPath` | Uses `taskByID(taskID)?.task.directory` only | Resolve directory from task row, active board task, then settings directory |
-| `services/interaction-reply.ts` | Calls `question/*` and `interaction/*` without directory | Route through a shared project-scoped path helper |
-| `services/workspace.ts` `activeDirectory` | Already exposes board task directory then settings directory | Reuse the same helper so callers do not drift |
-| `test/agent-session-controls.test.ts` | Expected no directory on child-agent routes | Assert board-derived directory query |
-| `test/interaction-reply-route.test.ts` | Expected no directory on interaction routes | Assert settings-derived directory query |
+| Surface                                   | Current state                                                | Decision                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `services/task.ts` `taskPath`             | Uses `taskByID(taskID)?.task.directory` only                 | Resolve directory from task row, active board task, then settings directory |
+| `services/interaction-reply.ts`           | Calls `question/*` and `interaction/*` without directory     | Route through a shared project-scoped path helper                           |
+| `services/workspace.ts` `activeDirectory` | Already exposes board task directory then settings directory | Reuse the same helper so callers do not drift                               |
+| `test/agent-session-controls.test.ts`     | Expected no directory on child-agent routes                  | Assert board-derived directory query                                        |
+| `test/interaction-reply-route.test.ts`    | Expected no directory on interaction routes                  | Assert settings-derived directory query                                     |
 
 ## Validation
 

@@ -8,7 +8,9 @@ mock.module("@opencorvus-ai/sdk", () => sdkMock)
 const { ChannelRuntime } = await import("../src/core")
 let oldFetch: typeof globalThis.fetch
 
-function installFetchMock(handler: (...args: Parameters<typeof globalThis.fetch>) => ReturnType<typeof globalThis.fetch>) {
+function installFetchMock(
+  handler: (...args: Parameters<typeof globalThis.fetch>) => ReturnType<typeof globalThis.fetch>,
+) {
   globalThis.fetch = Object.assign(handler, { preconnect: oldFetch.preconnect })
 }
 
@@ -389,7 +391,8 @@ describe("channel runtime channel protocol", () => {
         mime: "image/png",
         filename: "overlay.png",
         expires_at: 1,
-      }))
+      }),
+    )
 
     await expect(core.handleMessage(incoming("googlechat", "send gui"))).rejects.toThrow("url upload failed")
     expect(uploads).toHaveLength(0)

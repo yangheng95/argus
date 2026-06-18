@@ -44,6 +44,7 @@ import { BrowserPreviewTool, BrowserPreviewToolStaticDefinition } from "@/tool/b
 import { WAIT_MAX_MS, WAIT_MIN_MS, WaitToolDescription, WaitToolParameters, executeWait } from "@/tool/wait"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
+import { ExploreAgent } from "@/explore/agent"
 import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
@@ -61,7 +62,19 @@ import {
   renderVisualQaPriorReportContext,
 } from "@/visual-qa/context"
 import { materializeMcpToolResult } from "@/mcp/materialize"
-import { EngineArtifactTable, EngineGoalTable, EngineTaskTable, type EngineArtifactKind } from "@/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineGoalTable,
+  EngineInteractionRequestTable,
+  EngineMilestoneTable,
+  EnginePlanNodeTable,
+  EnginePlanVersionTable,
+  EngineRequirementTable,
+  EngineSpecItemTable,
+  EngineSpecSnapshotTable,
+  EngineTaskTable,
+  type EngineArtifactKind,
+} from "@/engine/engine.sql"
 import {
   supersedePriorActivePlansForTask,
   appendGoalToActiveGraph,
@@ -107,7 +120,7 @@ import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engi
 import { isLiveGoalRunStatus } from "@/engine/catalog"
 import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
-import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
+import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
 import {
   assertNoLiveBuildOwnershipForGoal,
   completeOrchestratorToolOwnership,
@@ -136,7 +149,12 @@ import {
   runContractAudit,
   type ContractAuditCriteriaResult,
 } from "@/acceptance/contract-audit"
-import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan, type RestartStage } from "./scheduler"
+import { isLiveRunStatus, restartStagePlan, type RestartStage } from "./scheduler"
+import {
+  isOrchestratorNoDecisionObservationToolName,
+  ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY,
+  type OrchestratorDecisionEffect,
+} from "./stateful-tool-names"
 import { composeAcceptanceRetryFeedback } from "./acceptance-retry-feedback"
 import { parsedRequirementFromRow } from "@/requirements/row"
 import {
@@ -580,10 +598,6 @@ const AddGoalInputSchema = z.object({
 })
 
 const FrontendDesignReasonField = z.string().describe("Why frontend design is needed for this task")
-const FrontendDesignLegacyUrlField = z
-  .string()
-  .optional()
-  .describe("Deprecated — use `urls`. Single URL for back-compat; merged into `urls`.")
 const FrontendDesignUrlsField = z
   .array(z.string())
   .optional()
@@ -613,10 +627,10 @@ const FrontendDesignMaterialsField = z
 const FrontendDesignInputSchema = z
   .object({})
   .extend({ reason: FrontendDesignReasonField })
-  .extend({ url: FrontendDesignLegacyUrlField })
   .extend({ urls: FrontendDesignUrlsField })
   .extend({ figma_url: FrontendDesignFigmaUrlField })
   .extend({ materials: FrontendDesignMaterialsField })
+  .strict()
 
 const FrontendResearchReasonField = z
   .string()
@@ -657,7 +671,7 @@ const VisualQaInputSchema = z.object({
     ),
 })
 
-function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string }): {
+function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string; goalRunID?: string }): {
   sessionID: string
   source: string
   goalRunID?: string
@@ -683,28 +697,31 @@ function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?
     }
   }
 
-  if (!input.sessionID) {
-    throw new Error("steer_subagent requires either session_id or goal_id")
-  }
-
-  const goalRun = findGoalRun(input.sessionID)
-  if (!goalRun || goalRun.task_id !== input.taskID) {
-    const byChildSession = listGoalRunsForTask(input.taskID).find((row) => row.session_id === input.sessionID)
+  if (input.goalRunID) {
+    const goalRun = findGoalRun(input.goalRunID)
+    if (!goalRun || goalRun.task_id !== input.taskID) {
+      throw new Error(`goal_run ${input.goalRunID} does not belong to task ${input.taskID}`)
+    }
+    if (!goalRun.session_id) {
+      throw new Error(
+        `goal_run ${input.goalRunID} has no child session_id yet; wait for the build session to start or finalize the stale attempt before steering it.`,
+      )
+    }
     return {
-      sessionID: input.sessionID,
-      source: input.sessionID,
-      goalRunID: byChildSession?.id,
+      sessionID: goalRun.session_id,
+      source: `${input.goalRunID} -> session ${goalRun.session_id}`,
+      goalRunID: goalRun.id,
     }
   }
-  if (!goalRun.session_id) {
-    throw new Error(
-      `goal_run ${input.sessionID} has no child session_id yet; wait for the build session to start or finalize the stale attempt before steering it.`,
-    )
+
+  if (!input.sessionID) {
+    throw new Error("sub-agent control requires session_id, goal_id, or goal_run_id")
   }
+  const byChildSession = listGoalRunsForTask(input.taskID).find((row) => row.session_id === input.sessionID)
   return {
-    sessionID: goalRun.session_id,
-    source: `${input.sessionID} -> session ${goalRun.session_id}`,
-    goalRunID: goalRun.id,
+    sessionID: input.sessionID,
+    source: input.sessionID,
+    goalRunID: byChildSession?.id,
   }
 }
 
@@ -1621,11 +1638,6 @@ export function createOrchestratorTools(input: {
     let task = requireTask(taskID)
     let createdRun = false
     let activatedRun = false
-    if (isTaskTerminal(task)) {
-      return {
-        error: `Task ${task.id} is ${deriveTaskStatus(task)}. Terminal tasks cannot create build runs from a wake or tool-result continuation; use retry_task or restart_from_stage for an explicit restart.`,
-      } as const
-    }
 
     if (!findActiveRunForTask(task.id)) {
       const created = await createExecutionRunRecord()
@@ -1662,22 +1674,11 @@ export function createOrchestratorTools(input: {
       plan = findPlan(planVersionID) ?? plan
     }
 
-    if (!isRunReadyForGoalDispatch({ status: run.status, planVersionID: run.plan_version_id })) {
-      return {
-        error: `Run ${run.id} is ${run.status}. Only accepted/running/blocked runs may dispatch goals. Create a fresh run if this one is terminal.`,
-      } as const
-    }
-
     return { task, run, plan, createdRun, activatedRun } as const
   }
 
   async function ensureTaskLevelBuildRun(): Promise<{ readonly run: RunRow } | { readonly error: string }> {
     const task = requireTask(taskID)
-    if (isTaskTerminal(task)) {
-      return {
-        error: `Task ${task.id} is ${deriveTaskStatus(task)}. Terminal tasks cannot create build runs from a wake or tool-result continuation; use retry_task or restart_from_stage for an explicit restart.`,
-      } as const
-    }
     const existing = findActiveRunForTask(task.id)
     if (existing && isLiveRunStatus(existing.status)) return { run: existing } as const
 
@@ -2250,6 +2251,99 @@ export function createOrchestratorTools(input: {
   // Agents that need to ask the user a question do so directly via
   // `Question.ask`. Workflow steps never pause for input here.
 
+  const decisionControlTools = new Set([
+    "question",
+    "propose_task",
+    "inject_operator_message",
+    "steer_subagent",
+    "cancel_subagent",
+  ])
+
+  function taskDecisionSignature() {
+    return Database.use((db) => {
+      const aggregate = (table: { task_id: unknown; time_updated: unknown }) =>
+        db
+          .select({
+            count: sql<number>`count(*)`,
+            updated: sql<number | null>`max(${table.time_updated})`,
+          })
+          .from(table as never)
+          .where(eq(table.task_id as never, taskID))
+          .get()
+      const task = db
+        .select({
+          time_updated: EngineTaskTable.time_updated,
+          time_completed: EngineTaskTable.time_completed,
+          error: EngineTaskTable.error,
+        })
+        .from(EngineTaskTable)
+        .where(eq(EngineTaskTable.id, taskID))
+        .get()
+      return JSON.stringify({
+        task,
+        artifacts: aggregate(EngineArtifactTable),
+        goals: aggregate(EngineGoalTable),
+        interactions: aggregate(EngineInteractionRequestTable),
+        milestones: aggregate(EngineMilestoneTable),
+        planNodes: aggregate(EnginePlanNodeTable),
+        planVersions: aggregate(EnginePlanVersionTable),
+        requirements: aggregate(EngineRequirementTable),
+        specItems: aggregate(EngineSpecItemTable),
+        specSnapshots: aggregate(EngineSpecSnapshotTable),
+      })
+    })
+  }
+
+  function normalizeOrchestratorToolResult(result: unknown): { output: string; title: string; metadata: object } {
+    if (typeof result === "string") return { output: result, title: "", metadata: {} }
+    if (result && typeof result === "object") {
+      const record = result as Record<string, unknown>
+      const output =
+        typeof record.output === "string"
+          ? record.output
+          : typeof record.text === "string"
+            ? record.text
+            : JSON.stringify(record.output ?? record)
+      return {
+        ...record,
+        output,
+        title: typeof record.title === "string" ? record.title : "",
+        metadata: record.metadata && typeof record.metadata === "object" ? record.metadata : {},
+      } as { output: string; title: string; metadata: object }
+    }
+    return { output: String(result ?? ""), title: "", metadata: {} }
+  }
+
+  function decisionEffectForTool(name: string, before: string, after: string): OrchestratorDecisionEffect {
+    if (isOrchestratorNoDecisionObservationToolName(name)) return "observation"
+    if (before !== after) return "decision"
+    if (decisionControlTools.has(name)) return "decision"
+    return "none"
+  }
+
+  function withDecisionEffectMetadata(name: string, raw: unknown): unknown {
+    const toolDef = raw as { execute?: (args: unknown, options: unknown) => Promise<unknown> }
+    if (typeof toolDef.execute !== "function") return raw
+    const execute = toolDef.execute
+    return {
+      ...(raw as object),
+      execute: async (args: unknown, options: unknown) => {
+        const before = taskDecisionSignature()
+        const result = await execute(args, options)
+        const after = taskDecisionSignature()
+        const normalized = normalizeOrchestratorToolResult(result)
+        const effect = decisionEffectForTool(name, before, after)
+        return {
+          ...normalized,
+          metadata: {
+            ...normalized.metadata,
+            [ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]: effect,
+          },
+        }
+      },
+    }
+  }
+
   const tools = {
     requirements: tool({
       description:
@@ -2545,18 +2639,16 @@ export function createOrchestratorTools(input: {
         "  - The request already contains detailed design specifications AND has no URL, screenshot/image, Figma/design-file, webpage-replica, or other visual reference that needs webpage-evidence/web-clone-source evidence for implementation",
       ].join("\n"),
       inputSchema: FrontendDesignInputSchema,
-      execute: async ({ reason, url, urls, figma_url, materials }) => {
+      execute: async ({ reason, urls, figma_url, materials }) => {
         const task = requireTask(taskID)
 
         // Guard: skip if no visual input available. Figma URL counts as visual.
         const hasAttachments = Array.isArray(task.attachments) && task.attachments.length > 0
-        // Auto-detect: any `figma.com` URL passed via `url` / `urls` is
+        // Auto-detect: any `figma.com` URL passed via `urls` is
         // treated as a Figma URL (uses Figma MCP instead of screenshot).
         const meta = (task.metadata as Record<string, unknown> | null) ?? {}
         const metaFigma = typeof meta.figma_url === "string" ? meta.figma_url : undefined
-        const inputUrls = [...(url ? [url] : []), ...(Array.isArray(urls) ? urls : [])].filter(
-          (u) => typeof u === "string" && u.length > 0,
-        )
+        const inputUrls = (Array.isArray(urls) ? urls : []).filter((u) => typeof u === "string" && u.length > 0)
         const figmaUrls = [
           ...(figma_url ? [figma_url] : []),
           ...(metaFigma ? [metaFigma] : []),
@@ -2578,7 +2670,7 @@ export function createOrchestratorTools(input: {
               phase: "frontend_design",
               key: "abort_no_visual_input",
               value:
-                "frontend_design aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
+                "frontend_design aborted before agent call: caller provided no visual reference (no attachments, no urls, no figma_url, no materials).",
               reason: "no_visual_input_provided",
             })
           } catch (logErr) {
@@ -2678,10 +2770,7 @@ export function createOrchestratorTools(input: {
         // heuristics are diagnostics attached to the materialized reference.
         for (const liveUrl of liveUrls) {
           try {
-            await trackStepProgress(
-              "frontend_design",
-              `frontend_design dispatch: capturing URL screenshot ${liveUrl}`,
-            )
+            await trackStepProgress("frontend_design", `frontend_design dispatch: capturing URL screenshot ${liveUrl}`)
             const {
               captureReferenceManifest,
               assessCaptureDiagnostics,
@@ -2959,10 +3048,7 @@ export function createOrchestratorTools(input: {
             onStatus: () => {},
             onSessionCreated: (id) => {
               runnerSessionID = id
-              void trackStepProgress(
-                "frontend_design",
-                `frontend_design dispatch: agent session created ${id}`,
-              )
+              void trackStepProgress("frontend_design", `frontend_design dispatch: agent session created ${id}`)
             },
           })
           await trackStepProgress("frontend_design", "frontend_design dispatch: agent analyze returned")
@@ -3065,13 +3151,13 @@ export function createOrchestratorTools(input: {
             key: "component_inventory",
             value: analysis.componentInventory,
             reason:
-              "Legacy compatibility field only; downstream agents should read public_report, reuse constraints, quality_project_contract, completeness_review, and source artifacts instead of treating this as a component checklist.",
+              "Component-family cross-check only; downstream agents should read public_report, reuse constraints, quality_project_contract, completeness_review, and source artifacts instead of treating this as a component checklist.",
           })
           decisionLog.append({
             phase: "frontend_design",
             key: "component_reuse_plan",
             value: JSON.stringify(analysis.componentReusePlan ?? [], null, 2),
-            reason: "Structured reuse/library/fallback plan for each component family in the frontend template.",
+            reason: "Structured reuse/library decision plan for each component family in the frontend template.",
           })
           decisionLog.append({
             phase: "frontend_design",
@@ -4502,12 +4588,6 @@ export function createOrchestratorTools(input: {
       execute: async ({ question, reason }) => {
         const task = requireTask(taskID)
         const model = await resolveAgentModelRef("explore", { taskID, sessionID: input.agentSessionID })
-        const exploreSession = await Session.createNext({
-          kind: "explore",
-          parentID: input.agentSessionID,
-          title: `Explore: ${question.slice(0, 80)}`,
-          directory: Instance.directory,
-        })
         const promptLines = [
           "# Repository Investigation",
           "",
@@ -4529,45 +4609,32 @@ export function createOrchestratorTools(input: {
         promptLines.push("## Question", question.trim())
         const prompt = promptLines.join("\n")
 
-        let finalMessage: Awaited<ReturnType<typeof SessionPrompt.prompt>>
-        try {
-          finalMessage = await SessionPrompt.prompt({
-            sessionID: exploreSession.id,
-            model,
-            agent: "explore",
-            tools: {
-              bash: false,
-              edit: false,
-              write: false,
-              task: false,
-              todowrite: false,
-              todoread: false,
-            },
-            parts: [{ type: "text", text: prompt, id: Identifier.ascending("part") }],
-          })
-        } catch (err) {
-          SessionStatus.set(exploreSession.id, {
-            type: "terminal",
-            reason: "error",
-            error: err instanceof Error ? err.message : String(err),
-          })
-          throw err
-        }
-        SessionStatus.set(exploreSession.id, { type: "terminal", reason: "completed" })
-        const resultText = (finalMessage?.parts ?? [])
-          .filter((part) => part.type === "text" && typeof (part as any).text === "string")
-          .map((part) => (part as any).text as string)
-          .join("\n\n")
-          .trim()
+        const exploreResult = await ExploreAgent.run({
+          parentSessionID: input.agentSessionID,
+          taskID,
+          sessionTitle: `Explore: ${question.slice(0, 80)}`,
+          model,
+          signal: input.signal,
+          prompt,
+          toolSwitches: {
+            bash: false,
+            edit: false,
+            write: false,
+            task: false,
+            todowrite: false,
+            todoread: false,
+          },
+        })
+        const resultText = exploreResult.finalText.trim()
         if (resultText.length === 0) {
-          throw new Error(`explore: subagent returned no text result (sessionID=${exploreSession.id})`)
+          throw new Error(`explore: subagent returned no text result (sessionID=${exploreResult.sessionID})`)
         }
 
         const now = Date.now()
         const decisionLog = createDecisionLog(taskID)
         decisionLog.append({
           phase: "explore",
-          key: `repo_investigation_${exploreSession.id}`,
+          key: `repo_investigation_${exploreResult.sessionID}`,
           value: resultText,
           reason: reason?.trim() || question.trim(),
         })
@@ -4581,7 +4648,7 @@ export function createOrchestratorTools(input: {
               payload: {
                 question: question.trim(),
                 reason: reason?.trim() || null,
-                session_id: exploreSession.id,
+                session_id: exploreResult.sessionID,
                 result: resultText,
               },
               time_created: now,
@@ -4594,10 +4661,10 @@ export function createOrchestratorTools(input: {
           headline: "Explore complete. Repository findings were persisted under phase=explore.",
           summary: resultText,
           fields: [
-            ["session", exploreSession.id],
+            ["session", exploreResult.sessionID],
             ["question", question.trim()],
           ],
-          pointer: `read_context scope=decisions; decision_log phase=explore key=repo_investigation_${exploreSession.id}`,
+          pointer: `read_context scope=decisions; decision_log phase=explore key=repo_investigation_${exploreResult.sessionID}`,
         })
       },
     }),
@@ -4618,12 +4685,6 @@ export function createOrchestratorTools(input: {
       inputSchema: AddGoalInputSchema,
       execute: async ({ goal, reason }) => {
         const task = requireTask(taskID)
-        if (isTaskTerminal(task)) {
-          return (
-            `add_goal: rejected because task ${taskID} is ${deriveTaskStatus(task)}. ` +
-            `A terminal task must first be reactivated by a real operator message or explicit retry/restart.`
-          )
-        }
         if (task.kind !== "workflow") {
           return `add_goal: rejected because task ${taskID} is kind=${task.kind}; direct build tasks do not own a workflow goal graph.`
         }
@@ -4774,10 +4835,8 @@ export function createOrchestratorTools(input: {
           // 1. Abort only LIVE goal_runs (queued/accepted/planning/running/
           //    evaluating/blocked). `completed` is never reset — its
           //    verification evidence is load-bearing, and the parent goal
-          //    should not regress from passed → pending via a
-          //    completed→aborted flip. The new attempt (step 2) supersedes
-          //    the tip so dispatchability kicks in; GoalPool is the
-          //    authoritative creator of the new goal_run.
+          //    should not regress from passed to pending via a
+          //    completed-to-aborted flip.
           const toAbort = listGoalRunsForTask(taskID).filter(
             (row) => row.goal_id === goalID && LIVE_GOAL_RUN_STATUSES.includes(row.status),
           )
@@ -4785,12 +4844,10 @@ export function createOrchestratorTools(input: {
             updateGoalRun(row.id, { status: "aborted", error: "contract modified" })
           }
           abortedRuns = toAbort.length
-          // 2. Open a new attempt under reason=modify_contract. Internally:
-          //    supersedes any terminal tip → deriveGoalStatus projects
-          //    pending → loop routes through pool.submit → pool.dispatchGoal
-          //    → fresh goal_run under the new contract. Idempotent if the
-          //    tip is already superseded. Emits GoalAttemptOpened so the
-          //    overlay / decision-log observe the boundary.
+          // 2. Record retry intent under reason=modify_contract. The
+          //    terminal tip remains lifecycle truth; the orchestrator reads
+          //    the intent fact and explicitly chooses a follow-up build.
+          //    Idempotent if the tip is already superseded.
           const result = startNewAttempt({
             goalID,
             reason: "modify_contract",
@@ -4807,7 +4864,7 @@ export function createOrchestratorTools(input: {
         }
 
         const resetSuffix = statusReset
-          ? ` (status reset: ${goalStatusByID(goal.id)} → pending via goal_run chain)`
+          ? ` (retry intent recorded; current status remains ${goalStatusByID(goal.id)})`
           : ""
         const abortSuffix = abortedRuns > 0 ? `, ${abortedRuns} prior goal_run(s) marked aborted` : ""
         const supersedeSuffix = supersededTipID ? `, tip ${supersededTipID} superseded` : ""
@@ -5211,33 +5268,33 @@ export function createOrchestratorTools(input: {
       description:
         "Send a scoped steering message to a child agent session and wake that session, OR — for a live-owned build child — return a read-only activity snapshot (status, last_activity_at, age_ms, ownership). " +
         "Build sessions cannot accept injected steering; the snapshot lets you decide between waiting and cancel_subagent mode='recover_stale'. " +
-        "You may pass session_id directly, goal_id for the latest live attempt, or a live goal_run_id via session_id for backward compatibility.",
+        "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly.",
       inputSchema: z
         .object({
-          session_id: z
-            .string()
-            .min(1)
-            .optional()
-            .describe(
-              "Child agent session id to steer. Backward-compatible: also accepts the live goal_run_id reported by read_context.",
-            ),
+          session_id: z.string().min(1).optional().describe("Child agent session id to steer."),
           goal_id: z
             .string()
             .min(1)
             .optional()
             .describe("Goal id to steer. Host resolves it to the latest live goal_run and child session."),
+          goal_run_id: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Live goal_run id whose child session should be inspected or steered."),
           message: z.string().min(1).describe("Natural-language steering/status-check message for that sub-agent"),
           reason: z.string().describe("Why this sub-agent must be contacted before retrying"),
         })
-        .refine((value) => !!value.session_id || !!value.goal_id, {
-          message: "steer_subagent requires either session_id or goal_id",
+        .refine((value) => !!value.session_id || !!value.goal_id || !!value.goal_run_id, {
+          message: "steer_subagent requires session_id, goal_id, or goal_run_id",
           path: ["session_id"],
         }),
-      execute: async ({ session_id, goal_id, message, reason }) => {
+      execute: async ({ session_id, goal_id, goal_run_id, message, reason }) => {
         const target = resolveSteerTarget({
           taskID,
           sessionID: session_id,
           goalID: goal_id,
+          goalRunID: goal_run_id,
         })
         const { kind } = assertDirectReplySessionOwnership({
           taskID,
@@ -5321,16 +5378,10 @@ export function createOrchestratorTools(input: {
       description:
         "Abort a specific child agent session, or recover a stale live-owned build via mode='recover_stale'. " +
         "This is the session-level resume rung: cancel the child, then explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal or restart_from_stage. " +
-        "You may pass session_id directly, goal_id for the latest live attempt, goal_run_id, or a live goal_run_id via session_id for backward compatibility.",
+        "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly.",
       inputSchema: z
         .object({
-          session_id: z
-            .string()
-            .min(1)
-            .optional()
-            .describe(
-              "Child agent session id to cancel. Backward-compatible: also accepts the live goal_run_id reported by read_context.",
-            ),
+          session_id: z.string().min(1).optional().describe("Child agent session id to cancel."),
           goal_id: z
             .string()
             .min(1)
@@ -5358,8 +5409,9 @@ export function createOrchestratorTools(input: {
       execute: async ({ session_id, goal_id, goal_run_id, mode, reason }) => {
         const target = resolveSteerTarget({
           taskID,
-          sessionID: goal_run_id ?? session_id,
+          sessionID: session_id,
           goalID: goal_id,
+          goalRunID: goal_run_id,
         })
         const { kind } = assertDirectReplySessionOwnership({
           taskID,
@@ -5683,7 +5735,9 @@ export function createOrchestratorTools(input: {
           ),
         kind: z
           .enum(["workflow", "build"])
-          .describe("Task engine kind for the follow-up: workflow for planned multi-stage work, build for direct execution.")
+          .describe(
+            "Task engine kind for the follow-up: workflow for planned multi-stage work, build for direct execution.",
+          )
           .default("workflow"),
       }),
       execute: async ({ title, request, reason, priority, queue, kind }) => {
@@ -5857,13 +5911,6 @@ export function createOrchestratorTools(input: {
       ) => {
         const toolExecution = requireOrchestratorToolExecutionContext(options, "build")
         const task = requireTask(taskID)
-        if (isTaskTerminal(task)) {
-          return (
-            `build: rejected because task ${taskID} is ${deriveTaskStatus(task)}. ` +
-            `This is a wake/tool-result continuation, not an explicit restart request. ` +
-            `No build run was created; use retry_task or restart_from_stage only when the operator explicitly wants to reopen the task.`
-          )
-        }
         const requestText = request.trim()
         const declaredDirectBuildIntent = directBuildIntent as string | undefined
         log.info("build tool invoked", {
@@ -7115,7 +7162,10 @@ export function createOrchestratorTools(input: {
   // Phase 5-g: the deprecated dispatch tools (dispatch_goal / exec_goal /
   // submit_execution / retry_goal / create_run) that the 5-c filter hid
   // from the LLM are now fully deleted. Build is the single dispatch tool.
+  const toolsWithDecisionMetadata = Object.fromEntries(
+    Object.entries(tools).map(([name, raw]) => [name, withDecisionEffectMetadata(name, raw)]),
+  ) as typeof tools
   return {
-    tools,
+    tools: toolsWithDecisionMetadata,
   }
 }

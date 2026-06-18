@@ -6,14 +6,14 @@ The center workbench used the shared `oc-surface-header` only for Workflow, Insp
 
 ## Call Points Checked
 
-| Surface | Source | Decision |
-| --- | --- | --- |
-| Workflow | `packages/overlay/src/index.html` | Keep existing `chat-header oc-surface-header`. |
-| Inspector | `packages/overlay/src/index.html` | Keep existing `sections-header oc-surface-header`; remove wrapper offset. |
-| Notifications | `packages/overlay/src/index.html` | Keep existing `sections-header oc-surface-header`; remove wrapper offset. |
-| Explorer | `packages/overlay/src/components/FileExplorerPanel.tsx` | Add `SurfaceHeader` with `explorer.title`; keep search in body toolbar. |
-| Files/Changes | `packages/overlay/src/components/FileChangesPanel.tsx` | Add `SurfaceHeader` with `section.files`; move Changes/Diff tabs into header actions. |
-| Preview | `packages/overlay/src/components/BrowserPreviewPanel.tsx` | Add `SurfaceHeader` with `browser_preview.title`; move refresh into header actions. |
+| Surface       | Source                                                    | Decision                                                                              |
+| ------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Workflow      | `packages/overlay/src/index.html`                         | Keep existing `chat-header oc-surface-header`.                                        |
+| Inspector     | `packages/overlay/src/index.html`                         | Keep existing `sections-header oc-surface-header`; remove wrapper offset.             |
+| Notifications | `packages/overlay/src/index.html`                         | Keep existing `sections-header oc-surface-header`; remove wrapper offset.             |
+| Explorer      | `packages/overlay/src/components/FileExplorerPanel.tsx`   | Add `SurfaceHeader` with `explorer.title`; keep search in body toolbar.               |
+| Files/Changes | `packages/overlay/src/components/FileChangesPanel.tsx`    | Add `SurfaceHeader` with `section.files`; move Changes/Diff tabs into header actions. |
+| Preview       | `packages/overlay/src/components/BrowserPreviewPanel.tsx` | Add `SurfaceHeader` with `browser_preview.title`; move refresh into header actions.   |
 
 ## Implementation
 

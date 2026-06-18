@@ -81,6 +81,14 @@ export type BrowserPreviewLiveInput =
   | { kind: "wheel"; x: number; y: number; deltaX: number; deltaY: number }
   | { kind: "key"; key: string }
 
+type BrowserPreviewLiveFrameDecoder = (blob: Blob) => Promise<void>
+
+let browserPreviewLiveFrameDecoder: BrowserPreviewLiveFrameDecoder = decodeBrowserPreviewLiveFrame
+
+export function __setBrowserPreviewLiveFrameDecoderForTest(decoder: BrowserPreviewLiveFrameDecoder | undefined) {
+  browserPreviewLiveFrameDecoder = decoder ?? decodeBrowserPreviewLiveFrame
+}
+
 export async function loadTaskBrowserPreviewTarget(
   taskID: string,
   signal?: AbortSignal,
@@ -192,7 +200,29 @@ async function browserPreviewLiveFrameObjectUrl(
   })
   if (!response.ok) throw new ApiError(response.status, path, decodeBinaryBrowserPreviewErrorBody(response.body))
   const contentType = response.headers["content-type"] || response.headers["Content-Type"] || "image/png"
-  return URL.createObjectURL(new Blob([bytesToArrayBuffer(response.body)], { type: contentType }))
+  const blob = new Blob([bytesToArrayBuffer(response.body)], { type: contentType })
+  await browserPreviewLiveFrameDecoder(blob)
+  return URL.createObjectURL(blob)
+}
+
+async function decodeBrowserPreviewLiveFrame(blob: Blob): Promise<void> {
+  if (typeof Image === "undefined") throw new Error("Browser preview live image decoder is unavailable.")
+  const url = URL.createObjectURL(blob)
+  try {
+    const image = new Image()
+    image.src = url
+    if (typeof image.decode !== "function") throw new Error("Browser preview live image decoder is unavailable.")
+    await image.decode()
+    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+      throw new Error("Browser preview live screenshot decoded without dimensions.")
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes("decoder is unavailable")) throw new Error(message)
+    throw new Error("Browser preview live screenshot failed to decode.")
+  } finally {
+    URL.revokeObjectURL(url)
+  }
 }
 
 function decodeBinaryBrowserPreviewErrorBody(body: Uint8Array): unknown {

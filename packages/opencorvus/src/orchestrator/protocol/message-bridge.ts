@@ -19,8 +19,13 @@ let crossInstanceBridgeQueue = Promise.resolve()
 //
 // `session.kind` is the authoritative source for "what is this session for".
 // The overlay renders a card per kind; this module's job is to stamp the kind
-// (and goalID / parentSessionID) onto every outgoing message event so the
-// frontend can route without re-deriving anything.
+// (and goalID / parentSessionID) onto every outgoing message event payload so
+// the frontend can route without re-deriving anything.
+//
+// Routing metadata belongs to the event envelope and message info. It must not
+// be copied into Message.Part: parts are a strict persisted protocol model and
+// display-only fields there make later Message.Event.PartUpdated validation
+// fail before the task can resume.
 
 /** Display channel — which card the overlay groups this message under.
  *  "main" is the top-level conversation; the rest mirror SessionKind values
@@ -221,15 +226,6 @@ function enrichProperties(
   if (enriched.info && typeof enriched.info === "object") {
     enriched.info = {
       ...(enriched.info as any),
-      resolvedRole: meta.resolvedRole,
-      channel: meta.channel,
-      ...(goalID ? { goalID } : {}),
-      ...(parentSessionID ? { parentSessionID } : {}),
-    }
-  }
-  if (enriched.part && typeof enriched.part === "object") {
-    enriched.part = {
-      ...(enriched.part as any),
       resolvedRole: meta.resolvedRole,
       channel: meta.channel,
       ...(goalID ? { goalID } : {}),

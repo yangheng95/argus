@@ -52,6 +52,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/config/prompt` | List prompt catalog | `config.prompt` |
 | GET | `/config/prompt-profile` | List prompt profiles | `config.promptProfile` |
 | GET | `/config/providers` | List config providers | `config.providers` |
+| POST | `/config/proxy/test` | Test network proxy | `config.proxy.test` |
 | GET | `/formatter` | Get formatter status | `formatter.status` |
 | GET | `/path` | Get paths | `path.get` |
 
@@ -117,8 +118,8 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/task/{taskID}/project-archive` | Download task project archive | `task.projectArchive` |
 | POST | `/task/{taskID}/replan` | Replan task | `task.replan` |
 | POST | `/task/{taskID}/retry` | Retry task | `task.retry` |
-| POST | `/task/{taskID}/rewind` | Rewind task timeline; optionally also reset worktree files via PatchPart replay | `task.rewind` |
-| POST | `/task/{taskID}/rewind/clear` | Clear the rewind cursor (visibility only; will not unrevert any reset worktree files) | `task.rewind.clear` |
+| POST | `/task/{taskID}/rewind` | Rewind task timeline; optionally also reset goal worktree files | `task.rewind` |
+| POST | `/task/{taskID}/rewind/clear` | Clear the rewind cursor (visibility only; will not unrevert any reset worktree files) | `task.clearRewindCursor` |
 | GET | `/task/{taskID}/runs` | List task runs | `task.runs` |
 | POST | `/task/{taskID}/session/{sessionID}/cancel` | Cancel a task agent session | `task.session.cancel` |
 | POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session | `task.session.reply` |
@@ -277,6 +278,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/provider` | List providers | `provider.list` |
 | GET | `/provider/auth` | Get provider auth methods | `provider.auth` |
 | POST | `/provider/discover-models` | Discover OpenAI-compatible provider models | `provider.discover.models` |
+| GET | `/provider/hexin/budget` | Get hexin gateway key budget | `provider.hexin.budget` |
 | POST | `/provider/hexin/refresh` | Refresh hexin gateway model list | `provider.hexin.refresh` |
 | POST | `/provider/refresh` | Refresh the models.dev registry snapshot | `provider.refresh` |
 | POST | `/provider/{providerID}/auth/execute` | Execute auth method | `provider.auth.execute` |

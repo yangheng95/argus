@@ -8,6 +8,7 @@ import { BrowserPreviewRegionLocator } from "@/browser-preview/region-comparison
 import { BrowserPreviewViewportID } from "@/browser-preview/viewport"
 import { Instance } from "@/project/instance"
 import { buildMultimodalToolResult } from "./multimodal-result"
+import { BrowserPreviewBindLocalModuleToolID } from "./browser-preview-tool-ids"
 import { Tool } from "./tool"
 
 export const BrowserPreviewBindLocalModuleToolParameters = z
@@ -27,18 +28,22 @@ export const BrowserPreviewBindLocalModuleToolParameters = z
       .string()
       .min(1)
       .default("web-clone-source/reference.png")
-      .describe("Source reference screenshot artifact. Defaults to the task frontend-design source package reference.png."),
+      .describe(
+        "Source reference screenshot artifact. Defaults to the task frontend-design source package reference.png.",
+      ),
     textAnchors: z
       .array(z.string().min(1))
       .default([])
-      .describe("Optional extra visible labels from the module, such as section headings, table headers, tabs, or card titles."),
+      .describe(
+        "Optional extra visible labels from the module, such as section headings, table headers, tabs, or card titles.",
+      ),
     sourcePadding: z.number().int().nonnegative().default(24).describe("Pixels to expand the selected source bbox."),
     localPadding: z.number().int().nonnegative().default(12).describe("Pixels to expand the captured local bbox."),
   })
   .strict()
 export type BrowserPreviewBindLocalModuleToolParameters = z.infer<typeof BrowserPreviewBindLocalModuleToolParameters>
 
-export const BrowserPreviewBindLocalModuleTool = Tool.define("browser_preview_bind_local_module", {
+export const BrowserPreviewBindLocalModuleTool = Tool.define(BrowserPreviewBindLocalModuleToolID, {
   description:
     "Bind the local module currently being edited to the corresponding source webpage module. " +
     "Captures the local module by locator, extracts visible anchors, searches task frontend-design source evidence for a source region that fully contains the corresponding module, materializes source/local crops plus a puzzle image, and returns that puzzle as an image attachment directly in this tool result. " +
@@ -115,5 +120,10 @@ function renderPublicResult(result: LocalModuleSourceBindingResult): Record<stri
 }
 
 function safeFilename(input: string): string {
-  return path.basename(input.trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "region")
+  return path.basename(
+    input
+      .trim()
+      .replace(/[^A-Za-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "region",
+  )
 }

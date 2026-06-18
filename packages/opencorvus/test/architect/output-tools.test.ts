@@ -144,6 +144,30 @@ function contractWithoutAuditCoverageFindings(input: {
   }).filter((finding) => finding.code === "contract_without_audit_coverage")
 }
 
+test("register_goal rejects internal runtime owned paths before collector mutation", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+
+  const out = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_stage1_manifest",
+      title: "Stage 1 manifest",
+      objective:
+        "Create a durable Stage 1 manifest that downstream build goals can read without relying on host runtime state.",
+      acceptance_specs: [acceptance("goal_stage1_manifest")],
+      owned_paths: [".opencorvus/r/t/ab/cdef12/stage1/evidence-manifest-prd.md"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    },
+    {} as any,
+  )
+
+  expect(out).toContain("internal OpenCorvus runtime path")
+  expect(out).toContain("durable deliverables under project source/docs paths")
+  expect(kit.getCollector().goals).toHaveLength(0)
+})
+
 async function registerTwoGoalGraph() {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
   const { tools } = kit

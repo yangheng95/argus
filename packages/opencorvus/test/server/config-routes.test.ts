@@ -181,7 +181,13 @@ describe("config prompt routes", () => {
           session_active: string | null
           default: string
           targets: Array<{ id: string; editable: boolean; built_in_only: boolean }>
-          profiles: Array<{ id: string; label: string; built_in: boolean; editable: boolean; agents: Record<string, string> }>
+          profiles: Array<{
+            id: string
+            label: string
+            built_in: boolean
+            editable: boolean
+            agents: Record<string, string>
+          }>
         }
         expect(body.active).toBe("custom-squad")
         expect(body.project_active).toBe("custom-squad")

@@ -1,7 +1,7 @@
 /**
  * Coverage guard for InteractionDialogHost — the dismissible overlay that
  * pops the oldest pending permission/question interaction so the user can't
- * lose the answer surface in the conversation timeline / sidebar.
+ * lose the answer surface in the conversation timeline.
  *
  * Two layers (per project rule 36):
  *   1. Behaviour test for `pickDialogInteraction` — the queue / dismiss

@@ -13,7 +13,7 @@
 
 ```
  外部渠道                                      本地用户
- (Slack, HTTP, 自建 bot)                       (overlay, TUI)
+ (Slack, HTTP, 自建 bot)                       (overlay, CLI)
         │                                           │
         ▼                                           ▼
  ┌────────────────────────┐              ┌────────────────────────┐
@@ -60,7 +60,7 @@
 - 使用通用 `Agent.defaultAgent()` + 注入 `PanelCapabilityRegistry` 为白名单
 - LLM 输出必须是一个或多个 capability action JSON，系统按 action 类型路由
 - 支持流式 `ControlMessage.handleStream`（SSE，overlay 实时消费）
-- `surface` 区分面板：`panel` · `slack` · `tui` · `cli`（见 `channel/catalog.ts`）
+- `surface` 区分入口：`panel` · `gateway` · `ChannelId` 枚举（Slack、Telegram、Discord 等，见 `channel/catalog.ts` / `packages/channel-config/src/index.ts`）
 
 **完整 Capability 列表**（来源：`panel/capability.ts`，2026-05-11 共 20 个 action，按文件顺序）：
 
@@ -148,7 +148,7 @@ SSE 消费者订阅 Bus → overlay 实时刷新。事件定义集中在 `engine
 **代码**：`src/server/`
 
 - 承载 overlay / CLI / 外部 bot 的 HTTP API
-- 关键路由（`src/server/routes/` 共 25 个文件，2026-05-12）：
+- 关键路由（`src/server/routes/` 共 28 个文件，2026-06-17）：
   - `routes/channel.ts` — `ChannelIngress.message` HTTP 端点
   - `routes/panel.ts` — `ControlMessage.handle` / `handleStream`（含 panel SSE 流）
   - `routes/orchestrator.ts` — EngineService.createTask 等 task API（共 42 个 describeRoute；含 task-list change stream 与 task event stream 两条 SSE 主线）
@@ -156,9 +156,10 @@ SSE 消费者订阅 Bus → overlay 实时刷新。事件定义集中在 `engine
   - `routes/control.ts` · `routes/executor.ts` — 控制平面（外部账号 / executor profile）
   - `routes/permission.ts` · `routes/project.ts` · `routes/config.ts` · `routes/question.ts` ·
     `routes/provider.ts` · `routes/mcp.ts` · `routes/file.ts` · `routes/skill.ts` ·
-    `routes/preview.ts` · `routes/terminal.ts` · `routes/gateway.ts` · `routes/global.ts` ·
-    `routes/app.ts` · `routes/attachment.ts` · `routes/auth.ts` · `routes/coding.ts` ·
-    `routes/experimental.ts` · `routes/export.ts` · `routes/tui.ts`
+    `routes/browser-preview.ts` · `routes/terminal.ts` · `routes/pty.ts` ·
+    `routes/gateway.ts` · `routes/global.ts` · `routes/app.ts` · `routes/attachment.ts` ·
+    `routes/auth.ts` · `routes/coding.ts` · `routes/documentation.ts` · `routes/mission.ts` ·
+    `routes/plugin.ts` · `routes/experimental.ts` · `routes/export.ts`
 - **SSE 端点**：分散在 5 个 route 文件——`routes/orchestrator.ts`（task / task event 双流，主线）·
   `routes/panel.ts`（control stream）· `routes/global.ts` · `routes/app.ts` · `routes/coding.ts`。
   `src/server/event.ts` **不是** SSE 端点，只是一个 7 行的 BusEvent 类型声明文件（`server.connected` / `global.disposed`）。历史文档中"`routes/task-event.ts`"路径不存在；该角色已并入 `routes/orchestrator.ts`。

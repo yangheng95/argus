@@ -19,6 +19,16 @@ function spawnFakeServer() {
   }
 }
 
+function spawnHangingShutdownServer() {
+  const { spawn } = require("child_process")
+  const serverPath = path.join(__dirname, "../fixture/lsp/hanging-shutdown-lsp-server.js")
+  return {
+    process: spawn(process.execPath, [serverPath], {
+      stdio: "pipe",
+    }),
+  }
+}
+
 async function waitForFile(filepath: string, timeoutMs = 3000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -142,6 +152,34 @@ describe("LSPClient interop", () => {
 
     expect(disposeCalls).toBe(1)
     expect(directKillCalls).toBe(0)
+  }, 15_000)
+
+  test("shutdown observes pending JSON-RPC rejection after connection dispose", async () => {
+    const handle = spawnHangingShutdownServer() as any
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason)
+    }
+    process.on("unhandledRejection", onUnhandled)
+    try {
+      const client = await Instance.provide({
+        directory: process.cwd(),
+        fn: () =>
+          LSPClient.create({
+            serverID: "hanging-shutdown",
+            server: handle as unknown as LSPServer.Handle,
+            root: process.cwd(),
+          }),
+      })
+
+      await client.shutdown()
+      await Bun.sleep(50)
+
+      expect(unhandled).toHaveLength(0)
+    } finally {
+      process.off("unhandledRejection", onUnhandled)
+      handle.process.kill()
+    }
   }, 15_000)
 
   test("instance dispose closes LSP server that is still initializing", async () => {

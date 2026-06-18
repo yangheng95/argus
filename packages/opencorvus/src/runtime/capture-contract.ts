@@ -38,6 +38,17 @@ export type RuntimeCaptureLayers = {
   asset: { passed: boolean; total: number; failed: Array<{ url: string; status: number; reason: string }> }
   dom: { passed: boolean; body_descendants: number; required: number }
   js: { passed: boolean; console_errors: string[]; page_errors: string[] }
+  glyph: {
+    passed: boolean
+    checked: number
+    failed: Array<{
+      text: string
+      font_family: string
+      font_spec: string
+      reason: string
+      missing_chars: string[]
+    }>
+  }
   pixel: { passed: boolean; variance: number; floor: number; screenshot_path: string }
   expected: { passed: boolean; missing_selectors: string[]; missing_texts: string[] }
 }
@@ -88,6 +99,8 @@ export type RuntimeCaptureSuccess = {
 
 export type RuntimeCaptureResult = RuntimeCaptureSuccess | RuntimeCaptureFailure
 
+const RUNTIME_CAPTURE_LAYER_NAMES = ["http", "asset", "dom", "js", "glyph", "pixel", "expected"] as const
+
 export function normalizeRuntimeCaptureViewport(input: { width: number; height: number }): {
   width: number
   height: number
@@ -117,7 +130,26 @@ export function normalizeRuntimeCaptureRequest(args: RuntimeCaptureRequest): Nor
 }
 
 export function runtimeCaptureFailedLayers(layers: RuntimeCaptureLayers): string[] {
-  return Object.entries(layers)
-    .filter(([, value]) => !value.passed)
-    .map(([name]) => name)
+  const layerRecord = layers as Record<string, { passed?: unknown } | undefined>
+  return RUNTIME_CAPTURE_LAYER_NAMES.filter((name) => layerRecord[name]?.passed !== true)
+}
+
+export function runtimeCaptureFailureSummary(layers: RuntimeCaptureLayers): string {
+  const failedLayers = runtimeCaptureFailedLayers(layers)
+  const jsDetail = runtimeCaptureJSFailureDetail(layers)
+  return jsDetail ? `failed layers: ${failedLayers.join(", ")}; ${jsDetail}` : `failed layers: ${failedLayers.join(", ")}`
+}
+
+function runtimeCaptureJSFailureDetail(layers: RuntimeCaptureLayers): string | undefined {
+  if (layers.js?.passed === true) return undefined
+  const consoleError = layers.js?.console_errors?.[0]
+  if (consoleError) return `js console error: ${shortRuntimeCaptureDetail(consoleError)}`
+  const pageError = layers.js?.page_errors?.[0]
+  if (pageError) return `js page error: ${shortRuntimeCaptureDetail(pageError)}`
+  return undefined
+}
+
+function shortRuntimeCaptureDetail(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim()
+  return normalized.length > 240 ? `${normalized.slice(0, 237)}...` : normalized
 }

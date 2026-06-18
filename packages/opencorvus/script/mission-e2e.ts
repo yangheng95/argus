@@ -1,14 +1,12 @@
 /**
- * Scratch: end-to-end smoke test of the Mission agent against the superchart
- * demo project, using the REAL environment (real auth, real model
- * config, real DB). Faithful to the production wake path (mission session +
- * agent="mission" user message + SessionPrompt.loop) but AWAITS the loop instead
- * of fire-and-forget so we can observe one full turn. Intake-only goal — no dispatch.
+ * End-to-end smoke test of the Mission agent against an operator-selected
+ * project, using the REAL environment (real auth, real model config, real DB).
+ * Faithful to the production wake path (mission session + agent="mission" user
+ * message + SessionPrompt.loop) but AWAITS the loop instead of fire-and-forget
+ * so we can observe one full turn. Intake-only goal — no dispatch.
  *
  * DB inspection uses a SEPARATE raw readonly bun:sqlite connection because
  * Database.use() hands back a drizzle ORM object, not a raw query() handle.
- *
- * Delete after use.
  */
 import { Database as RawSqlite } from "bun:sqlite"
 import { Instance } from "@/project/instance"
@@ -26,7 +24,15 @@ import path from "node:path"
 
 Log.init({ print: false })
 
-const PROJECT = "D:\\myhexin-local\\demos\\superchart"
+function requiredEnv(name: string): string {
+  const value = process.env[name]?.trim()
+  if (!value) {
+    throw new Error(`${name} is required`)
+  }
+  return value
+}
+
+const PROJECT = requiredEnv("MISSION_PROJECT_DIR")
 const MISSION_ID = "e2e-smoke-" + Date.now().toString(36)
 const PROMPT = [
   "This is an end-to-end SMOKE TEST of the Mission agent. Scope for THIS wake only:",

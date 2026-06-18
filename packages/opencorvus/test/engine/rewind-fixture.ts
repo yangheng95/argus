@@ -19,7 +19,9 @@ export type RewindScenario = {
   primaryFile: string
   existingGoalFile: string
   existingGoalWorktree: string
+  existingGoalRunID: string
   postCursorGoalWorktree: string
+  postCursorGoalRunID: string
   steps: RewindStep[]
   cursorAfterSecondStep: number
 }
@@ -136,7 +138,7 @@ export async function createRewindScenario(root: string): Promise<RewindScenario
     taskID,
     goalID: existingGoalID,
     coordinatorRunID: Identifier.ascending("run"),
-    now: base + 30,
+    now: base + 15,
   })
   const postCursorRun = createGoalRun({
     taskID,
@@ -164,6 +166,7 @@ export async function createRewindScenario(root: string): Promise<RewindScenario
 
   updateGoalRun(existingRun.id, {
     status: "running",
+    time_started: base + 15,
     workspace_dir: existing.info.directory,
     workspace_branch: existing.info.branch,
     workspace_base_ref: existing.baseRef,
@@ -181,7 +184,9 @@ export async function createRewindScenario(root: string): Promise<RewindScenario
     primaryFile,
     existingGoalFile: existing.file,
     existingGoalWorktree: existing.info.directory,
+    existingGoalRunID: existingRun.id,
     postCursorGoalWorktree: postCursor.info.directory,
+    postCursorGoalRunID: postCursorRun.id,
     steps,
     cursorAfterSecondStep,
   }

@@ -5,7 +5,7 @@ import path from "path"
 // Guard against a nested git repository inside packages/opencorvus.
 //
 // WHY: this package is tracked by the monorepo repo at the workspace ROOT
-// (C:/Users/chuan/myhexin-local/opecorvus/.git). If a `.git` is ever created
+// (for example C:/Users/example/opecorvus/.git). If a `.git` is ever created
 // at the package directory (e.g. a stray `git init`, a tool run with
 // --cd packages/opencorvus, an extracted tarball), every git command issued
 // from within packages/opencorvus resolves to the INNER repo instead of the

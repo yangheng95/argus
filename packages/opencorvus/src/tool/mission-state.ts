@@ -132,17 +132,13 @@ async function statIfExists(target: string) {
 
 const ReadAction = z.object({
   action: z.literal("read"),
-  file: z
-    .enum(MISSION_FILES)
-    .describe("Mission state file to read from the fixed vocabulary: frontier.md, tasks.md, handoff.md, or notes.md."),
+  file: z.enum(MISSION_FILES),
 })
 
 const WriteAction = z.object({
   action: z.literal("write"),
-  file: z
-    .enum(MISSION_FILES)
-    .describe("Mission state file to replace from the fixed vocabulary: frontier.md, tasks.md, handoff.md, or notes.md."),
-  content: z.string().describe("Complete markdown content that atomically replaces the selected mission state file."),
+  file: z.enum(MISSION_FILES),
+  content: z.string(),
 })
 
 const ListAction = z.object({

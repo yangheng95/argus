@@ -1,6 +1,13 @@
 # Acceptance Spec Scope Discipline - 2026-05-23
 
-Status: design draft. No runtime code is changed by this document.
+Status: implemented history as of 2026-06-17. Current runtime sources are
+`packages/opencorvus/src/prompt/core/requirements-core.txt`,
+`packages/opencorvus/src/requirements/output-tools.ts`,
+`packages/opencorvus/src/prompt/core/integrity-team-core.txt`,
+`packages/opencorvus/src/integrity/team-agent.ts`, and the maturity/scope
+tests under `packages/opencorvus/test/requirements/` and
+`packages/opencorvus/test/integrity/`. This file is retained as historical
+design evidence, not as a pending implementation checklist.
 
 CLAUDE.md rules relevant to this change: rule 2 (no surface-level diagnosis),
 rule 4 (treat as systemic, not single agent), rule 6.1 (prompt-over-host for

@@ -8,9 +8,10 @@
  * rewind must stay out of the session snapshot subsystem.
  */
 import z from "zod"
+import fs from "node:fs/promises"
 import { Identifier } from "@/id/id"
 import { MessageTable } from "@/session/session.sql"
-import { Database, and, eq, gt } from "@/storage/db"
+import { Database, NotFoundError, and, eq, gt } from "@/storage/db"
 import { Log } from "@/util/log"
 import { interruptTaskLoop, awaitTaskLoopIdle } from "@/orchestrator/loop"
 import { taskIDForSession } from "@/orchestrator/task-event"
@@ -60,14 +61,16 @@ function requireMessageAnchor(input: Extract<RewindTaskInput["anchor"], { kind: 
       .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
       .get(),
   )
-  if (!row) throw new Error(`rewindTask: message ${input.messageID} not found in session ${input.sessionID}`)
+  if (!row) {
+    throw new NotFoundError({ message: `Message not found: ${input.messageID} in session ${input.sessionID}` })
+  }
   return row
 }
 
 function ensureAnchorBelongsToTask(taskID: string, sessionID: string) {
   const owner = taskIDForSession(sessionID)
   if (owner !== taskID) {
-    throw new Error(`rewindTask: session ${sessionID} does not belong to task ${taskID}`)
+    throw new NotFoundError({ message: `Session ${sessionID} does not belong to task ${taskID}` })
   }
 }
 
@@ -83,8 +86,14 @@ type RewindWorkspaceAction = {
 }
 
 function runTimeForRewind(row: GoalRunRow): number {
+  const created = Number(row.time_created)
   const started = Number(row.time_started)
-  return Number.isFinite(started) && started > 0 ? started : row.time_created
+  const updated = Number(row.time_updated)
+  return Math.max(
+    Number.isFinite(created) && created > 0 ? created : 0,
+    Number.isFinite(started) && started > 0 ? started : 0,
+    Number.isFinite(updated) && updated > 0 ? updated : 0,
+  )
 }
 
 function goalsCreatedAfterCursor(taskID: string, cursorTime: number): Set<string> {
@@ -137,30 +146,52 @@ function collectWorkspaceActions(taskID: string, cursorTime: number): RewindWork
   })
 }
 
+async function validateWorkspaceActions(actions: RewindWorkspaceAction[]): Promise<void> {
+  for (const action of actions) {
+    if (!action.workspaceDir) continue
+    if (!action.remove && !action.workspaceBaseRef) {
+      throw new Error(`rewindTask: goal ${action.goalID} workspace is missing workspace_base_ref`)
+    }
+    const stat = await fs.stat(action.workspaceDir).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`rewindTask: goal ${action.goalID} workspace_dir not found: ${action.workspaceDir}: ${message}`)
+    })
+    if (!stat.isDirectory()) {
+      throw new Error(`rewindTask: goal ${action.goalID} workspace_dir is not a directory: ${action.workspaceDir}`)
+    }
+  }
+}
+
+function projectWorkspaceAction(action: RewindWorkspaceAction): void {
+  if (action.remove) {
+    updateGoalRun(action.goalRunID, {
+      workspace_dir: null,
+      workspace_branch: null,
+      workspace_base_ref: null,
+      ...(!TERMINAL_GOAL_RUN_STATUSES.has(action.status) ? { status: "aborted" as const } : {}),
+    })
+    return
+  }
+  if (!TERMINAL_GOAL_RUN_STATUSES.has(action.status)) {
+    updateGoalRun(action.goalRunID, { status: "aborted" })
+  }
+}
+
 async function applyWorktreeReset(input: RewindTaskInput, cursorTime: number): Promise<void> {
   interruptTaskLoop(input.taskID, "task rewind worktree reset")
   await awaitTaskLoopIdle(input.taskID, WORKTREE_RESET_IDLE_TIMEOUT_MS)
 
   const actions = collectWorkspaceActions(input.taskID, cursorTime)
+  await validateWorkspaceActions(actions)
   for (const action of actions) {
-    if (!action.workspaceDir) continue
-    if (action.remove) {
-      await Worktree.remove({ directory: action.workspaceDir })
-      updateGoalRun(action.goalRunID, {
-        workspace_dir: null,
-        workspace_branch: null,
-        workspace_base_ref: null,
-        ...(!TERMINAL_GOAL_RUN_STATUSES.has(action.status) ? { status: "aborted" as const } : {}),
-      })
-      continue
+    if (action.workspaceDir) {
+      if (action.remove) {
+        await Worktree.remove({ directory: action.workspaceDir })
+      } else {
+        await Worktree.reset({ directory: action.workspaceDir, baseRef: action.workspaceBaseRef! })
+      }
     }
-    if (!action.workspaceBaseRef) {
-      throw new Error(`rewindTask: goal ${action.goalID} workspace is missing workspace_base_ref`)
-    }
-    await Worktree.reset({ directory: action.workspaceDir, baseRef: action.workspaceBaseRef })
-    if (!TERMINAL_GOAL_RUN_STATUSES.has(action.status)) {
-      updateGoalRun(action.goalRunID, { status: "aborted" })
-    }
+    projectWorkspaceAction(action)
   }
 }
 
@@ -168,7 +199,7 @@ export async function rewindTask(raw: RewindTaskInput): Promise<RewindTaskResult
   const input = RewindTaskInput.parse(raw)
   const task = findTask(input.taskID)
   if (!task) {
-    throw new Error(`rewindTask: task ${input.taskID} not found`)
+    throw new NotFoundError({ message: `Task not found: ${input.taskID}` })
   }
 
   const cursorTime = (() => {
@@ -237,7 +268,7 @@ export async function rewindTask(raw: RewindTaskInput): Promise<RewindTaskResult
  */
 export async function clearRewindCursor(taskID: string): Promise<void> {
   const task = findTask(taskID)
-  if (!task) return
+  if (!task) throw new NotFoundError({ message: `Task not found: ${taskID}` })
   if (task.rewind_cursor_time == null) return
 
   const now = Date.now()

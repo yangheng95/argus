@@ -11,7 +11,7 @@ import { Log } from "@/util/log"
 // Map MIME types to the canonical file extension used when we lay attachments
 // down inside a project's .opencorvus/r attachment blob store. The list only
 // covers MIME types that a provider might send back as multimodal content.
-// Anything not in this table falls back to the filename's own extension, and
+// Anything not in this table uses the filename's own extension, and
 // only if that is also missing do we store a raw ".bin" (explicit enough that
 // a human or tool can still inspect the file).
 const MIME_EXT: Record<string, string> = {
@@ -288,8 +288,8 @@ export namespace AttachmentStore {
         "Reference-only attachments (text / json) are not inlined — fetch them via the `read` tool using the listed url."
     const formatRow = (a: AttachmentLike, kind: "inline" | "reference", index: number) => {
       const sizeKb = typeof a.size === "number" ? `${Math.max(1, Math.round(a.size / 1024))} KB, ` : ""
-      // displayFilename gives a readable name even when the upload path
-      // dropped the original filename — never let a 64-char sha surface
+      // displayFilename gives a generated readable name when the upload path
+      // omitted the original filename — never let a 64-char sha surface
       // as the user-visible name for the attachment.
       const name = displayFilename({ filename: a.filename, mime: a.mime, sha: a.sha, index })
       const mime = a.mime ?? "application/octet-stream"
@@ -423,8 +423,8 @@ export namespace AttachmentStore {
    *
    * Filename policy: prefer the attachment's original `filename` when it's
    * shell-safe (ASCII alphanumerics + `._-` + spaces preserved as-is — we
-   * only ban shell metacharacters and path separators). Otherwise fall back
-   * to `attachment-<index>-<sha-prefix>.<ext>` so the LLM still gets a stable
+   * only ban shell metacharacters and path separators). Otherwise use
+   * `attachment-<index>-<sha-prefix>.<ext>` so the LLM still gets a stable
    * reference. CJK filenames pass through (filesystem accepts them; the
    * sandbox check looks at path containment, not character set).
    *
@@ -512,13 +512,13 @@ export namespace AttachmentStore {
   /**
    * Single source of truth for "what name should the LLM / user see for
    * this attachment?" (CLAUDE.md rule 9). Use this everywhere a sha-based
-   * fallback would otherwise show through — `renderAttachmentInventory`
+   * raw storage handle would otherwise show through — `renderAttachmentInventory`
    * for sub-agent prompts, `task-api` for user-facing message lists, and
    * the `stageToWorktree` copy step (a stable name for tools that resolve
    * paths inside the worktree).
    *
-   * Fallback ladder when `original` is missing or contains shell-unsafe
-   * characters:
+   * Generated display-name policy when `original` is missing or contains
+   * shell-unsafe characters:
    *   1. `attachment-{index+1}-{sha8}.{ext}` — preserves task-relative
    *      ordering and traces back to storage; readable at a glance.
    *   2. With no sha:  `attachment-{index+1}-noref.{ext}` — signals the

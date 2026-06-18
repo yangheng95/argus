@@ -111,6 +111,19 @@ export function CardHeader(props: {
     return ms === null ? "" : formatDuration(ms)
   })
   const modelLabel = () => props.node.model?.display || ""
+  const hasContextTokens = () =>
+    typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0
+  const hasUsage = () => {
+    const usage = props.node.usage
+    if (!usage) return false
+    return (usage.totalTokens ?? 0) > 0 || (usage.costUSD ?? 0) > 0
+  }
+  const hasMetaActions = () => !!modelLabel() || hasContextTokens() || hasUsage()
+  const hasControlActions = () =>
+    (!!props.traceSessionID && !!props.onTrace) ||
+    (!!props.agentSessionID && !!props.onAgentModelSettings) ||
+    headActions.caps.canCancel() ||
+    headActions.caps.canRewind()
 
   return (
     <div
@@ -215,162 +228,164 @@ export function CardHeader(props: {
         </Show>
       </div>
       <div class="card__actions">
-        <Show when={modelLabel()}>
-          <span
-            class="card__model-hint"
-            title={t("card.model_tooltip", { model: modelLabel() })}
-            aria-label={t("card.model_tooltip", { model: modelLabel() })}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {modelLabel()}
-          </span>
-        </Show>
-        <Show when={typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0}>
-          <span
-            class="card__token-hint"
-            data-estimated={props.node.contextTokensEstimated ? "true" : "false"}
-            title={t(
-              props.node.contextTokensEstimated
-                ? "card.context_tokens_tooltip_estimated"
-                : "card.context_tokens_tooltip",
-              { value: String(props.node.contextTokens) },
-            )}
-            aria-label={t(
-              props.node.contextTokensEstimated
-                ? "card.context_tokens_tooltip_estimated"
-                : "card.context_tokens_tooltip",
-              { value: String(props.node.contextTokens) },
-            )}
-            onClick={(e) => e.stopPropagation()}
-          >
-            ~{formatTokenCount(props.node.contextTokens as number)} tok
-            {props.node.contextTokensEstimated ? " · est." : ""}
-          </span>
-        </Show>
-        <Show
-          when={(() => {
-            const u = props.node.usage
-            if (!u) return false
-            return (u.totalTokens ?? 0) > 0 || (u.costUSD ?? 0) > 0
-          })()}
-        >
-          {(_) => {
-            const u = () => props.node.usage!
-            const totalLabel = () => {
-              const t = u().totalTokens ?? 0
-              const inT = u().inputTokens ?? 0
-              const outT = u().outputTokens ?? 0
-              if (t > 0) return formatTokenCount(t)
-              if (inT > 0 || outT > 0) return formatTokenCount(inT + outT)
-              return ""
-            }
-            const costLabel = () => {
-              const c = u().costUSD ?? 0
-              return c > 0 ? formatCostUSD(c) : ""
-            }
-            const tip = () => {
-              const u_ = u()
-              const parts: string[] = []
-              if ((u_.inputTokens ?? 0) > 0) parts.push(`↑ ${u_.inputTokens} in`)
-              if ((u_.outputTokens ?? 0) > 0) parts.push(`↓ ${u_.outputTokens} out`)
-              if ((u_.totalTokens ?? 0) > 0) parts.push(`Σ ${u_.totalTokens} total`)
-              if ((u_.costUSD ?? 0) > 0) parts.push(formatCostUSD(u_.costUSD!))
-              return parts.join(" · ")
-            }
-            return (
-              <span class="card__usage-hint" title={tip()} onClick={(e) => e.stopPropagation()}>
-                <Show when={totalLabel()}>
-                  <span class="card__usage-tokens">{totalLabel()} tok</span>
-                </Show>
-                <Show when={costLabel()}>
-                  <span class="card__usage-cost">{costLabel()}</span>
-                </Show>
+        <Show when={hasMetaActions()}>
+          <div class="card__meta-actions">
+            <Show when={modelLabel()}>
+              <span
+                class="card__model-hint"
+                title={t("card.model_tooltip", { model: modelLabel() })}
+                aria-label={t("card.model_tooltip", { model: modelLabel() })}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {modelLabel()}
               </span>
-            )
-          }}
+            </Show>
+            <Show when={hasContextTokens()}>
+              <span
+                class="card__token-hint"
+                data-estimated={props.node.contextTokensEstimated ? "true" : "false"}
+                title={t(
+                  props.node.contextTokensEstimated
+                    ? "card.context_tokens_tooltip_estimated"
+                    : "card.context_tokens_tooltip",
+                  { value: String(props.node.contextTokens) },
+                )}
+                aria-label={t(
+                  props.node.contextTokensEstimated
+                    ? "card.context_tokens_tooltip_estimated"
+                    : "card.context_tokens_tooltip",
+                  { value: String(props.node.contextTokens) },
+                )}
+                onClick={(e) => e.stopPropagation()}
+              >
+                ~{formatTokenCount(props.node.contextTokens as number)} tok
+                {props.node.contextTokensEstimated ? " · est." : ""}
+              </span>
+            </Show>
+            <Show when={hasUsage()}>
+              {(_) => {
+                const u = () => props.node.usage!
+                const totalLabel = () => {
+                  const t = u().totalTokens ?? 0
+                  const inT = u().inputTokens ?? 0
+                  const outT = u().outputTokens ?? 0
+                  if (t > 0) return formatTokenCount(t)
+                  if (inT > 0 || outT > 0) return formatTokenCount(inT + outT)
+                  return ""
+                }
+                const costLabel = () => {
+                  const c = u().costUSD ?? 0
+                  return c > 0 ? formatCostUSD(c) : ""
+                }
+                const tip = () => {
+                  const u_ = u()
+                  const parts: string[] = []
+                  if ((u_.inputTokens ?? 0) > 0) parts.push(`↑ ${u_.inputTokens} in`)
+                  if ((u_.outputTokens ?? 0) > 0) parts.push(`↓ ${u_.outputTokens} out`)
+                  if ((u_.totalTokens ?? 0) > 0) parts.push(`Σ ${u_.totalTokens} total`)
+                  if ((u_.costUSD ?? 0) > 0) parts.push(formatCostUSD(u_.costUSD!))
+                  return parts.join(" · ")
+                }
+                return (
+                  <span class="card__usage-hint" title={tip()} onClick={(e) => e.stopPropagation()}>
+                    <Show when={totalLabel()}>
+                      <span class="card__usage-tokens">{totalLabel()} tok</span>
+                    </Show>
+                    <Show when={costLabel()}>
+                      <span class="card__usage-cost">{costLabel()}</span>
+                    </Show>
+                  </span>
+                )
+              }}
+            </Show>
+          </div>
         </Show>
-        <Show when={!!props.traceSessionID && !!props.onTrace}>
-          <button
-            type="button"
-            class="card__trace"
-            classList={{ "card__trace--open": !!props.traceOpen }}
-            title={t("card.inspect_agent_trace")}
-            aria-label={t("card.inspect_agent_trace")}
-            aria-pressed={!!props.traceOpen}
-            onClick={(e) => {
-              e.stopPropagation()
-              props.onTrace?.()
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault()
-                e.stopPropagation()
-                props.onTrace?.()
-              }
-            }}
-          >
-            <Icon name="inspect" size={13} />
-          </button>
-        </Show>
-        <Show when={!!props.agentSessionID && !!props.onAgentModelSettings}>
-          <button
-            type="button"
-            class="card__trace"
-            title="Session model settings"
-            aria-label="Session model settings"
-            data-testid="card-open-session-agent-models"
-            onClick={(e) => {
-              e.stopPropagation()
-              props.onAgentModelSettings?.(props.agentSessionID!)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault()
-                e.stopPropagation()
-                props.onAgentModelSettings?.(props.agentSessionID!)
-              }
-            }}
-          >
-            <Icon name="executor" size={13} />
-          </button>
-        </Show>
-        <Show when={headActions.caps.canCancel()}>
-          <button
-            type="button"
-            class="card__agent-cancel"
-            classList={{ "card__agent-cancel--pending": headActions.state.cancelling() }}
-            title={headActions.labels.cancel()}
-            aria-label={headActions.labels.cancel()}
-            disabled={headActions.state.cancelling()}
-            onClick={headActions.onAgentCancel}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault()
-                headActions.onAgentCancel(e)
-              }
-            }}
-          >
-            <Icon name="cancel" size={13} />
-          </button>
-        </Show>
-        <Show when={headActions.caps.canRewind()}>
-          <button
-            type="button"
-            class="card__rewind"
-            classList={{ "card__rewind--pending": headActions.state.rewinding() }}
-            title={headActions.labels.rewind()}
-            aria-label={headActions.labels.rewindStep()}
-            disabled={headActions.state.rewinding()}
-            onClick={headActions.onRewind}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault()
-                headActions.onRewind(e)
-              }
-            }}
-          >
-            <Icon name="rewind" size={13} />
-          </button>
+        <Show when={hasControlActions()}>
+          <div class="card__control-actions">
+            <Show when={!!props.traceSessionID && !!props.onTrace}>
+              <button
+                type="button"
+                class="card__trace"
+                classList={{ "card__trace--open": !!props.traceOpen }}
+                title={t("card.inspect_agent_trace")}
+                aria-label={t("card.inspect_agent_trace")}
+                aria-pressed={!!props.traceOpen}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  props.onTrace?.()
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    props.onTrace?.()
+                  }
+                }}
+              >
+                <Icon name="inspect" size={13} />
+              </button>
+            </Show>
+            <Show when={!!props.agentSessionID && !!props.onAgentModelSettings}>
+              <button
+                type="button"
+                class="card__trace"
+                title="Session model settings"
+                aria-label="Session model settings"
+                data-testid="card-open-session-agent-models"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  props.onAgentModelSettings?.(props.agentSessionID!)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    props.onAgentModelSettings?.(props.agentSessionID!)
+                  }
+                }}
+              >
+                <Icon name="executor" size={13} />
+              </button>
+            </Show>
+            <Show when={headActions.caps.canCancel()}>
+              <button
+                type="button"
+                class="card__agent-cancel"
+                classList={{ "card__agent-cancel--pending": headActions.state.cancelling() }}
+                title={headActions.labels.cancel()}
+                aria-label={headActions.labels.cancel()}
+                disabled={headActions.state.cancelling()}
+                onClick={headActions.onAgentCancel}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    headActions.onAgentCancel(e)
+                  }
+                }}
+              >
+                <Icon name="cancel" size={13} />
+              </button>
+            </Show>
+            <Show when={headActions.caps.canRewind()}>
+              <button
+                type="button"
+                class="card__rewind"
+                classList={{ "card__rewind--pending": headActions.state.rewinding() }}
+                title={headActions.labels.rewind()}
+                aria-label={headActions.labels.rewindStep()}
+                disabled={headActions.state.rewinding()}
+                onClick={headActions.onRewind}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    headActions.onRewind(e)
+                  }
+                }}
+              >
+                <Icon name="rewind" size={13} />
+              </button>
+            </Show>
+          </div>
         </Show>
       </div>
     </div>

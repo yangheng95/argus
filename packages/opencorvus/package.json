@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test --timeout 60000 test/acp test/agent test/browser test/build-agent test/bus test/cli test/coding-cli test/config test/workspace test/env test/fact-check test/file test/flag test/format test/frontend-design test/goal-workload-analyst test/id test/ide test/integrity test/lsp test/mcp test/memory test/patch test/permission test/plugin test/project test/prompt test/provider test/question test/research test/scheduler test/server test/session test/skill test/snapshot test/storage test/system-terminal test/tool test/util test/visual-qa test/script/check-release-assets.test.ts test/script/package-test-entry.test.ts test/script/published-package-bin.test.ts test/bun.test.ts test/permission-task.test.ts test/scheduler.test.ts",
+    "test": "bun test --timeout 60000 test/acp test/agent test/browser test/build-agent test/bus test/cli test/coding-cli test/config test/workspace test/env test/engine/queued-wake-ownership-drain.test.ts test/engine/describe-stream-error.test.ts test/engine/orchestrator-stream-error-fuse.test.ts test/fact-check test/file test/flag test/format test/frontend-design test/goal-workload-analyst test/id test/ide test/integrity test/lsp test/mcp test/memory test/patch test/permission test/plugin test/project test/prompt test/provider test/question test/research test/scheduler test/server test/session test/skill test/snapshot test/storage test/system-terminal test/tool test/util test/visual-qa test/orchestrator/no-decision-stop.test.ts test/orchestrator/no-decision-stop-process.test.ts test/orchestrator/session-hard-error.test.ts test/orchestrator/session-abort-funnel.test.ts test/script/check-release-assets.test.ts test/script/package-test-entry.test.ts test/script/published-package-bin.test.ts test/bun.test.ts test/permission-task.test.ts test/scheduler.test.ts",
     "build": "bun run script/build.ts",
     "dev": "bun ./src/index.ts"
   },
@@ -121,6 +121,7 @@
     "strip-ansi": "7.1.2",
     "turndown": "7.2.0",
     "ulid": "catalog:",
+    "undici": "6.21.3",
     "vscode-jsonrpc": "8.2.1",
     "web-tree-sitter": "0.25.10",
     "which": "2.0.2",

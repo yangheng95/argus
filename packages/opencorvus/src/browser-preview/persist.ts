@@ -9,7 +9,6 @@ import { EngineProtocol } from "@/engine/protocol"
 import { requireTask } from "@/engine/store"
 import { deriveTaskStatus } from "@/engine/task-status"
 import { Identifier } from "@/id/id"
-import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Database } from "@/storage/db"
 
@@ -31,7 +30,7 @@ export const PersistedBrowserPreviewEvidence = z.object({
   taskID: z.string(),
   targetID: z.string(),
   viewportID: z.string(),
-  operationKind: z.enum(["preview-capture", "reference-comparison"]),
+  operationKind: z.enum(["preview-capture", "reference-comparison"]).default("preview-capture"),
   regionID: z.string().optional(),
   manifestPath: z.string().optional(),
   artifactPaths: z.record(z.string(), z.string()).optional(),
@@ -43,7 +42,6 @@ export const PersistedBrowserPreviewEvidence = z.object({
   timeCreated: z.number(),
 })
 export type PersistedBrowserPreviewEvidence = z.infer<typeof PersistedBrowserPreviewEvidence>
-type BrowserPreviewEvidenceOperationKind = PersistedBrowserPreviewEvidence["operationKind"]
 
 const PersistedBrowserPreviewTargetPayload = z.object({
   url: z.string(),
@@ -279,28 +277,14 @@ function findBrowserPreviewEvidenceByID(input: {
       .limit(1)
       .get(),
   )
-  if (!row) return undefined
-  return browserPreviewEvidenceFromRow({
-    id: row.id,
-    taskID: row.task_id,
-    payload: row.payload,
-    timeCreated: row.time_created,
-    timeUpdated: row.time_updated,
-  })
-}
-
-function browserPreviewEvidenceFromRow(input: {
-  id: string
-  taskID: string
-  payload: unknown
-  timeCreated: number
-  timeUpdated: number
-}): PersistedBrowserPreviewEvidence | undefined {
-  if (!input.payload || typeof input.payload !== "object") return undefined
-  const payload = input.payload as Record<string, unknown>
+  if (!row || !row.payload || typeof row.payload !== "object") return undefined
+  const payload = row.payload as Record<string, unknown>
   const targetID = typeof payload.target_id === "string" ? payload.target_id : undefined
   const viewportID = typeof payload.viewport_id === "string" ? payload.viewport_id : undefined
-  const operationKind = parseBrowserPreviewEvidenceOperationKind(payload.operation_kind)
+  const operationKind =
+    payload.operation_kind === "reference-comparison" || payload.operation_kind === "preview-capture"
+      ? payload.operation_kind
+      : "preview-capture"
   const regionID = typeof payload.region_id === "string" ? payload.region_id : undefined
   const manifestPath = typeof payload.manifest_path === "string" ? payload.manifest_path : undefined
   const artifactPaths =
@@ -316,11 +300,11 @@ function browserPreviewEvidenceFromRow(input: {
   const diagnostics = Array.isArray(payload.diagnostics)
     ? payload.diagnostics.filter((item): item is string => typeof item === "string")
     : []
-  const timeCompleted = typeof payload.time_completed === "number" ? payload.time_completed : input.timeUpdated
-  if (!targetID || !viewportID || !operationKind || !status || !summary) return undefined
+  const timeCompleted = typeof payload.time_completed === "number" ? payload.time_completed : row.time_updated
+  if (!targetID || !viewportID || !status || !summary) return undefined
   return {
-    id: input.id,
-    taskID: input.taskID,
+    id: row.id,
+    taskID: row.task_id,
     targetID,
     viewportID,
     operationKind,
@@ -332,7 +316,7 @@ function browserPreviewEvidenceFromRow(input: {
     capture: payload.capture === null ? undefined : payload.capture,
     diagnostics,
     timeCompleted,
-    timeCreated: input.timeCreated,
+    timeCreated: row.time_created,
   }
 }
 
@@ -343,7 +327,7 @@ export async function findReadableBrowserPreviewEvidenceByID(input: {
 }): Promise<PersistedBrowserPreviewEvidence | undefined> {
   const evidence = findBrowserPreviewEvidenceByID(input)
   if (!evidence) return undefined
-  if (!(await browserPreviewEvidenceArtifactsReadable(evidence, input.projectRoot))) return undefined
+  if (!(await browserPreviewEvidenceArtifactsReadable(input.projectRoot, evidence))) return undefined
   return evidence
 }
 
@@ -432,8 +416,8 @@ export function persistBrowserPreviewEvidence(input: {
 }
 
 async function browserPreviewEvidenceArtifactsReadable(
-  evidence: PersistedBrowserPreviewEvidence,
   projectRoot: string,
+  evidence: PersistedBrowserPreviewEvidence,
 ): Promise<boolean> {
   const artifacts: Array<{ path: string; sha?: string }> = [
     ...browserPreviewCaptureArtifacts(evidence.capture),
@@ -558,13 +542,7 @@ export async function latestBrowserPreviewEvidenceIDs(input: {
 }): Promise<Partial<Record<string, string>>> {
   const rows = Database.use((db) =>
     db
-      .select({
-        id: EngineArtifactTable.id,
-        taskID: EngineArtifactTable.task_id,
-        payload: EngineArtifactTable.payload,
-        timeCreated: EngineArtifactTable.time_created,
-        timeUpdated: EngineArtifactTable.time_updated,
-      })
+      .select({ id: EngineArtifactTable.id, payload: EngineArtifactTable.payload })
       .from(EngineArtifactTable)
       .where(
         and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_EVIDENCE_KIND)),
@@ -577,9 +555,12 @@ export async function latestBrowserPreviewEvidenceIDs(input: {
     const meta = sqlEvidenceMeta(row.payload)
     if (meta?.targetID !== input.targetID) continue
     if (latest[meta.viewportID]) continue
-    const evidence = browserPreviewEvidenceFromRow(row)
-    if (!evidence) continue
-    if (!(await browserPreviewEvidenceArtifactsReadable(evidence, input.projectRoot))) continue
+    const readable = await findReadableBrowserPreviewEvidenceByID({
+      projectRoot: input.projectRoot,
+      taskID: input.taskID,
+      evidenceID: row.id,
+    })
+    if (!readable) continue
     latest[meta.viewportID] = row.id
   }
   return latest
@@ -588,15 +569,9 @@ export async function latestBrowserPreviewEvidenceIDs(input: {
 function sqlEvidenceMeta(payload: unknown): { targetID: string; viewportID: string } | undefined {
   if (!payload || typeof payload !== "object") return undefined
   const record = payload as Record<string, unknown>
-  const operationKind = parseBrowserPreviewEvidenceOperationKind(record.operation_kind)
-  if (operationKind !== "preview-capture") return undefined
+  if (record.operation_kind === "reference-comparison") return undefined
   const targetID = typeof record.target_id === "string" ? record.target_id : undefined
   const viewportID = typeof record.viewport_id === "string" ? record.viewport_id : undefined
   if (!targetID || !viewportID) return undefined
   return { targetID, viewportID }
-}
-
-function parseBrowserPreviewEvidenceOperationKind(input: unknown): BrowserPreviewEvidenceOperationKind | undefined {
-  if (input === "preview-capture" || input === "reference-comparison") return input
-  return undefined
 }

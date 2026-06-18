@@ -1,5 +1,10 @@
 # Task Global Project Forbidden - 2026-06-16
 
+> **Status (2026-06-17): Superseded symptom note.** The root cause is covered by
+> `specs/remove-global-project-sentinel-2026-06-16.md`: project discovery must
+> not create a shared `global` project identity. This file is retained as
+> historical evidence for task-boundary corrupt-data handling.
+
 ## Problem
 
 Task `tsk_ecefdca56001FewJ8LlB0AozSE` failed immediately on G1 retry because the
@@ -18,13 +23,13 @@ recoverable task state in the task/workflow model.
 
 Existing design sources:
 
-| Source | Evidence | Decision |
-| --- | --- | --- |
-| `specs/new-arch/2026-04-30-instance-bootstrap-darwin-cascade.md` | Task creation in a non-Git directory throws `WorktreeNotGitError`; no hidden `git init`. | Task creation must require a concrete Git project. |
-| `specs/new-arch/2026-06-12-overlay-init-git-412-retry.md` | Overlay handles `412 WorktreeNotGitError`, calls `POST /project/current/init-git`, and retries once. | Recovery is explicit before task persistence, not after task corruption. |
-| `packages/opencorvus/src/task-api/index.ts::prepareProject` | Rejects non-Git task creation before creating task rows. | Keep this precondition. |
-| `packages/opencorvus/src/engine/pipeline.ts::persistQueuedTask` | Lower-level persistence accepts arbitrary `projectID`. | Add the missing task persistence invariant here. |
-| `packages/opencorvus/src/storage/attachment-store.ts::stageToWorktree` | Rejects attachment/project mismatch. | Keep strict validation. |
+| Source                                                                 | Evidence                                                                                             | Decision                                                                 |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `specs/new-arch/2026-04-30-instance-bootstrap-darwin-cascade.md`       | Task creation in a non-Git directory throws `WorktreeNotGitError`; no hidden `git init`.             | Task creation must require a concrete Git project.                       |
+| `specs/new-arch/2026-06-12-overlay-init-git-412-retry.md`              | Overlay handles `412 WorktreeNotGitError`, calls `POST /project/current/init-git`, and retries once. | Recovery is explicit before task persistence, not after task corruption. |
+| `packages/opencorvus/src/task-api/index.ts::prepareProject`            | Rejects non-Git task creation before creating task rows.                                             | Keep this precondition.                                                  |
+| `packages/opencorvus/src/engine/pipeline.ts::persistQueuedTask`        | Lower-level persistence accepts arbitrary `projectID`.                                               | Add the missing task persistence invariant here.                         |
+| `packages/opencorvus/src/storage/attachment-store.ts::stageToWorktree` | Rejects attachment/project mismatch.                                                                 | Keep strict validation.                                                  |
 
 `Project.fromDirectory` may still return the historical `global` project for
 non-task project discovery in a non-Git directory. That does not permit

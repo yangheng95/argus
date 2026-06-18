@@ -9,6 +9,7 @@ import {
 import { BrowserPreviewViewportID } from "@/browser-preview/viewport"
 import { Instance } from "@/project/instance"
 import { buildMultimodalToolResult } from "./multimodal-result"
+import { BrowserPreviewCompareRegionsToolID } from "./browser-preview-tool-ids"
 import { Tool } from "./tool"
 
 export const BrowserPreviewCompareRegionsToolParameters = z
@@ -19,12 +20,15 @@ export const BrowserPreviewCompareRegionsToolParameters = z
       .min(1)
       .describe("Task-scoped source/local region bindings produced from source visual evidence and local components."),
     includeDiff: z.boolean().default(false).describe("Whether to also generate per-region difference PNGs."),
-    includeFullpageOverview: z.boolean().default(false).describe("Whether to retain full-page overview capture metadata."),
+    includeFullpageOverview: z
+      .boolean()
+      .default(false)
+      .describe("Whether to retain full-page overview capture metadata."),
   })
   .strict()
 export type BrowserPreviewCompareRegionsToolParameters = z.infer<typeof BrowserPreviewCompareRegionsToolParameters>
 
-export const BrowserPreviewCompareRegionsTool = Tool.define("browser_preview_compare_regions", {
+export const BrowserPreviewCompareRegionsTool = Tool.define(BrowserPreviewCompareRegionsToolID, {
   description:
     "Preferred frontend visual repair-loop tool when source/reference evidence and a persisted browser_preview_target both exist. Capture local implementation regions, crop matching source reference regions, persist comparison evidence, and return source/local side-by-side PNG attachments directly in the build agent message. Use before standalone screenshot review for reference-parity regions with bindings.",
   parameters: BrowserPreviewCompareRegionsToolParameters,

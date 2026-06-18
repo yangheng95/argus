@@ -17,27 +17,27 @@ the operator invoked an explicit cancel surface for a concrete target.
 
 ### Frontend Route
 
-| Surface | Current behavior | Consequence |
-| --- | --- | --- |
-| `packages/overlay/src/components/Card.tsx` | Build cards wrap the reply text with `Build session steering from overlay.` and call `sendTaskOperatorMessage(..., { source: "overlay_build_steer" })`. | The UI knows this is build-targeted guidance. |
-| `packages/overlay/src/components/ChatBubble.tsx` | Same build-stage routing as `Card.tsx`. | Same issue for top-level build message cards. |
-| `packages/overlay/src/services/task.ts::sendTaskOperatorMessage` | Posts `{ text, source }` to `POST /task/:taskID/message`. | Source is available at the route boundary. |
+| Surface                                                          | Current behavior                                                                                                                                        | Consequence                                   |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `packages/overlay/src/components/Card.tsx`                       | Build cards wrap the reply text with `Build session steering from overlay.` and call `sendTaskOperatorMessage(..., { source: "overlay_build_steer" })`. | The UI knows this is build-targeted guidance. |
+| `packages/overlay/src/components/ChatBubble.tsx`                 | Same build-stage routing as `Card.tsx`.                                                                                                                 | Same issue for top-level build message cards. |
+| `packages/overlay/src/services/task.ts::sendTaskOperatorMessage` | Posts `{ text, source }` to `POST /task/:taskID/message`.                                                                                               | Source is available at the route boundary.    |
 
 ### Backend Message Route
 
-| Surface | Current behavior | Consequence |
-| --- | --- | --- |
-| `packages/opencorvus/src/engine/model.ts::TaskMessageInput` | Accepts `source?: string`. | The API contract has a structured source field. |
-| `packages/opencorvus/src/task-api/index.ts::handleTaskMessage` | Records `source`, but calls `continueTaskMessage(taskID, input.text, attachmentRefs)` without source. | Dispatch semantics lose the source. |
-| `packages/opencorvus/src/task-api/index.ts::appendAndWakeTaskOperatorMessage` | Always calls `dispatchTaskLoop({ ..., interrupt: true })`. | Every task message becomes a task-level interrupt. |
+| Surface                                                                       | Current behavior                                                                                      | Consequence                                        |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `packages/opencorvus/src/engine/model.ts::TaskMessageInput`                   | Accepts `source?: string`.                                                                            | The API contract has a structured source field.    |
+| `packages/opencorvus/src/task-api/index.ts::handleTaskMessage`                | Records `source`, but calls `continueTaskMessage(taskID, input.text, attachmentRefs)` without source. | Dispatch semantics lose the source.                |
+| `packages/opencorvus/src/task-api/index.ts::appendAndWakeTaskOperatorMessage` | Always calls `dispatchTaskLoop({ ..., interrupt: true })`.                                            | Every task message becomes a task-level interrupt. |
 
 ### Queue / Ownership
 
-| Surface | Current behavior | Consequence |
-| --- | --- | --- |
-| `packages/opencorvus/src/engine/queue.ts::dispatchTaskLoop` | If `interrupt === true` and live ownership exists, calls `abortLiveOrchestratorToolOwnership({ ownerships: liveOwners })`. | One operator message cancels all live owned build/integrity children in the task. |
-| `packages/opencorvus/src/engine/writer.ts::abortLiveOrchestratorToolOwnership` | Cancels each child session, aborts the goal run if present, closes the tool part, and marks ownership `cancelled`. | Sibling goal runs are terminalized as aborted. |
-| `packages/opencorvus/src/orchestrator/tools.ts::cancel_subagent` | Uses `abortLiveOrchestratorToolOwnership` with a single resolved owner. | This is the correct explicit-cancel surface. |
+| Surface                                                                        | Current behavior                                                                                                           | Consequence                                                                       |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/engine/queue.ts::dispatchTaskLoop`                    | If `interrupt === true` and live ownership exists, calls `abortLiveOrchestratorToolOwnership({ ownerships: liveOwners })`. | One operator message cancels all live owned build/integrity children in the task. |
+| `packages/opencorvus/src/engine/writer.ts::abortLiveOrchestratorToolOwnership` | Cancels each child session, aborts the goal run if present, closes the tool part, and marks ownership `cancelled`.         | Sibling goal runs are terminalized as aborted.                                    |
+| `packages/opencorvus/src/orchestrator/tools.ts::cancel_subagent`               | Uses `abortLiveOrchestratorToolOwnership` with a single resolved owner.                                                    | This is the correct explicit-cancel surface.                                      |
 
 ### Test Drift
 
@@ -234,36 +234,36 @@ No overlay-only request field is allowed. If the backend schema does not accept
 Codex sub-agent review on 2026-06-13 accepted the root cause and required these
 revisions:
 
-| Finding | Revision |
-| --- | --- |
+| Finding                                                                                                                        | Revision                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `source/target` cannot live only in `OrchestratorEvent` because `queuedTaskEvents` is process-local and overwrites by task id. | Source/target must be persisted on the visible message and protocol event; `OrchestratorEvent` is only a projection. |
-| Text header plus structured target can become a double source. | Machine semantics must read only structured target; text is generated/display-only and never parsed. |
-| Test matrix missed `/inject` and `panel.send_task_message`. | Added coverage for both paths under live ownership. |
-| API target field requires OpenAPI/SDK sync. | Added schema/OpenAPI/SDK acceptance items. |
+| Text header plus structured target can become a double source.                                                                 | Machine semantics must read only structured target; text is generated/display-only and never parsed.                 |
+| Test matrix missed `/inject` and `panel.send_task_message`.                                                                    | Added coverage for both paths under live ownership.                                                                  |
+| API target field requires OpenAPI/SDK sync.                                                                                    | Added schema/OpenAPI/SDK acceptance items.                                                                           |
 
 Second independent review after the first implementation found two remaining
 single-source violations:
 
-| Finding | Required fix |
-| --- | --- |
+| Finding                                                                                                                                                                                                                                           | Required fix                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/task/:id/message` still wrote the same operator text into `WorkbenchTaskNoteTable`, while also persisting a root-session message and `task.message` protocol event. `operator_notes` then rendered the Workbench copy without target/messageID. | Task message ingress must not call `recordNote(kind="operator_note")`. The root session user message plus `TaskMessageRecorded` event are the durable source. Workbench notes remain for distinct note/constraint/goal-update flows only. |
-| `inject_operator_message` consumed the event text but called `EngineService.injectMessage` again, creating a second task message and dropping structured target/source/messageID. | `inject_operator_message` must treat `input.operatorMessage` as an already recorded wake fact and return structured context to the orchestrator, not re-inject through `/inject`. |
-| `source` was optional and filled by multiple `??` defaults. | Task message API callers must provide an explicit `source`; internal inject uses the single fixed source `api_inject`. |
+| `inject_operator_message` consumed the event text but called `EngineService.injectMessage` again, creating a second task message and dropping structured target/source/messageID.                                                                 | `inject_operator_message` must treat `input.operatorMessage` as an already recorded wake fact and return structured context to the orchestrator, not re-inject through `/inject`.                                                         |
+| `source` was optional and filled by multiple `??` defaults.                                                                                                                                                                                       | Task message API callers must provide an explicit `source`; internal inject uses the single fixed source `api_inject`.                                                                                                                    |
 
 ## Test Matrix
 
-| Test | Expected |
-| --- | --- |
-| `queue.test.ts`: interrupt with live build ownership | returns `queued`; no abort; no second loop until ownership closes |
-| `queue.test.ts`: interrupt with live integrity ownership | same as build |
-| `queue.test.ts`: two live owners, one operator message | neither owner is aborted by queue dispatch |
-| `orchestrator/tools.test.ts`: `cancel_subagent` live build | one selected owner is cancelled |
-| `server/task-message-routes.test.ts`: `/task/:id/message` | records user message and dispatches wake with source metadata |
-| `server/task-message-routes.test.ts`: `/task/:id/inject` with live ownership | records message/wake and does not abort any owner |
-| `tool/panel-send-task-message-attachments.test.ts` or equivalent panel test | `panel.send_task_message` uses the same non-destructive message path |
-| `overlay/agent-session-controls.test.ts` | build card guidance posts task message with source/target, not direct reply |
-| `task-api/lineage-terminal-notification.test.ts` | child terminal notification wake remains a wake; it does not imply cancellation |
-| OpenAPI / SDK generation checks | `TaskMessageInput` target is documented and generated before overlay sends it |
+| Test                                                                         | Expected                                                                        |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `queue.test.ts`: interrupt with live build ownership                         | returns `queued`; no abort; no second loop until ownership closes               |
+| `queue.test.ts`: interrupt with live integrity ownership                     | same as build                                                                   |
+| `queue.test.ts`: two live owners, one operator message                       | neither owner is aborted by queue dispatch                                      |
+| `orchestrator/tools.test.ts`: `cancel_subagent` live build                   | one selected owner is cancelled                                                 |
+| `server/task-message-routes.test.ts`: `/task/:id/message`                    | records user message and dispatches wake with source metadata                   |
+| `server/task-message-routes.test.ts`: `/task/:id/inject` with live ownership | records message/wake and does not abort any owner                               |
+| `tool/panel-send-task-message-attachments.test.ts` or equivalent panel test  | `panel.send_task_message` uses the same non-destructive message path            |
+| `overlay/agent-session-controls.test.ts`                                     | build card guidance posts task message with source/target, not direct reply     |
+| `task-api/lineage-terminal-notification.test.ts`                             | child terminal notification wake remains a wake; it does not imply cancellation |
+| OpenAPI / SDK generation checks                                              | `TaskMessageInput` target is documented and generated before overlay sends it   |
 
 ## Rollout Order
 

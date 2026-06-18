@@ -6,13 +6,13 @@ The root `package.json` intentionally rejects `bun test` from the repository roo
 
 ## Call sites
 
-| Surface | Current state | Decision |
-| --- | --- | --- |
-| `package.json` root `test` | Rejects root test execution | Keep; root is not the test owner |
-| `.github/workflows/test.yml` unit job | Runs `bunx turbo run test --filter=opencorvus` | Keep; it delegates to the package script |
+| Surface                                   | Current state                                                            | Decision                                                                                                                                     |
+| ----------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json` root `test`                | Rejects root test execution                                              | Keep; root is not the test owner                                                                                                             |
+| `.github/workflows/test.yml` unit job     | Runs `bunx turbo run test --filter=opencorvus`                           | Keep; it delegates to the package script                                                                                                     |
 | `packages/opencorvus/package.json` `test` | Handwritten default-suite list missing the release asset regression test | Add the moved release asset test and its entry contract by file path; do not add all `test/script` because it includes packaging smoke tests |
-| `test/check-release-assets.test.ts` | Root-level orphan test for root `script/check-release-assets.ts` | Move under `packages/opencorvus/test/script` and resolve the root script explicitly |
-| `packages/opencorvus/test/script/*` | Existing package script-contract tests | Include through the package-wide test entry |
+| `test/check-release-assets.test.ts`       | Root-level orphan test for root `script/check-release-assets.ts`         | Move under `packages/opencorvus/test/script` and resolve the root script explicitly                                                          |
+| `packages/opencorvus/test/script/*`       | Existing package script-contract tests                                   | Include through the package-wide test entry                                                                                                  |
 
 ## Validation
 

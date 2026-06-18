@@ -76,11 +76,12 @@ const TERMINAL_ABORTED_STATES = new Set(["aborted"])
 
 export interface GoalAttemptSummary {
   goal_run_id: string
-  /** FSM status of this particular goal_run row (immutable once terminal). */
+  /** Persisted status of this particular goal_run row (immutable once terminal). */
   outcome: string
   /** If non-null, this attempt was itself superseded by a newer one — the
    *  typed reason names why (acceptance_rework / manual_retry / modify_contract /
-   *  restart_stage). Terminal + superseded_reason means "redispatchable." */
+   *  restart_stage). Terminal + superseded_reason is retry intent evidence;
+   *  it does not make the goal scheduler-dispatchable by itself. */
   superseded_reason?: string
   superseded_at?: number
   /** Points at the older attempt this row supersedes (forms the chain). */
@@ -229,11 +230,12 @@ export interface TaskDesc {
   }
   recent_verdict?: AcceptanceVerdictDesc
   /** Recent orchestrator-stream-error artifacts (newest first, capped at
-   *  STREAM_FAILURE_PROMPT_CAP). Each entry marks a wake whose LLM stream
-   *  aborted before any decision was made. The orchestrator LLM reads this
-   *  list on its next wake and decides retry_task / restart_from_stage /
-   *  fail_task — there is no engine state machine that auto-handles them
-   *  (rule 13). Empty / undefined when the task has had no stream failures
+   *  STREAM_FAILURE_PROMPT_CAP). Most entries are wakes whose LLM stream
+   *  aborted before any decision was made; OrchestratorNoDecisionStopError is
+   *  a completed stream that stopped without a workflow decision. The
+   *  orchestrator LLM reads this list on its next wake and decides from the
+   *  current task context — there is no engine state machine that auto-handles
+   *  them (rule 13). Empty / undefined when the task has had no such artifacts
    *  since `task.time_started`. */
   recent_stream_failures?: StreamFailureDesc[]
   recent_tool_execute_failures?: ToolExecuteFailureDesc[]
@@ -403,11 +405,11 @@ export function describeGoal(goal: GoalRow, rewindCursor?: number | null): GoalD
   const attempts = [...rows].reverse().map(describeAttempt)
   const latest = tip ? describeAttempt(tip) : undefined
 
-  // Owner-stamp orphan: a live-status tip whose owner is a foreign (restarted)
-  // process is physically dead — render it as not-running so the overlay stops
-  // spinning and the orchestrator re-dispatches it. Spec 2026-05-29.
+  // Owner-stamp orphan is a confidence fact, not a lifecycle projection.
+  // Keep is_running tied to the persisted goal_run status; expose ownership
+  // death separately through is_orphaned so the LLM decides the next action.
   const tipIsOrphaned = !!tip && isGoalRunOrphaned(tip)
-  const tipIsLive = !!tip && LIVE_STATES.has(tip.status) && !tipIsOrphaned
+  const tipIsLive = !!tip && LIVE_STATES.has(tip.status)
   const tipIsOk = !!tip && TERMINAL_OK_STATES.has(tip.status)
   const tipIsFail = !!tip && TERMINAL_FAIL_STATES.has(tip.status)
   const tipIsAborted = !!tip && TERMINAL_ABORTED_STATES.has(tip.status)
@@ -464,9 +466,7 @@ function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc 
   const blockedGoals: CollaborationClosureDesc["blocked_goals"] = []
 
   for (const goal of goals) {
-    // Owner-orphaned goals are dead attempts whose owning process restarted;
-    // they need re-dispatch the same as a redispatch-intent terminal tip.
-    const mayDispatch = goal.never_dispatched || goal.needs_redispatch || goal.is_orphaned
+    const mayDispatch = goal.never_dispatched
     if (!mayDispatch) continue
 
     const blockers = goal.depends_on
@@ -695,7 +695,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
 function describeDerivedState(g: GoalDesc): string {
   const flags: string[] = []
   if (g.never_dispatched) flags.push("never_dispatched")
-  if (g.is_orphaned) flags.push("ORPHANED(owner process restarted — mid-stream goal cannot resume; re-dispatch)")
+  if (g.is_orphaned) flags.push("ORPHANED(owner process restarted — mid-stream execution context is gone)")
   if (g.is_running) flags.push("running")
   if (g.is_terminal_ok) flags.push("terminal_ok")
   if (g.is_terminal_fail) flags.push("terminal_fail")
@@ -893,16 +893,27 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   if (desc.recent_stream_failures && desc.recent_stream_failures.length > 0) {
     lines.push("")
     lines.push(`## Recent orchestrator stream failures (${desc.recent_stream_failures.length})`)
+    const hasNoDecisionFailure = desc.recent_stream_failures.some(
+      (f) => f.error_name === "OrchestratorNoDecisionStopError",
+    )
     for (const f of desc.recent_stream_failures) {
       const ts = new Date(f.time_created).toISOString()
       const tag = f.error_name ? `[${f.error_name}] ` : ""
       lines.push(`- ${ts} ${tag}${truncate(f.reason, 240)}`)
     }
+    if (hasNoDecisionFailure) {
+      lines.push(
+        `Entries tagged \`OrchestratorNoDecisionStopError\` are decision-contract failures: ` +
+          `the stream completed, but the orchestrator stopped without a workflow decision. ` +
+          `Continue from current task state and make a real workflow decision; do not treat ` +
+          `those entries as provider/network failures.`,
+      )
+    }
     lines.push(
-      `Each entry is an upstream LLM-call failure that aborted a wake before any ` +
-        `decision was made. Use this history to decide: \`retry_task\` (transient ` +
-        `network/idle blip), \`restart_from_stage\` (config-level — wrong provider/key), ` +
-        `or \`fail_task\` (permanent — quota exhausted, key revoked, model gone).`,
+      `Other entries are upstream LLM-call failures that aborted a wake before any decision ` +
+        `was made. Use those entries to decide: \`retry_task\` (transient network/idle blip), ` +
+        `\`restart_from_stage\` (config-level — wrong provider/key), or \`fail_task\` ` +
+        `(permanent — quota exhausted, key revoked, model gone).`,
     )
   }
 

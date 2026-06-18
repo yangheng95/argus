@@ -42,7 +42,7 @@ Any tool that writes files, runs commands, or calls external APIs must pass a pe
 The **biggest footgun** in the permission system: **later declarations override earlier ones**.
 :::
 
-`PermissionNext.evaluate()` (`src/permission/next.ts:312-319`) uses `findLast` to scan the merged ruleset, so:
+`PermissionNext.evaluate()` (`src/permission/next.ts`) uses `findLast` to scan the merged ruleset, so:
 
 ```jsonc
 {
@@ -66,7 +66,7 @@ Reversed order breaks:
 
 ## Bash command normalization
 
-`BashArity` (`src/permission/arity.ts:25`) normalizes shell commands to "semantic command prefixes" before pattern-matching, preventing bypass via injection:
+`BashArity` (`src/permission/arity.ts`) normalizes shell commands to "semantic command prefixes" before pattern-matching, preventing bypass via injection:
 
 | Input                     | Normalized                             |
 | ------------------------- | -------------------------------------- |
@@ -105,4 +105,4 @@ export OPENCORVUS_PERMISSION_TIMEOUT_MS=60000   # reject unanswered asks after 6
 
 ## No silent fallback on config error
 
-If a permission string is malformed (e.g. `"allow"` written as a string instead of an object), OpenCorvus **throws loudly** rather than silently misinterpreting it. `PermissionNext.fromConfig` validates the config shape before building the rule set (`src/permission/next.ts:62-85`).
+If a permission string is malformed (e.g. `"allow"` written as a string instead of an object), OpenCorvus **throws loudly** rather than silently misinterpreting it. `PermissionNext.fromConfig` validates the config shape before building the rule set (`src/permission/next.ts`).

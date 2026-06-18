@@ -63,7 +63,7 @@ export const ERRORS = {
     description: "Not found",
     content: {
       "application/json": {
-        schema: resolver(NotFoundError.Schema),
+        schema: namedErrorUnionSchema("NotFoundError", "LogFileNotFoundError"),
       },
     },
   },

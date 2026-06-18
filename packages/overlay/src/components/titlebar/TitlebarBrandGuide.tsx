@@ -1,5 +1,6 @@
 import * as Popover from "@kobalte/core/popover"
 import { createSignal, For } from "solid-js"
+import brandLogoUrl from "../../opencorvus-logo-dark.svg"
 import { t } from "../../utils/i18n"
 
 export function TitlebarBrandGuide() {
@@ -15,7 +16,7 @@ export function TitlebarBrandGuide() {
     <Popover.Root anchorRef={anchorRef} placement="bottom-start" gutter={8} slide={false}>
       <div ref={setAnchorRef} class="brand-guide-anchor" data-no-drag="true">
         <Popover.Trigger class="brand-guide" type="button" aria-label={t("brand.guide_trigger")} data-no-drag="true">
-          <img class="brand-logo" src="opencorvus-logo-dark.svg" alt={t("brand.logo_alt")} />
+          <img class="brand-logo" src={brandLogoUrl} alt={t("brand.logo_alt")} />
           <span class="brand-guide-copyblock" aria-hidden="true">
             <span class="brand-guide-wordmark">OpenCorvus</span>
             <span class="brand-guide-label">{t("brand.workspace_label")}</span>

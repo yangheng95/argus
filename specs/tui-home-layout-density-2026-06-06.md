@@ -1,5 +1,10 @@
 # TUI Home Layout Density - 2026-06-06
 
+> **Status (2026-06-17): Superseded.** The embedded overlay TUI surface described
+> here has been retired by `specs/new-arch/2026-06-10-tui-removal-plan.md`.
+> Current tests assert the coding-agent TUI plugin, `packages/tui-app`, and
+> `/tui/embed/*` remain absent. Keep this note as historical UI evidence only.
+
 ## Problem
 
 The right-side overlay TUI renders the real shared OpenTUI home screen, but the home route still uses a desktop-terminal hero layout. In the overlay panel the fixed 9-row logo, animated background, prompt box, and shortcut footer compete for the same first viewport. The result is visually noisy: the brand banner dominates while the input surface is pushed down and reads as an overlapping block.

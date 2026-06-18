@@ -23,17 +23,17 @@ Independent read-only agents confirmed the provider catalog defect separately:
 
 ## Callsite Census
 
-| Surface | Required decision |
-| --- | --- |
-| `packages/overlay/src/services/task.ts::panelRequestBody` | Include the selected explicit OpenCorvus model when sending control panel messages that can create tasks. |
-| `packages/opencorvus/src/control/message.ts` | Resolve the control-plane model from `ControlMessageInput.model` before project config. |
-| `packages/opencorvus/src/server/routes/mission.ts` | Accept and pass explicit model to `SessionWake.wake` for mission wake. |
-| `packages/opencorvus/src/orchestrator/tools.ts::propose_task` | Child task creation must inherit the current task resolved model when no explicit child model is provided. |
-| `packages/opencorvus/src/task-api/index.ts::createTaskInner` | If no explicit model is provided, validate that the effective project config can resolve a model before persisting a task. |
-| `packages/opencorvus/src/provider/models.ts` | Define `opencorvus` in the single local catalog source or delete all related provider logic. This repair keeps the provider and registers it in the catalog. |
-| `packages/opencorvus/src/orchestrator/agent.ts::orchestratorSessionForTask` | Do not reuse terminal/cancelled orchestrator child sessions as the execution owner for a new wake. |
-| `packages/opencorvus/src/session/prompt/state.ts` / `session/loop.ts` | A prompt call arriving while an old slot is cancelling must not be rejected by the old slot's final `session prompt loop finished`. |
-| `packages/opencorvus/src/orchestrator/task-event.ts` and overlay event consumers | Persist and expose task-scoped child activity/progress rather than relying only on live-only watermark events. |
+| Surface                                                                          | Required decision                                                                                                                                            |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/overlay/src/services/task.ts::panelRequestBody`                        | Include the selected explicit OpenCorvus model when sending control panel messages that can create tasks.                                                    |
+| `packages/opencorvus/src/control/message.ts`                                     | Resolve the control-plane model from `ControlMessageInput.model` before project config.                                                                      |
+| `packages/opencorvus/src/server/routes/mission.ts`                               | Accept and pass explicit model to `SessionWake.wake` for mission wake.                                                                                       |
+| `packages/opencorvus/src/orchestrator/tools.ts::propose_task`                    | Child task creation must inherit the current task resolved model when no explicit child model is provided.                                                   |
+| `packages/opencorvus/src/task-api/index.ts::createTaskInner`                     | If no explicit model is provided, validate that the effective project config can resolve a model before persisting a task.                                   |
+| `packages/opencorvus/src/provider/models.ts`                                     | Define `opencorvus` in the single local catalog source or delete all related provider logic. This repair keeps the provider and registers it in the catalog. |
+| `packages/opencorvus/src/orchestrator/agent.ts::orchestratorSessionForTask`      | Do not reuse terminal/cancelled orchestrator child sessions as the execution owner for a new wake.                                                           |
+| `packages/opencorvus/src/session/prompt/state.ts` / `session/loop.ts`            | A prompt call arriving while an old slot is cancelling must not be rejected by the old slot's final `session prompt loop finished`.                          |
+| `packages/opencorvus/src/orchestrator/task-event.ts` and overlay event consumers | Persist and expose task-scoped child activity/progress rather than relying only on live-only watermark events.                                               |
 
 ## Acceptance
 

@@ -1,18 +1,21 @@
 /**
  * Task Control Loop — the single entry point for task lifecycle.
  *
- * One wake = one orchestrator decision pass. There is no internal loop, no
- * watermark, no auto-rewake. The orchestrator LLM owns every workflow
- * decision through its own tool calls (dispatch_goal / deliver / modify_goal /
- * fail_task / question). When it stops, the loop exits. The next wake comes
- * from an external trigger (operator message, scheduler tick, ownership
+ * One wake = one orchestrator decision pass. There is no internal loop and no
+ * watermark. The orchestrator LLM owns every workflow decision through its own
+ * tool calls (dispatch_goal / deliver / modify_goal / fail_task / question).
+ * When it stops after a valid decision, the loop exits. The next wake normally
+ * comes from an external trigger (operator message, scheduler tick, ownership
  * recovery) — re-entering this function with a fresh event.
  *
  * Per rule 23 (no state machines): the loop does NOT inspect artifacts and
  * synthesise wake notes to push the LLM through a fixed pipeline. Past
  * iterations grew three such gates (acceptance-rejection rewake,
- * build-settled-without-deliver rewake, orchestrator-stream-error rewake);
- * all three were FSM in disguise and have been deleted.
+ * build-settled-without-deliver rewake, general orchestrator-stream-error
+ * rewake); all three were FSM in disguise and have been deleted. The only
+ * bounded self-wake left is an orchestrator no-decision contract failure: the
+ * previous wake did not produce a workflow decision, so the same task loop is
+ * re-entered with that visible fact until the stream-error fuse trips.
  *
  * What this owns:
  *   - Per-taskID serial chain (so concurrent wakes don't double-run).
@@ -26,10 +29,9 @@
  */
 
 import { Log } from "@/util/log"
-import type { RuntimeHooks } from "@/engine/runtime-hooks"
 import { Orchestrator, type OrchestratorEvent } from "@/orchestrator/agent"
 import { findTask } from "@/engine"
-import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
+import { isTaskQueued } from "@/engine/task-status"
 
 const log = Log.create({ service: "orchestrator-loop" })
 
@@ -115,12 +117,7 @@ export async function awaitTaskLoopIdle(taskID: string, idleTimeoutMs: number) {
   }
 }
 
-export async function runTaskLoop(input: {
-  taskID: string
-  event?: OrchestratorEvent
-  signal?: AbortSignal
-  hooks: RuntimeHooks
-}) {
+export async function runTaskLoop(input: { taskID: string; event?: OrchestratorEvent; signal?: AbortSignal }) {
   const prev = taskLoopChain.get(input.taskID) ?? Promise.resolve()
   const next = prev
     .catch(() => undefined)
@@ -151,32 +148,21 @@ export async function runTaskLoop(input: {
  * Run one orchestrator decision pass.
  *
  * Single-pass: enter, mark active if queued, run `Orchestrator.processTask`
- * once with the caller event, exit. There is no internal rewake. If the
- * LLM stops mid-task (acceptance rejection, build settled, stream error,
- * pending question), the next external trigger re-enters this function.
- * Concurrent entries for the same task are serialised by `runTaskLoop`.
+ * once with the caller event, exit. If the LLM stops mid-task after a valid
+ * decision (acceptance rejection, build settled, stream error, pending
+ * question), the next external trigger re-enters this function. If the
+ * orchestrator wake made no decision at all, `processTask` records that visible
+ * protocol failure and dispatches another bounded pass. Concurrent entries for
+ * the same task are serialised by `runTaskLoop`.
  */
-async function runTaskLoopInner(input: {
-  taskID: string
-  event?: OrchestratorEvent
-  signal?: AbortSignal
-  // Retained for API compatibility; the loop no longer threads hooks into a
-  // pool driver. Left in the signature so dispatchTaskLoop's callers stay unchanged.
-  hooks?: RuntimeHooks
-}) {
+async function runTaskLoopInner(input: { taskID: string; event?: OrchestratorEvent; signal?: AbortSignal }) {
   const { taskID, signal, event } = input
-
-  void input.hooks
 
   // Mark queued tasks active so the cwd-scoped queue sees ownership before
   // the first orchestrator decision completes.
   {
     const { updateTask } = await import("@/engine/state")
     const task = findTask(taskID)
-    if (task && isTaskTerminal(task)) {
-      log.info("terminal task loop wake ignored", { taskID, status: deriveTaskStatus(task), note: event?.note })
-      return
-    }
     if (task && isTaskQueued(task)) {
       await updateTask(task, { status: "active" }, "Task loop started — marking active for serial queue")
     }
@@ -189,10 +175,6 @@ async function runTaskLoopInner(input: {
   const task = findTask(taskID)
   if (!task) {
     log.error("task not found, exiting loop", { taskID })
-    return
-  }
-  if (isTaskTerminal(task)) {
-    log.info("terminal task loop wake ignored", { taskID, status: deriveTaskStatus(task), note: event?.note })
     return
   }
 

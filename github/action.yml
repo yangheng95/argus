@@ -9,10 +9,6 @@ inputs:
     description: "Model to use"
     required: true
 
-  agent:
-    description: "Agent to use. Must be a primary agent. Falls back to default_agent from config or 'build' if not found."
-    required: false
-
   share:
     description: "Share the opencorvus session (defaults to true for public repos)"
     required: false
@@ -41,36 +37,21 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Get opencorvus version
-      id: version
-      shell: bash
-      run: |
-        VERSION=$(curl -sf https://api.github.com/repos/yangheng95/opencorvus/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
-        echo "version=${VERSION:-latest}" >> $GITHUB_OUTPUT
-
-    - name: Cache opencorvus
-      id: cache
-      uses: actions/cache@v4
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
       with:
-        path: ~/.opencorvus/bin
-        key: opencorvus-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+        bun-version-file: ${{ github.action_path }}/../package.json
 
-    - name: Install opencorvus
-      if: steps.cache.outputs.cache-hit != 'true'
+    - name: Install action dependencies
       shell: bash
-      run: curl -fsSL https://opencorvus.ai/install | bash
-
-    - name: Add opencorvus to PATH
-      shell: bash
-      run: echo "$HOME/.opencorvus/bin" >> $GITHUB_PATH
+      run: bun install --cwd "$GITHUB_ACTION_PATH/.." --frozen-lockfile
 
     - name: Run opencorvus
       shell: bash
       id: run_opencorvus
-      run: opencorvus github run
+      run: bun "$GITHUB_ACTION_PATH/../packages/opencorvus/src/index.ts" github run
       env:
         MODEL: ${{ inputs.model }}
-        AGENT: ${{ inputs.agent }}
         SHARE: ${{ inputs.share }}
         PROMPT: ${{ inputs.prompt }}
         USE_GITHUB_TOKEN: ${{ inputs.use_github_token }}

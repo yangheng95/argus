@@ -308,6 +308,117 @@ async function collectDom(page) {
   });
 }
 
+async function collectGlyphCoverage(page) {
+  return page.evaluate(() => {
+    // CJK means Chinese, Japanese, and Korean unified ideograph coverage.
+    const cjkTextPattern = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u;
+    const samples = [];
+    const failed = [];
+    const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode()) && samples.length < 24) {
+      const text = String(node.textContent || "").replace(/\s+/g, " ").trim();
+      if (!cjkTextPattern.test(text)) continue;
+      const parent = node.parentElement;
+      if (!parent || !isVisible(parent)) continue;
+      const style = getComputedStyle(parent);
+      const sampleText = Array.from(text).filter((char) => cjkTextPattern.test(char)).slice(0, 8).join("");
+      if (!sampleText) continue;
+      const fontSpec = [style.fontStyle, style.fontVariant, style.fontWeight, style.fontSize, style.fontFamily]
+        .filter(Boolean)
+        .join(" ");
+      samples.push({
+        text: sampleText,
+        font_family: style.fontFamily,
+        font_spec: fontSpec,
+        font_size: style.fontSize,
+      });
+    }
+
+    for (const sample of samples) {
+      const fontReady = typeof document.fonts?.check === "function" ? document.fonts.check(sample.font_spec, sample.text) : false;
+      const missingChars = Array.from(new Set(Array.from(sample.text))).filter((char) =>
+        glyphMatchesMissingGlyph(char, sample.font_spec, sample.font_size),
+      );
+      if (!fontReady || missingChars.length > 0) {
+        failed.push({
+          text: sample.text,
+          font_family: sample.font_family,
+          font_spec: sample.font_spec,
+          reason: !fontReady ? "document.fonts.check failed" : "canvas glyph matched missing-glyph sentinel",
+          missing_chars: missingChars,
+        });
+      }
+    }
+
+    return { passed: failed.length === 0, checked: samples.length, failed };
+
+    function isVisible(element) {
+      const style = getComputedStyle(element);
+      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }
+
+    function glyphMatchesMissingGlyph(char, fontSpec, fontSize) {
+      const actual = glyphFingerprint(char, fontSpec, fontSize);
+      const missing = glyphFingerprint(String.fromCodePoint(0x10ffff), fontSpec, fontSize);
+      return (
+        actual.ink > 0 &&
+        missing.ink > 0 &&
+        actual.hash === missing.hash &&
+        actual.minX === missing.minX &&
+        actual.minY === missing.minY &&
+        actual.maxX === missing.maxX &&
+        actual.maxY === missing.maxY
+      );
+    }
+
+    function glyphFingerprint(char, fontSpec, fontSize) {
+      const size = Number.parseFloat(fontSize) || 16;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(48, Math.min(192, Math.ceil(size * 5)));
+      canvas.height = Math.max(48, Math.min(192, Math.ceil(size * 5)));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return { ink: 0, hash: "0", minX: 0, minY: 0, maxX: 0, maxY: 0 };
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#000";
+      ctx.font = fontSpec;
+      ctx.textBaseline = "top";
+      ctx.fillText(char, 4, 4);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let ink = 0;
+      let minX = canvas.width;
+      let minY = canvas.height;
+      let maxX = 0;
+      let maxY = 0;
+      let hash = 2166136261;
+      for (let y = 0; y < canvas.height; y += 1) {
+        for (let x = 0; x < canvas.width; x += 1) {
+          const i = (y * canvas.width + x) * 4;
+          const alpha = data[i + 3];
+          if (alpha <= 8) continue;
+          ink += 1;
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+          hash ^= data[i] + (data[i + 1] << 8) + (data[i + 2] << 16) + (alpha << 24);
+          hash = Math.imul(hash, 16777619) >>> 0;
+        }
+      }
+      return {
+        ink,
+        hash: hash.toString(16),
+        minX: ink ? minX : 0,
+        minY: ink ? minY : 0,
+        maxX: ink ? maxX : 0,
+        maxY: ink ? maxY : 0,
+      };
+    }
+  });
+}
+
 async function probeRuntimeInteractions(page) {
   const before = await page.evaluate(() => ({
     text: document.body?.innerText || "",
@@ -462,6 +573,7 @@ async function main() {
       interaction = await probeRuntimeInteractions(page);
       if (interaction.textChanged || interaction.htmlChanged) dom = await collectDom(page);
     }
+    const glyph = await collectGlyphCoverage(page);
     await page.screenshot({
       path: input.renderedPath,
       type: "png",
@@ -496,6 +608,7 @@ async function main() {
             required: input.requiredDomDescendants,
           },
           js: { passed: consoleErrors.length === 0 && pageErrors.length === 0, console_errors: consoleErrors, page_errors: pageErrors },
+          glyph,
           pixel: { passed: false, variance: 0, floor: 25, screenshot_path: input.renderedPath },
           expected: { passed: missingSelectors.length === 0 && missingTexts.length === 0, missing_selectors: missingSelectors, missing_texts: missingTexts },
         },

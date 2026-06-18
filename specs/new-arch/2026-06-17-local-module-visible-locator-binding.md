@@ -16,13 +16,13 @@ Date: 2026-06-17
 
 `rg "browser_preview_bind_local_module|bindLocalModuleToSourceRegion|LOCAL_MODULE_CAPTURE_SCRIPT|locator.count\\(|getBoundingClientRect|Math.max\\(1|BrowserPreviewBindLocalModuleTool|ToolRegistry" packages/opencorvus/src packages/opencorvus/test -S`
 
-| Area | Finding | Decision |
-| --- | --- | --- |
-| `src/browser-preview/local-module-source-binding.ts` | Sidecar capture treats hidden/zero-size DOM nodes as capturable implementation modules. | Require `isVisible()` and positive `boundingBox()` before evaluating anchors; stop coercing dimensions to 1. |
-| `src/tool/browser-preview-bind-local-module.ts` | Tool exists and delegates to `bindLocalModuleToSourceRegion`. | Keep the tool as the public product entry. |
-| `src/tool/registry.ts` | Tool is not registered, making the documented workflow unavailable and hiding the capture bug from tool tests. | Register `BrowserPreviewBindLocalModuleTool` next to other browser preview tools. |
-| `test/browser-preview/local-module-source-binding.test.ts` | Covers scoring and artifact materialization only. | Add real browser capture coverage for hidden and zero-size implementation locators. |
-| `test/tool/browser-preview.test.ts` | Registry currently asserts only `browser_preview` and `browser_preview_compare_regions`. | Add registry coverage for `browser_preview_bind_local_module`. |
+| Area                                                       | Finding                                                                                                        | Decision                                                                                                     |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `src/browser-preview/local-module-source-binding.ts`       | Sidecar capture treats hidden/zero-size DOM nodes as capturable implementation modules.                        | Require `isVisible()` and positive `boundingBox()` before evaluating anchors; stop coercing dimensions to 1. |
+| `src/tool/browser-preview-bind-local-module.ts`            | Tool exists and delegates to `bindLocalModuleToSourceRegion`.                                                  | Keep the tool as the public product entry.                                                                   |
+| `src/tool/registry.ts`                                     | Tool is not registered, making the documented workflow unavailable and hiding the capture bug from tool tests. | Register `BrowserPreviewBindLocalModuleTool` next to other browser preview tools.                            |
+| `test/browser-preview/local-module-source-binding.test.ts` | Covers scoring and artifact materialization only.                                                              | Add real browser capture coverage for hidden and zero-size implementation locators.                          |
+| `test/tool/browser-preview.test.ts`                        | Registry currently asserts only `browser_preview` and `browser_preview_compare_regions`.                       | Add registry coverage for `browser_preview_bind_local_module`.                                               |
 
 ## Acceptance
 

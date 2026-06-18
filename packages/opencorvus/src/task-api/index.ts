@@ -19,13 +19,14 @@ import { ProviderLLM } from "@/provider/llm"
 import { ProviderSchema } from "@/provider/schema"
 import { ProtocolStore } from "@/protocol/store"
 import { EngineProtocol } from "@/engine/protocol"
+import { clearRewindCursor } from "@/engine/rewind"
 import { ensureGitignore } from "@/engine/git"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Worktree } from "@/worktree"
 import { Question } from "@/question"
-import { Scheduler } from "@/scheduler"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
+import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
 import { SessionContext } from "@/session/context"
 import { Message } from "@/session/message"
@@ -68,7 +69,6 @@ import {
   startQueuedTaskInCwd,
   taskCwd,
 } from "@/engine/queue"
-import { reopenActiveRunForOperatorWake } from "@/engine/task-message-open"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
@@ -219,11 +219,13 @@ const CANCEL_ABORT_TIMEOUT_MS = 5_000
  */
 const CANCEL_CLEANUP_TIMEOUT_MS = 60_000
 
-function missionTaskTitleInput(input: z.infer<typeof CreateTaskInput>): {
-  missionID: string
-  sessionID: string
-  semanticTitle: string
-} | undefined {
+function missionTaskTitleInput(input: z.infer<typeof CreateTaskInput>):
+  | {
+      missionID: string
+      sessionID: string
+      semanticTitle: string
+    }
+  | undefined {
   if (input.source !== "mission") return undefined
   const metadata = input.metadata
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined
@@ -496,6 +498,29 @@ async function appendDirectAgentSessionReply(input: {
   }
 }
 
+function directReplyRouteToTaskWake(error: unknown): boolean {
+  const name = error instanceof Error ? error.name : ""
+  return new Set([
+    "InvalidReplyTargetKindError",
+    "BuildSessionDirectReplyError",
+    "ReplyTargetEnvelopeMissingError",
+    "SessionRuntimeContractMissingError",
+  ]).has(name)
+}
+
+function directReplyAttachmentSummary(input: {
+  attachments?: Array<{ mime: string; url: string; filename?: string }>
+}): string | undefined {
+  if (!input.attachments?.length) return undefined
+  return [
+    "Attachments:",
+    ...input.attachments.map((attachment, index) => {
+      const name = attachment.filename?.trim() || `attachment-${index + 1}`
+      return `- ${name} — ${attachment.mime} — url: ${attachment.url}`
+    }),
+  ].join("\n")
+}
+
 async function continueTaskMessage(
   taskID: string,
   text: string,
@@ -544,6 +569,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
   // task-level operator-message owner for /message and /inject.
   const source = input.source
   const userMessage = await appendTaskSessionMessage(task, input.text, source, input.attachments ?? [], input.target)
+  await clearRewindCursor(input.taskID)
   await EngineProtocol.emit(
     Event.TaskMessageRecorded,
     {
@@ -557,14 +583,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
     },
     { taskID: input.taskID, source: "service.message" },
   )
-  const wakeTask = isTaskCompleted(task)
-    ? await reopenCompletedTaskFromOperatorMessage(task)
-    : isTaskFailed(task)
-      ? await reopenFailedTaskFromOperatorMessage(task)
-      : isTaskCancelled(task)
-        ? await reopenCancelledTaskFromOperatorMessage(task)
-        : task
-  await reopenActiveRunForOperatorWake(wakeTask)
+  const wakeTask = await reactivateTaskForOperatorWake(task, "Operator message reactivated task")
 
   void dispatchTaskLoop({
     taskID: input.taskID,
@@ -600,26 +619,14 @@ function assertTaskOperatorMessageAccepted(task: TaskRow, text: string, attachme
   }
 }
 
-async function reopenFailedTaskFromOperatorMessage(task: TaskRow): Promise<TaskRow> {
+async function reactivateTaskForOperatorWake(task: TaskRow, summary: string): Promise<TaskRow> {
+  if (!isTaskTerminal(task)) return task
   const metadata =
     task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
       ? { ...(task.metadata as Record<string, unknown>) }
       : {}
   delete metadata.cancelled
-  return updateTask(task, { status: "queued", error: null, metadata }, "Operator message reopened failed task")
-}
-
-async function reopenCancelledTaskFromOperatorMessage(task: TaskRow): Promise<TaskRow> {
-  const metadata =
-    task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-      ? { ...(task.metadata as Record<string, unknown>) }
-      : {}
-  delete metadata.cancelled
-  return updateTask(task, { status: "queued", error: null, metadata }, "Operator message reopened cancelled task")
-}
-
-async function reopenCompletedTaskFromOperatorMessage(task: TaskRow): Promise<TaskRow> {
-  return updateTask(task, { status: "active", error: null }, "Operator message reopened completed task")
+  return updateTask(task, { status: "active", error: null, metadata }, summary)
 }
 
 function terminalTaskNotificationText(input: {
@@ -932,13 +939,16 @@ export namespace EngineService {
       EngineInteraction.subscribe(hooks())
       current.booted = true
     }
-    // Monitor active runs (executor status) — no pipeline advancement.
-    // Pipeline advancement is now driven by the Orchestrator.
+    // Narrow liveness tick: if a non-terminal task's active run has no live
+    // goal runs left, wake the task loop once so the orchestrator can inspect
+    // the no-live-goal snapshot. This does not restore executor/status polling.
     Scheduler.register({
-      id: "engine.poll",
+      id: "engine.liveness",
       interval: ORCHESTRATOR_POLL_INTERVAL_MS,
       scope: "instance",
-      run: () => EngineRuntime.monitorRuns(hooks()),
+      run: async () => {
+        await EngineRuntime.monitorRuns(hooks())
+      },
     })
     // Phase-7: no aggressive startup recovery. The post-phase-5 build model
     // is synchronous within a single orchestrator wake — nothing survives
@@ -1632,20 +1642,19 @@ function existingTaskByChannelBinding(
     | undefined,
 ) {
   if (!binding) return
-  const row = Database.use(
-    (db) =>
-      db
-        .select({ task_id: EngineChannelBindingTable.task_id, project_id: EngineTaskTable.project_id })
-        .from(EngineChannelBindingTable)
-        .innerJoin(EngineTaskTable, eq(EngineTaskTable.id, EngineChannelBindingTable.task_id))
-        .where(
-          and(
-            eq(EngineChannelBindingTable.platform, binding.platform),
-            eq(EngineChannelBindingTable.channel, binding.channel),
-            eq(EngineChannelBindingTable.thread, binding.thread),
-          ),
-        )
-        .get(),
+  const row = Database.use((db) =>
+    db
+      .select({ task_id: EngineChannelBindingTable.task_id, project_id: EngineTaskTable.project_id })
+      .from(EngineChannelBindingTable)
+      .innerJoin(EngineTaskTable, eq(EngineTaskTable.id, EngineChannelBindingTable.task_id))
+      .where(
+        and(
+          eq(EngineChannelBindingTable.platform, binding.platform),
+          eq(EngineChannelBindingTable.channel, binding.channel),
+          eq(EngineChannelBindingTable.thread, binding.thread),
+        ),
+      )
+      .get(),
   )
   if (!row) return
   if (row.project_id === "global") {
@@ -1678,12 +1687,31 @@ export namespace EngineService {
       attachments?: Array<{ mime: string; url: string; filename?: string }>
     },
   ) {
-    return appendDirectAgentSessionReply({
-      taskID,
-      sessionID,
-      message: input.message,
-      attachments: input.attachments,
-    })
+    try {
+      return await appendDirectAgentSessionReply({
+        taskID,
+        sessionID,
+        message: input.message,
+        attachments: input.attachments,
+      })
+    } catch (error) {
+      if (!directReplyRouteToTaskWake(error)) throw error
+      const text = input.message.trim()
+      if (!text) throw new Error("message is required")
+      const attachmentSummary = directReplyAttachmentSummary(input)
+      const wake = await appendAndWakeTaskOperatorMessage({
+        taskID,
+        text,
+        attachmentSummary,
+        source: "overlay_agent_session_reply",
+        target: { kind: "agent_session", sessionID },
+      })
+      return {
+        task_id: taskID,
+        session_id: sessionID,
+        message_id: wake.userMessage.info.id,
+      }
+    }
   }
 
   export async function replyInteraction(interactionID: string, raw: z.input<typeof ReplyInteractionInput>) {
@@ -1898,7 +1926,6 @@ export namespace EngineService {
       isTaskTerminal(task) || !liveRun
         ? await updateTask(task, { status: "queued", error: null, metadata }, "Retry requested by operator")
         : await updateTask(task, { error: null, metadata }, "Retry requested by operator")
-    await reopenActiveRunForOperatorWake(openedTask, "Retry reopened blocked run")
     void dispatchTaskLoop({ taskID, event: { note: OrchestratorEventNote.retry(task) } })
     return viewTask(requireTaskInCurrentProject(taskID))
   }
@@ -1924,22 +1951,7 @@ export namespace EngineService {
         })
         .run(),
     )
-    if (!run) {
-      if (!isTaskFailed(task)) {
-        return { resumed: false, status: deriveTaskStatus(task) }
-      }
-      const reopenedTask = await reopenFailedTaskFromOperatorMessage(task)
-      void dispatchTaskLoop({ taskID: task.id, event: { note: OrchestratorEventNote.retry(task) } })
-      return { resumed: true, status: deriveTaskStatus(reopenedTask) as string }
-    }
-    if (isTaskCompleted(task) || isTaskCancelled(task)) {
-      return { resumed: false, status: deriveTaskStatus(task) }
-    }
-    const wakeTask = isTaskFailed(task) ? await reopenFailedTaskFromOperatorMessage(task) : task
-    const reopenedRun = await reopenActiveRunForOperatorWake(wakeTask, "Operator note reopened blocked run")
-    if (!reopenedRun || reopenedRun.status === run.status) {
-      return { resumed: false, status: reopenedRun?.status ?? deriveTaskStatus(requireTaskInCurrentProject(taskID)) }
-    }
+    const wakeTask = await reactivateTaskForOperatorWake(task, "Operator note reactivated task")
     void dispatchTaskLoop({ taskID: wakeTask.id, event: { note: OrchestratorEventNote.retry(task) } })
     return { resumed: true, status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string }
   }
@@ -1952,7 +1964,10 @@ export namespace EngineService {
       if (!task.session_id) {
         throw new Error(`Task ${task.id} has no root session; cannot apply prompt profile ${input.promptProfile}.`)
       }
-      PromptProfile.assertKnownProfileID(input.promptProfile, await EffectiveConfig.base({ sessionID: task.session_id }))
+      PromptProfile.assertKnownProfileID(
+        input.promptProfile,
+        await EffectiveConfig.base({ sessionID: task.session_id }),
+      )
       await Session.mergeConfigOverlay({
         sessionID: task.session_id,
         patch: { prompt_profile: { active: input.promptProfile } },
@@ -1987,7 +2002,7 @@ export namespace EngineService {
     // user messages. Workbench notes are a separate note/constraint surface;
     // duplicating this text there would create a target-less second source.
     const note = await continueTaskMessage(taskID, input.text, input.source, attachmentRefs, input.target)
-    const message = note.resumed ? "Operator note recorded. Scheduler notified." : "Operator note recorded."
+    const message = note.resumed ? "Operator note recorded. Task wake dispatched." : "Operator note recorded."
     return {
       kind: "note" as const,
       message,
@@ -2031,9 +2046,6 @@ export namespace EngineService {
       appended: true,
       orchestratorWoken: wake.resumed,
       executorResumed: false,
-      // Deprecated compatibility field: task injection wakes the orchestrator,
-      // it does not resume a child executor/session.
-      resumed: false,
       status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string,
     }
   }

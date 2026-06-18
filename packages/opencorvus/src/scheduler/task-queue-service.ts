@@ -13,7 +13,6 @@ import { Database, and, eq, inArray, sql, type SQL } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { EngineConfig } from "@/engine/config"
-import { Scheduler } from "./index"
 import { TaskQueueTable } from "./task-queue.sql"
 import { SessionAgentIdentity } from "@/session/agent-identity"
 import { SessionWake } from "@/session/wake"
@@ -45,45 +44,34 @@ const EnqueuePromptInput = z.object({
   prompt: z.unknown(),
   priority: z.enum(["high", "normal", "low"]).optional(),
   source: z.string().optional(),
-  maxRetries: z.coerce.number().int().min(0).max(20).optional(),
 })
 
 export namespace TaskQueueService {
   const log = Log.create({ service: "task-queue-service" })
 
-  const POLL_INTERVAL_MS = 500
   const BATCH_SIZE = 10
   const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
   const CONCURRENCY_DEFAULT = 4
 
   const state = lazyInstanceState(() => ({
-    polling: false,
+    draining: false,
+    drainRequested: false,
+    activeDrain: undefined as Promise<Promise<void>[]> | undefined,
     inFlight: new Set<Promise<void>>(),
   }))
 
   export function init() {
-    Scheduler.register({
-      id: "task-queue-service.poll",
-      interval: POLL_INTERVAL_MS,
-      run: async () => {
-        await poll()
-      },
-      scope: "instance",
-    })
     log.info("task queue service initialized")
   }
 
   export async function runNow() {
-    const started = await poll()
-    await Promise.allSettled(started)
+    await drainUntilIdle()
   }
 
   export type QueuedTaskStatus = {
     taskID: string
     sessionID: string
-    status: "queued" | "retrying" | "running" | "completed" | "failed"
-    retryCount: number
-    maxRetries: number
+    status: "queued" | "running" | "completed" | "failed"
     source: string
     prompt: string
     error: string | null
@@ -111,8 +99,6 @@ export namespace TaskQueueService {
       taskID: row.id,
       sessionID: row.session_id,
       status: row.status,
-      retryCount: row.retry_count,
-      maxRetries: row.max_retries,
       source: row.source,
       prompt: row.prompt,
       error: row.error_message ?? null,
@@ -158,8 +144,6 @@ export namespace TaskQueueService {
           priority: input.priority ?? "normal",
           status: "queued",
           source: input.source ?? "api",
-          retry_count: 0,
-          max_retries: input.maxRetries ?? 3,
           metadata: {
             kind: "session_prompt",
             input: { ...prompt },
@@ -170,6 +154,7 @@ export namespace TaskQueueService {
         .run(),
     )
     log.info("task queued", { id, sessionID: input.sessionID, source: input.source ?? "api" })
+    requestDrain("enqueuePrompt")
     return id
   }
 
@@ -196,8 +181,6 @@ export namespace TaskQueueService {
           priority: input.priority ?? "normal",
           status: "queued",
           source: input.source ?? "api",
-          retry_count: 0,
-          max_retries: input.maxRetries ?? 3,
           metadata: {
             kind: "session_wake",
             messageID: userMessage.info.id,
@@ -214,6 +197,7 @@ export namespace TaskQueueService {
       messageID: userMessage.info.id,
       source: input.source ?? "api",
     })
+    requestDrain("enqueuePromptAfterPersistingUserMessage")
     return { taskID: id, userMessage }
   }
 
@@ -225,7 +209,7 @@ export namespace TaskQueueService {
     return Database.use((db) => {
       const where: SQL[] = [
         inArray(TaskQueueTable.session_id, sessionIDs),
-        inArray(TaskQueueTable.status, ["queued", "retrying", "running"]),
+        inArray(TaskQueueTable.status, ["queued", "running"]),
       ]
       if (input.source) where.push(eq(TaskQueueTable.source, input.source))
       const rows = db
@@ -243,55 +227,72 @@ export namespace TaskQueueService {
     })
   }
 
-  async function poll() {
-    const current = state()
-    if (current.polling) return []
-    current.polling = true
-    return run(Date.now())
+  function requestDrain(reason: string) {
+    void drainReadyTasks(reason).catch((error) => {
+      log.error("explicit queue drain failed", {
+        reason,
+        error: message(error),
+      })
+    })
   }
 
-  async function run(now: number): Promise<Promise<void>[]> {
-    const current = state()
-    // audit-2026-04-29 W2-V28 — polling clear MUST happen before
-    // run's async Promise resolves so the next runNow's poll can
-    // proceed in the same microtask flush. Pre-fix the
-    // `return run(...).finally(() => polling=false)` pattern in
-    // poll() set polling=false in a chained .finally microtask
-    // that fired AFTER the test's await firstRunning resume —
-    // which was queued earlier when firstStarted fired inside the
-    // mock during list.map. The test's resume ran first, called
-    // runNow → poll, which saw polling=still=true and SKIPPED.
-    // Bury the clear inside run's try/finally so it lands
-    // synchronously within run's body, before the body returns.
-    try {
-      await recover(now)
-      const limit = Math.max(0, concurrency() - current.inFlight.size)
-      if (limit === 0) return []
-      const queued = pending(limit)
-      if (queued.length === 0) return []
-      log.info("found queued tasks", { count: queued.length, projectID: Instance.project.id })
-      const list: Array<typeof TaskQueueTable.$inferSelect> = []
-      for (const item of queued) {
-        if (list.length >= limit) break
-        const task = claim(item.id, item.session_id)
-        if (!task) continue
-        list.push(task)
-      }
-      if (list.length === 0) return []
-      const started = list.map((task) => {
-        let running!: Promise<void>
-        running = execute(task)
-          .catch((error) => fail(task, error))
-          .finally(() => {
-            current.inFlight.delete(running)
-          })
-        current.inFlight.add(running)
-        return running
-      })
-      return started
-    } finally {
-      current.polling = false
+  async function drainUntilIdle() {
+    while (true) {
+      const started = await drainReadyTasks("runNow")
+      const current = state()
+      const running = [...current.inFlight]
+      if (started.length === 0 && running.length === 0) return
+      await Promise.allSettled([...started, ...running])
     }
+  }
+
+  async function drainReadyTasks(reason: string) {
+    const current = state()
+    if (current.draining) {
+      current.drainRequested = true
+      return current.activeDrain ? await current.activeDrain : []
+    }
+    current.draining = true
+    current.activeDrain = run(Date.now(), reason)
+    try {
+      return await current.activeDrain
+    } finally {
+      current.activeDrain = undefined
+      current.draining = false
+      if (current.drainRequested) {
+        current.drainRequested = false
+        requestDrain("queued while drain was active")
+      }
+    }
+  }
+
+  async function run(now: number, reason: string): Promise<Promise<void>[]> {
+    const current = state()
+    await recover(now)
+    const limit = Math.max(0, concurrency() - current.inFlight.size)
+    if (limit === 0) return []
+    const queued = pending(limit)
+    if (queued.length === 0) return []
+    log.info("found queued tasks", { count: queued.length, projectID: Instance.project.id, reason })
+    const list: Array<typeof TaskQueueTable.$inferSelect> = []
+    for (const item of queued) {
+      if (list.length >= limit) break
+      const task = claim(item.id, item.session_id)
+      if (!task) continue
+      list.push(task)
+    }
+    if (list.length === 0) return []
+    const started = list.map((task) => {
+      let running!: Promise<void>
+      running = execute(task)
+        .catch((error) => fail(task, error))
+        .finally(() => {
+          current.inFlight.delete(running)
+        })
+      current.inFlight.add(running)
+      return running
+    })
+    return started
   }
 
   function concurrency() {
@@ -312,7 +313,7 @@ export namespace TaskQueueService {
         })
         .from(TaskQueueTable)
         .where(
-          sql`${TaskQueueTable.status} IN ('queued', 'retrying')
+          sql`${TaskQueueTable.status} = 'queued'
             AND ${TaskQueueTable.session_id} IN (
               SELECT ${SessionTable.id}
               FROM ${SessionTable}
@@ -328,7 +329,7 @@ export namespace TaskQueueService {
               SELECT 1
               FROM a2a_task_queue better
               WHERE better.session_id = ${TaskQueueTable.session_id}
-                AND better.status IN ('queued', 'retrying')
+                AND better.status = 'queued'
                 AND (
                   CASE better.priority
                     WHEN 'high' THEN 0
@@ -396,7 +397,7 @@ export namespace TaskQueueService {
         .where(
           sql`${TaskQueueTable.id} = ${id}
             AND ${TaskQueueTable.session_id} = ${sessionID}
-            AND ${TaskQueueTable.status} IN ('queued', 'retrying')
+            AND ${TaskQueueTable.status} = 'queued'
             AND NOT EXISTS (
               SELECT 1
               FROM a2a_task_queue running
@@ -424,7 +425,7 @@ export namespace TaskQueueService {
     // makes progress (message.part.delta / message.part.updated). Replaces
     // the old unconditional setInterval(touch, 15s) which kept time_updated
     // fresh even while the upstream LLM stream was dead — defeating the
-    // recover() staleness gate. GlobalBus subscription covers worktree
+    // recover() inactivity check. GlobalBus subscription covers worktree
     // Instances too (session lives in one, executor in another).
     const handler = (msg: { payload: any }) => {
       const event = msg.payload
@@ -464,7 +465,7 @@ export namespace TaskQueueService {
       GlobalBus.off("event", handler)
     }
     const now = Date.now()
-    Database.use((db) =>
+    const completed = Database.use((db) =>
       db
         .update(TaskQueueTable)
         .set({
@@ -474,10 +475,17 @@ export namespace TaskQueueService {
           time_updated: now,
         })
         .where(and(eq(TaskQueueTable.id, task.id), eq(TaskQueueTable.status, "running")))
-        .run(),
+        .returning({ id: TaskQueueTable.id })
+        .get(),
     )
+    if (!completed) {
+      log.info("task finished after queue row was no longer running", { id: task.id, sessionID: task.session_id })
+      requestDrain("task finished after queue row changed")
+      return
+    }
     log.info("task completed", { id: task.id, sessionID: task.session_id })
     Bus.publish(TaskQueueEvent.Completed, { queueTaskID: task.id, sessionID: task.session_id })
+    requestDrain("task completed")
   }
 
   async function executeSessionWake(sessionID: string) {
@@ -515,59 +523,59 @@ export namespace TaskQueueService {
     )
     if (stale.length === 0) return
     for (const task of stale) {
-      const retryCount = task.retry_count + 1
-      const failed = retryCount > task.max_retries
       Database.use((db) =>
         db
           .update(TaskQueueTable)
           .set({
-            retry_count: retryCount,
-            status: failed ? "failed" : "retrying",
+            status: "failed",
             time_started: null,
-            time_completed: failed ? now : null,
+            time_completed: now,
             error_message: "task timed out while running",
             time_updated: now,
           })
           .where(and(eq(TaskQueueTable.id, task.id), eq(TaskQueueTable.status, "running")))
           .run(),
       )
-      log.warn("recovered stale running task", {
+      log.warn("marked stale running task failed after inactivity", {
         id: task.id,
         sessionID: task.session_id,
-        retryCount,
-        failed,
       })
-      if (failed) publishTerminalTaskError(task.session_id, "task timed out while running")
+      publishTerminalTaskError(task.session_id, "task timed out while running")
     }
   }
 
   function fail(task: typeof TaskQueueTable.$inferSelect, error: unknown) {
     const now = Date.now()
-    const retryCount = task.retry_count + 1
-    const failed = retryCount > task.max_retries
-    Database.use((db) =>
+    const failed = Database.use((db) =>
       db
         .update(TaskQueueTable)
         .set({
-          retry_count: retryCount,
-          status: failed ? "failed" : "retrying",
+          status: "failed",
           time_started: null,
-          time_completed: failed ? now : null,
+          time_completed: now,
           error_message: message(error),
           time_updated: now,
         })
         .where(and(eq(TaskQueueTable.id, task.id), eq(TaskQueueTable.status, "running")))
-        .run(),
+        .returning({ id: TaskQueueTable.id })
+        .get(),
     )
+    if (!failed) {
+      log.info("task failed after queue row was no longer running", {
+        id: task.id,
+        sessionID: task.session_id,
+        error: message(error),
+      })
+      requestDrain("task failed after queue row changed")
+      return
+    }
     log.error("task failed", {
       id: task.id,
       sessionID: task.session_id,
-      retryCount,
-      maxRetries: task.max_retries,
-      failed,
       error: message(error),
     })
-    if (failed) publishTerminalTaskError(task.session_id, message(error))
+    publishTerminalTaskError(task.session_id, message(error))
+    requestDrain("task failed")
   }
 
   function publishTerminalTaskError(sessionID: string, text: string) {

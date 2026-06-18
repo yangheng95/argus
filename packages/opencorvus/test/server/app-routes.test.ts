@@ -58,11 +58,10 @@ describe("app routes", () => {
     expect(parameterNames(paths["/task/{taskID}/browser-preview"]?.get)).toEqual(["directory"])
     expect(parameterNames(paths["/task/{taskID}/browser-preview/evidence/{evidenceID}"]?.get)).toEqual(["directory"])
     expect(parameterNames(paths["/session"]?.get)).toEqual(["directory"])
-    expect(parameterNames(paths["/channel/attachment"]?.post)).toEqual(["directory"])
-    expect(parameterNames(paths["/channel/attachment/{id}"]?.get)).toEqual([])
     expect(parameterNames(paths["/global/health"]?.get)).toEqual([])
     expect(parameterNames(paths["/log"]?.get)).toEqual([])
     expect(parameterNames(paths["/log/files"]?.get)).toEqual([])
+    expect(parameterNames(paths["/log/tail"]?.get)).toEqual([])
   })
 
   test("Server.openapi marks JSON request bodies required even when fields are refined", async () => {

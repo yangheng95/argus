@@ -1,4 +1,5 @@
 import { Log } from "@/util/log"
+import path from "node:path"
 import { bootstrap } from "../bootstrap"
 import { cmd } from "./cmd"
 import { AgentSideConnection, ndJsonStream } from "@agentclientprotocol/sdk"
@@ -21,7 +22,8 @@ export const AcpCommand = cmd({
   },
   handler: async (args) => {
     process.env.OPENCORVUS_CLIENT = "acp"
-    await bootstrap(process.cwd(), async () => {
+    const cwd = path.resolve(args.cwd as string)
+    await bootstrap(cwd, async () => {
       const opts = await resolveNetworkOptions(args)
       const server = Server.listen(opts)
 

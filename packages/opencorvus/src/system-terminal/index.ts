@@ -96,11 +96,7 @@ export namespace SystemTerminal {
   }
 
   function cmdQuote(value: string): string {
-    const escaped = value
-      .replaceAll("^", "^^")
-      .replaceAll("%", "%%")
-      .replaceAll("!", "^!")
-      .replaceAll('"', '""')
+    const escaped = value.replaceAll("^", "^^").replaceAll("%", "%%").replaceAll("!", "^!").replaceAll('"', '""')
     return `"${escaped}"`
   }
 

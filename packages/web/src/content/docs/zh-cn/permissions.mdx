@@ -42,12 +42,12 @@ description: OpenCorvus 的 allow / ask / deny 规则与默认放行权限策略
 permission 系统**最容易踩坑**的点：**后声明的规则优先级高于先声明的**。
 :::
 
-`PermissionNext.evaluate()`（`src/permission/next.ts:312-319`）用 `findLast` 扫描合并后的规则集：
+`PermissionNext.evaluate()`（`src/permission/next.ts`）用 `findLast` 扫描合并后的规则集：
 
 ```jsonc
 {
   "bash": {
-    "*": "ask", // 兜底
+    "*": "ask", // 默认规则
     "npm run *": "allow", // ← 这条生效（在 * 之后）
   },
 }
@@ -66,7 +66,7 @@ permission 系统**最容易踩坑**的点：**后声明的规则优先级高于
 
 ## Bash 命令归一化
 
-`BashArity`（`src/permission/arity.ts:25`）把 shell 命令归一化为"语义命令前缀"再做 pattern 匹配，避免绕过：
+`BashArity`（`src/permission/arity.ts`）把 shell 命令归一化为"语义命令前缀"再做 pattern 匹配，避免绕过：
 
 | 用户输入                  | 归一化后                         |
 | ------------------------- | -------------------------------- |
@@ -105,4 +105,4 @@ export OPENCORVUS_PERMISSION_TIMEOUT_MS=60000   # 60s 后拒绝未回复的 ask
 
 ## 配置错误早期暴露
 
-permission 字符串写错时**不 fallback**，直接抛。`PermissionNext.fromConfig` 会在构建规则集前校验 config 形态（`src/permission/next.ts:62-85`）。
+permission 字符串写错时**不 fallback**，直接抛。`PermissionNext.fromConfig` 会在构建规则集前校验 config 形态（`src/permission/next.ts`）。

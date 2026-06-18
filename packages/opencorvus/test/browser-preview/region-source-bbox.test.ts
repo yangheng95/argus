@@ -3,7 +3,10 @@ import { createServer, type Server } from "node:http"
 import fs from "node:fs/promises"
 import path from "node:path"
 import sharp from "sharp"
-import { compareBrowserPreviewRegions, type BrowserPreviewRegionBinding } from "../../src/browser-preview/region-comparison"
+import {
+  compareBrowserPreviewRegions,
+  type BrowserPreviewRegionBinding,
+} from "../../src/browser-preview/region-comparison"
 import {
   findReadableBrowserPreviewEvidenceByID,
   persistBrowserPreviewTarget,
@@ -55,7 +58,9 @@ describe("browser preview region source bbox bounds", () => {
         expect(badRegion?.artifacts).toBeUndefined()
         expect(validRegion?.status).toBe("completed")
         expect(validRegion?.artifacts?.source_crop).toBeTruthy()
-        const validSourceCrop = await sharp(resolveRuntimeRelativePath(tmp.path, validRegion!.artifacts!.source_crop)).metadata()
+        const validSourceCrop = await sharp(
+          resolveRuntimeRelativePath(tmp.path, validRegion!.artifacts!.source_crop),
+        ).metadata()
         expect(validSourceCrop.width).toBe(40)
         expect(validSourceCrop.height).toBe(30)
 
@@ -63,7 +68,7 @@ describe("browser preview region source bbox bounds", () => {
         expect(evidenceID).toBeTruthy()
         const evidence = await Instance.provide({
           directory: tmp.path,
-          fn: () => findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID }),
+          fn: () => findReadableBrowserPreviewEvidenceByID({ projectRoot: tmp.path, taskID, evidenceID }),
         })
         expect(evidence?.operationKind).toBe("reference-comparison")
         expect(evidence?.status).toBe("failed")
@@ -74,6 +79,7 @@ describe("browser preview region source bbox bounds", () => {
           directory: tmp.path,
           fn: () =>
             findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
               taskID,
               evidenceID: result.evidenceIDs["desktop:valid-source-bbox"],
             }),

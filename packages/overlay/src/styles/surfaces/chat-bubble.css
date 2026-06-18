@@ -240,11 +240,13 @@
 .chat-bubble__actions {
   flex: none;
   min-width: 0;
+  max-width: min(70%, calc(520px * var(--ui-scale)));
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
   align-self: flex-start;
   flex-wrap: wrap;
-  gap: calc(4px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
+  row-gap: calc(3px * var(--ui-scale));
   justify-content: flex-end;
 }
 

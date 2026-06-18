@@ -26,7 +26,7 @@ mock.module("../src/services/sse", () => ({
 
 const { deleteTask, selectTask } = await import("../src/services/task")
 const { activeTaskID, boardStore, setBoardStore } = await import("../src/store/board")
-const { __setHostTransportForTest } = await import("../src/services/host-transport")
+const { __setHostTransportForTest, HOST_CAPABILITIES } = await import("../src/services/host-transport")
 
 beforeEach(() => {
   hydrateCalls.length = 0
@@ -97,10 +97,17 @@ describe("task selection initial hydrate", () => {
     let requested = false
     __setHostTransportForTest({
       kind: "tauri",
-      async request() {
+      capabilities: HOST_CAPABILITIES.tauri,
+      async request(req: any) {
         requested = true
-        expect(activeTaskID()).toBe("")
-        return { status: 404, ok: false, headers: {}, body: { error: "missing" } }
+        if (req.method === "DELETE" && req.path === "task/tsk_deleted") {
+          expect(activeTaskID()).toBe("")
+          return { status: 404, ok: false, headers: {}, body: { error: "missing" } }
+        }
+        if (req.method === "GET" && req.path === "global/tasks") {
+          return { status: 200, ok: true, headers: {}, body: { tasks: [] } }
+        }
+        return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
       },
       openStream() {
         throw new Error("openStream not used")
@@ -116,6 +123,43 @@ describe("task selection initial hydrate", () => {
     await expect(deleteTask("tsk_deleted")).resolves.toBe(true)
 
     expect(requested).toBe(true)
+    expect(activeTaskID()).toBe("")
+  })
+
+  test("deleting a missing selected task surfaces task-list refresh failures", async () => {
+    setBoardStore("tasks", [
+      { task: { id: "tsk_refresh_fail", status: "cancelled", directory: "" }, pending_interactions: 0 },
+    ])
+    setBoardStore("selectedSource", { kind: "task", id: "tsk_refresh_fail" })
+    const requests: string[] = []
+    __setHostTransportForTest({
+      kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
+      async request(req: any) {
+        requests.push(`${req.method} ${req.path}`)
+        if (req.method === "DELETE" && req.path === "task/tsk_refresh_fail") {
+          expect(activeTaskID()).toBe("")
+          return { status: 404, ok: false, headers: {}, body: { error: "missing" } }
+        }
+        if (req.method === "GET" && req.path === "global/tasks") {
+          return { status: 503, ok: false, headers: {}, body: { error: "task list unavailable" } }
+        }
+        return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
+      },
+      openStream() {
+        throw new Error("openStream not used")
+      },
+      async native() {
+        throw new Error("native not used")
+      },
+      subscribeUiCommand() {
+        return { unsubscribe() {} }
+      },
+    } as any)
+
+    await expect(deleteTask("tsk_refresh_fail")).rejects.toThrow("task list unavailable")
+
+    expect(requests).toEqual(["DELETE task/tsk_refresh_fail", "GET global/tasks"])
     expect(activeTaskID()).toBe("")
   })
 })

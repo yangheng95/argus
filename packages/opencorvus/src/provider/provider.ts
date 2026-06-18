@@ -248,7 +248,7 @@ export namespace Provider {
         input: z.number().optional(),
         output: z.number(),
       }),
-      status: z.enum(["alpha", "beta", "deprecated", "active"]),
+      status: z.enum(["alpha", "beta", "active"]),
       options: z.record(z.string(), z.any()),
       headers: z.record(z.string(), z.string()),
       release_date: z.string(),
@@ -258,6 +258,13 @@ export namespace Provider {
       ref: "Model",
     })
   export type Model = z.infer<typeof Model>
+
+  function sourceModelStatus(provider: ModelsDev.Provider, model: ModelsDev.Model): Model["status"] {
+    if (model.status === "deprecated") {
+      throw new Error(`Deprecated source model ${provider.id}/${model.id} cannot be published`)
+    }
+    return model.status ?? "active"
+  }
 
   export const Info = z
     .object({
@@ -285,7 +292,7 @@ export namespace Provider {
         url: model.provider?.api ?? provider.api!,
         npm: model.provider?.npm ?? provider.npm ?? "@ai-sdk/openai-compatible",
       },
-      status: model.status ?? "active",
+      status: sourceModelStatus(provider, model),
       headers: model.headers ?? {},
       options: model.options ?? {},
       cost: {
@@ -348,7 +355,11 @@ export namespace Provider {
       name: provider.name,
       env: provider.env ?? [],
       options: {},
-      models: mapValues(provider.models, (model) => fromModelsDevModel(provider, model)),
+      models: Object.fromEntries(
+        Object.entries(provider.models)
+          .filter(([, model]) => model.status !== "deprecated")
+          .map(([id, model]) => [id, fromModelsDevModel(provider, model)]),
+      ),
     }
   }
 
@@ -599,7 +610,6 @@ export namespace Provider {
         if (modelID === "gpt-5-chat-latest" || (providerID === "openrouter" && modelID === "openai/gpt-5-chat"))
           delete provider.models[modelID]
         if (model.status === "alpha" && !Flag.OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
-        if (model.status === "deprecated") delete provider.models[modelID]
         if (
           (configProvider?.blacklist && configProvider.blacklist.includes(modelID)) ||
           (configProvider?.whitelist && !configProvider.whitelist.includes(modelID))

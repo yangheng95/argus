@@ -9,21 +9,13 @@
  *   - Challenge gate class: always 'diagnostic'. Challenge cannot block accept.
  *   - Scope/goal_id invariant: scope='goal' ⇔ goal_id NOT NULL;
  *     scope='global' ⇔ goal_id NULL.
- *   - Counterexample novelty dedup: inserting a hash that already exists on
- *     the same task flips into idempotent no-op rather than double-counting
- *     novelty_score.
  */
 import { and, asc, count, eq, sql } from "drizzle-orm"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Database } from "@/storage/db"
 import { Identifier } from "@/id/id"
-import {
-  EngineCounterexampleTable,
-  EngineIterationTable,
-  EngineMetricResultTable,
-  EngineMetricSpecTable,
-} from "./metrics.sql"
-import type { Counterexample, IterationSnapshot, MetricResult, MetricSpec } from "./types"
+import { EngineIterationTable, EngineMetricResultTable, EngineMetricSpecTable } from "./metrics.sql"
+import type { IterationSnapshot, MetricResult, MetricSpec } from "./types"
 import z from "zod"
 
 export const MetricWriteError = NamedError.create(
@@ -190,13 +182,6 @@ export function readResultsForIteration(taskID: string, iteration: number): Metr
       .all(),
   )
   return rows as MetricResult[]
-}
-
-export function readCounterexamplesForTask(taskID: string): Counterexample[] {
-  const rows = Database.use((db) =>
-    db.select().from(EngineCounterexampleTable).where(eq(EngineCounterexampleTable.task_id, taskID)).all(),
-  )
-  return rows as Counterexample[]
 }
 
 export function readIterationHistory(taskID: string): IterationSnapshot[] {

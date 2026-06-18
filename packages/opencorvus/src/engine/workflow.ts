@@ -17,7 +17,6 @@
 import { createDecisionLog } from "@/decision-log"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
-import { isGoalRunOrphaned } from "./orphan"
 import {
   findActiveSpecForTask,
   findLatestFrontendResearchBriefArtifact,
@@ -489,14 +488,8 @@ export function projectGoalSteps(taskID: string, workflow: MiniWorkflow): Record
   for (const goal of goals) {
     const runs = goalRuns.filter((r) => r.goal_id === goal.id)
     const tip = runs.find((r) => !supersededIDs.has(r.id)) // runs are desc by time_created
-    // Owner-orphan: a live-status tip driven live by a restarted process is
-    // physically dead (cannot resume). Project the step/phases as `failed`
-    // instead of `running` so the overlay card stops spinning after a restart;
-    // re-dispatch is driven by describeGoal.is_orphaned + beginBuildAttempt.
-    // Spec 2026-05-29-goal-run-owner-orphan-liveness §3.2.
-    const orphaned = tip ? isGoalRunOrphaned(tip) : false
-    const effectiveStatus = orphaned ? "failed" : tip?.status
-    const stepStatus = orphaned ? "failed" : mapGoalRunToStepStatus(tip?.status)
+    const effectiveStatus = tip?.status
+    const stepStatus = mapGoalRunToStepStatus(tip?.status)
     const startedAt = tip?.time_started ?? undefined
     const completedAt = tip?.time_completed ?? undefined
     const steps: Record<string, GoalStepStatus> = {}

@@ -23,6 +23,7 @@ export namespace AgentRuntimeMetadata {
     "architect",
     "build",
     "acceptance",
+    "explore",
     "fact-check",
     "frontend-design",
     "frontend-research",
@@ -48,22 +49,33 @@ export namespace AgentRuntimeMetadata {
   ] as const satisfies readonly SessionKind[]
 
   export const LIVE_RUNTIME_CONTINUATION_SESSION_KINDS = [
+    "architect",
     "build",
+    "explore",
+    "fact-check",
     "frontend-design",
+    "frontend-research",
+    "goal-workload-analyst",
     "integrity",
+    "intent-analysis",
+    "deep-research",
+    "requirements",
     "visual-qa",
   ] as const satisfies readonly SessionKind[]
 
   export const DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS = [
-    "architect",
     "acceptance",
-    "fact-check",
-    "frontend-research",
-    "goal-workload-analyst",
-    "intent-analysis",
     "orchestrator",
-    "deep-research",
-    "requirements",
+  ] as const satisfies readonly SessionKind[]
+
+  export const DIRECT_AUTOMATIC_COMPACTION_SESSION_KINDS = [
+    "root",
+    "assistant",
+    "mission",
+    "goal",
+    "executor",
+    "evaluator",
+    "system",
   ] as const satisfies readonly SessionKind[]
 
   export const AGENT_OWNED_SESSION_KIND_SET = new Set<SessionKind>(AGENT_OWNED_SESSION_KINDS)
@@ -74,5 +86,8 @@ export namespace AgentRuntimeMetadata {
   )
   export const DISABLED_AUTOMATIC_COMPACTION_SESSION_KIND_SET = new Set<SessionKind>(
     DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS,
+  )
+  export const DIRECT_AUTOMATIC_COMPACTION_SESSION_KIND_SET = new Set<SessionKind>(
+    DIRECT_AUTOMATIC_COMPACTION_SESSION_KINDS,
   )
 }

@@ -6,12 +6,12 @@ The `gui-coordinate-smoke` job in `.github/workflows/test.yml` runs `bun run ./p
 
 ## Call sites
 
-| Surface | Current state | Decision |
-| --- | --- | --- |
-| `.github/workflows/test.yml` `gui-coordinate-smoke` | Calls a missing opencorvus script | Run an overlay unit smoke that verifies the current browser preview coordinate mapper |
-| `packages/overlay/src/components/BrowserPreviewPanel.tsx` | Owns inline live screenshot coordinate mapping | Extract mapping into `browser-preview-live-point.ts` and call it from the component |
-| `packages/overlay/test` | Has browser preview structure tests, but no pure coordinate smoke | Add a focused test for center, clamp, zero-size, and workflow command coverage |
-| Old `packages/opencorvus/script/gui-coordinate-smoke.ts` | Referenced deleted `src/opencorvus/gui/coordinates` and `perception/capture` modules | Do not restore old deleted modules; current GUI coordinate source is browser preview live input |
+| Surface                                                   | Current state                                                                        | Decision                                                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `.github/workflows/test.yml` `gui-coordinate-smoke`       | Calls a missing opencorvus script                                                    | Run an overlay unit smoke that verifies the current browser preview coordinate mapper           |
+| `packages/overlay/src/components/BrowserPreviewPanel.tsx` | Owns inline live screenshot coordinate mapping                                       | Extract mapping into `browser-preview-live-point.ts` and call it from the component             |
+| `packages/overlay/test`                                   | Has browser preview structure tests, but no pure coordinate smoke                    | Add a focused test for center, clamp, zero-size, and workflow command coverage                  |
+| Old `packages/opencorvus/script/gui-coordinate-smoke.ts`  | Referenced deleted `src/opencorvus/gui/coordinates` and `perception/capture` modules | Do not restore old deleted modules; current GUI coordinate source is browser preview live input |
 
 ## Validation
 

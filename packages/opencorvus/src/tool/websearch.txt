@@ -5,7 +5,7 @@
 - Searches are performed automatically within a single API call
 
 Usage notes:
-  - Supports live crawling modes: 'fallback' (backup if cached unavailable) or 'preferred' (prioritize live crawling)
+  - Live crawling mode is fixed to 'preferred' by the tool schema.
   - Search types: 'auto' (balanced), 'fast' (quick results), 'deep' (comprehensive search)
   - Configurable context length for optimal LLM integration
   - This tool interface does not expose explicit domain filters; refine scope in the query text

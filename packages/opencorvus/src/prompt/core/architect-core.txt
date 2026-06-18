@@ -60,6 +60,7 @@ had a local implementation bug.
 Goal requirements:
 - `objective` is only the execution directive for this goal. Do not restate the whole user request and do not list interface signatures.
 - `owned_paths` are responsibility paths, not a sandbox. Separate feature goals must not claim overlapping `owned_paths` unless their execution is intentionally ordered by `depends_on`; if two goals both need the same file or directory subtree, make one goal depend on the other or merge/split ownership. Unordered overlap causes merge_back conflicts and rule 7 fallback failures, which have caused mass task cancellation.
+- Never put `.opencorvus/r/`, `.opencorvus/runtime/`, `.opencorvus/worktrees/`, `.opencorvus-worktrees/`, or `.opencorvus-meta.json` in `owned_paths`, and never ask Build to create durable deliverables there. Those paths are host-owned runtime evidence/state and are untracked by design. Keep task-runtime paths as exact read-only evidence references in objectives, acceptance specs, source/reference coverage, or contract rationale; put durable plans, PRDs, audits, and handoff documents under project source/docs paths.
 - `depends_on` lists prerequisite goals only.
 - `acceptance_specs` must be observable and goal-local. Scorer `type` is exactly one of `"heuristic"`, `"llm_judge"`, `"prebuilt"`, or `"contract_audit"`.
 - Shell and script checks are `heuristic` scorers. Do not use `type: "shell"` or `type: "script_ref"`; those belong under `spec.kind`.

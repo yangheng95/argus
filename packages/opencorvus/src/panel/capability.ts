@@ -2,7 +2,6 @@ import z from "zod"
 import { CheckConfig, StageRouting } from "@/engine"
 import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/catalog"
 import { isModelReference } from "@/provider/model-ref"
-import { AcceptanceSpecSchema } from "@/acceptance/types"
 
 export const RIGHT_SIDEBAR_SURFACE = "right-sidebar"
 export const PanelSurface = z.enum([...SharedChannelSurface.options, RIGHT_SIDEBAR_SURFACE])
@@ -100,8 +99,11 @@ function schemas<const T extends readonly Capability[]>(items: T) {
 }
 
 function missionSchemas<const T extends readonly Capability[]>(items: T) {
-  return items.map((item) => (item.action === "create_task" ? item.schema.required({ title: true }) : item.schema)) as
-    | [z.ZodObject<any>, z.ZodObject<any>, ...z.ZodObject<any>[]]
+  return items.map((item) => (item.action === "create_task" ? item.schema.required({ title: true }) : item.schema)) as [
+    z.ZodObject<any>,
+    z.ZodObject<any>,
+    ...z.ZodObject<any>[],
+  ]
 }
 
 export const PanelCapabilityRegistry = list(
@@ -111,7 +113,7 @@ export const PanelCapabilityRegistry = list(
     kind: "query",
     surfaces: allProjectSurfaces,
     params: {
-      taskID: z.string().describe("Task id whose plan and goal list should be inspected."),
+      taskID: z.string(),
     },
   }),
   item({
@@ -120,7 +122,7 @@ export const PanelCapabilityRegistry = list(
     kind: "query",
     surfaces: allProjectSurfaces,
     params: {
-      taskID: z.string().describe("Task id whose board should be inspected; omit to list recent tasks.").optional(),
+      taskID: z.string().optional(),
     },
   }),
   item({
@@ -139,12 +141,9 @@ export const PanelCapabilityRegistry = list(
     kind: "query",
     surfaces: allProjectSurfaces,
     params: {
-      taskIDs: z.array(z.string().min(1)).min(1).max(50).describe("Task ids to query, preserving one output row per id."),
-      includeChildren: z.boolean().describe("Include compact child task summaries for each queried task.").optional(),
-      includeInteractions: z
-        .boolean()
-        .describe("Include pending interaction counts for each queried task.")
-        .optional(),
+      taskIDs: z.array(z.string().min(1)).min(1).max(50),
+      includeChildren: z.boolean().optional(),
+      includeInteractions: z.boolean().optional(),
     },
   }),
   item({
@@ -153,29 +152,25 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      title: z.string().trim().min(1).max(80).describe("Short semantic title for the new task.").optional(),
-      request: z.string().describe("Complete user-facing request for the task to execute."),
-      request_id: z.string().describe("Optional idempotency key from the originating channel or UI request.").optional(),
-      executor: z
-        .enum(["opencorvus", "codex", "claude-code"])
-        .describe("Executor runtime to use for the new task when overriding the project default.")
-        .optional(),
+      title: z.string().trim().min(1).max(80).optional(),
+      request: z.string(),
+      request_id: z.string().optional(),
+      executor: z.enum(["opencorvus", "codex", "claude-code"]).optional(),
       model: z
         .string()
         .refine(isModelReference, {
           message: 'Model must be in the format "provider/model".',
         })
-        .describe("Model override for the new task, in provider/model form.")
         .optional(),
-      queue: z.boolean().describe("Whether to enqueue the task behind the directory queue instead of starting now.").optional(),
-      checks: CheckConfig.describe("Verification check configuration for the new task.").optional(),
-      routing: StageRouting.describe("Stage routing overrides for the new task.").optional(),
-      channel: z.string().describe("External channel id to bind this task to when created from a channel.").optional(),
-      thread: z.string().describe("External thread id to bind this task to when created from a channel.").optional(),
-      platform: ChannelId.describe("External channel platform for the binding, such as slack or feishu.").optional(),
-      metadata: z.record(z.string(), z.unknown()).describe("Additional task metadata supplied by the caller.").optional(),
-      source: z.string().describe("Business source label for the task, for example panel or channel:slack.").optional(),
-      allow_create: z.boolean().describe("Set false to return an ignored response instead of creating a task.").optional(),
+      queue: z.boolean().optional(),
+      checks: CheckConfig.optional(),
+      routing: StageRouting.optional(),
+      channel: z.string().optional(),
+      thread: z.string().optional(),
+      platform: ChannelId.optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
+      source: z.string().optional(),
+      allow_create: z.boolean().optional(),
     },
   }),
   item({
@@ -184,10 +179,10 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      taskID: z.string().describe("Task id that should receive the follow-up message."),
-      text: z.string().describe("Natural-language follow-up message to append to the task conversation."),
-      source: z.string().min(1).describe("Business source label for the follow-up message."),
-      user_id: z.string().describe("Optional upstream user id associated with the follow-up message.").optional(),
+      taskID: z.string(),
+      text: z.string(),
+      source: z.string().min(1),
+      user_id: z.string().optional(),
     },
   }),
   item({
@@ -196,9 +191,9 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      interactionID: z.string().describe("Pending interaction id to answer."),
-      reply: z.enum(["once", "always"]).describe("Predefined reply mode for permission-style interactions.").optional(),
-      message: z.string().describe("Free-form answer message for the pending interaction.").optional(),
+      interactionID: z.string(),
+      reply: z.enum(["once", "always"]).optional(),
+      message: z.string().optional(),
     },
   }),
   item({
@@ -207,8 +202,8 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      interactionID: z.string().describe("Pending interaction id to reject."),
-      message: z.string().describe("Optional rejection explanation to show with the interaction.").optional(),
+      interactionID: z.string(),
+      message: z.string().optional(),
     },
   }),
   item({
@@ -217,7 +212,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      taskID: z.string().describe("Task id to queue for retry."),
+      taskID: z.string(),
     },
   }),
   item({
@@ -226,7 +221,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      taskID: z.string().describe("Task id to queue for replanning."),
+      taskID: z.string(),
     },
   }),
   item({
@@ -235,7 +230,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      taskID: z.string().describe("Task id to cancel."),
+      taskID: z.string(),
     },
   }),
   item({
@@ -244,9 +239,9 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      taskID: z.string().describe("Task id whose verification checks should be updated."),
-      selection: CheckSelection.describe("Per-check enabled/disabled selection map keyed by check id.").optional(),
-      checks: CheckConfig.describe("Full replacement verification check configuration.").optional(),
+      taskID: z.string(),
+      selection: CheckSelection.optional(),
+      checks: CheckConfig.optional(),
     },
   }),
   item({
@@ -255,7 +250,7 @@ export const PanelCapabilityRegistry = list(
     kind: "query",
     surfaces: nonGatewaySharedSurfaces,
     params: {
-      match: z.string().describe("Optional window-title match text used to select the OpenCorvus GUI window.").optional(),
+      match: z.string().optional(),
     },
   }),
   item({
@@ -264,7 +259,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: localSurfaces,
     params: {
-      executor: z.enum(["opencorvus", "codex", "claude-code"]).describe("Executor runtime to select in the local panel."),
+      executor: z.enum(["opencorvus", "codex", "claude-code"]),
     },
     local_action_types: ["set_executor"],
     local_action_surfaces: localSurfaces,
@@ -275,7 +270,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: localSurfaces,
     params: {
-      taskID: z.string().describe("Task id to focus in the local project assistant surface."),
+      taskID: z.string(),
     },
     local_action_types: ["select_task"],
     local_action_surfaces: localSurfaces,
@@ -286,7 +281,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: localSurfaces,
     params: {
-      sessionID: z.string().describe("Session id to focus in the local project assistant surface."),
+      sessionID: z.string(),
     },
     local_action_types: ["select_session"],
     local_action_surfaces: localSurfaces,
@@ -306,7 +301,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: sharedSurfaces,
     params: {
-      sessionID: z.string().describe("Existing session id to fork."),
+      sessionID: z.string(),
     },
     local_action_types: ["select_session"],
     local_action_surfaces: ["panel"],
@@ -317,7 +312,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: sharedSurfaces,
     params: {
-      sessionID: z.string().describe("Session id to delete along with linked tasks."),
+      sessionID: z.string(),
     },
     local_action_types: ["invalidate_session"],
     local_action_surfaces: ["panel"],
@@ -328,12 +323,9 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      goalID: z.string().describe("Goal id whose description and acceptance specs should be replaced."),
-      description: z.string().describe("Replacement goal description."),
-      acceptance_specs: z
-        .array(AcceptanceSpecSchema)
-        .min(1)
-        .describe("Complete replacement acceptance specs for this goal using the canonical AcceptanceSpec schema."),
+      goalID: z.string(),
+      description: z.string(),
+      acceptance_specs: z.array(z.unknown()).min(1),
     },
   }),
   item({
@@ -342,7 +334,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: allProjectSurfaces,
     params: {
-      goalID: z.string().describe("Goal id to delete from the task plan."),
+      goalID: z.string(),
     },
   }),
 )

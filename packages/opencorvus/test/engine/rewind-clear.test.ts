@@ -20,6 +20,10 @@ afterEach(async () => {
 })
 
 describe("task rewind clear", () => {
+  test("clear missing task throws typed not found", async () => {
+    await expect(clearRewindCursor("task_missing_rewind_clear")).rejects.toMatchObject({ name: "NotFoundError" })
+  })
+
   test("clear after view-only rewind removes cursor", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

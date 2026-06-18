@@ -99,13 +99,31 @@ function isTaskListProjectionEventType(type: string) {
   )
 }
 
-export const TaskListEvent = z.object({
-  type: z.string(),
-  taskID: z.string().nullable(),
-  sequence: z.number(),
-  notify: BusEvent.NotifyDescriptorSchema.optional(),
-  notificationDetails: z.string().optional(),
-})
+export const TaskListEvent = z
+  .object({
+    type: z.string(),
+    taskID: z.string().nullable(),
+    sequence: z.number(),
+    notify: BusEvent.NotifyDescriptorSchema.optional(),
+    notificationDetails: z.string().optional(),
+  })
+  .superRefine((event, ctx) => {
+    const hasDetails = typeof event.notificationDetails === "string" && event.notificationDetails.trim().length > 0
+    if (event.notify && !hasDetails) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["notificationDetails"],
+        message: "Task-list events with notify metadata must include copyable notificationDetails",
+      })
+    }
+    if (!event.notify && event.notificationDetails !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["notificationDetails"],
+        message: "Task-list events without notify metadata must not include notificationDetails",
+      })
+    }
+  })
 
 const TaskListQuery = z.object({
   q: z.string().optional(),
@@ -1154,7 +1172,6 @@ export const EngineRoutes = lazy(() =>
                     appended: z.boolean(),
                     orchestratorWoken: z.boolean(),
                     executorResumed: z.boolean(),
-                    resumed: z.boolean(),
                     status: z.string(),
                   }),
                 ),
@@ -1175,13 +1192,10 @@ export const EngineRoutes = lazy(() =>
       describeRoute({
         summary: "Reply directly to a task agent session",
         description:
-          "Append a human-authored message to a non-orchestrator task agent session. " +
-          "This is scoped input for the target agent session, not a global task routing command. " +
-          "Returns 400 InvalidReplyTargetKindError / BuildSessionDirectReplyError for kinds the route refuses, " +
-          "409 ReplyTargetEnvelopeMissingError when the session has no prior user envelope yet, and " +
-          "410 SessionRuntimeContractMissingError when the in-memory runtime contract is gone (process " +
-          "restart or terminal collector already satisfied) — the overlay uses these to decide whether " +
-          "to retry, hide the reply box, or surface a generic failure.",
+          "Accept a human-authored message aimed at a task agent session. " +
+          "When the target session can be continued in-process, the message is appended there. " +
+          "When the target session cannot be continued directly, the same request is recorded as a task-root " +
+          "operator message with target session facts so the orchestrator can decide the next action.",
         operationId: "task.session.reply",
         responses: {
           202: {
@@ -1264,7 +1278,7 @@ export const EngineRoutes = lazy(() =>
     .post(
       "/task/:taskID/rewind",
       describeRoute({
-        summary: "Rewind task timeline; optionally also reset worktree files via PatchPart replay",
+        summary: "Rewind task timeline; optionally also reset goal worktree files",
         operationId: "task.rewind",
         responses: {
           200: {
@@ -1303,7 +1317,7 @@ export const EngineRoutes = lazy(() =>
       "/task/:taskID/rewind/clear",
       describeRoute({
         summary: "Clear the rewind cursor (visibility only; will not unrevert any reset worktree files)",
-        operationId: "task.rewind.clear",
+        operationId: "task.clearRewindCursor",
         responses: {
           200: {
             description: "Cursor cleared",
@@ -2059,7 +2073,7 @@ function taskListNotificationDetails(event: ReturnType<typeof ProtocolStore.list
 export function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
   // Schema (protocol/schema.ts) requires `emitted_at` to be a positive int.
   // Reading `time.emitted || time.created || Date.now()` was a rule-1
-  // fallback chain that silently repaired schema-invalid rows — if we ever
+  // cascading substitute that silently repaired schema-invalid rows — if we ever
   // reach that branch the upstream writer is broken and the right answer
   // is to crash loudly, not to stamp envelopes with a client-local clock.
   const timestamp = event.time.emitted

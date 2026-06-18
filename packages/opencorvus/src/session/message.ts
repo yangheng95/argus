@@ -967,7 +967,7 @@ export namespace Message {
             })
           }
         }
-        // Structural validity gate for provider replay. The chat-completion
+        // Structural validity check for provider replay. The chat-completion
         // contract (OpenAI / DeepSeek / vLLM / etc.) requires every assistant
         // message to carry `content` or `tool_calls`. When a stream early-dies
         // â€” provider truncates the response after opening a reasoning block,
@@ -1050,7 +1050,7 @@ export namespace Message {
           .select()
           .from(MessageTable)
           .where(eq(MessageTable.session_id, sessionID))
-          .orderBy(desc(MessageTable.time_created))
+          .orderBy(desc(MessageTable.time_created), desc(MessageTable.id))
           .limit(size)
           .offset(offset)
           .all(),

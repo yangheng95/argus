@@ -57,7 +57,32 @@ test("local model catalog includes every custom-loader provider", async () => {
   })
 })
 
-test("provider fetch init injects configured Bun proxy", () => {
+test("deprecated source models are not published through provider contracts", async () => {
+  ModelsDev.Data.reset()
+  Provider.resetAll()
+  const catalog = await ModelsDev.get()
+  expect(catalog.groq?.models["mistral-saba-24b"]?.status).toBe("deprecated")
+
+  await using tmp = await tmpdir({ config: {} })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("GROQ_API_KEY", "test-api-key")
+    },
+    fn: async () => {
+      const database = await Provider.database()
+      const providers = await Provider.list()
+      const publishedModel = Object.values(database.groq.models)[0]
+
+      expect(database.groq.models["mistral-saba-24b"]).toBeUndefined()
+      expect(providers.groq.models["mistral-saba-24b"]).toBeUndefined()
+      expect(Provider.Model.safeParse({ ...publishedModel, status: "deprecated" }).success).toBe(false)
+      expect(Object.values(providers.groq.models).map((model) => model.status)).not.toContain("deprecated")
+    },
+  })
+})
+
+test("provider fetch init injects configured runtime proxy transports", () => {
   const proxy = Provider.resolveFetchProxy({
     network: {
       proxy: {
@@ -74,6 +99,7 @@ test("provider fetch init injects configured Bun proxy", () => {
   expect(proxy).toBe("http://hexin:hx300033@10.217.133.185:30100/")
   expect(init.method).toBe("POST")
   expect(init.proxy).toBe("http://hexin:hx300033@10.217.133.185:30100/")
+  expect(init.dispatcher).toBeUndefined()
   expect(init.timeout).toBe(false)
 })
 
@@ -92,6 +118,7 @@ test("web research proxy scope leaves provider fetch direct", () => {
   expect(proxy).toBeUndefined()
   expect(init.method).toBe("GET")
   expect(init.proxy).toBeUndefined()
+  expect(init.dispatcher).toBeUndefined()
   expect(init.timeout).toBe(false)
 })
 

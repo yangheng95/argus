@@ -166,8 +166,7 @@ export async function ensureLiveWebpageEvidence(input: {
     taskID: input.taskID,
     url,
     evidenceDir,
-    fn: () =>
-      pipeline.captureRuntimeState({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
+    fn: () => pipeline.captureRuntimeState({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
   })
   if (!(await hasCompletePrimaryEvidence(evidenceDir, url))) {
     await failLiveWebpageEvidence({

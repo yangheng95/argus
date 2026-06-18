@@ -198,11 +198,7 @@ async function readDisplay(): Promise<string> {
       const el = document.querySelector(sel)
       if (el && (el.textContent || "").trim()) return (el.textContent || "").trim()
     }
-    // fallback: largest text block
-    const all = Array.from(document.querySelectorAll("body *")).filter((e) =>
-      /^\d|Error/.test((e.textContent || "").trim()),
-    )
-    return (all[0]?.textContent || "").trim()
+    throw new Error(`calculator display element not found; checked selectors: ${candidates.join(", ")}`)
   })
 }
 
@@ -301,8 +297,7 @@ if (page && baseURL) {
     })
     if (selectorEvidence) return true
     return Array.from(document.querySelectorAll("body *")).some((element) => {
-      const className =
-        typeof (element as HTMLElement).className === "string" ? (element as HTMLElement).className : ""
+      const className = typeof (element as HTMLElement).className === "string" ? (element as HTMLElement).className : ""
       return /expression|operand|highlight/i.test(className) && !!(element.textContent || "").trim()
     })
   })
@@ -327,12 +322,7 @@ if (page && baseURL) {
     clickToFill: /history.*click|clickHistory|onHistoryClick|历史.*点击|click.*history/i.test(codeBundle),
     persist: /localStorage.*history|history.*localStorage/i.test(codeBundle),
   }
-  record(
-    "R6-cap20",
-    "history cap = 20",
-    histRefs.cap20 ? "pass" : "fail",
-    histRefs.cap20 ? "" : "no cap-20 evidence",
-  )
+  record("R6-cap20", "history cap = 20", histRefs.cap20 ? "pass" : "fail", histRefs.cap20 ? "" : "no cap-20 evidence")
   record("R6-clear", "clear history present", histRefs.clearHistory ? "pass" : "fail", "")
   record("R6-fillback", "click history to fill back", histRefs.clickToFill ? "pass" : "fail", "")
   record("R6-persist", "history persisted to localStorage", histRefs.persist ? "pass" : "fail", "")

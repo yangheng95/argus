@@ -1,5 +1,5 @@
 import z from "zod"
-import { type BusEvent } from "@/bus/bus-event"
+import { BusEvent } from "@/bus/bus-event"
 import { Database, eq } from "@/storage/db"
 import { ProtocolStore } from "@/protocol/store"
 import { EngineTaskTable } from "./engine.sql"
@@ -33,7 +33,7 @@ export namespace EngineProtocol {
     properties: z.output<Definition["properties"]>,
     meta: Meta = {},
   ) {
-    const data = payload(properties)
+    const data = payload(BusEvent.parseProperties(def, properties))
     const taskID = meta.taskID ?? text(data, "taskID")
     if (!taskID) throw new Error(`protocol event ${def.type} is missing taskID`)
     const task = Database.use((db) =>

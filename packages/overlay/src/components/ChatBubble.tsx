@@ -299,6 +299,10 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     return parts.join(" · ")
   }
   const modelLabel = () => props.node.model?.display || ""
+  const hasContextTokens = () =>
+    typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0
+  const hasMetaActions = () => !!modelLabel() || hasContextTokens() || usageVisible()
+  const hasControlActions = () => !!traceSessionID() || headActions.caps.canCancel() || headActions.caps.canRewind()
   const articleStyle = createMemo<Record<string, string> | undefined>(() => {
     const style: Record<string, string> = {}
     const accent = stageAccent(normalizedRole())
@@ -388,89 +392,97 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 </div>
               </div>
               <div class="chat-bubble__actions">
-                <Show when={modelLabel()}>
-                  <span
-                    class="card__model-hint"
-                    title={t("card.model_tooltip", { model: modelLabel() })}
-                    aria-label={t("card.model_tooltip", { model: modelLabel() })}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    {modelLabel()}
-                  </span>
-                </Show>
-                <Show when={typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0}>
-                  <span
-                    class="card__token-hint"
-                    data-estimated={props.node.contextTokensEstimated ? "true" : "false"}
-                    title={t(
-                      props.node.contextTokensEstimated
-                        ? "card.context_tokens_tooltip_estimated"
-                        : "card.context_tokens_tooltip",
-                      { value: String(props.node.contextTokens) },
-                    )}
-                    aria-label={t(
-                      props.node.contextTokensEstimated
-                        ? "card.context_tokens_tooltip_estimated"
-                        : "card.context_tokens_tooltip",
-                      { value: String(props.node.contextTokens) },
-                    )}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    ~{formatTokenCount(props.node.contextTokens as number)} tok
-                    {props.node.contextTokensEstimated ? " · est." : ""}
-                  </span>
-                </Show>
-                <Show when={usageVisible()}>
-                  <span class="card__usage-hint" title={usageTip()} onClick={(event) => event.stopPropagation()}>
-                    <Show when={usageTotalLabel()}>
-                      <span class="card__usage-tokens">{usageTotalLabel()} tok</span>
+                <Show when={hasMetaActions()}>
+                  <div class="card__meta-actions">
+                    <Show when={modelLabel()}>
+                      <span
+                        class="card__model-hint"
+                        title={t("card.model_tooltip", { model: modelLabel() })}
+                        aria-label={t("card.model_tooltip", { model: modelLabel() })}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {modelLabel()}
+                      </span>
                     </Show>
-                    <Show when={usageCostLabel()}>
-                      <span class="card__usage-cost">{usageCostLabel()}</span>
+                    <Show when={hasContextTokens()}>
+                      <span
+                        class="card__token-hint"
+                        data-estimated={props.node.contextTokensEstimated ? "true" : "false"}
+                        title={t(
+                          props.node.contextTokensEstimated
+                            ? "card.context_tokens_tooltip_estimated"
+                            : "card.context_tokens_tooltip",
+                          { value: String(props.node.contextTokens) },
+                        )}
+                        aria-label={t(
+                          props.node.contextTokensEstimated
+                            ? "card.context_tokens_tooltip_estimated"
+                            : "card.context_tokens_tooltip",
+                          { value: String(props.node.contextTokens) },
+                        )}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        ~{formatTokenCount(props.node.contextTokens as number)} tok
+                        {props.node.contextTokensEstimated ? " · est." : ""}
+                      </span>
                     </Show>
-                  </span>
+                    <Show when={usageVisible()}>
+                      <span class="card__usage-hint" title={usageTip()} onClick={(event) => event.stopPropagation()}>
+                        <Show when={usageTotalLabel()}>
+                          <span class="card__usage-tokens">{usageTotalLabel()} tok</span>
+                        </Show>
+                        <Show when={usageCostLabel()}>
+                          <span class="card__usage-cost">{usageCostLabel()}</span>
+                        </Show>
+                      </span>
+                    </Show>
+                  </div>
                 </Show>
-                <Show when={!!traceSessionID()}>
-                  <button
-                    type="button"
-                    class="card__trace"
-                    classList={{ "card__trace--open": traceOpen() }}
-                    title={t("card.inspect_agent_trace")}
-                    aria-label={t("card.inspect_agent_trace")}
-                    aria-pressed={traceOpen()}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onTraceToggle()
-                    }}
-                  >
-                    <Icon name="inspect" size={13} />
-                  </button>
-                </Show>
-                <Show when={headActions.caps.canCancel()}>
-                  <button
-                    type="button"
-                    class="card__agent-cancel"
-                    classList={{ "card__agent-cancel--pending": headActions.state.cancelling() }}
-                    title={headActions.labels.cancel()}
-                    aria-label={headActions.labels.cancel()}
-                    disabled={headActions.state.cancelling()}
-                    onClick={headActions.onAgentCancel}
-                  >
-                    <Icon name="cancel" size={13} />
-                  </button>
-                </Show>
-                <Show when={headActions.caps.canRewind()}>
-                  <button
-                    type="button"
-                    class="card__rewind"
-                    classList={{ "card__rewind--pending": headActions.state.rewinding() }}
-                    title={headActions.labels.rewind()}
-                    aria-label={headActions.labels.rewindStep()}
-                    disabled={headActions.state.rewinding()}
-                    onClick={headActions.onRewind}
-                  >
-                    <Icon name="rewind" size={13} />
-                  </button>
+                <Show when={hasControlActions()}>
+                  <div class="card__control-actions">
+                    <Show when={!!traceSessionID()}>
+                      <button
+                        type="button"
+                        class="card__trace"
+                        classList={{ "card__trace--open": traceOpen() }}
+                        title={t("card.inspect_agent_trace")}
+                        aria-label={t("card.inspect_agent_trace")}
+                        aria-pressed={traceOpen()}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onTraceToggle()
+                        }}
+                      >
+                        <Icon name="inspect" size={13} />
+                      </button>
+                    </Show>
+                    <Show when={headActions.caps.canCancel()}>
+                      <button
+                        type="button"
+                        class="card__agent-cancel"
+                        classList={{ "card__agent-cancel--pending": headActions.state.cancelling() }}
+                        title={headActions.labels.cancel()}
+                        aria-label={headActions.labels.cancel()}
+                        disabled={headActions.state.cancelling()}
+                        onClick={headActions.onAgentCancel}
+                      >
+                        <Icon name="cancel" size={13} />
+                      </button>
+                    </Show>
+                    <Show when={headActions.caps.canRewind()}>
+                      <button
+                        type="button"
+                        class="card__rewind"
+                        classList={{ "card__rewind--pending": headActions.state.rewinding() }}
+                        title={headActions.labels.rewind()}
+                        aria-label={headActions.labels.rewindStep()}
+                        disabled={headActions.state.rewinding()}
+                        onClick={headActions.onRewind}
+                      >
+                        <Icon name="rewind" size={13} />
+                      </button>
+                    </Show>
+                  </div>
                 </Show>
               </div>
             </div>

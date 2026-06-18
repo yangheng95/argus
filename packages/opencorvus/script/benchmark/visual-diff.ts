@@ -12,7 +12,6 @@
 //   --browser-launch-timeout-ms <n> browser launch timeout (default 60000)
 //   --out <dir>                   write rendered.png + diff.json here (default repo .scratch/benchmark-runs/visual-diff-out)
 //   --headless                    run Chromium headless
-//   --chrome-cli-fallback         use Chrome CLI screenshot if Playwright launch fails
 //
 // Exit code: 0 = passed, 1 = failed, 2 = input/config error.
 //

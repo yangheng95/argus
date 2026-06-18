@@ -559,11 +559,7 @@ function renderReadme(input: {
   ].join("\n")
 }
 
-function buildWarnings(
-  sourceHtmlKind: "source-skeleton",
-  criticalCss: string,
-  fullSourceCss: string,
-): string[] {
+function buildWarnings(sourceHtmlKind: "source-skeleton", criticalCss: string, fullSourceCss: string): string[] {
   const warnings: string[] = []
   const reachableRuleCount = (criticalCss.match(/\/\* Reachable original CSS rules\. \*\//g) ?? []).length
   if (reachableRuleCount === 0 && fullSourceCss.length < 20000) {

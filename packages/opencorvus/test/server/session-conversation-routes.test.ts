@@ -156,7 +156,8 @@ describe("session conversation routes", () => {
             [assistant.id, "assistant", "assistant"],
           ],
         )
-        expect(transcript.map((message) => message.parts[0]?.channel)).toEqual(["main", "assistant"])
+        expect(transcript.map((message) => message.parts[0]?.channel)).toEqual([undefined, undefined])
+        expect(transcript.map((message) => message.parts[0]?.resolvedRole)).toEqual([undefined, undefined])
         expect(body.view.topLevelSessionIDs).toContain(session.id)
       },
     })

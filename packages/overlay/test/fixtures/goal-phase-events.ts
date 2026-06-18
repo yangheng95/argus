@@ -70,12 +70,13 @@ function messageInfo(channel: string, info: Record<string, any>) {
 }
 
 function messagePart(channel: string, part: Record<string, any>) {
+  const { resolvedRole, channel: _channel, parentSessionID, goalID, ...cleanPart } = part
   return {
-    part: {
-      ...part,
-      resolvedRole: part.resolvedRole ?? channel,
-      channel,
-    },
+    part: cleanPart,
+    resolvedRole: resolvedRole ?? channel,
+    channel,
+    ...(parentSessionID ? { parentSessionID } : {}),
+    ...(goalID ? { goalID } : {}),
   }
 }
 

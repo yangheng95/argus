@@ -7,11 +7,11 @@ OpenCorvus 在三种场景选模型，三者可独立配置。底层 provider �
 
 ## 三个旋钮
 
-| 场景              | 配置位置                                                                                                        |
-| ----------------- | --------------------------------------------------------------------------------------------------------------- |
-| 默认执行模型      | [config](/docs/zh-cn/config/) 的 `model` 字段                                                                   |
-| 按 agent 模型     | `agent.<name>.model`（见 `packages/opencorvus/src/config/config.ts:1053-1067`、`1191`、`1232`、`1239`、`1246`） |
-| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL` 环境变量                                                                              |
+| 场景              | 配置位置                                                              |
+| ----------------- | --------------------------------------------------------------------- |
+| 默认执行模型      | [config](/docs/zh-cn/config/) 的 `model` 字段                         |
+| 按 agent 模型     | `agent.<name>.model`（见 `packages/opencorvus/src/config/config.ts`） |
+| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL` 环境变量                                    |
 
 规划/执行分模型示例：
 
@@ -20,13 +20,13 @@ OpenCorvus 在三种场景选模型，三者可独立配置。底层 provider �
   "model": "openai/gpt-5.5",
   "agent": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },
-    "planner": { "model": "anthropic/claude-sonnet-4-6" },
+    "architect": { "model": "anthropic/claude-sonnet-4-6" },
     "frontend-design": { "model": "anthropic/claude-sonnet-4-6" },
   },
 }
 ```
 
-按 agent 的 `model` 由 `Agent.state()` 读取（`packages/opencorvus/src/agent/agent.ts:480`，`Provider.parseModel(value.model)`）。同名 agent 的 step / skill 旋钮另在 `assistant.<name>` 下——见 [Agents](/docs/zh-cn/agents/#agent-预算)。
+按 agent 的 `model` 由 `Agent.state()` 读取（`packages/opencorvus/src/agent/agent.ts`，`Provider.parseModel(value.model)`）。同名 agent 的 step / skill 旋钮另在 `assistant.<name>` 下——见 [Agents](/docs/zh-cn/agents/#agent-预算)。
 
 ## models.dev
 
@@ -37,10 +37,11 @@ OpenCorvus 在打包时拉取 [models.dev](https://models.dev) 快照（`package
 ## 列出可用模型
 
 ```bash
-opencorvus models --list
+opencorvus models
+opencorvus models openai --verbose
 ```
 
-只列出当前已配置 provider 凭证的模型。env 中禁用某 provider（或 config 的 `disabled_providers`）会从列表移除其模型。
+列出已配置 provider 的模型。传入 provider ID 会限制输出范围；通过 config 的 `disabled_providers` 禁用某个 provider 后，其模型会从列表移除。
 
 ## 模型变体
 

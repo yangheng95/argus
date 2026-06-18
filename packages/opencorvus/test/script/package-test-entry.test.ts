@@ -13,6 +13,5 @@ describe("opencorvus package test entry", () => {
     const args = testScript.split(/\s+/)
     expect(args).toContain("test/script/check-release-assets.test.ts")
     expect(args).toContain("test/script/package-test-entry.test.ts")
-    expect(args).toContain("test/script/published-package-bin.test.ts")
   })
 })

@@ -32,30 +32,21 @@ Commands run before design:
 
 Key schema exits:
 
-| Surface | Current role | Decision |
-| --- | --- | --- |
-| `src/provider/schema.ts` | Converts Zod / AI SDK schema wrappers into provider-bound JSON Schema through `ProviderTransform.schema`. | Keep as the only schema dialect entry for tool input and structured output. Add stress coverage around it instead of creating a second normalizer. |
-| `src/provider/transform.ts::schema` | Provider dialect normalization for OpenAI/GPT strict schemas and Gemini schemas. | Exercise recursive strictness, root union flattening, object closure, and local optional/null cleanup through tests. |
-| `src/session/loop.ts::prepareProviderTool` | Single provider-bound tool preparation path for registry, MCP, extra, and structured tools. | Stress this path because it is where provider schema and local Zod execution semantics meet. |
-| `src/session/loop.ts::createStructuredOutputTool` | Structured-output finalizer tool. | Include structured-output schema cases because provider errors here can end sessions without valid final payloads. |
-| `src/tool/registry.ts` + built-in `Tool.define` tools | Default agent tool surface. | Audit generated schemas for provider compatibility and ambiguous/prose-only fields. |
-| `src/orchestrator/tools.ts::createOrchestratorTools` | Orchestrator self-built task-control tool surface. | Audit every tool schema because orchestrator retry loops often originate here. |
-| `src/architect/output-tools.ts`, `src/research/output-tools.ts`, `src/frontend-design/schema.ts`, `src/integrity/team-schema.ts`, `src/build/types.ts`, `src/acceptance/types.ts` | Stage/terminal schemas consumed by LLM agents. | Keep canonical schemas; add representative pressure cases rather than duplicating contract definitions. |
+| Surface                                                                                                                                                                           | Current role                                                                                              | Decision                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/provider/schema.ts`                                                                                                                                                          | Converts Zod / AI SDK schema wrappers into provider-bound JSON Schema through `ProviderTransform.schema`. | Keep as the only schema dialect entry for tool input and structured output. Add stress coverage around it instead of creating a second normalizer. |
+| `src/provider/transform.ts::schema`                                                                                                                                               | Provider dialect normalization for OpenAI/GPT strict schemas and Gemini schemas.                          | Exercise recursive strictness, root union flattening, object closure, and local optional/null cleanup through tests.                               |
+| `src/session/loop.ts::prepareProviderTool`                                                                                                                                        | Single provider-bound tool preparation path for registry, MCP, extra, and structured tools.               | Stress this path because it is where provider schema and local Zod execution semantics meet.                                                       |
+| `src/session/loop.ts::createStructuredOutputTool`                                                                                                                                 | Structured-output finalizer tool.                                                                         | Include structured-output schema cases because provider errors here can end sessions without valid final payloads.                                 |
+| `src/tool/registry.ts` + built-in `Tool.define` tools                                                                                                                             | Default agent tool surface.                                                                               | Audit generated schemas for provider compatibility and ambiguous/prose-only fields.                                                                |
+| `src/orchestrator/tools.ts::createOrchestratorTools`                                                                                                                              | Orchestrator self-built task-control tool surface.                                                        | Audit every tool schema because orchestrator retry loops often originate here.                                                                     |
+| `src/architect/output-tools.ts`, `src/research/output-tools.ts`, `src/frontend-design/schema.ts`, `src/integrity/team-schema.ts`, `src/build/types.ts`, `src/acceptance/types.ts` | Stage/terminal schemas consumed by LLM agents.                                                            | Keep canonical schemas; add representative pressure cases rather than duplicating contract definitions.                                            |
 
-Observed risk signals before implementation:
+Observed risk signals:
 
 - `src/orchestrator/tools.ts::query_failed_goals` exposes a no-argument `z.object({})` schema. This is a query tool, not a terminal submit tool, so it is not changed without evidence. The benchmark should allow deliberate no-argument tools only when the root object is closed after provider normalization.
 - `src/tool/todo.ts::todoread` is a deliberate no-argument registry tool. Same treatment as above.
-- `src/tool/batch.ts` contained `z.object({}).loose()` for nested delegated tool parameters. The implementation replaces it with a dynamic discriminated union generated from the currently visible tool schemas.
-
-## Implementation Results
-
-- Added `test/provider/schema-stress.test.ts` as the pressure benchmark for provider dialects, registry tools, experimental batch tool, frontend-design evidence tools, orchestrator tools, and executor protocol adapters.
-- Closed `AcceptanceSpecSchema` exposure through panel `update_goal` by using the canonical `AcceptanceSpecSchema` instead of `z.unknown()`.
-- Closed prebuilt scorer config with a named config object instead of an open record.
-- Preserved field descriptions when `ProviderTransform.schema` flattens duplicate discriminator literals into provider-visible enums.
-- Reworked `batch` so the schema is generated from the visible target tool schemas, with `maxItems: 25` enforced at schema validation time and no delegated `parameters` loose object.
-- Changed executor protocol adapters so schema-less `structured_output` is not declared, `approval` remains event classification only rather than a callable any-object tool, and `request_user_input` / `shell_command` have closed schemas with field descriptions.
+- `src/tool/batch.ts` contains `z.object({}).loose()` for nested delegated tool parameters. It is behind experimental config and must be treated as a high-risk dynamic schema if that tool is enabled.
 
 ## Benchmark Definition
 
@@ -78,9 +69,3 @@ Timeout policy: benchmark execution must fail on true inactivity, not elapsed wa
 - Targeted schema tests pass.
 - Existing targeted provider/session/orchestrator tool tests still pass.
 - After tests pass, perform a manual second review of changed schema paths and benchmark assertions.
-
-## Verification
-
-- `bun test test/provider/schema-stress.test.ts test/acceptance/types.test.ts test/executor/tool-adapter-registry.test.ts test/server/executor-routes.test.ts --timeout 60000`
-- `bun test test/provider/schema.test.ts test/provider/transform.test.ts test/session/extra-tools.test.ts test/session/structured-output.test.ts test/session/structured-output-tool.test.ts test/architect/goal-tool-schema-visible.test.ts test/tool/schema-snapshot.test.ts test/provider/schema-stress.test.ts test/acceptance/types.test.ts test/executor/tool-adapter-registry.test.ts test/server/executor-routes.test.ts --timeout 60000`
-- `bun run typecheck`

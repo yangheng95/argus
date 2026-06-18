@@ -8,7 +8,6 @@ import { boardStore } from "../store/board"
 import { deriveChanges, normalizeDiffs } from "./meta"
 import type { FileChange } from "../components/DiffView"
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label"
-import { parsePatch } from "diff"
 
 export interface DiffTarget {
   filePath: string
@@ -32,15 +31,6 @@ export interface ChangeGroup {
 }
 
 const diffCache = new Map<string, FileChange[]>()
-
-// VCS means Version Control System; rows come from the existing /vcs/diff endpoint.
-interface VcsDiffRow {
-  file?: unknown
-  patch?: unknown
-  additions?: unknown
-  deletions?: unknown
-  status?: unknown
-}
 
 export function changeGroupsRevisionKey(groups: ChangeGroup[]): string {
   return groups
@@ -101,56 +91,6 @@ function findDiffByPath(changes: FileChange[], filePath: string): FileChange | n
   return changes.find((change) => normalizeDiffPath(change.file) === target) || null
 }
 
-function beforeAfterFromPatch(patch: string): Pick<FileChange, "before" | "after" | "isText"> | null {
-  if (/\b(?:Binary files .* differ|GIT binary patch)\b/.test(patch)) return null
-  const parsed = parsePatch(patch)
-  const file = parsed[0]
-  if (!file) return null
-  const before: string[] = []
-  const after: string[] = []
-  for (const hunk of file.hunks || []) {
-    for (const line of hunk.lines || []) {
-      if (!line || line.startsWith("\\")) continue
-      const marker = line[0]
-      const text = line.slice(1)
-      if (marker === " ") {
-        before.push(text)
-        after.push(text)
-      } else if (marker === "-") {
-        before.push(text)
-      } else if (marker === "+") {
-        after.push(text)
-      }
-    }
-  }
-  return {
-    before: before.join("\n"),
-    after: after.join("\n"),
-    isText: true,
-  }
-}
-
-function normalizeVcsDiffs(rawDiffs: unknown): FileChange[] {
-  if (!Array.isArray(rawDiffs)) return []
-  return rawDiffs
-    .flatMap((raw: VcsDiffRow) => {
-      const file = typeof raw?.file === "string" ? raw.file : ""
-      if (!file) return []
-      const patchBody = typeof raw.patch === "string" ? beforeAfterFromPatch(raw.patch) : null
-      return [
-        {
-          file: file.replace(/^[ab]\//, ""),
-          ...(patchBody || {}),
-          isText: !!patchBody,
-          additions: Number.isFinite(Number(raw.additions)) ? Number(raw.additions) : 0,
-          deletions: Number.isFinite(Number(raw.deletions)) ? Number(raw.deletions) : 0,
-          status: raw.status === "added" || raw.status === "deleted" ? raw.status : "modified",
-        } satisfies FileChange,
-      ]
-    })
-    .sort((a, b) => a.file.localeCompare(b.file))
-}
-
 function sumAdditions(changes: FileChange[]): number {
   return changes.reduce((sum, item) => sum + (item.additions ?? 0), 0)
 }
@@ -183,8 +123,7 @@ function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
       // Prefer payload.changedFileDiffs (carries per-file additions/deletions
       // from the persisted goal_run acceptance row, populated by board.ts)
       // over the bare `changedFiles` string list, which has no stat numbers
-      // and would render as +0/-0 on every row. The diff fetch below is the
-      // fallback for older payloads written before changedFileDiffs landed.
+      // and renders as +0/-0 on every row until scoped diff bodies are available.
       for (const payload of payloads) {
         for (const entry of Array.isArray(payload?.changedFileDiffs) ? payload.changedFileDiffs : []) {
           const file = typeof entry?.file === "string" ? entry.file : ""
@@ -287,11 +226,6 @@ export function currentChangeGroups(): ChangeGroup[] {
   ]
 }
 
-/** Flattened view of currentChangeGroups() for legacy callers. */
-export function currentChanges(): FileChange[] {
-  return currentChangeGroups().flatMap((group) => group.changes)
-}
-
 async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): Promise<FileChange[]> {
   const key = scopeCacheKey(scope)
   if (!key) return []
@@ -305,14 +239,9 @@ async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): 
   return diffs
 }
 
-async function fetchVcsDiffs(): Promise<FileChange[]> {
-  return normalizeVcsDiffs(await apiJson("vcs/diff"))
-}
-
 /**
- * Fetch full diffs for the given acceptance run. Returns cached result if the
- * runID matches the last fetch. Throws on network failure; callers decide
- * whether to fall back to a stub FileChange.
+ * Fetch full diffs for the given acceptance run. Returns cached result for the
+ * runID and throws on network failure.
  */
 export async function fetchFullDiffs(runID: string): Promise<FileChange[]> {
   return fetchScopedDiffs({ runID })
@@ -353,8 +282,7 @@ export async function resolveCurrentChangeGroups(): Promise<ChangeGroup[]> {
 
 /**
  * Resolve a FileChange by path, fetching the full diff if needed. Returns
- * null when the file cannot be located. Never throws — on failure falls back
- * to whatever metadata is available in boardStore.
+ * null when the scoped acceptance source has no preview body for that path.
  */
 export async function resolveDiff(target: DiffTarget): Promise<FileChange | null> {
   const groups = currentChangeGroups()
@@ -368,23 +296,11 @@ export async function resolveDiff(target: DiffTarget): Promise<FileChange | null
   }
   const goalRunID = target.goalRunID || group?.goalRunID
   const runID = goalRunID ? group?.runID : group?.runID || acceptanceRunID()
-  let scopedHit: FileChange | null = null
-  try {
-    if (goalRunID || runID) {
-      const full = goalRunID ? await fetchGoalRunDiffs(goalRunID) : await fetchFullDiffs(String(runID))
-      scopedHit = findDiffByPath(full, target.filePath)
-      if (hasDiffBody(scopedHit)) return scopedHit
-    }
-  } catch {
-    // Keep resolving from the live VCS diff below; scoped acceptance can be
-    // missing for agent/tool-derived rows that still represent real edits.
+  if (goalRunID || runID) {
+    const full = goalRunID ? await fetchGoalRunDiffs(goalRunID) : await fetchFullDiffs(String(runID))
+    const scopedHit = findDiffByPath(full, target.filePath)
+    if (scopedHit?.isText === false) return scopedHit
+    if (hasDiffBody(scopedHit)) return scopedHit
   }
-  try {
-    const vcsHit = findDiffByPath(await fetchVcsDiffs(), target.filePath)
-    if (vcsHit?.isText === false) return vcsHit
-    if (hasDiffBody(vcsHit)) return vcsHit
-  } catch {
-    return scopedHit || stub
-  }
-  return scopedHit || stub
+  return null
 }

@@ -94,7 +94,11 @@ describe("panel.create_task actor provenance", () => {
           },
         )
         expect(createSpy).toHaveBeenCalledTimes(1)
-        captured = createSpy.mock.calls[0]?.[0] as { metadata?: Record<string, unknown>; source?: string; title?: string }
+        captured = createSpy.mock.calls[0]?.[0] as {
+          metadata?: Record<string, unknown>
+          source?: string
+          title?: string
+        }
       },
     })
     return { metadata: captured?.metadata ?? {}, source: captured?.source, title: captured?.title, missionID }

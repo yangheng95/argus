@@ -1,5 +1,10 @@
 # 2026-06-05 Diff Preview VCS Backfill Plan
 
+> Status: Superseded on 2026-06-17 by the document-health audit. The current
+> diff preview contract uses scoped acceptance diff bodies as the single source.
+> Missing scoped bodies render no preview and must be fixed in the producer;
+> overlay must not backfill from live VCS diff or stub metadata.
+
 ## Problem
 
 The Files panel can show a changed file row with additions/deletions while the Diff view renders `diff.no_preview`. The row can be a board/agent stub that has stats but no `before`/`after` body. `resolveDiff()` currently only upgrades stubs from acceptance endpoints (`/goal-run/:goalRunID/acceptance` or `/run/:runID/acceptance`). If that source has no full blob for the clicked file, the renderer receives the stub and has nothing to display.

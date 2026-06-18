@@ -35,7 +35,7 @@ export interface WorkloadPromptInput {
   requirements?: Array<{ id: string; type: string; description: string; acceptance: string; non_goals: string }>
   /** Full materialized frontend template text — inlined so the analyst deep-reads it. */
   prdFullText?: string
-  /** frontend-design handoff reference text (fallback / supplement). */
+  /** Frontend-design handoff reference text supplied by the orchestrator. */
   frontendDesign?: string
 }
 

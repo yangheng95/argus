@@ -14,14 +14,14 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 | `opencorvus doctor`          | 先跑一次全面诊断                                                    |
 | 端口占用                     | 默认 7878，`netstat -ano \| findstr 7878`                           |
 | `OPENCORVUS_SERVER_PASSWORD` | 若对外监听，必须设；否则启动报 `refuses to expose without password` |
-| 权限：`ENOSPC`               | `~/.opencorvus` 磁盘满                                              |
+| 权限：`ENOSPC`               | 解析后的 OpenCorvus data 或 config 目录磁盘满                       |
 
 ### Overlay 启动后连不上后端
 
 1. 托盘菜单 → Restart（会重启后端 + 刷新前端）
-2. 看 overlay 日志 `~/.opencorvus/overlay.log`
+2. 看解析后的 OpenCorvus log 目录下的 overlay startup log 和 sidecar log（portable 模式为 `$OPENCORVUS_HOME/data/log`）
 3. 手工探测 `GET http://127.0.0.1:<port>/global/health`
-4. 设 `OPENCORVUS_OVERLAY_SINGLETON_MODE=kill-old-start-new` 防止旧后端残留
+4. 如果日志里的 PID 与托盘进程不一致，先停止旧后端进程，再重启 overlay
 
 ## Provider / 模型类
 
@@ -37,7 +37,7 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 
 `alibaba-coding-plan-cn` 已知在高峰期会 hang。**不要**增加 stall timeout 掩盖问题：
 
-- 改用 `--tool-timeout-ms=30000` 让它 fail fast
+- 对 `opencorvus run` 事件流 stall，设置 `OPENCORVUS_RUN_STALL_TIMEOUT_MS=30000`
 - 或切换到其他 [provider](/docs/zh-cn/providers/)
 
 ## Orchestrator 类

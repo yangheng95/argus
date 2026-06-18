@@ -26,7 +26,7 @@ LSP only runs lazily — the first time the agent touches a file in language X, 
 
 ## Configuration
 
-LSP servers are auto-discovered. There is no per-language config in `opencorvus.jsonc` today; if a language server is missing on `PATH`, OpenCorvus skips it silently and the agent falls back to plain text diagnostics.
+LSP servers are auto-discovered. There is no per-language config in `opencorvus.jsonc` today; if a language server is missing on `PATH`, OpenCorvus does not produce semantic LSP diagnostics for that language.
 
 If you need a non-standard server binary, install it on `PATH` under the conventional name; the LSP layer does not currently support arbitrary command paths.
 

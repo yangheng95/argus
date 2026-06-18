@@ -17,8 +17,8 @@ export function adapt(serve?: Serve) {
   return (opts: ServeOpts) => Bun.serve(opts) as unknown as Server
 }
 
-export function path(raw: string | undefined, fallback: string) {
-  if (!raw) return fallback
+export function path(raw: string | undefined, defaultPath: string) {
+  if (!raw) return defaultPath
   if (raw.startsWith("/")) return raw
   return `/${raw}`
 }

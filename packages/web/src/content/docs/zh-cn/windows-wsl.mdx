@@ -31,10 +31,10 @@ Bun 官方提供 Windows 构建，OpenCorvus 直接复用。
 ```bash
 # Ubuntu-on-WSL 内
 curl -fsSL https://bun.sh/install | bash
-git clone https://github.com/yangheng95/argus
-cd argus/packages/opencorvus
+git clone https://github.com/yangheng95/opencorvus
+cd opencorvus
 bun install
-bun run start
+bun run --cwd packages/opencorvus dev -- serve
 ```
 
 Overlay 开发仍然需要原生 Windows（Tauri 不在 WSL 下）；只有 headless 的 `opencorvus serve` 适合 WSL。

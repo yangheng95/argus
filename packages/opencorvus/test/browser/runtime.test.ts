@@ -146,7 +146,7 @@ describe("BrowserRuntime", () => {
     for (const file of files) {
       const source = await fs.readFile(path.resolve(import.meta.dir, "../../", file.path), "utf8")
       expect(source).toContain(file.snippet)
-      expect(source).not.toContain('args: []')
+      expect(source).not.toContain("args: []")
     }
   })
 

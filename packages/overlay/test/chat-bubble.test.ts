@@ -73,6 +73,12 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_CSS).toContain("grid-template-columns: minmax(0, 1fr) auto auto;")
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="user"] .chat-bubble__identity {\n  display: contents;')
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="user"] .chat-bubble__actions')
+  expect(CHAT_BUBBLE_TSX).toContain('class="card__meta-actions"')
+  expect(CHAT_BUBBLE_TSX).toContain('class="card__control-actions"')
+  expect(CHAT_BUBBLE_TSX.indexOf('class="card__meta-actions"')).toBeLessThan(
+    CHAT_BUBBLE_TSX.indexOf('class="card__control-actions"'),
+  )
+  expect(CHAT_BUBBLE_CSS).toContain("max-width: min(70%, calc(520px * var(--ui-scale)));")
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="user"] .chat-bubble__head-avatar')
   expect(CHAT_BUBBLE_CSS).not.toContain(".chat-bubble__flow")
   expect(CHAT_BUBBLE_CSS).not.toContain(".chat-bubble__flow-link")

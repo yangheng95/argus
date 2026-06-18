@@ -14,8 +14,26 @@ import { mapValues } from "remeda"
 import { errors } from "../error"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
+import { testNetworkProxy } from "../../util/network-proxy-test"
 
 const log = Log.create({ service: "server" })
+
+const NetworkProxyTestRequest = z
+  .object({
+    proxy: Config.NetworkProxy,
+  })
+  .meta({ ref: "NetworkProxyTestRequest" })
+
+const NetworkProxyTestResponse = z
+  .object({
+    ok: z.boolean(),
+    status: z.enum(["connected", "error"]),
+    targetUrl: z.string(),
+    statusCode: z.number().optional(),
+    durationMs: z.number(),
+    message: z.string(),
+  })
+  .meta({ ref: "NetworkProxyTestResponse" })
 
 async function configResponse() {
   const [raw, orch] = await Promise.all([Config.get(), EngineConfig.get()])
@@ -115,6 +133,40 @@ export const ConfigRoutes = lazy(() =>
         return c.json(await configResponse())
       },
     )
+    .post(
+      "/proxy/test",
+      describeRoute({
+        summary: "Test network proxy",
+        description:
+          "Run a single HTTP request through the submitted network.proxy settings. This uses the edited proxy draft directly and never falls back to a direct request.",
+        operationId: "config.proxy.test",
+        responses: {
+          200: {
+            description: "Proxy test result",
+            content: {
+              "application/json": {
+                schema: resolver(NetworkProxyTestResponse),
+              },
+            },
+          },
+          400: {
+            description: "Proxy test result for an invalid proxy draft",
+            content: {
+              "application/json": {
+                schema: resolver(NetworkProxyTestResponse),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", NetworkProxyTestRequest),
+      async (c) => {
+        const { proxy } = c.req.valid("json")
+        const result = await testNetworkProxy(proxy)
+        if (!proxy.url?.trim()) return c.json(result, 400)
+        return c.json(result)
+      },
+    )
     .get(
       "/prompt",
       describeRoute({
@@ -148,9 +200,7 @@ export const ConfigRoutes = lazy(() =>
             description: "Prompt profile catalog",
             content: {
               "application/json": {
-                schema: resolver(
-                  PromptProfileCatalogSchema,
-                ),
+                schema: resolver(PromptProfileCatalogSchema),
               },
             },
           },
@@ -159,14 +209,19 @@ export const ConfigRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          sessionID: z.string().optional().meta({ description: "Optional root or child session id for session-effective prompt profile view" }),
+          sessionID: z
+            .string()
+            .optional()
+            .meta({ description: "Optional root or child session id for session-effective prompt profile view" }),
         }),
       ),
       async (c) => {
         const query = c.req.valid("query")
         if (!query.sessionID) {
           const config = await Config.get()
-          return c.json(PromptProfile.list(config, { projectActive: PromptProfile.activeID(config), sessionActive: null }))
+          return c.json(
+            PromptProfile.list(config, { projectActive: PromptProfile.activeID(config), sessionActive: null }),
+          )
         }
         const [projectConfig, effectiveConfig] = await Promise.all([
           EffectiveConfig.base({ sessionID: query.sessionID }),

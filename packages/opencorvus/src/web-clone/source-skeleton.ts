@@ -635,7 +635,7 @@ async function renderSkeletonCssBundle(
 ): Promise<CssBundle> {
   const base = [
     "/* Source skeleton CSS.",
-    "   This critical file contains reachable stylesheet rules plus computed-style fallback rules.",
+    "   This critical file contains reachable stylesheet rules plus computed-style evidence rules.",
     "   Full stylesheet evidence remains in full-source.css. */",
     "",
     "* { box-sizing: border-box; }",
@@ -669,7 +669,7 @@ async function renderSkeletonCssBundle(
     base.push("")
   }
   if (computedRules.length > 0) {
-    base.push("/* Browser computed-style fallback rules keyed by source node id. */")
+    base.push("/* Browser computed-style evidence rules keyed by source node id. */")
     base.push(...computedRules)
   }
   const reachableRules = rules.filter((rule) => rule.reachable).length
@@ -719,7 +719,7 @@ function renderSkeletonReadme(pageIr: WebClonePageIr, manifest: WebCloneSourceSk
     "Use these files:",
     "",
     "- `index.html`: semantic source skeleton with source node/segment ids.",
-    "- `critical.css`: reachable stylesheet rules plus computed-style fallback rules.",
+    "- `critical.css`: reachable stylesheet rules plus computed-style evidence rules.",
     "- `full-source.css`: complete stylesheet evidence sidecar for targeted lookup.",
     "- `used-selectors.json`: selector reachability evidence from the skeleton nodes.",
     "- `../source-ir/component-tree.json`: semantic component boundary evidence.",

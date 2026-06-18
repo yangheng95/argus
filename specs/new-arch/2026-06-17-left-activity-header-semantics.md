@@ -28,13 +28,13 @@ rg -n "LEFT_ACTIVITIES|LEFT_ACTIVITY_BODY_IDS|LEFT_ACTIVITY_TITLE_KEYS|leftPanel
 
 Findings:
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Static shell | `index.html` initializes `leftPanelTaskActions` with `aria-label="Mission"` and `data-i18n-aria-label="mission.title"`. | Keep initial HTML for first paint, but runtime must synchronize semantics with active activity. |
-| Runtime activity definition | `main.tsx` `LEFT_ACTIVITIES` owns `labelKey` per activity. | Use this as the title/ARIA key source. |
-| Duplicate title map | `main.tsx` `LEFT_ACTIVITY_TITLE_KEYS` repeats label keys. | Delete the duplicate map and derive from `LEFT_ACTIVITIES`. |
-| Header effect | Runtime effect updates title text and button visibility, but not toolbar ARIA/i18n attributes. | Update `aria-label`, `data-i18n-aria-label`, and `data-activity-actions` in the same effect. |
-| Tests | Browser side-activity test already inspects `#leftPanelTaskActions`; static tests pin Mission header actions. | Add assertions for semantic synchronization across Mission, Tasks, Assistant, and tool panels. |
+| Surface                     | Evidence                                                                                                                | Decision                                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Static shell                | `index.html` initializes `leftPanelTaskActions` with `aria-label="Mission"` and `data-i18n-aria-label="mission.title"`. | Keep initial HTML for first paint, but runtime must synchronize semantics with active activity. |
+| Runtime activity definition | `main.tsx` `LEFT_ACTIVITIES` owns `labelKey` per activity.                                                              | Use this as the title/ARIA key source.                                                          |
+| Duplicate title map         | `main.tsx` `LEFT_ACTIVITY_TITLE_KEYS` repeats label keys.                                                               | Delete the duplicate map and derive from `LEFT_ACTIVITIES`.                                     |
+| Header effect               | Runtime effect updates title text and button visibility, but not toolbar ARIA/i18n attributes.                          | Update `aria-label`, `data-i18n-aria-label`, and `data-activity-actions` in the same effect.    |
+| Tests                       | Browser side-activity test already inspects `#leftPanelTaskActions`; static tests pin Mission header actions.           | Add assertions for semantic synchronization across Mission, Tasks, Assistant, and tool panels.  |
 
 ## Fix
 

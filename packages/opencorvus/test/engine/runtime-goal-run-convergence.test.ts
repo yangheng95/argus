@@ -7,14 +7,7 @@ import {
 } from "../../src/engine/engine.sql"
 import { EngineRuntime } from "../../src/engine/runtime"
 import { hooks } from "../../src/engine/state"
-import { findRun, findTask } from "../../src/engine/store"
-import { deriveTaskStatus } from "../../src/engine/task-status"
-import { dispatchTaskLoop } from "../../src/engine/queue"
-import {
-  completeOrchestratorToolOwnership,
-  createOrchestratorToolOwnershipPayload,
-  insertOrchestratorToolOwnershipArtifact,
-} from "../../src/engine/tool-ownership"
+import { findRun } from "../../src/engine/store"
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Database, and, eq } from "../../src/storage/db"
@@ -30,7 +23,7 @@ describe("EngineRuntime goal-run convergence", () => {
     await resetDatabase()
   })
 
-  test("all terminal goal runs wake the orchestrator without completing the task", async () => {
+  test("all terminal goal runs wake the task loop without rewriting the parent run", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -51,15 +44,16 @@ describe("EngineRuntime goal-run convergence", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         const run = findRun(runID)
-        expect(run?.status).toBe("running")
-        expect(run?.blocking_reason).toBeNull()
-        expect(run?.error).toBeNull()
-        expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
+        expect(run?.status).toBe("blocked")
+        expect(run?.blocking_reason).toBe("integrity verdict needs_correction")
+        expect(run?.error).toBe("Integrity needs correction")
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
-          taskID,
-        })
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
         expect(runTaskLoop.mock.calls[0]?.[0].event).toBeUndefined()
+        const facts = goalBatchNotificationsForTask(taskID)
+        expect(facts).toHaveLength(1)
+        expect(facts[0]?.label).toBe("goal-batch-wake-dispatched")
+        expect((facts[0]?.payload as Record<string, unknown> | null)?.time_dispatched).toBeNumber()
       },
     })
   })
@@ -89,6 +83,105 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
+  test("active run with no goal runs wakes the task loop once", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_no_goal_liveness_${Date.now()}`
+        const runID = `run_no_goal_liveness_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
+        expect(runTaskLoop.mock.calls[0]?.[0].event).toBeUndefined()
+        const facts = goalBatchNotificationsForTask(taskID)
+        expect(facts).toHaveLength(1)
+        expect(facts[0]?.label).toBe("no-live-goal-wake-dispatched")
+        const payload = facts[0]?.payload as Record<string, unknown> | null
+        expect(payload?.fingerprint).toBe("no-goal-runs")
+        expect(payload?.goal_runs).toEqual([])
+        expect(payload?.time_dispatched).toBeNumber()
+      },
+    })
+  })
+
+  test("syncRun and monitorRuns ignore completed tasks with stale live runs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_completed_stale_live_${Date.now()}`
+        const runID = `run_completed_stale_live_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(
+          taskID,
+          runID,
+          now,
+          {
+            status: "running",
+            blocking_reason: null,
+            error: null,
+          },
+          { time_completed: now + 1 },
+        )
+
+        expect(await EngineRuntime.syncRun(runID, hooks())).toBeFalse()
+        const result = await EngineRuntime.monitorRuns(hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result.observedRuns).toBe(0)
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("syncRun and monitorRuns ignore historical live runs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_historical_live_${Date.now()}`
+        const staleRunID = `run_historical_stale_${Date.now()}`
+        const activeRunID = `run_historical_active_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, staleRunID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+        seedRunArtifact(taskID, activeRunID, now + 1, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+
+        expect(await EngineRuntime.syncRun(staleRunID, hooks())).toBeFalse()
+        const result = await EngineRuntime.monitorRuns(hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result.observedRuns).toBe(1)
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        const facts = goalBatchNotificationsForTask(taskID)
+        expect(facts).toHaveLength(1)
+        expect(facts[0]?.run_id).toBe(activeRunID)
+      },
+    })
+  })
+
   test("a later terminal goal batch under the same parent run wakes again", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -108,6 +201,7 @@ describe("EngineRuntime goal-run convergence", () => {
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(1)
 
         seedGoalRun(taskID, runID, "grun_batch_two", "completed", now + 2)
 
@@ -115,10 +209,9 @@ describe("EngineRuntime goal-run convergence", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(runTaskLoop).toHaveBeenCalledTimes(2)
-        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
-          taskID,
-        })
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({ taskID })
         expect(runTaskLoop.mock.calls[1]?.[0].event).toBeUndefined()
+        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(2)
       },
     })
   })
@@ -194,18 +287,12 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
-  test("terminal batch notification is recorded only after a wake starts", async () => {
+  test("terminal batch liveness dispatch records a fact after starting a wake", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        let release: (() => void) | undefined
-        const holdLoop = new Promise<void>((resolve) => {
-          release = resolve
-        })
-        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async () => {
-          await holdLoop
-        })
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
         const taskID = `task_goal_live_owner_${Date.now()}`
         const runID = `run_goal_live_owner_${Date.now()}`
         const now = Date.now()
@@ -217,45 +304,10 @@ describe("EngineRuntime goal-run convergence", () => {
         seedGoalRun(taskID, runID, "grun_one", "completed", now + 1)
         seedGoalRun(taskID, runID, "grun_two", "completed", now + 2)
 
-        await dispatchTaskLoop({ taskID })
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-
-        const ownershipPayload = createOrchestratorToolOwnershipPayload({
-          taskID,
-          orchestratorSessionID: `ses_orchestrator_${now}`,
-          orchestratorMessageID: `msg_orchestrator_${now}`,
-          toolCallID: `cal_integrity_${now}`,
-          toolPartID: `prt_integrity_${now}`,
-          childSessionID: `ses_integrity_${now}`,
-          toolName: "integrity",
-          scope: "task",
-          now,
-        })
-        insertOrchestratorToolOwnershipArtifact({
-          taskID,
-          label: "tool-ownership-start",
-          payload: ownershipPayload,
-          now,
-        })
-
-        await EngineRuntime.syncRun(runID, hooks())
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(0)
-
-        completeOrchestratorToolOwnership({
-          taskID,
-          ownershipID: ownershipPayload.ownership_id,
-          outcome: "completed",
-          now: now + 3,
-        })
-        release!()
-        await holdLoop
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(goalBatchNotificationsForTask(taskID)).toHaveLength(1)
       },
     })
@@ -313,9 +365,11 @@ function seedTaskRun(
   runID: string,
   now: number,
   run: { status: string; blocking_reason: string | null; error: string | null },
+  task: { time_completed?: number | null } = {},
 ) {
-  Database.use((db) => {
-    db.insert(EngineTaskTable)
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
       .values({
         id: taskID,
         project_id: Instance.project.id,
@@ -326,9 +380,22 @@ function seedTaskRun(
         time_created: now,
         time_updated: now,
         time_started: now,
+        time_completed: task.time_completed ?? null,
       } as any)
-      .run()
-    db.insert(EngineArtifactTable)
+      .run(),
+  )
+  seedRunArtifact(taskID, runID, now, run)
+}
+
+function seedRunArtifact(
+  taskID: string,
+  runID: string,
+  now: number,
+  run: { status: string; blocking_reason: string | null; error: string | null },
+) {
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
       .values({
         id: runID,
         task_id: taskID,
@@ -352,8 +419,8 @@ function seedTaskRun(
         time_created: now,
         time_updated: now,
       })
-      .run()
-  })
+      .run(),
+  )
 }
 
 function goalBatchNotificationsForTask(taskID: string) {

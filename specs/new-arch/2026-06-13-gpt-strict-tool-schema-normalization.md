@@ -46,13 +46,13 @@ Commands:
 - `rg -n 'prepareProviderTool|normalizeToolSchemaForProvider|asSchema|z\.toJSONSchema|jsonSchema\(' packages/opencorvus/src/session packages/opencorvus/src/provider packages/opencorvus/test/session -g '!**/dist/**'`
 - `rg -n 'strict|json_schema|additionalProperties|required.*properties|ProviderTransform\.schema|openai-compatible|gpt-5.5|hexin' packages/opencorvus/src packages/opencorvus/test specs -g '!**/dist/**'`
 
-| Call point | Finding | Decision |
-| --- | --- | --- |
-| `session/loop.ts::prepareProviderTool` | Single exit for registry, MCP, extra, and structured tools | Keep as the entry point; pass through `ProviderTransform.schema` only |
-| `session/loop.ts::createStructuredOutputTool` | Marks StructuredOutput as strict | Provider JSON Schema must satisfy OpenAI strict rules before it reaches GPT |
-| `provider/transform.ts::schema` | Flattens root `anyOf`, but does not recursively strictify object `required` arrays | Add recursive OpenAI-strict object normalization for GPT/OpenAI-style strict schemas |
-| `build/types.ts::BuildResultSchema` | Local runtime correctly rejects `status="passed"` with `error` | Keep local schema strict and add provider-schema regression coverage |
-| `build/agent.ts::report_build_result.inputSchema` | Reuses `BuildResultSchema` | Keep single schema source |
+| Call point                                        | Finding                                                                            | Decision                                                                             |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `session/loop.ts::prepareProviderTool`            | Single exit for registry, MCP, extra, and structured tools                         | Keep as the entry point; pass through `ProviderTransform.schema` only                |
+| `session/loop.ts::createStructuredOutputTool`     | Marks StructuredOutput as strict                                                   | Provider JSON Schema must satisfy OpenAI strict rules before it reaches GPT          |
+| `provider/transform.ts::schema`                   | Flattens root `anyOf`, but does not recursively strictify object `required` arrays | Add recursive OpenAI-strict object normalization for GPT/OpenAI-style strict schemas |
+| `build/types.ts::BuildResultSchema`               | Local runtime correctly rejects `status="passed"` with `error`                     | Keep local schema strict and add provider-schema regression coverage                 |
+| `build/agent.ts::report_build_result.inputSchema` | Reuses `BuildResultSchema`                                                         | Keep single schema source                                                            |
 
 ## Design
 

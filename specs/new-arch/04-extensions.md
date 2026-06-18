@@ -72,7 +72,7 @@ Orchestrator build tool → build/agent.ts (LLM 决策 + Worktree.create) →
 | 文件                                      | 作用                                            |
 | ----------------------------------------- | ----------------------------------------------- |
 | `index.ts`                                | MCP client 管理（连接、生命周期）               |
-| `serve.ts`                                | argus 自身作为 MCP server 暴露工具              |
+| `serve.ts`                                | OpenCorvus 自身作为 MCP server 暴露工具         |
 | `stdio.ts`                                | stdio transport 适配（本地子进程）              |
 | `materialize.ts`                          | 把 MCP 工具实例化进 ToolRegistry / agent 上下文 |
 | `auth.ts`                                 | MCP 鉴权                                        |
@@ -81,14 +81,14 @@ Orchestrator build tool → build/agent.ts (LLM 决策 + Worktree.create) →
 两种角色：
 
 - **作为 client / host**：接入外部 MCP server，把工具暴露给 agent（Orchestrator / sub-agent 决定调用）
-- **作为 server**：对外暴露 argus 自己的能力（见 `mcp/serve.ts`）
+- **作为 server**：对外暴露 OpenCorvus 自己的能力（见 `mcp/serve.ts`）
 
 ## ACP —— Agent Client Protocol
 
 **代码**：`src/acp/`
 
-- 外部编辑器（Zed 等）通过 ACP 协议调用 argus
-- 编辑器扮演 client，argus 扮演 agent
+- 外部编辑器（Zed 等）通过 ACP 协议调用 OpenCorvus
+- 编辑器扮演 client，OpenCorvus 扮演 agent
 - 与 `ChannelIngress` / `ControlMessage` 并列为入站入口之一（见 [03-control.md](03-control.md)）
 
 文件：`agent.ts` · `session.ts` · `types.ts`（README 存于目录内）。

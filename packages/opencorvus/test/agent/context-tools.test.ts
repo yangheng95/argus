@@ -121,9 +121,7 @@ describe("agent context tools", () => {
             ;(Memory as typeof Memory & { search: typeof Memory.search }).search = () => {
               throw new Error("memory index unavailable")
             }
-            ;(
-              Memory as typeof Memory & { getFileInProject: typeof Memory.getFileInProject }
-            ).getFileInProject = () => {
+            ;(Memory as typeof Memory & { getFileInProject: typeof Memory.getFileInProject }).getFileInProject = () => {
               throw new Error("memory row read failed")
             }
 
@@ -136,9 +134,8 @@ describe("agent context tools", () => {
             )
           } finally {
             ;(Memory as typeof Memory & { search: typeof Memory.search }).search = originalSearch
-            ;(
-              Memory as typeof Memory & { getFileInProject: typeof Memory.getFileInProject }
-            ).getFileInProject = originalGetFileInProject
+            ;(Memory as typeof Memory & { getFileInProject: typeof Memory.getFileInProject }).getFileInProject =
+              originalGetFileInProject
           }
         },
       })

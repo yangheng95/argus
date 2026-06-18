@@ -16,14 +16,14 @@ OpenCorvus 同时扮演：
 
 ### 连接时序
 
-1. 服务启动读 config `mcp` 字段（`src/mcp/index.ts:164-211`）
+1. 服务启动读 config `mcp` 字段（`src/mcp/index.ts`）
 2. 按 `type` 创建 transport：
    - `"local"` → `StdioClientTransport`（子进程 stdin/stdout）
-   - `"remote"` → 先 `StreamableHTTPClientTransport`，失败降级 `SSEClientTransport`
+   - `"remote"` → 使用配置中的 `transport`：默认 `streamable-http`，显式设置时用 `sse`
 3. 连接后 `client.listTools()`
 4. 工具名经 sanitize（非字母数字 → `_`）后以 `{clientName}_{toolName}` 注册到 session 工具集
 
-Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts:120-149`）。
+Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts`）。
 
 ## 2. 配置 MCP Server
 
@@ -43,7 +43,7 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts:
 }
 ```
 
-字段（`src/config/config.ts:533-552`）：
+字段（`src/config/config.ts`）：
 
 | 字段          | 说明                                 |
 | ------------- | ------------------------------------ |
@@ -60,6 +60,7 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts:
   "mcp": {
     "my-remote-server": {
       "type": "remote",
+      "transport": "streamable-http",
       "url": "https://mcp.example.com/api",
       "headers": { "Authorization": "Bearer sk-..." },
       "oauth": false,
@@ -70,7 +71,7 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts:
 }
 ```
 
-字段（`src/config/config.ts:569-591`）：
+字段（`src/config/config.ts`）：
 
 | 字段                 | 说明                                             |
 | -------------------- | ------------------------------------------------ |
@@ -83,15 +84,15 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts:
 
 ## 3. 已支持的 MCP 能力
 
-| 能力                                         | 状态         |
-| -------------------------------------------- | ------------ |
-| Tools (`listTools` + `callTool`)             | 完整         |
-| Prompts (`listPrompts` + `getPrompt`)        | 完整         |
-| Resources (`listResources` + `readResource`) | 完整         |
-| `ToolListChanged` 通知                       | 支持         |
-| StreamableHTTP / SSE / stdio transports      | 全支持       |
-| OAuth 2.0 + PKCE                             | 远程默认开启 |
-| 动态 client 注册 (RFC 7591)                  | 支持         |
+| 能力                                         | 状态             |
+| -------------------------------------------- | ---------------- |
+| Tools (`listTools` + `callTool`)             | 完整             |
+| Prompts (`listPrompts` + `getPrompt`)        | 完整             |
+| Resources (`listResources` + `readResource`) | 完整             |
+| `ToolListChanged` 通知                       | 支持             |
+| StreamableHTTP / SSE / stdio transports      | 通过显式配置支持 |
+| OAuth 2.0 + PKCE                             | 远程默认开启     |
+| 动态 client 注册 (RFC 7591)                  | 支持             |
 
 ## 4. OAuth 认证流程
 
@@ -101,18 +102,18 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts:
 opencorvus mcp auth <server-name>
 ```
 
-OpenCorvus 本地启 callback server，打开浏览器跳转授权，code 交换 token 后持久化到 `~/.local/share/opencorvus/mcp-auth.json`。
+OpenCorvus 本地启 callback server，打开浏览器跳转授权，code 交换 token 后持久化到解析后的 OpenCorvus data 目录下的 `mcp-auth.json`。
 
 查询状态：
 
 ```bash
-opencorvus mcp status
+opencorvus mcp list
 ```
 
 清除认证：
 
 ```bash
-opencorvus mcp remove-auth <server-name>
+opencorvus mcp logout <server-name>
 ```
 
 ## 5. 典型配置示例
@@ -178,4 +179,4 @@ OpenCorvus 自动把这个 URL 注入到执行器配置里：
 | `needs_auth`                | 需要 OAuth                              |
 | `needs_client_registration` | 服务器不支持动态注册，需提供 `clientId` |
 
-默认超时 30000ms（`src/mcp/index.ts:31`）；可由 `timeout` 字段或全局 `experimental.mcp_timeout` 调整。
+默认超时 30000ms（`src/mcp/index.ts`）；可由 `timeout` 字段或全局 `experimental.mcp_timeout` 调整。

@@ -5,9 +5,16 @@ import { startBrowserFixture } from "./http-fixture.ts"
 
 test("browser fixture close destroys active streaming HTTP connections", async () => {
   const server = await startBrowserFixture(() => {
-    return new Response(":\n\n", {
-      headers: { "content-type": "text/event-stream; charset=utf-8" },
-    })
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(":\n\n"))
+        },
+      }),
+      {
+        headers: { "content-type": "text/event-stream; charset=utf-8" },
+      },
+    )
   })
   const controller = new AbortController()
   try {

@@ -1108,9 +1108,7 @@ export const SessionRoutes = lazy(() =>
                   z.object({
                     taskID: z.string(),
                     sessionID: z.string(),
-                    status: z.enum(["queued", "retrying", "running", "completed", "failed"]),
-                    retryCount: z.number().int(),
-                    maxRetries: z.number().int(),
+                    status: z.enum(["queued", "running", "completed", "failed"]),
                     source: z.string(),
                     prompt: z.string(),
                     error: z.string().nullable(),

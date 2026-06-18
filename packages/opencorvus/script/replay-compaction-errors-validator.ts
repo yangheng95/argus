@@ -4,9 +4,17 @@ import { CompactionHandoff } from "../src/session/compaction-handoff"
 import type { Message } from "../src/session/message"
 import { patchEvidenceSummary } from "../src/snapshot/types"
 
-const DB_PATH = "C:/Users/hengu/.local/share/opencorvus/opencorvus.db"
-const SESSION_ID = "ses_1a65b06e4ffenN44slTAUds19S"
-const COMPACTION_MESSAGE_ID = "msg_e59aa9d68001NVVmrF2nPj9mrO"
+function requiredEnv(name: string): string {
+  const value = process.env[name]?.trim()
+  if (!value) {
+    throw new Error(`${name} is required`)
+  }
+  return value
+}
+
+const DB_PATH = requiredEnv("OPENCORVUS_DB")
+const SESSION_ID = requiredEnv("SESSION_ID")
+const COMPACTION_MESSAGE_ID = requiredEnv("COMPACTION_MESSAGE_ID")
 
 type MessageRow = {
   id: string

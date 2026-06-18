@@ -1,4 +1,5 @@
 import { normalizeAgentRole, type AgentRole } from "./message"
+import type { CardNode } from "../store/card-tree"
 
 export const SCREENSHOT_BROWSER_ITEM_LIMIT = 120
 
@@ -72,6 +73,10 @@ function pushUnique(items: ScreenshotBrowserItem[], seen: Set<string>, item: Scr
   items.push(item)
 }
 
+function sourceMessageID(message: any, part: any): string {
+  return firstString(part?.messageID, message.info?.id)
+}
+
 function browserEvidenceItem(input: {
   message: any
   part: any
@@ -85,7 +90,7 @@ function browserEvidenceItem(input: {
   const src = firstString(screenshot?.attachmentUrl)
   if (!isStoredAttachmentUrl(src)) return undefined
   const title = firstString(browser?.title, browser?.url, input.part?.tool, "Browser screenshot")
-  const messageID = firstString(input.message.info?.id)
+  const messageID = sourceMessageID(input.message, input.part)
   const partID = firstString(input.part?.id) || String(input.index)
   const viewport = isRecord(browser?.viewport) ? browser.viewport : {}
   const viewportText =
@@ -117,7 +122,7 @@ function fileItem(input: {
   const src = firstString(input.part?.url)
   if (!src) return undefined
   const title = firstString(input.part?.filename, input.part?.name, src)
-  const messageID = firstString(input.message.info?.id)
+  const messageID = sourceMessageID(input.message, input.part)
   const partID = firstString(input.part?.id) || String(input.index)
   return {
     id: `file:${messageID}:${partID}`,
@@ -145,7 +150,7 @@ function toolAttachmentItems(input: {
     : Array.isArray(input.part?.attachments)
       ? input.part.attachments
       : []
-  const messageID = firstString(input.message.info?.id)
+  const messageID = sourceMessageID(input.message, input.part)
   const partID = firstString(input.part?.id) || String(input.index)
   return attachments
     .filter((attachment: any) => isStoredImageReference(attachment))
@@ -193,6 +198,52 @@ export function collectScreenshotBrowserItems(messages: readonly any[]): Screens
     }
   }
   return items.sort((a, b) => b.time - a.time).slice(0, SCREENSHOT_BROWSER_ITEM_LIMIT)
+}
+
+function cardMessage(card: CardNode): any {
+  const role = firstString(card.role, card.stage)
+  const time = Number(card.time)
+  const completed = Number(card.timeCompleted)
+  return {
+    info: {
+      id: firstString(card.messageID, card.id),
+      sessionID: firstString(card.sessionID, card.phaseSessionID),
+      role,
+      resolvedRole: role,
+      agent: firstString(card.stage, role),
+      time: {
+        created: Number.isFinite(time) && time > 0 ? time : 0,
+        completed: Number.isFinite(completed) && completed > 0 ? completed : undefined,
+      },
+    },
+    parts: Array.isArray(card.parts) ? card.parts : [],
+  }
+}
+
+function collectCardMessages(
+  order: readonly string[],
+  cards: Readonly<Record<string, CardNode | undefined>>,
+  visited: Set<string>,
+  messages: any[],
+): void {
+  for (const id of order) {
+    if (visited.has(id)) continue
+    visited.add(id)
+    const card = cards[id]
+    if (!card) continue
+    messages.push(cardMessage(card))
+    const childIDs = Array.isArray(card.childIDs) ? card.childIDs : []
+    collectCardMessages(childIDs, cards, visited, messages)
+  }
+}
+
+export function collectScreenshotBrowserItemsFromCardTree(
+  order: readonly string[],
+  cards: Readonly<Record<string, CardNode | undefined>>,
+): ScreenshotBrowserItem[] {
+  const messages: any[] = []
+  collectCardMessages(Array.isArray(order) ? order : [], cards, new Set<string>(), messages)
+  return collectScreenshotBrowserItems(messages)
 }
 
 export function groupScreenshotBrowserItems(items: readonly ScreenshotBrowserItem[]): ScreenshotBrowserGroup[] {

@@ -13,11 +13,7 @@ import path from "node:path"
 import z from "zod"
 
 import { Tool } from "../../tool/tool"
-import {
-  WEBPAGE_EVALUATE_PASS_SCORE,
-  evaluateVisual,
-  isEvaluationReportPassing,
-} from "@/verification/visual/evaluate"
+import { WEBPAGE_EVALUATE_PASS_SCORE, evaluateVisual, isEvaluationReportPassing } from "@/verification/visual/evaluate"
 import { resolveWebpageEvidenceOutputDir, DEFAULT_WEBPAGE_EVIDENCE_SUBDIR } from "./output-dir"
 import { tryMaterializeVisualEvidenceBundle } from "./visual-evidence-bundle"
 

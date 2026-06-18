@@ -47,10 +47,7 @@ const HeuristicScorerSchema = z.object({
         .describe(
           "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
         ),
-      path: z
-        .string()
-        .min(1)
-        .describe("Repo-relative script path that already exists at registration time."),
+      path: z.string().min(1).describe("Repo-relative script path that already exists at registration time."),
       args: z.array(z.string()).optional(),
     }),
   ]),
@@ -89,34 +86,6 @@ const PREBUILT_SCORER_NAMES = [
   "visual-evidence-bundle",
 ] as const
 
-const PrebuiltScorerConfigSchema = z
-  .object({
-    expected_text: z
-      .string()
-      .min(1)
-      .optional()
-      .describe("For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against."),
-    min_length: z
-      .number()
-      .int()
-      .nonnegative()
-      .optional()
-      .describe("For length_within: inclusive minimum character count."),
-    max_length: z
-      .number()
-      .int()
-      .nonnegative()
-      .optional()
-      .describe("For length_within: inclusive maximum character count."),
-    json_schema: z
-      .string()
-      .min(2)
-      .optional()
-      .describe("For json_schema: JSON.stringify of the expected JSON Schema object."),
-  })
-  .strict()
-  .describe("Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.")
-
 const PrebuiltScorerSchema = z.object({
   type: z
     .literal("prebuilt")
@@ -124,7 +93,7 @@ const PrebuiltScorerSchema = z.object({
       "prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.",
     ),
   name: z.enum(PREBUILT_SCORER_NAMES),
-  config: PrebuiltScorerConfigSchema.default({}),
+  config: z.record(z.string(), z.unknown()).default({}),
   spec: z
     .object({
       kind: z.literal("visual_evidence_bundle"),
