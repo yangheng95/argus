@@ -229,18 +229,6 @@ export function renderEmbeddedOverlayUiModule(
   ].join("\n")
 }
 
-async function writeEmbeddedOverlayUiModule(repoRoot: string): Promise<number> {
-  const modulePath = resolveEmbeddedOverlayUiModulePath(repoRoot)
-  const files = await discoverOverlayUiSourceFiles(repoRoot)
-  await fs.promises.writeFile(modulePath, renderEmbeddedOverlayUiModule(modulePath, files))
-  return files.length
-}
-
-async function resetEmbeddedOverlayUiModule(repoRoot: string): Promise<void> {
-  const modulePath = resolveEmbeddedOverlayUiModulePath(repoRoot)
-  await fs.promises.writeFile(modulePath, renderEmbeddedOverlayUiModule(modulePath, []))
-}
-
 async function removeObsoleteSidecarUiDirs(repoRoot: string): Promise<void> {
   for (const dir of resolveObsoleteLinuxBinarySidecarUiDirs(repoRoot)) {
     await fs.promises.rm(dir, { recursive: true, force: true })
@@ -265,22 +253,12 @@ export async function packageLinuxBinary(
   const env = linuxBinaryBuildEnv(opts.env ?? process.env, version)
   const opencorvusRoot = path.join(repoRoot, "packages", "opencorvus")
 
-  let embeddedUiModuleWritten = false
-  try {
-    if (!opts.skipBuild && !opts.skipUi) {
-      await buildOverlayUi(repoRoot, env)
-      const embeddedCount = await writeEmbeddedOverlayUiModule(repoRoot)
-      console.log(`Embedded overlay UI files: ${embeddedCount}`)
-      embeddedUiModuleWritten = true
-    }
+  if (!opts.skipBuild && !opts.skipUi) {
+    await buildOverlayUi(repoRoot, env)
+  }
 
-    if (!opts.skipBuild) {
-      await $`bun run script/build.ts --overlay-server --single --baseline`.cwd(opencorvusRoot).env(env)
-    }
-  } finally {
-    if (embeddedUiModuleWritten) {
-      await resetEmbeddedOverlayUiModule(repoRoot)
-    }
+  if (!opts.skipBuild) {
+    await $`bun run script/build.ts --overlay-server --single --baseline`.cwd(opencorvusRoot).env(env)
   }
 
   await fs.promises.rm(resolveLegacyLooseBinaryDir(repoRoot), { recursive: true, force: true })

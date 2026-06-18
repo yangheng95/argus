@@ -4475,3 +4475,57 @@ LINE:
 - Epicurus traced the exact mapping path from ACP `PromptRequest.prompt[]` through `ACP.Agent.prompt(...)` to `this.sdk.session.prompt({ parts })`.
 - Epicurus confirmed `packages/opencorvus/test/acp/event-subscription.test.ts` is the right regression location because its fake SDK can capture forwarded `session.prompt(...)` parts.
 - Epicurus recommended accepting exactly `http:` and `https:` through URL parsing and explicitly not mixing broader `file:`, `zed:`, `blob:`, `data:`, or `ftp:` image URI semantics into this batch.
+
+## Batch P2-CA: BH-063 packaged overlay-server must serve embedded UI
+
+### Findings
+
+- BH-063 targets `packages/opencorvus/src/server/overlay-ui.ts` and the packaged overlay-server smoke path.
+- `Server.App()` mounts `/global`, `/auth`, and `/ui`; `/global/health` has no UI asset dependency, so a packaged server can report healthy while `/ui/index.html` is missing.
+- Local probing of the existing compiled Windows x64 overlay-server reproduced the defect: `/global/health` returned `200`, while `/ui/index.html` returned `404` with `Overlay UI not found...`.
+- `OverlayUI.routes()` already supports serving embedded UI files from `EMBEDDED_OVERLAY_UI`, but `packages/opencorvus/script/build.ts --overlay-server` did not populate that generated table before compiling.
+- Linux bundle packaging had its own temporary embedded-module write path. Keeping that logic outside the canonical overlay-server build entrypoint left other packaged overlay-server artifacts without UI.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/server.ts::Server.App()` mounts `OverlayUI.routes()` at `/ui`.
+- `packages/opencorvus/src/cli/cmd/serve.ts` starts `Server.listen(...)` and prints the `/ui/` URL.
+- `packages/opencorvus/src/server/overlay-ui.ts::OverlayUI.routes()` serves `EMBEDDED_OVERLAY_UI` when `/index.html` is present, otherwise falls through to executable-adjacent or workspace UI lookup.
+- `packages/opencorvus/src/server/overlay-ui-embedded.generated.ts` is the compile-time table consumed by `OverlayUI.routes()`.
+- `packages/opencorvus/script/build.ts` is the official overlay-server artifact compiler used by packaged smoke tests, local overlay builds, and local package scripts.
+- `script/package-linux-binary.ts` already exposes `discoverOverlayUiSourceFiles(...)`, `renderEmbeddedOverlayUiModule(...)`, and `resolveEmbeddedOverlayUiModulePath(...)`, and still owns Linux runtime-bundle assembly.
+- `script/package-local.ts`, `packages/overlay/script/build.ts`, and `packages/overlay/script/build-overlay.ts` are the caller paths that must ensure `packages/overlay/dist-vite/index.html` exists before invoking `build.ts --overlay-server`.
+- `packages/opencorvus/test/script/packaged-overlay-server-health.test.ts` was the only real compiled-artifact smoke, but previously fetched only `/global/health`.
+
+### Fix Shape
+
+- Make `packages/opencorvus/script/build.ts --overlay-server` write the embedded UI module from the current `packages/overlay/dist-vite` before `Bun.build(...)`, then restore the default empty module in `finally`.
+- Keep a single embedded UI source for overlay-server artifacts instead of adding a health gate or changing `/global/health` semantics.
+- Move Linux package embedding responsibility into the canonical build entrypoint by removing the duplicate write/reset path from `script/package-linux-binary.ts`.
+- Ensure callers that build overlay-server artifacts first build `packages/overlay/dist-vite`:
+  - `script/package-local.ts` now runs `bun run build:vite` before `bun run build --overlay-server --all`.
+  - `packages/overlay/script/build.ts` now runs `bun run build:vite` before `bun run build --overlay-server`.
+  - `packages/overlay/script/build-overlay.ts` already had this ordering.
+- Extend the packaged smoke test to build the UI, compile the overlay-server artifact, start that compiled executable, fetch `/global/health`, and fetch `/ui/index.html` from the same process.
+
+### Regression Tests
+
+- `packages/opencorvus/test/script/packaged-overlay-server-health.test.ts` now asserts the compiled overlay-server:
+  - build output reports `Embedded overlay UI files:`;
+  - `/global/health` returns `200` and healthy path metadata;
+  - `/ui/index.html` returns `200`, `text/html`, the overlay page marker, and relative `./assets/` references.
+- `packages/opencorvus/test/script/build-artifact.test.ts` now source-checks that:
+  - `build.ts` writes embedded UI before `Bun.build(...)` and resets it afterward;
+  - local package and overlay build scripts run `build:vite` before `build --overlay-server`.
+
+### Verification
+
+- Focused packaging tests passed: `bun test packages/opencorvus/test/script/package-linux-binary.test.ts packages/opencorvus/test/script/build-artifact.test.ts packages/opencorvus/test/script/packaged-overlay-server-health.test.ts --timeout 240000`.
+- The packaged smoke test compiled a real Windows x64 overlay-server, started it, and verified both `/global/health` and `/ui/index.html`.
+
+### Independent Review Feedback
+
+- Boole confirmed BH-063 was present because `/global/health` can pass without touching `OverlayUI.routes()` asset availability.
+- Boole traced the serving path through `Server.App()`, `serve.ts`, `overlay-ui.ts`, `overlay-ui-embedded.generated.ts`, `build.ts`, and `packaged-overlay-server-health.test.ts`.
+- Boole recommended testing the same compiled executable for both health and `/ui/index.html`, and explicitly warned not to gate `/global/health` on UI or rely on workspace `dist-vite` at runtime.
+- Boole noted that a build source-contract test is appropriate if the repair changes build staging; this batch added that guard for the canonical `build.ts --overlay-server` path.
