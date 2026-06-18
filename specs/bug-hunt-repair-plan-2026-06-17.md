@@ -3254,3 +3254,53 @@ LINE:
 - Carver confirmed BH-098 was still substantive in HEAD `39ab900d97`: after priming `Config.get()`, `Config.updateGlobal({ username: "new-global" })` changed direct global reads while the same active instance still returned the old merged username.
 - Carver identified the single-source requirement missed by the first draft: `Config.updateGlobal(...)` is also called by `packages/opencorvus/src/skill/manager.ts`, so Provider/Agent/channel invalidation cannot live only in `PATCH /global/config`.
 - Carver also flagged that channel sync failures must not be hidden by copying the project `/config` route's `catch` block; this batch lets global update errors propagate visibly.
+
+## Batch P1-BC: BH-099 channel runtime startup failures must fail config writes visibly
+
+### Findings
+
+- BH-099 targets `packages/opencorvus/src/channel/supervisor.ts::syncRuntime(...)` and `packages/opencorvus/src/server/routes/config.ts::PATCH /config`.
+- `ChannelSupervisor.sync(...)` calls `syncRuntime(...)`, and `syncRuntime(...)` catches every runtime startup failure, stores `status: "error"`, logs the failure, and returns a snapshot.
+- `PATCH /config` then calls `ChannelSupervisor.sync(updated).catch(...)`. Because `sync(...)` does not throw on startup failure, the catch does not run and the route returns a successful config response while the runtime is in error state.
+- The same hidden-failure boundary also affects `ChannelSupervisor.restart(...)` and the global config refresh path added for BH-098 because both consume `ChannelSupervisor.sync(...)` / `restart(...)` as if thrown errors are the failure signal.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/channel/supervisor.ts::sync(...)` is the config-driven runtime reconciliation entrypoint.
+- `packages/opencorvus/src/channel/supervisor.ts::restart(...)` is the explicit user restart entrypoint behind `POST /channel/runtime/restart`.
+- `packages/opencorvus/src/channel/supervisor.ts::syncRuntime(...)` owns stopping the previous runtime, setting the next signature, starting the in-process runtime, and currently swallowing startup errors.
+- `packages/opencorvus/src/server/routes/config.ts::PATCH /config` updates project config, resets provider and agent state, and syncs the channel runtime.
+- `packages/opencorvus/src/config/config.ts::Config.updateGlobal(...)` syncs active channel runtimes after global config writes.
+- `packages/opencorvus/src/project/bootstrap.ts::InstanceBootstrap()` calls `ChannelSupervisor.sync(await Config.get())` and currently catches bootstrap-time failures so project bootstrap itself remains available.
+- `packages/opencorvus/src/server/routes/channel.ts::POST /channel/runtime/restart` returns the result of `ChannelSupervisor.restart(...)`.
+- `packages/opencorvus/test/channel/supervisor-env.test.ts` already mocks the channel-runtime import chain without starting real adapters.
+- `packages/opencorvus/test/channel/routes.test.ts` covers channel runtime routes but not startup failure behavior.
+
+### Fix Shape
+
+- Add a structured `ChannelRuntimeStartError` in `channel/supervisor.ts` carrying the visible message, detail, and channel IDs.
+- In `syncRuntime(...)`, keep storing `status: "error"` and `detail` before throwing `ChannelRuntimeStartError`, so `/channel/runtime` can still report the last failure.
+- Remove the hidden catch from project `PATCH /config`; channel startup failure must propagate through the normal server error handler.
+- Let `Config.updateGlobal(...)` and `POST /channel/runtime/restart` share the same thrown failure behavior without route-specific gates.
+- Do not add retries, fallback disabled state, config rollback, route allowlists, or a second runtime status source.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/channel/supervisor-env.test.ts` so the fake runtime `start()` throws after a valid Slack config.
+- Assert `PATCH /config` returns a structured `ChannelRuntimeStartError` response and does not return a successful config payload.
+- Assert `/channel/runtime` still reports `status: "error"` and the same failure detail after the failed config patch.
+- Assert `ChannelSupervisor.sync(...)` rejects directly on startup failure while preserving the error status snapshot.
+
+### Verification
+
+- Focused channel tests passed: `bun test packages/opencorvus/test/channel/supervisor-env.test.ts packages/opencorvus/test/channel/routes.test.ts --timeout 60000`.
+- Related config/global route tests passed: `bun test packages/opencorvus/test/channel/supervisor-env.test.ts packages/opencorvus/test/channel/routes.test.ts packages/opencorvus/test/server/config-routes.test.ts packages/opencorvus/test/server/global-config-routes.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Popper confirmed BH-099 was still substantive in committed HEAD `7d8d8ce649`: `syncRuntime()` caught startup errors and did not rethrow, while `PATCH /config` swallowed thrown sync errors and always returned the config payload.
+- Popper confirmed the two-signal root cause: supervisor encoded startup failure as normal data (`status: "error"`) while the config route treated only thrown exceptions as failure.
+- Popper recommended the same final boundary used here: preserve supervisor error status for `/channel/runtime`, throw structured `ChannelRuntimeStartError` from `sync()` / `restart()` startup failures, remove the project `/config` catch, and avoid retry, fallback disabled state, rollback, route gate, or second status source.

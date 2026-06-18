@@ -109,9 +109,7 @@ export const ConfigRoutes = lazy(() =>
         const updated = await Config.get()
         Provider.reset()
         Agent.reset()
-        await ChannelSupervisor.sync(updated).catch((error) => {
-          log.warn("channel runtime sync failed", { error: String(error) })
-        })
+        await ChannelSupervisor.sync(updated)
         return c.json(await configResponse())
       },
     )
