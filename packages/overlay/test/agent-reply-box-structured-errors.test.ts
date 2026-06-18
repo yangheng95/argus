@@ -9,13 +9,31 @@
 // would require a render harness the overlay tests deliberately avoid.
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 
 function readText(rel: string): string {
   return readFileSync(join(OVERLAY_ROOT, rel), "utf8")
+}
+
+function overlaySourceText(): string {
+  const root = join(OVERLAY_ROOT, "src")
+  const chunks: string[] = []
+  const visit = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        visit(full)
+        continue
+      }
+      if (!/\.(ts|tsx)$/.test(entry.name)) continue
+      chunks.push(readFileSync(full, "utf8"))
+    }
+  }
+  visit(root)
+  return chunks.join("\n")
 }
 
 describe("AgentSessionReplyBox structured errors", () => {
@@ -73,6 +91,16 @@ describe("AgentSessionReplyBox structured errors", () => {
     expect(replyBox).toContain("info.data?.sessionKind")
     expect(replyBox).toContain("info.data?.envelopeAgent")
     expect(replyBox).toContain("card.agent_reply_build_envelope")
+  })
+
+  test("overlay does not keep a direct-reply kind mirror", () => {
+    const mirrorModule = ["direct", "reply", "kinds"].join("-")
+    expect(existsSync(join(OVERLAY_ROOT, "src", "utils", `${mirrorModule}.ts`))).toBe(false)
+    const source = overlaySourceText()
+    expect(source).not.toContain("DIRECT_REPLY_AGENT_KINDS")
+    expect(source).not.toContain("canReceiveDirectAgentReply")
+    expect(source).not.toContain(mirrorModule)
+    expect(source).not.toContain("structured 4xx")
   })
 })
 

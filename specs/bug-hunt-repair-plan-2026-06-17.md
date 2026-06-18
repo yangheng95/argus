@@ -4383,3 +4383,48 @@ LINE:
 - Volta confirmed BH-055 still lacked meaningful retry context even though status semantics were present.
 - Volta confirmed BH-056 still lacked a budget-specific visual screenshot artifact and pixel-level assertion.
 - Volta recommended repairing BH-053 through BH-056 together because they share the same component resource, browser fixture, and selector visual surface; BH-058 was kept in the same batch only as route-policy test coverage for the same endpoint.
+
+## Batch P2-BY: BH-057 remove stale overlay direct-reply kind mirror
+
+### Findings
+
+- BH-057 targets `packages/overlay/src/utils/direct-reply-kinds.ts`.
+- The module was no longer used by production overlay code. `Card.tsx` and `ChatBubble.tsx` already render `AgentSessionReplyBox` for every non-root agent session instead of using `canReceiveDirectAgentReply(...)` as a UI filter.
+- The remaining mirror duplicated `packages/opencorvus/src/orchestrator/direct-reply.ts::DIRECT_REPLY_AGENT_KINDS` and its comment still documented structured 4xx refusal semantics.
+- Current backend behavior is more nuanced: invalid direct replies with attachments still reject as structured errors, but many non-directable plain text replies intentionally become targeted task-root operator wakes with `202`. Keeping a frontend kind whitelist as a route-capability source is therefore stale and violates the single-source rule.
+- The equality test `packages/overlay/test/direct-reply-kinds.test.ts` preserved the double-source mirror instead of proving the overlay had stopped relying on it.
+
+### Call-point Inventory
+
+- `packages/overlay/src/utils/direct-reply-kinds.ts` exported `DIRECT_REPLY_AGENT_KINDS` and `canReceiveDirectAgentReply(...)`.
+- `packages/overlay/test/direct-reply-kinds.test.ts` imported the overlay mirror and backend canonical set only to assert equality.
+- `packages/overlay/test/agent-reply-box-structured-errors.test.ts` already asserted `Card.tsx` and `ChatBubble.tsx` do not call `canReceiveDirectAgentReply(...)`.
+- `packages/overlay/src/components/AgentSessionReplyBox.tsx` owns visible reply-box error diagnostics and remains the only overlay direct-reply response handling surface.
+- `packages/opencorvus/src/orchestrator/direct-reply.ts` remains the backend source for direct-reply and session-control kind sets.
+- `packages/opencorvus/test/server/reply-error-taxonomy.test.ts` is the backend contract proving targeted task-root wake behavior and the attachment rejection exception.
+
+### Fix Shape
+
+- Delete the unused overlay mirror module.
+- Delete the equality test that kept the mirror alive.
+- Extend `agent-reply-box-structured-errors.test.ts` with a source scan over `packages/overlay/src` proving there is no `DIRECT_REPLY_AGENT_KINDS`, `canReceiveDirectAgentReply`, `direct-reply-kinds`, or stale `structured 4xx` wording in overlay production source.
+- Keep backend direct-reply kind sets unchanged. This batch does not add `build` to generic direct reply and does not change task-root operator guidance behavior.
+
+### Regression Tests
+
+- `packages/overlay/test/agent-reply-box-structured-errors.test.ts` now rejects reintroducing an overlay direct-reply kind mirror while preserving the existing assertions that `Card.tsx` and `ChatBubble.tsx` keep every non-root agent session replyable in the UI.
+
+### Verification
+
+- Focused overlay test passed: `bun test packages/overlay/test/agent-reply-box-structured-errors.test.ts --timeout 60000`.
+- Overlay source residual scan passed: `rg -n "direct-reply-kinds|DIRECT_REPLY_AGENT_KINDS|canReceiveDirectAgentReply|structured 4xx" packages/overlay/src -g "*.ts" -g "*.tsx"` returned no matches.
+- Overlay typecheck passed: `bun run --cwd packages/overlay typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Fermat confirmed BH-057 was still present in committed `HEAD`, with the mirror unused by production overlay code and imported only by `packages/overlay/test/direct-reply-kinds.test.ts`.
+- Fermat confirmed the authoritative direct-reply kind source remains `packages/opencorvus/src/orchestrator/direct-reply.ts`, while runtime policy and 202 task-root wake behavior live in `packages/opencorvus/src/task-api/index.ts`.
+- Fermat recommended deletion rather than replacement because a generated or manually synced overlay mirror would still be a second policy source.
+- Fermat explicitly warned not to mix backend BH-026/BH-027 contract reconciliation or build task-message `target` changes into this batch.
