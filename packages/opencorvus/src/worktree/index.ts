@@ -7,7 +7,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Project } from "../project/project"
-import { Database, eq } from "../storage/db"
+import { Database, eq, NotFoundError } from "../storage/db"
 import { ProjectTable } from "../project/project.sql"
 import { fn } from "../util/fn"
 import { git as runGit } from "../util/git"
@@ -1059,6 +1059,22 @@ export namespace Worktree {
     }
     return out
   }
+
+  export const removeProjectWorktree = fn(RemoveInput, async (input) => {
+    const directory = await canonical(input.directory)
+    let target: ProjectWorktreeInfo | undefined
+    for (const entry of await listProjectWorktrees(Instance.project.id)) {
+      if (!entry.removable) continue
+      if ((await canonical(entry.directory)) === directory) {
+        target = entry
+        break
+      }
+    }
+    if (!target) {
+      throw new NotFoundError({ message: `Project worktree not found: ${input.directory}` })
+    }
+    return remove({ directory: target.directory })
+  })
 
   async function isCaseInsensitiveFilesystem(target: string) {
     if (process.platform === "win32") return true

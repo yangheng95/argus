@@ -1,4 +1,5 @@
 import path from "path"
+import fs from "fs/promises"
 import { $ } from "bun"
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Filesystem } from "../../src/util/filesystem"
@@ -237,6 +238,31 @@ describe("project routes", () => {
       fn: () => Project.get(Instance.project.id),
     })
     expect(project?.sandboxes).not.toContain(expiredDir)
+  }, 30_000)
+
+  test.each([
+    ["/project/current/worktrees", { ok: true }],
+    ["/experimental/worktree", true],
+  ] as const)("DELETE %s rejects an unregistered sibling directory without deleting it", async (route) => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const victimDir = path.join(tmp.path, "..", `project-route-delete-victim-${Date.now()}`)
+    const sentinel = path.join(victimDir, "sentinel.txt")
+    await fs.mkdir(victimDir, { recursive: true })
+    await Bun.write(sentinel, "keep")
+
+    const response = await app.request(route, {
+      method: "DELETE",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ directory: victimDir }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(await Filesystem.exists(victimDir)).toBe(true)
+    expect(await Bun.file(sentinel).text()).toBe("keep")
   }, 30_000)
 
   test("GET /project/current/cleanup-candidates is read-only ownership inspection", async () => {
