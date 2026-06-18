@@ -16065,9 +16065,6 @@
                               "overall_score": {
                                 "type": "number"
                               },
-                              "pass_threshold": {
-                                "type": "number"
-                              },
                               "ssim_score": {
                                 "type": "number"
                               },
@@ -16086,12 +16083,38 @@
                             },
                             "required": [
                               "overall_score",
-                              "pass_threshold",
                               "ssim_score",
                               "pixel_diff_percent",
                               "mismatched_pixels",
                               "total_pixels",
                               "dimensions_match"
+                            ]
+                          },
+                          "coverage": {
+                            "type": "object",
+                            "properties": {
+                              "source_width": {
+                                "type": "number"
+                              },
+                              "source_height": {
+                                "type": "number"
+                              },
+                              "implementation_width": {
+                                "type": "number"
+                              },
+                              "implementation_height": {
+                                "type": "number"
+                              },
+                              "implementation_covers_source": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "source_width",
+                              "source_height",
+                              "implementation_width",
+                              "implementation_height",
+                              "implementation_covers_source"
                             ]
                           },
                           "artifacts": {
@@ -35901,7 +35924,7 @@
       "post": {
         "operationId": "global.db.reset",
         "summary": "Reset database",
-        "description": "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
+        "description": "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify a registered absolute projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
         "responses": {
           "200": {
             "description": "Reset results",

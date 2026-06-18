@@ -39,7 +39,7 @@ import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, 
 import { canComposeChat, stopChatRequest } from "./services/chat"
 import { isTaskInterruptable } from "./store/board"
 import { loadAllLocales, localeTag, setLocale } from "./utils/i18n"
-import { apiJson, apiRequest, configure as configureApi } from "./services/api"
+import { ApiError, apiJson, configure as configureApi } from "./services/api"
 import { t } from "./utils/i18n"
 import { renderMarkdown } from "./utils/markdown"
 import { aggregateUsageAcrossSessions, formatUsageStrip } from "./utils/format-usage"
@@ -61,7 +61,7 @@ import {
   PANEL_PANE_CONFIG,
 } from "./services/pane"
 import { panelMessage } from "./services/chat"
-import { loadPromptProfileCatalog, type PromptProfileOption } from "./services/config"
+import { loadPromptProfileCatalog, resetDatabase, type PromptProfileOption } from "./services/config"
 import { NotificationCenter } from "./components/NotificationCenter"
 import { waitForLogDrain, AppLog } from "./utils/log"
 import { teardownApp } from "./services/init"
@@ -968,13 +968,10 @@ if (sidebarTitleEl) {
     }
     if (!window.confirm(t("sidebar.reset_db_confirm", { database: databasePath, projectDir }))) return
     try {
-      const res = await apiRequest<unknown>("global/db/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectDir }),
-        responseKind: "text",
-      })
-      if (res.status === 409) {
+      await resetDatabase(projectDir)
+      window.location.reload()
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
         notifyWarning({
           id: "system:reset-db",
           title: t("sidebar.reset_db_blocked_title"),
@@ -982,28 +979,6 @@ if (sidebarTitleEl) {
         })
         return
       }
-      if (!res.ok) {
-        const text = typeof res.body === "string" && res.body ? res.body : `HTTP ${res.status}`
-        notifyError({
-          id: "system:reset-db",
-          title: t("sidebar.reset_db_failed_title"),
-          message: t("sidebar.reset_db_failed", { error: text }),
-          details: `POST global/db/reset → HTTP ${res.status}\n\n${
-            typeof res.body === "string"
-              ? res.body
-              : (() => {
-                  try {
-                    return JSON.stringify(res.body, null, 2)
-                  } catch {
-                    return String(res.body)
-                  }
-                })()
-          }`,
-        })
-        return
-      }
-      window.location.reload()
-    } catch (err) {
       notifyError({
         id: "system:reset-db",
         title: t("sidebar.reset_db_failed_title"),

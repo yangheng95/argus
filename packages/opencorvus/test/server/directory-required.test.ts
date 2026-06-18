@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import * as fs from "node:fs/promises"
+import path from "node:path"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -204,6 +206,41 @@ describe("project-scope middleware: directory required", () => {
     )
 
     expect(responses.map((response) => response.status)).toEqual(Array(8).fill(200))
+  })
+
+  test("directory query preserves literal percent-encoded slash sequences", async () => {
+    await using root = await tmpdir()
+    const literal = path.join(root.path, "literal%2Fname")
+    const nested = path.join(root.path, "literal", "name")
+    await fs.mkdir(literal, { recursive: true })
+    await fs.mkdir(nested, { recursive: true })
+
+    const app = Server.App()
+    const response = await app.request(`/path?directory=${encodeURIComponent(literal)}`, { method: "GET" })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { directory: string }
+    expect(body.directory).toBe(path.resolve(literal))
+    expect(body.directory).not.toBe(path.resolve(nested))
+  })
+
+  test("directory header preserves literal percent-encoded slash sequences", async () => {
+    await using root = await tmpdir()
+    const literal = path.join(root.path, "literal%2Fname")
+    const nested = path.join(root.path, "literal", "name")
+    await fs.mkdir(literal, { recursive: true })
+    await fs.mkdir(nested, { recursive: true })
+
+    const app = Server.App()
+    const response = await app.request("/path", {
+      method: "GET",
+      headers: { "x-opencorvus-directory": literal },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { directory: string }
+    expect(body.directory).toBe(path.resolve(literal))
+    expect(body.directory).not.toBe(path.resolve(nested))
   })
 
   test("cross-project MySQL transfer routes work without ?directory=", async () => {

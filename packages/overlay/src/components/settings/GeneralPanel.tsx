@@ -3,8 +3,10 @@ import { t } from "../../utils/i18n"
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings"
 import { configure as configureApi } from "../../services/api"
 import { checkConnection } from "../../services/connection"
-import { reloadProjectScope, patchConfig } from "../../services/config"
+import { reloadProjectScope, patchConfig, resetDatabase } from "../../services/config"
+import type { DatabaseResetTarget } from "../../services/config"
 import { ensureDesktopNotificationPermission } from "../../services/notify"
+import { activeProjectDirectory } from "../../services/project-directory"
 import { appStore } from "../../store/app"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
@@ -12,11 +14,20 @@ import { SurfaceHeader } from "../ui/SurfaceHeader"
 export default function GeneralPanel() {
   const [saved, setSaved] = createSignal(false)
   const [error, setError] = createSignal("")
+  const [dbResetting, setDbResetting] = createSignal(false)
+  const [dbResetNotice, setDbResetNotice] = createSignal("")
+  const [dbResetNoticeStatus, setDbResetNoticeStatus] = createSignal<"active" | "warn" | "error">("active")
 
   // ── Handlers ──
 
   function describeError(e: unknown): string {
     return e instanceof Error ? e.message : String(e)
+  }
+
+  function summarizeResetTargets(targets: DatabaseResetTarget[]): string {
+    return targets
+      .map((target) => `${target.ok ? "OK" : "FAILED"} ${target.label}: ${target.path}${target.error ? ` (${target.error})` : ""}`)
+      .join("; ")
   }
 
   function handleServerUrlChange(e: Event) {
@@ -87,6 +98,44 @@ export default function GeneralPanel() {
     setError("")
   }
 
+  async function handleDatabaseReset() {
+    const directory = activeProjectDirectory().trim()
+    if (!directory) {
+      setDbResetNoticeStatus("error")
+      setDbResetNotice(t("settings.db_reset_missing_directory"))
+      return
+    }
+    if (!window.confirm(t("settings.db_reset_confirm", { directory }))) return
+
+    setDbResetting(true)
+    setDbResetNotice("")
+    setError("")
+    try {
+      const result = await resetDatabase(directory)
+      const summary = summarizeResetTargets(result.targets)
+      setDbResetNoticeStatus(result.ok ? "active" : "warn")
+      setDbResetNotice(
+        `${t(result.ok ? "settings.db_reset_complete" : "settings.db_reset_partial", {
+          count: result.targets.length,
+        })}${summary ? ` ${summary}` : ""}`,
+      )
+      try {
+        await checkConnection()
+        await reloadProjectScope()
+      } catch (reloadError) {
+        setDbResetNoticeStatus("warn")
+        setDbResetNotice((current) =>
+          `${current} ${t("settings.db_reset_reload_failed", { error: describeError(reloadError) })}`,
+        )
+      }
+    } catch (resetError) {
+      setDbResetNoticeStatus("error")
+      setDbResetNotice(t("settings.db_reset_failed", { error: describeError(resetError) }))
+    } finally {
+      setDbResetting(false)
+    }
+  }
+
   return (
     <div class="general-panel">
       {/* ── Connection ── */}
@@ -122,6 +171,37 @@ export default function GeneralPanel() {
           {error() ? (
             <div class="config-status-box" data-status="error">
               <span class="config-status-box__text">{error()}</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ── Database ── */}
+      <div class="config-panel-group">
+        <SurfaceHeader variant="settings-group" title={t("settings.section.database")} />
+        <div class="config-panel-card">
+          <div class="config-toggle-list">
+            <div class="config-toggle-list-item">
+              <span class="toggle-label">
+                {t("settings.db_reset_label")}
+                <span class="toggle-hint">{t("settings.db_reset_hint")}</span>
+              </span>
+              <Button
+                type="button"
+                variant="solid"
+                size="sm"
+                tone="danger"
+                data-ui="settings-db-reset"
+                disabled={dbResetting() || !appStore.connected}
+                onClick={handleDatabaseReset}
+              >
+                {dbResetting() ? t("settings.db_reset_running") : t("settings.db_reset_button")}
+              </Button>
+            </div>
+          </div>
+          {dbResetNotice() ? (
+            <div class="config-status-box" data-status={dbResetNoticeStatus()}>
+              <span class="config-status-box__text">{dbResetNotice()}</span>
             </div>
           ) : null}
         </div>
