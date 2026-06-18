@@ -92,10 +92,30 @@ describe("build-artifact", () => {
 
   test("package-local builds overlay-server sidecars before Docker overlay packaging", () => {
     const source = readFileSync(resolve(import.meta.dir, "../../../../script/package-local.ts"), "utf8")
+    expect(source.indexOf("bun run build:vite")).toBeLessThan(source.indexOf("bun run build --overlay-server --all"))
     expect(source).toContain("bun run build --overlay-server --all")
     expect(source).not.toContain("bun run build --all")
     expect(source).toContain("Docker is required for Linux overlay builds")
     expect(source).not.toContain("skipping Linux overlay builds")
+  })
+
+  test("overlay-server build embeds the current UI bundle before compiling", () => {
+    const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
+    const overlayBuildSource = readFileSync(resolve(import.meta.dir, "../../../overlay/script/build.ts"), "utf8")
+
+    expect(buildSource).toContain("discoverOverlayUiSourceFiles")
+    expect(buildSource).toContain("renderEmbeddedOverlayUiModule")
+    expect(buildSource).toContain('if (buildFlavor === "overlay-server")')
+    expect(buildSource).toContain("Embedded overlay UI files:")
+    const writeIndex = buildSource.indexOf("const embeddedCount = await writeEmbeddedOverlayUiModuleForBuild()")
+    const compileIndex = buildSource.indexOf("entrypoints: artifactEntrypoints(buildFlavor)", writeIndex)
+    const resetIndex = buildSource.indexOf("await resetEmbeddedOverlayUiModuleForBuild()", compileIndex)
+    expect(writeIndex).toBeGreaterThan(-1)
+    expect(compileIndex).toBeGreaterThan(writeIndex)
+    expect(resetIndex).toBeGreaterThan(compileIndex)
+    expect(overlayBuildSource.indexOf("bun run build:vite")).toBeLessThan(
+      overlayBuildSource.indexOf("bun run build --overlay-server"),
+    )
   })
 
   test("overlay-server flavor compiles only the overlay launcher entrypoint", () => {

@@ -26,6 +26,11 @@ import {
   artifactSourcemap,
   parseBuildFlavor,
 } from "./build-artifact"
+import {
+  discoverOverlayUiSourceFiles,
+  renderEmbeddedOverlayUiModule,
+  resolveEmbeddedOverlayUiModulePath,
+} from "../../../script/package-linux-binary"
 import { detectArtifactNodeRuntimeHost } from "./build-host-runtime"
 import { copyRuntimeNodeModules } from "./build-runtime-node-modules"
 import { cleanBuildDist } from "./build-clean"
@@ -33,6 +38,7 @@ import { resolveModelsSnapshotData } from "./models-snapshot"
 
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 const modelsSnapshotPath = path.join(dir, "src/provider/models-snapshot.ts")
+const repoRoot = path.resolve(dir, "../..")
 
 // Fetch and generate models.dev snapshot
 const modelsData = await resolveModelsSnapshotData({ modelsSnapshotPath, modelsUrl })
@@ -192,6 +198,18 @@ let windowsSupervisorHelper: string | undefined
 const DEFAULT_PACKAGED_PLUGIN_MODULES: Array<{ name: string }> = []
 const DEFAULT_PACKAGED_PLUGIN_MANIFESTS: Array<{ source: string; destination: string }> = []
 
+async function writeEmbeddedOverlayUiModuleForBuild(): Promise<number> {
+  const modulePath = resolveEmbeddedOverlayUiModulePath(repoRoot)
+  const files = await discoverOverlayUiSourceFiles(repoRoot)
+  await fs.promises.writeFile(modulePath, renderEmbeddedOverlayUiModule(modulePath, files))
+  return files.length
+}
+
+async function resetEmbeddedOverlayUiModuleForBuild(): Promise<void> {
+  const modulePath = resolveEmbeddedOverlayUiModulePath(repoRoot)
+  await fs.promises.writeFile(modulePath, renderEmbeddedOverlayUiModule(modulePath, []))
+}
+
 type PackagedPluginManifest = {
   resources?: Array<{
     id?: unknown
@@ -296,98 +314,111 @@ async function stageDefaultPluginManifests(outdir: string, targetOS: PackagedPlu
   }
 }
 
-for (const item of targets) {
-  const compileTarget = [
-    "bun",
-    item.os === "win32" ? "windows" : item.os,
-    item.arch,
-    item.avx2 === false ? "baseline" : undefined,
-    item.abi === undefined ? undefined : item.abi,
-  ]
-    .filter(Boolean)
-    .join("-")
-  const name = [
-    artifactPackageBaseName(pkg.name, buildFlavor),
-    // changing to win32 flags npm for some reason
-    item.os === "win32" ? "windows" : item.os,
-    item.arch,
-    item.avx2 === false ? "baseline" : undefined,
-    item.abi === undefined ? undefined : item.abi,
-  ]
-    .filter(Boolean)
-    .join("-")
-  console.log(`building ${name}`)
-  await $`mkdir -p dist/${name}`
-
-  const executablePath = runtimeDir
-    ? path.resolve(runtimeDir, runtimeName(item), item.os === "win32" ? "bun.exe" : "bun")
-    : undefined
-  if (runtimeDir && executablePath && !fs.existsSync(executablePath)) {
-    throw new Error(`Missing Bun runtime for target '${runtimeName(item)}' at '${executablePath}'`)
-  }
-
-  const compile: Record<string, unknown> = {
-    autoloadBunfig: false,
-    autoloadDotenv: false,
-    autoloadTsconfig: true,
-    autoloadPackageJson: true,
-    target: compileTarget,
-    outfile: `dist/${name}/${artifactExecutableName(item.os)}`,
-    execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
-    windows: {},
-  }
-  if (executablePath) compile.executablePath = executablePath
-
-  await Bun.build({
-    conditions: ["browser"],
-    tsconfig: "./tsconfig.json",
-    sourcemap: artifactSourcemap(),
-    external: artifactExternalModules(),
-    compile: compile as any,
-    entrypoints: artifactEntrypoints(buildFlavor),
-    define: {
-      OPENCORVUS_VERSION: `'${Script.version}'`,
-      OPENCORVUS_CHANNEL: `'${Script.channel}'`,
-      OPENCORVUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
-      OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
-    },
-  })
-  const browserMcpRuntimeDir = path.join(dir, "dist", name, "browser-mcp-node")
-  await buildBrowserMcpNodeBundle(browserMcpRuntimeDir)
-  await copyRuntimeNodeModules(item, path.join(dir, "dist", name), dir)
+let embeddedOverlayUiModuleWritten = false
+try {
   if (buildFlavor === "overlay-server") {
-    await copyRuntimeNodeModules(item, path.join(dir, "dist", name), dir, DEFAULT_PACKAGED_PLUGIN_MODULES)
-    await stageDefaultPluginManifests(path.join(dir, "dist", name), item.os as PackagedPluginTargetOS)
-  }
-  await copyRuntimeNodeModules(item, browserMcpRuntimeDir, dir)
-  await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
-
-  if (item.os === "win32") {
-    const helper = await buildWindowsSupervisorHelper()
-    await fs.promises.copyFile(helper, path.join(dir, "dist", name, "opencorvus-process-supervisor.exe"))
+    const embeddedCount = await writeEmbeddedOverlayUiModuleForBuild()
+    embeddedOverlayUiModuleWritten = true
+    console.log(`Embedded overlay UI files: ${embeddedCount}`)
   }
 
-  if (binaryOnly) {
-    const files = await fs.promises.readdir(path.join(dir, "dist", name))
-    await Promise.all(
-      files
-        .filter((x) => x.endsWith(".map"))
-        .map((x) => fs.promises.rm(path.join(dir, "dist", name, x), { force: true })),
-    )
-  }
-  await Bun.file(`dist/${name}/package.json`).write(
-    JSON.stringify(
-      {
-        name,
-        version: Script.version,
-        os: [item.os],
-        cpu: [item.arch],
+  for (const item of targets) {
+    const compileTarget = [
+      "bun",
+      item.os === "win32" ? "windows" : item.os,
+      item.arch,
+      item.avx2 === false ? "baseline" : undefined,
+      item.abi === undefined ? undefined : item.abi,
+    ]
+      .filter(Boolean)
+      .join("-")
+    const name = [
+      artifactPackageBaseName(pkg.name, buildFlavor),
+      // changing to win32 flags npm for some reason
+      item.os === "win32" ? "windows" : item.os,
+      item.arch,
+      item.avx2 === false ? "baseline" : undefined,
+      item.abi === undefined ? undefined : item.abi,
+    ]
+      .filter(Boolean)
+      .join("-")
+    console.log(`building ${name}`)
+    await $`mkdir -p dist/${name}`
+
+    const executablePath = runtimeDir
+      ? path.resolve(runtimeDir, runtimeName(item), item.os === "win32" ? "bun.exe" : "bun")
+      : undefined
+    if (runtimeDir && executablePath && !fs.existsSync(executablePath)) {
+      throw new Error(`Missing Bun runtime for target '${runtimeName(item)}' at '${executablePath}'`)
+    }
+
+    const compile: Record<string, unknown> = {
+      autoloadBunfig: false,
+      autoloadDotenv: false,
+      autoloadTsconfig: true,
+      autoloadPackageJson: true,
+      target: compileTarget,
+      outfile: `dist/${name}/${artifactExecutableName(item.os)}`,
+      execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
+      windows: {},
+    }
+    if (executablePath) compile.executablePath = executablePath
+
+    await Bun.build({
+      conditions: ["browser"],
+      tsconfig: "./tsconfig.json",
+      sourcemap: artifactSourcemap(),
+      external: artifactExternalModules(),
+      compile: compile as any,
+      entrypoints: artifactEntrypoints(buildFlavor),
+      define: {
+        OPENCORVUS_VERSION: `'${Script.version}'`,
+        OPENCORVUS_CHANNEL: `'${Script.channel}'`,
+        OPENCORVUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
+        OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
       },
-      null,
-      2,
-    ),
-  )
-  binaries[name] = Script.version
+    })
+    const browserMcpRuntimeDir = path.join(dir, "dist", name, "browser-mcp-node")
+    await buildBrowserMcpNodeBundle(browserMcpRuntimeDir)
+    await copyRuntimeNodeModules(item, path.join(dir, "dist", name), dir)
+    if (buildFlavor === "overlay-server") {
+      await copyRuntimeNodeModules(item, path.join(dir, "dist", name), dir, DEFAULT_PACKAGED_PLUGIN_MODULES)
+      await stageDefaultPluginManifests(path.join(dir, "dist", name), item.os as PackagedPluginTargetOS)
+    }
+    await copyRuntimeNodeModules(item, browserMcpRuntimeDir, dir)
+    await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
+
+    if (item.os === "win32") {
+      const helper = await buildWindowsSupervisorHelper()
+      await fs.promises.copyFile(helper, path.join(dir, "dist", name, "opencorvus-process-supervisor.exe"))
+    }
+
+    if (binaryOnly) {
+      const files = await fs.promises.readdir(path.join(dir, "dist", name))
+      await Promise.all(
+        files
+          .filter((x) => x.endsWith(".map"))
+          .map((x) => fs.promises.rm(path.join(dir, "dist", name, x), { force: true })),
+      )
+    }
+    await Bun.file(`dist/${name}/package.json`).write(
+      JSON.stringify(
+        {
+          name,
+          version: Script.version,
+          os: [item.os],
+          cpu: [item.arch],
+        },
+        null,
+        2,
+      ),
+    )
+    binaries[name] = Script.version
+  }
+} finally {
+  if (embeddedOverlayUiModuleWritten) {
+    await resetEmbeddedOverlayUiModuleForBuild()
+  }
 }
 
 export { binaries }

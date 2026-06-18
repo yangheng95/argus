@@ -6,6 +6,7 @@ import os from "node:os"
 import path from "node:path"
 
 const packageRoot = path.resolve(import.meta.dir, "../..")
+const overlayRoot = path.resolve(packageRoot, "../overlay")
 
 function overlayPlatform() {
   if (process.platform === "win32") return "windows"
@@ -41,6 +42,24 @@ async function collect(stream: ReadableStream<Uint8Array> | null) {
 }
 
 async function buildPackagedOverlayServerArtifact() {
+  const uiProc = Bun.spawn(["bun", "run", "build:vite"], {
+    cwd: overlayRoot,
+    env: {
+      ...process.env,
+      OPENCORVUS_DISABLE_MODELS_FETCH: "true",
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const [uiStdout, uiStderr, uiExitCode] = await Promise.all([
+    collect(uiProc.stdout),
+    collect(uiProc.stderr),
+    uiProc.exited,
+  ])
+  if (uiExitCode !== 0) {
+    throw new Error(`overlay UI build failed with exit ${uiExitCode}\n${uiStdout}\n${uiStderr}`)
+  }
+
   const proc = Bun.spawn(["bun", "run", "build", "--overlay-server", "--binary-only"], {
     cwd: packageRoot,
     env: {
@@ -65,13 +84,14 @@ describe("packaged overlay-server health", () => {
     proc = undefined
   })
 
-  test("compiled overlay-server artifact starts and answers /global/health", async () => {
+  test("compiled overlay-server artifact starts and serves health plus embedded UI", async () => {
     const buildOutput = await buildPackagedOverlayServerArtifact()
     expect(buildOutput).not.toContain("B:/~BUN/root")
     expect(buildOutput).not.toContain("Cannot find module")
     expect(buildOutput).not.toContain("Cannot find package")
     expect(buildOutput).not.toContain("@parcel/watcher/wrapper")
     expect(buildOutput).not.toContain("ERR_MODULE_NOT_FOUND")
+    expect(buildOutput).toContain("Embedded overlay UI files:")
 
     const name = `opencorvus-overlay-server-${overlayPlatform()}-${overlayArch()}`
     const artifactDir = path.resolve(packageRoot, "dist", name)
@@ -94,13 +114,35 @@ describe("packaged overlay-server health", () => {
       stderr: "pipe",
     })
 
-    let response: Response | undefined
+    let healthStatus: number | undefined
+    let healthBody:
+      | {
+          healthy: boolean
+          paths: { database: string; data: string; home: string }
+        }
+      | undefined
+    let uiStatus: number | undefined
+    let uiContentType: string | null | undefined
+    let uiHtml = ""
     const deadline = Date.now() + 30_000
     while (Date.now() < deadline) {
       if (proc.exitCode !== null) break
       try {
-        response = await fetch(`http://127.0.0.1:${port}/global/health`)
-        if (response.ok) break
+        const healthResponse = await fetch(`http://127.0.0.1:${port}/global/health`)
+        const uiResponse = await fetch(`http://127.0.0.1:${port}/ui/index.html`)
+        const [healthText, indexHtml] = await Promise.all([healthResponse.text(), uiResponse.text()])
+
+        healthStatus = healthResponse.status
+        uiStatus = uiResponse.status
+        uiContentType = uiResponse.headers.get("content-type")
+        uiHtml = indexHtml
+        if (healthResponse.ok) {
+          healthBody = JSON.parse(healthText) as {
+            healthy: boolean
+            paths: { database: string; data: string; home: string }
+          }
+        }
+        if (healthResponse.ok && uiResponse.ok) break
       } catch {
         await Bun.sleep(250)
       }
@@ -116,14 +158,17 @@ describe("packaged overlay-server health", () => {
     expect(output).not.toContain("@parcel/watcher/wrapper")
     expect(output).not.toContain("ERR_MODULE_NOT_FOUND")
 
-    expect(response?.status).toBe(200)
-    const body = (await response!.json()) as {
-      healthy: boolean
-      paths: { database: string; data: string; home: string }
-    }
+    expect(healthStatus).toBe(200)
+    expect(healthBody).toBeDefined()
+    const body = healthBody!
     expect(body.healthy).toBe(true)
     expect(path.isAbsolute(body.paths.database)).toBe(true)
     expect(path.isAbsolute(body.paths.data)).toBe(true)
     expect(path.isAbsolute(body.paths.home)).toBe(true)
+
+    expect(uiStatus).toBe(200)
+    expect(uiContentType).toContain("text/html")
+    expect(uiHtml).toContain('data-page="overlay"')
+    expect(uiHtml).toContain("./assets/")
   }, 180_000)
 })

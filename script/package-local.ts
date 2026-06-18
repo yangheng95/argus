@@ -31,6 +31,9 @@ const linuxTargets = process.argv.filter((a) => a.startsWith("--target=")).map((
 
 // ── 1. opencorvus overlay server — all platforms ─────────────────────────────
 if (!skipCli) {
+  console.log("\n=== overlay UI assets ===")
+  await $`bun run build:vite`.cwd(overlay)
+
   console.log("\n=== opencorvus overlay server (all platforms) ===")
   await $`bun run build --overlay-server --all`.cwd(opencorvus)
   console.log("  opencorvus overlay server done -> packages/opencorvus/dist/")
