@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
@@ -11,6 +11,19 @@ const CARD_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "c
 const CONVERSATION_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "conversation.css"), "utf8")
 const COMPOSER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "composer.css"), "utf8")
 const FIELD_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "field.css"), "utf8")
+
+function walkFiles(dir: string, accept: (file: string) => boolean): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry)
+    if (statSync(full).isDirectory()) {
+      out.push(...walkFiles(full, accept))
+    } else if (accept(full)) {
+      out.push(full)
+    }
+  }
+  return out
+}
 
 function bodyOf(source: string, selector: string): string {
   const css = source.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -67,7 +80,7 @@ test("task and file search share the field primitive", () => {
 })
 
 test("inspector list rows keep a neutral inset base", () => {
-  expect(bodyOf(INSPECTOR_CSS, ".knowledge-item, .pref-item")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(INSPECTOR_CSS, ".knowledge-item")).toMatch(/background:\s*transparent/)
   expect(bodyOf(INSPECTOR_CSS, ".req-spec-content")).toMatch(/background:\s*var\(--surface-inset\)/)
   expect(bodyOf(INSPECTOR_CSS, ".integrity__issue, .integrity__correction, .integrity__missing")).toMatch(
     /background:\s*transparent/,
@@ -85,6 +98,16 @@ test("inspector list rows keep a neutral inset base", () => {
   expect(bodyOf(INSPECTOR_CSS, '.gwg[data-goal-status="running"] .gwg-status-icon')).toMatch(
     /background:\s*var\(--accent-dim\)/,
   )
+})
+
+test("retired preference row selectors stay removed from production source", () => {
+  const productionText = walkFiles(join(OVERLAY_ROOT, "src"), (file) => /\.(?:css|html|ts|tsx|json)$/.test(file))
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n")
+
+  for (const className of ["pref-item", "pref-item-head", "pref-item-key", "pref-item-value"]) {
+    expect(productionText).not.toContain(className)
+  }
 })
 
 test("message content carriers keep a neutral surface base", () => {

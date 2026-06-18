@@ -2,7 +2,7 @@
    Providers, AgentModels, Channels, Skills, Knowledge, etc.). Each
    tab module's classes are added here as they get a token sweep
    and clean extraction. The richer `.config-*` / `.extension-*` /
-   `.knowledge-*` / `.pref-*` / `.market-*` / `.channel-doc-*`
+   `.knowledge-*` / `.market-*` / `.channel-doc-*`
    blocks still live in styles.css until each gets a token sweep. */
 
 /* ──────────────────────────────────────────────────────────
@@ -416,9 +416,8 @@ button.s-row:focus-visible {
 
 /* Memory item row in the list. The original solo declared a
    `border-bottom: 1px solid var(--divider-soft)` that a late
-   cross-surface rule (`.knowledge-item, .pref-item { border-
-   bottom: none }`) zeroed out — declaring the rendered value
-   directly here so the surface canonical does not lie. */
+   cross-surface rule zeroed out; declaring the rendered value
+   directly here keeps the surface canonical accurate. */
 .knowledge-item {
   display: flex;
   flex-direction: column;
@@ -2234,8 +2233,7 @@ button.s-row:focus-visible {
 .config-content .extension-head:focus-within,
 .config-content .channel-doc-card:hover,
 .config-content .channel-doc-card:focus-within,
-.config-content .knowledge-item:hover,
-.config-content .pref-item:hover {
+.config-content .knowledge-item:hover {
   border-color: transparent;
   background: var(--settings-surface-hover);
   box-shadow: none;
@@ -2307,23 +2305,6 @@ button.s-row:focus-visible {
   color: var(--text-muted);
   min-width: calc(48px * var(--ui-scale));
   text-align: right;
-}
-
-/* The .pref-item canonical previously appeared twice in styles.css —
- * one rule cleared border-bottom (overriding the shared card baseline
- * `border:1px solid var(--border)` in styles.css that also applied to
- * .market-card / .knowledge-item), and
- * a second rule eight lines later set cursor:pointer. Rule 9 cleanup:
- * merged into one canonical here. The .pref-item entry in those
- * shared card multi-selectors stays in styles.css until the broader
- * card-pattern abstraction lands. */
-.pref-item {
-  border-bottom: none;
-  cursor: pointer;
-}
-
-.pref-item-value {
-  font-size: var(--ui-font-control);
 }
 
 /* ─────────────────────────────────────────────────────────────

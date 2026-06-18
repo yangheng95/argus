@@ -2453,20 +2453,14 @@
   background: transparent;
 }
 
-.pref-item-key {
-  font-family: var(--font);
-  font-variant-numeric: tabular-nums;
-}
-
 /* ─────────────────────────────────────────────────────────────
    Inspector list-row variants (extracted 2026-05-04): goal/
-   knowledge/pref card chrome + their unified hover lift,
+   knowledge card chrome + their unified hover lift,
    gwg list + priority badge, goalsSection scroll override. Settings
    market-card chrome is owned by surfaces/settings.css.
    ───────────────────────────────────────────────────────────── */
 
-.knowledge-item,
-.pref-item {
+.knowledge-item {
   border: 0 solid transparent;
   border-radius: 0;
   background: transparent;
@@ -2479,8 +2473,7 @@
 }
 
 .channel-doc-card:hover,
-.knowledge-item:hover,
-.pref-item:hover {
+.knowledge-item:hover {
   background: var(--surface-hover);
   border-color: transparent;
   box-shadow: none;
