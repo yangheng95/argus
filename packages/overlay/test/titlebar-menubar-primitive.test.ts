@@ -22,11 +22,11 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).toContain("<Menubar.GroupLabel")
     expect(SOURCE).toContain("<Menubar.RadioGroup")
     expect(SOURCE).toContain("<Menubar.RadioItem")
-    expect(SOURCE).not.toContain('role="menubar"')
-    expect(SOURCE).not.toContain('role="menu"')
-    expect(SOURCE).not.toContain('role="menuitem"')
-    expect(SOURCE).not.toContain('role="radiogroup"')
-    expect(SOURCE).not.toContain('role="radio"')
+    expect(SOURCE).not.toMatch(/<[^>]+role="menubar"/)
+    expect(SOURCE).not.toMatch(/<[^>]+role="menu"/)
+    expect(SOURCE).not.toMatch(/<[^>]+role="menuitem"/)
+    expect(SOURCE).not.toMatch(/<[^>]+role="radiogroup"/)
+    expect(SOURCE).not.toMatch(/<[^>]+role="radio"/)
     expect(SOURCE).not.toContain('aria-haspopup="menu"')
     expect(SOURCE).not.toContain('document.addEventListener("pointerdown"')
   })
@@ -36,6 +36,15 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).toContain("Alt+")
     expect(SOURCE).toContain("openFromKeyboard")
     expect(SOURCE).toContain("focusTrigger")
+  })
+
+  test("focuses access-key menus by Kobalte roles instead of titlebar item classes", () => {
+    expect(SOURCE).toContain("autoFocusMenu={autoFocusMenu()}")
+    expect(SOURCE).toContain('[role="menuitemradio"][aria-checked="true"]:not([aria-disabled="true"])')
+    expect(SOURCE).toContain('[role="menuitem"]:not([aria-disabled="true"])')
+    expect(SOURCE).not.toContain("focusFirstMenuItem")
+    expect(SOURCE).not.toContain(".titlebar-menubar-item:not([data-disabled])")
+    expect(SOURCE).not.toContain("#titlebar-menu-${id}")
   })
 
   test("styles Kobalte disabled item state", () => {
