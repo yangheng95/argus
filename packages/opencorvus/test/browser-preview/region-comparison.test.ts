@@ -231,6 +231,97 @@ describe("browser preview region comparison", () => {
     { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
   )
 
+  test(
+    "uses mobile source reference artifacts for mobile viewport region comparisons",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await sharp({
+        create: {
+          width: 390,
+          height: 844,
+          channels: 4,
+          background: "#ffffff",
+        },
+      })
+        .composite([
+          {
+            input: Buffer.from(
+              `<svg width="300" height="128" xmlns="http://www.w3.org/2000/svg">
+                <rect width="300" height="128" fill="#fee2e2"/>
+                <text x="18" y="50" font-family="Arial" font-size="26" fill="#7f1d1d">Mobile Module</text>
+                <text x="18" y="88" font-family="Arial" font-size="18" fill="#991b1b">Reference mobile</text>
+              </svg>`,
+            ),
+            left: 24,
+            top: 36,
+          },
+        ])
+        .png()
+        .toFile(path.join(paths.sourcePackageAbsolute, "reference-mobile.png"))
+      const server = await startMobilePreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        const binding: BrowserPreviewRegionBinding = {
+          region_id: "mobile-module",
+          viewport_id: "mobile",
+          region_scope: "page-section",
+          source: {
+            reference_artifact_id: "reference-mobile.png",
+            bbox: { x: 24, y: 36, width: 300, height: 128 },
+            semantic_role: "mobile module section",
+            text_anchors: ["Mobile Module", "Reference mobile"],
+            source_refs: ["mobile source screenshot"],
+          },
+          implementation: {
+            route: "/mobile",
+            locator: { kind: "data-oc-region", value: "mobile-module" },
+            component_files: ["src/MobileModule.tsx"],
+          },
+          acceptance_refs: ["mobile reference parity"],
+        }
+
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["mobile"],
+          bindings: [binding],
+          includeDiff: true,
+        })
+
+        expect(result.status).toBe("passed")
+        expect(result.regions).toHaveLength(1)
+        const region = result.regions[0]
+        expect(result.evidenceIDs["mobile:mobile-module"]).toBeTruthy()
+        expect(region.viewport_id).toBe("mobile")
+        expect(region.source_bbox).toEqual({ x: 24, y: 36, width: 300, height: 128 })
+        expect(region.implementation_bbox?.width).toBe(300)
+        expect(region.artifacts?.source_crop).toEndWith("source.png")
+        expect(region.artifacts?.implementation_crop).toEndWith("implementation.png")
+        expect(region.artifacts?.side_by_side).toEndWith("side-by-side.png")
+        expect(region.artifacts?.diff).toEndWith("diff.png")
+        const sourceCropPath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.source_crop)
+        const implementationCropPath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.implementation_crop)
+        const sideBySidePath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side)
+        await expectPngDimensions(sourceCropPath, { width: 300, height: 128 })
+        await expectPngDimensions(implementationCropPath, { width: 300, height: 128 })
+        await expectPngDimensions(sideBySidePath, { width: 616, height: 204 })
+        await expectPngHasColorDiversity(sourceCropPath)
+        await expectPngHasColorDiversity(implementationCropPath)
+        await expectPngHasColorDiversity(sideBySidePath)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
+  )
+
   test("delegates runtime capture to browser evidence runner instead of owning a sidecar", async () => {
     const source = await fs.readFile(
       path.resolve(import.meta.dir, "../../src/browser-preview/region-comparison.ts"),
@@ -352,6 +443,51 @@ async function startBelowFoldPreviewServer(): Promise<{ url: string; close: () =
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
   const address = server.address()
   if (!address || typeof address === "string") throw new Error("below-fold preview test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
+async function startMobilePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((req, res) => {
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>Mobile preview</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #fff7ed; }
+            main { padding: 36px 24px; }
+            [data-oc-region="mobile-module"] {
+              width: 300px;
+              height: 128px;
+              background: #fee2e2;
+              color: #7f1d1d;
+              box-sizing: border-box;
+              padding: 18px;
+            }
+            h1 { margin: 0 0 14px; font-size: 26px; line-height: 1; }
+            p { margin: 0; font-size: 18px; color: #991b1b; }
+          </style>
+        </head>
+        <body><main><section data-oc-region="mobile-module"><h1>Mobile Module</h1><p>Reference mobile</p></section></main></body>
+      </html>`
+    if (req.url !== "/mobile") {
+      res.writeHead(404, { "content-type": "text/plain" })
+      res.end("not found")
+      return
+    }
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("mobile preview test server did not bind a TCP address")
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>
