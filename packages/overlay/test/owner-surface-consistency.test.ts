@@ -124,8 +124,8 @@ test("conversation agent rail and conversation owner surfaces stay flat", () => 
   expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__avatar-button:hover")).toMatch(
     /background:\s*var\(--subtle-2\)/,
   )
-  expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/border:\s*0 solid transparent/)
-  expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(CARD_CSS, ".task-progress__pill")).toMatch(/border:\s*var\(--oc-border-width\) solid var\(--card-border\)/)
+  expect(bodyOf(CARD_CSS, ".task-progress__pill")).toMatch(/background:\s*var\(--card-bg-0\)/)
   expect(bodyOf(COMPOSER_CSS, ".chat-empty--task")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(COMPOSER_CSS, ".chat-empty--task")).toMatch(/background:\s*transparent/)
 })

@@ -79,7 +79,6 @@ export interface DomRefs {
   changesBody: HTMLElement | null
 
   // Chat
-  chatGoalsStrip: HTMLElement | null
   chatScroll: HTMLElement | null
   chatEmpty: HTMLElement | null
 
@@ -207,7 +206,6 @@ export function getDomRefs(): DomRefs {
     changesBody: $<HTMLElement>("#changesBody"),
 
     // Chat
-    chatGoalsStrip: $<HTMLElement>("#chatGoalsStrip"),
     chatScroll: $<HTMLElement>("#chatScroll"),
     chatEmpty: $<HTMLElement>("#chatEmpty"),
 
