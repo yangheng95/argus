@@ -38,6 +38,14 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).toContain("focusTrigger")
   })
 
+  test("does not preserve the retired Tools top-level menu", () => {
+    expect(SOURCE).not.toContain('| "tools"')
+    expect(SOURCE).not.toContain('"tools",')
+    expect(SOURCE).not.toContain('id === "tools"')
+    expect(SOURCE).not.toContain("MENU_ACCESS_KEYS.tools")
+    expect(SOURCE).not.toContain("titlebar.menu.tools")
+  })
+
   test("focuses access-key menus by Kobalte roles instead of titlebar item classes", () => {
     expect(SOURCE).toContain("autoFocusMenu={autoFocusMenu()}")
     expect(SOURCE).toContain('[role="menuitemradio"][aria-checked="true"]:not([aria-disabled="true"])')
