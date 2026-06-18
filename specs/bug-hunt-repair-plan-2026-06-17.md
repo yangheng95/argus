@@ -4045,3 +4045,68 @@ LINE:
 - Descartes confirmed the repaired dirty tree rejected relative and unknown absolute inputs before `Instance.disposeAll()` / `Database.reset(...)`.
 - Descartes called out the Overlay `activeDirectory()` sandbox boundary; the final repair accepts registered sandboxes as registered project directories while still rejecting unknown absolute paths.
 - Descartes confirmed CLI reset is a separate `process.cwd()` caller and should not receive route-level registered-project semantics.
+
+## Batch P2-BS: BH-025 project directory transport must preserve literal percent sequences
+
+### Findings
+
+- BH-025 targets the project-directory request boundary in `packages/opencorvus/src/server/server.ts` and the SDK directory transport in `packages/sdk/js/src/client.ts`.
+- Hono already returns `c.req.query("directory")` after URL query decoding. The old `decodeProjectDirectory(...)` decoded that value again, so a literal path component such as `literal%2Fname` arrived as `literal/name`.
+- The same helper was also used by the PTY websocket connect route, so fixing only the main middleware would have left a second project-directory entry point with the same bug.
+- The SDK used `x-opencorvus-directory` as a percent-encoded header for non-ASCII paths. Headers do not have URL decoding semantics, and decoding that header on the server conflicts with legitimate percent characters in filesystem paths.
+- Overlay already injects directory through URL/transport query values; its contract needed explicit coverage that `URLSearchParams` encodes the literal percent sign once as `%25`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/server.ts` is the project-scoped route middleware and now calls `selectProjectDirectory(...)` without percent-decoding.
+- `packages/opencorvus/src/server/routes/pty.ts::GET /pty/:ptyID/connect` is the websocket project scope entry point and now uses the same selector.
+- `packages/opencorvus/src/server/directory.ts::selectProjectDirectory(...)` is the single server helper for choosing query over header without transforming the value.
+- `packages/sdk/js/src/client.ts::createOpenCorvusClient(...)` now injects configured project directory through request query parameters for project-scoped routes.
+- `@opencorvus-ai/transport-protocol::routeRequiresProjectDirectory(...)` remains the shared route policy used by server, overlay, and SDK.
+- `packages/overlay/src/services/api.ts` continues to inject directory through `URLSearchParams` and HostTransport query data.
+
+### Fix Shape
+
+- Replace `decodeProjectDirectory(...)` with `selectProjectDirectory(...)`; the server no longer calls `decodeURIComponent(...)` on project directories.
+- Keep query precedence over header, but treat both values as already-literal request values instead of encoded payloads.
+- Update the PTY websocket route to use the same helper so there is no second directory decoding path.
+- Move SDK configured-directory transport from `x-opencorvus-directory` header mutation to a fetch wrapper that appends `?directory=` only for routes that require project scope.
+- Preserve SDK MINGW/MSYS path normalization before query injection.
+- Add `@opencorvus-ai/transport-protocol` as the SDK dependency so route scope policy is not duplicated.
+- Do not add path probing fallback, literal-vs-decoded fallback, `%2F` gates, or compatibility decoding.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/server/directory-required.test.ts`:
+  - create sibling `literal%2Fname` and `literal/name` directories and assert query `directory=` resolves to the literal percent directory;
+  - assert `x-opencorvus-directory` header also preserves the literal percent directory;
+  - assert `selectProjectDirectory(...)` itself preserves literal query/header values and prefers query.
+- Extend `packages/opencorvus/test/server/sdk-client-auth.test.ts`:
+  - configured SDK directory injects query scope for project routes;
+  - configured SDK directory does not inject global routes;
+  - non-ASCII directory values are carried through query without header encoding.
+- Extend `packages/overlay/test/api-directory-injection.test.ts`:
+  - `apiUrl("tasks")` encodes literal `%2F` as `%252F` while `searchParams.get("directory")` remains the literal path;
+  - HostTransport query injection preserves the literal `%2F` value.
+
+### Verification
+
+- Focused BH-025 server/SDK tests passed: `bun test packages/opencorvus/test/server/directory-required.test.ts packages/opencorvus/test/server/sdk-client-auth.test.ts --timeout 90000`.
+- Focused overlay directory injection tests passed: `bun test packages/overlay/test/api-directory-injection.test.ts --timeout 60000`.
+- SDK typecheck passed: `bun run --cwd packages/sdk/js typecheck`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Root typecheck passed: `bun typecheck`.
+- SDK import boundary check passed: `bun run check:sdk-imports`.
+- API route inventory passed: `bun run api:routes-check`.
+- Docs check passed: `bun run docs:check`.
+- Overlay i18n check passed: `bun run overlay:i18n-check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Package test-entry guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Huygens confirmed `HEAD` before the repair still reproduced BH-025 because `directory` query values were decoded by Hono and then decoded again by server helper logic.
+- Huygens confirmed the repaired tree no longer reproduced the issue for query or header directory transport.
+- Huygens identified PTY websocket connect as a second call point that had to share the same helper.
+- Huygens recommended direct selector coverage plus overlay literal `%2F` transport coverage; both are now in the regression suite.
