@@ -68,7 +68,6 @@ test("titlebar top-level menu i18n keys exist in both locales", () => {
     "titlebar.menu.workspace",
     "titlebar.menu.provider",
     "titlebar.menu.run",
-    "titlebar.menu.tools",
     "titlebar.menu.settings",
     "titlebar.menu.view",
     "titlebar.menu.help",
@@ -78,4 +77,6 @@ test("titlebar top-level menu i18n keys exist in both locales", () => {
     expect(EN[key]).not.toBe("")
     expect(ZH[key]).not.toBe("")
   }
+  expect(EN["titlebar.menu.tools"]).toBeUndefined()
+  expect(ZH["titlebar.menu.tools"]).toBeUndefined()
 })

@@ -227,16 +227,14 @@ test(
             }
           })
 
+          assert.deepEqual(geometry.triggers, ["workspace", "provider", "run", "settings", "view", "help"])
           assert.equal(geometry.triggers.includes("product"), false)
-          assert.ok(geometry.triggers.includes("workspace"))
           assert.equal(geometry.triggers.includes("model"), false)
           assert.equal(geometry.triggers.includes("agent"), false)
-          assert.ok(geometry.triggers.includes("provider"))
-          assert.ok(geometry.triggers.includes("tools"))
+          assert.equal(geometry.triggers.includes("tools"), false)
           assert.equal(geometry.triggers.includes("skill"), false)
           assert.equal(geometry.triggers.includes("mcp"), false)
           assert.equal(geometry.triggers.includes("memory"), false)
-          assert.ok(geometry.triggers.includes("settings"))
           assert.deepEqual(geometry.outOfBounds, [])
           assert.deepEqual(geometry.overlaps, [])
           assert.ok(geometry.brandWidth > 24)
@@ -244,6 +242,13 @@ test(
           assert.ok(geometry.badgeTitle.includes(String(server.port)))
           assert.ok(geometry.badgeTitle.includes("12345"))
           assert.ok(geometry.titlebarHeight > 24)
+          if (locale === "en-US" && width === 1440) {
+            const titlebarElement = await page.$("#titlebar")
+            assert.ok(titlebarElement)
+            const screenshotPath = resolve(".scratch/titlebar-top-level-menus.png")
+            mkdirSync(dirname(screenshotPath), { recursive: true })
+            writeFileSync(screenshotPath, await titlebarElement.screenshot({}))
+          }
           if (width <= 760) {
             assert.equal(
               geometry.triggerMetrics.every((item) => item.width <= 32),
@@ -267,7 +272,7 @@ test(
               true,
             )
           }
-          for (const menu of ["workspace", "provider", "run", "tools", "settings", "view", "help"]) {
+          for (const menu of ["workspace", "provider", "run", "settings", "view", "help"]) {
             await page.click(`[data-menu-trigger="${menu}"]`)
             await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { visible: true })
             const panelBounds = await page.$eval(`[data-testid="titlebar-menu-${menu}"]`, (node) => {
@@ -296,6 +301,18 @@ test(
               menu,
             )
           }
+          await page.click('[data-menu-trigger="settings"]')
+          await page.waitForSelector('[data-testid="titlebar-menu-settings"]', { visible: true })
+          const settingsEntries = await page.$eval('[data-testid="titlebar-menu-settings"]', (node) =>
+            Array.from(node.querySelectorAll<HTMLElement>('[data-testid^="titlebar-settings-"]')).map(
+              (item) => item.dataset.testid || "",
+            ),
+          )
+          assert.equal(settingsEntries.includes("titlebar-settings-permissions"), true)
+          assert.equal(settingsEntries.includes("titlebar-settings-prompt"), true)
+          assert.equal(settingsEntries.includes("titlebar-settings-channel"), true)
+          await page.keyboard.press("Escape")
+          await page.waitForFunction(() => !document.querySelector('[data-testid="titlebar-menu-settings"]'))
           await page.click('[data-menu-trigger="help"]')
           await page.waitForSelector('[data-testid="titlebar-help-about"]', { visible: true })
           const helpContract = await page.$eval('[data-testid="titlebar-menu-help"]', (node) => {
@@ -620,6 +637,29 @@ test(
       await page.waitForFunction(
         () => (document.activeElement as HTMLElement | null)?.dataset.menuTrigger === "workspace",
       )
+
+      await page.keyboard.down("Alt")
+      await page.keyboard.press("t")
+      await page.keyboard.up("Alt")
+      const altTRetiredState = await page.evaluate(() => {
+        const visibleMenus = Array.from(document.querySelectorAll<HTMLElement>('[data-testid^="titlebar-menu-"]'))
+          .filter((node) => {
+            const style = getComputedStyle(node)
+            const rect = node.getBoundingClientRect()
+            return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
+          })
+          .map((node) => node.dataset.testid || "")
+        return {
+          toolsTriggerCount: document.querySelectorAll('[data-menu-trigger="tools"]').length,
+          toolsMenuCount: document.querySelectorAll('[data-testid="titlebar-menu-tools"]').length,
+          visibleMenus,
+        }
+      })
+      assert.deepEqual(altTRetiredState, {
+        toolsTriggerCount: 0,
+        toolsMenuCount: 0,
+        visibleMenus: [],
+      })
 
       await page.keyboard.down("Alt")
       await page.keyboard.press("v")
