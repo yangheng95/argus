@@ -57,6 +57,7 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toContain('import * as Popover from "@kobalte/core/popover"')
     expect(SRC).toContain("<Popover.Root")
     expect(SRC).toContain("<Popover.Trigger")
+    expect(SRC).toContain("<Popover.Portal")
     expect(SRC).toContain("<Popover.Content")
     expect(SRC).not.toContain('document.addEventListener("pointerdown"')
     expect(SRC).not.toContain("useHotkey({")
@@ -109,6 +110,12 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/await setExecutorModel\(executorID, model\)/)
   })
 
+  test("model buttons expose the current selection to assistive technology", () => {
+    expect(SRC).toMatch(/data-active=\{modelID === props\.currentModel \? "true" : "false"\}/)
+    expect(SRC).toMatch(/aria-current=\{modelID === props\.currentModel \? "true" : undefined\}/)
+    expect(SRC).not.toMatch(/aria-pressed=\{modelID === props\.currentModel/)
+  })
+
   test("mirror selection writes task root session config before project config", () => {
     expect(SRC).toMatch(/import \{ activeTaskID, hasSelectedTask \} from "\.\.\/store\/board"/)
     expect(SRC).toMatch(/import \{[\s\S]*?getTaskOperatorModelContext,[\s\S]*?patchConfig,[\s\S]*?patchSessionConfig/)
@@ -157,7 +164,10 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(selectorStackBlock).toContain("display: block;")
     expect(CSS).toMatch(/\.executor-dualbar\s*\{[\s\S]*?width:\s*100%/)
     expect(metaLeftBlock).toContain("flex: 1 1 100%;")
-    expect(CSS).toMatch(/\.executor-popover\s*\{[\s\S]*?left:\s*0/)
+    const popoverBlock = cssBlock(".executor-popover")
+    expect(popoverBlock).not.toContain("left:")
+    expect(popoverBlock).not.toContain("bottom:")
+    expect(popoverBlock).not.toContain("position:")
     expect(CSS).not.toMatch(/\.executor-chip-slot\[data-side="external"\] \.executor-popover/)
     expect(selectorStackBlock).not.toContain("grid-column: 1 / -1")
     expect(metaBlock).not.toContain("flex-direction: column")
