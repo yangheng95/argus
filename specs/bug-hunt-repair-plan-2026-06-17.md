@@ -3545,3 +3545,48 @@ LINE:
 - Pauli confirmed BH-075 was still present in HEAD `aab98e52b3315dd51cafdc901d2b46a247a39088`: serve probed the port, then ran `fuser -k` or `netstat` plus `taskkill` before calling `Server.listen(...)`.
 - Pauli identified the same root cause: "target port has a listener" was treated as "old OpenCorvus process can be killed" without ownership proof, host/interface distinction, or project/runtime identity.
 - Pauli recommended the final no-fallback boundary used here: delete pre-bind probing and automatic process termination, make `Server.listen(opts)` the only startup authority, and let explicit occupied ports fail visibly.
+
+## Batch P1-BI: BH-077 explicit run agent selection must be fail-closed
+
+### Findings
+
+- BH-077 targets `packages/opencorvus/src/cli/cmd/run.ts`.
+- `RunCommand` currently validates `args.agent` inside `execute(...)`, but missing agents and subagents both print a warning and return `undefined`.
+- `undefined` is then passed to `sdk.session.command(...)` or `sdk.session.prompt(...)`, causing the server-side default agent to run even though the operator explicitly selected a different agent.
+- The validation happens before `session(sdk)` today; the bug is the fallback-to-default behavior, not ordering.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/cli/cmd/run.ts::RunCommand` owns CLI `--agent` parsing, local/attached client creation, session creation/forking, and the final `sdk.session.command(...)` / `sdk.session.prompt(...)` calls.
+- `packages/opencorvus/src/agent/agent.ts::Agent.get(...)` resolves configured and built-in agent definitions and returns `undefined` for unknown agents.
+- `packages/opencorvus/src/agent/agent.ts::Agent.defaultAgent(...)` owns implicit default selection; explicit CLI agent validation must not fall through to this path.
+- `packages/opencorvus/src/index.ts` registers `RunCommand` as the `run [message..]` command.
+- `packages/opencorvus/test/cli` has no existing run-command regression coverage, so this batch adds a focused CLI test file.
+
+### Fix Shape
+
+- Add an exported `resolveRunAgent(...)` helper in `run.ts` that returns `undefined` only when no explicit agent was provided.
+- When an explicit agent is unknown, throw before session creation with a concrete "not found" error.
+- When an explicit agent has `mode === "subagent"`, throw before session creation with a concrete "is a subagent, not a primary agent" error.
+- Keep explicit non-subagent agents accepted, including existing hidden/internal primary agents, because the current CLI contract only rejects missing agents and subagents.
+- Remove the warning messages that mention falling back to default agent. Do not add prompts, compatibility branches, default retries, or host-side routing gates.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/cli/run-agent.test.ts`.
+- Assert `resolveRunAgent(undefined)` returns `undefined`, preserving implicit default behavior only when the operator did not pass `--agent`.
+- Assert `resolveRunAgent("missing-agent")` rejects with "not found".
+- Assert `resolveRunAgent("explore")` rejects because built-in `explore` is a subagent.
+- Assert `resolveRunAgent("coding")` returns the explicit primary agent id.
+- Assert `RunCommand.handler(...)` rejects missing prompt agents and subagent `--command` agents before mocked SDK session create/list/fork/prompt/command side effects.
+- Add a source-level guard that `run.ts` no longer contains "Falling back to default agent" and that `resolveRunAgent(...)` is called before `session(sdk)`.
+
+### Verification
+
+- Focused CLI tests passed: `bun test packages/opencorvus/test/cli/run-agent.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+
+### Independent Review Feedback
+
+- Raman confirmed BH-077 was still present in HEAD `1e18eff61d`: missing agents and subagents returned `undefined`, then `session/prompt` and `command-exec` paths interpreted `undefined` as default agent selection.
+- Raman identified the same root cause: CLI collapses "explicit invalid agent" into "agent omitted"; server-side default selection is only valid for genuinely omitted agents.
+- Raman recommended adding handler-level tests that invalid prompt and command invocations exit before session creation or prompt/command submission; the final test suite includes mocked SDK assertions for both paths.
