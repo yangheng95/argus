@@ -804,16 +804,23 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).not.toMatch(/rgba\(248,\s*113,\s*113/)
   })
 
-  test("task bar, task status, task flag, and recent dir panel are owned by surfaces/conversation.css", () => {
+  test("task bar, task status, and recent dir panel are owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
+    const sourceText = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx|html)$/.test(path))
+      .map((path) => readText(path))
+      .join("\n")
+
+    for (const className of ["task-bar-main", "task-cwd-actions", "task-flag"]) {
+      expect(sourceText).not.toMatch(new RegExp(`\\b${className}\\b`))
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
+      expect(conversationSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
+    }
 
     for (const className of [
       "task-bar",
-      "task-bar-main",
       "task-status",
       "status-label",
-      "task-flag",
       "workspace-command-dock",
       "workspace-command-divider",
       "workspace-editor-launchers",
@@ -1776,19 +1783,23 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/rgba\(10,\s*16,\s*24/)
   })
 
-  test("conversation goals strip is owned by surfaces/conversation.css", () => {
+  test("retired conversation goal strip selectors stay absent from production source", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
+    const cardSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
+    const conversationSource = readText(join(OVERLAY_ROOT, "src/components/Conversation.tsx"))
+    const sourceText = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx|html)$/.test(path))
+      .map((path) => readText(path))
+      .join("\n")
 
-    for (const className of ["chat-goals-strip", "goal-chip"]) {
-      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    for (const token of ["chatGoalsStrip", "chat-goals-strip", "goal-chip"]) {
+      expect(sourceText).not.toMatch(new RegExp(`\\b${token}\\b`))
     }
 
-    expect(conversationSurface).toMatch(/\.chat-goals-strip:empty\s*\{/)
-    expect(conversationSurface).toMatch(/\.goal-chip\[data-status="passed"\]/)
-    expect(conversationSurface).toMatch(/\.goal-chip\[data-status="failed"\]/)
-    expect(conversationSurface).toMatch(/\.goal-chip\[data-status="in_progress"\]/)
+    expect(styles).not.toMatch(/(^|\n)\.(?:chat-goals-strip|goal-chip)(?:\s|\.|:|\{|,|\[)/)
+    expect(conversationSurface).not.toMatch(/(^|\n)\.(?:chat-goals-strip|goal-chip)(?:\s|\.|:|\{|,|\[)/)
+    expect(conversationSource).toContain("<TaskProgressBar />")
+    expect(cardSurface).toMatch(/(^|\n)\.task-progress__pill\s*\{/)
   })
 
   test("conversation header + task-switch progress are owned by surfaces/conversation.css", () => {
@@ -1852,10 +1863,11 @@ describe("overlay architecture guards", () => {
     const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
-    for (const className of ["chat-empty", "chat-empty-icon", "chat-empty-text", "chat-follow-label"]) {
+    for (const className of ["chat-empty", "chat-empty-icon", "chat-empty-text"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+    expect(conversationSurface).not.toMatch(/(^|\n)\.chat-follow-label(?:\s|\.|:|\{|,|\[)/)
 
     expect(html).toContain('href="styles/surfaces/conversation.css"')
     const conversationAt = html.indexOf('href="styles/surfaces/conversation.css"')
@@ -2668,7 +2680,7 @@ describe("overlay architecture guards", () => {
         const selector = match[1] ?? ""
         const body = match[2] ?? ""
         const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
-        if (!isThemeSelector || !/\.chat-goals-strip\b/.test(selector)) continue
+        if (!isThemeSelector || !/\.conversation-agent-rail\b/.test(selector)) continue
 
         expect(body).not.toMatch(/\b(?:background|border(?:-[a-z]+)?|box-shadow)\s*:/)
       }
