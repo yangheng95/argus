@@ -982,25 +982,22 @@ button.s-row:focus-visible {
 
 /* ── Settings dialog shell + sidebar nav ─────────────────── */
 
-.config-close-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(28px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
-  border: none;
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background var(--ui-duration-base),
-    color var(--ui-duration-base);
+#configDialog .dialog-form {
+  --settings-surface-base: var(--surface-inset);
+  --settings-surface-hover: color-mix(in srgb, var(--surface-hover) 72%, var(--surface));
+  --settings-surface-muted: color-mix(in srgb, var(--surface) 82%, var(--surface-inset));
+  --settings-surface-emphasis: color-mix(in srgb, var(--surface-strong) 74%, var(--surface));
+  min-height: min(calc(620px * var(--ui-scale)), calc(100vh - calc(80px * var(--ui-scale))));
 }
 
-.config-close-btn:hover {
-  background: var(--settings-surface-muted);
-  color: var(--text-strong);
+.dialog-header-actions .oc-button[data-ui="config-dialog-close"] {
+  --oc-button-color: var(--text-muted);
+}
+
+.dialog-header-actions .oc-button[data-ui="config-dialog-close"]:hover,
+.dialog-header-actions .oc-button[data-ui="config-dialog-close"]:focus-visible {
+  --oc-button-bg: var(--settings-surface-muted);
+  --oc-button-color: var(--text-strong);
 }
 
 /* `.config-dialog-layout` only adds flex layout; the shared CSS-
@@ -1009,13 +1006,6 @@ button.s-row:focus-visible {
    styles.css because they cross the inspector / settings
    surface boundary. */
 .config-dialog-layout {
-  /* Settings panels use a neutral surface stack so every theme reads as
-   * one family instead of mixing accent-washed blues with black cards. */
-  --settings-surface-base: var(--surface-inset);
-  --settings-surface-hover: color-mix(in srgb, var(--surface-hover) 72%, var(--surface));
-  --settings-surface-muted: color-mix(in srgb, var(--surface) 82%, var(--surface-inset));
-  --settings-surface-emphasis: color-mix(in srgb, var(--surface-strong) 74%, var(--surface));
-
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
@@ -1027,10 +1017,6 @@ button.s-row:focus-visible {
   max-height: calc(
     min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale))) - calc(120px * var(--ui-scale))
   );
-}
-
-#configDialog .dialog-form {
-  min-height: min(calc(620px * var(--ui-scale)), calc(100vh - calc(80px * var(--ui-scale))));
 }
 
 /* Sidebar nav rail: vertical list of tab buttons inside the

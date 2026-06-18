@@ -10,6 +10,7 @@ import NetworkPanel from "./settings/NetworkPanel"
 import { PermissionsPanel } from "./settings/PermissionsPanel"
 import { MemoryPanel } from "./MemoryPanel"
 import { Dialog } from "./primitives/Dialog"
+import { Button } from "./ui/Button"
 import { Tab, TabList, TabPanel, Tabs } from "./ui/Tabs"
 import { appStore } from "../store/app"
 import { boardStore, activeTaskID } from "../store/board"
@@ -321,15 +322,19 @@ export function ConfigDialogHost() {
       title={t("config.title")}
       onClose={closeConfigDialog}
       headerActions={
-        <button
+        <Button
           type="button"
-          class="config-close-btn"
+          variant="ghost"
+          size="icon"
+          tone="neutral"
           id="btnCloseConfigDialog"
+          data-ui="config-dialog-close"
+          title={t("common.close")}
           aria-label={t("common.close")}
           onClick={closeConfigDialog}
         >
           <Icon name="close" size={14} strokeWidth={1.5} />
-        </button>
+        </Button>
       }
     >
       <Show when={dialogStore.config.open}>

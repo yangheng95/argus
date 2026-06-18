@@ -152,6 +152,71 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
       await page.keyboard.up("Control")
       await page.waitForSelector(".cmdk-panel")
     }
+    async function assertConfigCloseButtonPrimitive(screenshotPath?: string) {
+      const rest = await page.$eval("#btnCloseConfigDialog", (node) => {
+        const button = node as HTMLButtonElement
+        const style = window.getComputedStyle(button)
+        const rect = button.getBoundingClientRect()
+        return {
+          tagName: button.tagName,
+          className: button.className,
+          variant: button.dataset.variant || "",
+          size: button.dataset.size || "",
+          tone: button.dataset.tone || "",
+          ui: button.dataset.ui || "",
+          title: button.getAttribute("title") || "",
+          ariaLabel: button.getAttribute("aria-label") || "",
+          width: rect.width,
+          height: rect.height,
+          color: style.color,
+          backgroundColor: style.backgroundColor,
+        }
+      })
+      assert.equal(rest.tagName, "BUTTON")
+      assert.match(rest.className, /\boc-button\b/)
+      assert.equal(rest.variant, "ghost")
+      assert.equal(rest.size, "icon")
+      assert.equal(rest.tone, "neutral")
+      assert.equal(rest.ui, "config-dialog-close")
+      assert.equal(rest.title, "Close")
+      assert.equal(rest.ariaLabel, "Close")
+      assert.ok(rest.width > 0)
+      assert.ok(rest.height > 0)
+      assert.ok(Math.abs(rest.width - rest.height) <= 1)
+
+      await page.hover("#btnCloseConfigDialog")
+      const hover = await page.$eval("#btnCloseConfigDialog", (node) => {
+        const style = window.getComputedStyle(node as HTMLElement)
+        return {
+          color: style.color,
+          backgroundColor: style.backgroundColor,
+        }
+      })
+      assert.notEqual(hover.backgroundColor, "rgba(0, 0, 0, 0)")
+      assert.notEqual(hover.backgroundColor, "transparent")
+
+      await page.focus("#btnCloseConfigDialog")
+      const focus = await page.$eval("#btnCloseConfigDialog", (node) => {
+        const button = node as HTMLButtonElement
+        const style = window.getComputedStyle(button)
+        return {
+          active: document.activeElement === button,
+          outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth,
+          focusVisible: button.matches(":focus-visible"),
+        }
+      })
+      assert.equal(focus.active, true)
+      assert.equal(focus.focusVisible, true)
+      assert.notEqual(focus.outlineStyle, "none")
+      assert.notEqual(focus.outlineWidth, "0px")
+
+      if (screenshotPath) {
+        const screenshot = await page.screenshot({ fullPage: false })
+        assert.ok(screenshot.length > 0)
+        writeFileSync(screenshotPath, screenshot)
+      }
+    }
     async function runConfigCommand(query: string, panelID: string, expectedText: string, screenshotPath?: string) {
       await openCommandPaletteFromKeyboard()
       await page.click(".cmdk-input")
@@ -178,11 +243,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
         panelID,
       )
       await page.waitForFunction((text) => document.body.textContent?.includes(text), {}, expectedText)
-      if (screenshotPath) {
-        const screenshot = await page.screenshot({ fullPage: false })
-        assert.ok(screenshot.length > 0)
-        writeFileSync(screenshotPath, screenshot)
-      }
+      await assertConfigCloseButtonPrimitive(screenshotPath)
       await page.click("#btnCloseConfigDialog")
       await page.waitForFunction(() => document.querySelector("#configDialog") === null)
     }

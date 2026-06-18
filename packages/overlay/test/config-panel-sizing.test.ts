@@ -67,11 +67,11 @@ describe("config panel sizing", () => {
   })
 
   test("settings panels keep a flat borderless owner surface", () => {
-    const layoutBody = bodyOf(".config-dialog-layout")
-    expect(layoutBody).toContain("--settings-surface-base: var(--surface-inset)")
-    expect(layoutBody).toContain("--settings-surface-hover:")
-    expect(layoutBody).toContain("--settings-surface-muted:")
-    expect(layoutBody).toContain("--settings-surface-emphasis:")
+    const dialogBody = bodyOf("#configDialog .dialog-form")
+    expect(dialogBody).toContain("--settings-surface-base: var(--surface-inset)")
+    expect(dialogBody).toContain("--settings-surface-hover:")
+    expect(dialogBody).toContain("--settings-surface-muted:")
+    expect(dialogBody).toContain("--settings-surface-emphasis:")
 
     for (const selector of [
       ".s-row",
@@ -146,6 +146,11 @@ describe("config panel sizing", () => {
   })
 
   test("settings dialog sidebar uses the shared Tabs primitive", () => {
+    expect(CONFIG_DIALOG_TSX).toContain('import { Button } from "./ui/Button"')
+    expect(CONFIG_DIALOG_TSX).toContain("<Button")
+    expect(CONFIG_DIALOG_TSX).toContain('data-ui="config-dialog-close"')
+    expect(CONFIG_DIALOG_TSX).toContain('id="btnCloseConfigDialog"')
+    expect(CONFIG_DIALOG_TSX).not.toContain('class="config-close-btn"')
     expect(CONFIG_DIALOG_TSX).toContain('import { Tab, TabList, TabPanel, Tabs } from "./ui/Tabs"')
     expect(CONFIG_DIALOG_TSX).toContain("<Tabs")
     expect(CONFIG_DIALOG_TSX).toContain("<TabList")
@@ -159,6 +164,15 @@ describe("config panel sizing", () => {
     expect(SETTINGS_CSS).not.toMatch(/\.config-nav-item\b/)
     expect(SETTINGS_CSS).not.toMatch(/\.config-nav-spacer\b/)
     expect(SETTINGS_CSS).not.toMatch(/\.config-tab-panel\.active\b/)
+    expect(SETTINGS_CSS).not.toMatch(/\.config-close-btn\b/)
+    expect(bodyOf('.dialog-header-actions .oc-button[data-ui="config-dialog-close"]')).toMatch(
+      /--oc-button-color:\s*var\(--text-muted\)/,
+    )
+    expect(
+      bodyOf(
+        '.dialog-header-actions .oc-button[data-ui="config-dialog-close"]:hover,\n.dialog-header-actions .oc-button[data-ui="config-dialog-close"]:focus-visible',
+      ),
+    ).toMatch(/--oc-button-bg:\s*var\(--settings-surface-muted\)/)
     expect(bodyOf(".config-sidebar .oc-tabs")).toMatch(/flex-direction:\s*column/)
     expect(bodyOf(".config-sidebar .oc-tab")).toMatch(/justify-content:\s*flex-start/)
     expect(bodyOf('.config-sidebar .oc-tab[data-config-tab="about"]')).toMatch(/margin-top:\s*auto/)
