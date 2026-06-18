@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -935,7 +937,38 @@ test(
         "mission task projection button should render after mission wake refresh",
         (state) => state.missionTaskProjectionButtons === 1,
       )
-      await clickButton('[data-ui="mission-task-projection-select"]')
+      const projectionSelector = '[data-ui="mission-task-projection-select"]'
+      await page.waitForSelector(projectionSelector, { visible: true })
+      let projectionFocused = false
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        await page.keyboard.press("Tab")
+        projectionFocused = await page.$eval(
+          projectionSelector,
+          (node) => document.activeElement === node,
+        )
+        if (projectionFocused) break
+      }
+      assert.equal(projectionFocused, true)
+      const projectionFocus = await page.$eval(projectionSelector, (node) => {
+        const button = node as HTMLElement
+        const styles = getComputedStyle(button)
+        return {
+          className: button.className,
+          focusVisible: button.matches(":focus-visible"),
+          outlineStyle: styles.outlineStyle,
+          outlineWidth: styles.outlineWidth,
+        }
+      })
+      assert.match(projectionFocus.className, /\btask-row-main\b/)
+      assert.equal(projectionFocus.focusVisible, true)
+      assert.notEqual(projectionFocus.outlineStyle, "none")
+      assert.notEqual(projectionFocus.outlineWidth, "0px")
+      const missionPanel = await page.$("#leftPanelMissions")
+      assert.ok(missionPanel)
+      const screenshotPath = resolve(".scratch/mission-task-projection-row-focus.png")
+      mkdirSync(dirname(screenshotPath), { recursive: true })
+      writeFileSync(screenshotPath, await missionPanel.screenshot({}))
+      await clickButton(projectionSelector)
       await page.waitForFunction(
         () =>
           document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true" &&

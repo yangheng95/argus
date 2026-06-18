@@ -140,7 +140,7 @@ function MissionTaskProjectionRow(props: { task: MissionTaskProjection; onSelect
     >
       <button
         type="button"
-        class="mission-task-projection-button"
+        class="task-row-main mission-task-projection-select"
         data-ui="mission-task-projection-select"
         title={missionTaskProjectionTip(props.task)}
         onClick={(event) => {

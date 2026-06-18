@@ -140,10 +140,12 @@
   min-width: 0;
 }
 
-.mission-task-projection-button {
+.mission-task-projection-row .task-row-main[data-ui="mission-task-projection-select"] {
   display: grid;
   width: 100%;
   min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
@@ -158,11 +160,10 @@
   cursor: pointer;
 }
 
-.mission-task-projection-button:hover,
-.mission-task-projection-button:focus-visible {
+.mission-task-projection-row .task-row-main[data-ui="mission-task-projection-select"]:hover,
+.mission-task-projection-row .task-row-main[data-ui="mission-task-projection-select"]:focus-visible {
   background: var(--surface-hover);
   color: var(--text-strong);
-  outline: none;
 }
 
 .mission-task-projection-main {
