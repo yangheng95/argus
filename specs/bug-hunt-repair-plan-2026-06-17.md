@@ -3723,3 +3723,60 @@ LINE:
 - Averroes confirmed BH-096 was still present in HEAD `2bfa5ef247`: `.env.example` was modeled as an extension, while `path.extname(...)` returned `.example`.
 - Averroes verified the current classifier shape hits `.env.example` and `config/app.env.example` while skipping `config/notes.example`.
 - Averroes required the regression to cover root `.env.example`, nested `*.env.example`, and a negative `.example` fixture; the final test covers all three paths.
+
+## Batch P1-BM: BH-097 secret scan must read git object snapshots
+
+### Findings
+
+- BH-097 targets `script/secret-scan.ts` and `.husky/pre-push`.
+- `listTrackedFiles(...)` derives tracked path names from the git index, but `scan(...)` turns those paths into `path.join(opts.repoRoot, rel)` and reads current worktree bytes with `fs.readFileSync(...)`.
+- A committed or staged secret can therefore be hidden by editing the worktree copy to remove the secret without staging that cleanup.
+- The pre-push hook invokes the same scanner entrypoint, so it inherits the mismatch between pushed commit content, staged index content, and worktree reads.
+- Index-only scanning is insufficient: if HEAD contains a secret and the cleanup has been staged, the index is clean while the commit being pushed is still dirty.
+
+### Call-point Inventory
+
+- `script/secret-scan.ts::gitIndexPath(...)` locates the active git index and already honors `GIT_INDEX_FILE`.
+- `script/secret-scan.ts::parseGitIndexPaths(...)` parses path names from index entries; it is currently the single source for default scan paths.
+- `script/secret-scan.ts::listTrackedFiles(...)` wraps `parseGitIndexPaths(...)` for the default production path list.
+- `script/secret-scan.ts::scan(...)` is the only production scanning function and currently reads worktree files.
+- `.husky/pre-push` runs `bun run script/secret-scan.ts`; the hook also receives local/remote refs on stdin, which identify the local commit objects Git is about to push.
+- `packages/vscode-extension/test/secret-scan.test.ts` is the existing scanner regression suite and can create temporary git repositories for index-content behavior.
+
+### Fix Shape
+
+- Extend index parsing to return path, blob object id, file size, and mode from each stage-zero index entry.
+- Add tree parsing for `git ls-tree -r -z -l <ref>` output so scanner can read committed/local-ref blobs by object id.
+- Keep `parseGitIndexPaths(...)` as a compatibility-free wrapper over the richer parser for existing tests.
+- Make default `scan({ repoRoot })` read HEAD tree blobs plus indexed blobs through `git cat-file --batch` by object id, chunked by blob size, before applying the existing text classifier and secret patterns.
+- Add `refs` to `ScanOptions` for explicit pre-push local commit object ids; when present, scan those refs plus the index instead of implicitly resolving HEAD.
+- Change `.husky/pre-push` to capture hook stdin and pipe it to `secret-scan.ts --pre-push-stdin`, where malformed ref lines fail loudly and deleted refs are ignored.
+- Skip non-regular gitlink entries and blobs larger than the existing 1 MiB cutoff before invoking `git cat-file`.
+- Keep explicit `files` in `ScanOptions` as a test fixture override only; the production path must not fall back to worktree reads when indexed blob reads fail.
+- Do not add worktree fallback reads, hook-only checks, retry gates, `git diff` keyword matching, or scan-all behavior.
+
+### Regression Tests
+
+- Extend `packages/vscode-extension/test/secret-scan.test.ts`.
+- Add a temp git repo fixture where a secret is committed, the worktree copy is cleaned without staging, and `scan({ repoRoot })` still reports `openai-style` from HEAD/index blobs.
+- Add a temp git repo fixture where a clean commit is followed by a staged secret and an unstaged cleanup, and `scan({ repoRoot })` still reports `openai-style` from the staged index blob.
+- Add a temp git repo fixture where a committed secret is hidden by a staged cleanup and `scan({ repoRoot })` still reports `openai-style` from HEAD.
+- Add a pre-push local-ref fixture where a historical local commit contains a secret while current HEAD/index are clean, and `scan({ repoRoot, refs })` still reports the local-ref blob.
+- Add parser coverage proving index entries and tree entries expose object id, file size, mode, and path while `parseGitIndexPaths(...)` remains path-only.
+- Add pre-push stdin parser coverage for deduped pushed refs, deleted refs, and malformed lines.
+
+### Verification
+
+- Focused secret scanner tests passed: `bun test packages/vscode-extension/test/secret-scan.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Pre-push stdin equivalent passed: `"<local-ref-line>" | bun run script/secret-scan.ts --pre-push-stdin`.
+- VS Code extension typecheck passed: `bun run --cwd packages/vscode-extension typecheck`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Curie confirmed BH-097 was still present in HEAD `925222cb87803144e1966c42c30a9b5c2c237251`: the scanner selected paths from `.git/index` but read worktree bytes with `fs.readFileSync(...)`.
+- Curie identified that index-only scanning would still miss HEAD/local-ref secrets after a staged cleanup; the repair therefore scans both local-ref tree blobs and index blobs.
+- Curie required committed, staged, staged-cleanup, parser, and pre-push local-ref regressions; the final test suite covers all of those paths.
