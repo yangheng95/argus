@@ -1265,15 +1265,6 @@
         },
         "parameters": [
           {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "schema": {
               "type": "string"
             },
@@ -2344,6 +2335,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -2547,10 +2548,8 @@
         },
         "parameters": [
           {
-            "name": "directory",
             "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "name": "directory",
             "schema": {
               "type": "string"
             }
@@ -2620,7 +2619,8 @@
                   "name",
                   "expression",
                   "prompt"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -2671,10 +2671,8 @@
         },
         "parameters": [
           {
-            "name": "directory",
             "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "name": "directory",
             "schema": {
               "type": "string"
             }
@@ -2791,10 +2789,8 @@
         },
         "parameters": [
           {
-            "name": "directory",
             "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "name": "directory",
             "schema": {
               "type": "string"
             }
@@ -2888,7 +2884,8 @@
                   "name",
                   "eventType",
                   "prompt"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -2939,10 +2936,8 @@
         },
         "parameters": [
           {
-            "name": "directory",
             "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "name": "directory",
             "schema": {
               "type": "string"
             }
@@ -3616,7 +3611,9 @@
                             "anyOf": [
                               {
                                 "type": "string",
-                                "minLength": 1
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^(?!.*--)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
                               },
                               {
                                 "type": "null"
@@ -6487,249 +6484,7 @@
                     "all": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "properties": {
-                          "api": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "env": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "id": {
-                            "type": "string"
-                          },
-                          "npm": {
-                            "type": "string"
-                          },
-                          "models": {
-                            "type": "object",
-                            "propertyNames": {
-                              "type": "string"
-                            },
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "name": {
-                                  "type": "string"
-                                },
-                                "family": {
-                                  "type": "string"
-                                },
-                                "release_date": {
-                                  "type": "string"
-                                },
-                                "attachment": {
-                                  "type": "boolean"
-                                },
-                                "reasoning": {
-                                  "type": "boolean"
-                                },
-                                "temperature": {
-                                  "type": "boolean"
-                                },
-                                "tool_call": {
-                                  "type": "boolean"
-                                },
-                                "interleaved": {
-                                  "anyOf": [
-                                    {
-                                      "type": "boolean",
-                                      "const": true
-                                    },
-                                    {
-                                      "type": "object",
-                                      "properties": {
-                                        "field": {
-                                          "type": "string",
-                                          "enum": [
-                                            "reasoning_content",
-                                            "reasoning_details"
-                                          ]
-                                        }
-                                      },
-                                      "required": [
-                                        "field"
-                                      ],
-                                      "additionalProperties": false
-                                    }
-                                  ]
-                                },
-                                "cost": {
-                                  "type": "object",
-                                  "properties": {
-                                    "input": {
-                                      "type": "number"
-                                    },
-                                    "output": {
-                                      "type": "number"
-                                    },
-                                    "cache_read": {
-                                      "type": "number"
-                                    },
-                                    "cache_write": {
-                                      "type": "number"
-                                    },
-                                    "context_over_200k": {
-                                      "type": "object",
-                                      "properties": {
-                                        "input": {
-                                          "type": "number"
-                                        },
-                                        "output": {
-                                          "type": "number"
-                                        },
-                                        "cache_read": {
-                                          "type": "number"
-                                        },
-                                        "cache_write": {
-                                          "type": "number"
-                                        }
-                                      },
-                                      "required": [
-                                        "input",
-                                        "output"
-                                      ]
-                                    }
-                                  },
-                                  "required": [
-                                    "input",
-                                    "output"
-                                  ]
-                                },
-                                "limit": {
-                                  "type": "object",
-                                  "properties": {
-                                    "context": {
-                                      "type": "number"
-                                    },
-                                    "input": {
-                                      "type": "number"
-                                    },
-                                    "output": {
-                                      "type": "number"
-                                    }
-                                  },
-                                  "required": [
-                                    "context",
-                                    "output"
-                                  ]
-                                },
-                                "modalities": {
-                                  "type": "object",
-                                  "properties": {
-                                    "input": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string",
-                                        "enum": [
-                                          "text",
-                                          "audio",
-                                          "image",
-                                          "video",
-                                          "pdf"
-                                        ]
-                                      }
-                                    },
-                                    "output": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "string",
-                                        "enum": [
-                                          "text",
-                                          "audio",
-                                          "image",
-                                          "video",
-                                          "pdf"
-                                        ]
-                                      }
-                                    }
-                                  },
-                                  "required": [
-                                    "input",
-                                    "output"
-                                  ]
-                                },
-                                "experimental": {
-                                  "type": "boolean"
-                                },
-                                "status": {
-                                  "type": "string",
-                                  "enum": [
-                                    "alpha",
-                                    "beta",
-                                    "deprecated"
-                                  ]
-                                },
-                                "options": {
-                                  "type": "object",
-                                  "propertyNames": {
-                                    "type": "string"
-                                  },
-                                  "additionalProperties": {}
-                                },
-                                "headers": {
-                                  "type": "object",
-                                  "propertyNames": {
-                                    "type": "string"
-                                  },
-                                  "additionalProperties": {
-                                    "type": "string"
-                                  }
-                                },
-                                "provider": {
-                                  "type": "object",
-                                  "properties": {
-                                    "npm": {
-                                      "type": "string"
-                                    },
-                                    "api": {
-                                      "type": "string"
-                                    }
-                                  }
-                                },
-                                "variants": {
-                                  "type": "object",
-                                  "propertyNames": {
-                                    "type": "string"
-                                  },
-                                  "additionalProperties": {
-                                    "type": "object",
-                                    "propertyNames": {
-                                      "type": "string"
-                                    },
-                                    "additionalProperties": {}
-                                  }
-                                }
-                              },
-                              "required": [
-                                "id",
-                                "name",
-                                "release_date",
-                                "attachment",
-                                "reasoning",
-                                "temperature",
-                                "tool_call",
-                                "limit",
-                                "options"
-                              ]
-                            }
-                          }
-                        },
-                        "required": [
-                          "name",
-                          "env",
-                          "id",
-                          "models"
-                        ]
+                        "$ref": "#/components/schemas/Provider"
                       }
                     },
                     "default": {
@@ -6926,6 +6681,42 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.hexin.refresh({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/provider/hexin/budget": {
+      "get": {
+        "operationId": "provider.hexin.budget",
+        "summary": "Get hexin gateway key budget",
+        "description": "Fetch the Hexin LiteLLM key budget using the configured Hexin provider credential. This route never exposes the API key to the overlay.",
+        "responses": {
+          "200": {
+            "description": "Hexin budget lookup result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HexinBudgetResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.hexin.budget({\n  ...\n})"
           }
         ]
       }
@@ -10708,6 +10499,7 @@
                         "const": "view_plan"
                       },
                       "taskID": {
+                        "description": "Task id whose plan and goal list should be inspected.",
                         "type": "string"
                       }
                     },
@@ -10724,6 +10516,7 @@
                         "const": "view_board"
                       },
                       "taskID": {
+                        "description": "Task id whose board should be inspected; omit to list recent tasks.",
                         "type": "string"
                       }
                     },
@@ -10751,6 +10544,7 @@
                         "const": "query_task"
                       },
                       "taskIDs": {
+                        "description": "Task ids to query, preserving one output row per id.",
                         "minItems": 1,
                         "maxItems": 50,
                         "type": "array",
@@ -10760,9 +10554,11 @@
                         }
                       },
                       "includeChildren": {
+                        "description": "Include compact child task summaries for each queried task.",
                         "type": "boolean"
                       },
                       "includeInteractions": {
+                        "description": "Include pending interaction counts for each queried task.",
                         "type": "boolean"
                       }
                     },
@@ -10779,17 +10575,21 @@
                         "const": "create_task"
                       },
                       "title": {
+                        "description": "Short semantic title for the new task.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 80
                       },
                       "request": {
+                        "description": "Complete user-facing request for the task to execute.",
                         "type": "string"
                       },
                       "request_id": {
+                        "description": "Optional idempotency key from the originating channel or UI request.",
                         "type": "string"
                       },
                       "executor": {
+                        "description": "Executor runtime to use for the new task when overriding the project default.",
                         "type": "string",
                         "enum": [
                           "opencorvus",
@@ -10798,12 +10598,15 @@
                         ]
                       },
                       "model": {
+                        "description": "Model override for the new task, in provider/model form.",
                         "type": "string"
                       },
                       "queue": {
+                        "description": "Whether to enqueue the task behind the directory queue instead of starting now.",
                         "type": "boolean"
                       },
                       "checks": {
+                        "description": "Verification check configuration for the new task.",
                         "type": "object",
                         "properties": {
                           "build": {
@@ -11251,6 +11054,7 @@
                         }
                       },
                       "routing": {
+                        "description": "Stage routing overrides for the new task.",
                         "type": "object",
                         "properties": {
                           "spec": {
@@ -11277,12 +11081,15 @@
                         }
                       },
                       "channel": {
+                        "description": "External channel id to bind this task to when created from a channel.",
                         "type": "string"
                       },
                       "thread": {
+                        "description": "External thread id to bind this task to when created from a channel.",
                         "type": "string"
                       },
                       "platform": {
+                        "description": "External channel platform for the binding, such as slack or feishu.",
                         "type": "string",
                         "enum": [
                           "slack",
@@ -11302,6 +11109,7 @@
                         ]
                       },
                       "metadata": {
+                        "description": "Additional task metadata supplied by the caller.",
                         "type": "object",
                         "propertyNames": {
                           "type": "string"
@@ -11309,9 +11117,11 @@
                         "additionalProperties": {}
                       },
                       "source": {
+                        "description": "Business source label for the task, for example panel or channel:slack.",
                         "type": "string"
                       },
                       "allow_create": {
+                        "description": "Set false to return an ignored response instead of creating a task.",
                         "type": "boolean"
                       }
                     },
@@ -11328,16 +11138,20 @@
                         "const": "send_task_message"
                       },
                       "taskID": {
+                        "description": "Task id that should receive the follow-up message.",
                         "type": "string"
                       },
                       "text": {
+                        "description": "Natural-language follow-up message to append to the task conversation.",
                         "type": "string"
                       },
                       "source": {
+                        "description": "Business source label for the follow-up message.",
                         "type": "string",
                         "minLength": 1
                       },
                       "user_id": {
+                        "description": "Optional upstream user id associated with the follow-up message.",
                         "type": "string"
                       }
                     },
@@ -11356,9 +11170,11 @@
                         "const": "reply_interaction"
                       },
                       "interactionID": {
+                        "description": "Pending interaction id to answer.",
                         "type": "string"
                       },
                       "reply": {
+                        "description": "Predefined reply mode for permission-style interactions.",
                         "type": "string",
                         "enum": [
                           "once",
@@ -11366,6 +11182,7 @@
                         ]
                       },
                       "message": {
+                        "description": "Free-form answer message for the pending interaction.",
                         "type": "string"
                       }
                     },
@@ -11382,9 +11199,11 @@
                         "const": "reject_interaction"
                       },
                       "interactionID": {
+                        "description": "Pending interaction id to reject.",
                         "type": "string"
                       },
                       "message": {
+                        "description": "Optional rejection explanation to show with the interaction.",
                         "type": "string"
                       }
                     },
@@ -11401,6 +11220,7 @@
                         "const": "retry_task"
                       },
                       "taskID": {
+                        "description": "Task id to queue for retry.",
                         "type": "string"
                       }
                     },
@@ -11417,6 +11237,7 @@
                         "const": "replan_task"
                       },
                       "taskID": {
+                        "description": "Task id to queue for replanning.",
                         "type": "string"
                       }
                     },
@@ -11433,6 +11254,7 @@
                         "const": "cancel_task"
                       },
                       "taskID": {
+                        "description": "Task id to cancel.",
                         "type": "string"
                       }
                     },
@@ -11449,9 +11271,11 @@
                         "const": "update_checks"
                       },
                       "taskID": {
+                        "description": "Task id whose verification checks should be updated.",
                         "type": "string"
                       },
                       "selection": {
+                        "description": "Per-check enabled/disabled selection map keyed by check id.",
                         "type": "object",
                         "propertyNames": {
                           "type": "string"
@@ -11461,6 +11285,7 @@
                         }
                       },
                       "checks": {
+                        "description": "Full replacement verification check configuration.",
                         "type": "object",
                         "properties": {
                           "build": {
@@ -11921,6 +11746,7 @@
                         "const": "capture_overlay_screenshot"
                       },
                       "match": {
+                        "description": "Optional window-title match text used to select the OpenCorvus GUI window.",
                         "type": "string"
                       }
                     },
@@ -11936,6 +11762,7 @@
                         "const": "set_executor"
                       },
                       "executor": {
+                        "description": "Executor runtime to select in the local panel.",
                         "type": "string",
                         "enum": [
                           "opencorvus",
@@ -11957,6 +11784,7 @@
                         "const": "select_task"
                       },
                       "taskID": {
+                        "description": "Task id to focus in the local project assistant surface.",
                         "type": "string"
                       }
                     },
@@ -11973,6 +11801,7 @@
                         "const": "select_session"
                       },
                       "sessionID": {
+                        "description": "Session id to focus in the local project assistant surface.",
                         "type": "string"
                       }
                     },
@@ -12001,6 +11830,7 @@
                         "const": "fork_session"
                       },
                       "sessionID": {
+                        "description": "Existing session id to fork.",
                         "type": "string"
                       }
                     },
@@ -12017,6 +11847,7 @@
                         "const": "delete_session"
                       },
                       "sessionID": {
+                        "description": "Session id to delete along with linked tasks.",
                         "type": "string"
                       }
                     },
@@ -12033,15 +11864,403 @@
                         "const": "update_goal"
                       },
                       "goalID": {
+                        "description": "Goal id whose description and acceptance specs should be replaced.",
                         "type": "string"
                       },
                       "description": {
+                        "description": "Replacement goal description.",
                         "type": "string"
                       },
                       "acceptance_specs": {
+                        "description": "Complete replacement acceptance specs for this goal using the canonical AcceptanceSpec schema.",
                         "minItems": 1,
                         "type": "array",
-                        "items": {}
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "description": "Stable spec ID, e.g. 'acc-login-3s'.",
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "source_requirement_id": {
+                              "description": "Requirement ID this spec was derived from (REQ-N).",
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "goal_id": {
+                              "description": "Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.",
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "scenario": {
+                              "description": "Gherkin Given/When/Then scenario. Optional — omit for pure code checks.",
+                              "type": "object",
+                              "properties": {
+                                "given": {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "when": {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "then": {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              "required": [
+                                "given",
+                                "when",
+                                "then"
+                              ]
+                            },
+                            "scorers": {
+                              "description": "At least one scorer — a spec without a scorer is untestable.",
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "description": "heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.",
+                                        "type": "string",
+                                        "const": "heuristic"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "spec": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "description": "shell — run an inline command. Requires: cmd; optional cwd.",
+                                                "type": "string",
+                                                "const": "shell"
+                                              },
+                                              "cmd": {
+                                                "description": "Shell command. Exit 0 = pass unless expect.exit_code set.",
+                                                "type": "string",
+                                                "minLength": 1
+                                              },
+                                              "cwd": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "cmd"
+                                            ]
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "description": "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
+                                                "type": "string",
+                                                "const": "script_ref"
+                                              },
+                                              "path": {
+                                                "description": "Repo-relative script path that already exists at registration time.",
+                                                "type": "string",
+                                                "minLength": 1
+                                              },
+                                              "args": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string"
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "path"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "expect": {
+                                        "type": "object",
+                                        "properties": {
+                                          "exit_code": {
+                                            "type": "integer",
+                                            "minimum": -9007199254740991,
+                                            "maximum": 9007199254740991
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "name",
+                                      "spec"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "description": "llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.",
+                                        "type": "string",
+                                        "const": "llm_judge"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "criteria": {
+                                        "description": "Single-criterion evaluation question in natural language.",
+                                        "type": "string",
+                                        "minLength": 10
+                                      },
+                                      "rubric": {
+                                        "description": "Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.",
+                                        "minItems": 2,
+                                        "maxItems": 5,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "score": {
+                                              "description": "Integer score for this level.",
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 9007199254740991
+                                            },
+                                            "label": {
+                                              "description": "Short level label, e.g. 'fully met'.",
+                                              "type": "string",
+                                              "minLength": 1
+                                            },
+                                            "anchor": {
+                                              "description": "Behavioral description: what earns this score.",
+                                              "type": "string",
+                                              "minLength": 1
+                                            },
+                                            "passes": {
+                                              "description": "Does this level count as pass for binary verdict?",
+                                              "type": "boolean"
+                                            }
+                                          },
+                                          "required": [
+                                            "score",
+                                            "label",
+                                            "anchor",
+                                            "passes"
+                                          ]
+                                        }
+                                      },
+                                      "inputs": {
+                                        "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "enum": [
+                                            "acceptance_summary",
+                                            "changed_files",
+                                            "requirement_text",
+                                            "visual_evidence"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "name",
+                                      "criteria"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "description": "prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.",
+                                        "type": "string",
+                                        "const": "prebuilt"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "enum": [
+                                          "factuality",
+                                          "relevance",
+                                          "contains",
+                                          "exact_match",
+                                          "length_within",
+                                          "json_schema",
+                                          "visual-evidence-bundle"
+                                        ]
+                                      },
+                                      "config": {
+                                        "default": {},
+                                        "description": "Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.",
+                                        "type": "object",
+                                        "properties": {
+                                          "expected_text": {
+                                            "description": "For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.",
+                                            "type": "string",
+                                            "minLength": 1
+                                          },
+                                          "min_length": {
+                                            "description": "For length_within: inclusive minimum character count.",
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991
+                                          },
+                                          "max_length": {
+                                            "description": "For length_within: inclusive maximum character count.",
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991
+                                          },
+                                          "json_schema": {
+                                            "description": "For json_schema: JSON.stringify of the expected JSON Schema object.",
+                                            "type": "string",
+                                            "minLength": 2
+                                          }
+                                        },
+                                        "additionalProperties": false
+                                      },
+                                      "spec": {
+                                        "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "visual_evidence_bundle"
+                                          },
+                                          "viewport": {
+                                            "type": "string",
+                                            "minLength": 1
+                                          }
+                                        },
+                                        "required": [
+                                          "kind"
+                                        ]
+                                      },
+                                      "expect": {
+                                        "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                        "type": "object",
+                                        "properties": {
+                                          "status": {
+                                            "type": "string",
+                                            "const": "passed"
+                                          }
+                                        },
+                                        "required": [
+                                          "status"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "name"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                        "type": "string",
+                                        "const": "contract_audit"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "spec": {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "contract_graph"
+                                          },
+                                          "contract_ids": {
+                                            "minItems": 1,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string",
+                                              "minLength": 1
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "contract_ids"
+                                        ]
+                                      },
+                                      "expect": {
+                                        "type": "object",
+                                        "properties": {
+                                          "status": {
+                                            "type": "string",
+                                            "const": "passed"
+                                          }
+                                        },
+                                        "required": [
+                                          "status"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "name",
+                                      "spec",
+                                      "expect"
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "severity": {
+                              "type": "string",
+                              "enum": [
+                                "essential",
+                                "important",
+                                "optional",
+                                "pitfall"
+                              ]
+                            },
+                            "trigger": {
+                              "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.",
+                              "type": "string",
+                              "enum": [
+                                "on_goal",
+                                "on_integrity"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "source_requirement_id",
+                            "goal_id",
+                            "title",
+                            "scorers",
+                            "severity"
+                          ]
+                        }
                       }
                     },
                     "required": [
@@ -12059,6 +12278,7 @@
                         "const": "delete_goal"
                       },
                       "goalID": {
+                        "description": "Goal id to delete from the task plan.",
                         "type": "string"
                       }
                     },
@@ -13717,7 +13937,6 @@
                       "type": "string"
                     },
                     "operationKind": {
-                      "default": "preview-capture",
                       "type": "string",
                       "enum": [
                         "preview-capture",
@@ -13768,6 +13987,7 @@
                     "taskID",
                     "targetID",
                     "viewportID",
+                    "operationKind",
                     "status",
                     "summary",
                     "diagnostics",
@@ -16190,11 +16410,33 @@
                                         },
                                         "config": {
                                           "default": {},
+                                          "description": "Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.",
                                           "type": "object",
-                                          "propertyNames": {
-                                            "type": "string"
+                                          "properties": {
+                                            "expected_text": {
+                                              "description": "For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.",
+                                              "type": "string",
+                                              "minLength": 1
+                                            },
+                                            "min_length": {
+                                              "description": "For length_within: inclusive minimum character count.",
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 9007199254740991
+                                            },
+                                            "max_length": {
+                                              "description": "For length_within: inclusive maximum character count.",
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 9007199254740991
+                                            },
+                                            "json_schema": {
+                                              "description": "For json_schema: JSON.stringify of the expected JSON Schema object.",
+                                              "type": "string",
+                                              "minLength": 2
+                                            }
                                           },
-                                          "additionalProperties": {}
+                                          "additionalProperties": false
                                         },
                                         "spec": {
                                           "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
@@ -16298,12 +16540,11 @@
                                 ]
                               },
                               "trigger": {
-                                "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.",
+                                "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.",
                                 "type": "string",
                                 "enum": [
                                   "on_goal",
-                                  "on_integrity",
-                                  "on_acceptance"
+                                  "on_integrity"
                                 ]
                               }
                             },
@@ -16643,11 +16884,33 @@
                                               },
                                               "config": {
                                                 "default": {},
+                                                "description": "Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.",
                                                 "type": "object",
-                                                "propertyNames": {
-                                                  "type": "string"
+                                                "properties": {
+                                                  "expected_text": {
+                                                    "description": "For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.",
+                                                    "type": "string",
+                                                    "minLength": 1
+                                                  },
+                                                  "min_length": {
+                                                    "description": "For length_within: inclusive minimum character count.",
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                    "maximum": 9007199254740991
+                                                  },
+                                                  "max_length": {
+                                                    "description": "For length_within: inclusive maximum character count.",
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                    "maximum": 9007199254740991
+                                                  },
+                                                  "json_schema": {
+                                                    "description": "For json_schema: JSON.stringify of the expected JSON Schema object.",
+                                                    "type": "string",
+                                                    "minLength": 2
+                                                  }
                                                 },
-                                                "additionalProperties": {}
+                                                "additionalProperties": false
                                               },
                                               "spec": {
                                                 "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
@@ -16751,12 +17014,11 @@
                                       ]
                                     },
                                     "trigger": {
-                                      "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.",
+                                      "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.",
                                       "type": "string",
                                       "enum": [
                                         "on_goal",
-                                        "on_integrity",
-                                        "on_acceptance"
+                                        "on_integrity"
                                       ]
                                     }
                                   },
@@ -29631,11 +29893,33 @@
                                   },
                                   "config": {
                                     "default": {},
+                                    "description": "Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.",
                                     "type": "object",
-                                    "propertyNames": {
-                                      "type": "string"
+                                    "properties": {
+                                      "expected_text": {
+                                        "description": "For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.",
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "min_length": {
+                                        "description": "For length_within: inclusive minimum character count.",
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "max_length": {
+                                        "description": "For length_within: inclusive maximum character count.",
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "json_schema": {
+                                        "description": "For json_schema: JSON.stringify of the expected JSON Schema object.",
+                                        "type": "string",
+                                        "minLength": 2
+                                      }
                                     },
-                                    "additionalProperties": {}
+                                    "additionalProperties": false
                                   },
                                   "spec": {
                                     "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
@@ -29739,12 +30023,11 @@
                           ]
                         },
                         "trigger": {
-                          "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.",
+                          "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.",
                           "type": "string",
                           "enum": [
                             "on_goal",
-                            "on_integrity",
-                            "on_acceptance"
+                            "on_integrity"
                           ]
                         }
                       },
@@ -32290,6 +32573,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
           "409": {
             "description": "Conflict",
             "content": {
@@ -32326,7 +32619,8 @@
                 "properties": {
                   "projectDir": {
                     "description": "Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB.",
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
@@ -33266,8 +33560,12 @@
             "description": "WhatsApp Cloud API phone number ID",
             "type": "string"
           },
+          "appSecret": {
+            "description": "WhatsApp Meta app secret used to verify webhook signatures",
+            "type": "string"
+          },
           "verifyToken": {
-            "description": "Optional WhatsApp webhook verification token",
+            "description": "WhatsApp webhook verification token",
             "type": "string"
           },
           "webhookHost": {
@@ -33353,7 +33651,7 @@
             "type": "string"
           },
           "secret": {
-            "description": "Optional LINE channel secret for webhook verification",
+            "description": "LINE channel secret for webhook verification",
             "type": "string"
           },
           "webhookHost": {
@@ -33406,6 +33704,10 @@
           },
           "token": {
             "description": "Mattermost bot token",
+            "type": "string"
+          },
+          "webhookToken": {
+            "description": "Mattermost outgoing webhook token used to verify inbound requests",
             "type": "string"
           },
           "webhookHost": {
@@ -34598,12 +34900,17 @@
               "active": {
                 "default": "frontend",
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^(?!.*--)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
               },
               "profiles": {
                 "type": "object",
                 "propertyNames": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^(?!.*--)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
                 },
                 "additionalProperties": {
                   "type": "object",
@@ -34613,7 +34920,8 @@
                       "minLength": 1
                     },
                     "description": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
                     "agents": {
                       "default": {},
@@ -34622,7 +34930,8 @@
                         "type": "string"
                       },
                       "additionalProperties": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                       }
                     }
                   },
@@ -35516,6 +35825,9 @@
         "type": "object",
         "properties": {
           "directory": {
+            "type": "string"
+          },
+          "baseRef": {
             "type": "string"
           }
         },
@@ -38066,6 +38378,65 @@
           "label"
         ]
       },
+      "HexinBudget": {
+        "type": "object",
+        "properties": {
+          "maxBudget": {
+            "type": "number"
+          },
+          "spend": {
+            "type": "number"
+          },
+          "remaining": {
+            "type": "number"
+          },
+          "overBudget": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "maxBudget",
+          "spend",
+          "remaining",
+          "overBudget"
+        ]
+      },
+      "HexinBudgetResponse": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean",
+                "const": true
+              },
+              "budget": {
+                "$ref": "#/components/schemas/HexinBudget"
+              }
+            },
+            "required": [
+              "ok",
+              "budget"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean",
+                "const": false
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ok",
+              "error"
+            ]
+          }
+        ]
+      },
       "ProviderAuthPrompt": {
         "type": "object",
         "properties": {
@@ -39027,6 +39398,23 @@
           "properties"
         ]
       },
+      "Event.server.heartbeat": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "server.heartbeat"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.global.disposed": {
         "type": "object",
         "properties": {
@@ -39324,7 +39712,10 @@
                   }
                 ]
               }
-            }
+            },
+            "required": [
+              "error"
+            ]
           }
         },
         "required": [
@@ -42792,6 +43183,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.server.connected"
+          },
+          {
+            "$ref": "#/components/schemas/Event.server.heartbeat"
           },
           {
             "$ref": "#/components/schemas/Event.global.disposed"

@@ -22,10 +22,20 @@ describe("SDK build format contract", () => {
     const workflow = readRepo(".github/workflows/typecheck.yml")
     const build = readRepo("packages/sdk/js/script/build.ts")
 
-    expect(build).toContain('rmWithinPackage("src/gen"')
-    expect(build).toContain('generate("./src/gen")')
+    expect(build).toContain("replaceDirectoryAfterSuccessfulBuild({")
+    expect(build).toContain('stagingRelative: ".tmp-sdk-gen"')
+    expect(build).toContain('targetRelative: "src/gen"')
+    expect(build).not.toContain('rmWithinPackage("src/gen"')
+    expect(build).not.toContain('writeFileWithRetry(path.join(dir, "src", "gen"')
     expect(workflow).toContain("bun ./packages/sdk/js/script/build.ts")
     expect(workflow).toContain("packages/sdk/js/src/gen packages/sdk/openapi.json")
     expect(workflow).not.toContain("packages/sdk/js/src/v2/gen")
+  })
+
+  test("OpenAPI generation does not import the SDK client before SDK generation", () => {
+    const plugin = readRepo("packages/opencorvus/src/plugin/index.ts")
+
+    expect(plugin).not.toContain('import { createOpenCorvusClient } from "@opencorvus-ai/sdk"')
+    expect(plugin).toContain('await import("@opencorvus-ai/sdk")')
   })
 })

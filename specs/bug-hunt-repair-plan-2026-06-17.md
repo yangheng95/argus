@@ -2873,3 +2873,53 @@ LINE:
 - Kuhn confirmed BH-071 was present in HEAD: `docker info` failure was handled with `console.warn(...)` and package-local still reached `=== Package complete ===`.
 - Kuhn confirmed the candidate repair is the minimal fail-closed boundary: throw when Docker is unavailable unless the operator explicitly passed `--skip-linux`.
 - Kuhn identified a separate adjacent package-linux-binary stale-output risk; that is not included in this BH-071 batch.
+
+## Batch P1-AU: BH-073 SDK generated output replacement must be transactional
+
+### Findings
+
+- BH-073 targets `packages/sdk/js/script/build.ts`.
+- HEAD wrote tracked `src/gen` bootstrap stubs before OpenAPI generation, then deleted the tracked generated directory before the real SDK generation had succeeded.
+- The stub write was masking a real import cycle: SDK build loads the OpenAPI generator, OpenAPI route inventory loads plugin routes, plugin code imported `@opencorvus-ai/sdk` at top level, and the SDK client imports `src/gen/*`.
+- If OpenAPI generation, SDK generation, formatting, or process execution failed between those steps, the tracked generated SDK output could be left as partial stubs or removed files.
+
+### Call-point Inventory
+
+- `packages/sdk/js/script/build.ts` owns SDK OpenAPI and client generation.
+- `packages/sdk/js/script/generation-transaction.ts` owns the generated-directory transaction helper introduced for this batch.
+- `packages/sdk/js/package.json::scripts.build` invokes the SDK build script.
+- `script/generate.ts` invokes the SDK build before package generation.
+- `.github/workflows/typecheck.yml` and `.github/workflows/generate.yml` verify generated SDK/OpenAPI output in CI.
+- `packages/opencorvus/src/server/server.ts::Server.openapi()` and `packages/opencorvus/src/server/routes/app.ts` provide the route inventory used during OpenAPI generation.
+- `packages/opencorvus/src/plugin/index.ts` owned the top-level SDK import that completed the cycle.
+- `packages/opencorvus/test/script/sdk-build-format-contract.test.ts`, `packages/opencorvus/test/script/sdk-build-transaction.test.ts`, and `packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts` cover the generation contract.
+- `packages/sdk/openapi.json`, `packages/sdk/js/src/gen/*`, and generated API docs must be regenerated together after route schema changes.
+
+### Fix Shape
+
+- Remove the plugin module's top-level SDK value import and load `createOpenCorvusClient` only inside the lazy plugin runtime path.
+- Delete tracked stub writes and the pre-success `rmWithinPackage("src/gen")` step from the SDK build.
+- Generate the client into owned untracked staging directory `.tmp-sdk-gen`, validate expected generated files there, then replace `src/gen` only after successful generation.
+- During replacement, move the old target to an owned backup directory first and restore it if the final rename fails; remove staging and backup after completion.
+- Do not add a fallback generation mode, compatibility stubs, or caller-side gates around OpenAPI generation.
+
+### Verification
+
+- Added `packages/opencorvus/test/script/sdk-build-transaction.test.ts`.
+- The failure regression forces the staging build callback to throw after writing a partial generated file and asserts the tracked `src/gen` target remains unchanged and staging is removed.
+- The success regression asserts the tracked generated directory is replaced only after staging generation succeeds.
+- Updated `sdk-build-format-contract.test.ts` to assert the SDK build uses `replaceDirectoryAfterSuccessfulBuild(...)`, does not write tracked stubs, does not pre-delete `src/gen`, and the OpenAPI generation path no longer top-level imports the SDK client.
+- Focused tests passed: `bun test packages/opencorvus/test/script/sdk-build-transaction.test.ts packages/opencorvus/test/script/sdk-build-format-contract.test.ts packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- SDK package typecheck passed: `bun run --cwd packages/sdk/js typecheck`.
+- Real SDK build passed: `bun ./packages/sdk/js/script/build.ts`.
+- Staging cleanup check passed: `Test-Path packages/sdk/js/.tmp-sdk-gen; Test-Path packages/sdk/js/.tmp-sdk-gen-backup` returned `False` and `False`.
+- Docs check passed: `bun run docs:check`.
+- Route inventory check passed: `bun run api:routes-check`.
+- Scoped typecheck passed: `bunx turbo run typecheck --filter=@opencorvus-ai/sdk --filter=opencorvus`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Halley confirmed BH-073 was present in HEAD and identified the real root cause as the SDK build -> OpenAPI route inventory -> plugin top-level SDK import -> generated SDK import cycle.
+- Halley recommended fixing the cycle before removing stubs, then making `src/gen` replacement transactional through untracked staging and post-success replacement.
+- Halley confirmed the required regression coverage: forced generation failure leaves tracked generated files unchanged; successful staging replaces the target; source contract forbids top-level plugin SDK imports, tracked stubs, and pre-success `src/gen` deletion.

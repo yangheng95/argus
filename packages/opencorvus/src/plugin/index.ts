@@ -13,7 +13,6 @@ import type {
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
-import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 import { BunProc } from "../bun"
 import { Instance, lazyInstanceState } from "../project/instance"
 import { Session } from "../session"
@@ -234,6 +233,7 @@ export namespace Plugin {
   }
 
   const state = lazyInstanceState(async () => {
+    const { createOpenCorvusClient } = await import("@opencorvus-ai/sdk")
     const client = createOpenCorvusClient({
       baseUrl: IN_PROCESS_BASE_URL,
       directory: Instance.directory,
