@@ -21,6 +21,7 @@ import {
 import { fileToDataUrl } from "../services/file-to-data-url"
 import { Icon } from "./Icon"
 import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
+import { Button } from "./ui/Button"
 import {
   clearComposerDraft,
   composerDraftText,
@@ -577,15 +578,18 @@ export function ChatComposer(props: ChatComposerProps) {
                   <img class="chat-attachment-thumb" src={att.url} alt={att.filename} />
                 </Show>
                 <span class="chat-attachment-name">{att.filename || "file"}</span>
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  tone="neutral"
                   type="button"
-                  class="chat-attachment-remove"
+                  data-ui="chat-attachment-remove"
                   data-chrome="icon-action"
                   aria-label={t("chat.attachment.remove")}
                   onClick={() => removeAttachment(index())}
                 >
-                  &times;
-                </button>
+                  <Icon name="close" size={12} />
+                </Button>
               </div>
             )}
           </For>
@@ -636,9 +640,11 @@ export function ChatComposer(props: ChatComposerProps) {
         </div>
 
         {/* Send / Stop button */}
-        <button
+        <Button
           id={props.busy ? (props.stopID ?? "btnTaskInterrupt") : (props.sendID ?? "chatSend")}
-          class="chat-send"
+          variant="solid"
+          size="md"
+          tone={props.busy ? "danger" : "accent"}
           type={props.busy ? "button" : "submit"}
           data-ui={props.sendDataUI}
           data-busy={props.busy ? "true" : undefined}
@@ -659,7 +665,7 @@ export function ChatComposer(props: ChatComposerProps) {
             </Show>
           </span>
           <span class="chat-send-label">{sendLabel()}</span>
-        </button>
+        </Button>
       </div>
 
       <Show when={showLargeRequestWarning()}>

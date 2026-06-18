@@ -1130,7 +1130,7 @@ test(
           ".btn.mini",
           '[data-ui^="executor-chip-"]',
           ".chat-input",
-          ".chat-send",
+          '.chat-compose-row .oc-button[data-mode]',
           ".board-intro__cta-action",
         ]
         return selectors.flatMap((selector) => {
@@ -1170,8 +1170,8 @@ test(
             props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 8,
           },
-          { selector: ".chat-send", props: ["paddingLeft", "paddingRight"], max: 9 },
-          { selector: ".chat-send", props: ["columnGap", "paddingLeft", "paddingRight"], max: 9 },
+          { selector: '.chat-compose-row .oc-button[data-mode]', props: ["paddingLeft", "paddingRight"], max: 9 },
+          { selector: '.chat-compose-row .oc-button[data-mode]', props: ["columnGap", "paddingLeft", "paddingRight"], max: 9 },
         ]
         return checks.flatMap(({ selector, props, max }) => {
           const node = document.querySelector<HTMLElement>(selector)

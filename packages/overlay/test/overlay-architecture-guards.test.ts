@@ -151,7 +151,7 @@ const LEGACY_BUTTON_CLASSES = [
 const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
   btn: 0,
   "btn-primary": 0,
-  "chat-send": 1,
+  "chat-send": 0,
   "chat-interrupt": 0,
   "titlebar-btn": 0,
   "sidebar-btn": 0,
@@ -1995,6 +1995,7 @@ describe("overlay architecture guards", () => {
   test("composer attachments and compose row/meta are owned by surfaces/composer.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+    const composerSource = readText(join(OVERLAY_ROOT, "src/components/ChatComposer.tsx"))
 
     for (const className of [
       "chat-attachments",
@@ -2002,7 +2003,6 @@ describe("overlay architecture guards", () => {
       "chat-attachment-thumb",
       "chat-attachment-icon",
       "chat-attachment-name",
-      "chat-attachment-remove",
       "chat-compose-row",
       "chat-compose-meta",
       "chat-compose-meta-left",
@@ -2015,15 +2015,24 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).not.toMatch(/(^|\n)\.chat-compose-meta-right(?:\s|\.|:|\{|,|\[)/)
     expect(composerSurface).not.toMatch(/(^|\n)\.chat-compose-meta-left\s+a(?:\s|\.|:|\{|,|\[)/)
 
-    expect(composerSurface).toMatch(/\.chat-attachment-remove:hover\s*\{/)
+    expect(composerSource).toContain('data-ui="chat-attachment-remove"')
+    expect(composerSource).not.toContain('class="chat-attachment-remove"')
+    expect(composerSurface).toMatch(/\.chat-attachment-item\s+\.oc-button\[data-ui="chat-attachment-remove"\]\s*\{/)
+    expect(composerSurface).not.toMatch(/(^|\n)\.chat-attachment-remove(?:\s|:|\{|,|\[)/)
     expect(composerSurface).toMatch(/\.chat-input\[data-dragover\]\s+\.chat-compose-row\s*\{/)
   })
 
-  test("composer chat-send and busy state are owned by surfaces/composer.css", () => {
+  test("composer send and stop controls route through the Button primitive", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+    const composerSource = readText(join(OVERLAY_ROOT, "src/components/ChatComposer.tsx"))
 
-    for (const className of ["chat-send", "chat-send-icon", "chat-send-label"]) {
+    expect(composerSource).toContain('import { Button } from "./ui/Button"')
+    expect(composerSource).toContain("<Button")
+    expect(composerSource).not.toMatch(/<button\b/)
+    expect(composerSource).not.toContain('class="chat-send"')
+
+    for (const className of ["chat-send-icon", "chat-send-label"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
@@ -2040,10 +2049,10 @@ describe("overlay architecture guards", () => {
 
       expect(selector).not.toMatch(/\.chat-send\b/)
     }
-    expect(composerSurface).toMatch(/\.chat-send:hover\s*\{/)
-    expect(composerSurface).toMatch(/\.chat-send:disabled\s*\{/)
-    expect(composerSurface).toMatch(/\.chat-send:focus-visible\s*\{/)
-    expect(composerSurface).toMatch(/\.chat-send\[data-busy="true"\]:hover\s*\{/)
+    expect(composerSurface).not.toMatch(/(^|\n)\.chat-send(?:\s|:|\{|,|\[)/)
+    expect(composerSurface).toMatch(/\.chat-compose-row\s+\.oc-button\[data-mode\]\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-compose-row\s+\.oc-button\[data-mode="send"\]:disabled\s*\{/)
+    expect(composerSurface).not.toMatch(/\.chat-send\[data-busy="true"\]:hover\s*\{/)
   })
 
   test("composer chat-textarea family is owned by surfaces/composer.css", () => {
