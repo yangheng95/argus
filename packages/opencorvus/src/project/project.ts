@@ -544,7 +544,8 @@ export namespace Project {
   export async function removeSandbox(id: string, directory: string) {
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
     if (!row) throw new Error(`Project not found: ${id}`)
-    const sandboxes = row.sandboxes.filter((s) => s !== directory)
+    const target = Filesystem.windowsPath(path.resolve(directory))
+    const sandboxes = row.sandboxes.filter((s) => Filesystem.windowsPath(path.resolve(s)) !== target)
     const result = Database.use((db) =>
       db
         .update(ProjectTable)

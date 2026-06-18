@@ -1073,7 +1073,8 @@ export namespace Worktree {
     if (!target) {
       throw new NotFoundError({ message: `Project worktree not found: ${input.directory}` })
     }
-    return remove({ directory: target.directory })
+    await remove({ directory: target.directory })
+    return target
   })
 
   async function isCaseInsensitiveFilesystem(target: string) {
