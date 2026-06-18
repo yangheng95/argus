@@ -4673,3 +4673,59 @@ LINE:
 - Dalton verified the route request schema is `.strict()` and only reads `body.targetID`.
 - Dalton verified tracked OpenAPI and generated Software Development Kit types already contain only `targetID` for `BrowserPreviewSelectTaskTargetData`.
 - Dalton recommended changing only the app-routes test assertions and not modifying production browser-preview code, OpenAPI generation, or URL body compatibility.
+
+## Batch P2-CD: BH-080 unknown question and permission replies must fail closed
+
+### Findings
+
+- BH-080 targets `packages/opencorvus/src/question/index.ts` and `packages/opencorvus/src/permission/next.ts`.
+- `Question.reply(...)`, `Question.reject(...)`, and `PermissionNext.reply(...)` logged unknown request ids and returned without throwing.
+- `packages/opencorvus/src/server/routes/question.ts` and `packages/opencorvus/src/server/routes/permission.ts` awaited those service calls and then returned `true`, while their OpenAPI response sets already advertised `404`.
+- Because the service returned before `Bus.publish(...)`, no reply/reject event was emitted; the defect was a false-success HTTP response and false-success direct service contract.
+- Existing question service tests explicitly preserved the old silent-success behavior. Existing permission reply tests also used empty rulesets for reply paths, so no pending permission was created and silent unknown replies made those tests pass accidentally.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/question/index.ts::Question.reply(...)` and `Question.reject(...)` own question request resolution and publish `question.replied` / `question.rejected`.
+- `packages/opencorvus/src/permission/next.ts::PermissionNext.reply(...)` owns permission request resolution and publishes `permission.replied`.
+- `packages/opencorvus/src/server/routes/question.ts` exposes `POST /question/:requestID/reply` and `POST /question/:requestID/reject`.
+- `packages/opencorvus/src/server/routes/permission.ts` exposes `POST /permission/:requestID/reply`.
+- `packages/opencorvus/src/server/error-handler.ts` maps `NotFoundError` to HTTP 404.
+- `packages/opencorvus/test/question/question.test.ts` covered direct question reply/reject behavior.
+- `packages/opencorvus/test/permission/next.test.ts` covered direct permission reply behavior.
+- No existing server route test covered unknown question or permission request ids.
+
+### Fix Shape
+
+- Throw the existing `NotFoundError` from question and permission service reply paths when the request id is not pending.
+- Keep route handlers unchanged so they rely on the existing server error mapper instead of adding route-level branches.
+- Keep event publication after the pending-entry lookup. Unknown request ids throw before any reply/reject event can publish.
+- Correct permission reply service tests so the positive `once` and `always` reply cases create real pending requests with explicit `ask` rules.
+- Do not add compatibility responses, fallback success paths, or synthetic event suppression gates.
+
+### Regression Tests
+
+- Update `packages/opencorvus/test/question/question.test.ts` so unknown question reply/reject now reject with `NotFoundError`.
+- Update `packages/opencorvus/test/permission/next.test.ts` so unknown permission reply rejects with `NotFoundError` and positive reply tests use real pending asks.
+- Add `packages/opencorvus/test/server/question-permission-routes.test.ts` covering:
+  - `POST /question/que_missing/reply` returns 404 and emits no question reply/reject event;
+  - `POST /question/que_missing/reject` returns 404 and emits no question reject/reply event;
+  - `POST /permission/per_missing/reply` returns 404 and emits no permission reply event.
+
+### Verification
+
+- Focused route tests passed: `bun test packages/opencorvus/test/server/question-permission-routes.test.ts --timeout 60000`.
+- Question service tests passed: `bun test packages/opencorvus/test/question/question.test.ts --timeout 60000`.
+- Permission service tests passed: `bun test packages/opencorvus/test/permission/next.test.ts --timeout 60000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Route inventory passed: `bun run api:routes-check`.
+- API reference check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Noether confirmed BH-080 was still present in `HEAD`: unknown `que_*` / `per_*` replies silently returned success and routes then returned `200 true`.
+- Noether confirmed `NotFoundError` is already mapped to HTTP 404 by `server/error-handler.ts`.
+- Noether traced production callers through question/permission routes and task interaction reply handlers.
+- Noether confirmed existing HEAD tests preserved the bad behavior and that permission reply tests with empty rulesets were fake pending cases.
+- Noether recommended fixing the service layer as the single source, correcting the permission tests, and adding route-level 404/no-event coverage.

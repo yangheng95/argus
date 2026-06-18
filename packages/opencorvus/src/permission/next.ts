@@ -3,7 +3,7 @@ import { BusEvent } from "@/bus/bus-event"
 import type { Config } from "@/config/config"
 import { Identifier } from "@/id/id"
 import { Instance, lazyInstanceState } from "@/project/instance"
-import { Database, eq } from "@/storage/db"
+import { Database, eq, NotFoundError } from "@/storage/db"
 import { PermissionTable } from "@/session/session.sql"
 import { fn } from "@/util/fn"
 import { Log } from "@/util/log"
@@ -236,7 +236,7 @@ export namespace PermissionNext {
     async (input) => {
       const s = await state()
       const existing = s.pending[input.requestID]
-      if (!existing) return
+      if (!existing) throw new NotFoundError({ message: `Permission request not found: ${input.requestID}` })
       clearTimeout(existing.timer)
       delete s.pending[input.requestID]
       Bus.publish(Event.Replied, {

@@ -2,6 +2,7 @@ import { test, expect } from "bun:test"
 import os from "os"
 import { PermissionNext } from "../../src/permission/next"
 import { Instance } from "../../src/project/instance"
+import { NotFoundError } from "../../src/storage/db"
 import { tmpdir } from "../fixture/fixture"
 
 // fromConfig tests
@@ -606,7 +607,7 @@ test("reply - once resolves the pending ask", async () => {
         patterns: ["ls"],
         metadata: {},
         always: [],
-        ruleset: [],
+        ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
       })
 
       await PermissionNext.reply({
@@ -648,6 +649,22 @@ test("reply - reject throws RejectedError", async () => {
   })
 })
 
+test("reply - rejects unknown requestID", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(
+        PermissionNext.reply({
+          requestID: "per_unknown",
+          reply: "once",
+          autoReply: false,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError)
+    },
+  })
+})
+
 test("ask - timeout rejects pending permission", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
@@ -682,7 +699,7 @@ test("reply - always persists approval and resolves", async () => {
         patterns: ["ls"],
         metadata: {},
         always: ["ls"],
-        ruleset: [],
+        ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
       })
 
       await PermissionNext.reply({

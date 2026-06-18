@@ -3,6 +3,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
 import { Identifier } from "@/id/id"
 import { Instance, lazyInstanceState } from "@/project/instance"
+import { NotFoundError } from "@/storage/db"
 import { Log } from "@/util/log"
 import z from "zod"
 import { values as objectValues } from "@/util/object"
@@ -175,7 +176,7 @@ export namespace Question {
     const existing = s.pending[input.requestID]
     if (!existing) {
       log.warn("reply for unknown request", { requestID: input.requestID })
-      return
+      throw new NotFoundError({ message: `Question request not found: ${input.requestID}` })
     }
     clearTimeout(existing.timer)
     delete s.pending[input.requestID]
@@ -196,7 +197,7 @@ export namespace Question {
     const existing = s.pending[requestID]
     if (!existing) {
       log.warn("reject for unknown request", { requestID })
-      return
+      throw new NotFoundError({ message: `Question request not found: ${requestID}` })
     }
     delete s.pending[requestID]
 
