@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { mkdirSync, writeFileSync } from "node:fs"
-import { resolve } from "node:path"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -30,6 +30,15 @@ function eventStream() {
       "cache-control": "no-cache",
     },
   })
+}
+
+async function saveElementScreenshot(page: any, selector: string, filename: string) {
+  const screenshotPath = resolve(".scratch", filename)
+  mkdirSync(dirname(screenshotPath), { recursive: true })
+  const element = await page.$(selector)
+  assert.ok(element, `${selector} should exist before screenshot`)
+  writeFileSync(screenshotPath, await element.screenshot({}))
+  return screenshotPath
 }
 
 test("settings segmented controls expose per-row accessible names", async () => {
@@ -165,6 +174,70 @@ test("settings segmented controls expose per-row accessible names", async () => 
     await page.click('[data-menu-trigger="settings"]')
     await page.waitForSelector('[data-testid="titlebar-settings-permissions"]')
     await page.click('[data-testid="titlebar-settings-permissions"]')
+    await page.waitForSelector('[data-config-panel="permissions"] .s-segmented')
+
+    const selectedTabState = await page.$eval('[data-config-tab="permissions"]', (node: HTMLElement) => {
+      const controls = node.getAttribute("aria-controls") ?? ""
+      const panel = controls ? document.getElementById(controls) : null
+      const panelBox = panel?.getBoundingClientRect()
+      const tablist = node.closest<HTMLElement>('[role="tablist"]')
+      return {
+        role: node.getAttribute("role") ?? "",
+        selected: node.getAttribute("aria-selected") ?? "",
+        controls,
+        tabID: node.id,
+        tablistRole: tablist?.getAttribute("role") ?? "",
+        tablistOrientation: tablist?.getAttribute("aria-orientation") ?? "",
+        panelRole: panel?.getAttribute("role") ?? "",
+        labelledby: panel?.getAttribute("aria-labelledby") ?? "",
+        panelVisible: Boolean(panelBox && panelBox.width > 0 && panelBox.height > 0),
+      }
+    })
+    assert.equal(selectedTabState.role, "tab")
+    assert.equal(selectedTabState.selected, "true")
+    assert.equal(selectedTabState.tablistRole, "tablist")
+    assert.equal(selectedTabState.tablistOrientation, "vertical")
+    assert.ok(selectedTabState.controls)
+    assert.equal(selectedTabState.panelRole, "tabpanel")
+    assert.equal(selectedTabState.labelledby, selectedTabState.tabID)
+    assert.equal(selectedTabState.panelVisible, true)
+
+    await page.focus('[data-config-tab="permissions"]')
+    await page.keyboard.press("ArrowDown")
+    await page.waitForFunction(() => document.activeElement?.getAttribute("data-config-tab") === "prompt")
+    await page.keyboard.press("Enter")
+    await page.waitForSelector('[data-config-panel="prompt"] #promptBody')
+    await page.keyboard.press("End")
+    await page.waitForFunction(() => document.activeElement?.getAttribute("data-config-tab") === "about")
+    const focusedAboutTab = await page.$eval('[data-config-tab="about"]', (node: HTMLElement) => {
+      const style = getComputedStyle(node)
+      return {
+        focused: document.activeElement === node,
+        focusVisible: node.matches(":focus-visible"),
+        outlineStyle: style.outlineStyle,
+        outlineColor: style.outlineColor,
+        outlineWidth: style.outlineWidth,
+      }
+    })
+    assert.equal(focusedAboutTab.focused, true)
+    assert.equal(focusedAboutTab.focusVisible, true)
+    assert.notEqual(focusedAboutTab.outlineStyle, "none")
+    assert.notEqual(focusedAboutTab.outlineWidth, "0px")
+    const tabFocusScreenshot = await saveElementScreenshot(page, "#configDialog .dialog-form", "settings-tabs-focus-visible.png")
+    assert.ok(tabFocusScreenshot.endsWith("settings-tabs-focus-visible.png"))
+    await page.keyboard.press("Enter")
+    await page.waitForSelector('[data-config-panel="about"] #aboutBody')
+    await page.waitForFunction(() => !!document.querySelector('[data-config-tab="about"]')?.getAttribute("aria-controls"))
+    const aboutTabState = await page.$eval('[data-config-tab="about"]', (node: HTMLElement) => ({
+      selected: node.getAttribute("aria-selected") ?? "",
+      controls: node.getAttribute("aria-controls") ?? "",
+    }))
+    assert.equal(aboutTabState.selected, "true")
+    assert.ok(aboutTabState.controls)
+    const aboutScreenshot = await saveElementScreenshot(page, "#configDialog .dialog-form", "settings-tabs-about-panel.png")
+    assert.ok(aboutScreenshot.endsWith("settings-tabs-about-panel.png"))
+
+    await page.click('[data-config-tab="permissions"]')
     await page.waitForSelector('[data-config-panel="permissions"] .s-segmented')
 
     const rows = await page.evaluate(() =>

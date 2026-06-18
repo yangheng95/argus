@@ -96,7 +96,7 @@ describe("config panel sizing", () => {
     }
 
     for (const selector of [
-      ".config-nav-item:hover",
+      ".config-sidebar .oc-tab:hover,\n.config-sidebar .oc-tab:focus-visible",
       '.s-row[data-interactive="true"]:hover,\n.s-row[data-interactive="true"]:focus-within',
     ]) {
       expect(bodyOf(selector)).toMatch(/background:\s*var\(--settings-surface-hover\)/)
@@ -134,7 +134,7 @@ describe("config panel sizing", () => {
 
   test("memory tab owns a full-height scrollable list", () => {
     expect(bodyOf(".memory-panel")).toMatch(/flex\s*:\s*1 1 auto/)
-    expect(bodyOf('.config-tab-panel[data-config-panel="memory"].active')).toMatch(/display:\s*flex/)
+    expect(bodyOf('.config-tab-panel[data-config-panel="memory"]')).toMatch(/display:\s*flex/)
     expect(bodyOf("#memoryBody")).toMatch(/flex\s*:\s*1 1 auto/)
 
     const list = bodyOf(".knowledge-list")
@@ -143,6 +143,25 @@ describe("config panel sizing", () => {
     expect(list).toMatch(/overflow-y:\s*auto/)
     expect(list).toMatch(/scrollbar-width:\s*auto/)
     expect(bodyOf(".knowledge-list::-webkit-scrollbar")).toContain("width: var(--session-scrollbar-size)")
+  })
+
+  test("settings dialog sidebar uses the shared Tabs primitive", () => {
+    expect(CONFIG_DIALOG_TSX).toContain('import { Tab, TabList, TabPanel, Tabs } from "./ui/Tabs"')
+    expect(CONFIG_DIALOG_TSX).toContain("<Tabs")
+    expect(CONFIG_DIALOG_TSX).toContain("<TabList")
+    expect(CONFIG_DIALOG_TSX).toContain("<Tab")
+    expect(CONFIG_DIALOG_TSX).toContain("<TabPanel")
+    expect(CONFIG_DIALOG_TSX).toContain("onValueChange={switchConfigTab}")
+    expect(CONFIG_DIALOG_TSX).toContain('orientation="vertical"')
+    expect(CONFIG_DIALOG_TSX).not.toContain('"config-nav-item"')
+    expect(CONFIG_DIALOG_TSX).not.toContain('class="config-nav-spacer"')
+    expect(CONFIG_DIALOG_TSX).not.toContain('class="config-tab-panel active"')
+    expect(SETTINGS_CSS).not.toMatch(/\.config-nav-item\b/)
+    expect(SETTINGS_CSS).not.toMatch(/\.config-nav-spacer\b/)
+    expect(SETTINGS_CSS).not.toMatch(/\.config-tab-panel\.active\b/)
+    expect(bodyOf(".config-sidebar .oc-tabs")).toMatch(/flex-direction:\s*column/)
+    expect(bodyOf(".config-sidebar .oc-tab")).toMatch(/justify-content:\s*flex-start/)
+    expect(bodyOf('.config-sidebar .oc-tab[data-config-tab="about"]')).toMatch(/margin-top:\s*auto/)
   })
 
   test("prompt profile editor has no retired per-agent prompt editor surface", () => {

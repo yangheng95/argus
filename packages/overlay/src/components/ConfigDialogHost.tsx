@@ -10,6 +10,7 @@ import NetworkPanel from "./settings/NetworkPanel"
 import { PermissionsPanel } from "./settings/PermissionsPanel"
 import { MemoryPanel } from "./MemoryPanel"
 import { Dialog } from "./primitives/Dialog"
+import { Tab, TabList, TabPanel, Tabs } from "./ui/Tabs"
 import { appStore } from "../store/app"
 import { boardStore, activeTaskID } from "../store/board"
 import { settingsStore } from "../store/settings"
@@ -332,40 +333,42 @@ export function ConfigDialogHost() {
       }
     >
       <Show when={dialogStore.config.open}>
-        <div class="config-dialog-layout">
+        <Tabs
+          value={dialogStore.config.activeTab}
+          onValueChange={switchConfigTab}
+          orientation="vertical"
+          class="config-dialog-layout"
+        >
           <nav class="config-sidebar" id="configSidebar" style={sidebarStyle()}>
-            <For each={MAIN_CONFIG_TABS}>
-              {(tab) => (
-                <button
-                  type="button"
-                  classList={{
-                    "config-nav-item": true,
-                    active: dialogStore.config.activeTab === tab.id,
-                  }}
-                  data-config-tab={tab.id}
-                  onClick={() => switchConfigTab(tab.id)}
-                >
-                  <Icon class="config-nav-icon" name={tab.icon} size={18} />
-                  <span>{t(tab.labelKey)}</span>
-                  <Show when={tab.badgeID}>
-                    <span class="config-nav-badge" id={tab.badgeID} />
-                  </Show>
-                </button>
-              )}
-            </For>
-            <div class="config-nav-spacer" />
-            <button
-              type="button"
-              classList={{
-                "config-nav-item": true,
-                active: dialogStore.config.activeTab === "about",
-              }}
-              data-config-tab="about"
-              onClick={() => switchConfigTab("about")}
-            >
-              <Icon class="config-nav-icon" name={ABOUT_CONFIG_TAB.icon} size={18} />
-              <span>{t(ABOUT_CONFIG_TAB.labelKey)}</span>
-            </button>
+            <TabList size="md" tone="neutral" data-ui="settings-dialog-tablist">
+              <For each={MAIN_CONFIG_TABS}>
+                {(tab) => (
+                  <Tab
+                    value={tab.id}
+                    active={dialogStore.config.activeTab === tab.id}
+                    size="md"
+                    tone="neutral"
+                    data-config-tab={tab.id}
+                  >
+                    <Icon class="config-nav-icon" name={tab.icon} size={18} />
+                    <span>{t(tab.labelKey)}</span>
+                    <Show when={tab.badgeID}>
+                      <span class="config-nav-badge" id={tab.badgeID} />
+                    </Show>
+                  </Tab>
+                )}
+              </For>
+              <Tab
+                value="about"
+                active={dialogStore.config.activeTab === "about"}
+                size="md"
+                tone="neutral"
+                data-config-tab="about"
+              >
+                <Icon class="config-nav-icon" name={ABOUT_CONFIG_TAB.icon} size={18} />
+                <span>{t(ABOUT_CONFIG_TAB.labelKey)}</span>
+              </Tab>
+            </TabList>
           </nav>
           <div
             class="config-resizer"
@@ -383,20 +386,27 @@ export function ConfigDialogHost() {
             onKeyDown={handleResizeKeyDown}
           />
           <div class="config-content" id="configContent">
-            <div
-              class="config-tab-panel active"
-              data-config-panel={dialogStore.config.activeTab}
-              id={dialogStore.config.activeTab === "channel" ? "channelSection" : undefined}
-            >
-              <div
-                classList={{ "config-section-body": true, "about-body": dialogStore.config.activeTab === "about" }}
-                id={activePanelBodyID(dialogStore.config.activeTab)}
-              >
-                {renderActivePanel()}
-              </div>
-            </div>
+            <For each={CONFIG_TABS}>
+              {(tab) => (
+                <TabPanel
+                  value={tab.id}
+                  class="config-tab-panel"
+                  data-config-panel={tab.id}
+                  id={tab.id === "channel" ? "channelSection" : undefined}
+                >
+                  <Show when={dialogStore.config.activeTab === tab.id}>
+                    <div
+                      classList={{ "config-section-body": true, "about-body": tab.id === "about" }}
+                      id={activePanelBodyID(tab.id)}
+                    >
+                      {renderActivePanel()}
+                    </div>
+                  </Show>
+                </TabPanel>
+              )}
+            </For>
           </div>
-        </div>
+        </Tabs>
       </Show>
     </Dialog>
   )

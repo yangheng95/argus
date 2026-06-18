@@ -66,9 +66,15 @@
   --oc-tab-color: var(--oc-tab-active-color);
 }
 
-.oc-tab:hover,
+.oc-tab:hover {
+  --oc-tab-bg: var(--surface-hover);
+  --oc-tab-color: var(--text-strong);
+}
+
 .oc-tab:focus-visible {
   --oc-tab-bg: var(--surface-hover);
   --oc-tab-color: var(--text-strong);
-  outline: none;
+
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
 }

@@ -7,6 +7,7 @@ const TABS_CSS = join(import.meta.dir, "../src/styles/primitives/tabs.css")
 const EXECUTOR_SELECTOR_SOURCE = join(import.meta.dir, "../src/components/ExecutorSelector.tsx")
 const FILE_CHANGES_PANEL_SOURCE = join(import.meta.dir, "../src/components/FileChangesPanel.tsx")
 const BROWSER_PREVIEW_PANEL_SOURCE = join(import.meta.dir, "../src/components/BrowserPreviewPanel.tsx")
+const CONFIG_DIALOG_SOURCE = join(import.meta.dir, "../src/components/ConfigDialogHost.tsx")
 // 2026-05-04: `src/styles.css` was decomposed into `src/styles/...`. The
 // "only one chrome owner" check walks the new tree to confirm no rule
 // for the retired `.right-panel-tab*` class survives anywhere.
@@ -65,6 +66,8 @@ test("Tabs primitive delegates tab semantics to Kobalte", () => {
   expect(source).toContain("<KobalteTabs")
   expect(source).toContain("export function TabList")
   expect(source).toContain("export function TabPanel")
+  expect(source).toContain('orientation?: "horizontal" | "vertical"')
+  expect(source).toContain("orientation={local.orientation}")
   expect(source).toContain('activationMode="manual"')
   expect(source).not.toContain('role="tablist"')
   expect(source).not.toContain('role="tab"')
@@ -76,7 +79,7 @@ test("retired WorkspacePanel does not keep a hand-written tab surface", () => {
 })
 
 test("Feature tab surfaces use the Tabs primitive instead of hand-written ARIA", () => {
-  for (const sourcePath of [EXECUTOR_SELECTOR_SOURCE, FILE_CHANGES_PANEL_SOURCE]) {
+  for (const sourcePath of [EXECUTOR_SELECTOR_SOURCE, FILE_CHANGES_PANEL_SOURCE, CONFIG_DIALOG_SOURCE]) {
     const source = readFileSync(sourcePath, "utf8")
 
     expect(source).toContain("<Tabs")
@@ -89,12 +92,22 @@ test("Feature tab surfaces use the Tabs primitive instead of hand-written ARIA",
     expect(source).not.toContain('role="tabpanel"')
     expect(source).not.toContain("aria-selected")
     expect(source).not.toContain("file-changes-tab")
+    expect(source).not.toContain('"config-nav-item"')
+    expect(source).not.toContain('class="config-tab-panel active"')
     const tabOpenTags = source.match(/<Tab\b[^>]*>/g) ?? []
     expect(tabOpenTags.length).toBeGreaterThan(0)
     for (const tag of tabOpenTags) {
       expect(tag).not.toContain("onClick=")
     }
   }
+})
+
+test("Tabs primitive owns the canonical keyboard focus ring", () => {
+  const css = readFileSync(TABS_CSS, "utf8")
+
+  expect(css).toMatch(/\.oc-tab:focus-visible\s*\{[^}]*outline:\s*var\(--oc-border-width\)\s+solid\s+var\(--accent\);/s)
+  expect(css).toMatch(/\.oc-tab:focus-visible\s*\{[^}]*outline-offset:\s*calc\(1px \* var\(--ui-scale\)\);/s)
+  expect(css).not.toMatch(/\.oc-tab[^{]*:focus-visible\s*\{[^}]*outline:\s*none\s*;/s)
 })
 
 test("Browser Preview viewport choices do not pretend to be tab panels", () => {
