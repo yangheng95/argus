@@ -1,35 +1,52 @@
 import { Hono } from "hono"
+import { describeRoute, resolver, validator } from "hono-openapi"
 import { createNote } from "./service"
-import { validateContent } from "./text-processor"
+import { MAX_CONTENT_LENGTH } from "./text-processor"
+import { lazy } from "@/util/lazy"
+import z from "zod"
+import { errors } from "@/server/error"
 
-const routes = new Hono()
+const CreateQuickNoteRequest = z
+  .object({
+    content: z.string().min(1).max(MAX_CONTENT_LENGTH),
+  })
+  .meta({ ref: "CreateQuickNoteRequest" })
 
-/**
- * POST /api/v1/notes
- * 创建新笔记
- */
-routes.post("/notes", async (c) => {
-  try {
-    const body = await c.req.json()
-    const { content } = body
+const CreateQuickNoteResponse = z
+  .object({
+    code: z.literal(200),
+    data: z.object({
+      note_id: z.string(),
+      summary: z.string(),
+    }),
+  })
+  .meta({ ref: "CreateQuickNoteResponse" })
 
-    // 验证内容
-    if (!content || typeof content !== "string") {
-      return c.json({ code: 400, error: "content 是必需的且必须是字符串" }, 400)
-    }
+export const QuickNoteRoutes = lazy(() =>
+  new Hono().post(
+    "/notes",
+    describeRoute({
+      summary: "Create QuickNote",
+      description: "Create a quick note from plain text content.",
+      operationId: "quicknote.create",
+      responses: {
+        200: {
+          description: "QuickNote created successfully",
+          content: {
+            "application/json": {
+              schema: resolver(CreateQuickNoteResponse),
+            },
+          },
+        },
+        ...errors(400),
+      },
+    }),
+    validator("json", CreateQuickNoteRequest),
+    async (c) => {
+      const { content } = c.req.valid("json")
+      const result = createNote({ content })
 
-    if (!validateContent(content)) {
-      return c.json({ code: 400, error: "内容长度不能超过 2000 字符" }, 400)
-    }
-
-    // 创建笔记
-    const result = createNote({ content })
-
-    return c.json({ code: 200, data: result })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "未知错误"
-    return c.json({ code: 500, error: message }, 500)
-  }
-})
-
-export { routes }
+      return c.json({ code: 200, data: result })
+    },
+  ),
+)

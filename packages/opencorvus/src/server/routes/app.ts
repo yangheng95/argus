@@ -37,6 +37,7 @@ import { GatewayRoutes } from "./gateway"
 import { MissionRoutes } from "./mission"
 import { BrowserPreviewRoutes } from "./browser-preview"
 import { PluginRoutes } from "./plugin"
+import { QuickNoteRoutes } from "@/quicknote/routes"
 import { hasServerShutdownHandler, requestServerShutdown } from "../shutdown"
 import { Env } from "@/runtime/env"
 import { AppDocumentation } from "./documentation"
@@ -93,6 +94,7 @@ export function AppRoutes(root: Hono) {
     .route("/coding", CodingRoutes())
     .route("/gateway", GatewayRoutes())
     .route("/mission", MissionRoutes())
+    .route("/api/v1", QuickNoteRoutes())
     .route("/", BrowserPreviewRoutes())
     .post(
       "/shutdown",

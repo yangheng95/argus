@@ -52,6 +52,7 @@ import type {
   ConfigUpdateErrors,
   ConfigUpdateResponses,
   ControlTimelineResponses,
+  CreateQuickNoteRequest,
   EventSubscribeResponses,
   ExecutorGetModelResponses,
   ExecutorListResponses,
@@ -206,6 +207,8 @@ import type {
   QuestionRejectResponses,
   QuestionReplyErrors,
   QuestionReplyResponses,
+  QuicknoteCreateErrors,
+  QuicknoteCreateResponses,
   RunAbortErrors,
   RunAbortResponses,
   RunAcceptanceErrors,
@@ -5210,6 +5213,43 @@ export class Mission extends HeyApiClient {
   }
 }
 
+export class Quicknote extends HeyApiClient {
+  /**
+   * Create QuickNote
+   *
+   * Create a quick note from plain text content.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      createQuickNoteRequest?: CreateQuickNoteRequest
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { key: "createQuickNoteRequest", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<QuicknoteCreateResponses, QuicknoteCreateErrors, ThrowOnError>({
+      url: "/api/v1/notes",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class BrowserPreview extends HeyApiClient {
   /**
    * Resolve task browser preview target
@@ -9128,6 +9168,11 @@ export class OpenCorvusClient extends HeyApiClient {
   private _mission?: Mission
   get mission(): Mission {
     return (this._mission ??= new Mission({ client: this.client }))
+  }
+
+  private _quicknote?: Quicknote
+  get quicknote(): Quicknote {
+    return (this._quicknote ??= new Quicknote({ client: this.client }))
   }
 
   private _browserPreview?: BrowserPreview

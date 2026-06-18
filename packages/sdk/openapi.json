@@ -14941,6 +14941,61 @@
         ]
       }
     },
+    "/api/v1/notes": {
+      "post": {
+        "operationId": "quicknote.create",
+        "summary": "Create QuickNote",
+        "description": "Create a quick note from plain text content.",
+        "responses": {
+          "200": {
+            "description": "QuickNote created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateQuickNoteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuickNoteRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.quicknote.create({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/browser-preview": {
       "get": {
         "operationId": "browserPreview.taskTarget",
@@ -41986,6 +42041,47 @@
         },
         "required": [
           "ok"
+        ]
+      },
+      "CreateQuickNoteResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "number",
+            "const": 200
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "note_id": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "note_id",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "data"
+        ]
+      },
+      "CreateQuickNoteRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "content"
         ]
       },
       "AcceptanceDiffSummary": {
