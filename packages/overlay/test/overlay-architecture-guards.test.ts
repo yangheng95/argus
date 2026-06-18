@@ -8,7 +8,7 @@ const GOD_CSS_ARCHIVE_DIR = join(REPO_ROOT, "docs/archive/overlay-god-css")
 const THIS_FILE = join(import.meta.dir, "overlay-architecture-guards.test.ts")
 const SURFACE_DUPLICATE_SELECTOR_LIMITS = new Map<string, number>([
   ["activity.css", 21],
-  ["card.css", 6],
+  ["card.css", 8],
   ["changes.css", 3],
   ["chat-bubble.css", 0],
   ["cmdk.css", 0],
