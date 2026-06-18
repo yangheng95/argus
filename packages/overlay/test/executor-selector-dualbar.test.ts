@@ -152,6 +152,7 @@ describe("ExecutorSelector dual chip bar", () => {
     const selectorStackBlock = cssBlock(".executor-selector-stack")
     const metaBlock = cssBlock(".chat-compose-meta")
     const metaLeftBlock = cssBlock(".chat-compose-meta-left")
+    const chipButtonBlock = cssBlock('.executor-chip-slot .oc-button[data-ui^="executor-chip-"]')
 
     expect(selectorStackBlock).toContain("display: block;")
     expect(CSS).toMatch(/\.executor-dualbar\s*\{[\s\S]*?width:\s*100%/)
@@ -160,6 +161,9 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(CSS).not.toMatch(/\.executor-chip-slot\[data-side="external"\] \.executor-popover/)
     expect(selectorStackBlock).not.toContain("grid-column: 1 / -1")
     expect(metaBlock).not.toContain("flex-direction: column")
+    expect(chipButtonBlock).toContain("--oc-button-padding-x: var(--ui-btn-mini-padding-x);")
+    expect(chipButtonBlock).toContain("--oc-button-gap: var(--ui-btn-mini-padding-x);")
+    expect(chipButtonBlock).not.toContain("calc(10px * var(--ui-scale))")
   })
 
   test("Hexin budget CSS belongs to the composer selector surface", () => {

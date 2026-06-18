@@ -26,7 +26,9 @@ function bodyOf(source: string, selector: string): string {
 test("titlebar controls stay on the surface family", () => {
   expect(TITLEBAR_CSS).not.toContain("var(--guide-card-")
   expect(TITLEBAR_CSS).not.toContain("var(--hover-accent-shadow)")
-  expect(bodyOf(TITLEBAR_CSS, ".titlebar-theme-option:hover")).toMatch(/background:\s*var\(--surface-hover\)/)
+  expect(
+    bodyOf(TITLEBAR_CSS, ".titlebar-theme-option:hover, .titlebar-theme-option[data-highlighted], .titlebar-theme-option:focus-visible"),
+  ).toMatch(/background:\s*var\(--surface-hover\)/)
   expect(
     bodyOf(
       TITLEBAR_CSS,
@@ -38,12 +40,15 @@ test("titlebar controls stay on the surface family", () => {
   )
   expect(TITLEBAR_CSS).toContain("background: var(--menu-panel-bg)")
   expect(bodyOf(TITLEBAR_CSS, ".titlebar-menubar-note")).toMatch(/background:\s*var\(--surface-inset\)/)
-  expect(bodyOf(TITLEBAR_CSS, ".titlebar-status-chip, .titlebar-setup-cta, .titlebar-status-icon")).toContain(
-    "color-mix(in srgb, var(--surface-strong) 86%, transparent)",
-  )
-  expect(
-    bodyOf(TITLEBAR_CSS, ".titlebar-status-chip:hover, .titlebar-setup-cta:hover, .titlebar-status-icon:hover"),
-  ).toMatch(/background:\s*var\(--surface-hover\)/)
+  for (const className of [
+    "titlebar-status-chip",
+    "titlebar-setup-cta",
+    "titlebar-status-icon",
+    "titlebar-task-status",
+  ]) {
+    expect(TITLEBAR_CSS).not.toMatch(new RegExp(`\\.${className}(?:\\s|[,>{:+~.#\\[])`))
+  }
+  expect(bodyOf(TITLEBAR_CSS, ".status-icon")).toContain("var(--oc-titlebar-status-icon)")
 })
 
 test("task and file search share the field primitive", () => {

@@ -555,8 +555,8 @@
 
 .executor-chip-slot .oc-button[data-ui^="executor-chip-"] {
   --oc-button-height: auto;
-  --oc-button-padding-x: calc(10px * var(--ui-scale));
-  --oc-button-gap: calc(10px * var(--ui-scale));
+  --oc-button-padding-x: var(--ui-btn-mini-padding-x);
+  --oc-button-gap: var(--ui-btn-mini-padding-x);
   --oc-button-border: 0 solid transparent;
   --oc-button-bg: color-mix(in srgb, var(--surface-inset) 92%, transparent);
   --oc-button-color: var(--text-soft);

@@ -20,13 +20,19 @@ const INSPECTOR = readFileSync(
   "utf8",
 )
 
+function retiredSelector(className: string): RegExp {
+  return new RegExp(`(^|[\\n,{])\\s*\\.${className}(?:\\s|[,>{:+~.#\\[]|$)`, "m")
+}
+
 describe("workspace header controls share a single density tier", () => {
-  test("workspace tabs use the panel-header height and title typography", () => {
+  test("retired workspace tab chrome stays absent", () => {
+    for (const className of ["workspace-tabs", "workspace-tab", "workspace-tab-label", "workspace-tab-file"]) {
+      expect(WORKSPACE).not.toMatch(retiredSelector(className))
+    }
     expect(WORKSPACE).toContain("min-height: var(--ui-panel-header-height);")
-    expect(WORKSPACE).toContain("font-size: var(--ui-font-title);")
   })
 
-  test("workspace close button uses the icon-button density token", () => {
+  test("file editor close button uses the icon-button density token", () => {
     expect(WORKSPACE).toContain("width: var(--oc-density-icon-button);")
     expect(WORKSPACE).toContain("height: var(--oc-density-icon-button);")
   })
