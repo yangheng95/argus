@@ -41,7 +41,7 @@
 
 .changes-commit {
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 }
 
 .changes-total [data-tone="add"] {
@@ -255,7 +255,7 @@
 }
 
 .changes-group-commit {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 }
 
 .change-row-shell {

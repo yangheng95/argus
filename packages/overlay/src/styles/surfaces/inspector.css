@@ -272,7 +272,7 @@
   background: var(--surface-inset);
   color: var(--text-muted);
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  font-family: var(--ui-font-mono);
+  font-family: var(--mono);
   font-size: var(--ui-font-meta);
 }
 
@@ -381,7 +381,7 @@
   background: var(--surface);
   color: var(--text-muted);
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  font-family: var(--ui-font-mono);
+  font-family: var(--mono);
   font-size: var(--ui-font-meta);
   text-align: left;
 }

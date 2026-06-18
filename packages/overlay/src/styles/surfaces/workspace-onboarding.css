@@ -177,7 +177,7 @@
   background: var(--surface-inset);
   color: var(--text-strong);
   font: inherit;
-  font-weight: var(--ui-font-weight);
+  font-weight: var(--ui-font-weight-body);
 }
 
 .workspace-onboarding-browser-path-label input:focus {
