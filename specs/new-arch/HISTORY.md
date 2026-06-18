@@ -19,6 +19,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-file-explorer-drag-upload.md](2026-06-18-file-explorer-drag-upload.md)                                                         | File Explorer Drag Upload |
 | [2026-06-18-titlebar-brand-guide-popover-primitive.md](2026-06-18-titlebar-brand-guide-popover-primitive.md)                               | Titlebar Brand Guide Popover Primitive |
 | [2026-06-18-settings-dialog-tabs-primitive.md](2026-06-18-settings-dialog-tabs-primitive.md)                                               | Settings Dialog Tabs Primitive |
+| [2026-06-18-settings-tabpanel-active-test-contract.md](2026-06-18-settings-tabpanel-active-test-contract.md)                               | Settings TabPanel Active Test Contract |
 | [2026-06-18-prompt-profile-list-row-primitive.md](2026-06-18-prompt-profile-list-row-primitive.md)                                         | Prompt Profile List Row Primitive |
 | [2026-06-18-chat-composer-button-primitive-owner.md](2026-06-18-chat-composer-button-primitive-owner.md)                                   | Chat Composer Button Primitive Owner |
 | [2026-06-18-select-control-shell-single-source.md](2026-06-18-select-control-shell-single-source.md)                                       | Select Control Shell Single Source |

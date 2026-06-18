@@ -189,7 +189,7 @@ test(
       await page.click('[data-menu-trigger="settings"]')
       await page.waitForSelector('[data-testid="titlebar-settings-prompt"]', { visible: true })
       await page.click('[data-testid="titlebar-settings-prompt"]')
-      await page.waitForSelector('[data-config-panel="prompt"].active', { visible: true })
+      await page.waitForSelector('[data-config-panel="prompt"] #promptBody', { visible: true })
 
       await page.keyboard.press("Escape")
       await page.keyboard.down("Alt")

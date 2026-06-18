@@ -1243,7 +1243,7 @@ test(
       await page.waitForFunction(
         () =>
           document.querySelector("#configDialog") !== null &&
-          document.querySelector('[data-config-panel="skill"]')?.classList.contains("active") === true,
+          document.querySelector('[data-config-panel="skill"] .config-section-body') !== null,
       )
       await page.waitForFunction(() => document.body.textContent?.includes("alpha-skill"))
       seen.push("#btnCloseConfigDialog")
@@ -1257,7 +1257,7 @@ test(
       await page.waitForFunction(
         () =>
           document.querySelector("#configDialog") !== null &&
-          document.querySelector('[data-config-panel="mcp"]')?.classList.contains("active") === true,
+          document.querySelector('[data-config-panel="mcp"] .config-section-body') !== null,
       )
       await page.waitForFunction(() => document.body.textContent?.includes("docs"))
       seen.push("#btnCloseConfigDialog")
@@ -1271,7 +1271,7 @@ test(
       await page.waitForFunction(
         () =>
           document.querySelector("#configDialog") !== null &&
-          document.querySelector('[data-config-panel="skill-market"]')?.classList.contains("active") === true,
+          document.querySelector('[data-config-panel="skill-market"] .config-section-body') !== null,
       )
       await page.waitForFunction(() => document.body.textContent?.includes("market-install"))
       seen.push("#btnCloseConfigDialog")
