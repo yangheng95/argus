@@ -9,6 +9,8 @@ import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
+const TASK_ID = "tsk_file_changes_filter"
+
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
 }
@@ -50,11 +52,68 @@ const promptProfileCatalog = {
   ],
 }
 
+const fileChangesFixture = [
+  {
+    file: "src/live-file.ts",
+    patch: [
+      "Index: src/live-file.ts",
+      "===================================================================",
+      "--- src/live-file.ts",
+      "+++ src/live-file.ts",
+      "@@ -1,2 +1,3 @@",
+      " export const value = 1;",
+      "+export const next = 2;",
+      " export const end = true;",
+      "",
+    ].join("\n"),
+    additions: 1,
+    deletions: 0,
+    status: "modified",
+  },
+  ...Array.from({ length: 4 }, (_, index) => ({
+    file: `src/added-filter-${index + 1}.ts`,
+    patch: "",
+    additions: index + 1,
+    deletions: 0,
+    status: "added",
+  })),
+  ...Array.from({ length: 3 }, (_, index) => ({
+    file: `src/deleted-filter-${index + 1}.ts`,
+    patch: "",
+    additions: 0,
+    deletions: index + 1,
+    status: "deleted",
+  })),
+  ...Array.from({ length: 2 }, (_, index) => ({
+    file: `src/modified-filter-${index + 1}.ts`,
+    patch: "",
+    additions: index + 2,
+    deletions: 1,
+    status: "modified",
+  })),
+]
+
 test("right toolbar Diff returns to the diff subview after the user switches to Changes", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
   const requestLog: string[] = []
+  const now = Date.now()
+  const task = {
+    id: TASK_ID,
+    title: "File changes filter fixture",
+    directory: "D:/overlay/workspace/app",
+    status: "running",
+    time: { created: now - 10_000, updated: now - 1_000 },
+  }
+  const board = {
+    snapshotVersion: "file-changes-filter-toolbar-board",
+    task,
+    changes: fileChangesFixture,
+    interactions: [],
+    goalWorkflows: [],
+    lastSequence: 0,
+  }
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
@@ -63,7 +122,7 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
     if (path === "/session") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
@@ -79,27 +138,7 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
         ahead: 0,
         behind: 0,
       })
-    if (path === "/vcs/diff") {
-      return send([
-        {
-          file: "src/live-file.ts",
-          patch: [
-            "Index: src/live-file.ts",
-            "===================================================================",
-            "--- src/live-file.ts",
-            "+++ src/live-file.ts",
-            "@@ -1,2 +1,3 @@",
-            " export const value = 1;",
-            "+export const next = 2;",
-            " export const end = true;",
-            "",
-          ].join("\n"),
-          additions: 1,
-          deletions: 0,
-          status: "modified",
-        },
-      ])
-    }
+    if (path === "/vcs/diff") return send(fileChangesFixture)
     if (path === "/goal-run/gr_diff_preview/acceptance") {
       return send({
         result: {
@@ -116,6 +155,21 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
         },
       })
     }
+    if (path === `/task/${TASK_ID}/board`) return send(board, { headers: { etag: '"file-changes-filter-board"' } })
+    if (path === `/task/${TASK_ID}/conversation`)
+      return send({
+        board,
+        transcript: [],
+        timeline: [],
+        events: [],
+        view: { sessions: [] },
+        agentView: { sessions: [] },
+        eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
+        history: { hasMoreBefore: false },
+        messageWatermark: null,
+        lastSequence: 0,
+      })
+    if (path === `/task/${TASK_ID}/events`) return eventStream()
     if (path === "/provider") return send({ all: [], connected: [], default: {} })
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [] })
@@ -162,6 +216,15 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]')
+    await page.evaluate(async (taskID) => {
+      await (window as any).loadTasks()
+      await (window as any).selectTask(taskID)
+    }, TASK_ID)
+    await page.waitForFunction(
+      (expectedCount) => ((window as any).boardStore?.board?.changes?.length ?? 0) === expectedCount,
+      {},
+      fileChangesFixture.length,
+    )
 
     await page.evaluate(() => {
       ;(window as any).openWorkspaceDiff({ filePath: "src/live-file.ts", goalRunID: "gr_diff_preview" })
@@ -196,6 +259,7 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       (node as HTMLButtonElement).click(),
     )
     assert.equal(await page.$eval(".file-changes-panel", (node) => (node as HTMLElement).dataset.activeView), "changes")
+    await page.waitForSelector('[data-ui="file-changes-status-filter-option"][data-status="added"]')
     const changesTabPanelState = await page.$eval('[data-ui="file-changes-view-tab"][data-value="changes"]', (node) => {
       const tab = node as HTMLElement
       const controls = tab.getAttribute("aria-controls") ?? ""
@@ -215,6 +279,87 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     assert.equal(changesTabPanelState.panelRole, "tabpanel")
     assert.equal(changesTabPanelState.labelledby, changesTabPanelState.tabID)
     assert.equal(changesTabPanelState.panelVisible, true)
+
+    const initialFilterControlState = await page.evaluate(() => {
+      const strip = document.querySelector<HTMLElement>(".changes-status-strip")
+      const options = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-ui="file-changes-status-filter-option"]'),
+      ).map((node) => ({
+        tag: node.tagName,
+        className: node.className,
+        status: node.dataset.status ?? "",
+        dataActive: node.dataset.active ?? "",
+        ariaPressed: node.getAttribute("aria-pressed"),
+      }))
+      return {
+        stripRole: strip?.getAttribute("role") ?? "",
+        rawStatusChips: document.querySelectorAll(".changes-status-chip").length,
+        options,
+      }
+    })
+    assert.equal(initialFilterControlState.stripRole, "")
+    assert.equal(initialFilterControlState.rawStatusChips, 0)
+    assert.deepEqual(
+      initialFilterControlState.options.map((item) => item.status),
+      ["all", "modified", "added", "deleted"],
+    )
+    assert.equal(initialFilterControlState.options.every((item) => item.className.includes("oc-tab")), true)
+    assert.equal(initialFilterControlState.options.find((item) => item.status === "all")?.dataActive, "true")
+
+    await page.type(".changes-filter-input", "added-filter")
+    await page.waitForSelector('[data-ui="file-changes-filter-clear"]')
+    const clearFilterState = await page.$eval('[data-ui="file-changes-filter-clear"]', (node) => {
+      const button = node as HTMLButtonElement
+      const box = button.getBoundingClientRect()
+      return {
+        tag: button.tagName,
+        className: button.className,
+        dataChrome: button.dataset.chrome ?? "",
+        ariaLabel: button.getAttribute("aria-label") ?? "",
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+      }
+    })
+    assert.equal(clearFilterState.tag, "BUTTON")
+    assert.match(clearFilterState.className, /\boc-button\b/)
+    assert.equal(clearFilterState.dataChrome, "icon-action")
+    assert.ok(clearFilterState.ariaLabel)
+    assert.ok(clearFilterState.width >= 20)
+    assert.ok(clearFilterState.height >= 20)
+
+    const filterScreenshotPath = resolve(".scratch/file-changes-filter-toolbar.png")
+    mkdirSync(dirname(filterScreenshotPath), { recursive: true })
+    const changesPanel = await page.$(".file-changes-panel")
+    assert.ok(changesPanel)
+    writeFileSync(filterScreenshotPath, await changesPanel.screenshot({}))
+
+    await page.click('[data-ui="file-changes-filter-clear"]')
+    const clearedFilterState = await page.$eval(".changes-filter-input", (node) => ({
+      value: (node as HTMLInputElement).value,
+      focused: document.activeElement === node,
+    }))
+    assert.deepEqual(clearedFilterState, { value: "", focused: true })
+
+    await page.click('[data-ui="file-changes-status-filter-option"][data-status="added"]')
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>('[data-ui="file-changes-status-filter-option"][data-status="added"]')
+          ?.dataset.active === "true",
+    )
+    const addedFilterState = await page.evaluate(() => {
+      const rowStatuses = Array.from(document.querySelectorAll<HTMLElement>(".change-row .change-status")).map(
+        (node) => node.dataset.status ?? "",
+      )
+      return {
+        activeAdded:
+          document.querySelector<HTMLElement>('[data-ui="file-changes-status-filter-option"][data-status="added"]')
+            ?.dataset.active ?? "",
+        rowStatuses,
+      }
+    })
+    assert.equal(addedFilterState.activeAdded, "true")
+    assert.ok(addedFilterState.rowStatuses.length > 0)
+    assert.equal(addedFilterState.rowStatuses.every((status) => status === "added"), true)
 
     await page.$eval('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]', (node) =>
       (node as HTMLButtonElement).click(),
