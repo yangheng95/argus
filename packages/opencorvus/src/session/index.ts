@@ -1027,7 +1027,16 @@ export namespace Session {
 
   const UpdatePartInput = Message.Part
 
-  const TOOL_STATUS_RANK: Record<string, number> = { pending: 0, running: 1, completed: 2, error: 2 }
+  type ToolStatus = Message.ToolPart["state"]["status"]
+  const TOOL_STATUS_RANK: Record<ToolStatus, number> = { pending: 0, running: 1, completed: 2, error: 2 }
+  const TERMINAL_TOOL_STATUS: ReadonlySet<ToolStatus> = new Set(["completed", "error"])
+
+  function shouldSkipToolStatusUpdate(previousStatus: ToolStatus, nextStatus: ToolStatus): boolean {
+    const oldRank = TOOL_STATUS_RANK[previousStatus]
+    const newRank = TOOL_STATUS_RANK[nextStatus]
+    if (newRank < oldRank) return true
+    return oldRank === newRank && previousStatus !== nextStatus && TERMINAL_TOOL_STATUS.has(previousStatus)
+  }
 
   /** Detector for inline base64 image / pdf / audio / video data URLs inside
    *  a part's serialized data. Single source for the write-boundary guard
@@ -1103,9 +1112,7 @@ export namespace Session {
         if (existingPart?.data) {
           const prev = existingPart.data as any
           if (prev.type === "tool" && prev.state?.status) {
-            const oldRank = TOOL_STATUS_RANK[prev.state.status] ?? 0
-            const newRank = TOOL_STATUS_RANK[part.state.status] ?? 0
-            if (newRank < oldRank) return
+            if (shouldSkipToolStatusUpdate(prev.state.status, part.state.status)) return
           }
         }
       }
