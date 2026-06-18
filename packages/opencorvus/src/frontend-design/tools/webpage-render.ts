@@ -12,6 +12,7 @@ import z from "zod"
 
 import { Tool } from "../../tool/tool"
 import { renderFiles } from "@/browser/webpage/render"
+import { Instance } from "@/project/instance"
 import { resolveWebpageEvidenceOutputDir, DEFAULT_WEBPAGE_EVIDENCE_SUBDIR } from "./output-dir"
 
 export const WebpageRenderTool = Tool.define("webpage_render", {
@@ -79,7 +80,7 @@ Returns the screenshot path + render time. This is a Build/Integrity runtime evi
           viewport,
           fullPage: params.full_page ?? false,
           renderTimeMs: render.renderTimeMs,
-          projectDirectory: process.cwd(),
+          projectDirectory: Instance.directory,
           consoleErrors: render.consoleErrors,
         },
         null,

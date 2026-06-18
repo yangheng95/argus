@@ -3162,3 +3162,42 @@ LINE:
 - Banach confirmed BH-084 was still present in HEAD before the local repair: malformed JSON object bodies could return 200 and clear executor model env state, while generated SDK still had `body?: never`.
 - Banach found no existing PATCH route coverage and identified the existing static SDK contract test as the right place to add generated-client assertions.
 - Banach recommended the same minimal boundary used here: one Zod schema, `validator("json", ...)`, `c.req.valid("json")`, `errors(400)`, SDK regeneration from OpenAPI, and no fallback, gate, compatibility shim, or hand-edited generated contract.
+
+## Batch P1-BA: BH-100 visual evidence project directory must use Instance context
+
+### Findings
+
+- BH-100 targets `packages/opencorvus/src/frontend-design/tools/webpage-render.ts`, `packages/opencorvus/src/frontend-design/tools/webpage-evaluate.ts`, and `packages/opencorvus/src/frontend-design/tools/webpage-vision-judge.ts`.
+- HEAD wrote `projectDirectory: process.cwd()` into `render-result.json` and passed `process.cwd()` to `tryMaterializeVisualEvidenceBundle(...)`.
+- In sidecar/server runs, the process working directory can differ from the active task workspace. That made the `VisualEvidenceBundle.rendered.projectDirectory` provenance point QA and integrity consumers at the wrong project.
+- The visual fidelity evidence chain design record defines `VisualEvidenceBundle.rendered.projectDirectory` as part of the single structured evidence contract for rendered provenance. This batch keeps that contract task-scoped through `Instance.directory`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/frontend-design/tools/webpage-render.ts::WebpageRenderTool` writes `render-result.json` and is the only source of render-time `projectDirectory` metadata.
+- `packages/opencorvus/src/frontend-design/tools/webpage-evaluate.ts::WebpageEvaluateTool` can materialize a `VisualEvidenceBundle` after numeric comparison artifacts exist.
+- `packages/opencorvus/src/frontend-design/tools/webpage-vision-judge.ts::WebpageVisionJudgeTool` can materialize a `VisualEvidenceBundle` after qualitative verdict artifacts exist.
+- `packages/opencorvus/src/frontend-design/tools/visual-evidence-bundle.ts::tryMaterializeVisualEvidenceBundle(...)` is the single bundle serializer and intentionally receives `projectDirectory` from the tool caller instead of trusting stale render metadata.
+- `packages/opencorvus/test/frontend-design/webpage-evidence-architecture.test.ts` owns static architecture guards for the visual evidence tool wiring.
+- `packages/opencorvus/test/frontend-design/tools/visual-evidence-bundle.test.ts` covers the normal bundle materializer contract.
+
+### Fix Shape
+
+- Import `Instance` in all three webpage evidence tools.
+- Write `render-result.json.projectDirectory` from `Instance.directory`.
+- Pass `Instance.directory` to `tryMaterializeVisualEvidenceBundle(...)` from evaluate and vision judge.
+- Keep `tryMaterializeVisualEvidenceBundle(...)` as the single serializer and do not add a second provenance source, cwd fallback, sidecar-specific branch, gate, or compatibility path.
+- Add a focused materializer regression proving the supplied project directory wins over stale `render-result.json` metadata.
+- Add a source architecture guard proving all three tools use `Instance.directory` and no longer contain `projectDirectory: process.cwd()`.
+
+### Verification
+
+- Focused tests passed: `bun test packages/opencorvus/test/frontend-design/tools/webpage-evidence-project-directory.test.ts packages/opencorvus/test/frontend-design/webpage-evidence-architecture.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Euler confirmed BH-100 was still present in committed HEAD before this local repair: all three webpage evidence tools used `process.cwd()` for visual evidence provenance.
+- Euler identified `specs/new-arch/2026-06-08-visual-fidelity-evidence-chain.md` as the relevant design record and confirmed `VisualEvidenceBundle.rendered.projectDirectory` is part of the single structured visual evidence contract.
+- Euler recommended binding the three tool entrypoints to `Instance.directory`, retaining `tryMaterializeVisualEvidenceBundle(...)` as the serializer boundary, and avoiding fallback or parallel metadata sources.
